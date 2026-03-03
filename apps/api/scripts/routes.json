@@ -1,0 +1,818 @@
+[
+  {
+    "method": "OPTIONS",
+    "url": "*"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/activity-logs"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/activity-logs"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/community/groups"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/community/groups"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/community/stats"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/community/stats"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/crisis-events"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/crisis-events"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/crisis-events/:id"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/crisis-events/:id"
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/admin/crisis-events/:id/status"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/email-templates"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/email-templates"
+  },
+  {
+    "method": "POST",
+    "url": "/api/admin/email-templates"
+  },
+  {
+    "method": "DELETE",
+    "url": "/api/admin/email-templates/:id"
+  },
+  {
+    "method": "PUT",
+    "url": "/api/admin/email-templates/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/error-logs"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/error-logs"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/live-sessions"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/live-sessions"
+  },
+  {
+    "method": "POST",
+    "url": "/api/admin/live-sessions/:id/end"
+  },
+  {
+    "method": "POST",
+    "url": "/api/admin/live-sessions/:id/flag"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/notifications/audience-counts"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/notifications/audience-counts"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/notifications/manual"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/notifications/manual"
+  },
+  {
+    "method": "POST",
+    "url": "/api/admin/notifications/manual"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/nudge-templates"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/nudge-templates"
+  },
+  {
+    "method": "POST",
+    "url": "/api/admin/nudge-templates"
+  },
+  {
+    "method": "DELETE",
+    "url": "/api/admin/nudge-templates/:id"
+  },
+  {
+    "method": "PUT",
+    "url": "/api/admin/nudge-templates/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/nudges"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/nudges"
+  },
+  {
+    "method": "POST",
+    "url": "/api/admin/nudges"
+  },
+  {
+    "method": "DELETE",
+    "url": "/api/admin/nudges/:id"
+  },
+  {
+    "method": "PUT",
+    "url": "/api/admin/nudges/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/push-campaigns"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/push-campaigns"
+  },
+  {
+    "method": "POST",
+    "url": "/api/admin/push-campaigns"
+  },
+  {
+    "method": "DELETE",
+    "url": "/api/admin/push-campaigns/:id"
+  },
+  {
+    "method": "PUT",
+    "url": "/api/admin/push-campaigns/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/session-recordings"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/session-recordings"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/session-recordings/:id/transcript"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/session-recordings/:id/transcript"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/stats"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/stats"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/stats/recent"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/stats/recent"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/support-tickets"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/support-tickets"
+  },
+  {
+    "method": "PUT",
+    "url": "/api/admin/support-tickets/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/user-segments"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/user-segments"
+  },
+  {
+    "method": "POST",
+    "url": "/api/admin/user-segments"
+  },
+  {
+    "method": "DELETE",
+    "url": "/api/admin/user-segments/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/users"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/users"
+  },
+  {
+    "method": "DELETE",
+    "url": "/api/admin/users/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/users/:id"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/users/:id"
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/admin/users/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/users/:id/audit-logs"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/admin/users/:id/audit-logs"
+  },
+  {
+    "method": "GET",
+    "url": "/api/ai-avatars"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/ai-avatars"
+  },
+  {
+    "method": "POST",
+    "url": "/api/ai-avatars"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/ai-avatars/"
+  },
+  {
+    "method": "DELETE",
+    "url": "/api/ai-avatars/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/ai-avatars/:id"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/ai-avatars/:id"
+  },
+  {
+    "method": "PUT",
+    "url": "/api/ai-avatars/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/billing"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/billing"
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/billing"
+  },
+  {
+    "method": "POST",
+    "url": "/api/billing"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/billing/"
+  },
+  {
+    "method": "GET",
+    "url": "/api/billing/admin/invoices"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/billing/admin/invoices"
+  },
+  {
+    "method": "GET",
+    "url": "/api/billing/admin/payg-transactions"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/billing/admin/payg-transactions"
+  },
+  {
+    "method": "GET",
+    "url": "/api/billing/admin/subscriptions"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/billing/admin/subscriptions"
+  },
+  {
+    "method": "GET",
+    "url": "/api/billing/admin/users/:userId/subscription"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/billing/admin/users/:userId/subscription"
+  },
+  {
+    "method": "POST",
+    "url": "/api/billing/cancel"
+  },
+  {
+    "method": "POST",
+    "url": "/api/billing/credits"
+  },
+  {
+    "method": "GET",
+    "url": "/api/billing/history"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/billing/history"
+  },
+  {
+    "method": "GET",
+    "url": "/api/billing/invoices"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/billing/invoices"
+  },
+  {
+    "method": "POST",
+    "url": "/api/billing/portal"
+  },
+  {
+    "method": "POST",
+    "url": "/api/billing/sync"
+  },
+  {
+    "method": "POST",
+    "url": "/api/billing/webhook"
+  },
+  {
+    "method": "POST",
+    "url": "/api/email/send"
+  },
+  {
+    "method": "GET",
+    "url": "/api/emergency-contacts"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/emergency-contacts"
+  },
+  {
+    "method": "POST",
+    "url": "/api/emergency-contacts"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/emergency-contacts/"
+  },
+  {
+    "method": "DELETE",
+    "url": "/api/emergency-contacts/:id"
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/emergency-contacts/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/habits"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/habits"
+  },
+  {
+    "method": "POST",
+    "url": "/api/habits"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/habits/"
+  },
+  {
+    "method": "DELETE",
+    "url": "/api/habits/:id"
+  },
+  {
+    "method": "PUT",
+    "url": "/api/habits/:id"
+  },
+  {
+    "method": "DELETE",
+    "url": "/api/habits/:id/complete"
+  },
+  {
+    "method": "POST",
+    "url": "/api/habits/:id/complete"
+  },
+  {
+    "method": "GET",
+    "url": "/api/habits/admin/users/:userId/habits"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/habits/admin/users/:userId/habits"
+  },
+  {
+    "method": "GET",
+    "url": "/api/journal"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/journal"
+  },
+  {
+    "method": "POST",
+    "url": "/api/journal"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/journal/"
+  },
+  {
+    "method": "DELETE",
+    "url": "/api/journal/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/journal/:id"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/journal/:id"
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/journal/:id"
+  },
+  {
+    "method": "POST",
+    "url": "/api/journal/:id/favorite"
+  },
+  {
+    "method": "GET",
+    "url": "/api/journal/admin/users/:userId/journals"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/journal/admin/users/:userId/journals"
+  },
+  {
+    "method": "GET",
+    "url": "/api/moods"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/moods"
+  },
+  {
+    "method": "POST",
+    "url": "/api/moods"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/moods/"
+  },
+  {
+    "method": "GET",
+    "url": "/api/moods/admin"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/moods/admin"
+  },
+  {
+    "method": "GET",
+    "url": "/api/moods/admin/users/:userId/moods"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/moods/admin/users/:userId/moods"
+  },
+  {
+    "method": "GET",
+    "url": "/api/notifications"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/notifications"
+  },
+  {
+    "method": "POST",
+    "url": "/api/notifications"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/notifications/"
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/notifications/:id/read"
+  },
+  {
+    "method": "POST",
+    "url": "/api/notifications/broadcast"
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/notifications/read-all"
+  },
+  {
+    "method": "GET",
+    "url": "/api/notifications/unread-count"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/notifications/unread-count"
+  },
+  {
+    "method": "GET",
+    "url": "/api/sessions"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/sessions"
+  },
+  {
+    "method": "POST",
+    "url": "/api/sessions"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/sessions/"
+  },
+  {
+    "method": "GET",
+    "url": "/api/sessions/:id"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/sessions/:id"
+  },
+  {
+    "method": "POST",
+    "url": "/api/sessions/:id/end"
+  },
+  {
+    "method": "POST",
+    "url": "/api/sessions/:id/favorite"
+  },
+  {
+    "method": "POST",
+    "url": "/api/sessions/:id/messages"
+  },
+  {
+    "method": "GET",
+    "url": "/api/sessions/:id/transcript"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/sessions/:id/transcript"
+  },
+  {
+    "method": "GET",
+    "url": "/api/sessions/admin/users/:userId/sessions"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/sessions/admin/users/:userId/sessions"
+  },
+  {
+    "method": "POST",
+    "url": "/api/sessions/schedule"
+  },
+  {
+    "method": "GET",
+    "url": "/api/sleep"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/sleep"
+  },
+  {
+    "method": "POST",
+    "url": "/api/sleep"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/sleep/"
+  },
+  {
+    "method": "DELETE",
+    "url": "/api/sleep/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/sleep/:id"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/sleep/:id"
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/sleep/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/sleep/admin/users/:userId/sleep"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/sleep/admin/users/:userId/sleep"
+  },
+  {
+    "method": "GET",
+    "url": "/api/system-settings"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/system-settings"
+  },
+  {
+    "method": "POST",
+    "url": "/api/system-settings"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/system-settings/"
+  },
+  {
+    "method": "GET",
+    "url": "/api/system-settings/:key"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/system-settings/:key"
+  },
+  {
+    "method": "GET",
+    "url": "/api/users/admin/users"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/users/admin/users"
+  },
+  {
+    "method": "GET",
+    "url": "/api/users/admin/users/:userId"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/users/admin/users/:userId"
+  },
+  {
+    "method": "POST",
+    "url": "/api/users/check"
+  },
+  {
+    "method": "GET",
+    "url": "/api/users/credits"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/users/credits"
+  },
+  {
+    "method": "GET",
+    "url": "/api/users/export"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/users/export"
+  },
+  {
+    "method": "POST",
+    "url": "/api/users/init"
+  },
+  {
+    "method": "DELETE",
+    "url": "/api/users/me"
+  },
+  {
+    "method": "GET",
+    "url": "/api/users/me"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/users/me"
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/users/me"
+  },
+  {
+    "method": "POST",
+    "url": "/api/users/onboarding"
+  },
+  {
+    "method": "GET",
+    "url": "/api/wellness"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/wellness"
+  },
+  {
+    "method": "POST",
+    "url": "/api/wellness"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/wellness/"
+  },
+  {
+    "method": "DELETE",
+    "url": "/api/wellness/:id"
+  },
+  {
+    "method": "GET",
+    "url": "/api/wellness/:id"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/wellness/:id"
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/wellness/:id"
+  },
+  {
+    "method": "POST",
+    "url": "/api/wellness/:id/favorite"
+  },
+  {
+    "method": "POST",
+    "url": "/api/wellness/:id/progress"
+  },
+  {
+    "method": "POST",
+    "url": "/api/wellness/:id/start"
+  },
+  {
+    "method": "GET",
+    "url": "/api/wellness/challenges"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/wellness/challenges"
+  },
+  {
+    "method": "GET",
+    "url": "/api/wellness/progress"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/wellness/progress"
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/wellness/progress/:progressId"
+  },
+  {
+    "method": "GET",
+    "url": "/api/wellness/stats"
+  },
+  {
+    "method": "HEAD",
+    "url": "/api/wellness/stats"
+  }
+]

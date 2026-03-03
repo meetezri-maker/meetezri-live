@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+    volumes:
+      - ../../apps/api:/app
+      - /app/node_modules
+      - ../../packages:/packages
+    depends_on:
+      - redis
+
+  realtime:
+    build:
+      context: ../../apps/realtime
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+    volumes:
+      - ../../apps/realtime:/app
+      - /app/node_modules
+      - ../../packages:/packages
+    depends_on:
+      - redis
+
+  ai:
+    build:
+      context: ../../apps/ai
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8000
+    volumes:
+      - ../../apps/ai:/app
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:

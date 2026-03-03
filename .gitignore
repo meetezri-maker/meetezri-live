@@ -1,0 +1,84 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Production
+build/
+dist/
+out/
+.next/
+.nuxt/
+.vuepress/dist
+.serverless/
+.fusebox/
+.dynamodb/
+
+# Misc
+.DS_Store
+Thumbs.db
+.env
+.env.local
+.env.*.local
+.env.test
+.env.production
+.env.development
+*.env
+*.env.*
+!.env.example
+*.pem
+.temp
+.tmp
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs
+*.njsproj
+*.sln
+*.sw?
+*.tsbuildinfo
+.history/
+
+# User requested ignores
+*.md
+
+# Python/Pip
+pip-wheel-metadata/
+pip-install-*/
+pip-build-*/
+pip-build-env-*/
+pip-metadata-*/
+pip-unpack-*/
+tmp*
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+venv/
+env/

@@ -1,0 +1,42 @@
+{
+  "name": "Ezri - Mental Health & Wellness",
+  "short_name": "Ezri",
+  "description": "AI-powered mental health companion with mood tracking, journaling, and wellness tools",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "wellness", "lifestyle", "medical"],
+  "shortcuts": [
+    {
+      "name": "Start AI Session",
+      "short_name": "Session",
+      "description": "Begin a new AI therapy session",
+      "url": "/app/session",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Quick Mood Check",
+      "short_name": "Mood",
+      "description": "Log your current mood",
+      "url": "/app/mood",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Journal Entry",
+      "short_name": "Journal",
+      "description": "Write a journal entry",
+      "url": "/app/journal",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
