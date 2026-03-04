@@ -59,14 +59,10 @@ export function Signup() {
     setIsLoading(true);
     try {
       // Check if user exists before attempting signup
-      const checkResult = await api.checkUserExists(email, `${firstName} ${lastName}`);
+      const checkResult = await api.checkUserExists(email);
       
       if (checkResult.exists) {
-        if (checkResult.reason === 'name') {
-          toast.error("An account with this name already exists. Please use a different name or log in.");
-        } else {
-          toast.error("Account already exists. Please log in instead.");
-        }
+        toast.error("Account already exists. Please log in instead.");
         setIsLoading(false);
         // Optional: navigate("/login");
         return;

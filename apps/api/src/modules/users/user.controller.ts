@@ -12,8 +12,8 @@ export async function checkUserExistsHandler(
   request: FastifyRequest<{ Body: CheckUserInput }>,
   reply: FastifyReply
 ) {
-  const { email, full_name } = request.body;
-  const result = await userService.checkUserExists(email, full_name);
+  const { email } = request.body;
+  const result = await userService.checkUserExists(email);
   return result;
 }
 
