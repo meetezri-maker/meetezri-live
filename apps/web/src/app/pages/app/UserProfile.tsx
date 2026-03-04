@@ -88,7 +88,7 @@ export function UserProfile() {
         name: profile.full_name || "",
         email: profile.email || user?.email || "",
         phone: profile.phone || "",
-        birthday: profile.age ? `${profile.age} years old` : "",
+        birthday: profile.age ? `${profile.age} ` : "",
         location: profile.timezone || "",
         pronouns: profile.pronouns || "",
         emergency_contact_name: profile.emergency_contact_name || "",

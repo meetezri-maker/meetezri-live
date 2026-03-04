@@ -93,7 +93,7 @@ export function OnboardingWelcome() {
           transition={{ delay: 0.8 }}
           className="pt-4"
         >
-          <Link to="/onboarding/profile-setup">
+          <Link to="/onboarding/profile">
             <motion.div
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
