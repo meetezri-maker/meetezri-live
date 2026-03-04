@@ -36,7 +36,7 @@ export function OnboardingWelcome() {
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.3 }}
+          transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.1 }} // Reduced delay
           className="flex justify-center"
         >
           <div className="relative">
@@ -59,7 +59,7 @@ export function OnboardingWelcome() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+          transition={{ delay: 0.2 }} // Reduced delay
         >
           <Card className="p-6 bg-gradient-to-br from-primary/5 to-accent/5 border-primary/20">
             <p className="text-center text-lg">
@@ -71,7 +71,7 @@ export function OnboardingWelcome() {
 
         <div className="grid sm:grid-cols-3 gap-4">
           {features.map((feature, index) => (
-            <AnimatedCard key={index} delay={0.5 + index * 0.1}>
+            <AnimatedCard key={index} delay={0.3 + index * 0.1}> {/* Reduced delay */}
               <Card className="p-5 h-full text-center hover:shadow-xl transition-shadow">
                 <motion.div
                   whileHover={{ scale: 1.2, rotate: 360 }}
@@ -90,7 +90,7 @@ export function OnboardingWelcome() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8 }}
+          transition={{ delay: 0.4 }} // Reduced delay
           className="pt-4"
         >
           <Link to="/onboarding/profile-setup">

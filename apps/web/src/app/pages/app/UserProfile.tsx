@@ -696,8 +696,10 @@ export function UserProfile() {
                                   <Calendar className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                                   {isEditing ? (
                                     <input
-                                      {...field}
+                                      value={field.value || ""}
+                                      onChange={(e) => field.onChange(e.target.value.replace(/\D/g, ""))}
                                       disabled={isSaving}
+                                      inputMode="numeric"
                                       className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
                                       placeholder="Age"
                                     />

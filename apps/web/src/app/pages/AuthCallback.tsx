@@ -13,6 +13,13 @@ export function AuthCallback() {
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   useEffect(() => {
+    // Immediate redirect if user is already loaded
+    if (user) {
+      navigate("/onboarding/welcome", { replace: true });
+    }
+  }, [user, navigate]);
+
+  useEffect(() => {
     const handleCallback = async () => {
       // 1. Parse Parameters
       const searchParams = new URLSearchParams(location.search);
@@ -39,8 +46,14 @@ export function AuthCallback() {
       // 3. Handle Code Exchange (PKCE)
       if (code) {
         try {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
           if (exchangeError) throw exchangeError;
+          
+          if (data?.session) {
+            setStatus('success');
+            navigate("/onboarding/welcome", { replace: true });
+            return;
+          }
         } catch (err: any) {
           console.error('Code exchange error:', err);
           const msg = err.message || 'Failed to verify email';
@@ -52,7 +65,7 @@ export function AuthCallback() {
       } 
       // 4. Handle Tokens (Implicit)
       else if (accessToken && refreshToken) {
-          const { error: sessionError } = await supabase.auth.setSession({
+          const { data, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
@@ -63,6 +76,12 @@ export function AuthCallback() {
              setErrorMessage(msg);
              setStatus('error');
              return;
+          }
+          
+          if (data?.session) {
+            setStatus('success');
+            navigate("/onboarding/welcome", { replace: true });
+            return;
           }
       }
 
