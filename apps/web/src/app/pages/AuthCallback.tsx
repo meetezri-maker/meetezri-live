@@ -72,14 +72,14 @@ export function AuthCallback() {
         
         if (session) {
           setStatus('success');
-          // Wait a moment for context to update, then redirect
-          setTimeout(() => navigate("/onboarding/welcome"), 500);
+          // Navigate immediately - user wants "nano seconds" response
+          navigate("/onboarding/welcome", { replace: true });
           return;
         }
 
-        // Retry every 500ms for up to 5 seconds (10 attempts)
-        if (attempts < 10) {
-          setTimeout(() => checkSession(attempts + 1), 500);
+        // Retry every 50ms for up to 5 seconds (100 attempts)
+        if (attempts < 100) {
+          setTimeout(() => checkSession(attempts + 1), 50);
         } else {
           console.warn("Session check timed out after 5 seconds");
           setErrorMessage("Session establishment timed out. Please try logging in.");
