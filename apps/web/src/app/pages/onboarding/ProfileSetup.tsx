@@ -176,7 +176,7 @@ export function OnboardingProfileSetup() {
 
   return (
     <OnboardingLayout
-      currentStep={2}
+      currentStep={1}
       totalSteps={8}
       title="Tell Us About Yourself"
       subtitle="Help us personalize your Ezri experience"

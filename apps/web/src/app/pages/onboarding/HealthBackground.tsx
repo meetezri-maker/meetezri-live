@@ -106,7 +106,7 @@ export function OnboardingHealthBackground() {
         </motion.div>
 
         {/* Currently on Medication */}
-        <motion.div
+        {/* <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
@@ -135,7 +135,7 @@ export function OnboardingHealthBackground() {
               ))}
             </div>
           </Card>
-        </motion.div>
+        </motion.div> */}
 
         {/* Content Warnings */}
         <motion.div

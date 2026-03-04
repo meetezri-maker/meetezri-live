@@ -3,11 +3,21 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Card } from "../../components/ui/card";
+import { Textarea } from "../../components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../../components/ui/dialog";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { ArrowRight, ArrowLeft, Phone, Heart, AlertCircle } from "lucide-react";
+import { ArrowRight, ArrowLeft, Phone, Heart, AlertCircle, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
+import { toast } from "sonner";
 
 export function OnboardingEmergencyContact() {
   const navigate = useNavigate();
@@ -15,6 +25,12 @@ export function OnboardingEmergencyContact() {
   const [emergencyName, setEmergencyName] = useState(data.emergencyContactName || "");
   const [emergencyPhone, setEmergencyPhone] = useState(data.emergencyContactPhone || "");
   const [emergencyRelationship, setEmergencyRelationship] = useState(data.emergencyContactRelationship || "");
+  
+  // Safety Plan State
+  const [isSafetyPlanOpen, setIsSafetyPlanOpen] = useState(false);
+  const [warningSigns, setWarningSigns] = useState(data.safetyPlan?.warningSigns || "");
+  const [copingStrategies, setCopingStrategies] = useState(data.safetyPlan?.copingStrategies || "");
+  const [supportContacts, setSupportContacts] = useState(data.safetyPlan?.supportContacts || "");
 
   const handleContinue = () => {
     updateData({ 
@@ -23,6 +39,19 @@ export function OnboardingEmergencyContact() {
       emergencyContactRelationship: emergencyRelationship 
     });
     navigate("/onboarding/permissions");
+  };
+
+  const handleSaveSafetyPlan = () => {
+    updateData({
+      safetyPlan: {
+        warningSigns,
+        copingStrategies,
+        supportContacts,
+        createdAt: new Date().toISOString()
+      }
+    });
+    setIsSafetyPlanOpen(false);
+    toast.success("Safety plan saved successfully");
   };
 
   return (
@@ -146,9 +175,11 @@ export function OnboardingEmergencyContact() {
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="w-full p-4 border-2 border-dashed border-primary rounded-lg text-primary hover:bg-primary/5 transition-colors"
+              onClick={() => setIsSafetyPlanOpen(true)}
+              className="w-full p-4 border-2 border-dashed border-primary rounded-lg text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-2"
             >
-              + Create Safety Plan (recommended)
+              <Plus className="w-4 h-4" />
+              {data.safetyPlan ? "Edit Safety Plan" : "Create Safety Plan (recommended)"}
             </motion.button>
             <p className="text-xs text-muted-foreground mt-2">
               You can set this up later in your profile
@@ -228,6 +259,61 @@ export function OnboardingEmergencyContact() {
           All fields are optional • You can skip this step
         </motion.p>
       </div>
+
+      {/* Safety Plan Dialog */}
+      <Dialog open={isSafetyPlanOpen} onOpenChange={setIsSafetyPlanOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Your Safety Plan</DialogTitle>
+            <DialogDescription>
+              A safety plan helps you cope when you're feeling overwhelmed or unsafe.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="warningSigns">Warning Signs</Label>
+              <p className="text-xs text-muted-foreground">What thoughts, feelings, or behaviors indicate you're struggling?</p>
+              <Textarea 
+                id="warningSigns" 
+                placeholder="e.g., Feeling isolated, sleeping too much, racing thoughts..." 
+                value={warningSigns}
+                onChange={(e) => setWarningSigns(e.target.value)}
+                className="min-h-[80px]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="copingStrategies">Coping Strategies</Label>
+              <p className="text-xs text-muted-foreground">What can you do on your own to feel better?</p>
+              <Textarea 
+                id="copingStrategies" 
+                placeholder="e.g., Deep breathing, listening to music, going for a walk..." 
+                value={copingStrategies}
+                onChange={(e) => setCopingStrategies(e.target.value)}
+                className="min-h-[80px]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="supportContacts">Support Contacts</Label>
+              <p className="text-xs text-muted-foreground">Who can you reach out to for help?</p>
+              <Textarea 
+                id="supportContacts" 
+                placeholder="e.g., Partner, Therapist, Best friend..." 
+                value={supportContacts}
+                onChange={(e) => setSupportContacts(e.target.value)}
+                className="min-h-[80px]"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsSafetyPlanOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveSafetyPlan}>Save Plan</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </OnboardingLayout>
   );
 }

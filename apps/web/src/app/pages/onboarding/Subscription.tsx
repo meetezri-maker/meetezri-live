@@ -176,12 +176,12 @@ export function OnboardingSubscription() {
 
   return (
     <OnboardingLayout
-      currentStep={3}
+      currentStep={2}
       totalSteps={8}
       title="Choose Your Plan"
       subtitle="Select the plan that best fits your wellness journey"
       showBack={true}
-      onBack={() => navigate("/onboarding/profile")}
+      onBack={() => navigate("/onboarding/profile-setup")}
     >
       <div className="space-y-6">
         {viewMode === 'list' ? (
