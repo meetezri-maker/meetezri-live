@@ -1,8 +1,8 @@
 export default async function handler(req: any, res: any) {
   try {
     // Dynamically import the app to catch initialization errors
-    const appModule = await import("../src/app");
-    const app = appModule.default;
+    // Using require to ensure compatibility with CommonJS output and avoid TS inference issues
+    const app = require("../src/app").default;
     
     // Delegate to Fastify
     await app.ready();
