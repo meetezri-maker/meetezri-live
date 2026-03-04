@@ -694,12 +694,18 @@ export function UserProfile() {
                                     : 'border-gray-300 dark:border-gray-700'
                                 }`}>
                                   <Calendar className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                                  <input
-                                    {...field}
-                                    disabled={!isEditing || isSaving}
-                                    className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-                                    placeholder="Age"
-                                  />
+                                  {isEditing ? (
+                                    <input
+                                      {...field}
+                                      disabled={isSaving}
+                                      className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
+                                      placeholder="Age"
+                                    />
+                                  ) : (
+                                    <p className="flex-1 font-medium text-gray-900 dark:text-gray-100">
+                                      {field.value ? `${field.value.toString().replace(/\D/g, '')} years old` : "Not set"}
+                                    </p>
+                                  )}
                                 </div>
                               </FormControl>
                               <FormMessage />

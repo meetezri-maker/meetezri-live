@@ -1112,76 +1112,7 @@ export const api = {
     }
   },
 
-  // Habits API
-  habits: {
-    async getAll() {
-      const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/habits`, {
-        method: 'GET',
-        headers,
-      });
-      return handleResponse(res, 'Failed to fetch habits');
-    },
 
-    async create(data: { name: string; category?: string; frequency?: 'daily' | 'weekly'; color?: string; icon?: string }) {
-      const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/habits`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(data),
-      });
-      return handleResponse(res, 'Failed to create habit');
-    },
-
-    async update(id: string, data: { name?: string; category?: string; frequency?: 'daily' | 'weekly'; color?: string; icon?: string }) {
-      const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/habits/${id}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify(data),
-      });
-      return handleResponse(res, 'Failed to update habit');
-    },
-
-    async delete(id: string) {
-      const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/habits/${id}`, {
-        method: 'DELETE',
-        headers,
-      });
-      if (res.status === 204) return true;
-      return handleResponse(res, 'Failed to delete habit');
-    },
-
-    async complete(id: string, date?: string) {
-      const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/habits/${id}/complete`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ completed_at: date }),
-      });
-      return handleResponse(res, 'Failed to complete habit');
-    },
-
-    async uncomplete(id: string, date: string) {
-      const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/habits/${id}/complete?date=${date}`, {
-        method: 'DELETE',
-        headers,
-      });
-      return handleResponse(res, 'Failed to uncomplete habit');
-    },
-
-    async getUserHabits(userId: string) { // Admin only
-      const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/habits/admin/users/${userId}/habits`, {
-        method: 'GET',
-        headers,
-        cache: 'no-store',
-      });
-      return handleResponse(res, 'Failed to fetch user habits');
-    }
-  },
 
   // Notifications API
   notifications: {
