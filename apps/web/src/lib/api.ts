@@ -4,7 +4,7 @@ const API_URL =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.DEV
     ? 'http://localhost:3001/api'
-    : 'https://meet-ezri-api.vercel.app/api');
+    : 'https://meetezri-live-api.vercel.app/api');
 
 async function getHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
