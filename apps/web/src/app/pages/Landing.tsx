@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { PublicNav } from "../components/PublicNav";
@@ -7,20 +7,47 @@ import { Card } from "../components/ui/card";
 import { AnimatedCard } from "../components/AnimatedCard";
 import { FloatingElement } from "../components/FloatingElement";
 import { motion } from "motion/react";
-import { Heart, Video, Shield, Clock, Sparkles, CheckCircle2, ArrowRight, Star, Zap, Check, Crown } from "lucide-react";
+import { Heart, Video, Shield, Clock, Sparkles, CheckCircle2, ArrowRight, Star, Zap, Check, Crown, Loader2 } from "lucide-react";
 import { SUBSCRIPTION_PLANS } from "../utils/subscriptionPlans";
 import type { PlanTier } from "../utils/subscriptionPlans";
 
 export function Landing() {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
+    // 1. Immediate redirect if auth params are present (Implicit or PKCE)
+    const hash = location.hash;
+    const search = location.search;
+    
+    if (
+      (hash && (hash.includes('access_token') || hash.includes('type=recovery') || hash.includes('error='))) ||
+      (search && (search.includes('code=') || search.includes('error=')))
+    ) {
+      // Forward to auth callback handler immediately
+      navigate(`/auth/callback${search}${hash}`);
+      return;
+    }
+
+    // 2. Redirect if already logged in
     if (!isLoading && user) {
-      // If user is logged in, redirect to onboarding
       navigate("/onboarding/welcome");
     }
-  }, [user, isLoading, navigate]);
+  }, [user, isLoading, navigate, location]);
+
+  // Show loader if we are about to redirect (auth params present)
+  const isAuthRedirect = 
+    (location.hash && (location.hash.includes('access_token') || location.hash.includes('type=recovery'))) ||
+    (location.search && location.search.includes('code='));
+
+  if (isAuthRedirect) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-purple-50/30 to-white overflow-hidden">
