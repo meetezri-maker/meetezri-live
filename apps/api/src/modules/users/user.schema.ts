@@ -56,5 +56,13 @@ export const checkUserSchema = z.object({
   email: z.string().email(),
 });
 
+export const signupSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+});
+
 export type CheckUserInput = z.infer<typeof checkUserSchema>;
+export type SignupInput = z.infer<typeof signupSchema>;
 

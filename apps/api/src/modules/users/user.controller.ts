@@ -1,6 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { onboardingSchema, updateProfileSchema, checkUserSchema, CheckUserInput } from './user.schema';
+import { onboardingSchema, updateProfileSchema, checkUserSchema, CheckUserInput, SignupInput, signupSchema } from './user.schema';
 import * as userService from './user.service';
+import { supabaseAdmin } from '../../config/supabase';
+import { emailService } from '../email/email.service';
 
 interface UserPayload {
   sub: string;
@@ -15,6 +17,76 @@ export async function checkUserExistsHandler(
   const { email } = request.body;
   const result = await userService.checkUserExists(email);
   return result;
+}
+
+export async function signupHandler(
+  request: FastifyRequest<{ Body: SignupInput }>,
+  reply: FastifyReply
+) {
+  const { email, password, firstName, lastName } = request.body;
+
+  // Double check if user exists
+  const existingUser = await userService.checkUserExists(email);
+  if (existingUser.exists) {
+    return reply.code(400).send({ message: 'User already exists' });
+  }
+
+  try {
+    // 1. Create user in Supabase Auth (unconfirmed)
+    // We disable email confirmation here so Supabase doesn't send the default email
+    const { data: user, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: false,
+      user_metadata: {
+        first_name: firstName,
+        last_name: lastName,
+      }
+    });
+
+    if (createError) throw createError;
+    if (!user.user) throw new Error('Failed to create user');
+
+    // 2. Generate verification link
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'signup',
+      email,
+      password,
+      options: {
+        redirectTo: `${process.env.APP_URL || 'http://localhost:5173'}/auth/callback`
+      }
+    });
+
+    if (linkError) throw linkError;
+    const verificationLink = linkData.properties?.action_link;
+
+    if (!verificationLink) throw new Error('Failed to generate verification link');
+
+    // 3. Send custom email with target="_blank"
+    await emailService.sendEmail(
+      email,
+      'Confirm your email - MeetEzri',
+      `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Welcome to MeetEzri!</h2>
+        <p>Hi ${firstName},</p>
+        <p>Please confirm your email address to get started.</p>
+        <p>Click the button below to verify your account:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verificationLink}" target="_blank" style="background-color: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Confirm Email</a>
+        </div>
+        <p>If you didn't sign up for MeetEzri, you can ignore this email.</p>
+      </div>
+      `,
+      `Confirm your email by visiting: ${verificationLink}`
+    );
+
+    return reply.code(201).send({ success: true, message: 'User created successfully. Please check your email to verify your account.' });
+
+  } catch (error: any) {
+    request.log.error({ error }, 'Signup failed');
+    return reply.code(500).send({ message: error.message || 'Signup failed' });
+  }
 }
 
 export async function getAllUsersHandler(

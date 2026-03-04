@@ -68,26 +68,16 @@ export function Signup() {
         return;
       }
 
-      const { data, error } = await supabase.auth.signUp({
+      // Use backend API for signup to ensure custom email template
+      await api.signup({
         email,
         password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-          data: {
-            first_name: firstName,
-            last_name: lastName,
-          },
-        },
+        firstName,
+        lastName,
       });
 
-      if (error) throw error;
-
-      if (data?.session) {
-        toast.success("Account created successfully!");
-        navigate("/onboarding/welcome");
-      } else if (data?.user) {
-        toast.success("Please check your email to verify your account before logging in.");
-      }
+      toast.success("Account created! Please check your email to verify your account.");
+      navigate("/login");
     } catch (error: any) {
       const rawMessage = error.message || "";
       const message = rawMessage.toLowerCase();

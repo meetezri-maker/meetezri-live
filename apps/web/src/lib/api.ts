@@ -116,6 +116,17 @@ export const api = {
     return handleResponse(res, 'Failed to check user existence');
   },
 
+  async signup(data: { email: string; password: string; firstName: string; lastName: string }) {
+    const res = await fetch(`${API_URL}/users/signup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res, 'Failed to sign up');
+  },
+
   async sendEmail(to: string, subject: string, html: string, text?: string) {
     const headers = await getHeaders();
     const res = await fetch(`${API_URL}/email/send`, {
