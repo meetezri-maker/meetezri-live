@@ -121,58 +121,55 @@ export async function getProfile(userId: string) {
     return cached.data;
   }
 
-  const [profileResult, recentMoods, scheduledAppointments, countsResult] = await Promise.all([
-    // 1. Profile + simple relations
-    prisma.profiles.findUnique({
-      where: { id: userId },
-      include: {
-        companion_profiles: true,
-        subscriptions: {
-          where: { status: 'active' },
-          orderBy: { created_at: 'desc' },
-          take: 1
+  // Optimized to use a single query to prevent connection pool exhaustion
+  const profileResult = await prisma.profiles.findUnique({
+    where: { id: userId },
+    include: {
+      companion_profiles: true,
+      subscriptions: {
+        where: { status: 'active' },
+        orderBy: { created_at: 'desc' },
+        take: 1
+      },
+      emergency_contacts: {
+        orderBy: { created_at: 'desc' },
+        take: 1
+      },
+      // Include recent moods
+      mood_entries: {
+        orderBy: { created_at: 'desc' },
+        take: 30
+      },
+      // Include scheduled appointments
+      appointments_appointments_user_idToprofiles: {
+        where: {
+          status: 'scheduled',
+          start_time: { gt: new Date() }
         },
-        emergency_contacts: {
-          orderBy: { created_at: 'desc' },
-          take: 1
+        orderBy: { start_time: 'asc' }
+      },
+      // Get counts
+      _count: {
+        select: {
+          app_sessions: { where: { ended_at: { not: null } } },
+          mood_entries: true,
+          journal_entries: true
         }
       }
-    }),
-    // 2. Recent moods
-    prisma.mood_entries.findMany({
-      where: { user_id: userId },
-      orderBy: { created_at: 'desc' },
-      take: 30
-    }),
-    // 3. Scheduled appointments
-    prisma.appointments.findMany({
-      where: {
-        user_id: userId,
-        status: 'scheduled',
-        start_time: { gt: new Date() }
-      },
-      orderBy: { start_time: 'asc' }
-    }),
-    // 4. Counts (Single Raw Query)
-    prisma.$queryRaw`
-      SELECT
-        (SELECT count(*) FROM app_sessions WHERE user_id = ${userId}::uuid AND ended_at IS NOT NULL) as sessions,
-        (SELECT count(*) FROM mood_entries WHERE user_id = ${userId}::uuid) as moods,
-        (SELECT count(*) FROM journal_entries WHERE user_id = ${userId}::uuid) as journals
-    `
-  ]);
+    }
+  });
 
   if (!profileResult) return null;
 
   const activeSubscription = profileResult.subscriptions[0];
   const latestEmergencyContact = profileResult.emergency_contacts[0];
   
-  const counts = (countsResult as any[])[0] || {};
-  const completedSessionsCount = Number(counts.sessions || 0);
-  const moodEntriesCount = Number(counts.moods || 0);
-  const journalEntriesCount = Number(counts.journals || 0);
+  const completedSessionsCount = profileResult._count.app_sessions;
+  const moodEntriesCount = profileResult._count.mood_entries;
+  const journalEntriesCount = profileResult._count.journal_entries;
 
-  const streakDays = calculateStreak(recentMoods);
+  const streakDays = calculateStreak(profileResult.mood_entries);
+  const scheduledAppointments = profileResult.appointments_appointments_user_idToprofiles;
   const upcomingSessions = scheduledAppointments.length;
   const primaryContact = latestEmergencyContact;
 
@@ -196,17 +193,9 @@ export async function getProfile(userId: string) {
     credits_total: (planDetails?.credits || 30) + (profileResult.purchased_credits || 0),
     subscription_plan: planType,
     subscriptions: activeSubscription ? [activeSubscription] : [],
-    mood_entries: recentMoods,
-    appointments_appointments_user_idToprofiles: scheduledAppointments,
-    emergency_contacts: latestEmergencyContact ? [latestEmergencyContact] : []
   };
 
-  // Set cache
-  userProfileCache.set(userId, {
-    data: result,
-    timestamp: Date.now()
-  });
-
+  userProfileCache.set(userId, { data: result, timestamp: Date.now() });
   return result;
 }
 
