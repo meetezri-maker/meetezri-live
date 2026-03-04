@@ -1,9 +1,21 @@
+import { FastifyInstance } from 'fastify';
+
 export default async function handler(req: any, res: any) {
   try {
-    // Dynamically import the app to catch initialization errors
-    // Using require to ensure compatibility with CommonJS output and avoid TS inference issues
-    const app = require("../src/app").default;
+    // Log for debugging Vercel logs
+    console.log(`[API Handler] ${req.method} ${req.url}`);
+
+    // Dynamically import the app to ensure Vercel bundles dependencies correctly
+    // We use 'import' instead of 'require' for better static analysis by Vercel's builder
+    const appModule = await import("../src/app");
     
+    // Cast to any/FastifyInstance to avoid TS errors with the dynamic import type
+    const app = appModule.default as unknown as FastifyInstance;
+    
+    if (!app) {
+      throw new Error("Failed to load app module: default export is missing");
+    }
+
     // Delegate to Fastify
     await app.ready();
     app.server.emit("request", req, res);
