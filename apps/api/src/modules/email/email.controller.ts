@@ -63,7 +63,7 @@ export async function resetPasswordHandler(
         <p>We received a request to reset your password for your MeetEzri account.</p>
         <p>Click the button below to reset it:</p>
         <div style="text-align: center; margin: 30px 0;">
-          <a href="${resetLink}" style="background-color: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Reset Password</a>
+          <a href="${resetLink}" target="_blank" style="background-color: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Reset Password</a>
         </div>
         <p>If you didn't request this, you can safely ignore this email.</p>
         <p style="color: #666; font-size: 12px; margin-top: 30px;">Wait, this link will expire in 1 hour.</p>
