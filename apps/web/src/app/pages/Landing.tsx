@@ -1,4 +1,6 @@
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { useAuth } from "../contexts/AuthContext";
 import { PublicNav } from "../components/PublicNav";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
@@ -10,6 +12,16 @@ import { SUBSCRIPTION_PLANS } from "../utils/subscriptionPlans";
 import type { PlanTier } from "../utils/subscriptionPlans";
 
 export function Landing() {
+  const { user, isLoading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isLoading && user) {
+      // If user is logged in, redirect to onboarding
+      navigate("/onboarding/welcome");
+    }
+  }, [user, isLoading, navigate]);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-purple-50/30 to-white overflow-hidden">
       <PublicNav />
