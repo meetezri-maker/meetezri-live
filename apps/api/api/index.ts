@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import app from '../src/app';
 
 export default async function handler(req: any, res: any) {
   // Set a hard timeout to prevent Vercel from hanging without response
@@ -9,20 +10,6 @@ export default async function handler(req: any, res: any) {
   try {
     // Log for debugging Vercel logs
     console.log(`[API Handler] ${req.method} ${req.url}`);
-
-    // Dynamically import the app to ensure Vercel bundles dependencies correctly
-    // We use 'import' instead of 'require' for better static analysis by Vercel's builder
-    const appModule = await Promise.race([
-      import("../src/app"),
-      timeoutPromise
-    ]) as any;
-    
-    // Cast to any/FastifyInstance to avoid TS errors with the dynamic import type
-    const app = appModule.default as unknown as FastifyInstance;
-    
-    if (!app) {
-      throw new Error("Failed to load app module: default export is missing");
-    }
 
     // Delegate to Fastify with timeout race
     await Promise.race([
