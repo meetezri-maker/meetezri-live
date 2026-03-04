@@ -39,6 +39,50 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { Skeleton } from "../../components/ui/skeleton";
 
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "../../components/ui/form";
+import { Input } from "../../components/ui/input";
+
+const profileSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().email("Invalid email address"),
+
+  phone: z
+    .string()
+    .optional()
+    .or(z.literal(""))
+    .refine((v) => v === "" || /^[0-9]+$/.test(v), "Phone must contain digits only"),
+
+  birthday: z.string().optional(),
+  pronouns: z.string().optional(),
+  location: z.string().optional(),
+  in_therapy: z.string().optional(),
+  on_medication: z.string().optional(),
+  selected_goals: z.string().optional(),
+  selected_triggers: z.string().optional(),
+
+  emergency_contact_name: z.string().min(2, "Contact name is required").optional().or(z.literal("")),
+
+  emergency_contact_phone: z
+    .string()
+    .optional()
+    .or(z.literal(""))
+    .refine((v) => v === "" || /^[0-9]+$/.test(v), "Valid phone number is required (digits only)"),
+
+  emergency_contact_relationship: z.string().optional(),
+});
+
+type ProfileFormValues = z.infer<typeof profileSchema>;
+
 export function UserProfile() {
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
@@ -49,29 +93,38 @@ export function UserProfile() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [joinedAt, setJoinedAt] = useState<string>("");
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    birthday: "",
-    location: "",
-    pronouns: "",
-    emergency_contact_name: "",
-    emergency_contact_phone: "",
-    emergency_contact_relationship: "",
-    in_therapy: "",
-    on_medication: "",
-    selected_goals: [] as string[],
-    selected_triggers: [] as string[],
-    selected_avatar: "",
-    selected_voice: "",
-    selected_environment: ""
+  
+  // Use React Hook Form
+  const form = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      birthday: "",
+      location: "",
+      pronouns: "",
+      emergency_contact_name: "",
+      emergency_contact_phone: "",
+      emergency_contact_relationship: "",
+      in_therapy: "",
+      on_medication: "",
+      selected_goals: "",
+      selected_triggers: "",
+    },
   });
 
   const [userStats, setUserStats] = useState({
     sessions: 0,
     checkins: 0,
     daysActive: 0
+  });
+
+  // Additional state for non-form fields if any (e.g. preferences that are not part of main form)
+  const [preferencesData, setPreferencesData] = useState({
+    selected_avatar: "",
+    selected_voice: "",
+    selected_environment: ""
   });
 
   useEffect(() => {
@@ -84,11 +137,12 @@ export function UserProfile() {
     try {
       const profile = await api.getMe();
       console.log("Loaded profile data:", profile); // Debug logging
-      setFormData({
+      
+      form.reset({
         name: profile.full_name || "",
         email: profile.email || user?.email || "",
         phone: profile.phone || "",
-        birthday: profile.age ? `${profile.age} ` : "",
+        birthday: profile.age ? `${profile.age}` : "",
         location: profile.timezone || "",
         pronouns: profile.pronouns || "",
         emergency_contact_name: profile.emergency_contact_name || "",
@@ -96,12 +150,16 @@ export function UserProfile() {
         emergency_contact_relationship: profile.emergency_contact_relationship || "",
         in_therapy: profile.in_therapy || "Not specified",
         on_medication: profile.on_medication || "Not specified",
-        selected_goals: profile.selected_goals || [],
-        selected_triggers: profile.selected_triggers || [],
+        selected_goals: (profile.selected_goals || []).join(', '),
+        selected_triggers: (profile.selected_triggers || []).join(', '),
+      });
+      
+      setPreferencesData({
         selected_avatar: profile.selected_avatar || "Default Avatar",
         selected_voice: profile.selected_voice || "Default Voice",
         selected_environment: profile.selected_environment || "Default Environment"
       });
+
       setProfileImage(profile.avatar_url);
       if (profile.created_at) {
         setJoinedAt(new Date(profile.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short' }));
@@ -165,52 +223,50 @@ export function UserProfile() {
     }
   };
 
-  const handleSaveProfile = async () => {
-    if (isEditing) {
-      setIsSaving(true);
-      try {
-        const updatedProfile = await api.updateProfile({
-          full_name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          age: formData.birthday, // Mapped from birthday field which is actually age
-          avatar_url: profileImage,
-          pronouns: formData.pronouns,
-          timezone: formData.location,
-          in_therapy: formData.in_therapy,
-          on_medication: formData.on_medication,
-          selected_goals: formData.selected_goals,
-          selected_triggers: formData.selected_triggers,
-          emergency_contact_name: formData.emergency_contact_name,
-          emergency_contact_phone: formData.emergency_contact_phone,
-          emergency_contact_relationship: formData.emergency_contact_relationship
-        });
-        setFormData(prev => ({
-          ...prev,
-          name: updatedProfile.full_name || '',
-          email: updatedProfile.email || '',
-          phone: updatedProfile.phone || '',
-          birthday: updatedProfile.age || '',
-          pronouns: updatedProfile.pronouns || '',
-          location: updatedProfile.timezone || '',
-          in_therapy: updatedProfile.in_therapy || 'Not specified',
-          on_medication: updatedProfile.on_medication || 'Not specified',
-          selected_goals: updatedProfile.selected_goals || [],
-          selected_triggers: updatedProfile.selected_triggers || [],
-          emergency_contact_name: updatedProfile.emergency_contact_name || '',
-          emergency_contact_phone: updatedProfile.emergency_contact_phone || '',
-          emergency_contact_relationship: updatedProfile.emergency_contact_relationship || ''
-        }));
-        toast.success("Profile updated successfully!");
-        setIsEditing(false);
-      } catch (error) {
-        console.error("Profile update error:", error);
-        toast.error("Failed to update profile");
-      } finally {
-        setIsSaving(false);
-      }
-    } else {
-      setIsEditing(true);
+  const onSubmit = async (data: ProfileFormValues) => {
+    setIsSaving(true);
+    try {
+      const updatedProfile = await api.updateProfile({
+        full_name: data.name,
+        email: data.email,
+        phone: data.phone,
+        age: data.birthday, // Mapped from birthday field which is actually age
+        avatar_url: profileImage,
+        pronouns: data.pronouns,
+        timezone: data.location,
+        in_therapy: data.in_therapy,
+        on_medication: data.on_medication,
+        selected_goals: data.selected_goals ? data.selected_goals.split(',').map(s => s.trim()).filter(Boolean) : [],
+        selected_triggers: data.selected_triggers ? data.selected_triggers.split(',').map(s => s.trim()).filter(Boolean) : [],
+        emergency_contact_name: data.emergency_contact_name,
+        emergency_contact_phone: data.emergency_contact_phone,
+        emergency_contact_relationship: data.emergency_contact_relationship
+      });
+      
+      // Update form with returned data to ensure sync
+      form.reset({
+        name: updatedProfile.full_name || '',
+        email: updatedProfile.email || '',
+        phone: updatedProfile.phone || '',
+        birthday: updatedProfile.age || '',
+        pronouns: updatedProfile.pronouns || '',
+        location: updatedProfile.timezone || '',
+        in_therapy: updatedProfile.in_therapy || 'Not specified',
+        on_medication: updatedProfile.on_medication || 'Not specified',
+        selected_goals: (updatedProfile.selected_goals || []).join(', '),
+        selected_triggers: (updatedProfile.selected_triggers || []).join(', '),
+        emergency_contact_name: updatedProfile.emergency_contact_name || '',
+        emergency_contact_phone: updatedProfile.emergency_contact_phone || '',
+        emergency_contact_relationship: updatedProfile.emergency_contact_relationship || ''
+      });
+
+      toast.success("Profile updated successfully!");
+      setIsEditing(false);
+    } catch (error) {
+      console.error("Profile update error:", error);
+      toast.error("Failed to update profile");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -238,19 +294,19 @@ export function UserProfile() {
     {
       icon: Volume2,
       title: "Voice",
-      value: formData.selected_voice || "Not set",
+      value: preferencesData.selected_voice || "Not set",
       link: "/app/settings"
     },
     {
       icon: User,
       title: "Avatar",
-      value: formData.selected_avatar || "Not set",
+      value: preferencesData.selected_avatar || "Not set",
       link: "/app/settings"
     },
     {
       icon: Palette,
       title: "Environment",
-      value: formData.selected_environment || "Not set",
+      value: preferencesData.selected_environment || "Not set",
       link: "/app/settings"
     }
   ];
@@ -418,7 +474,7 @@ export function UserProfile() {
                       <Edit className="w-4 h-4" />
                     </motion.button>
                   </div>
-                  <h2 className="text-2xl font-bold mb-1">{formData.name}</h2>
+                  <h2 className="text-2xl font-bold mb-1">{form.watch('name')}</h2>
                   <p className="text-muted-foreground text-sm">Member since {joinedAt || '...'}</p>
                 </div>
 
@@ -442,15 +498,38 @@ export function UserProfile() {
                   })}
                 </div>
 
-                <Button
-                  onClick={handleSaveProfile}
-                  variant="outline"
-                  className="w-full"
-                  isLoading={isSaving}
-                >
-                  <Edit className="w-4 h-4 mr-2" />
-                  {isEditing ? "Save Changes" : "Edit Profile"}
-                </Button>
+                {isEditing ? (
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={form.handleSubmit(onSubmit)}
+                      className="flex-1"
+                      isLoading={isSaving}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setIsEditing(false);
+                        // Reset form to last loaded values (reload profile to be safe or use form.reset() with saved values if tracked)
+                        loadProfile(); 
+                      }}
+                      variant="outline"
+                      className="flex-1"
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={() => setIsEditing(true)}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit Profile
+                  </Button>
+                )}
               </Card>
             </motion.div>
 
@@ -499,151 +578,195 @@ export function UserProfile() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
             >
-              <Card className={`p-6 shadow-xl transition-all ${isEditing ? 'ring-2 ring-primary shadow-2xl' : ''}`}>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-lg">Personal Information</h3>
-                  {isEditing && (
-                    <motion.span
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="text-xs bg-primary text-white px-3 py-1 rounded-full"
-                    >
-                      Editing Mode
-                    </motion.span>
-                  )}
-                </div>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label className="mb-2 block">Full Name</Label>
-                      <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
-                        isEditing 
-                          ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
-                          : 'border-gray-300 dark:border-gray-700'
-                      }`}>
-                        <User className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                        <input
-                          type="text"
-                          value={formData.name}
-                          disabled={!isEditing || isSaving}
-                          onChange={(e) =>
-                            setFormData({ ...formData, name: e.target.value })
-                          }
-                          className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)}>
+                  <Card className={`p-6 shadow-xl transition-all ${isEditing ? 'ring-2 ring-primary shadow-2xl' : ''}`}>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-bold text-lg">Personal Information</h3>
+                      {isEditing && (
+                        <motion.span
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="text-xs bg-primary text-white px-3 py-1 rounded-full"
+                        >
+                          Editing Mode
+                        </motion.span>
+                      )}
+                    </div>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Full Name</FormLabel>
+                              <FormControl>
+                                <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
+                                  isEditing 
+                                    ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
+                                    : 'border-gray-300 dark:border-gray-700'
+                                }`}>
+                                  <User className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                                  <input
+                                    {...field}
+                                    disabled={!isEditing || isSaving}
+                                    className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
+                                  />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="email"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Email</FormLabel>
+                              <FormControl>
+                                <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
+                                  isEditing 
+                                    ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
+                                    : 'border-gray-300 dark:border-gray-700'
+                                }`}>
+                                  <Mail className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                                  <input
+                                    {...field}
+                                    disabled={!isEditing || isSaving}
+                                    className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
+                                  />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="phone"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Phone</FormLabel>
+                              <FormControl>
+                                <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
+                                  isEditing 
+                                    ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
+                                    : 'border-gray-300 dark:border-gray-700'
+                                }`}>
+                                  <Phone className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                                  {/* <input
+                                    {...field}
+                                    disabled={!isEditing || isSaving}
+                                    className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
+                                  /> */}
+                                  <input
+  value={field.value || ""}
+  onChange={(e) => {
+    const onlyDigits = e.target.value.replace(/\D/g, "");
+    field.onChange(onlyDigits);
+  }}
+  disabled={!isEditing || isSaving}
+  inputMode="numeric"
+  pattern="[0-9]*"
+  className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
+/>
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="birthday"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Age</FormLabel>
+                              <FormControl>
+                                <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
+                                  isEditing 
+                                    ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
+                                    : 'border-gray-300 dark:border-gray-700'
+                                }`}>
+                                  <Calendar className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                                  <input
+                                    {...field}
+                                    disabled={!isEditing || isSaving}
+                                    className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
+                                    placeholder="Age"
+                                  />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="pronouns"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Pronouns</FormLabel>
+                              <FormControl>
+                                <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
+                                  isEditing 
+                                    ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
+                                    : 'border-gray-300 dark:border-gray-700'
+                                }`}>
+                                  <User className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                                  <input
+                                    {...field}
+                                    disabled={!isEditing || isSaving}
+                                    className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
+                                  />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="location"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Location/Timezone</FormLabel>
+                              <FormControl>
+                                <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
+                                  isEditing 
+                                    ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
+                                    : 'border-gray-300 dark:border-gray-700'
+                                }`}>
+                                  <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                                  <input
+                                    {...field}
+                                    disabled={!isEditing || isSaving}
+                                    className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
+                                  />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
                         />
                       </div>
                     </div>
-
-                    <div>
-                      <Label className="mb-2 block">Email</Label>
-                      <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
-                        isEditing 
-                          ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
-                          : 'border-gray-300 dark:border-gray-700'
-                      }`}>
-                        <Mail className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                        <input
-                          type="email"
-                          value={formData.email}
-                          disabled={!isEditing || isSaving}
-                          onChange={(e) =>
-                            setFormData({ ...formData, email: e.target.value })
-                          }
-                          className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="mb-2 block">Phone</Label>
-                      <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
-                        isEditing 
-                          ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
-                          : 'border-gray-300 dark:border-gray-700'
-                      }`}>
-                        <Phone className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                        <input
-                          type="tel"
-                          value={formData.phone}
-                          disabled={!isEditing || isSaving}
-                          onChange={(e) =>
-                            setFormData({ ...formData, phone: e.target.value })
-                          }
-                          className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="mb-2 block">Age</Label>
-                      <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
-                        isEditing 
-                          ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
-                          : 'border-gray-300 dark:border-gray-700'
-                      }`}>
-                        <Calendar className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                        <input
-                          type="text"
-                          value={formData.birthday}
-                          disabled={!isEditing || isSaving}
-                          onChange={(e) =>
-                            setFormData({ ...formData, birthday: e.target.value })
-                          }
-                          className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-                          placeholder="Age"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="mb-2 block">Pronouns</Label>
-                      <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
-                        isEditing 
-                          ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
-                          : 'border-gray-300 dark:border-gray-700'
-                      }`}>
-                        <User className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                        <input
-                          type="text"
-                          value={formData.pronouns}
-                          disabled={!isEditing || isSaving}
-                          onChange={(e) =>
-                            setFormData({ ...formData, pronouns: e.target.value })
-                          }
-                          className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="mb-2 block">Location/Timezone</Label>
-                      <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
-                        isEditing 
-                          ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
-                          : 'border-gray-300 dark:border-gray-700'
-                      }`}>
-                        <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                        <input
-                          type="text"
-                          value={formData.location}
-                          disabled={!isEditing || isSaving}
-                          onChange={(e) =>
-                            setFormData({ ...formData, location: e.target.value })
-                          }
-                          className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </motion.div>
-
+                  </Card>
+                
+            
             {/* Wellness Profile (New Section) */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
+              className="mt-6"
             >
               <Card className="p-6 shadow-xl">
                 <div className="flex items-center justify-between mb-4">
@@ -657,120 +780,147 @@ export function UserProfile() {
                 <div className="space-y-6">
                   {/* Therapy & Medication */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Users className="w-4 h-4 text-purple-500" />
-                        <span className="font-semibold text-sm">Therapy Status</span>
-                      </div>
-                      {isEditing ? (
-                        <select
-                          value={formData.in_therapy}
-                          disabled={isSaving}
-                          onChange={(e) => setFormData({ ...formData, in_therapy: e.target.value })}
-                          className="w-full p-2 border dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-sm disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-                        >
-                          <option value="">Select...</option>
-                          <option value="Yes">Yes</option>
-                          <option value="No">No</option>
-                          <option value="Previously">Previously</option>
-                          <option value="Thinking about it">Thinking about it</option>
-                        </select>
-                      ) : (
-                        <p className="text-sm text-gray-700 dark:text-gray-300">{formData.in_therapy || "Not specified"}</p>
+                    <FormField
+                      control={form.control}
+                      name="in_therapy"
+                      render={({ field }) => (
+                        <FormItem className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg space-y-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Users className="w-4 h-4 text-purple-500" />
+                            <FormLabel className="font-semibold text-sm">Therapy Status</FormLabel>
+                          </div>
+                          <FormControl>
+                            {isEditing ? (
+                              <select
+                                {...field}
+                                disabled={isSaving}
+                                className="w-full p-2 border dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-sm disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
+                              >
+                                <option value="">Select...</option>
+                                <option value="Yes">Yes</option>
+                                <option value="No">No</option>
+                                <option value="Previously">Previously</option>
+                                <option value="Thinking about it">Thinking about it</option>
+                              </select>
+                            ) : (
+                              <p className="text-sm text-gray-700 dark:text-gray-300">{field.value || "Not specified"}</p>
+                            )}
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
                       )}
-                    </div>
-                    <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Pill className="w-4 h-4 text-blue-500" />
-                        <span className="font-semibold text-sm">Medication</span>
-                      </div>
-                      {isEditing ? (
-                         <select
-                          value={formData.on_medication}
-                          disabled={isSaving}
-                          onChange={(e) => setFormData({ ...formData, on_medication: e.target.value })}
-                          className="w-full p-2 border dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <option value="">Select...</option>
-                          <option value="Yes">Yes</option>
-                          <option value="No">No</option>
-                          <option value="Prefer not to say">Prefer not to say</option>
-                        </select>
-                      ) : (
-                        <p className="text-sm text-gray-700 dark:text-gray-300">{formData.on_medication || "Not specified"}</p>
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="on_medication"
+                      render={({ field }) => (
+                        <FormItem className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg space-y-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Pill className="w-4 h-4 text-blue-500" />
+                            <FormLabel className="font-semibold text-sm">Medication</FormLabel>
+                          </div>
+                          <FormControl>
+                            {isEditing ? (
+                               <select
+                                {...field}
+                                disabled={isSaving}
+                                className="w-full p-2 border dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <option value="">Select...</option>
+                                <option value="Yes">Yes</option>
+                                <option value="No">No</option>
+                                <option value="Prefer not to say">Prefer not to say</option>
+                              </select>
+                            ) : (
+                              <p className="text-sm text-gray-700 dark:text-gray-300">{field.value || "Not specified"}</p>
+                            )}
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
                       )}
-                    </div>
+                    />
                   </div>
 
                   {/* Goals */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Target className="w-4 h-4 text-green-500" />
-                      <span className="font-semibold text-sm">Selected Goals</span>
-                    </div>
-                    {isEditing ? (
-                      <div className="space-y-2">
-                        <textarea
-                          value={formData.selected_goals.join(', ')}
-                          disabled={isSaving}
-                          onChange={(e) => setFormData({ 
-                            ...formData, 
-                            selected_goals: e.target.value.split(',').map(s => s.trim())
-                          })}
-                          className="w-full p-2 border dark:border-gray-700 rounded-md text-sm min-h-[80px] bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                          placeholder="Enter goals separated by commas (e.g., Better sleep, Less anxiety)"
-                        />
-                        <p className="text-xs text-muted-foreground">Separate goals with commas</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {formData.selected_goals.length > 0 ? (
-                          formData.selected_goals.map((goal, i) => (
-                            <Badge key={i} variant="secondary" className="px-3 py-1">
-                              {goal}
-                            </Badge>
-                          ))
-                        ) : (
-                          <p className="text-sm text-muted-foreground italic">No goals selected</p>
-                        )}
-                      </div>
+                  <FormField
+                    control={form.control}
+                    name="selected_goals"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Target className="w-4 h-4 text-green-500" />
+                          <FormLabel className="font-semibold text-sm">Selected Goals</FormLabel>
+                        </div>
+                        <FormControl>
+                          {isEditing ? (
+                            <div className="space-y-2">
+                              <textarea
+                                {...field}
+                                disabled={isSaving}
+                                className="w-full p-2 border dark:border-gray-700 rounded-md text-sm min-h-[80px] bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                placeholder="Enter goals separated by commas (e.g., Better sleep, Less anxiety)"
+                              />
+                              <p className="text-xs text-muted-foreground">Separate goals with commas</p>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {field.value && field.value.length > 0 ? (
+                                field.value.split(',').map(s => s.trim()).filter(Boolean).map((goal, i) => (
+                                  <Badge key={i} variant="secondary" className="px-3 py-1">
+                                    {goal}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <p className="text-sm text-muted-foreground italic">No goals selected</p>
+                              )}
+                            </div>
+                          )}
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </div>
+                  />
 
                   {/* Triggers */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Zap className="w-4 h-4 text-orange-500" />
-                      <span className="font-semibold text-sm">Triggers / Challenges</span>
-                    </div>
-                    {isEditing ? (
-                      <div className="space-y-2">
-                         <textarea
-                          value={formData.selected_triggers.join(', ')}
-                          disabled={isSaving}
-                          onChange={(e) => setFormData({ 
-                            ...formData, 
-                            selected_triggers: e.target.value.split(',').map(s => s.trim())
-                          })}
-                          className="w-full p-2 border dark:border-gray-700 rounded-md text-sm min-h-[80px] bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                          placeholder="Enter triggers separated by commas (e.g., Work stress, Social anxiety)"
-                        />
-                        <p className="text-xs text-muted-foreground">Separate triggers with commas</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {formData.selected_triggers.length > 0 ? (
-                          formData.selected_triggers.map((trigger, i) => (
-                            <Badge key={i} variant="outline" className="px-3 py-1 border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300">
-                              {trigger}
-                            </Badge>
-                          ))
-                        ) : (
-                          <p className="text-sm text-muted-foreground italic">No triggers specified</p>
-                        )}
-                      </div>
+                  <FormField
+                    control={form.control}
+                    name="selected_triggers"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Zap className="w-4 h-4 text-orange-500" />
+                          <FormLabel className="font-semibold text-sm">Triggers / Challenges</FormLabel>
+                        </div>
+                        <FormControl>
+                          {isEditing ? (
+                            <div className="space-y-2">
+                               <textarea
+                                {...field}
+                                disabled={isSaving}
+                                className="w-full p-2 border dark:border-gray-700 rounded-md text-sm min-h-[80px] bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                placeholder="Enter triggers separated by commas (e.g., Work stress, Social anxiety)"
+                              />
+                              <p className="text-xs text-muted-foreground">Separate triggers with commas</p>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {field.value && field.value.length > 0 ? (
+                                field.value.split(',').map(s => s.trim()).filter(Boolean).map((trigger, i) => (
+                                  <Badge key={i} variant="outline" className="px-3 py-1 border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300">
+                                    {trigger}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <p className="text-sm text-muted-foreground italic">No triggers specified</p>
+                              )}
+                            </div>
+                          )}
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </div>
+                  />
                 </div>
               </Card>
             </motion.div>
@@ -780,6 +930,7 @@ export function UserProfile() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.35 }}
+              className="mt-6"
             >
               <Card className="p-6 shadow-xl border-l-4 border-l-red-400">
                 <div className="flex items-center gap-2 mb-4">
@@ -788,58 +939,83 @@ export function UserProfile() {
                 </div>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Name</Label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={formData.emergency_contact_name}
-                        disabled={isSaving}
-                        onChange={(e) => setFormData({ ...formData, emergency_contact_name: e.target.value })}
-                        className="w-full mt-1 p-2 border rounded-lg border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20 outline-none text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                        placeholder="Contact Name"
-                      />
-                    ) : (
-                      <p className="font-medium mt-1">{formData.emergency_contact_name || "Not set"}</p>
+                  <FormField
+                    control={form.control}
+                    name="emergency_contact_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wider">Name</Label>
+                        <FormControl>
+                          {isEditing ? (
+                            <input
+                              {...field}
+                              disabled={isSaving}
+                              className="w-full mt-1 p-2 border rounded-lg border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20 outline-none text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                              placeholder="Contact Name"
+                            />
+                          ) : (
+                            <p className="font-medium mt-1">{field.value || "Not set"}</p>
+                          )}
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Relationship</Label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={formData.emergency_contact_relationship}
-                        disabled={isSaving}
-                        onChange={(e) => setFormData({ ...formData, emergency_contact_relationship: e.target.value })}
-                        className="w-full mt-1 p-2 border rounded-lg border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20 outline-none text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                        placeholder="Relationship"
-                      />
-                    ) : (
-                      <p className="font-medium mt-1">{formData.emergency_contact_relationship || "Not set"}</p>
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="emergency_contact_relationship"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wider">Relationship</Label>
+                        <FormControl>
+                          {isEditing ? (
+                            <input
+                              {...field}
+                              disabled={isSaving}
+                              className="w-full mt-1 p-2 border rounded-lg border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20 outline-none text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                              placeholder="Relationship"
+                            />
+                          ) : (
+                            <p className="font-medium mt-1">{field.value || "Not set"}</p>
+                          )}
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground uppercase tracking-wider">Phone</Label>
-                    {isEditing ? (
-                      <input
-                        type="tel"
-                        value={formData.emergency_contact_phone}
-                        disabled={isSaving}
-                        onChange={(e) => setFormData({ ...formData, emergency_contact_phone: e.target.value })}
-                        className="w-full mt-1 p-2 border rounded-lg border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20 outline-none text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                        placeholder="Contact Phone"
-                      />
-                    ) : (
-                      <div className="flex items-center gap-2 mt-1">
-                        <Phone className="w-3 h-3 text-gray-400 dark:text-gray-500" />
-                        <p className="font-medium">{formData.emergency_contact_phone || "Not set"}</p>
-                      </div>
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="emergency_contact_phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wider">Phone</Label>
+                        <FormControl>
+                          {isEditing ? (
+                            <input
+                              {...field}
+                              disabled={isSaving}
+                              className="w-full mt-1 p-2 border rounded-lg border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20 outline-none text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                              placeholder="Contact Phone"
+                            />
+                          ) : (
+                            <div className="flex items-center gap-2 mt-1">
+                              <Phone className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+                              <p className="font-medium">{field.value || "Not set"}</p>
+                            </div>
+                          )}
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </div>
+                  />
                 </div>
               </Card>
             </motion.div>
-
+            </form>
+            </Form>
+</motion.div>
             {/* Settings Sections */}
             {settingsSections.map((section, sectionIndex) => (
               <motion.div

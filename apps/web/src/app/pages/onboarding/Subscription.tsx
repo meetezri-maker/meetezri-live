@@ -8,6 +8,10 @@ import { Check, Loader2, Sparkles, Zap, Crown } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Form, FormField, FormItem, FormControl, FormMessage } from "../../components/ui/form";
 
 import {
   Select,
@@ -17,32 +21,40 @@ import {
   SelectValue,
 } from "../../components/ui/select";
 
+const subscriptionSchema = z.object({
+  selectedPlan: z.enum(["trial", "core", "pro"] as const),
+});
+
+type SubscriptionValues = z.infer<typeof subscriptionSchema>;
+
 export function OnboardingSubscription() {
   const navigate = useNavigate();
-  const [selectedPlan, setSelectedPlan] = useState<PlanTier>("trial");
   const [isProcessing, setIsProcessing] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'single'>('list');
+
+  const form = useForm<SubscriptionValues>({
+    resolver: zodResolver(subscriptionSchema),
+    defaultValues: {
+      selectedPlan: "trial",
+    },
+  });
+
+  const selectedPlan = form.watch("selectedPlan");
 
   useEffect(() => {
     const storedPlan = localStorage.getItem("selectedPlan") as PlanTier;
     if (storedPlan && SUBSCRIPTION_PLANS[storedPlan]) {
-      setSelectedPlan(storedPlan);
+      form.setValue("selectedPlan", storedPlan);
       setViewMode('single');
-      // Clear storage so subsequent visits (refresh) might not lock it? 
-      // Actually, user might want to refresh. Keeping it is fine.
-      // Or maybe clear it if they navigate away? 
-      // User requirement: "if the user comes directly ... then the same flow".
-      // Direct flow has no storedPlan.
-      // Pricing flow has storedPlan.
     }
-  }, []);
+  }, [form]);
 
-  const handleContinue = async () => {
+  const onSubmit = async (values: SubscriptionValues) => {
     setIsProcessing(true);
     try {
-      console.log("Processing subscription for plan:", selectedPlan);
+      console.log("Processing subscription for plan:", values.selectedPlan);
       
-      if (selectedPlan === "trial") {
+      if (values.selectedPlan === "trial") {
         toast.info("Activating your free trial...");
         // For trial, just create subscription and move on
         const result = await api.billing.createSubscription({
@@ -51,8 +63,6 @@ export function OnboardingSubscription() {
         });
         console.log("Trial subscription result:", result);
         
-        // Update local profile/context if needed? 
-        // The next page will likely fetch fresh data or we rely on backend.
         // Navigate to wellness baseline
         navigate("/onboarding/wellness-baseline");
       } else {
@@ -64,7 +74,7 @@ export function OnboardingSubscription() {
         const cancelUrl = `${origin}/onboarding/subscription`;
 
         const result = await api.billing.createSubscription({
-          plan_type: selectedPlan,
+          plan_type: values.selectedPlan,
           billing_cycle: "monthly",
           successUrl,
           cancelUrl
@@ -127,7 +137,7 @@ export function OnboardingSubscription() {
               ? `${styles.border} ${styles.bg}` 
               : "border-transparent hover:border-border/50 bg-card/50"
           }`}
-          onClick={() => setSelectedPlan(tier)}
+          onClick={() => form.setValue("selectedPlan", tier)}
         >
           {isSelected && (
             <div className={`absolute top-0 right-0 p-1 ${styles.badge} rounded-bl-lg`}>
@@ -183,62 +193,79 @@ export function OnboardingSubscription() {
       showBack={true}
       onBack={() => navigate("/onboarding/profile-setup")}
     >
-      <div className="space-y-6">
-        {viewMode === 'list' ? (
-          <div className="grid grid-cols-1 gap-4">
-            {plans.map((tier) => renderPlanCard(tier))}
-          </div>
-        ) : (
-          <div className="max-w-md mx-auto space-y-6">
-            {renderPlanCard(selectedPlan)}
-            
-            <div className="space-y-2 bg-slate-50 p-4 rounded-lg border border-slate-100">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-slate-700">Want to switch plans?</p>
-              </div>
-              <Select value={selectedPlan} onValueChange={(val) => setSelectedPlan(val as PlanTier)}>
-                <SelectTrigger className="w-full bg-white">
-                  <SelectValue placeholder="Select a plan" />
-                </SelectTrigger>
-                <SelectContent>
-                  {plans.map((tier) => (
-                    <SelectItem key={tier} value={tier}>
-                      {SUBSCRIPTION_PLANS[tier].displayName} - {SUBSCRIPTION_PLANS[tier].price === 0 ? 'Free' : `$${SUBSCRIPTION_PLANS[tier].price}/mo`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
-              <div className="pt-2 text-center">
-                <button 
-                  onClick={() => setViewMode('list')}
-                  className="text-xs text-muted-foreground hover:text-primary underline decoration-dotted transition-colors"
-                >
-                  Compare all features
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="flex justify-end pt-4">
-          <Button 
-            onClick={handleContinue} 
-            disabled={isProcessing}
-            className="w-full md:w-auto min-w-[150px]"
-            size="lg"
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              "Continue"
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <FormField
+            control={form.control}
+            name="selectedPlan"
+            render={() => (
+              <FormItem>
+                <FormControl>
+                  {viewMode === 'list' ? (
+                    <div className="grid grid-cols-1 gap-4">
+                      {plans.map((tier) => renderPlanCard(tier))}
+                    </div>
+                  ) : (
+                    <div className="max-w-md mx-auto space-y-6">
+                      {renderPlanCard(selectedPlan)}
+                      
+                      <div className="space-y-2 bg-slate-50 p-4 rounded-lg border border-slate-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm font-medium text-slate-700">Want to switch plans?</p>
+                        </div>
+                        <Select 
+                          value={selectedPlan} 
+                          onValueChange={(val) => form.setValue("selectedPlan", val as PlanTier)}
+                        >
+                          <SelectTrigger className="w-full bg-white">
+                            <SelectValue placeholder="Select a plan" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {plans.map((tier) => (
+                              <SelectItem key={tier} value={tier}>
+                                {SUBSCRIPTION_PLANS[tier].displayName} - {SUBSCRIPTION_PLANS[tier].price === 0 ? 'Free' : `$${SUBSCRIPTION_PLANS[tier].price}/mo`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        
+                        <div className="pt-2 text-center">
+                          <button 
+                            type="button"
+                            onClick={() => setViewMode('list')}
+                            className="text-xs text-muted-foreground hover:text-primary underline decoration-dotted transition-colors"
+                          >
+                            Compare all features
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </FormControl>
+                <FormMessage />
+              </FormItem>
             )}
-          </Button>
-        </div>
-      </div>
+          />
+
+          <div className="flex justify-end pt-4">
+            <Button 
+              type="submit"
+              disabled={isProcessing}
+              className="w-full md:w-auto min-w-[150px]"
+              size="lg"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                "Continue"
+              )}
+            </Button>
+          </div>
+        </form>
+      </Form>
     </OnboardingLayout>
   );
 }

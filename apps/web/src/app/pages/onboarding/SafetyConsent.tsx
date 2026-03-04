@@ -3,7 +3,6 @@
  * Safety & Support Notice onboarding step
  */
 
-import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { OnboardingLayout } from '@/app/components/OnboardingLayout';
 import { Button } from '@/app/components/ui/button';
@@ -12,16 +11,39 @@ import { Card } from '@/app/components/ui/card';
 import { ShieldCheck, AlertCircle, Users, Phone } from 'lucide-react';
 import { useSafetyConsent } from '@/app/contexts/SafetyContext';
 import { useOnboarding } from '@/app/contexts/OnboardingContext';
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/app/components/ui/form';
+
+const safetyConsentSchema = z.object({
+  agreed: z.boolean().refine((val) => val === true, {
+    message: "You must agree to the safety guidelines to continue",
+  }),
+});
+
+type SafetyConsentValues = z.infer<typeof safetyConsentSchema>;
 
 export function OnboardingSafetyConsent() {
   const navigate = useNavigate();
   const { updateConsent } = useSafetyConsent();
   const { updateData } = useOnboarding();
-  const [agreed, setAgreed] = useState(false);
 
-  const handleContinue = () => {
-    if (!agreed) return;
+  const form = useForm<SafetyConsentValues>({
+    resolver: zodResolver(safetyConsentSchema),
+    defaultValues: {
+      agreed: false,
+    },
+  });
 
+  const onSubmit = (values: SafetyConsentValues) => {
     // Save consent
     updateConsent({
       agreedToSafetyNotice: true,
@@ -138,59 +160,73 @@ export function OnboardingSafetyConsent() {
 
         {/* Agreement checkbox */}
         <Card className="p-6 bg-gray-50">
-          <div className="space-y-4">
-            <h4 className="font-semibold text-gray-900">
-              By Continuing, You Acknowledge:
-            </h4>
-            
-            <div className="space-y-3 text-sm text-gray-700">
-              <div className="flex items-start gap-2">
-                <span className="text-blue-600 mt-1">✓</span>
-                <span>Ezri provides support and companionship, not medical treatment</span>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <h4 className="font-semibold text-gray-900">
+                By Continuing, You Acknowledge:
+              </h4>
+              
+              <div className="space-y-3 text-sm text-gray-700">
+                <div className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-1">✓</span>
+                  <span>Ezri provides support and companionship, not medical treatment</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-1">✓</span>
+                  <span>You are responsible for seeking immediate help when needed</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-1">✓</span>
+                  <span>Ezri may adjust conversations and show resources based on safety concerns</span>
+                </div>
               </div>
-              <div className="flex items-start gap-2">
-                <span className="text-blue-600 mt-1">✓</span>
-                <span>You are responsible for seeking immediate help when needed</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <span className="text-blue-600 mt-1">✓</span>
-                <span>Ezri may adjust conversations and show resources based on safety concerns</span>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-3 pt-4 border-t">
-              <Checkbox
-                id="safety-consent"
-                checked={agreed}
-                onCheckedChange={(checked) => setAgreed(checked as boolean)}
+              <FormField
+                control={form.control}
+                name="agreed"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center gap-3 pt-4 border-t space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        id="safety-consent"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel
+                        htmlFor="safety-consent"
+                        className="text-sm font-medium text-gray-900 cursor-pointer select-none"
+                      >
+                        I understand and agree to these safety guidelines
+                      </FormLabel>
+                      <FormMessage />
+                    </div>
+                  </FormItem>
+                )}
               />
-              <label
-                htmlFor="safety-consent"
-                className="text-sm font-medium text-gray-900 cursor-pointer select-none"
-              >
-                I understand and agree to these safety guidelines
-              </label>
-            </div>
-          </div>
-        </Card>
 
-        {/* Navigation buttons */}
-        <div className="flex gap-4 pt-6">
-          <Button
-            variant="outline"
-            onClick={() => navigate('/onboarding/avatar-preferences')}
-            className="flex-1"
-          >
-            Back
-          </Button>
-          <Button
-            onClick={handleContinue}
-            disabled={!agreed}
-            className="flex-1"
-          >
-            Continue
-          </Button>
-        </div>
+              {/* Navigation buttons */}
+              <div className="flex gap-4 pt-6">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigate('/onboarding/avatar-preferences')}
+                  className="flex-1"
+                >
+                  Back
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={!form.watch('agreed')}
+                  className="flex-1"
+                >
+                  Continue
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </Card>
       </div>
     </OnboardingLayout>
   );
