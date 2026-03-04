@@ -1012,10 +1012,9 @@ export function UserProfile() {
                   />
                 </div>
               </Card>
-            </motion.div>
             </form>
             </Form>
-</motion.div>
+          </motion.div>
             {/* Settings Sections */}
             {settingsSections.map((section, sectionIndex) => (
               <motion.div
