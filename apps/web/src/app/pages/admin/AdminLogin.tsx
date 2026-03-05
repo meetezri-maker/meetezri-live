@@ -175,9 +175,47 @@ export function AdminLogin() {
       await verifyRoleAndNavigate();
 
     } catch (err: any) {
+      const rawMsg = err?.message || "Authentication failed";
       console.error("Admin login error:", err);
-      setError(err.message || "Authentication failed");
-      toast.error(err.message || "Authentication failed");
+
+      // Handle a known intermittent Supabase issue where auth returns:
+      // "Database error granting user ..." on sign-in
+      if (typeof rawMsg === "string" && rawMsg.toLowerCase().includes("database error") && rawMsg.toLowerCase().includes("granting user")) {
+        toast.error("Temporary auth issue. Retrying sign-in…");
+        try {
+          // Small backoff then retry once
+          await new Promise((r) => setTimeout(r, 500));
+          const { data: { user }, error: retryError } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (retryError || !user) {
+            throw retryError || new Error("Authentication failed");
+          }
+
+          // If retry works, continue as normal
+          const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
+          if (factorsError) throw factorsError;
+          const totpFactor = factors?.totp?.[0];
+          if (totpFactor) {
+            setMfaFactorId(totpFactor.id);
+            setStep("mfa");
+            setIsLoading(false);
+            return;
+          }
+          await verifyRoleAndNavigate();
+          return;
+        } catch (retryErr: any) {
+          console.error("Retry sign-in failed:", retryErr);
+          setError(rawMsg);
+          toast.error("Authentication error: please try again or reset your password.");
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      setError(rawMsg);
+      toast.error(rawMsg);
       setIsLoading(false);
     }
   };
