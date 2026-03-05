@@ -39,7 +39,13 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   }
 
   if (allowedRoles && allowedRoles.length > 0 && !hasRole(allowedRoles)) {
-    return <Navigate to="/dashboard" replace />;
+    // If user tries to access an area they don't have role for:
+    // - Admin paths -> permission denied page
+    // - App paths -> redirect to main app dashboard
+    if (location.pathname.startsWith('/admin')) {
+      return <Navigate to="/error/permission-denied" replace />;
+    }
+    return <Navigate to="/app/dashboard" replace />;
   }
 
   return <>{children}</>;

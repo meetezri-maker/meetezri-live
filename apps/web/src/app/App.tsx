@@ -48,6 +48,77 @@ import { OnboardingComplete } from '@/app/pages/onboarding/Complete';
 import { Dashboard } from '@/app/pages/app/Dashboard';
 import { UserProfile } from '@/app/pages/app/UserProfile';
 
+// Admin Pages
+import { SuperAdminDashboard } from '@/app/pages/admin/SuperAdminDashboard';
+import { OrgAdminDashboard } from '@/app/pages/admin/OrgAdminDashboard';
+import { TeamAdminDashboard } from '@/app/pages/admin/TeamAdminDashboard';
+import { UserManagement } from '@/app/pages/admin/UserManagement';
+import { UserSegmentation } from '@/app/pages/admin/UserSegmentation';
+import { TeamRoleManagement } from '@/app/pages/admin/TeamRoleManagement';
+import { CompanionManagement } from '@/app/pages/admin/CompanionManagement';
+import { AIAvatarManager } from '@/app/pages/admin/AIAvatarManager';
+import { ConversationTranscripts } from '@/app/pages/admin/ConversationTranscripts';
+import { CrisisDashboard } from '@/app/pages/admin/CrisisDashboard';
+import { CrisisMonitoring } from '@/app/pages/admin/CrisisMonitoring';
+import { CrisisEventDetails } from '@/app/pages/admin/CrisisEventDetails';
+import { CrisisFollowUpQueue } from '@/app/pages/admin/CrisisFollowUpQueue';
+import { CrisisProtocol } from '@/app/pages/admin/CrisisProtocol';
+import { Analytics } from '@/app/pages/admin/Analytics';
+import { UsageOverview } from '@/app/pages/admin/UsageOverview';
+import { UsageAnalytics } from '@/app/pages/admin/UsageAnalytics';
+import { SessionAnalytics } from '@/app/pages/admin/SessionAnalytics';
+import { EngagementMetrics } from '@/app/pages/admin/EngagementMetrics';
+import { RetentionMetrics } from '@/app/pages/admin/RetentionMetrics';
+import { FeatureAdoption } from '@/app/pages/admin/FeatureAdoption';
+import { OnboardingAnalytics } from '@/app/pages/admin/OnboardingAnalytics';
+import { ReportsAnalytics } from '@/app/pages/admin/ReportsAnalytics';
+import { ContentManagement } from '@/app/pages/admin/ContentManagement';
+import { WellnessToolsCMS } from '@/app/pages/admin/WellnessToolsCMS';
+import { WellnessContentCMS } from '@/app/pages/admin/WellnessContentCMS';
+import { WellnessContentLibrary } from '@/app/pages/admin/WellnessContentLibrary';
+import { WellnessToolEditor } from '@/app/pages/admin/WellnessToolEditor';
+import { ExerciseLibrary } from '@/app/pages/admin/ExerciseLibrary';
+import { ContentPerformance } from '@/app/pages/admin/ContentPerformance';
+import { ContentModeration } from '@/app/pages/admin/ContentModeration';
+import { NudgeManagement } from '@/app/pages/admin/NudgeManagement';
+import { NudgeTemplates } from '@/app/pages/admin/NudgeTemplates';
+import { NudgeScheduler } from '@/app/pages/admin/NudgeScheduler';
+import { NudgePerformance } from '@/app/pages/admin/NudgePerformance';
+import { WellnessChallenges } from '@/app/pages/admin/WellnessChallenges';
+import { BadgeManager } from '@/app/pages/admin/BadgeManager';
+import { NotificationsCenter } from '@/app/pages/admin/NotificationsCenter';
+import { ManualNotifications } from '@/app/pages/admin/ManualNotifications';
+import { EmailTemplates } from '@/app/pages/admin/EmailTemplates';
+import { PushNotifications } from '@/app/pages/admin/PushNotifications';
+import { SupportTickets } from '@/app/pages/admin/SupportTickets';
+import { CommunityManagement } from '@/app/pages/admin/CommunityManagement';
+import { LiveSessionsMonitor } from '@/app/pages/admin/LiveSessionsMonitor';
+import { SessionRecordings } from '@/app/pages/admin/SessionRecordings';
+import { ActivityMonitor } from '@/app/pages/admin/ActivityMonitor';
+import { SystemHealthEnhanced } from '@/app/pages/admin/SystemHealthEnhanced';
+import { SystemHealthDashboard } from '@/app/pages/admin/SystemHealthDashboard';
+import { ErrorTracking } from '@/app/pages/admin/ErrorTracking';
+import { SystemSettingsEnhanced } from '@/app/pages/admin/SystemSettingsEnhanced';
+import { GlobalConfiguration } from '@/app/pages/admin/GlobalConfiguration';
+import { FeatureFlags } from '@/app/pages/admin/FeatureFlags';
+import { APIManagement } from '@/app/pages/admin/APIManagement';
+import { IntegrationSettings } from '@/app/pages/admin/IntegrationSettings';
+import { BrandingCustomization } from '@/app/pages/admin/BrandingCustomization';
+import { ABTesting } from '@/app/pages/admin/ABTesting';
+import { Billing as AdminBilling } from '@/app/pages/admin/Billing';
+import { BillingSubscriptions } from '@/app/pages/admin/BillingSubscriptions';
+import { PackageManager } from '@/app/pages/admin/PackageManager';
+import { PayAsYouGoManager } from '@/app/pages/admin/PayAsYouGoManager';
+import { ComplianceDashboard } from '@/app/pages/admin/ComplianceDashboard';
+import { HIPAACompliance } from '@/app/pages/admin/HIPAACompliance';
+import { DataPrivacyControls } from '@/app/pages/admin/DataPrivacyControls';
+import { DataRetentionPrivacy } from '@/app/pages/admin/DataRetentionPrivacy';
+import { AuditLogs } from '@/app/pages/admin/AuditLogs';
+import { SystemLogs } from '@/app/pages/admin/SystemLogs';
+import { LegalDocumentation } from '@/app/pages/admin/LegalDocumentation';
+import { DataExport } from '@/app/pages/admin/DataExport';
+import { BackupRecovery } from '@/app/pages/admin/BackupRecovery';
+
 // Error Pages
 import { Error404 } from '@/app/pages/errors/Error404';
 import { Error500 } from '@/app/pages/errors/Error500';
@@ -211,8 +282,103 @@ export default function App() {
             <Route path="/app/user-profile" element={<UserProfile />} />
             <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />
             
-            {/* Admin Routes - Protected */}
-            <Route path="/admin/*" element={<AppLayout><ComingSoon /></AppLayout>} />
+            {/* Admin Routes - Protected (Super Admin area) */}
+            {/* Dashboards */}
+            <Route path="/admin/super-admin-dashboard" element={<SuperAdminDashboard />} />
+            <Route path="/admin/org-admin-dashboard" element={<OrgAdminDashboard />} />
+            <Route path="/admin/team-admin-dashboard" element={<TeamAdminDashboard />} />
+
+            {/* User Management */}
+            <Route path="/admin/user-management" element={<UserManagement />} />
+            <Route path="/admin/user-segmentation" element={<UserSegmentation />} />
+            <Route path="/admin/team-role-management" element={<TeamRoleManagement />} />
+            <Route path="/admin/companion-management" element={<CompanionManagement />} />
+
+            {/* AI Avatar System */}
+            <Route path="/admin/ai-avatar-manager" element={<AIAvatarManager />} />
+            <Route path="/admin/conversation-transcripts" element={<ConversationTranscripts />} />
+
+            {/* Crisis Management */}
+            <Route path="/admin/crisis-dashboard" element={<CrisisDashboard />} />
+            <Route path="/admin/crisis-monitoring" element={<CrisisMonitoring />} />
+            <Route path="/admin/crisis-event-details" element={<CrisisEventDetails />} />
+            <Route path="/admin/crisis-follow-up-queue" element={<CrisisFollowUpQueue />} />
+            <Route path="/admin/crisis-protocol" element={<CrisisProtocol />} />
+
+            {/* Analytics */}
+            <Route path="/admin/analytics" element={<Analytics />} />
+            <Route path="/admin/usage-overview" element={<UsageOverview />} />
+            <Route path="/admin/usage-analytics" element={<UsageAnalytics />} />
+            <Route path="/admin/session-analytics" element={<SessionAnalytics />} />
+            <Route path="/admin/engagement-metrics" element={<EngagementMetrics />} />
+            <Route path="/admin/retention-metrics" element={<RetentionMetrics />} />
+            <Route path="/admin/feature-adoption" element={<FeatureAdoption />} />
+            <Route path="/admin/onboarding-analytics" element={<OnboardingAnalytics />} />
+            <Route path="/admin/reports-analytics" element={<ReportsAnalytics />} />
+
+            {/* Content */}
+            <Route path="/admin/content-management" element={<ContentManagement />} />
+            <Route path="/admin/wellness-tools-cms" element={<WellnessToolsCMS />} />
+            <Route path="/admin/wellness-content-cms" element={<WellnessContentCMS />} />
+            <Route path="/admin/wellness-content-library" element={<WellnessContentLibrary />} />
+            <Route path="/admin/wellness-tool-editor" element={<WellnessToolEditor />} />
+            <Route path="/admin/exercise-library" element={<ExerciseLibrary />} />
+            <Route path="/admin/content-performance" element={<ContentPerformance />} />
+            <Route path="/admin/content-moderation" element={<ContentModeration />} />
+
+            {/* Engagement */}
+            <Route path="/admin/nudge-management" element={<NudgeManagement />} />
+            <Route path="/admin/nudge-templates" element={<NudgeTemplates />} />
+            <Route path="/admin/nudge-scheduler" element={<NudgeScheduler />} />
+            <Route path="/admin/nudge-performance" element={<NudgePerformance />} />
+            <Route path="/admin/wellness-challenges" element={<WellnessChallenges />} />
+            <Route path="/admin/badge-manager" element={<BadgeManager />} />
+
+            {/* Communications */}
+            <Route path="/admin/notifications-center" element={<NotificationsCenter />} />
+            <Route path="/admin/manual-notifications" element={<ManualNotifications />} />
+            <Route path="/admin/email-templates" element={<EmailTemplates />} />
+            <Route path="/admin/push-notifications" element={<PushNotifications />} />
+            <Route path="/admin/support-tickets" element={<SupportTickets />} />
+            <Route path="/admin/community-management" element={<CommunityManagement />} />
+
+            {/* Monitoring */}
+            <Route path="/admin/live-sessions-monitor" element={<LiveSessionsMonitor />} />
+            <Route path="/admin/session-recordings" element={<SessionRecordings />} />
+            <Route path="/admin/activity-monitor" element={<ActivityMonitor />} />
+            <Route path="/admin/system-health-enhanced" element={<SystemHealthEnhanced />} />
+            <Route path="/admin/system-health-dashboard" element={<SystemHealthDashboard />} />
+            <Route path="/admin/error-tracking" element={<ErrorTracking />} />
+
+            {/* System */}
+            <Route path="/admin/system-settings-enhanced" element={<SystemSettingsEnhanced />} />
+            <Route path="/admin/global-configuration" element={<GlobalConfiguration />} />
+            <Route path="/admin/feature-flags" element={<FeatureFlags />} />
+            <Route path="/admin/api-management" element={<APIManagement />} />
+            <Route path="/admin/integration-settings" element={<IntegrationSettings />} />
+            <Route path="/admin/branding-customization" element={<BrandingCustomization />} />
+            <Route path="/admin/ab-testing" element={<ABTesting />} />
+
+            {/* Billing */}
+            <Route path="/admin/billing" element={<AdminBilling />} />
+            <Route path="/admin/billing-subscriptions" element={<BillingSubscriptions />} />
+            <Route path="/admin/package-manager" element={<PackageManager />} />
+            <Route path="/admin/payg-transactions" element={<PayAsYouGoManager />} />
+
+            {/* Security & Compliance */}
+            <Route path="/admin/compliance-dashboard" element={<ComplianceDashboard />} />
+            <Route path="/admin/hipaa-compliance" element={<HIPAACompliance />} />
+            <Route path="/admin/data-privacy-controls" element={<DataPrivacyControls />} />
+            <Route path="/admin/data-retention-privacy" element={<DataRetentionPrivacy />} />
+            <Route path="/admin/audit-logs" element={<AuditLogs />} />
+            <Route path="/admin/system-logs" element={<SystemLogs />} />
+            <Route path="/admin/legal-documentation" element={<LegalDocumentation />} />
+
+            {/* Data */}
+            <Route path="/admin/data-export" element={<DataExport />} />
+            <Route path="/admin/backup-recovery" element={<BackupRecovery />} />
+
+            {/* No generic /admin/* fallback so every admin URL must point to a real page */}
           </Route>
 
           {/* Error Pages */}
