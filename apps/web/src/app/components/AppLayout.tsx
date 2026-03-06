@@ -207,12 +207,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     
     // Safety override: If we are on the production domain, ensure we use the HTTPS production URL
     // This guards against any weird browser behavior or proxy issues
-    if (origin.includes('meetezri-live-web.vercel.app')) {
+    if (origin.includes('meetezri-live-web.vercel.app') || origin.includes('vercel.app')) {
       origin = 'https://meetezri-live-web.vercel.app';
     }
     
     const redirectUrl = `${origin}/auth/callback?redirect=${encodeURIComponent('/app/user-profile')}`;
     
+    // Debugging Alert - Remove after fixing
+    // alert(`Resending to: ${redirectUrl}`);
     console.log("Resending verification to:", redirectUrl);
     console.log("Supabase URL:", import.meta.env.VITE_SUPABASE_URL); // Debugging check
 
