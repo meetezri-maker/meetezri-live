@@ -644,7 +644,19 @@ export function Signup() {
                                     action: {
                                       label: "Resend Email",
                                       onClick: async () => {
-                                        await supabase.auth.resend({ type: "signup", email });
+                                        let origin = window.location.origin;
+                                        if (origin.includes('meetezri-live-web.vercel.app')) {
+                                          origin = 'https://meetezri-live-web.vercel.app';
+                                        }
+                                        const redirectUrl = `${origin}/auth/callback?redirect=${encodeURIComponent('/app/user-profile')}`;
+                                        
+                                        await supabase.auth.resend({ 
+                                          type: "signup", 
+                                          email,
+                                          options: {
+                                            emailRedirectTo: redirectUrl
+                                          }
+                                        });
                                         toast.success("Sent!");
                                       },
                                     },

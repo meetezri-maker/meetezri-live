@@ -295,10 +295,18 @@ export function UserProfile() {
     if (!user?.email) return;
     try {
       setResending(true);
-      const rawEnv = (import.meta as any).env?.VITE_CLIENT_URL as string | undefined;
-      const baseUrl = (rawEnv && typeof rawEnv === 'string' ? rawEnv.trim() : '') || window.location.origin;
+      
+      // Use window.location.origin as the primary source of truth
+      let baseUrl = window.location.origin;
+      
+      // Safety override: If we are on the production domain, ensure we use the HTTPS production URL
+      if (baseUrl.includes('meetezri-live-web.vercel.app')) {
+        baseUrl = 'https://meetezri-live-web.vercel.app';
+      }
+
       const currentPath = window.location.pathname + window.location.search;
       const redirectTo = `${baseUrl}/auth/callback?redirect=${encodeURIComponent(currentPath)}`;
+      
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email: user.email,
