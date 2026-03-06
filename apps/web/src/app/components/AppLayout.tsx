@@ -201,6 +201,14 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const resendVerification = async () => {
     if (!user?.email) return;
+    
+    // Explicitly determine the base URL to ensure we don't accidentally send localhost links in production
+    // or vice versa, although window.location.origin is usually correct.
+    const origin = window.location.origin;
+    const redirectUrl = `${origin}/auth/callback?redirect=${encodeURIComponent('/app/user-profile')}`;
+    
+    console.log("Resending verification to:", redirectUrl);
+
     try {
       // If the user is technically "confirmed" (due to Confirm Email OFF setting) but flagged as unverified,
       // we send a Magic Link instead of a signup verification email.
@@ -208,7 +216,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         const { error } = await supabase.auth.signInWithOtp({
           email: user.email,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent('/app/user-profile')}`,
+            emailRedirectTo: redirectUrl,
             // data: { ... } // Optional: could pass data to know it's a verification flow
           }
         });
@@ -220,7 +228,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           type: "signup",
           email: user.email,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent('/app/user-profile')}`
+            emailRedirectTo: redirectUrl
           }
         });
         if (error) throw error;
