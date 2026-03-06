@@ -202,12 +202,19 @@ export function AppLayout({ children }: AppLayoutProps) {
   const resendVerification = async () => {
     if (!user?.email) return;
     
-    // Explicitly determine the base URL to ensure we don't accidentally send localhost links in production
-    // or vice versa, although window.location.origin is usually correct.
-    const origin = window.location.origin;
+    // Explicitly determine the base URL
+    let origin = window.location.origin;
+    
+    // Safety override: If we are on the production domain, ensure we use the HTTPS production URL
+    // This guards against any weird browser behavior or proxy issues
+    if (origin.includes('meetezri-live-web.vercel.app')) {
+      origin = 'https://meetezri-live-web.vercel.app';
+    }
+    
     const redirectUrl = `${origin}/auth/callback?redirect=${encodeURIComponent('/app/user-profile')}`;
     
     console.log("Resending verification to:", redirectUrl);
+    console.log("Supabase URL:", import.meta.env.VITE_SUPABASE_URL); // Debugging check
 
     try {
       // If the user is technically "confirmed" (due to Confirm Email OFF setting) but flagged as unverified,
