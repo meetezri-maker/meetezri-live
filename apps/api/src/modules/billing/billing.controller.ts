@@ -15,6 +15,7 @@ import {
   getAllInvoices,
   getAllPaygTransactions,
   syncPaygCredits,
+  createGuestCheckoutSession,
 } from './billing.service';
 import { CreateSubscriptionInput, UpdateSubscriptionInput, CreateCreditPurchaseInput } from './billing.schema';
 
@@ -56,6 +57,14 @@ export async function createSubscriptionHandler(
   const user = request.user as UserPayload;
   const result = await createCheckoutSession(user.sub, user.email || '', request.body);
 
+  return reply.code(200).send(result);
+}
+
+export async function createGuestSubscriptionHandler(
+  request: FastifyRequest<{ Body: CreateSubscriptionInput }>,
+  reply: FastifyReply
+) {
+  const result = await createGuestCheckoutSession(request.body);
   return reply.code(200).send(result);
 }
 

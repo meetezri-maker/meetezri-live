@@ -61,6 +61,7 @@ export const signupSchema = z.object({
   password: z.string().min(6),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
+  stripe_session_id: z.string().optional(),
 });
 
 export type CheckUserInput = z.infer<typeof checkUserSchema>;

@@ -161,6 +161,37 @@ export async function createCheckoutSession(userId: string, email: string, data:
   return { checkoutUrl: session.url };
 }
 
+export async function createGuestCheckoutSession(data: CreateSubscriptionInput) {
+  const priceId = STRIPE_PRICE_IDS[data.plan_type as keyof typeof STRIPE_PRICE_IDS];
+  
+  if (!priceId) {
+    throw new Error('Invalid plan type');
+  }
+
+  const successUrl = data.successUrl || `${CLIENT_URL}/signup?postCheckout=1&plan=${data.plan_type}&session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl = data.cancelUrl || `${CLIENT_URL}/pricing`;
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'subscription',
+    payment_method_types: ['card'],
+    line_items: [
+      {
+        price: priceId,
+        quantity: 1,
+      },
+    ],
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    allow_promotion_codes: true,
+    billing_address_collection: 'required',
+    subscription_data: {
+      trial_period_days: undefined, // Paid plans start immediately
+    },
+  });
+
+  return { checkoutUrl: session.url };
+}
+
 export async function createCreditPurchaseSession(userId: string, email: string, data: CreateCreditPurchaseInput) {
   const customerId = await getOrCreateStripeCustomer(userId, email);
 
@@ -215,6 +246,22 @@ export async function createCreditPurchaseSession(userId: string, email: string,
   });
 
   return { checkoutUrl: session.url };
+}
+
+export async function linkSubscriptionToUser(userId: string, sessionId: string) {
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  if (!session.customer) return;
+
+  const customerId = session.customer as string;
+  
+  // Update user profile
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: { stripe_customer_id: customerId }
+  });
+
+  // Sync subscriptions
+  await syncSubscriptionWithStripe(userId);
 }
 
 export async function createPortalSession(userId: string) {

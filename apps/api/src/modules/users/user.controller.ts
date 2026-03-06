@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { onboardingSchema, updateProfileSchema, checkUserSchema, CheckUserInput, SignupInput, signupSchema } from './user.schema';
 import * as userService from './user.service';
+import * as billingService from '../billing/billing.service';
 import { supabaseAdmin } from '../../config/supabase';
 import { emailService } from '../email/email.service';
 
@@ -47,13 +48,47 @@ export async function signupHandler(
     if (createError) throw createError;
     if (!user.user) throw new Error('Failed to create user');
 
+    // Link subscription if paid flow
+    if (request.body.stripe_session_id) {
+      try {
+        await billingService.linkSubscriptionToUser(user.user.id, request.body.stripe_session_id);
+      } catch (error) {
+        request.log.error({ error }, 'Failed to link subscription to new user');
+      }
+    }
+
+    // Determine base URL from request origin or fallback
+    const origin = request.headers.origin;
+    const referer = request.headers.referer;
+    
+    // Log headers to debug environment issues
+    request.log.info({ origin, referer, appUrlEnv: process.env.APP_URL }, 'Determining redirect base URL');
+
+    let appUrl = process.env.APP_URL || 'http://localhost:5173';
+    
+    // Prefer Origin or Referer if they match localhost (dev environment)
+    if (origin && origin.includes('localhost')) {
+      appUrl = origin;
+    } else if (referer && referer.includes('localhost')) {
+      // Extract base URL from referer (e.g. http://localhost:5173/signup -> http://localhost:5173)
+      try {
+        const url = new URL(referer);
+        appUrl = url.origin;
+      } catch (e) {}
+    }
+
+    const redirectParam = encodeURIComponent('/onboarding/welcome');
+    const finalRedirectTo = `${appUrl}/auth/callback?redirect=${redirectParam}`;
+    
+    request.log.info({ finalRedirectTo }, 'Generated verification link redirect URL');
+
     // 2. Generate verification link
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'signup',
       email,
       password,
       options: {
-        redirectTo: `${process.env.APP_URL || 'http://localhost:5173'}/auth/callback`
+        redirectTo: finalRedirectTo
       }
     });
 

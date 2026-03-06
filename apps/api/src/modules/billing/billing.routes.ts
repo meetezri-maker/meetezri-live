@@ -57,6 +57,19 @@ export async function billingRoutes(app: FastifyInstance) {
   );
 
   app.post(
+    '/guest-checkout',
+    {
+      schema: {
+        body: createSubscriptionSchema,
+        response: {
+          200: z.object({ checkoutUrl: z.string() }),
+        },
+      },
+    },
+    billingController.createGuestSubscriptionHandler
+  );
+
+  app.post(
     '/credits',
     {
       schema: {

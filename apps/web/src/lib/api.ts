@@ -125,7 +125,7 @@ export const api = {
     return handleResponse(res, 'Failed to check user existence');
   },
 
-  async signup(data: { email: string; password: string; firstName: string; lastName: string }) {
+  async signup(data: { email: string; password: string; firstName: string; lastName: string; stripe_session_id?: string }) {
     const res = await fetch(`${API_URL}/users/signup`, {
       method: 'POST',
       headers: {
@@ -954,6 +954,17 @@ export const api = {
         body: JSON.stringify(data),
       });
       return handleResponse(res, 'Failed to create subscription');
+    },
+
+    async createGuestSubscription(data: { plan_type: 'trial' | 'core' | 'pro'; billing_cycle?: 'monthly' | 'yearly'; successUrl?: string; cancelUrl?: string }) {
+      const res = await fetch(`${API_URL}/billing/guest-checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to create guest subscription');
     },
 
     async buyCredits(data: { credits: number }) {

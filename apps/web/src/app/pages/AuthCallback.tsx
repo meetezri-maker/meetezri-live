@@ -13,14 +13,45 @@ export function AuthCallback() {
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   const getRedirectPath = () => {
+    // 1. Check standard search params
     const searchParams = new URLSearchParams(location.search);
-    const requested = searchParams.get('redirect');
+    let requested = searchParams.get('redirect') || searchParams.get('next');
+    
+    // 2. Check hash params (Supabase Implicit Flow / PKCE edge cases)
+    if (!requested && location.hash) {
+       const hashStr = location.hash.substring(1);
+       const hashParams = new URLSearchParams(hashStr);
+       requested = hashParams.get('redirect') || hashParams.get('next');
+    }
+
+    console.log("Resolved Redirect Path:", requested);
+
     if (requested && requested.startsWith('/')) return requested;
-    return '/app/user-profile';
+
+    // 3. Smart Fallback based on User Metadata
+    // Trial users (Soft Verification) -> Profile to complete setup
+    if (user?.user_metadata?.email_verification_required) {
+      return '/app/user-profile';
+    }
+
+    // Default Fallback
+    return '/app/dashboard';
   };
 
   useEffect(() => {
-    // Immediate redirect if user is already loaded
+    // Check if we are in the middle of an auth flow (Code Exchange or Implicit Flow)
+    const searchParams = new URLSearchParams(location.search);
+    const hasCode = searchParams.get('code');
+    const hasHash = location.hash.includes('access_token') || location.hash.includes('error') || location.hash.includes('type=recovery');
+
+    // If there is a code or hash, we MUST wait for handleCallback to process the new session
+    // DO NOT redirect based on potential stale user session
+    if (hasCode || hasHash) {
+      console.log("AuthCallback: Detected new auth flow parameters. Waiting for processing...");
+      return;
+    }
+
+    // Immediate redirect if user is already loaded AND we are not processing a new login
     if (user) {
       // If user has the "email_verification_required" flag, clear it since they just completed an auth flow
       if (user.user_metadata?.email_verification_required) {
@@ -38,6 +69,9 @@ export function AuthCallback() {
   }, [user, navigate, location.search]);
 
   useEffect(() => {
+    console.log("AuthCallback mounted. URL:", window.location.href);
+    console.log("Search:", location.search, "Hash:", location.hash);
+
     const handleCallback = async () => {
       // 1. Parse Parameters
       const searchParams = new URLSearchParams(location.search);

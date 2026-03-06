@@ -17,6 +17,16 @@ export function Landing() {
   const location = useLocation();
 
   useEffect(() => {
+    // Scroll to hash if present
+    if (location.hash === '#pricing') {
+      setTimeout(() => {
+        const el = document.getElementById('pricing');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    }
+
     // 1. Immediate redirect if auth params are present (Implicit or PKCE)
     const hash = location.hash;
     const search = location.search;
@@ -552,7 +562,7 @@ export function Landing() {
                               const cancelUrl = `${origin}/#pricing`;
                               
                               const { api } = await import("@/lib/api");
-                              const result = await api.billing.createSubscription({
+                              const result = await api.billing.createGuestSubscription({
                                 plan_type: planId,
                                 billing_cycle: "monthly",
                                 successUrl,

@@ -208,7 +208,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         const { error } = await supabase.auth.signInWithOtp({
           email: user.email,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent('/app/user-profile')}`,
             // data: { ... } // Optional: could pass data to know it's a verification flow
           }
         });
@@ -220,7 +220,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           type: "signup",
           email: user.email,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`
+            emailRedirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent('/app/user-profile')}`
           }
         });
         if (error) throw error;

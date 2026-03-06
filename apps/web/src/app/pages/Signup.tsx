@@ -92,11 +92,16 @@ export function Signup() {
     const params = new URLSearchParams(location.search);
     const postCheckout = params.get('postCheckout') === '1';
     const plan = params.get('plan');
+    const sessionId = params.get('session_id');
+    
     if (postCheckout) {
       try {
         window.localStorage.setItem('planPurchased', '1');
         if (plan) {
           window.localStorage.setItem('selectedPlan', plan);
+        }
+        if (sessionId) {
+          window.localStorage.setItem('stripeSessionId', sessionId);
         }
       } catch {}
     }
@@ -155,11 +160,14 @@ export function Signup() {
       }
 
       // Paid/other flows: use backend signup to send branded emails
+      const stripeSessionId = window.localStorage.getItem('stripeSessionId');
+      
       await api.signup({
         email: data.email,
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
+        stripe_session_id: stripeSessionId || undefined
       });
 
       toast.success("Account created! Please verify your email to continue.");
