@@ -34,6 +34,20 @@ export function AuthCallback() {
       return '/app/user-profile';
     }
 
+    // 4. Heuristic for New Paid Users (if param is lost)
+    // If user was created in the last 5 minutes AND is verified (no trial flag)
+    // This handles cases where Supabase/Email providers strip the redirect param
+    if (user?.created_at) {
+      const created = new Date(user.created_at).getTime();
+      const now = Date.now();
+      const isNew = (now - created) < 5 * 60 * 1000; // 5 minutes threshold
+      
+      if (isNew) {
+         console.log("AuthCallback: Detected new user (heuristic), redirecting to onboarding");
+         return '/onboarding/welcome';
+      }
+    }
+
     // Default Fallback
     return '/app/dashboard';
   };
