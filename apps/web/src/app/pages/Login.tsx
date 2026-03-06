@@ -66,10 +66,22 @@ export function Login() {
 
   const handleResendVerification = async (emailToResend: string) => {
     try {
-      const rawEnv = (import.meta as any).env?.VITE_CLIENT_URL as string | undefined;
-      const baseUrl = (rawEnv && typeof rawEnv === 'string' ? rawEnv.trim() : '') || window.location.origin;
+      // Use window.location.origin as the primary source of truth for the redirect base URL
+      let baseUrl = window.location.origin;
+      
+      // Safety override: If we are on the production domain, ensure we use the HTTPS production URL
+      if (baseUrl.includes('meetezri-live-web.vercel.app')) {
+        baseUrl = 'https://meetezri-live-web.vercel.app';
+      } else if (baseUrl.includes('localhost')) {
+         // Only fallback to env var if we are on localhost and want to override port? 
+         // But usually window.location.origin is correct even for localhost.
+      }
+
       const currentPath = window.location.pathname + window.location.search;
       const redirectTo = `${baseUrl}/auth/callback?redirect=${encodeURIComponent(currentPath)}`;
+      
+      console.log("Resending verification (Login Page) to:", redirectTo);
+
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email: emailToResend,
