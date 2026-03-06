@@ -5,12 +5,22 @@ import { Skeleton } from "../../components/ui/skeleton";
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
-import { Video, Heart, BookOpen, TrendingUp, Calendar, Sparkles, ArrowRight, Award, Target, Flame, Clock, Zap } from "lucide-react";
+import { Video, Heart, BookOpen, TrendingUp, Calendar, Sparkles, ArrowRight, Award, Target, Flame, Clock, Zap, Mail } from "lucide-react";
 import { useState, useEffect } from "react";
 import { WellnessChallenges } from "../../components/WellnessChallenges";
 import { PWAInstallPrompt } from "../../components/PWAInstallPrompt";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "../../../lib/api";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "../../components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 
 interface BackendSession {
   id: string;
@@ -25,9 +35,20 @@ interface BackendSession {
 }
 
 export function Dashboard() {
-  const { profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [upcomingSessionsCount, setUpcomingSessionsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [confirmEmailDismissed, setConfirmEmailDismissed] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+
+  const isTrialUser = profile?.subscription_plan === "trial" || profile?.subscription_plan == null;
+  // Only show when email is not verified: trust API (email_verified / needs_email_verification) first
+  const emailVerified = profile?.email_verified === true;
+  const needsEmailVerification =
+    !emailVerified &&
+    (profile?.needs_email_verification === true ||
+      (isTrialUser && user?.email_confirmed_at == null));
+  const showConfirmEmailPopup = needsEmailVerification && !confirmEmailDismissed;
 
   const moodEmojis: Record<string, string> = {
     "Happy": "😊",
@@ -176,9 +197,67 @@ export function Dashboard() {
     );
   }
 
+  const handleResendVerification = async () => {
+    if (!user?.email) return;
+    setResendLoading(true);
+    try {
+      await api.resendVerificationEmail();
+      toast.success("Verification email sent. Check your inbox.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to send verification email");
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   return (
     <AppLayout>
+      {/* Confirm email popup for free trial users who haven't verified yet */}
+      <Dialog open={showConfirmEmailPopup} onOpenChange={(open) => !open && setConfirmEmailDismissed(true)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+              <Mail className="h-6 w-6 text-amber-600" />
+            </div>
+            <DialogTitle className="text-center">Verify your email</DialogTitle>
+            <DialogDescription className="text-center">
+              We sent a verification link to <strong>{user?.email}</strong>. Open that email and <strong>click the link</strong> to verify your account and secure your free trial. You can close this and verify from the link in your inbox anytime.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row">
+            <Button variant="outline" onClick={() => setConfirmEmailDismissed(true)} className="w-full sm:w-auto">
+              I&apos;ll do it later
+            </Button>
+            <Button onClick={handleResendVerification} disabled={resendLoading} className="w-full sm:w-auto">
+              {resendLoading ? "Sending…" : "Send Verification Email"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        {/* Always-visible message for free trial users who need to verify email */}
+        {needsEmailVerification && (
+          <Alert className="mb-6 border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-100 [&>svg]:text-amber-600">
+            <Mail className="h-4 w-4" />
+            <AlertTitle>Verify your email to secure your free trial</AlertTitle>
+            <AlertDescription className="flex flex-col gap-2">
+              <span>
+                We sent a verification link to <strong>{user?.email}</strong>. Open your inbox, find the email from MeetEzri, and <strong>click the link in that email</strong> to verify your account. No need to log in again—just click the link.
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-fit border-amber-600 text-amber-800 hover:bg-amber-100 dark:border-amber-500 dark:text-amber-200 dark:hover:bg-amber-900/50"
+                onClick={handleResendVerification}
+                disabled={resendLoading}
+              >
+                {resendLoading ? "Sending…" : "Resend verification email"}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

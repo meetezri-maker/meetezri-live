@@ -72,9 +72,14 @@ app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, 
   if (req.raw && (req.raw as any).body) {
     done(null, (req.raw as any).body);
   } else {
-    // Otherwise, parse the string body
+    // Empty or missing body (e.g. POST with no body) -> treat as {}
+    const raw = (body as string) ?? '';
+    if (raw.trim() === '') {
+      done(null, {});
+      return;
+    }
     try {
-      const json = JSON.parse(body as string);
+      const json = JSON.parse(raw);
       done(null, json);
     } catch (err: any) {
       err.statusCode = 400;

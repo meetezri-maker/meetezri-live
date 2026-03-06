@@ -89,6 +89,57 @@ export async function signupHandler(
   }
 }
 
+export async function resendVerificationHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload & { email?: string };
+  const userId = user.sub;
+  const email = user.email || await userService.getUserEmail(userId);
+
+  if (!email) {
+    return reply.code(400).send({ message: 'Email not found' });
+  }
+
+  try {
+    const appUrl = process.env.APP_URL || 'http://localhost:5173';
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email,
+      options: {
+        redirectTo: `${appUrl}/auth/callback`,
+      },
+    });
+
+    if (linkError) throw linkError;
+    const verificationLink = linkData.properties?.action_link;
+    if (!verificationLink) throw new Error('Failed to generate verification link');
+
+    await emailService.sendEmail(
+      email,
+      'Verify your email - MeetEzri',
+      `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Verify your email</h2>
+        <p>Hi,</p>
+        <p>Please verify your email address to secure your MeetEzri free trial account.</p>
+        <p>Click the button below to verify:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verificationLink}" target="_blank" style="background-color: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Verify my email</a>
+        </div>
+        <p>If you didn't sign up for MeetEzri, you can ignore this email.</p>
+      </div>
+      `,
+      `Verify your email by visiting: ${verificationLink}`
+    );
+
+    return reply.code(200).send({ success: true, message: 'Verification email sent' });
+  } catch (error: any) {
+    request.log.error({ error }, 'Resend verification failed');
+    return reply.code(500).send({ message: error.message || 'Failed to send verification email' });
+  }
+}
+
 export async function getAllUsersHandler(
   request: FastifyRequest,
   reply: FastifyReply

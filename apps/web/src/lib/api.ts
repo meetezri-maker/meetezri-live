@@ -76,6 +76,15 @@ export const api = {
     return handleResponse(res, 'Failed to update profile');
   },
 
+  async resendVerificationEmail() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/resend-verification`, {
+      method: 'POST',
+      headers,
+    });
+    return handleResponse(res, 'Failed to send verification email');
+  },
+
   async completeOnboarding(data: any) {
     const headers = await getHeaders();
     const res = await fetch(`${API_URL}/users/onboarding`, {

@@ -174,7 +174,14 @@ export function OnboardingProfileSetup() {
         timezone: values.timezone 
       });
       
-      navigate("/onboarding/subscription");
+      const selectedPlan = typeof window !== "undefined" ? window.localStorage.getItem("selectedPlan") : null;
+      const planPurchased = typeof window !== "undefined" ? window.localStorage.getItem("planPurchased") === "1" : false;
+      
+      if (planPurchased || selectedPlan === "trial") {
+        navigate("/onboarding/wellness-baseline");
+      } else {
+        navigate("/onboarding/subscription");
+      }
     } catch (error) {
       console.error("Profile update error:", error);
       toast.error("Failed to update profile");

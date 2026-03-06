@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
 import { Badge } from "../../components/ui/badge";
 import { motion } from "motion/react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   User,
   Mail,
@@ -51,6 +51,15 @@ import {
   FormMessage,
 } from "../../components/ui/form";
 import { Input } from "../../components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog";
 
 const profileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -85,15 +94,27 @@ type ProfileFormValues = z.infer<typeof profileSchema>;
 
 export function UserProfile() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { signOut, user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [showVerifiedAlert, setShowVerifiedAlert] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [joinedAt, setJoinedAt] = useState<string>("");
+  const [resending, setResending] = useState(false);
   
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("verified") === "true") {
+      setShowVerifiedAlert(true);
+      // Clean up the URL
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location, navigate]);
+
   // Use React Hook Form
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -270,6 +291,30 @@ export function UserProfile() {
     }
   };
 
+  const handleResendVerification = async () => {
+    if (!user?.email) return;
+    try {
+      setResending(true);
+      const rawEnv = (import.meta as any).env?.VITE_CLIENT_URL as string | undefined;
+      const baseUrl = (rawEnv && typeof rawEnv === 'string' ? rawEnv.trim() : '') || window.location.origin;
+      const currentPath = window.location.pathname + window.location.search;
+      const redirectTo = `${baseUrl}/auth/callback?redirect=${encodeURIComponent(currentPath)}`;
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: user.email,
+        options: {
+          emailRedirectTo: redirectTo,
+        },
+      });
+      if (error) throw error;
+      toast.success("Verification email sent! Please check your inbox.");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to resend verification email");
+    } finally {
+      setResending(false);
+    }
+  };
+
   const handleLogout = async () => {
     if (confirm('Are you sure you want to log out?')) {
       setIsLoggingOut(true);
@@ -329,6 +374,8 @@ export function UserProfile() {
       ]
     }
   ];
+  
+  const needsEmailVerification = !!user && !(user as any).email_confirmed_at;
 
   if (isLoading) {
     return (
@@ -411,6 +458,20 @@ export function UserProfile() {
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        {needsEmailVerification && (
+          <div className="mb-6 p-4 border-2 border-yellow-300 bg-yellow-50 rounded-xl flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-yellow-700" />
+              <div>
+                <p className="font-semibold text-yellow-900">Verify your email</p>
+                <p className="text-sm text-yellow-800">Please verify your email to secure your account and unlock all features.</p>
+              </div>
+            </div>
+            <Button variant="outline" onClick={handleResendVerification} disabled={resending}>
+              {resending ? 'Sending...' : 'Resend link'}
+            </Button>
+          </div>
+        )}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -795,7 +856,7 @@ export function UserProfile() {
                         <FormItem className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg space-y-0">
                           <div className="flex items-center gap-2 mb-2">
                             <Users className="w-4 h-4 text-purple-500" />
-                            <FormLabel className="font-semibold text-sm">Therapy Status</FormLabel>
+                            <FormLabel className="font-semibold text-sm">Professionl  Companion</FormLabel>
                           </div>
                           <FormControl>
                             {isEditing ? (
@@ -807,8 +868,7 @@ export function UserProfile() {
                                 <option value="">Select...</option>
                                 <option value="Yes">Yes</option>
                                 <option value="No">No</option>
-                                <option value="Previously">Previously</option>
-                                <option value="Thinking about it">Thinking about it</option>
+                                <option value="Prefer not to say">Prefer Not to Say</option>
                               </select>
                             ) : (
                               <p className="text-sm text-gray-700 dark:text-gray-300">{field.value || "Not specified"}</p>
@@ -819,7 +879,7 @@ export function UserProfile() {
                       )}
                     />
 
-                    <FormField
+                    {/* <FormField
                       control={form.control}
                       name="on_medication"
                       render={({ field }) => (
@@ -847,7 +907,7 @@ export function UserProfile() {
                           <FormMessage />
                         </FormItem>
                       )}
-                    />
+                    /> */}
                   </div>
 
                   {/* Goals */}
@@ -1098,6 +1158,30 @@ export function UserProfile() {
           </div>
         </div>
       </div>
+
+      <AlertDialog open={showVerifiedAlert} onOpenChange={setShowVerifiedAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-green-500" />
+              Email Verified Successfully!
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Thank you for verifying your email. Your account is now fully active.
+              <br /><br />
+              Please take a moment to complete your profile details to personalize your experience.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => {
+              setShowVerifiedAlert(false);
+              setIsEditing(true);
+            }}>
+              Complete Profile
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

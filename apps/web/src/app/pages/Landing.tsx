@@ -521,24 +521,61 @@ export function Landing() {
                     </ul>
 
                     {/* CTA Button */}
-                    <div onClick={() => {
-                      localStorage.setItem('selectedPlan', planId);
-                    }}>
-                      <Link to="/signup" className="block">
-                        <Button 
-                          className={`w-full ${
+                    <div>
+                      {planId === 'trial' ? (
+                        <div
+                          onClick={() => {
+                            localStorage.setItem('selectedPlan', planId);
+                          }}
+                        >
+                          <Link to="/signup" className="block">
+                            <Button 
+                              className={`w-full ${
+                                isPopular 
+                                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/30' 
+                                  : 'bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white'
+                              }`}
+                              size="lg"
+                            >
+                              Start Your Trial
+                              <ArrowRight className="w-4 h-4 ml-2" />
+                            </Button>
+                          </Link>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={async () => {
+                            try {
+                              localStorage.setItem('selectedPlan', planId);
+                              const origin = window.location.origin;
+                              const successUrl = `${origin}/signup?postCheckout=1&plan=${planId}&session_id={CHECKOUT_SESSION_ID}`;
+                              const cancelUrl = `${origin}/#pricing`;
+                              
+                              const { api } = await import("@/lib/api");
+                              const result = await api.billing.createSubscription({
+                                plan_type: planId,
+                                billing_cycle: "monthly",
+                                successUrl,
+                                cancelUrl
+                              });
+                              
+                              if (result.checkoutUrl) {
+                                window.location.href = result.checkoutUrl;
+                              }
+                            } catch (e) {
+                              console.error("Failed to start checkout:", e);
+                            }
+                          }}
+                          className={`w-full inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                             isPopular 
                               ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/30' 
-                              : planId === 'trial'
-                              ? 'bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white'
-                              : ''
+                              : 'bg-black text-white hover:bg-gray-800'
                           }`}
-                          size="lg"
                         >
-                          {planId === 'trial' ? 'Start Your Trial' : 'Get Started'}
+                          Get Started
                           <ArrowRight className="w-4 h-4 ml-2" />
-                        </Button>
-                      </Link>
+                        </button>
+                      )}
                     </div>
 
                     {planId === 'trial' && (

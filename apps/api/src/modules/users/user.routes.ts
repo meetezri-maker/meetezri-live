@@ -11,6 +11,7 @@ import {
   getUserProfileAdminHandler,
   checkUserExistsHandler,
   signupHandler,
+  resendVerificationHandler,
 } from './user.controller';
 import { checkUserSchema, signupSchema } from './user.schema';
 
@@ -52,6 +53,14 @@ export async function userRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate],
     },
     getMeHandler
+  );
+
+  fastify.post(
+    '/resend-verification',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    resendVerificationHandler
   );
 
   fastify.get(

@@ -111,91 +111,128 @@ export async function createProfile(userId: string, email: string, fullName?: st
   return profile;
 }
 
-const userProfileCache = new Map<string, { data: any, timestamp: number }>();
+const userProfileCache = new Map<string, { data: any; timestamp: number }>();
 const PROFILE_CACHE_TTL = 30 * 1000; // 30 seconds
 
 export async function getProfile(userId: string) {
   // Check cache first
   const cached = userProfileCache.get(userId);
-  if (cached && (Date.now() - cached.timestamp < PROFILE_CACHE_TTL)) {
-    return cached.data;
+  let result: any;
+
+  if (cached && Date.now() - cached.timestamp < PROFILE_CACHE_TTL) {
+    result = { ...cached.data };
+  } else {
+    // Optimized to use a single query to prevent connection pool exhaustion
+    const profileResult = await prisma.profiles.findUnique({
+      where: { id: userId },
+      include: {
+        companion_profiles: true,
+        subscriptions: {
+          where: { status: 'active' },
+          orderBy: { created_at: 'desc' },
+          take: 1,
+        },
+        emergency_contacts: {
+          orderBy: { created_at: 'desc' },
+          take: 1,
+        },
+        // Include recent moods
+        mood_entries: {
+          orderBy: { created_at: 'desc' },
+          take: 30,
+        },
+        // Include scheduled appointments
+        appointments_appointments_user_idToprofiles: {
+          where: {
+            status: 'scheduled',
+            start_time: { gt: new Date() },
+          },
+          orderBy: { start_time: 'asc' },
+        },
+        // Get counts
+        _count: {
+          select: {
+            app_sessions: { where: { ended_at: { not: null } } },
+            mood_entries: true,
+            journal_entries: true,
+          },
+        },
+      },
+    });
+
+    if (!profileResult) return null;
+
+    const activeSubscription = profileResult.subscriptions[0];
+    const latestEmergencyContact = profileResult.emergency_contacts[0];
+
+    const completedSessionsCount = profileResult._count.app_sessions;
+    const moodEntriesCount = profileResult._count.mood_entries;
+    const journalEntriesCount = profileResult._count.journal_entries;
+
+    const streakDays = calculateStreak(profileResult.mood_entries);
+    const scheduledAppointments =
+      profileResult.appointments_appointments_user_idToprofiles;
+    const upcomingSessions = scheduledAppointments.length;
+    const primaryContact = latestEmergencyContact;
+
+    const internalPlanType = (activeSubscription?.plan_type ||
+      "trial") as keyof typeof PLAN_LIMITS;
+    const planDetails = PLAN_LIMITS[internalPlanType];
+
+    result = {
+      ...profileResult,
+      emergency_contact_name:
+        primaryContact?.name || profileResult.emergency_contact_name,
+      emergency_contact_phone:
+        primaryContact?.phone || profileResult.emergency_contact_phone,
+      emergency_contact_relationship:
+        primaryContact?.relationship ||
+        profileResult.emergency_contact_relationship,
+      streak_days: streakDays,
+      upcoming_sessions: upcomingSessions,
+      stats: {
+        completed_sessions: completedSessionsCount,
+        total_checkins: moodEntriesCount,
+        total_journals: journalEntriesCount,
+        streak_days: streakDays,
+      },
+      credits_remaining:
+        (profileResult.credits || 0) + (profileResult.purchased_credits || 0),
+      credits_total:
+        (planDetails?.credits || 30) +
+        (profileResult.purchased_credits || 0),
+      subscription_plan: internalPlanType,
+      subscriptions: activeSubscription ? [activeSubscription] : [],
+    };
+
+    userProfileCache.set(userId, { data: result, timestamp: Date.now() });
   }
 
-  // Optimized to use a single query to prevent connection pool exhaustion
-  const profileResult = await prisma.profiles.findUnique({
-    where: { id: userId },
-    include: {
-      companion_profiles: true,
-      subscriptions: {
-        where: { status: 'active' },
-        orderBy: { created_at: 'desc' },
-        take: 1
-      },
-      emergency_contacts: {
-        orderBy: { created_at: 'desc' },
-        take: 1
-      },
-      // Include recent moods
-      mood_entries: {
-        orderBy: { created_at: 'desc' },
-        take: 30
-      },
-      // Include scheduled appointments
-      appointments_appointments_user_idToprofiles: {
-        where: {
-          status: 'scheduled',
-          start_time: { gt: new Date() }
-        },
-        orderBy: { start_time: 'asc' }
-      },
-      // Get counts
-      _count: {
-        select: {
-          app_sessions: { where: { ended_at: { not: null } } },
-          mood_entries: true,
-          journal_entries: true
-        }
-      }
-    }
-  });
+  // Always fetch fresh email verification status from Supabase (so verification link click is reflected quickly)
+  let emailVerified = true;
+  try {
+    const { data: authData } = await supabaseAdmin.auth.admin.getUserById(
+      userId,
+    );
+    const user = authData?.user;
+    const isConfirmed = !!user?.email_confirmed_at;
+    // Check custom metadata flag we set during trial signup
+    const verificationRequired = user?.user_metadata?.email_verification_required === true;
+    
+    // User is verified ONLY if confirmed by Supabase AND doesn't have the required flag
+    emailVerified = isConfirmed && !verificationRequired;
+  } catch {
+    // If we can't fetch, keep whatever is currently in result.email_verified
+    emailVerified = result?.email_verified ?? true;
+  }
 
-  if (!profileResult) return null;
+  const planType = (result.subscription_plan || "trial") as keyof typeof PLAN_LIMITS;
+  result.email_verified = emailVerified;
+  result.needs_email_verification = planType === "trial" && !emailVerified;
 
-  const activeSubscription = profileResult.subscriptions[0];
-  const latestEmergencyContact = profileResult.emergency_contacts[0];
-  
-  const completedSessionsCount = profileResult._count.app_sessions;
-  const moodEntriesCount = profileResult._count.mood_entries;
-  const journalEntriesCount = profileResult._count.journal_entries;
-
-  const streakDays = calculateStreak(profileResult.mood_entries);
-  const scheduledAppointments = profileResult.appointments_appointments_user_idToprofiles;
-  const upcomingSessions = scheduledAppointments.length;
-  const primaryContact = latestEmergencyContact;
-
-  const planType = (activeSubscription?.plan_type || 'trial') as keyof typeof PLAN_LIMITS;
-  const planDetails = PLAN_LIMITS[planType];
-
-  const result = {
-    ...profileResult,
-    emergency_contact_name: primaryContact?.name || profileResult.emergency_contact_name,
-    emergency_contact_phone: primaryContact?.phone || profileResult.emergency_contact_phone,
-    emergency_contact_relationship: primaryContact?.relationship || profileResult.emergency_contact_relationship,
-    streak_days: streakDays,
-    upcoming_sessions: upcomingSessions,
-    stats: {
-      completed_sessions: completedSessionsCount,
-      total_checkins: moodEntriesCount,
-      total_journals: journalEntriesCount,
-      streak_days: streakDays
-    },
-    credits_remaining: (profileResult.credits || 0) + (profileResult.purchased_credits || 0),
-    credits_total: (planDetails?.credits || 30) + (profileResult.purchased_credits || 0),
-    subscription_plan: planType,
-    subscriptions: activeSubscription ? [activeSubscription] : [],
-  };
-
+  // Update cache with fresh verification flags
   userProfileCache.set(userId, { data: result, timestamp: Date.now() });
+
   return result;
 }
 

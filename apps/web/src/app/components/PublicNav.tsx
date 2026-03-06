@@ -44,7 +44,7 @@ export function PublicNav() {
               <Link to="/login">
                 <Button variant="ghost">Log In</Button>
               </Link>
-              <Link to="/signup">
+            <Link to="/#pricing">
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                   <Button>Get Started</Button>
                 </motion.div>
@@ -93,7 +93,7 @@ export function PublicNav() {
               <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
                 <Button variant="ghost" className="w-full">Log In</Button>
               </Link>
-              <Link to="/signup" onClick={() => setMobileMenuOpen(false)}>
+              <Link to="/#pricing" onClick={() => setMobileMenuOpen(false)}>
                 <Button className="w-full">Get Started</Button>
               </Link>
             </div>

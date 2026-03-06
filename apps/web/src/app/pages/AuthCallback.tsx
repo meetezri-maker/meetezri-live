@@ -12,12 +12,30 @@ export function AuthCallback() {
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
+  const getRedirectPath = () => {
+    const searchParams = new URLSearchParams(location.search);
+    const requested = searchParams.get('redirect');
+    if (requested && requested.startsWith('/')) return requested;
+    return '/app/user-profile';
+  };
+
   useEffect(() => {
     // Immediate redirect if user is already loaded
     if (user) {
-      navigate("/onboarding/welcome", { replace: true });
+      // If user has the "email_verification_required" flag, clear it since they just completed an auth flow
+      if (user.user_metadata?.email_verification_required) {
+        supabase.auth.updateUser({
+          data: { email_verification_required: false }
+        }).then(() => {
+          toast.success("Email verified successfully!");
+        });
+        // Redirect to profile with verified flag
+        navigate('/app/user-profile?verified=true', { replace: true });
+        return;
+      }
+      navigate(getRedirectPath(), { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, location.search]);
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -51,7 +69,7 @@ export function AuthCallback() {
           
           if (data?.session) {
             setStatus('success');
-            navigate("/onboarding/welcome", { replace: true });
+            navigate(getRedirectPath(), { replace: true });
             return;
           }
         } catch (err: any) {
@@ -80,7 +98,7 @@ export function AuthCallback() {
           
           if (data?.session) {
             setStatus('success');
-            navigate("/onboarding/welcome", { replace: true });
+            navigate(getRedirectPath(), { replace: true });
             return;
           }
       }
@@ -92,7 +110,7 @@ export function AuthCallback() {
         if (session) {
           setStatus('success');
           // Navigate immediately - user wants "nano seconds" response
-          navigate("/onboarding/welcome", { replace: true });
+          navigate(getRedirectPath(), { replace: true });
           return;
         }
 
@@ -127,7 +145,7 @@ export function AuthCallback() {
            <>
             <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-500 font-bold text-xl">✓</div>
             <h2 className="text-xl font-semibold text-gray-700">Email Verified!</h2>
-            <p className="text-muted-foreground">Redirecting to onboarding...</p>
+            <p className="text-muted-foreground">Redirecting...</p>
           </>
         )}
 

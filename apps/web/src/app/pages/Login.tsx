@@ -66,11 +66,15 @@ export function Login() {
 
   const handleResendVerification = async (emailToResend: string) => {
     try {
+      const rawEnv = (import.meta as any).env?.VITE_CLIENT_URL as string | undefined;
+      const baseUrl = (rawEnv && typeof rawEnv === 'string' ? rawEnv.trim() : '') || window.location.origin;
+      const currentPath = window.location.pathname + window.location.search;
+      const redirectTo = `${baseUrl}/auth/callback?redirect=${encodeURIComponent(currentPath)}`;
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email: emailToResend,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: redirectTo,
         },
       });
       if (error) throw error;

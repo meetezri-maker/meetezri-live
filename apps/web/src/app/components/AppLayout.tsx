@@ -15,11 +15,14 @@ import {
   Target,
   Clock,
   Sparkles,
-  CreditCard
+  CreditCard,
+  AlertTriangle
 } from "lucide-react";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { useAuth } from "../contexts/AuthContext";
 import { useNotifications } from "../contexts/NotificationsContext";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -193,6 +196,41 @@ export function AppLayout({ children }: AppLayoutProps) {
     ? "pb-12 sm:pb-4 sm:pl-64"
     : "pb-20 sm:pb-6 sm:pl-72";
 
+  // Check both standard Supabase verification AND our custom metadata flag
+  const isUnverified = user && (!user.email_confirmed_at || user.user_metadata?.email_verification_required);
+
+  const resendVerification = async () => {
+    if (!user?.email) return;
+    try {
+      // If the user is technically "confirmed" (due to Confirm Email OFF setting) but flagged as unverified,
+      // we send a Magic Link instead of a signup verification email.
+      if (user.email_confirmed_at && user.user_metadata?.email_verification_required) {
+        const { error } = await supabase.auth.signInWithOtp({
+          email: user.email,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            // data: { ... } // Optional: could pass data to know it's a verification flow
+          }
+        });
+        if (error) throw error;
+        toast.success("Verification link sent! Please check your email and click the sign-in link to verify.");
+      } else {
+        // Standard flow for genuinely unconfirmed users
+        const { error } = await supabase.auth.resend({
+          type: "signup",
+          email: user.email,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`
+          }
+        });
+        if (error) throw error;
+        toast.success("Verification email sent. Check your inbox.");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to send verification email.");
+    }
+  };
+
   const handleLogout = async () => {
     await signOut();
     navigate("/login");
@@ -266,6 +304,26 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {/* Main Content */}
       <main className={`flex-1 overflow-y-auto ${mainPaddingClass}`}>
+        {isUnverified && (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-4 m-4 rounded shadow-sm">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <AlertTriangle className="h-5 w-5 text-yellow-400" aria-hidden="true" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-yellow-700 dark:text-yellow-200">
+                  Your email address is not verified. Please check your inbox for the verification link.
+                  <button 
+                    onClick={resendVerification} 
+                    className="font-medium underline ml-2 hover:text-yellow-600 dark:hover:text-yellow-100"
+                  >
+                    Resend verification email
+                  </button>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         {children}
       </main>
 
