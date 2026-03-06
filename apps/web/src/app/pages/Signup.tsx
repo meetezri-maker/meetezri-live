@@ -139,10 +139,19 @@ export function Signup() {
 
       if (selectedPlan === 'trial' && !planPurchased) {
         // For free trial: create account client-side so a session is established immediately
+        
+        // Explicitly set redirect URL to avoid defaults
+        let origin = window.location.origin;
+        if (origin.includes('meetezri-live-web.vercel.app')) {
+          origin = 'https://meetezri-live-web.vercel.app';
+        }
+        const redirectUrl = `${origin}/auth/callback?redirect=${encodeURIComponent('/app/user-profile')}`;
+
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: data.email,
           password: data.password,
           options: {
+            emailRedirectTo: redirectUrl,
             data: {
               first_name: data.firstName,
               last_name: data.lastName,
