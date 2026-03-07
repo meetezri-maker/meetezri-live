@@ -1,5 +1,5 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { PublicNav } from "../components/PublicNav";
 import { Button } from "../components/ui/button";
@@ -15,6 +15,7 @@ export function Landing() {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
   useEffect(() => {
     // Scroll to hash if present
@@ -535,27 +536,31 @@ export function Landing() {
                       {planId === 'trial' ? (
                         <div
                           onClick={() => {
+                            setLoadingPlan(planId);
                             localStorage.setItem('selectedPlan', planId);
+                            setTimeout(() => {
+                              navigate('/signup');
+                            }, 500);
                           }}
                         >
-                          <Link to="/signup" className="block">
-                            <Button 
-                              className={`w-full ${
-                                isPopular 
-                                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/30' 
-                                  : 'bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white'
-                              }`}
-                              size="lg"
-                            >
-                              Start Your Trial
-                              <ArrowRight className="w-4 h-4 ml-2" />
-                            </Button>
-                          </Link>
+                          <Button 
+                            className={`w-full ${
+                              isPopular 
+                                ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/30' 
+                                : 'bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white'
+                            }`}
+                            size="lg"
+                            isLoading={loadingPlan === planId}
+                          >
+                            Start Your Trial
+                            <ArrowRight className="w-4 h-4 ml-2" />
+                          </Button>
                         </div>
                       ) : (
-                        <button
+                        <Button
                           onClick={async () => {
                             try {
+                              setLoadingPlan(planId);
                               localStorage.setItem('selectedPlan', planId);
                               const origin = window.location.origin;
                               const successUrl = `${origin}/signup?postCheckout=1&plan=${planId}&session_id={CHECKOUT_SESSION_ID}`;
@@ -574,17 +579,20 @@ export function Landing() {
                               }
                             } catch (e) {
                               console.error("Failed to start checkout:", e);
+                              setLoadingPlan(null);
                             }
                           }}
-                          className={`w-full inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                          className={`w-full ${
                             isPopular 
                               ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/30' 
                               : 'bg-black text-white hover:bg-gray-800'
                           }`}
+                          size="lg"
+                          isLoading={loadingPlan === planId}
                         >
                           Get Started
                           <ArrowRight className="w-4 h-4 ml-2" />
-                        </button>
+                        </Button>
                       )}
                     </div>
 

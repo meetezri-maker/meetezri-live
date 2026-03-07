@@ -1,14 +1,16 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { PublicNav } from "../components/PublicNav";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { motion } from "motion/react";
 import { Check, X, Package, Zap, ArrowRight, Sparkles } from "lucide-react";
 import { SUBSCRIPTION_PLANS } from "../utils/subscriptionPlans";
-import type { PlanTier } from "../utils/subscriptionPlans";
+import { useState } from "react";
 
 export function Pricing() {
+  const navigate = useNavigate();
   const plans = Object.values(SUBSCRIPTION_PLANS);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-purple-50/30 to-white">
@@ -67,16 +69,49 @@ export function Pricing() {
                     </div>
                   )}
 
-                  <Link to="/signup" className="block" onClick={() => localStorage.setItem('selectedPlan', plan.id)}>
+                  <div onClick={() => {
+                    setLoadingPlan(plan.id);
+                    localStorage.setItem('selectedPlan', plan.id);
+                    if (plan.id === 'trial') {
+                      setTimeout(() => {
+                        navigate('/signup');
+                      }, 500);
+                    } else {
+                      // Paid plans logic
+                      (async () => {
+                        try {
+                          const origin = window.location.origin;
+                          const successUrl = `${origin}/signup?postCheckout=1&plan=${plan.id}&session_id={CHECKOUT_SESSION_ID}`;
+                          const cancelUrl = `${origin}/pricing`;
+                          
+                          const { api } = await import("@/lib/api");
+                          const result = await api.billing.createGuestSubscription({
+                            plan_type: plan.id,
+                            billing_cycle: "monthly",
+                            successUrl,
+                            cancelUrl
+                          });
+                          
+                          if (result.checkoutUrl) {
+                            window.location.href = result.checkoutUrl;
+                          }
+                        } catch (e) {
+                          console.error("Failed to start checkout:", e);
+                          setLoadingPlan(null);
+                        }
+                      })();
+                    }
+                  }}>
                     <Button 
                       className="w-full" 
                       variant={plan.popular ? "default" : "outline"}
                       size="lg"
+                      isLoading={loadingPlan === plan.id}
                     >
                       {plan.id === 'trial' ? 'Start Trial' : 'Get Started'}
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
-                  </Link>
+                  </div>
                 </div>
 
                 <div className="space-y-4 flex-1">

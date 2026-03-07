@@ -335,7 +335,7 @@ export function Login() {
             >
               <p className="text-sm text-muted-foreground">
                 Don't have an account?{" "}
-                <Link to="/signup" className="text-primary font-medium hover:underline">
+                <Link to="/pricing" className="text-primary font-medium hover:underline">
                   Sign up
                 </Link>
               </p>
