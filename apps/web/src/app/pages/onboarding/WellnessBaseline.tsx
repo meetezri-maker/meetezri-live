@@ -3,11 +3,12 @@ import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { ArrowRight, ArrowLeft, Smile, Frown, Meh, Laugh, Angry } from "lucide-react";
+import { ArrowRight, ArrowLeft, Smile, Frown, Meh, Laugh, Angry, Loader2 } from "lucide-react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useState } from "react";
 import {
   Form,
   FormControl,
@@ -27,6 +28,7 @@ type WellnessBaselineValues = z.infer<typeof wellnessBaselineSchema>;
 export function OnboardingWellnessBaseline() {
   const navigate = useNavigate();
   const { data, updateData } = useOnboarding();
+  const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<WellnessBaselineValues>({
     resolver: zodResolver(wellnessBaselineSchema),
@@ -56,8 +58,12 @@ export function OnboardingWellnessBaseline() {
   ];
 
   const onSubmit = (values: WellnessBaselineValues) => {
-    updateData(values);
-    navigate("/onboarding/health-background");
+    setIsLoading(true);
+    // Add a small delay for better UX
+    setTimeout(() => {
+      updateData(values);
+      navigate("/onboarding/health-background");
+    }, 500);
   };
 
   return (
@@ -189,7 +195,7 @@ export function OnboardingWellnessBaseline() {
             transition={{ delay: 0.8 }}
             className="flex gap-3"
           >
-            <Link to="/onboarding/profile" className="flex-1">
+            <Link to="/onboarding/profile-setup" className="flex-1">
               <Button type="button" variant="outline" className="w-full group">
                 <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
                 Back
@@ -204,10 +210,20 @@ export function OnboardingWellnessBaseline() {
                 <Button 
                   type="submit"
                   className="w-full group relative overflow-hidden"
+                  disabled={isLoading}
                 >
                   <span className="relative z-10 flex items-center justify-center gap-2">
-                    Continue
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        Continue
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
                   </span>
                   <motion.div
                     className="absolute inset-0 bg-gradient-to-r from-accent to-secondary"

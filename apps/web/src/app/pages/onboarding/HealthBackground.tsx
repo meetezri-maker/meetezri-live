@@ -4,11 +4,12 @@ import { Card } from "../../components/ui/card";
 import { Label } from "../../components/ui/label";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { ArrowRight, ArrowLeft, Info, Shield } from "lucide-react";
+import { ArrowRight, ArrowLeft, Info, Shield, Loader2 } from "lucide-react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useState } from "react";
 import {
   Form,
   FormControl,
@@ -29,6 +30,7 @@ type HealthBackgroundValues = z.infer<typeof healthBackgroundSchema>;
 export function OnboardingHealthBackground() {
   const navigate = useNavigate();
   const { data, updateData } = useOnboarding();
+  const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<HealthBackgroundValues>({
     resolver: zodResolver(healthBackgroundSchema),
@@ -49,8 +51,11 @@ export function OnboardingHealthBackground() {
   ];
 
   const onSubmit = (values: HealthBackgroundValues) => {
-    updateData(values);
-    navigate("/onboarding/avatar-preferences");
+    setIsLoading(true);
+    setTimeout(() => {
+      updateData(values);
+      navigate("/onboarding/avatar-preferences");
+    }, 500);
   };
 
   return (
@@ -218,10 +223,20 @@ export function OnboardingHealthBackground() {
                 <Button 
                   type="submit"
                   className="w-full group relative overflow-hidden"
+                  disabled={isLoading}
                 >
                   <span className="relative z-10 flex items-center justify-center gap-2">
-                    Continue
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        Continue
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
                   </span>
                   <motion.div
                     className="absolute inset-0 bg-gradient-to-r from-accent to-secondary"

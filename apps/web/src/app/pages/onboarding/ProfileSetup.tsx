@@ -4,7 +4,7 @@ import { Input } from "../../components/ui/input";
 import { Card } from "../../components/ui/card";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { ArrowRight, ArrowLeft, Camera, User } from "lucide-react";
+import { ArrowRight, ArrowLeft, Camera, User, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
 import { supabase } from "@/lib/supabase";
@@ -41,6 +41,7 @@ export function OnboardingProfileSetup() {
   const { data, updateData } = useOnboarding();
   const { user } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [availableTimezones] = useState<string[]>((Intl as any).supportedValuesOf('timeZone'));
 
   const form = useForm<ProfileSetupValues>({
@@ -154,6 +155,7 @@ export function OnboardingProfileSetup() {
   };
 
   const onSubmit = async (values: ProfileSetupValues) => {
+    setIsLoading(true);
     try {
       // First update the profile
       await api.updateProfile({
@@ -185,6 +187,7 @@ export function OnboardingProfileSetup() {
     } catch (error) {
       console.error("Profile update error:", error);
       toast.error("Failed to update profile");
+      setIsLoading(false);
     }
   };
 
@@ -413,24 +416,37 @@ export function OnboardingProfileSetup() {
               </Link>
 
               <div className="flex-1">
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Button 
+                  type="submit"
+                  className="w-full group relative overflow-hidden"
+                  disabled={isLoading}
                 >
-                  <Button type="submit" className="w-full group relative overflow-hidden">
-                    <span className="relative z-10 flex items-center justify-center gap-2">
-                      Continue
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                    </span>
-                    <motion.div
-                      className="absolute inset-0 bg-gradient-to-r from-accent to-secondary"
-                      initial={{ x: "-100%" }}
-                      whileHover={{ x: 0 }}
-                      transition={{ duration: 0.3 }}
-                    />
-                  </Button>
-                </motion.div>
-              </div>
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        Continue
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
+                  </span>
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-accent to-secondary"
+                    initial={{ x: "-100%" }}
+                    whileHover={{ x: 0 }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </Button>
+              </motion.div>
+            </div>
             </motion.div>
           </form>
         </Form>

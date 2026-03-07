@@ -14,7 +14,7 @@ import {
 } from "../../components/ui/dialog";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { Phone, Heart, AlertCircle, Plus, X, ArrowLeft, ArrowRight } from "lucide-react";
+import { Phone, Heart, AlertCircle, Plus, X, ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
 import { toast } from "sonner";
@@ -41,6 +41,7 @@ type EmergencyContactValues = z.infer<typeof emergencyContactSchema>;
 export function OnboardingEmergencyContact() {
   const navigate = useNavigate();
   const { data, updateData } = useOnboarding();
+  const [isLoading, setIsLoading] = useState(false);
   
   // Safety Plan State
   const [isSafetyPlanOpen, setIsSafetyPlanOpen] = useState(false);
@@ -58,12 +59,15 @@ export function OnboardingEmergencyContact() {
   });
 
   const onSubmit = (values: EmergencyContactValues) => {
-    updateData({ 
-      emergencyContactName: values.emergencyName, 
-      emergencyContactPhone: values.emergencyPhone, 
-      emergencyContactRelationship: values.emergencyRelationship 
-    });
-    navigate("/onboarding/permissions");
+    setIsLoading(true);
+    setTimeout(() => {
+      updateData({ 
+        emergencyContactName: values.emergencyName, 
+        emergencyContactPhone: values.emergencyPhone, 
+        emergencyContactRelationship: values.emergencyRelationship 
+      });
+      navigate("/onboarding/permissions");
+    }, 500);
   };
 
   const handleSaveSafetyPlan = () => {
@@ -275,27 +279,37 @@ export function OnboardingEmergencyContact() {
                   </Link>
 
                   <div className="flex-1">
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <Button 
-                        type="submit"
-                        className="w-full group relative overflow-hidden"
-                      >
-                        <span className="relative z-10 flex items-center justify-center gap-2">
-                          Continue
-                          <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                        </span>
-                        <motion.div
-                          className="absolute inset-0 bg-gradient-to-r from-accent to-secondary"
-                          initial={{ x: "-100%" }}
-                          whileHover={{ x: 0 }}
-                          transition={{ duration: 0.3 }}
-                        />
-                      </Button>
-                    </motion.div>
-                  </div>
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Button 
+                  type="submit"
+                  className="w-full group relative overflow-hidden"
+                  disabled={isLoading}
+                >
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        Continue
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
+                  </span>
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-accent to-secondary"
+                    initial={{ x: "-100%" }}
+                    whileHover={{ x: 0 }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </Button>
+              </motion.div>
+            </div>
                 </motion.div>
               </form>
             </Form>
