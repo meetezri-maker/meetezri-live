@@ -12,7 +12,9 @@ export function AuthCallback() {
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
-  const getRedirectPath = () => {
+  const getRedirectPath = (currentUser?: any) => {
+    const targetUser = currentUser || user;
+    
     // 1. Check standard search params
     const searchParams = new URLSearchParams(location.search);
     let requested = searchParams.get('redirect') || searchParams.get('next');
@@ -30,15 +32,14 @@ export function AuthCallback() {
 
     // 3. Smart Fallback based on User Metadata
     // Trial users (Soft Verification) -> Profile to complete setup
-    if (user?.user_metadata?.email_verification_required) {
-      return '/app/user-profile';
+    if (targetUser?.user_metadata?.email_verification_required) {
+      // We must return the path with the verified param so the alert shows
+      return '/app/user-profile?verified=true';
     }
 
     // 4. Heuristic for New Paid Users (if param is lost)
-    // If user was created in the last 5 minutes AND is verified (no trial flag)
-    // This handles cases where Supabase/Email providers strip the redirect param
-    if (user?.created_at) {
-      const created = new Date(user.created_at).getTime();
+    if (targetUser?.created_at) {
+      const created = new Date(targetUser.created_at).getTime();
       const now = Date.now();
       const isNew = (now - created) < 5 * 60 * 1000; // 5 minutes threshold
       
@@ -50,6 +51,25 @@ export function AuthCallback() {
 
     // Default Fallback
     return '/app/dashboard';
+  };
+
+  const finalizeVerification = async (sessionUser: any) => {
+      // If this is a Trial User verifying for the first time
+      if (sessionUser?.user_metadata?.email_verification_required) {
+          try {
+            await supabase.auth.updateUser({
+              data: { email_verification_required: false }
+            });
+            toast.success("Email verified successfully!");
+            navigate('/app/user-profile?verified=true', { replace: true });
+            return;
+          } catch (e) {
+            console.error("Failed to clear verification flag", e);
+          }
+      }
+      
+      // Standard redirect
+      navigate(getRedirectPath(sessionUser), { replace: true });
   };
 
   useEffect(() => {
@@ -117,7 +137,7 @@ export function AuthCallback() {
           
           if (data?.session) {
             setStatus('success');
-            navigate(getRedirectPath(), { replace: true });
+            finalizeVerification(data.session.user);
             return;
           }
         } catch (err: any) {
@@ -146,7 +166,7 @@ export function AuthCallback() {
           
           if (data?.session) {
             setStatus('success');
-            navigate(getRedirectPath(), { replace: true });
+            finalizeVerification(data.session.user);
             return;
           }
       }
@@ -158,7 +178,7 @@ export function AuthCallback() {
         if (session) {
           setStatus('success');
           // Navigate immediately - user wants "nano seconds" response
-          navigate(getRedirectPath(), { replace: true });
+          finalizeVerification(session.user);
           return;
         }
 
