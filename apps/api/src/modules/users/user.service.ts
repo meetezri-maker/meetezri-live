@@ -258,6 +258,9 @@ export async function updateProfile(userId: string, data: UpdateProfileInput) {
     ...profileData 
   } = data as any;
 
+  console.log("Updating profile for user:", userId);
+  console.log("Emergency Contact Data:", { emergency_contact_name, emergency_contact_phone, emergency_contact_relationship });
+
   // Handle emergency contact update if any of the fields are present
   if (emergency_contact_name !== undefined || emergency_contact_phone !== undefined || emergency_contact_relationship !== undefined) {
     const existingContact = await prisma.emergency_contacts.findFirst({

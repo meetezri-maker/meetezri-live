@@ -51,6 +51,7 @@ import {
   FormMessage,
 } from "../../components/ui/form";
 import { Input } from "../../components/ui/input";
+import { PhoneInput } from "../../components/ui/phone-input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,6 +62,26 @@ import {
   AlertDialogTitle,
 } from "../../components/ui/alert-dialog";
 
+const goalsOptions = [
+  { value: "reduce-stress", label: "Reduce Stress", emoji: "🧘" },
+  { value: "manage-anxiety", label: "Manage Anxiety", emoji: "💭" },
+  { value: "improve-sleep", label: "Improve Sleep", emoji: "😴" },
+  { value: "boost-mood", label: "Boost Mood", emoji: "✨" },
+  { value: "build-confidence", label: "Build Confidence", emoji: "💪" },
+  { value: "work-life-balance", label: "Work-Life Balance", emoji: "⚖️" },
+  { value: "relationship-support", label: "Relationship Support", emoji: "❤️" },
+  { value: "grief-loss", label: "Grief & Loss", emoji: "🕊️" }
+];
+
+const triggersOptions = [
+  { value: "violence", label: "Violence" },
+  { value: "self-harm", label: "Self-harm" },
+  { value: "substance-abuse", label: "Substance Abuse" },
+  { value: "eating-disorders", label: "Eating Disorders" },
+  { value: "trauma", label: "Trauma/PTSD" },
+  { value: "none", label: "None of the above" }
+];
+
 const profileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
@@ -69,15 +90,15 @@ const profileSchema = z.object({
     .string()
     .optional()
     .or(z.literal(""))
-    .refine((v) => v === "" || /^[0-9]+$/.test(v), "Phone must contain digits only"),
+    .refine((v) => !v || /^\+?[\d\s-().]+$/.test(v), "Phone must contain valid characters (digits, spaces, dashes, +, ())"),
 
   birthday: z.string().optional(),
   pronouns: z.string().optional(),
   location: z.string().optional(),
   in_therapy: z.string().optional(),
   on_medication: z.string().optional(),
-  selected_goals: z.string().optional(),
-  selected_triggers: z.string().optional(),
+  selected_goals: z.array(z.string()).optional(),
+  selected_triggers: z.array(z.string()).optional(),
 
   emergency_contact_name: z.string().min(2, "Contact name is required").optional().or(z.literal("")),
 
@@ -85,7 +106,7 @@ const profileSchema = z.object({
     .string()
     .optional()
     .or(z.literal(""))
-    .refine((v) => v === "" || /^[0-9]+$/.test(v), "Valid phone number is required (digits only)"),
+    .refine((v) => !v || /^\+?[\d\s-().]+$/.test(v), "Valid phone number is required"),
 
   emergency_contact_relationship: z.string().optional(),
 });
@@ -130,8 +151,8 @@ export function UserProfile() {
       emergency_contact_relationship: "",
       in_therapy: "",
       on_medication: "",
-      selected_goals: "",
-      selected_triggers: "",
+      selected_goals: [],
+      selected_triggers: [],
     },
   });
 
@@ -171,8 +192,12 @@ export function UserProfile() {
         emergency_contact_relationship: profile.emergency_contact_relationship || "",
         in_therapy: profile.in_therapy || "Not specified",
         on_medication: profile.on_medication || "Not specified",
-        selected_goals: (profile.selected_goals || []).join(', '),
-        selected_triggers: (profile.selected_triggers || []).join(', '),
+        selected_goals: Array.isArray(profile.selected_goals) 
+          ? profile.selected_goals 
+          : (typeof profile.selected_goals === 'string' ? profile.selected_goals.split(',').map((s: string) => s.trim()) : []),
+        selected_triggers: Array.isArray(profile.selected_triggers) 
+          ? profile.selected_triggers 
+          : (typeof profile.selected_triggers === 'string' ? profile.selected_triggers.split(',').map((s: string) => s.trim()) : []),
       });
       
       setPreferencesData({
@@ -257,8 +282,8 @@ export function UserProfile() {
         timezone: data.location,
         in_therapy: data.in_therapy,
         on_medication: data.on_medication,
-        selected_goals: data.selected_goals ? data.selected_goals.split(',').map(s => s.trim()).filter(Boolean) : [],
-        selected_triggers: data.selected_triggers ? data.selected_triggers.split(',').map(s => s.trim()).filter(Boolean) : [],
+        selected_goals: data.selected_goals || [],
+        selected_triggers: data.selected_triggers || [],
         emergency_contact_name: data.emergency_contact_name,
         emergency_contact_phone: data.emergency_contact_phone,
         emergency_contact_relationship: data.emergency_contact_relationship
@@ -274,8 +299,8 @@ export function UserProfile() {
         location: updatedProfile.timezone || '',
         in_therapy: updatedProfile.in_therapy || 'Not specified',
         on_medication: updatedProfile.on_medication || 'Not specified',
-        selected_goals: (updatedProfile.selected_goals || []).join(', '),
-        selected_triggers: (updatedProfile.selected_triggers || []).join(', '),
+        selected_goals: updatedProfile.selected_goals || [],
+        selected_triggers: updatedProfile.selected_triggers || [],
         emergency_contact_name: updatedProfile.emergency_contact_name || '',
         emergency_contact_phone: updatedProfile.emergency_contact_phone || '',
         emergency_contact_relationship: updatedProfile.emergency_contact_relationship || ''
@@ -721,29 +746,12 @@ export function UserProfile() {
                             <FormItem>
                               <FormLabel>Phone</FormLabel>
                               <FormControl>
-                                <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
-                                  isEditing 
-                                    ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
-                                    : 'border-gray-300 dark:border-gray-700'
-                                }`}>
-                                  <Phone className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                                  {/* <input
-                                    {...field}
-                                    disabled={!isEditing || isSaving}
-                                    className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-                                  /> */}
-                                  <input
-  value={field.value || ""}
-  onChange={(e) => {
-    const onlyDigits = e.target.value.replace(/\D/g, "");
-    field.onChange(onlyDigits);
-  }}
-  disabled={!isEditing || isSaving}
-  inputMode="numeric"
-  pattern="[0-9]*"
-  className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-/>
-                                </div>
+                                <PhoneInput
+                                  value={field.value}
+                                  onChange={field.onChange}
+                                  disabled={!isEditing || isSaving}
+                                  placeholder="Phone number"
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -864,7 +872,7 @@ export function UserProfile() {
                         <FormItem className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg space-y-0">
                           <div className="flex items-center gap-2 mb-2">
                             <Users className="w-4 h-4 text-purple-500" />
-                            <FormLabel className="font-semibold text-sm">Professionl  Companion</FormLabel>
+                            <FormLabel className="font-semibold text-sm">Professionol  Companion</FormLabel>
                           </div>
                           <FormControl>
                             {isEditing ? (
@@ -930,23 +938,45 @@ export function UserProfile() {
                         </div>
                         <FormControl>
                           {isEditing ? (
-                            <div className="space-y-2">
-                              <textarea
-                                {...field}
-                                disabled={isSaving}
-                                className="w-full p-2 border dark:border-gray-700 rounded-md text-sm min-h-[80px] bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                                placeholder="Enter goals separated by commas (e.g., Better sleep, Less anxiety)"
-                              />
-                              <p className="text-xs text-muted-foreground">Separate goals with commas</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {goalsOptions.map((goal) => {
+                                const isSelected = (field.value || []).includes(goal.value);
+                                return (
+                                  <button
+                                    key={goal.value}
+                                    type="button"
+                                    disabled={isSaving}
+                                    onClick={() => {
+                                      const current = field.value || [];
+                                      const updated = isSelected
+                                        ? current.filter((v: string) => v !== goal.value)
+                                        : [...current, goal.value];
+                                      field.onChange(updated);
+                                    }}
+                                    className={`p-3 rounded-lg border text-sm text-left transition-all flex items-center gap-2 ${
+                                      isSelected
+                                        ? "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 ring-1 ring-green-500"
+                                        : "border-gray-200 dark:border-gray-700 hover:border-green-300 dark:hover:border-green-800 bg-white dark:bg-gray-900"
+                                    }`}
+                                  >
+                                    <span className="text-lg">{goal.emoji}</span>
+                                    <span className="font-medium">{goal.label}</span>
+                                  </button>
+                                );
+                              })}
                             </div>
                           ) : (
                             <div className="flex flex-wrap gap-2">
                               {field.value && field.value.length > 0 ? (
-                                field.value.split(',').map(s => s.trim()).filter(Boolean).map((goal, i) => (
-                                  <Badge key={i} variant="secondary" className="px-3 py-1">
-                                    {goal}
-                                  </Badge>
-                                ))
+                                field.value.map((val: string, i: number) => {
+                                  const option = goalsOptions.find(opt => opt.value === val);
+                                  return (
+                                    <Badge key={i} variant="secondary" className="px-3 py-1 flex items-center gap-1.5 bg-green-50 text-green-700 border-green-200">
+                                      <span>{option?.emoji}</span>
+                                      <span>{option?.label || val}</span>
+                                    </Badge>
+                                  );
+                                })
                               ) : (
                                 <p className="text-sm text-muted-foreground italic">No goals selected</p>
                               )}
@@ -970,23 +1000,43 @@ export function UserProfile() {
                         </div>
                         <FormControl>
                           {isEditing ? (
-                            <div className="space-y-2">
-                               <textarea
-                                {...field}
-                                disabled={isSaving}
-                                className="w-full p-2 border dark:border-gray-700 rounded-md text-sm min-h-[80px] bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                                placeholder="Enter triggers separated by commas (e.g., Work stress, Social anxiety)"
-                              />
-                              <p className="text-xs text-muted-foreground">Separate triggers with commas</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {triggersOptions.map((trigger) => {
+                                const isSelected = (field.value || []).includes(trigger.value);
+                                return (
+                                  <button
+                                    key={trigger.value}
+                                    type="button"
+                                    disabled={isSaving}
+                                    onClick={() => {
+                                      const current = field.value || [];
+                                      const updated = isSelected
+                                        ? current.filter((v: string) => v !== trigger.value)
+                                        : [...current, trigger.value];
+                                      field.onChange(updated);
+                                    }}
+                                    className={`p-3 rounded-lg border text-sm text-left transition-all flex items-center gap-2 ${
+                                      isSelected
+                                        ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 ring-1 ring-orange-500"
+                                        : "border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-800 bg-white dark:bg-gray-900"
+                                    }`}
+                                  >
+                                    <span className="font-medium">{trigger.label}</span>
+                                  </button>
+                                );
+                              })}
                             </div>
                           ) : (
                             <div className="flex flex-wrap gap-2">
                               {field.value && field.value.length > 0 ? (
-                                field.value.split(',').map(s => s.trim()).filter(Boolean).map((trigger, i) => (
-                                  <Badge key={i} variant="outline" className="px-3 py-1 border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300">
-                                    {trigger}
-                                  </Badge>
-                                ))
+                                field.value.map((val: string, i: number) => {
+                                  const option = triggersOptions.find(opt => opt.value === val);
+                                  return (
+                                    <Badge key={i} variant="outline" className="px-3 py-1 border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300">
+                                      {option?.label || val}
+                                    </Badge>
+                                  );
+                                })
                               ) : (
                                 <p className="text-sm text-muted-foreground italic">No triggers specified</p>
                               )}
@@ -1069,11 +1119,12 @@ export function UserProfile() {
                         <Label className="text-xs text-muted-foreground uppercase tracking-wider">Phone</Label>
                         <FormControl>
                           {isEditing ? (
-                            <input
-                              {...field}
+                            <PhoneInput
+                              value={field.value}
+                              onChange={field.onChange}
                               disabled={isSaving}
-                              className="w-full mt-1 p-2 border rounded-lg border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20 outline-none text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                               placeholder="Contact Phone"
+                              className="mt-1"
                             />
                           ) : (
                             <div className="flex items-center gap-2 mt-1">

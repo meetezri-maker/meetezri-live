@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { PhoneInput } from "../components/ui/phone-input";
 import { Card } from "../components/ui/card";
 import { Label } from "../components/ui/label";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -51,7 +52,7 @@ export function Signup() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [trialDetailsLoading, setTrialDetailsLoading] = useState(false);
   const contactValid = trialContact.name.trim().length >= 2 
-    && /^\d{7,}$/.test(trialContact.phone.trim())
+    && /^\+?\d{7,}$/.test(trialContact.phone.trim())
     && trialContact.relationship.trim().length >= 2;
 
   const form = useForm<SignupFormValues>({
@@ -554,18 +555,13 @@ export function Signup() {
                     </div>
                     <div className="space-y-2">
                       <Label>Emergency Contact Phone</Label>
-                      <Input
-                        type="tel"
-                        inputMode="numeric"
-                        pattern="[0-9]{7,}"
-                        placeholder="Digits only"
+                      <PhoneInput
                         value={trialContact.phone}
-                        aria-invalid={!!trialContact.phone && !/^\d{7,}$/.test(trialContact.phone.trim())}
-                        className={trialContact.phone && !/^\d{7,}$/.test(trialContact.phone.trim()) ? "border-red-500 focus-visible:ring-red-500" : ""}
-                        onChange={(e) => setTrialContact({ ...trialContact, phone: e.target.value })}
+                        onChange={(value) => setTrialContact({ ...trialContact, phone: value || '' })}
+                        placeholder="Phone number"
                       />
-                      {trialContact.phone && !/^\d{7,}$/.test(trialContact.phone.trim()) && (
-                        <p className="text-xs text-red-600 mt-1">Enter at least 7 digits</p>
+                      {trialContact.phone && !/^\+?\d{7,}$/.test(trialContact.phone.trim()) && (
+                        <p className="text-xs text-red-600 mt-1">Enter a valid phone number</p>
                       )}
                     </div>
                     <div className="space-y-2">
@@ -608,7 +604,7 @@ export function Signup() {
                           if (!contactValid) {
                             const errors = [];
                             if (trialContact.name.trim().length < 2) errors.push("name (minimum 2 characters)");
-                            if (!/^\d{7,}$/.test(trialContact.phone.trim())) errors.push("phone (minimum 7 digits)");
+                            if (!/^\+?\d{7,}$/.test(trialContact.phone.trim())) errors.push("phone (minimum 7 digits)");
                             if (trialContact.relationship.trim().length < 2) errors.push("relationship (minimum 2 characters)");
                             toast.error(`Please complete emergency contact details correctly: ${errors.join(", ")}`);
                             return;
@@ -671,13 +667,19 @@ export function Signup() {
 
                           try {
                             const { api } = await import("@/lib/api");
+                            
+                            console.log("Initializing profile...");
                             // Ensure profile exists before updating (backend creates it on initProfile)
                             await api.initProfile();
+                            
+                            console.log("Updating profile with emergency contact:", trialContact);
                             await api.updateProfile({
                               emergency_contact_name: trialContact.name,
                               emergency_contact_phone: trialContact.phone,
                               emergency_contact_relationship: trialContact.relationship
                             });
+                            
+                            console.log("Profile updated successfully");
                             await api.billing.createSubscription({
                               plan_type: "trial",
                               billing_cycle: "monthly"
