@@ -169,6 +169,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(null);
     setUser(null);
     setSession(null);
+
+    // Clear plan-related client cache so next signup starts fresh
+    try {
+      window.localStorage.removeItem('selectedPlan');
+      window.localStorage.removeItem('planPurchased');
+    } catch {
+      // Ignore storage errors (e.g. SSR or disabled storage)
+    }
   };
 
   const value = {
