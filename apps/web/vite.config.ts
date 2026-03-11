@@ -1,7 +1,7 @@
-import { defineConfig } from 'vite'
-import path from 'path'
-import tailwindcss from '@tailwindcss/vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import path from 'path';
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [
@@ -16,4 +16,16 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-})
+  // Prevent aggressive browser caching during local development and preview,
+  // which can cause stale bundles when the dev server is restarted.
+  server: {
+    headers: {
+      'Cache-Control': 'no-store, max-age=0',
+    },
+  },
+  preview: {
+    headers: {
+      'Cache-Control': 'no-store, max-age=0',
+    },
+  },
+});
