@@ -20,13 +20,13 @@ import {
   ArrowRight,
   Heart,
   Pause,
-  Play
+  Play,
+  Loader2
 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/app/components/ui/button";
-const avatarImage = "/Male.png";
 import { useSafety } from "@/app/contexts/SafetyContext";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
@@ -38,6 +38,334 @@ import { SafetyBoundaryMessage } from "@/app/components/safety/SafetyBoundaryMes
 import { SafetyResourceCard } from "@/app/components/safety/SafetyResourceCard";
 import { getSafetyResources } from "@/app/utils/safetyResources";
 import { LowMinutesWarning } from "@/app/components/modals/LowMinutesWarning";
+
+import * as THREE from "three"; 
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+
+const AVATAR_MODEL_PATH = "/C1v4.glb";
+
+function ThreeAvatar({ isSpeaking, audioLevel }: { isSpeaking: boolean; audioLevel: number }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const frameIdRef = useRef<number | null>(null);
+  const modelRef = useRef<THREE.Group | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const baseScaleRef = useRef<number>(1);
+  const morphMeshesRef = useRef<THREE.Mesh[]>([]);
+  const morphTargetIndexRef = useRef<number>(0);
+  const jawBoneRef = useRef<THREE.Bone | null>(null);
+  const mouthOpenRef = useRef<number>(0);
+  const mouthSmoothedRef = useRef<number>(0);
+  const blinkTargetsRef = useRef<{ mesh: THREE.Mesh; index: number }[]>([]);
+  const eyelidBonesRef = useRef<THREE.Bone[]>([]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const width = container.clientWidth || 800;
+    const height = container.clientHeight || 600;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 1000);
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+    });
+
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    rendererRef.current = renderer;
+    container.appendChild(renderer.domElement);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    dirLight.position.set(3, 5, 5);
+    scene.add(dirLight);
+
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    fillLight.position.set(-3, 2, 4);
+    scene.add(fillLight);
+
+    const loader = new GLTFLoader();
+
+    loader.load(
+      AVATAR_MODEL_PATH,
+      (gltf) => {
+        const model = gltf.scene;
+
+        morphMeshesRef.current = [];
+        jawBoneRef.current = null;
+        blinkTargetsRef.current = [];
+        eyelidBonesRef.current = [];
+        mouthSmoothedRef.current = 0;
+        mouthOpenRef.current = 0;
+
+        model.traverse((child: any) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+
+            if (child.morphTargetInfluences && child.morphTargetInfluences.length > 0) {
+              morphMeshesRef.current.push(child);
+
+              const dict = child.morphTargetDictionary || {};
+              const entries = Object.entries(dict) as [string, number][];
+
+              const mouthEntry =
+                entries.find(([name]) =>
+                  /mouth|jaw|viseme|aa|ah|oh|ee|ih|uh/i.test(name)
+                ) || entries[0];
+
+              if (mouthEntry) {
+                morphTargetIndexRef.current = mouthEntry[1];
+                console.log("[Avatar] Using mouth morph target:", mouthEntry[0], "on mesh", child.name);
+              }
+
+              entries.forEach(([name, index]) => {
+                if (/(blink|eyeBlink|eyelid|lid)/i.test(name)) {
+                  blinkTargetsRef.current.push({ mesh: child, index });
+                  console.log("[Avatar] Found blink morph target:", name, "on mesh", child.name);
+                }
+              });
+            }
+          }
+
+          if ((child as any).isBone) {
+            const name = child.name || "";
+
+            if (/jaw|mouth|chin/i.test(name)) {
+              jawBoneRef.current = child as THREE.Bone;
+              console.log("[Avatar] Found jaw bone:", name);
+            }
+
+            if (/(eyelid|upperlid|lowerlid|eyeLid|EyeLid|Lid)/i.test(name)) {
+              eyelidBonesRef.current.push(child as THREE.Bone);
+              console.log("[Avatar] Found eyelid bone:", name);
+            }
+          }
+        });
+
+        console.log("morphMeshesRef", morphMeshesRef.current);
+        console.log("jawBoneRef", jawBoneRef.current);
+        console.log("blinkTargetsRef", blinkTargetsRef.current);
+        console.log("eyelidBonesRef", eyelidBonesRef.current);
+
+        if (morphMeshesRef.current.length === 0 && !jawBoneRef.current) {
+          console.warn(
+            "[Avatar] No morph targets or jaw/mouth bones detected on C1.glb. Lip sync will not animate."
+          );
+        }
+
+        if (blinkTargetsRef.current.length === 0 && eyelidBonesRef.current.length === 0) {
+          console.warn(
+            "[Avatar] No blink morph targets or eyelid bones detected on C1.glb. Blinking will not animate."
+          );
+        }
+
+        const box = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        const center = new THREE.Vector3();
+        box.getSize(size);
+        box.getCenter(center);
+
+        model.position.sub(center);
+
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const targetViewHeight = 2.5;
+        const baseScale = targetViewHeight / maxDim;
+        baseScaleRef.current = baseScale;
+        model.scale.setScalar(baseScale);
+
+        modelRef.current = model;
+        scene.add(model);
+
+        const scaledBox = new THREE.Box3().setFromObject(model);
+        const scaledSize = new THREE.Vector3();
+        const scaledCenter = new THREE.Vector3();
+        scaledBox.getSize(scaledSize);
+        scaledBox.getCenter(scaledCenter);
+
+        const portraitHeight = scaledSize.y * 0.38;
+        const fovRad = (camera.fov * Math.PI) / 180;
+        const distance = (portraitHeight / 2) / Math.tan(fovRad / 2);
+
+        const lookAtY = scaledCenter.y + scaledSize.y * 0.34;
+
+        camera.position.set(scaledCenter.x, lookAtY, distance * 1.25);
+        camera.lookAt(new THREE.Vector3(scaledCenter.x, lookAtY, scaledCenter.z));
+        camera.updateProjectionMatrix();
+      },
+      undefined,
+      (error) => {
+        console.error("Failed to load avatar model:", error);
+      }
+    );
+
+    const handleResize = () => {
+      if (!container || !rendererRef.current) return;
+
+      const newWidth = container.clientWidth || 800;
+      const newHeight = container.clientHeight || 600;
+
+      camera.aspect = newWidth / newHeight;
+      camera.updateProjectionMatrix();
+      rendererRef.current.setSize(newWidth, newHeight);
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    const animate = () => {
+      frameIdRef.current = requestAnimationFrame(animate);
+
+      const target = mouthOpenRef.current;
+      const previous = mouthSmoothedRef.current;
+      const smoothed = previous + (target - previous) * 0.6;
+      mouthSmoothedRef.current = smoothed;
+      const mouth = smoothed;
+
+      if (morphMeshesRef.current.length > 0) {
+        const index = morphTargetIndexRef.current;
+        const amplifiedMouth = Math.min(1, Math.max(0, mouth * 1.9));
+
+        morphMeshesRef.current.forEach((mesh) => {
+          if (mesh.morphTargetInfluences && index < mesh.morphTargetInfluences.length) {
+            mesh.morphTargetInfluences[index] = amplifiedMouth;
+          }
+        });
+      } else if (jawBoneRef.current) {
+        jawBoneRef.current.rotation.x = -1.15 * mouth;
+      }
+
+      renderer.render(scene, camera);
+    };
+
+    animate();
+
+    return () => {
+      if (frameIdRef.current !== null) {
+        cancelAnimationFrame(frameIdRef.current);
+      }
+
+      window.removeEventListener("resize", handleResize);
+
+      if (modelRef.current) {
+        scene.remove(modelRef.current);
+        modelRef.current.traverse((child: any) => {
+          if (child.isMesh) {
+            child.geometry?.dispose();
+            if (Array.isArray(child.material)) {
+              child.material.forEach((m: any) => m.dispose?.());
+            } else {
+              child.material?.dispose?.();
+            }
+          }
+        });
+      }
+
+      renderer.dispose();
+
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!modelRef.current) return;
+    const multiplier = isSpeaking ? 1.03 : 1;
+    modelRef.current.scale.setScalar(baseScaleRef.current * multiplier);
+  }, [isSpeaking]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timeoutId: number | null = null;
+
+    const scheduleBlink = () => {
+      if (cancelled) return;
+
+      const delay = 2500 + Math.random() * 2500;
+      timeoutId = window.setTimeout(() => {
+        if (cancelled) return;
+
+        if (blinkTargetsRef.current.length === 0 && eyelidBonesRef.current.length === 0) {
+          scheduleBlink();
+          return;
+        }
+
+        const start = performance.now();
+        const duration = 180;
+
+        const animateBlink = (time: number) => {
+          if (cancelled) return;
+
+          const t = Math.min(1, (time - start) / duration);
+          const phase = t < 0.5 ? t * 2 : (1 - t) * 2;
+          const blinkAmount = phase;
+
+          blinkTargetsRef.current.forEach(({ mesh, index }) => {
+            if (mesh.morphTargetInfluences && index < mesh.morphTargetInfluences.length) {
+              mesh.morphTargetInfluences[index] = blinkAmount;
+            }
+          });
+
+          eyelidBonesRef.current.forEach((bone) => {
+            bone.rotation.x = 0.35 * blinkAmount;
+          });
+
+          if (t < 1) {
+            requestAnimationFrame(animateBlink);
+          } else {
+            scheduleBlink();
+          }
+        };
+
+        requestAnimationFrame(animateBlink);
+      }, delay);
+    };
+
+    scheduleBlink();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isSpeaking) {
+      mouthOpenRef.current = 0;
+      return;
+    }
+
+    const start = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - start) / 1000;
+
+      const base =
+        Math.sin(elapsed * 12) * 0.55 +
+        Math.sin(elapsed * 19) * 0.3 +
+        0.8;
+
+      const target = Math.min(1, Math.max(0.22, base));
+      mouthOpenRef.current = target;
+    }, 1000 / 30);
+
+    return () => {
+      clearInterval(interval);
+      mouthOpenRef.current = 0;
+    };
+  }, [isSpeaking]);
+
+  return <div ref={containerRef} className="w-full h-full min-h-[500px]" />;
+}
+
+export default ThreeAvatar;
 
 export function ActiveSession() {
   const navigate = useNavigate();
@@ -84,6 +412,8 @@ export function ActiveSession() {
   const recognitionRef = useRef<any>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const lastSpeechStartRef = useRef(0);
+  const isRecognitionActiveRef = useRef(false);
+  const isSessionEndingRef = useRef(false);
 
   const [currentSubtitle, setCurrentSubtitle] = useState<string | null>(null);
 
@@ -347,6 +677,7 @@ export function ActiveSession() {
       console.log("Speech recognition started");
       lastSpeechStartRef.current = Date.now();
       setIsListening(true);
+      isRecognitionActiveRef.current = true;
       toast.info("Microphone Active");
     };
 
@@ -556,8 +887,9 @@ export function ActiveSession() {
     
     recognition.onend = () => {
       setIsListening(false);
-      // Auto-restart if permissions are still granted and NOT speaking
-      if (permissionsGranted && !isEzriSpeakingRef.current) {
+      isRecognitionActiveRef.current = false;
+      // Auto-restart if permissions are still granted, NOT speaking, and session is active
+      if (permissionsGranted && !isEzriSpeakingRef.current && !isSessionEndingRef.current) {
         // Prevent rapid loops: if session started < 1s ago, add longer delay
         const sessionDuration = Date.now() - lastSpeechStartRef.current;
         const restartDelay = sessionDuration < 1000 ? 2000 : 500;
@@ -565,20 +897,23 @@ export function ActiveSession() {
         console.log(`Speech recognition ended (ran for ${sessionDuration}ms), restarting in ${restartDelay}ms...`);
         
         setTimeout(() => {
-            try {
-              if (!isEzriSpeakingRef.current && recognitionRef.current) {
-                 recognitionRef.current.start();
-              }
-            } catch (e) {
-              console.error("Failed to restart speech recognition", e);
+          if (isSessionEndingRef.current) return;
+          try {
+            if (!isEzriSpeakingRef.current && recognitionRef.current && !isRecognitionActiveRef.current) {
+              recognitionRef.current.start();
             }
+          } catch (e) {
+            console.error("Failed to restart speech recognition", e);
+          }
         }, restartDelay);
       }
     };
 
     try {
       console.log("Starting speech recognition...");
-      recognition.start();
+      if (!isSessionEndingRef.current && !isRecognitionActiveRef.current) {
+        recognition.start();
+      }
     } catch (e) {
       console.error("Failed to start speech recognition", e);
     }
@@ -590,6 +925,7 @@ export function ActiveSession() {
       } catch (e) {
       }
       setIsListening(false);
+      isRecognitionActiveRef.current = false;
       recognitionRef.current = null;
     };
   }, [permissionsGranted]);
@@ -600,7 +936,7 @@ export function ActiveSession() {
     
     const watchdog = setInterval(() => {
         // Recognition Restart Logic
-        if (!isListening && !isEzriSpeakingRef.current && recognitionRef.current) {
+        if (!isSessionEndingRef.current && !isListening && !isEzriSpeakingRef.current && recognitionRef.current && !isRecognitionActiveRef.current) {
             console.log("Watchdog: Recognition stopped unexpectedly, restarting...");
             try {
                 recognitionRef.current.start();
@@ -852,6 +1188,18 @@ export function ActiveSession() {
   };
 
   const handleEndSession = async () => {
+    isSessionEndingRef.current = true;
+    // Stop recognition and prevent any further restarts
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onend = null;
+        recognitionRef.current.stop();
+      } catch (e) {
+      }
+      isRecognitionActiveRef.current = false;
+      setIsListening(false);
+    }
+
     setIsUploading(true);
     const endTime = Date.now();
     const durationSeconds = Math.floor((endTime - sessionStartTime) / 1000);
@@ -1022,52 +1370,19 @@ export function ActiveSession() {
               )}
             </AnimatePresence>
 
-            {/* Main Avatar Image with Multiple Animations */}
+            {/* 3D Avatar */}
             <motion.div
-              className="relative z-10 w-full h-full flex items-center justify-center"
+              className="relative z-10 w-full h-full"
               animate={{
-                // Breathing animation - gentle up and down
                 y: isEzriSpeaking ? [0, -8, 0, -6, 0] : [0, -3, 0],
               }}
               transition={{
                 duration: isEzriSpeaking ? 2 : 4,
                 repeat: Infinity,
-                ease: "easeInOut"
+                ease: "easeInOut",
               }}
             >
-              <motion.img
-                src={avatarImage}
-                alt={currentAvatar.name}
-                className="w-auto h-full max-w-none object-contain"
-                animate={{
-                  // Subtle scale animation when speaking
-                  scale: isEzriSpeaking ? [1, 1.02, 1, 1.01, 1] : 1,
-                }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-                style={{
-                  filter: isEzriSpeaking ? 'brightness(1.1)' : 'brightness(1)',
-                  transition: 'filter 0.5s ease-in-out'
-                }}
-              />
-
-              {/* Animated Border Glow when Speaking */}
-              {isEzriSpeaking && (
-                <motion.div
-                  className="absolute inset-0 pointer-events-none"
-                  animate={{
-                    boxShadow: [
-                      '0 0 30px rgba(168, 85, 247, 0.4)',
-                      '0 0 60px rgba(168, 85, 247, 0.6)',
-                      '0 0 30px rgba(168, 85, 247, 0.4)',
-                    ],
-                  }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                />
-              )}
+              <ThreeAvatar isSpeaking={isEzriSpeaking} audioLevel={audioLevel} />
             </motion.div>
 
             {/* Voice Wave Animation Overlay when speaking */}

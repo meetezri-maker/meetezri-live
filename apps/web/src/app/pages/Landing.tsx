@@ -41,10 +41,9 @@ export function Landing() {
       return;
     }
 
-    // 2. Redirect if already logged in
-    if (!isLoading && user) {
-      navigate("/onboarding/welcome");
-    }
+    // 2. Do NOT auto-redirect logged-in users away from home.
+    //    They should stay on `/` unless they explicitly start onboarding
+    //    or navigate via another flow (login, auth callback, etc.).
   }, [user, isLoading, navigate, location]);
 
   // Show loader if we are about to redirect (auth params present)
