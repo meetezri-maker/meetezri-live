@@ -31,13 +31,14 @@ import {
   Users,
   Loader2
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 import { api } from "@/lib/api";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { Skeleton } from "../../components/ui/skeleton";
+import { Progress } from "../../components/ui/progress";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -169,6 +170,9 @@ export function UserProfile() {
     selected_environment: ""
   });
 
+  // Keep a copy of raw profile if needed later
+  const [rawProfile, setRawProfile] = useState<any | null>(null);
+
   useEffect(() => {
     if (user) {
       loadProfile();
@@ -179,6 +183,7 @@ export function UserProfile() {
     try {
       const profile = await api.getMe();
       console.log("Loaded profile data:", profile); // Debug logging
+      setRawProfile(profile);
       
       form.reset({
         name: profile.full_name || "",
@@ -231,6 +236,78 @@ export function UserProfile() {
       toast.error("Failed to load profile");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Watch form values so completion updates as the user edits
+  const watchedValues = form.watch();
+
+  // Compute profile completion based on current (watched) form values
+  const profileCompletion = useMemo(() => {
+    const values = watchedValues as ProfileFormValues;
+
+    const fields: {
+      key: keyof ProfileFormValues;
+      label: string;
+      type?: "string" | "array";
+      treatNotSpecifiedAsEmpty?: boolean;
+    }[] = [
+      { key: "name", label: "Name", type: "string" },
+      { key: "phone", label: "Phone", type: "string" },
+      { key: "birthday", label: "Birthday", type: "string" },
+      { key: "location", label: "Location", type: "string" },
+      { key: "pronouns", label: "Pronouns", type: "string" },
+      { key: "in_therapy", label: "In therapy", type: "string", treatNotSpecifiedAsEmpty: true },
+      { key: "on_medication", label: "On medication", type: "string", treatNotSpecifiedAsEmpty: true },
+      { key: "emergency_contact_name", label: "Emergency contact name", type: "string" },
+      { key: "emergency_contact_phone", label: "Emergency contact phone", type: "string" },
+      { key: "emergency_contact_relationship", label: "Emergency contact relationship", type: "string" },
+      { key: "selected_goals", label: "Wellness goals", type: "array" },
+      { key: "selected_triggers", label: "Content triggers", type: "array" },
+    ];
+
+    let completed = 0;
+    const missingLabels: string[] = [];
+    const missingFields: { label: string; key: string }[] = [];
+
+    fields.forEach((field) => {
+      const value = values[field.key] as any;
+      let isFilled = false;
+
+      if (field.type === "array") {
+        isFilled = Array.isArray(value) && value.length > 0;
+      } else {
+        const str = (value ?? "").toString().trim();
+        if (field.treatNotSpecifiedAsEmpty && str.toLowerCase() === "not specified") {
+          isFilled = false;
+        } else {
+          isFilled = str.length > 0;
+        }
+      }
+
+      if (isFilled) {
+        completed += 1;
+      } else {
+        missingLabels.push(field.label);
+        missingFields.push({ label: field.label, key: field.key as string });
+      }
+    });
+
+    const total = fields.length;
+    const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+    return {
+      percent,
+      missingLabels,
+      missingFields,
+      isComplete: percent === 100,
+    };
+  }, [watchedValues]);
+
+  const scrollToProfileField = (fieldKey: string) => {
+    const el = document.getElementById(`profile-field-${fieldKey}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   };
 
@@ -505,6 +582,80 @@ export function UserProfile() {
             </Button>
           </div>
         )}
+        {/* Persistent profile completion status (always visible, independent of any dismissible messages) */}
+        <div className="mb-6">
+          <Card className="relative overflow-hidden border border-primary/20 bg-gradient-to-r from-primary/5 via-primary/10 to-background shadow-sm">
+            <div className="pointer-events-none absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_top_left,rgba(129,140,248,0.35),transparent_55%),radial-gradient(circle_at_bottom_right,rgba(236,72,153,0.25),transparent_55%)]" />
+            <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between p-4 md:p-5">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary shadow-sm">
+                  <Activity className="h-4 w-4" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold">
+                      Profile {profileCompletion.percent}% complete
+                    </p>
+                    {!profileCompletion.isComplete && (
+                      <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-primary">
+                        Recommended setup
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {profileCompletion.isComplete
+                      ? "Amazing – your profile is fully set up and Ezri can personalize support for you."
+                      : profileCompletion.missingFields.length > 0
+                        ? "You’re almost there. Tap a chip below to jump to that part of your profile."
+                        : "Add a few more details so Ezri can better understand and support you."}
+                  </p>
+                  {!profileCompletion.isComplete && profileCompletion.missingFields.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {profileCompletion.missingFields.slice(0, 6).map((item) => (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => scrollToProfileField(item.key)}
+                          className="inline-flex items-center rounded-full border border-primary/30 bg-background/60 px-2.5 py-0.5 text-[11px] font-medium text-primary shadow-sm hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        >
+                          <span className="mr-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                          {item.label}
+                        </button>
+                      ))}
+                      {profileCompletion.missingFields.length > 6 && (
+                        <span className="text-[11px] text-muted-foreground">
+                          +{profileCompletion.missingFields.length - 6} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex w-full flex-col gap-2 md:w-64">
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>{profileCompletion.percent >= 50 ? "Looking good" : "Let’s get you set up"}</span>
+                  <span className="font-semibold text-foreground">
+                    {profileCompletion.percent}%
+                  </span>
+                </div>
+                <Progress value={profileCompletion.percent} />
+                {!profileCompletion.isComplete && (
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-3 text-[11px]"
+                      onClick={() => scrollToProfileField(profileCompletion.missingFields[0]?.key || "name")}
+                    >
+                      Finish profile
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+        </div>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -693,7 +844,7 @@ export function UserProfile() {
                           control={form.control}
                           name="name"
                           render={({ field }) => (
-                            <FormItem>
+                            <FormItem id="profile-field-name" className="scroll-mt-24">
                               <FormLabel>Full Name</FormLabel>
                               <FormControl>
                                 <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
@@ -743,7 +894,7 @@ export function UserProfile() {
                           control={form.control}
                           name="phone"
                           render={({ field }) => (
-                            <FormItem>
+                            <FormItem id="profile-field-phone" className="scroll-mt-24">
                               <FormLabel>Phone</FormLabel>
                               <FormControl>
                                 <PhoneInput
@@ -762,7 +913,7 @@ export function UserProfile() {
                           control={form.control}
                           name="birthday"
                           render={({ field }) => (
-                            <FormItem>
+                            <FormItem id="profile-field-birthday" className="scroll-mt-24">
                               <FormLabel>Age</FormLabel>
                               <FormControl>
                                 <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
@@ -796,7 +947,7 @@ export function UserProfile() {
                           control={form.control}
                           name="pronouns"
                           render={({ field }) => (
-                            <FormItem>
+                            <FormItem id="profile-field-pronouns" className="scroll-mt-24">
                               <FormLabel>Pronouns</FormLabel>
                               <FormControl>
                                 <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
@@ -821,7 +972,7 @@ export function UserProfile() {
                           control={form.control}
                           name="location"
                           render={({ field }) => (
-                            <FormItem>
+                            <FormItem id="profile-field-location" className="scroll-mt-24">
                               <FormLabel>Location/Timezone</FormLabel>
                               <FormControl>
                                 <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
@@ -869,7 +1020,7 @@ export function UserProfile() {
                       control={form.control}
                       name="in_therapy"
                       render={({ field }) => (
-                        <FormItem className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg space-y-0">
+                        <FormItem id="profile-field-in_therapy" className="scroll-mt-24 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg space-y-0">
                           <div className="flex items-center gap-2 mb-2">
                             <Users className="w-4 h-4 text-purple-500" />
                             <FormLabel className="font-semibold text-sm">Professionol  Companion</FormLabel>
@@ -895,18 +1046,18 @@ export function UserProfile() {
                       )}
                     />
 
-                    {/* <FormField
+                    <FormField
                       control={form.control}
                       name="on_medication"
                       render={({ field }) => (
-                        <FormItem className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg space-y-0">
+                        <FormItem id="profile-field-on_medication" className="scroll-mt-24 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg space-y-0">
                           <div className="flex items-center gap-2 mb-2">
                             <Pill className="w-4 h-4 text-blue-500" />
                             <FormLabel className="font-semibold text-sm">Medication</FormLabel>
                           </div>
                           <FormControl>
                             {isEditing ? (
-                               <select
+                              <select
                                 {...field}
                                 disabled={isSaving}
                                 className="w-full p-2 border dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -923,7 +1074,7 @@ export function UserProfile() {
                           <FormMessage />
                         </FormItem>
                       )}
-                    /> */}
+                    />
                   </div>
 
                   {/* Goals */}
@@ -931,7 +1082,7 @@ export function UserProfile() {
                     control={form.control}
                     name="selected_goals"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem id="profile-field-selected_goals" className="scroll-mt-24">
                         <div className="flex items-center gap-2 mb-3">
                           <Target className="w-4 h-4 text-green-500" />
                           <FormLabel className="font-semibold text-sm">Selected Goals</FormLabel>
@@ -993,7 +1144,7 @@ export function UserProfile() {
                     control={form.control}
                     name="selected_triggers"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem id="profile-field-selected_triggers" className="scroll-mt-24">
                         <div className="flex items-center gap-2 mb-3">
                           <Zap className="w-4 h-4 text-orange-500" />
                           <FormLabel className="font-semibold text-sm">Triggers / Challenges</FormLabel>
@@ -1069,7 +1220,7 @@ export function UserProfile() {
                     control={form.control}
                     name="emergency_contact_name"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem id="profile-field-emergency_contact_name" className="scroll-mt-24">
                         <Label className="text-xs text-muted-foreground uppercase tracking-wider">Name</Label>
                         <FormControl>
                           {isEditing ? (
@@ -1092,7 +1243,7 @@ export function UserProfile() {
                     control={form.control}
                     name="emergency_contact_relationship"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem id="profile-field-emergency_contact_relationship" className="scroll-mt-24">
                         <Label className="text-xs text-muted-foreground uppercase tracking-wider">Relationship</Label>
                         <FormControl>
                           {isEditing ? (
@@ -1115,7 +1266,7 @@ export function UserProfile() {
                     control={form.control}
                     name="emergency_contact_phone"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem id="profile-field-emergency_contact_phone" className="scroll-mt-24">
                         <Label className="text-xs text-muted-foreground uppercase tracking-wider">Phone</Label>
                         <FormControl>
                           {isEditing ? (

@@ -47,6 +47,8 @@ import { OnboardingComplete } from '@/app/pages/onboarding/Complete';
 // User App Pages
 import { Dashboard } from '@/app/pages/app/Dashboard';
 import { UserProfile } from '@/app/pages/app/UserProfile';
+import { SessionLobby } from '@/app/pages/app/SessionLobby';
+import { ActiveSession } from '@/app/pages/app/ActiveSession';
 
 // Admin Pages
 import { SuperAdminDashboard } from '@/app/pages/admin/SuperAdminDashboard';
@@ -279,6 +281,8 @@ export default function App() {
           
             {/* App Routes */}
             <Route path="/app/dashboard" element={<Dashboard />} />
+            <Route path="/app/session-lobby" element={<SessionLobby />} />
+            <Route path="/app/active-session" element={<ActiveSession />} />
             <Route path="/app/user-profile" element={<UserProfile />} />
             <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />
             
