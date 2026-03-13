@@ -3,6 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "packageManager": "pnpm@9.1.1",
+  "pnpm": {
+    "overrides": {
+      "vite": "6.3.5"
+    }
+  },
   "scripts": {
     "dev": "pnpm -r --parallel run dev",
     "build": "pnpm -r run build",
