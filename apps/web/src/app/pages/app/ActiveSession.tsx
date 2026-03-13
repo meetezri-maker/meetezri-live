@@ -1326,7 +1326,9 @@ export function ActiveSession() {
   }, [isSessionPaused]);
 
   // Credits
-  const [creditsRemaining, setCreditsRemaining] = useState(duration || 0);
+  const [initialCreditsSeconds, setInitialCreditsSeconds] = useState<number | null>(
+    null
+  );
   const [showLowCreditsWarning, setShowLowCreditsWarning] = useState(false);
   const [showOutOfCredits, setShowOutOfCredits] = useState(false);
   const [showLowMinutesModal, setShowLowMinutesModal] = useState(false);
@@ -1337,20 +1339,30 @@ export function ActiveSession() {
     const loadCredits = async () => {
       try {
         const { credits } = await api.getCredits();
-        if (credits !== undefined) setCreditsRemaining(credits);
+        const sessionLimitSeconds =
+          typeof duration === "number" && duration > 0
+            ? duration * 60
+            : Number.POSITIVE_INFINITY;
+        const userCreditsSeconds =
+          typeof credits === "number" && credits > 0 ? credits * 60 : 0;
+        const effectiveSeconds =
+          sessionLimitSeconds === Number.POSITIVE_INFINITY
+            ? userCreditsSeconds
+            : Math.min(userCreditsSeconds, sessionLimitSeconds);
+        setInitialCreditsSeconds(effectiveSeconds);
       } catch (err) {
         console.error("Failed to load credits:", err);
       }
     };
     loadCredits();
-  }, []);
+  }, [duration]);
 
   const [sessionId] = useState(
     () =>
       stateSessionId ||
       `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   );
-  const [sessionStartTime] = useState(Date.now());
+  const [hasSessionEnded, setHasSessionEnded] = useState(false);
 
   const currentAvatar = {
     name: config?.avatar || "Maya Chen",
@@ -1399,37 +1411,38 @@ export function ActiveSession() {
   }, [currentState, isSessionPaused, updateState]);
 
   useEffect(() => {
-    if (isSessionPaused) return;
+    if (isSessionPaused || hasSessionEnded) return;
 
     const timer = setInterval(() => {
-      setSessionTime((prev) => {
-        const newTime = prev + 1;
-        if (newTime > 0 && newTime % 60 === 0) {
-          setCreditsRemaining((prevCredits: number) =>
-            Math.max(0, prevCredits - 1)
-          );
-        }
-        return newTime;
-      });
+      setSessionTime((prev) => prev + 1);
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isSessionPaused]);
+  }, [isSessionPaused, hasSessionEnded]);
+
+  const remainingSeconds =
+    initialCreditsSeconds !== null
+      ? Math.max(0, initialCreditsSeconds - sessionTime)
+      : null;
+  const remainingWholeMinutes =
+    remainingSeconds !== null ? Math.floor(remainingSeconds / 60) : null;
 
   useEffect(() => {
-    if (creditsRemaining === 10 && !showLowCreditsWarning)
+    if (remainingWholeMinutes === null) return;
+    if (remainingWholeMinutes === 10 && !showLowCreditsWarning)
       setShowLowCreditsWarning(true);
-    if (creditsRemaining === 0 && !showOutOfCredits) setShowOutOfCredits(true);
+    if (remainingWholeMinutes === 0 && !showOutOfCredits)
+      setShowOutOfCredits(true);
     if (
-      creditsRemaining > 0 &&
-      creditsRemaining <= 3 &&
+      remainingWholeMinutes > 0 &&
+      remainingWholeMinutes <= 3 &&
       !hasShownLowMinutesModal
     ) {
       setShowLowMinutesModal(true);
       setHasShownLowMinutesModal(true);
     }
   }, [
-    creditsRemaining,
+    remainingWholeMinutes,
     showLowCreditsWarning,
     showOutOfCredits,
     hasShownLowMinutesModal,
@@ -1465,6 +1478,7 @@ export function ActiveSession() {
   };
 
   const handleEndSession = async () => {
+    setHasSessionEnded(true);
     isSessionEndingRef.current = true;
     if (recognitionRef.current) {
       try {
@@ -1476,8 +1490,7 @@ export function ActiveSession() {
     }
 
     setIsUploading(true);
-    const endTime = Date.now();
-    const durationSeconds = Math.floor((endTime - sessionStartTime) / 1000);
+    const durationSeconds = sessionTime;
 
     try {
       await api.sessions.end(sessionId, durationSeconds, undefined, transcript);
@@ -1494,7 +1507,11 @@ export function ActiveSession() {
 
     if (needsCooldown) {
       navigate("/app/settings/cooldown-screen", {
-        state: { sessionId, safetyLevel: currentState, sessionDuration: durationSeconds },
+        state: {
+          sessionId,
+          safetyLevel: currentState,
+          sessionDuration: durationSeconds,
+        },
       });
     } else {
       navigate("/app/dashboard");
@@ -1699,34 +1716,49 @@ export function ActiveSession() {
             </div>
 
             <motion.div
-              animate={{ scale: creditsRemaining <= 10 ? [1, 1.05, 1] : 1 }}
+              animate={{
+                scale:
+                  remainingWholeMinutes !== null &&
+                  remainingWholeMinutes <= 10
+                    ? [1, 1.05, 1]
+                    : 1,
+              }}
               transition={{
                 duration: 1,
-                repeat: creditsRemaining <= 10 ? Infinity : 0,
+                repeat:
+                  remainingWholeMinutes !== null &&
+                  remainingWholeMinutes <= 10
+                    ? Infinity
+                    : 0,
               }}
               className={`px-4 py-2 rounded-xl border flex items-center gap-2 ${
-                creditsRemaining <= 10
+                remainingWholeMinutes !== null && remainingWholeMinutes <= 10
                   ? "bg-red-500/90 border-red-300"
-                  : creditsRemaining <= 30
+                  : remainingWholeMinutes !== null &&
+                    remainingWholeMinutes <= 30
                   ? "bg-amber-500/90 border-amber-300"
                   : "bg-black/60 backdrop-blur-xl border-white/20"
               }`}
             >
               <Clock
                 className={`w-4 h-4 ${
-                  creditsRemaining <= 10 ? "text-white" : "text-blue-300"
+                  remainingWholeMinutes !== null && remainingWholeMinutes <= 10
+                    ? "text-white"
+                    : "text-blue-300"
                 }`}
               />
               <div>
                 <p
                   className={`text-xs ${
-                    creditsRemaining <= 10 ? "text-white" : "text-gray-300"
+                    remainingWholeMinutes !== null && remainingWholeMinutes <= 10
+                      ? "text-white"
+                      : "text-gray-300"
                   }`}
                 >
                   Minutes Left
                 </p>
                 <p className="text-lg font-bold text-white">
-                  {creditsRemaining}
+                  {remainingWholeMinutes !== null ? remainingWholeMinutes : "—"}
                 </p>
               </div>
             </motion.div>
@@ -2065,8 +2097,9 @@ export function ActiveSession() {
       {/* Low Credits Warning */}
       <AnimatePresence>
         {showLowCreditsWarning &&
-          creditsRemaining > 0 &&
-          creditsRemaining <= 10 && (
+          remainingWholeMinutes !== null &&
+          remainingWholeMinutes > 0 &&
+          remainingWholeMinutes <= 10 && (
             <motion.div
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
@@ -2081,7 +2114,7 @@ export function ActiveSession() {
                       Running Low on Minutes!
                     </h4>
                     <p className="text-sm text-amber-50 mb-3">
-                      You have {creditsRemaining} minutes left. Consider
+                      You have {remainingWholeMinutes} minutes left. Consider
                       purchasing more or your session will end soon.
                     </p>
                     <div className="flex gap-2">
@@ -2205,13 +2238,13 @@ export function ActiveSession() {
       <LowMinutesWarning
         isOpen={showLowMinutesModal}
         onClose={() => setShowLowMinutesModal(false)}
-        minutesRemaining={creditsRemaining}
+        minutesRemaining={remainingWholeMinutes ?? 0}
       />
 
       {/* End Session Confirm */}
       <AnimatePresence>
         {showEndConfirm && (
-          <motion.div
+            <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2222,7 +2255,7 @@ export function ActiveSession() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
               className="bg-slate-900 rounded-2xl p-6 max-w-md w-full border-2 border-red-500/30"
             >
               <div className="text-center mb-6">

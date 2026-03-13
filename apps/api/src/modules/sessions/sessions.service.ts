@@ -68,21 +68,29 @@ export async function getSessions(userId: string, status?: string) {
   });
 }
 
-export async function endSession(userId: string, sessionId: string, durationSeconds?: number, recordingUrl?: string, transcript?: any[]) {
+export async function endSession(
+  userId: string,
+  sessionId: string,
+  durationSeconds?: number,
+  recordingUrl?: string,
+  transcript?: any[]
+) {
   const session = await getSessionById(userId, sessionId);
   if (!session) {
     throw new Error('Session not found');
   }
 
-  // Calculate real duration from started_at if available
-  let minutesUsed = 0;
-  if (session.started_at) {
+  // Calculate duration in seconds, preferring explicit client value
+  let secondsUsed = 0;
+  if (typeof durationSeconds === 'number' && durationSeconds >= 0) {
+    secondsUsed = durationSeconds;
+  } else if (session.started_at) {
     const now = new Date();
     const durationMs = now.getTime() - new Date(session.started_at).getTime();
-    minutesUsed = Math.ceil(durationMs / 1000 / 60);
-  } else if (durationSeconds) {
-    minutesUsed = Math.ceil(durationSeconds / 60);
+    secondsUsed = Math.max(0, Math.floor(durationMs / 1000));
   }
+
+  const minutesUsed = Math.floor(secondsUsed / 60);
 
   // Deduct credits
   if (minutesUsed > 0) {
