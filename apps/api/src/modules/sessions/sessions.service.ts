@@ -69,6 +69,7 @@ async function sendScheduledSessionEmails(userId: string, session: any) {
       console.warn('No email found for user when sending scheduled session emails', { userId });
       return;
     }
+    const email = user.email;
 
     const scheduledAt = session.scheduled_at ? new Date(session.scheduled_at) : null;
 
@@ -94,7 +95,7 @@ async function sendScheduledSessionEmails(userId: string, session: any) {
     `;
 
     await emailService.sendEmail(
-      user.email,
+      email,
       'Your Ezri session is scheduled',
       htmlConfirmation
     );
@@ -118,7 +119,7 @@ async function sendScheduledSessionEmails(userId: string, session: any) {
             `;
 
             await emailService.sendEmail(
-              user.email,
+              email,
               'Reminder: Your Ezri session is coming up',
               htmlReminder
             );
