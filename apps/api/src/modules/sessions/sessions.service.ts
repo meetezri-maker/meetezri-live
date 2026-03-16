@@ -1,4 +1,5 @@
 import prisma from '../../lib/prisma';
+import { emailService } from '../email/email.service';
 import { CreateSessionInput, CreateMessageInput } from './sessions.schema';
 
 export async function createSession(userId: string, input: CreateSessionInput) {
@@ -44,10 +45,91 @@ export async function createSession(userId: string, input: CreateSessionInput) {
         started_at: input.type === 'instant' ? new Date() : undefined,
       },
     });
+
+    // Send confirmation and schedule reminder emails for scheduled sessions
+    if (result.type === 'scheduled') {
+      void sendScheduledSessionEmails(userId, result);
+    }
+
     return result;
   } catch (error) {
     console.error('Error in createSession service:', error);
     throw error;
+  }
+}
+
+async function sendScheduledSessionEmails(userId: string, session: any) {
+  try {
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+
+    if (!user?.email) {
+      console.warn('No email found for user when sending scheduled session emails', { userId });
+      return;
+    }
+
+    const scheduledAt = session.scheduled_at ? new Date(session.scheduled_at) : null;
+
+    const formattedDateTime = scheduledAt
+      ? scheduledAt.toLocaleString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        })
+      : 'the scheduled time';
+
+    const sessionTitle = session.title || 'Your Ezri session';
+
+    // Immediate confirmation email
+    const htmlConfirmation = `
+      <p>Hi there,</p>
+      <p>Your session <strong>${sessionTitle}</strong> has been scheduled for <strong>${formattedDateTime}</strong>.</p>
+      <p>If you did not make this change or need to reschedule, please log in to your MeetEzri account.</p>
+      <p>— The MeetEzri Team</p>
+    `;
+
+    await emailService.sendEmail(
+      user.email,
+      'Your Ezri session is scheduled',
+      htmlConfirmation
+    );
+
+    // Best-effort reminder about 1 hour before the session starts
+    if (scheduledAt) {
+      const now = new Date();
+      const oneHourMs = 60 * 60 * 1000;
+      const diffMs = scheduledAt.getTime() - now.getTime();
+      const delayMs = diffMs - oneHourMs;
+
+      // Only schedule reminder if the session is at least slightly in the future
+      if (delayMs > 0) {
+        setTimeout(async () => {
+          try {
+            const htmlReminder = `
+              <p>Hi there,</p>
+              <p>This is a reminder that your session <strong>${sessionTitle}</strong> is starting in about one hour, at <strong>${formattedDateTime}</strong>.</p>
+              <p>You can join your session from your MeetEzri dashboard.</p>
+              <p>— The MeetEzri Team</p>
+            `;
+
+            await emailService.sendEmail(
+              user.email,
+              'Reminder: Your Ezri session is coming up',
+              htmlReminder
+            );
+          } catch (err) {
+            console.error('Failed to send scheduled session reminder email:', err);
+          }
+        }, delayMs);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to send scheduled session emails:', error);
   }
 }
 
