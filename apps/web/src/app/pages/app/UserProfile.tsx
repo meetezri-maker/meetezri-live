@@ -97,7 +97,7 @@ const profileSchema = z.object({
   pronouns: z.string().optional(),
   location: z.string().optional(),
   in_therapy: z.string().optional(),
-  on_medication: z.string().optional(),
+  // on_medication: z.string().optional(),
   selected_goals: z.array(z.string()).optional(),
   selected_triggers: z.array(z.string()).optional(),
 
@@ -151,7 +151,7 @@ export function UserProfile() {
       emergency_contact_phone: "",
       emergency_contact_relationship: "",
       in_therapy: "",
-      on_medication: "",
+      // on_medication: "",
       selected_goals: [],
       selected_triggers: [],
     },
@@ -196,7 +196,7 @@ export function UserProfile() {
         emergency_contact_phone: profile.emergency_contact_phone || "",
         emergency_contact_relationship: profile.emergency_contact_relationship || "",
         in_therapy: profile.in_therapy || "Not specified",
-        on_medication: profile.on_medication || "Not specified",
+        // on_medication: profile.on_medication || "Not specified",
         selected_goals: Array.isArray(profile.selected_goals) 
           ? profile.selected_goals 
           : (typeof profile.selected_goals === 'string' ? profile.selected_goals.split(',').map((s: string) => s.trim()) : []),
@@ -258,7 +258,7 @@ export function UserProfile() {
       { key: "location", label: "Location", type: "string" },
       { key: "pronouns", label: "Pronouns", type: "string" },
       { key: "in_therapy", label: "In therapy", type: "string", treatNotSpecifiedAsEmpty: true },
-      { key: "on_medication", label: "On medication", type: "string", treatNotSpecifiedAsEmpty: true },
+      // { key: "on_medication", label: "On medication", type: "string", treatNotSpecifiedAsEmpty: true },
       { key: "emergency_contact_name", label: "Emergency contact name", type: "string" },
       { key: "emergency_contact_phone", label: "Emergency contact phone", type: "string" },
       { key: "emergency_contact_relationship", label: "Emergency contact relationship", type: "string" },
@@ -358,7 +358,7 @@ export function UserProfile() {
         pronouns: data.pronouns,
         timezone: data.location,
         in_therapy: data.in_therapy,
-        on_medication: data.on_medication,
+        // on_medication: data.on_medication,
         selected_goals: data.selected_goals || [],
         selected_triggers: data.selected_triggers || [],
         emergency_contact_name: data.emergency_contact_name,
@@ -375,7 +375,7 @@ export function UserProfile() {
         pronouns: updatedProfile.pronouns || '',
         location: updatedProfile.timezone || '',
         in_therapy: updatedProfile.in_therapy || 'Not specified',
-        on_medication: updatedProfile.on_medication || 'Not specified',
+        // on_medication: updatedProfile.on_medication || 'Not specified',
         selected_goals: updatedProfile.selected_goals || [],
         selected_triggers: updatedProfile.selected_triggers || [],
         emergency_contact_name: updatedProfile.emergency_contact_name || '',
@@ -1045,7 +1045,7 @@ export function UserProfile() {
                         </FormItem>
                       )}
                     />
-
+{/* 
                     <FormField
                       control={form.control}
                       name="on_medication"
@@ -1074,7 +1074,7 @@ export function UserProfile() {
                           <FormMessage />
                         </FormItem>
                       )}
-                    />
+                    /> */}
                   </div>
 
                   {/* Goals */}
