@@ -63,7 +63,9 @@ const AVATAR_MODEL_PATH = "/C1v4.glb";
 
 
 // Exact names for your current file
-const EXACT_EYE_NAMES = ["eyes"];
+// IMPORTANT: do not force-map "eyes" as a blink target on this GLB,
+// it is not a safe eyelid morph and animating it can hide the head/face.
+const EXACT_EYE_NAMES: string[] = [];
 const EXACT_MOUTH_NAMES = ["mouth"];
 
 // Generic fallbacks for other rigs
@@ -360,11 +362,11 @@ function ThreeAvatar({
 
       if (!scene || !camera || !renderer) return;
 
-      // Smooth mouth
-      const target = mouthTargetRef.current;
-      const lerpSpeed = target > mouthSmoothedRef.current ? 2 : 5;
+      // Smooth mouth using a stable lerp factor in [0,1]
+      const target = THREE.MathUtils.clamp(mouthTargetRef.current, 0, 1);
+      const lerpFactor = target > mouthSmoothedRef.current ? 0.25 : 0.35;
       mouthSmoothedRef.current +=
-        (target - mouthSmoothedRef.current) * lerpSpeed;
+        (target - mouthSmoothedRef.current) * lerpFactor;
       const mouth = THREE.MathUtils.clamp(mouthSmoothedRef.current, 0, 1);
 
       // Apply mouth morphs — conservative ranges to avoid extreme deformation.
