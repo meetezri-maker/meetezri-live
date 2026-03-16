@@ -206,10 +206,10 @@ export function SessionLobby() {
   ];
 
   const avatars = [
-    { id: "alex", name: "Alex", emoji: "👨‍⚕️", description: "Supportive and empathetic" },
-    { id: "sarah", name: "Sarah", emoji: "👩‍⚕️", description: "Warm and understanding" },
-    { id: "jordan", name: "jordan", emoji: "👨‍💼", description: "Professional and attentive" },
-    { id: "sarah", name: "sarah", emoji: "👩‍🦰", description: "Kind and patient" }
+    { id: "Alex Rivera", name: "Alex Rivera", emoji: "👨‍⚕️", description: "Supportive and empathetic" },
+    { id: "Sarah Mitchell", name: "Sarah Mitchell", emoji: "👩‍⚕️", description: "Warm and understanding" },
+    { id: "Jordan Taylor", name: "Jordan Taylor", emoji: "👨‍💼", description: "Professional and attentive" },
+    { id: "Maya chen", name: "maya chen", emoji: "👩‍🦰", description: "Kind and patient" }
   ];
 
   const durations = [15, 30, 45, 60];
