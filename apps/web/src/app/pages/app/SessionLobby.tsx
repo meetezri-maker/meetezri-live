@@ -209,7 +209,7 @@ export function SessionLobby() {
     { id: "Alex Rivera", name: "Alex Rivera", emoji: "👨‍⚕️", description: "Supportive and empathetic" },
     { id: "Sarah Mitchell", name: "Sarah Mitchell", emoji: "👩‍⚕️", description: "Warm and understanding" },
     { id: "Jordan Taylor", name: "Jordan Taylor", emoji: "👨‍💼", description: "Professional and attentive" },
-    { id: "Maya chen", name: "maya chen", emoji: "👩‍🦰", description: "Kind and patient" }
+    { id: "Maya chen", name: "Maya Chen", emoji: "👩‍🦰", description: "Kind and patient" }
   ];
 
   const durations = [15, 30, 45, 60];
