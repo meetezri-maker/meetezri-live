@@ -383,7 +383,7 @@ export function Dashboard() {
                     : "bg-gradient-to-br from-green-500 to-emerald-500"
                 }`}
               >
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between ">
                   <Clock className="w-8 h-8" />
                   {creditsRemaining <= 50 && (
                     <motion.div
@@ -394,14 +394,20 @@ export function Dashboard() {
                     </motion.div>
                   )}
                 </div>
-                <h3 className="font-semibold mb-1">Time Remaining</h3>
-                <p className="text-2xl font-bold font-mono">
+                <div className="flex flex-col gap-2 mt-1">
+                <h3 className="font-bold ">Time Remaining</h3>
+                <p className="text-xl font-semibold font-mono">
                   {formatTime(creditsRemainingSeconds)}
                 </p>
-                <h3 className="text-md text-white/80 mt-1">
-                  Total: {creditsTotal} min
-                </h3>
-                <p className="text-xs text-white/90 mt-1">
+                </div>
+                <div className="flex flex-row gap-2 mt-1">
+                <h3 className="  font-bold "> Total minutes: </h3>
+                <p className="text-xl font-semibold font-mono">
+                  {creditsTotal} 
+                </p>
+                 
+                </div>
+                <p className="text-xs text-white/90 ">
                   {userPlan} • Click to manage
                 </p>
               </Card>
