@@ -30,7 +30,7 @@ const profileSetupSchema = z.object({
   age: z.string().refine((val) => {
     const num = parseInt(val);
     return !isNaN(num) && num >= 13 && num <= 120;
-  }, "You must be between 13 and 120 years old"),
+  }, "You must be at least 13 years old"),
   timezone: z.string().min(1, "Timezone is required"),
 });
 
