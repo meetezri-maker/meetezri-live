@@ -299,8 +299,9 @@ export function Dashboard() {
               transition={{ delay: 0.1 }}
               whileHover={{ scale: 1.05, y: -5 }}
               whileTap={{ scale: 0.98 }}
+              className="h-full"
             >
-              <Card className="p-6 bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-shadow">
+              <Card className="h-full p-6 bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-shadow flex flex-col">
                 <div className="flex items-center justify-between mb-2">
                   <Heart className="w-8 h-8" />
                   <motion.span
@@ -325,8 +326,9 @@ export function Dashboard() {
               transition={{ delay: 0.2 }}
               whileHover={{ scale: 1.05, y: -5 }}
               whileTap={{ scale: 0.98 }}
+              className="h-full"
             >
-              <Card className="p-6 bg-gradient-to-br from-orange-500 to-red-500 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-shadow">
+              <Card className="h-full p-6 bg-gradient-to-br from-orange-500 to-red-500 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-shadow flex flex-col">
                 <div className="flex items-center justify-between mb-2">
                   <Flame className="w-8 h-8" />
                   <motion.div
@@ -351,8 +353,9 @@ export function Dashboard() {
               transition={{ delay: 0.3 }}
               whileHover={{ scale: 1.05, y: -5 }}
               whileTap={{ scale: 0.98 }}
+              className="h-full"
             >
-              <Card className="p-6 bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-shadow">
+              <Card className="h-full p-6 bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-shadow flex flex-col">
                 <div className="flex items-center justify-between mb-2">
                   <Calendar className="w-8 h-8" />
                   <Award className="w-8 h-8" />
@@ -371,9 +374,10 @@ export function Dashboard() {
               transition={{ delay: 0.4 }}
               whileHover={{ scale: 1.05, y: -5 }}
               whileTap={{ scale: 0.98 }}
+              className="h-full"
             >
               <Card
-                className={`p-6 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-shadow ${
+                className={`h-full p-6 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-shadow flex flex-col ${
                   creditsRemaining <= 50
                     ? "bg-gradient-to-br from-amber-500 to-orange-500"
                     : "bg-gradient-to-br from-green-500 to-emerald-500"
@@ -394,9 +398,9 @@ export function Dashboard() {
                 <p className="text-2xl font-bold font-mono">
                   {formatTime(creditsRemainingSeconds)}
                 </p>
-                <p className="text-xs text-white/80 mt-1">
+                <h3 className="text-md text-white/80 mt-1">
                   Total: {creditsTotal} min
-                </p>
+                </h3>
                 <p className="text-xs text-white/90 mt-1">
                   {userPlan} • Click to manage
                 </p>
