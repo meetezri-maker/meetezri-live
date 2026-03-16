@@ -8,6 +8,7 @@ import {
   Circle,
   AlertCircle,
   Maximize,
+  Minimize,
   Volume2,
   VolumeX,
   Settings,
@@ -618,6 +619,9 @@ export function ActiveSession() {
     "excellent" | "good" | "poor"
   >("excellent");
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showSettingsOpen, setShowSettingsOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const sessionContainerRef = useRef<HTMLDivElement>(null);
   const [showPermissionRequest, setShowPermissionRequest] = useState(false);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [permissionStateInitialized, setPermissionStateInitialized] =
@@ -627,6 +631,7 @@ export function ActiveSession() {
   >([]);
   const speechTimeoutRef = useRef<number | null>(null);
   const isMutedRef = useRef(isMuted);
+  const isSoundOffRef = useRef(isSoundOff);
   const isSessionPausedRef = useRef(false);
   const scriptStepRef = useRef(0);
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -692,7 +697,7 @@ export function ActiveSession() {
     console.log("speakAvatar called with:", text);
     setCurrentSubtitle(text);
 
-    if (isSoundOff) return;
+    if (isSoundOffRef.current) return;
     if (typeof window === "undefined") return;
     const synth = (window as any).speechSynthesis as SpeechSynthesis | undefined;
     if (!synth) {
@@ -710,6 +715,7 @@ export function ActiveSession() {
       currentUtteranceRef.current = utterance;
       utterance.rate = 1;
       utterance.pitch = 1;
+      utterance.volume = isSoundOffRef.current ? 0 : 1;
 
       const voices = synth.getVoices();
       const preferredVoice =
@@ -818,6 +824,10 @@ export function ActiveSession() {
   useEffect(() => {
     isMutedRef.current = isMuted;
   }, [isMuted]);
+
+  useEffect(() => {
+    isSoundOffRef.current = isSoundOff;
+  }, [isSoundOff]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1528,8 +1538,59 @@ export function ActiveSession() {
     }
   };
 
+  const toggleFullscreen = async () => {
+    if (!sessionContainerRef.current) return;
+    try {
+      if (!document.fullscreenElement) {
+        await sessionContainerRef.current.requestFullscreen();
+        setIsFullscreen(true);
+      } else {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+      }
+    } catch (e) {
+      console.warn("Fullscreen failed:", e);
+      toast.error("Fullscreen is not supported or was denied.");
+    }
+  };
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  const handleResetSession = () => {
+    setShowSettingsOpen(false);
+    setIsEzriSpeaking(false);
+    isEzriSpeakingRef.current = false;
+    if (currentUtteranceRef.current) {
+      window.speechSynthesis.cancel();
+      currentUtteranceRef.current = null;
+    }
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
+      setStream(null);
+    }
+    setTimeout(() => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {}
+      }
+      setPermissionsGranted(true);
+      window.location.reload();
+    }, 100);
+    toast.info("Resetting Session...");
+  };
+
   return (
-    <div className="h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col overflow-hidden">
+    <div
+      ref={sessionContainerRef}
+      className="h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col overflow-hidden"
+    >
       {/* Header */}
       <motion.div
         initial={{ y: -50, opacity: 0 }}
@@ -1587,28 +1648,8 @@ export function ActiveSession() {
               variant="ghost"
               size="sm"
               className="text-white hover:bg-white/10"
-              onClick={() => {
-                setIsEzriSpeaking(false);
-                isEzriSpeakingRef.current = false;
-                if (currentUtteranceRef.current) {
-                  window.speechSynthesis.cancel();
-                  currentUtteranceRef.current = null;
-                }
-                if (stream) {
-                  stream.getTracks().forEach((t) => t.stop());
-                  setStream(null);
-                }
-                setTimeout(() => {
-                  if (recognitionRef.current) {
-                    try {
-                      recognitionRef.current.abort();
-                    } catch (e) {}
-                  }
-                  setPermissionsGranted(true);
-                  window.location.reload();
-                }, 100);
-                toast.info("Resetting Session...");
-              }}
+              onClick={() => setShowSettingsOpen(true)}
+              aria-label="Session settings"
             >
               <Settings className="w-4 h-4" />
             </Button>
@@ -1616,8 +1657,14 @@ export function ActiveSession() {
               variant="ghost"
               size="sm"
               className="text-white hover:bg-white/10"
+              onClick={toggleFullscreen}
+              aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
             >
-              <Maximize className="w-4 h-4" />
+              {isFullscreen ? (
+                <Minimize className="w-4 h-4" />
+              ) : (
+                <Maximize className="w-4 h-4" />
+              )}
             </Button>
           </div>
         </div>
@@ -1933,14 +1980,16 @@ export function ActiveSession() {
           </motion.button>
 
           <motion.button
+            type="button"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => setIsSoundOff(!isSoundOff)}
+            onClick={() => setIsSoundOff((prev) => !prev)}
             className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
               isSoundOff
                 ? "bg-red-500 hover:bg-red-600"
                 : "bg-white/10 hover:bg-white/20 border-2 border-white/20"
             }`}
+            aria-label={isSoundOff ? "Turn sound on" : "Turn sound off"}
           >
             {isSoundOff ? (
               <VolumeX className="w-7 h-7 text-white" />
@@ -2245,6 +2294,53 @@ export function ActiveSession() {
         onClose={() => setShowLowMinutesModal(false)}
         minutesRemaining={remainingWholeMinutes ?? 0}
       />
+
+      {/* Session Settings Modal */}
+      <AnimatePresence>
+        {showSettingsOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowSettingsOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              className="bg-slate-900 rounded-2xl p-6 max-w-md w-full border-2 border-white/10"
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <Settings className="w-5 h-5 text-purple-400" />
+                <h3 className="text-xl font-bold text-white">Session Settings</h3>
+              </div>
+              <p className="text-gray-300 text-sm mb-6">
+                Reset your session to restart permissions or fix connection issues. This will reload the page.
+              </p>
+              <div className="flex gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowSettingsOpen(false)}
+                  className="flex-1 px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium"
+                >
+                  Cancel
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleResetSession}
+                  className="flex-1 px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-medium"
+                >
+                  Reset Session
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* End Session Confirm */}
       <AnimatePresence>
