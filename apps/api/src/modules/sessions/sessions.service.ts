@@ -90,35 +90,53 @@ export async function endSession(
     secondsUsed = Math.max(0, Math.floor(durationMs / 1000));
   }
 
-  const minutesUsed = Math.floor(secondsUsed / 60);
-
   // Deduct credits
-  if (minutesUsed > 0) {
+  if (secondsUsed > 0) {
     try {
       const profile = await prisma.profiles.findUnique({
         where: { id: userId },
-        select: { credits: true, purchased_credits: true }
+        select: {
+          credits: true,
+          purchased_credits: true,
+          credits_seconds: true,
+          purchased_credits_seconds: true,
+        }
       });
 
       if (profile) {
-        const subCredits = profile.credits || 0;
-        const purCredits = profile.purchased_credits || 0;
-        
-        let newSubCredits = subCredits;
-        let newPurCredits = purCredits;
+        const subSeconds =
+          (profile.credits_seconds && profile.credits_seconds > 0)
+            ? profile.credits_seconds
+            : (profile.credits || 0) * 60;
+        const purSeconds =
+          (profile.purchased_credits_seconds &&
+            profile.purchased_credits_seconds > 0)
+            ? profile.purchased_credits_seconds
+            : (profile.purchased_credits || 0) * 60;
 
-        if (subCredits >= minutesUsed) {
-          newSubCredits = subCredits - minutesUsed;
+        let newSubSeconds = subSeconds;
+        let newPurSeconds = purSeconds;
+
+        if (newSubSeconds >= secondsUsed) {
+          newSubSeconds -= secondsUsed;
         } else {
-          newSubCredits = 0;
-          newPurCredits = purCredits - (minutesUsed - subCredits);
+          const remaining = secondsUsed - newSubSeconds;
+          newSubSeconds = 0;
+          newPurSeconds = Math.max(0, newPurSeconds - remaining);
         }
+
+        const newSubCredits =
+          newSubSeconds === 0 ? 0 : Math.ceil(newSubSeconds / 60);
+        const newPurCredits =
+          newPurSeconds === 0 ? 0 : Math.ceil(newPurSeconds / 60);
 
         await prisma.profiles.update({
           where: { id: userId },
           data: {
             credits: newSubCredits,
-            purchased_credits: Math.max(0, newPurCredits)
+            purchased_credits: Math.max(0, newPurCredits),
+            credits_seconds: newSubSeconds,
+            purchased_credits_seconds: newPurSeconds,
           }
         });
       }
@@ -148,7 +166,7 @@ export async function endSession(
     where: { id: sessionId },
     data: {
       ended_at: new Date(),
-      duration_minutes: minutesUsed,
+      duration_minutes: Math.floor(secondsUsed / 60),
       recording_url: recordingUrl,
       status: 'completed'
     },
