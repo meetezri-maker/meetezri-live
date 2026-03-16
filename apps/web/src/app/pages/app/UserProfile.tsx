@@ -582,7 +582,8 @@ export function UserProfile() {
             </Button>
           </div>
         )}
-        {/* Persistent profile completion status (always visible, independent of any dismissible messages) */}
+        {/* Profile completion status (hidden when profile is 100% complete) */}
+        {!profileCompletion.isComplete && (
         <div className="mb-6">
           <Card className="relative overflow-hidden border border-primary/20 bg-gradient-to-r from-primary/5 via-primary/10 to-background shadow-sm">
             <div className="pointer-events-none absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_top_left,rgba(129,140,248,0.35),transparent_55%),radial-gradient(circle_at_bottom_right,rgba(236,72,153,0.25),transparent_55%)]" />
@@ -656,6 +657,7 @@ export function UserProfile() {
             </div>
           </Card>
         </div>
+        )}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
