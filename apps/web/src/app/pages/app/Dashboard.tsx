@@ -99,6 +99,24 @@ export function Dashboard() {
   const creditsTotal = profile?.credits_total || 200;
   const userPlan = profile?.subscription_plan || "Basic Plan";
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`;
+  };
+
+  const creditsRemainingSeconds =
+    typeof profile?.credits_remaining_seconds === "number"
+      ? Math.max(0, profile.credits_remaining_seconds)
+      : creditsRemaining * 60;
+
+  const creditsTotalSeconds =
+    typeof profile?.credits_total_seconds === "number"
+      ? Math.max(0, profile.credits_total_seconds)
+      : creditsTotal * 60;
+
   const quickActions = [
     {
       icon: Video,
@@ -354,11 +372,13 @@ export function Dashboard() {
               whileHover={{ scale: 1.05, y: -5 }}
               whileTap={{ scale: 0.98 }}
             >
-              <Card className={`p-6 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-shadow ${
-                creditsRemaining <= 50 
-                  ? 'bg-gradient-to-br from-amber-500 to-orange-500' 
-                  : 'bg-gradient-to-br from-green-500 to-emerald-500'
-              }`}>
+              <Card
+                className={`p-6 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-shadow ${
+                  creditsRemaining <= 50
+                    ? "bg-gradient-to-br from-amber-500 to-orange-500"
+                    : "bg-gradient-to-br from-green-500 to-emerald-500"
+                }`}
+              >
                 <div className="flex items-center justify-between mb-2">
                   <Clock className="w-8 h-8" />
                   {creditsRemaining <= 50 && (
@@ -370,9 +390,16 @@ export function Dashboard() {
                     </motion.div>
                   )}
                 </div>
-                <h3 className="font-semibold mb-1">Minutes Remaining</h3>
-                <p className="text-2xl font-bold">{creditsRemaining} / {creditsTotal}</p>
-                <p className="text-xs text-white/90 mt-2">{userPlan} • Click to manage</p>
+                <h3 className="font-semibold mb-1">Time Remaining</h3>
+                <p className="text-2xl font-bold font-mono">
+                  {formatTime(creditsRemainingSeconds)}
+                </p>
+                <p className="text-xs text-white/80 mt-1">
+                  Total: {creditsTotal} min
+                </p>
+                <p className="text-xs text-white/90 mt-1">
+                  {userPlan} • Click to manage
+                </p>
               </Card>
             </motion.div>
           </Link>

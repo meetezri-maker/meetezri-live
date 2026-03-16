@@ -63,7 +63,9 @@ const AVATAR_MODEL_PATH = "/C1v4.glb";
 
 
 // Exact names for your current file
-const EXACT_EYE_NAMES = ["eyes"];
+// IMPORTANT: do not force-map "eyes" as a blink target on this GLB,
+// it is not a safe eyelid morph and animating it can hide the head/face.
+const EXACT_EYE_NAMES: string[] = [];
 const EXACT_MOUTH_NAMES = ["mouth"];
 
 // Generic fallbacks for other rigs
@@ -163,7 +165,7 @@ function ThreeAvatar({
     const scene = new THREE.Scene();
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(35, width / height, 0.01, 1000);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({
@@ -360,67 +362,50 @@ function ThreeAvatar({
 
       if (!scene || !camera || !renderer) return;
 
-      // Smooth mouth
-      const target = mouthTargetRef.current;
-      const lerpSpeed = target > mouthSmoothedRef.current ? 2 : 5;
+      // Smooth mouth using a stable lerp factor in [0,1]
+      const target = THREE.MathUtils.clamp(mouthTargetRef.current, 0, 1);
+      const lerpFactor = target > mouthSmoothedRef.current ? 0.25 : 0.35;
       mouthSmoothedRef.current +=
-        (target - mouthSmoothedRef.current) * lerpSpeed;
+        (target - mouthSmoothedRef.current) * lerpFactor;
       const mouth = THREE.MathUtils.clamp(mouthSmoothedRef.current, 0, 1);
 
-      // Apply mouth morphs
-      // if (mouthBindingsRef.current.length > 0) {
-      //   mouthBindingsRef.current.forEach(({ mesh, index, name }) => {
-      //     const influences = mesh.morphTargetInfluences;
-      //     if (!influences || index >= influences.length) return;
-      
-      //     const lower = name.toLowerCase();
-      
-      //     // Different morphs get different strengths
-      //     if (lower.includes("jaw") || lower.includes("open") || lower.includes("mouth")) {
-      //       influences[index] = THREE.MathUtils.clamp(mouth * 1.5, 0, 1);
-      //     } else if (lower.includes("aa") || lower.includes("ah") || lower.includes("oh")) {
-      //       influences[index] = THREE.MathUtils.clamp(mouth * 1.2, 0, 1);
-      //     } else if (lower.includes("ee") || lower.includes("ih")) {
-      //       influences[index] = THREE.MathUtils.clamp(mouth * 0.525, 0, 1);
-      //     } else if (lower.includes("uh")) {
-      //       influences[index] = THREE.MathUtils.clamp(mouth * 0.825, 0, 1);
-      //     } else {
-      //       influences[index] = THREE.MathUtils.clamp(mouth * 0.9, 0, 1);
-      //     }
-      //   });
-      // } else if (jawBoneRef.current) {
-      //   jawBoneRef.current.rotation.x = -0.825 * mouth;
-      // }
-
+      // Apply mouth morphs — conservative ranges to avoid extreme deformation.
+      // Also avoid any targets that look like full head/neck controls.
       if (mouthBindingsRef.current.length > 0) {
         mouthBindingsRef.current.forEach(({ mesh, index, name }) => {
           const influences = mesh.morphTargetInfluences;
           if (!influences || index >= influences.length) return;
-      
+
           const lower = name.toLowerCase();
-      
-          if (lower.includes("jaw") || lower.includes("open") || lower.includes("mouth")) {
-            influences[index] = THREE.MathUtils.clamp(mouth * 3.2, 0, 1);
-          } else if (lower.includes("aa") || lower.includes("ah") || lower.includes("oh")) {
-            influences[index] = THREE.MathUtils.clamp(mouth * 2.6, 0, 1);
-          } else if (lower.includes("ee") || lower.includes("ih")) {
-            influences[index] = THREE.MathUtils.clamp(mouth * 1.2, 0, 1);
-          } else if (lower.includes("uh")) {
-            influences[index] = THREE.MathUtils.clamp(mouth * 1.8, 0, 1);
-          } else {
-            influences[index] = THREE.MathUtils.clamp(mouth * 2.2, 0, 1);
+
+          if (lower.includes("head") || lower.includes("neck")) {
+            return;
           }
+
+          let strength = mouth;
+          if (lower.includes("jaw") || lower.includes("open") || lower.includes("mouth")) {
+            strength = mouth * 1.0;
+          } else if (lower.includes("aa") || lower.includes("ah") || lower.includes("oh")) {
+            strength = mouth * 0.9;
+          } else if (lower.includes("ee") || lower.includes("ih")) {
+            strength = mouth * 0.7;
+          } else if (lower.includes("uh")) {
+            strength = mouth * 0.8;
+          } else {
+            strength = mouth * 0.8;
+          }
+
+          influences[index] = THREE.MathUtils.clamp(strength, 0, 1);
         });
       }
-      
-      if (jawBoneRef.current) {
-        jawBoneRef.current.rotation.x = -1.8 * mouth;
-      }
+
+      // Disable jaw bone rotation entirely to avoid moving the whole head
+      // out of frame for rigs where the "jaw" bone also controls head/neck.
       // Slight scale pulse while speaking
       if (model) {
-        const speakingScale = isSpeaking ? 1.03 : 1;
+        const speakingScale = isSpeaking ? 1.01 : 1;
         const audioPulse = isSpeaking
-          ? 1 + Math.min(audioLevel / 500, 0.015)
+          ? 1 + Math.min(audioLevel / 1200, 0.006)
           : 1;
         model.scale.setScalar(baseScaleRef.current * speakingScale * audioPulse);
       }
@@ -610,7 +595,7 @@ export default ThreeAvatar;
 export function ActiveSession() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const { sessionId: stateSessionId, duration, config } = location.state || {};
 
   const permissionStorageKey = useMemo(() => {
@@ -892,9 +877,9 @@ export function ActiveSession() {
   useEffect(() => {
     if (!permissionsGranted) return;
 
-    // @ts-ignore
     const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       console.log("Speech recognition not supported in this browser");
       return;
@@ -1338,13 +1323,17 @@ export function ActiveSession() {
   useEffect(() => {
     const loadCredits = async () => {
       try {
-        const { credits } = await api.getCredits();
+        const { credits_seconds, credits } = await api.getCredits();
         const sessionLimitSeconds =
           typeof duration === "number" && duration > 0
             ? duration * 60
             : Number.POSITIVE_INFINITY;
         const userCreditsSeconds =
-          typeof credits === "number" && credits > 0 ? credits * 60 : 0;
+          typeof credits_seconds === "number"
+            ? Math.max(0, credits_seconds)
+            : typeof credits === "number" && credits > 0
+            ? credits * 60
+            : 0;
         const effectiveSeconds =
           sessionLimitSeconds === Number.POSITIVE_INFINITY
             ? userCreditsSeconds
@@ -1494,6 +1483,11 @@ export function ActiveSession() {
 
     try {
       await api.sessions.end(sessionId, durationSeconds, undefined, transcript);
+      try {
+        await refreshProfile();
+      } catch (e) {
+        console.error("Failed to refresh profile after session end:", e);
+      }
       toast.success("Session ended successfully");
     } catch (error) {
       console.error("Failed to end session:", error);
@@ -1514,7 +1508,12 @@ export function ActiveSession() {
         },
       });
     } else {
-      navigate("/app/dashboard");
+      navigate("/app/dashboard", {
+        state: {
+          sessionId,
+          sessionDuration: durationSeconds,
+        },
+      });
     }
   };
 
@@ -1652,7 +1651,7 @@ export function ActiveSession() {
             <motion.div
               className="relative z-10 w-full h-full"
               animate={{
-                y: isEzriSpeaking ? [0, -8, 0, -6, 0] : [0, -3, 0],
+                y: isEzriSpeaking ? [0, -2, 0, -1, 0] : [0, -1, 0],
               }}
               transition={{
                 duration: isEzriSpeaking ? 2 : 4,
@@ -1757,8 +1756,8 @@ export function ActiveSession() {
                 >
                   Minutes Left
                 </p>
-                <p className="text-lg font-bold text-white">
-                  {remainingWholeMinutes !== null ? remainingWholeMinutes : "—"}
+                <p className="text-lg font-bold text-white font-mono">
+                  {remainingSeconds !== null ? formatTime(remainingSeconds) : "—"}
                 </p>
               </div>
             </motion.div>
@@ -2114,7 +2113,13 @@ export function ActiveSession() {
                       Running Low on Minutes!
                     </h4>
                     <p className="text-sm text-amber-50 mb-3">
-                      You have {remainingWholeMinutes} minutes left. Consider
+                      You have{" "}
+                      <span className="font-mono">
+                        {remainingSeconds !== null
+                          ? formatTime(remainingSeconds)
+                          : "—"}
+                      </span>{" "}
+                      left. Consider
                       purchasing more or your session will end soon.
                     </p>
                     <div className="flex gap-2">

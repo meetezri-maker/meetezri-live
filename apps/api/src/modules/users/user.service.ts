@@ -93,6 +93,7 @@ export async function createProfile(userId: string, email: string, fullName?: st
       full_name: fullName || email.split('@')[0],
       role: 'user',
       credits: 30, // Initialize with 30 minutes for Trial
+      credits_seconds: 30 * 60,
     },
   });
 
@@ -179,6 +180,17 @@ export async function getProfile(userId: string) {
       "trial") as keyof typeof PLAN_LIMITS;
     const planDetails = PLAN_LIMITS[internalPlanType];
 
+    const subscriptionSeconds =
+      (profileResult.credits_seconds && profileResult.credits_seconds > 0)
+        ? profileResult.credits_seconds
+        : (profileResult.credits || 0) * 60;
+    const purchasedSeconds =
+      (profileResult.purchased_credits_seconds &&
+        profileResult.purchased_credits_seconds > 0)
+        ? profileResult.purchased_credits_seconds
+        : (profileResult.purchased_credits || 0) * 60;
+    const totalSeconds = subscriptionSeconds + purchasedSeconds;
+
     result = {
       ...profileResult,
       emergency_contact_name:
@@ -196,11 +208,13 @@ export async function getProfile(userId: string) {
         total_journals: journalEntriesCount,
         streak_days: streakDays,
       },
-      credits_remaining:
-        (profileResult.credits || 0) + (profileResult.purchased_credits || 0),
+      credits_remaining: totalSeconds === 0 ? 0 : Math.ceil(totalSeconds / 60),
+      credits_remaining_seconds: totalSeconds,
       credits_total:
         (planDetails?.credits || 30) +
         (profileResult.purchased_credits || 0),
+      credits_total_seconds:
+        (planDetails?.credits || 30) * 60 + purchasedSeconds,
       subscription_plan: internalPlanType,
       subscriptions: activeSubscription ? [activeSubscription] : [],
     };
@@ -239,12 +253,34 @@ export async function getProfile(userId: string) {
 export async function getCredits(userId: string) {
   const profile = await prisma.profiles.findUnique({
     where: { id: userId },
-    select: { credits: true, purchased_credits: true }
+    select: {
+      credits: true,
+      purchased_credits: true,
+      credits_seconds: true,
+      purchased_credits_seconds: true,
+    }
   });
-  return { 
-    credits: (profile?.credits || 0) + (profile?.purchased_credits || 0),
-    subscription: profile?.credits || 0,
-    purchased: profile?.purchased_credits || 0
+
+  const subscriptionSeconds =
+    (profile?.credits_seconds && profile.credits_seconds > 0)
+      ? profile.credits_seconds
+      : (profile?.credits || 0) * 60;
+  const purchasedSeconds =
+    (profile?.purchased_credits_seconds &&
+      profile.purchased_credits_seconds > 0)
+      ? profile.purchased_credits_seconds
+      : (profile?.purchased_credits || 0) * 60;
+  const totalSeconds = subscriptionSeconds + purchasedSeconds;
+
+  return {
+    credits: totalSeconds === 0 ? 0 : Math.ceil(totalSeconds / 60),
+    subscription:
+      subscriptionSeconds === 0 ? 0 : Math.ceil(subscriptionSeconds / 60),
+    purchased:
+      purchasedSeconds === 0 ? 0 : Math.ceil(purchasedSeconds / 60),
+    credits_seconds: totalSeconds,
+    subscription_seconds: subscriptionSeconds,
+    purchased_seconds: purchasedSeconds,
   };
 }
 
