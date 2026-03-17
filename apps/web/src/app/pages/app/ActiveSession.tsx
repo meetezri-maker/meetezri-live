@@ -11,7 +11,6 @@ import {
   Minimize,
   Volume2,
   VolumeX,
-  Settings,
   Camera,
   Check,
   X,
@@ -619,7 +618,6 @@ export function ActiveSession() {
     "excellent" | "good" | "poor"
   >("excellent");
   const [showEndConfirm, setShowEndConfirm] = useState(false);
-  const [showSettingsOpen, setShowSettingsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const sessionContainerRef = useRef<HTMLDivElement>(null);
   const [showPermissionRequest, setShowPermissionRequest] = useState(false);
@@ -1476,7 +1474,8 @@ export function ActiveSession() {
       .padStart(2, "0")}`;
   };
 
-  const handleEndSession = async () => {
+  const endSessionAndCleanup = async () => {
+    if (isSessionEndingRef.current) return;
     setHasSessionEnded(true);
     isSessionEndingRef.current = true;
     if (recognitionRef.current) {
@@ -1505,6 +1504,12 @@ export function ActiveSession() {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const handleEndSession = async () => {
+    await endSessionAndCleanup();
+
+    const durationSeconds = sessionTime;
 
     const needsCooldown =
       currentState === "HIGH_RISK" || currentState === "SAFETY_MODE";
@@ -1563,7 +1568,6 @@ export function ActiveSession() {
   }, []);
 
   const handleResetSession = () => {
-    setShowSettingsOpen(false);
     setIsEzriSpeaking(false);
     isEzriSpeakingRef.current = false;
     if (currentUtteranceRef.current) {
@@ -1644,15 +1648,6 @@ export function ActiveSession() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white hover:bg-white/10"
-              onClick={() => setShowSettingsOpen(true)}
-              aria-label="Session settings"
-            >
-              <Settings className="w-4 h-4" />
-            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -2173,7 +2168,10 @@ export function ActiveSession() {
                     </p>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => navigate("/app/billing")}
+                        onClick={async () => {
+                          await endSessionAndCleanup();
+                          navigate("/app/billing");
+                        }}
                         className="px-4 py-2 bg-white text-amber-700 rounded-lg font-semibold text-sm hover:bg-amber-50 transition-colors"
                       >
                         Buy More Minutes
@@ -2242,7 +2240,10 @@ export function ActiveSession() {
                   Continue Your Wellness Journey:
                 </h4>
                 <button
-                  onClick={() => navigate("/app/billing")}
+                  onClick={async () => {
+                    await endSessionAndCleanup();
+                    navigate("/app/billing");
+                  }}
                   className="w-full p-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-xl text-white font-semibold flex items-center justify-between group transition-all"
                 >
                   <div className="flex items-center gap-3">
@@ -2260,7 +2261,10 @@ export function ActiveSession() {
                 </button>
 
                 <button
-                  onClick={() => navigate("/app/billing")}
+                  onClick={async () => {
+                    await endSessionAndCleanup();
+                    navigate("/app/billing");
+                  }}
                   className="w-full p-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-xl text-white font-semibold flex items-center justify-between group transition-all"
                 >
                   <div className="flex items-center gap-3">
@@ -2294,53 +2298,6 @@ export function ActiveSession() {
         onClose={() => setShowLowMinutesModal(false)}
         minutesRemaining={remainingWholeMinutes ?? 0}
       />
-
-      {/* Session Settings Modal */}
-      <AnimatePresence>
-        {showSettingsOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setShowSettingsOpen(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e: React.MouseEvent) => e.stopPropagation()}
-              className="bg-slate-900 rounded-2xl p-6 max-w-md w-full border-2 border-white/10"
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <Settings className="w-5 h-5 text-purple-400" />
-                <h3 className="text-xl font-bold text-white">Session Settings</h3>
-              </div>
-              <p className="text-gray-300 text-sm mb-6">
-                Reset your session to restart permissions or fix connection issues. This will reload the page.
-              </p>
-              <div className="flex gap-3">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowSettingsOpen(false)}
-                  className="flex-1 px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium"
-                >
-                  Cancel
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleResetSession}
-                  className="flex-1 px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-medium"
-                >
-                  Reset Session
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* End Session Confirm */}
       <AnimatePresence>

@@ -2,7 +2,7 @@ import { AppLayout } from "../../components/AppLayout";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { motion, AnimatePresence } from "motion/react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Video,
   Calendar,
@@ -17,7 +17,7 @@ import {
   X,
   Check
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -66,12 +66,18 @@ export function SessionLobby() {
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
 
   useEffect(() => {
+    // Only sync avatar when that specific field changes (prevents effect loops)
     if (profile?.selected_avatar) {
       setSelectedAvatar(profile.selected_avatar);
       setTempSelectedAvatar(profile.selected_avatar);
     }
+  }, [profile?.selected_avatar]);
+
+  useEffect(() => {
+    // Load once on mount; avoid depending on `profile` identity
     loadUpcomingSessions();
-  }, [profile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Sync temp state when modal opens
   useEffect(() => {
@@ -80,6 +86,48 @@ export function SessionLobby() {
       setTempSelectedAvatar(selectedAvatar);
     }
   }, [showCustomizeModal, selectedVoice, selectedAvatar]);
+
+  const minutesAvailable = useMemo(() => {
+    // Backend fields vary across environments; use the best available signal.
+    const remainingSeconds =
+      (typeof profile?.credits_remaining_seconds === "number"
+        ? profile.credits_remaining_seconds
+        : undefined) ??
+      (typeof profile?.credits_seconds === "number" ? profile.credits_seconds : undefined);
+    if (typeof remainingSeconds === "number") {
+      return Math.max(0, Math.floor(remainingSeconds / 60));
+    }
+
+    const remaining =
+      (typeof profile?.credits_remaining === "number" ? profile.credits_remaining : undefined) ??
+      (typeof profile?.credits === "number" ? profile.credits : undefined) ??
+      0;
+    const purchased = typeof profile?.purchased_credits === "number" ? profile.purchased_credits : 0;
+    return Math.max(0, remaining + purchased);
+  }, [
+    profile?.credits_remaining_seconds,
+    profile?.credits_seconds,
+    profile?.credits_remaining,
+    profile?.credits,
+    profile?.purchased_credits,
+  ]);
+
+  const durations = [15, 30, 45, 60];
+  const durationDisabled = useMemo(() => {
+    const map = new Map<number, boolean>();
+    for (const d of durations) map.set(d, minutesAvailable < d);
+    return map;
+  }, [minutesAvailable]);
+
+  useEffect(() => {
+    // If user's remaining minutes drop below selection, snap to the largest allowed duration.
+    if (minutesAvailable <= 0) return;
+    if (selectedDuration <= minutesAvailable) return;
+    const allowed = durations.filter((d) => d <= minutesAvailable);
+    if (allowed.length > 0) {
+      setSelectedDuration(allowed[allowed.length - 1]);
+    }
+  }, [minutesAvailable, selectedDuration]);
 
   const handleSaveCustomize = () => {
     setSelectedVoice(tempSelectedVoice);
@@ -212,8 +260,6 @@ export function SessionLobby() {
     { id: "Maya chen", name: "Maya Chen", emoji: "👩‍🦰", description: "Kind and patient" }
   ];
 
-  const durations = [15, 30, 45, 60];
-
   const [checklistItems, setChecklistItems] = useState([
     { label: "Find a quiet, private space", checked: true },
     { label: "Check your audio/video", checked: true },
@@ -330,9 +376,16 @@ export function SessionLobby() {
                 <h2 className="text-xl font-bold mb-4">Session Type</h2>
                 <div className="grid grid-cols-2 gap-4">
                   <motion.button
+                    type="button"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => setSelectedMode("now")}
+                    onClick={() => {
+                      if (selectedMode === "now") {
+                        void handleStartSession();
+                        return;
+                      }
+                      setSelectedMode("now");
+                    }}
                     className={`p-6 rounded-xl border-2 transition-all w-full ${
                       selectedMode === "now"
                         ? "border-primary bg-primary/10 shadow-lg"
@@ -345,9 +398,16 @@ export function SessionLobby() {
                   </motion.button>
 
                   <motion.button
+                    type="button"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => setSelectedMode("schedule")}
+                    onClick={() => {
+                      if (selectedMode === "schedule") {
+                        setShowScheduleModal(true);
+                        return;
+                      }
+                      setSelectedMode("schedule");
+                    }}
                     className={`p-6 rounded-xl border-2 transition-all ${
                       selectedMode === "schedule"
                         ? "border-primary bg-primary/10 shadow-lg"
@@ -377,14 +437,21 @@ export function SessionLobby() {
                   {durations.map((duration, index) => (
                     <motion.button
                       key={duration}
+                      type="button"
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: 0.3 + index * 0.05 }}
-                      whileHover={{ scale: 1.05 }}
+                      whileHover={durationDisabled.get(duration) ? undefined : { scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => setSelectedDuration(duration)}
+                      onClick={() => {
+                        if (durationDisabled.get(duration)) return;
+                        setSelectedDuration(duration);
+                      }}
+                      disabled={durationDisabled.get(duration)}
                       className={`p-4 rounded-xl border-2 transition-all ${
-                        selectedDuration === duration
+                        durationDisabled.get(duration)
+                          ? "border-border opacity-40 cursor-not-allowed"
+                          : selectedDuration === duration
                           ? "border-primary bg-primary text-primary-foreground shadow-lg"
                           : "border-border hover:border-primary/50"
                       }`}
@@ -393,6 +460,9 @@ export function SessionLobby() {
                       <div className="text-xs mt-1">min</div>
                     </motion.button>
                   ))}
+                </div>
+                <div className="mt-3 text-xs text-muted-foreground">
+                  Minutes available: <span className="font-medium">{minutesAvailable}</span>
                 </div>
               </Card>
             </motion.div>
@@ -499,12 +569,13 @@ export function SessionLobby() {
                   whileTap={{ scale: 0.98 }}
                 >
                   <Button 
+                    type="button"
                     className="w-full h-16 text-lg group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:shadow-2xl hover:shadow-purple-500/50 transition-all"
                     onClick={handleStartSession}
-                    disabled={isStarting}
+                    disabled={isStarting || selectedDuration > minutesAvailable}
                   >
                     <motion.div
-                      className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600"
+                      className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 pointer-events-none"
                       initial={{ x: "-100%" }}
                       whileHover={{ x: 0 }}
                       transition={{ duration: 0.3 }}
@@ -529,6 +600,7 @@ export function SessionLobby() {
                 </motion.div>
               ) : (
                 <Button 
+                  type="button"
                   className="w-full h-16 text-lg bg-gradient-to-r from-gray-600 to-gray-700"
                   onClick={() => setShowScheduleModal(true)}
                 >
@@ -568,6 +640,7 @@ export function SessionLobby() {
                     <span className="text-sm font-medium">{selectedAvatar}</span>
                   </div>
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     className="w-full"
@@ -673,6 +746,7 @@ export function SessionLobby() {
                         </p>
                       </div>
                       <motion.button
+                        type="button"
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => setShowCustomizeModal(false)}
@@ -694,6 +768,7 @@ export function SessionLobby() {
                           {voices.map((voice, index) => (
                             <motion.button
                               key={voice.id}
+                              type="button"
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.1 + index * 0.05 }}
@@ -738,6 +813,7 @@ export function SessionLobby() {
                           {avatars.map((avatar, index) => (
                             <motion.button
                               key={avatar.id}
+                              type="button"
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.3 + index * 0.05 }}
@@ -773,12 +849,14 @@ export function SessionLobby() {
                     {/* Footer Buttons - Fixed */}
                     <div className="flex items-center justify-end gap-3 p-6 border-t shrink-0 bg-gray-50/50 dark:bg-gray-800/50">
                       <Button
+                        type="button"
                         variant="outline"
                         onClick={() => setShowCustomizeModal(false)}
                       >
                         Cancel
                       </Button>
                       <Button
+                        type="button"
                         className="bg-gradient-to-r from-blue-600 to-purple-600 text-white"
                         onClick={handleSaveCustomize}
                       >
@@ -823,6 +901,7 @@ export function SessionLobby() {
                         </p>
                       </div>
                       <motion.button
+                        type="button"
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => setShowScheduleModal(false)}
@@ -864,6 +943,7 @@ export function SessionLobby() {
                     {/* Footer Buttons - Fixed */}
                     <div className="flex items-center justify-end gap-3 p-6 border-t shrink-0 bg-gray-50/50 dark:bg-gray-800/50 dark:border-gray-800">
                       <Button
+                        type="button"
                         variant="outline"
                         onClick={() => setShowScheduleModal(false)}
                         disabled={isScheduling}
@@ -871,6 +951,7 @@ export function SessionLobby() {
                         Cancel
                       </Button>
                       <Button
+                        type="button"
                         className="bg-gradient-to-r from-blue-600 to-purple-600 text-white"
                         onClick={handleScheduleSession}
                         isLoading={isScheduling}
