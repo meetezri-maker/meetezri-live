@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { createSessionHandler, getSessionsHandler, getSessionHandler, endSessionHandler, createMessageHandler, getSessionTranscriptHandler, scheduleSessionHandler, getUserSessionsHandler, toggleSessionFavoriteHandler } from './sessions.controller';
-import { createSessionSchema, endSessionSchema, createMessageSchema } from './sessions.schema';
+import { createSessionHandler, getSessionsHandler, getSessionHandler, endSessionHandler, createMessageHandler, getSessionTranscriptHandler, scheduleSessionHandler, getUserSessionsHandler, toggleSessionFavoriteHandler, heartbeatSessionHandler } from './sessions.controller';
+import { createSessionSchema, endSessionSchema, createMessageSchema, heartbeatSessionSchema } from './sessions.schema';
 
 export async function sessionRoutes(app: FastifyInstance) {
   app.get(
@@ -58,6 +58,17 @@ export async function sessionRoutes(app: FastifyInstance) {
       preHandler: [app.authenticate],
     },
     endSessionHandler
+  );
+
+  app.post(
+    '/:id/heartbeat',
+    {
+      schema: {
+        body: heartbeatSessionSchema,
+      },
+      preHandler: [app.authenticate],
+    },
+    heartbeatSessionHandler
   );
 
   app.post(
