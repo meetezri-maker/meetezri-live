@@ -16,7 +16,7 @@ const subscriptionsCache = new Map<string, { data: any[]; timestamp: number }>()
 const CLIENT_URL =
   process.env.CLIENT_URL ||
   (process.env.NODE_ENV === 'production'
-    ? 'https://meet-ezri.vercel.app'
+    ? 'https://meetezri-live-web.vercel.app'
     : 'http://localhost:5173');
 
 async function getOrCreateStripeCustomer(userId: string, email: string) {
