@@ -21,6 +21,10 @@ export const endSessionSchema = z.object({
   })).optional()
 });
 
+export const heartbeatSessionSchema = z.object({
+  elapsed_seconds: z.number().int().nonnegative(),
+});
+
 export const createMessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'system']),
   content: z.string(),
@@ -44,4 +48,5 @@ export const sessionResponseSchema = z.object({
 
 export type CreateSessionInput = z.infer<typeof createSessionSchema>;
 export type EndSessionInput = z.infer<typeof endSessionSchema>;
+export type HeartbeatSessionInput = z.infer<typeof heartbeatSessionSchema>;
 export type CreateMessageInput = z.infer<typeof createMessageSchema>;

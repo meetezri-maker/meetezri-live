@@ -598,6 +598,26 @@ export function ActiveSession() {
   const { user, refreshProfile } = useAuth();
   const { sessionId: stateSessionId, duration, config } = location.state || {};
 
+  const apiSessionId = useMemo(() => {
+    if (typeof stateSessionId === "string" && stateSessionId.length > 0) return stateSessionId;
+    try {
+      const fromQuery = new URLSearchParams(location.search).get("sessionId");
+      if (fromQuery) return fromQuery;
+    } catch {}
+    try {
+      const fromStorage = window.localStorage.getItem("ezri_active_session_id");
+      if (fromStorage) return fromStorage;
+    } catch {}
+    return null;
+  }, [stateSessionId, location.search]);
+
+  useEffect(() => {
+    if (!apiSessionId) return;
+    try {
+      window.localStorage.setItem("ezri_active_session_id", apiSessionId);
+    } catch {}
+  }, [apiSessionId]);
+
   const permissionStorageKey = useMemo(() => {
     if (typeof window === "undefined") return "ezri_media_permissions";
     if (!user?.id) return "ezri_media_permissions";
@@ -695,7 +715,6 @@ export function ActiveSession() {
     console.log("speakAvatar called with:", text);
     setCurrentSubtitle(text);
 
-    if (isSoundOffRef.current) return;
     if (typeof window === "undefined") return;
     const synth = (window as any).speechSynthesis as SpeechSynthesis | undefined;
     if (!synth) {
@@ -731,6 +750,13 @@ export function ActiveSession() {
         console.log("Speech started");
         setIsEzriSpeaking(true);
         isEzriSpeakingRef.current = true;
+
+        // If sound is off, pause immediately (so we can resume mid-sentence later)
+        if (isSoundOffRef.current) {
+          try {
+            synth.pause();
+          } catch {}
+        }
 
         if (recognitionRef.current && isListening) {
           try {
@@ -833,7 +859,9 @@ export function ActiveSession() {
     if (!synth) return;
     if (isSoundOff) {
       try {
-        synth.cancel();
+        // Pause instead of cancel so subtitles/transcript don't vanish and
+        // we can resume from the same point later.
+        synth.pause();
       } catch {}
     }
   }, [isSoundOff]);
@@ -842,12 +870,12 @@ export function ActiveSession() {
     if (typeof window === "undefined") return;
     const synth = (window as any).speechSynthesis as SpeechSynthesis | undefined;
     if (!synth) return;
-    if (!isMuted && !isSoundOff) {
+    if (!isSoundOff) {
       try {
         synth.resume();
       } catch {}
     }
-  }, [isMuted, isSoundOff]);
+  }, [isSoundOff]);
 
   useEffect(() => {
     if (permissionStateInitialized) return;
@@ -1322,10 +1350,12 @@ export function ActiveSession() {
   const [initialCreditsSeconds, setInitialCreditsSeconds] = useState<number | null>(
     null
   );
+  const [accountCreditsSeconds, setAccountCreditsSeconds] = useState<number | null>(null);
   const [showLowCreditsWarning, setShowLowCreditsWarning] = useState(false);
   const [showOutOfCredits, setShowOutOfCredits] = useState(false);
   const [showLowMinutesModal, setShowLowMinutesModal] = useState(false);
   const [hasShownLowMinutesModal, setHasShownLowMinutesModal] = useState(false);
+  const [isBuyingMoreMinutes, setIsBuyingMoreMinutes] = useState(false);
   const previousConnectionQuality = useRef(connectionQuality);
 
   useEffect(() => {
@@ -1346,6 +1376,7 @@ export function ActiveSession() {
           sessionLimitSeconds === Number.POSITIVE_INFINITY
             ? userCreditsSeconds
             : Math.min(userCreditsSeconds, sessionLimitSeconds);
+        setAccountCreditsSeconds(userCreditsSeconds);
         setInitialCreditsSeconds(effectiveSeconds);
       } catch (err) {
         console.error("Failed to load credits:", err);
@@ -1354,11 +1385,7 @@ export function ActiveSession() {
     loadCredits();
   }, [duration]);
 
-  const [sessionId] = useState(
-    () =>
-      stateSessionId ||
-      `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  );
+  const [sessionId] = useState(() => apiSessionId || `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
   const [hasSessionEnded, setHasSessionEnded] = useState(false);
 
   const currentAvatar = {
@@ -1417,6 +1444,39 @@ export function ActiveSession() {
     return () => clearInterval(timer);
   }, [isSessionPaused, hasSessionEnded]);
 
+  // Heartbeat: deduct credits during the live session (server-side).
+  useEffect(() => {
+    if (!apiSessionId) return;
+    if (isSessionPaused || hasSessionEnded) return;
+
+    let cancelled = false;
+    let lastSent = 0;
+
+    const tick = async () => {
+      if (cancelled) return;
+      // Avoid sending too early (need at least a few seconds of session time)
+      if (sessionTime <= 0) return;
+      // Only send if at least 15s have passed since last send
+      if (sessionTime - lastSent < 15) return;
+
+      try {
+        await api.sessions.heartbeat(apiSessionId, sessionTime);
+        lastSent = sessionTime;
+      } catch (e) {
+        // Best-effort; don't interrupt session on transient failures
+      }
+    };
+
+    const interval = window.setInterval(() => {
+      void tick();
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [apiSessionId, isSessionPaused, hasSessionEnded, sessionTime]);
+
   const remainingSeconds =
     initialCreditsSeconds !== null
       ? Math.max(0, initialCreditsSeconds - sessionTime)
@@ -1424,10 +1484,29 @@ export function ActiveSession() {
   const remainingWholeMinutes =
     remainingSeconds !== null ? Math.floor(remainingSeconds / 60) : null;
 
+  // Account credits are only deducted on session end (server-side).
+  // For in-session UX, we use a projected remaining value based on time spent so far.
+  const projectedAccountRemainingSeconds =
+    accountCreditsSeconds !== null
+      ? Math.max(0, accountCreditsSeconds - sessionTime)
+      : null;
+  const projectedAccountRemainingWholeMinutes =
+    projectedAccountRemainingSeconds !== null
+      ? Math.floor(projectedAccountRemainingSeconds / 60)
+      : null;
+
   useEffect(() => {
+    // Show when the user is projected to drop below 10 minutes.
+    if (projectedAccountRemainingWholeMinutes === null) return;
+    if (
+      projectedAccountRemainingWholeMinutes > 0 &&
+      projectedAccountRemainingWholeMinutes < 10
+    ) {
+      if (!showLowCreditsWarning) setShowLowCreditsWarning(true);
+    } else {
+      if (showLowCreditsWarning) setShowLowCreditsWarning(false);
+    }
     if (remainingWholeMinutes === null) return;
-    if (remainingWholeMinutes === 10 && !showLowCreditsWarning)
-      setShowLowCreditsWarning(true);
     if (remainingWholeMinutes === 0 && !showOutOfCredits)
       setShowOutOfCredits(true);
     if (
@@ -1440,6 +1519,7 @@ export function ActiveSession() {
     }
   }, [
     remainingWholeMinutes,
+    projectedAccountRemainingWholeMinutes,
     showLowCreditsWarning,
     showOutOfCredits,
     hasShownLowMinutesModal,
@@ -1491,7 +1571,11 @@ export function ActiveSession() {
     const durationSeconds = sessionTime;
 
     try {
-      await api.sessions.end(sessionId, durationSeconds, undefined, transcript);
+      if (!apiSessionId) {
+        toast.error("Missing session id. Please restart the session from the lobby.");
+        return;
+      }
+      await api.sessions.end(apiSessionId, durationSeconds, undefined, transcript);
       try {
         await refreshProfile();
       } catch (e) {
@@ -2140,9 +2224,9 @@ export function ActiveSession() {
       {/* Low Credits Warning */}
       <AnimatePresence>
         {showLowCreditsWarning &&
-          remainingWholeMinutes !== null &&
-          remainingWholeMinutes > 0 &&
-          remainingWholeMinutes <= 10 && (
+          projectedAccountRemainingWholeMinutes !== null &&
+          projectedAccountRemainingWholeMinutes > 0 &&
+          projectedAccountRemainingWholeMinutes < 10 && (
             <motion.div
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
@@ -2159,8 +2243,8 @@ export function ActiveSession() {
                     <p className="text-sm text-amber-50 mb-3">
                       You have{" "}
                       <span className="font-mono">
-                        {remainingSeconds !== null
-                          ? formatTime(remainingSeconds)
+                        {projectedAccountRemainingSeconds !== null
+                          ? formatTime(projectedAccountRemainingSeconds)
                           : "—"}
                       </span>{" "}
                       left. Consider
@@ -2169,15 +2253,24 @@ export function ActiveSession() {
                     <div className="flex gap-2">
                       <button
                         onClick={async () => {
-                          await endSessionAndCleanup();
-                          navigate("/app/billing");
+                          if (isBuyingMoreMinutes) return;
+                          setIsBuyingMoreMinutes(true);
+                          try {
+                            await endSessionAndCleanup();
+                            navigate("/app/billing");
+                          } finally {
+                            setIsBuyingMoreMinutes(false);
+                          }
                         }}
-                        className="px-4 py-2 bg-white text-amber-700 rounded-lg font-semibold text-sm hover:bg-amber-50 transition-colors"
+                        disabled={isBuyingMoreMinutes}
+                        className="px-4 py-2 bg-white text-amber-700 rounded-lg font-semibold text-sm hover:bg-amber-50 transition-colors disabled:opacity-70 disabled:cursor-not-allowed inline-flex items-center gap-2"
                       >
+                        {isBuyingMoreMinutes && <Loader2 className="w-4 h-4 animate-spin" />}
                         Buy More Minutes
                       </button>
                       <button
                         onClick={() => setShowLowCreditsWarning(false)}
+                        disabled={isBuyingMoreMinutes}
                         className="px-4 py-2 bg-amber-600 text-white rounded-lg font-medium text-sm hover:bg-amber-700 transition-colors"
                       >
                         Dismiss

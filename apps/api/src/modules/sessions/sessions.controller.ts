@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { createSession, getSessions, getSessionById, endSession, createMessage, getSessionTranscript, toggleSessionFavorite } from './sessions.service';
-import { CreateSessionInput, EndSessionInput, CreateMessageInput } from './sessions.schema';
+import { createSession, getSessions, getSessionById, endSession, createMessage, getSessionTranscript, toggleSessionFavorite, heartbeatSession } from './sessions.service';
+import { CreateSessionInput, EndSessionInput, CreateMessageInput, HeartbeatSessionInput } from './sessions.schema';
 
 interface UserPayload {
   sub: string;
@@ -135,6 +135,22 @@ export async function endSessionHandler(
       request.body.transcript
     );
     return reply.send(session);
+  } catch (error: any) {
+    if (error.message === 'Session not found') {
+      return reply.code(404).send({ message: 'Session not found' });
+    }
+    throw error;
+  }
+}
+
+export async function heartbeatSessionHandler(
+  request: FastifyRequest<{ Params: { id: string }; Body: HeartbeatSessionInput }>,
+  reply: FastifyReply
+) {
+  try {
+    const user = request.user as UserPayload;
+    const result = await heartbeatSession(user.sub, request.params.id, request.body.elapsed_seconds);
+    return reply.send(result);
   } catch (error: any) {
     if (error.message === 'Session not found') {
       return reply.code(404).send({ message: 'Session not found' });

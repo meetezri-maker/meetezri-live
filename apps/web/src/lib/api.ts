@@ -562,6 +562,18 @@ export const api = {
       return handleResponse(res, 'Failed to end session');
     },
 
+    async heartbeat(id: string, elapsedSeconds: number) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/sessions/${id}/heartbeat`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          elapsed_seconds: elapsedSeconds,
+        }),
+      });
+      return handleResponse(res, 'Failed to heartbeat session');
+    },
+
     async addMessage(id: string, role: 'user' | 'assistant' | 'system', content: string) {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/sessions/${id}/messages`, {

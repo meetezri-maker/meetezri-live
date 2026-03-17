@@ -2,12 +2,66 @@ import prisma from '../../lib/prisma';
 import { emailService } from '../email/email.service';
 import { CreateSessionInput, CreateMessageInput } from './sessions.schema';
 
+async function deductCreditsSeconds(userId: string, secondsUsed: number) {
+  if (secondsUsed <= 0) return;
+  const profile = await prisma.profiles.findUnique({
+    where: { id: userId },
+    select: {
+      credits: true,
+      purchased_credits: true,
+      credits_seconds: true,
+      purchased_credits_seconds: true,
+    }
+  });
+
+  if (!profile) return;
+
+  const subSeconds =
+    (profile.credits_seconds && profile.credits_seconds > 0)
+      ? profile.credits_seconds
+      : (profile.credits || 0) * 60;
+  const purSeconds =
+    (profile.purchased_credits_seconds && profile.purchased_credits_seconds > 0)
+      ? profile.purchased_credits_seconds
+      : (profile.purchased_credits || 0) * 60;
+
+  let newSubSeconds = subSeconds;
+  let newPurSeconds = purSeconds;
+
+  if (newSubSeconds >= secondsUsed) {
+    newSubSeconds -= secondsUsed;
+  } else {
+    const remaining = secondsUsed - newSubSeconds;
+    newSubSeconds = 0;
+    newPurSeconds = Math.max(0, newPurSeconds - remaining);
+  }
+
+  const newSubCredits = newSubSeconds === 0 ? 0 : Math.ceil(newSubSeconds / 60);
+  const newPurCredits = newPurSeconds === 0 ? 0 : Math.ceil(newPurSeconds / 60);
+
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: {
+      credits: newSubCredits,
+      purchased_credits: Math.max(0, newPurCredits),
+      credits_seconds: newSubSeconds,
+      purchased_credits_seconds: newPurSeconds,
+    }
+  });
+}
+
 export async function createSession(userId: string, input: CreateSessionInput) {
   try {
     // Ensure user profile exists to satisfy foreign key constraint
     const profile = await prisma.profiles.findUnique({
       where: { id: userId },
-      select: { id: true, credits: true, purchased_credits: true }
+      select: {
+        id: true,
+        credits: true,
+        purchased_credits: true,
+        credits_seconds: true,
+        purchased_credits_seconds: true,
+      }
     });
 
     if (!profile) {
@@ -26,10 +80,22 @@ export async function createSession(userId: string, input: CreateSessionInput) {
     // Check if user has sufficient credits
     // For trial users (hard cap), ensure they have enough credits for the entire planned duration
     const requiredCredits = input.duration_minutes || 5;
-    const totalCredits = (profile.credits || 0) + (profile.purchased_credits || 0);
+    const subSeconds =
+      (profile.credits_seconds && profile.credits_seconds > 0)
+        ? profile.credits_seconds
+        : (profile.credits || 0) * 60;
+    const purSeconds =
+      (profile.purchased_credits_seconds && profile.purchased_credits_seconds > 0)
+        ? profile.purchased_credits_seconds
+        : (profile.purchased_credits || 0) * 60;
+    const totalSeconds = subSeconds + purSeconds;
+    const requiredSeconds = requiredCredits * 60;
+    const totalCredits = totalSeconds === 0 ? 0 : Math.ceil(totalSeconds / 60);
     
-    if (totalCredits < requiredCredits) {
-      throw new Error(`Insufficient credits. You need ${requiredCredits} minutes but have ${totalCredits}. Please upgrade your plan.`);
+    if (totalSeconds < requiredSeconds) {
+      throw new Error(
+        `Insufficient credits. You need ${requiredCredits} minutes but have ${totalCredits}. Please upgrade your plan.`
+      );
     }
 
     const result = await prisma.app_sessions.create({
@@ -174,58 +240,14 @@ export async function endSession(
   }
 
   // Deduct credits
-  if (secondsUsed > 0) {
+  // If heartbeat already billed some seconds, only bill the remainder.
+  const alreadyBilled = typeof (session as any).billed_seconds === 'number' ? Math.max(0, (session as any).billed_seconds) : 0;
+  const billNow = Math.max(0, secondsUsed - alreadyBilled);
+  if (billNow > 0) {
     try {
-      const profile = await prisma.profiles.findUnique({
-        where: { id: userId },
-        select: {
-          credits: true,
-          purchased_credits: true,
-          credits_seconds: true,
-          purchased_credits_seconds: true,
-        }
-      });
-
-      if (profile) {
-        const subSeconds =
-          (profile.credits_seconds && profile.credits_seconds > 0)
-            ? profile.credits_seconds
-            : (profile.credits || 0) * 60;
-        const purSeconds =
-          (profile.purchased_credits_seconds &&
-            profile.purchased_credits_seconds > 0)
-            ? profile.purchased_credits_seconds
-            : (profile.purchased_credits || 0) * 60;
-
-        let newSubSeconds = subSeconds;
-        let newPurSeconds = purSeconds;
-
-        if (newSubSeconds >= secondsUsed) {
-          newSubSeconds -= secondsUsed;
-        } else {
-          const remaining = secondsUsed - newSubSeconds;
-          newSubSeconds = 0;
-          newPurSeconds = Math.max(0, newPurSeconds - remaining);
-        }
-
-        const newSubCredits =
-          newSubSeconds === 0 ? 0 : Math.ceil(newSubSeconds / 60);
-        const newPurCredits =
-          newPurSeconds === 0 ? 0 : Math.ceil(newPurSeconds / 60);
-
-        await prisma.profiles.update({
-          where: { id: userId },
-          data: {
-            credits: newSubCredits,
-            purchased_credits: Math.max(0, newPurCredits),
-            credits_seconds: newSubSeconds,
-            purchased_credits_seconds: newPurSeconds,
-          }
-        });
-      }
+      await deductCreditsSeconds(userId, billNow);
     } catch (error) {
       console.error('Error deducting credits:', error);
-      // Don't fail the session end if credit deduction fails, but log it
     }
   }
 
@@ -251,8 +273,40 @@ export async function endSession(
       ended_at: new Date(),
       duration_minutes: Math.floor(secondsUsed / 60),
       recording_url: recordingUrl,
-      status: 'completed'
+      status: 'completed',
+      billed_seconds: secondsUsed,
     },
+  });
+}
+
+export async function heartbeatSession(userId: string, sessionId: string, elapsedSeconds: number) {
+  if (elapsedSeconds < 0) return { ok: true, billed_delta_seconds: 0 };
+
+  return prisma.$transaction(async (tx) => {
+    const session = await tx.app_sessions.findFirst({
+      where: { id: sessionId, user_id: userId },
+      select: { id: true, status: true, ended_at: true, billed_seconds: true }
+    });
+    if (!session) throw new Error('Session not found');
+    if (session.ended_at || session.status === 'completed') {
+      return { ok: true, billed_delta_seconds: 0 };
+    }
+
+    const alreadyBilled = typeof session.billed_seconds === 'number' ? Math.max(0, session.billed_seconds) : 0;
+    const desired = Math.max(0, elapsedSeconds);
+    const delta = desired - alreadyBilled;
+    if (delta <= 0) {
+      return { ok: true, billed_delta_seconds: 0 };
+    }
+
+    // Deduct + mark billed seconds atomically
+    await deductCreditsSeconds(userId, delta);
+    await tx.app_sessions.update({
+      where: { id: sessionId },
+      data: { billed_seconds: desired }
+    });
+
+    return { ok: true, billed_delta_seconds: delta };
   });
 }
 

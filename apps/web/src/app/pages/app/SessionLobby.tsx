@@ -87,8 +87,33 @@ export function SessionLobby() {
     }
   }, [showCustomizeModal, selectedVoice, selectedAvatar]);
 
+  const [liveCreditsSeconds, setLiveCreditsSeconds] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Use the dedicated credits endpoint (no-cache) so "Minutes available" matches Dashboard.
+    const loadCredits = async () => {
+      try {
+        const { credits_seconds, credits } = await api.getCredits();
+        const seconds =
+          typeof credits_seconds === "number"
+            ? Math.max(0, credits_seconds)
+            : typeof credits === "number"
+            ? Math.max(0, credits) * 60
+            : null;
+        setLiveCreditsSeconds(seconds);
+      } catch {
+        setLiveCreditsSeconds(null);
+      }
+    };
+    loadCredits();
+  }, []);
+
   const minutesAvailable = useMemo(() => {
-    // Backend fields vary across environments; use the best available signal.
+    if (liveCreditsSeconds !== null) {
+      return Math.max(0, Math.floor(liveCreditsSeconds / 60));
+    }
+
+    // Fallback (cached profile fields)
     const remainingSeconds =
       (typeof profile?.credits_remaining_seconds === "number"
         ? profile.credits_remaining_seconds
@@ -102,9 +127,11 @@ export function SessionLobby() {
       (typeof profile?.credits_remaining === "number" ? profile.credits_remaining : undefined) ??
       (typeof profile?.credits === "number" ? profile.credits : undefined) ??
       0;
-    const purchased = typeof profile?.purchased_credits === "number" ? profile.purchased_credits : 0;
+    const purchased =
+      typeof profile?.purchased_credits === "number" ? profile.purchased_credits : 0;
     return Math.max(0, remaining + purchased);
   }, [
+    liveCreditsSeconds,
     profile?.credits_remaining_seconds,
     profile?.credits_seconds,
     profile?.credits_remaining,
@@ -185,7 +212,12 @@ export function SessionLobby() {
         }
       });
 
-      navigate("/app/active-session", { 
+      // Persist sessionId so ActiveSession can recover after refresh
+      try {
+        window.localStorage.setItem("ezri_active_session_id", session.id);
+      } catch {}
+
+      navigate(`/app/active-session?sessionId=${encodeURIComponent(session.id)}`, { 
         state: { 
           sessionId: session.id,
           config: session.config,

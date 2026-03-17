@@ -98,6 +98,7 @@ export function Dashboard() {
   const creditsRemaining = profile?.credits_remaining || 0;
   const creditsTotal = profile?.credits_total || 200;
   const userPlan = profile?.subscription_plan || "Basic Plan";
+  const [liveCreditsSeconds, setLiveCreditsSeconds] = useState<number | null>(null);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -107,8 +108,30 @@ export function Dashboard() {
       .padStart(2, "0")}`;
   };
 
+  useEffect(() => {
+    // Use the dedicated credits endpoint (no-cache) for accurate seconds display
+    const loadCredits = async () => {
+      try {
+        const { credits_seconds, credits } = await api.getCredits();
+        const seconds =
+          typeof credits_seconds === "number"
+            ? Math.max(0, credits_seconds)
+            : typeof credits === "number"
+            ? Math.max(0, credits) * 60
+            : null;
+        setLiveCreditsSeconds(seconds);
+      } catch (e) {
+        // Fall back to profile-derived fields below
+        setLiveCreditsSeconds(null);
+      }
+    };
+    loadCredits();
+  }, []);
+
   const creditsRemainingSeconds =
-    typeof profile?.credits_remaining_seconds === "number"
+    liveCreditsSeconds !== null
+      ? liveCreditsSeconds
+      : typeof profile?.credits_remaining_seconds === "number"
       ? Math.max(0, profile.credits_remaining_seconds)
       : creditsRemaining * 60;
 
