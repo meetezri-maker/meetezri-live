@@ -662,17 +662,17 @@ export async function syncSubscriptionWithStripe(userId: string) {
 
   // Sync Credits (Optional: Only if active/trialing)
   if (['active', 'trialing'].includes(activeSub.status)) {
-      const limits = PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS];
-      if (limits) {
-          // Check if we should update credits. 
-          // For now, let's update if the plan matches.
-          // In a real system, you'd check if credits were already allocated for this period.
-          // But here, ensuring they have the credits is safer.
-          await prisma.profiles.update({
-              where: { id: userId },
-              data: { credits: limits.credits }
-          });
-      }
+    const limits = PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS];
+    if (limits) {
+      // Ensure both minute and second-based credits are updated for the new plan
+      await prisma.profiles.update({
+        where: { id: userId },
+        data: { 
+          credits: limits.credits,
+          credits_seconds: limits.credits * 60,
+        },
+      });
+    }
   }
 
   return updatedSub;
