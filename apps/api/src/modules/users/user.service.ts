@@ -2,6 +2,7 @@ import prisma from '../../lib/prisma';
 import { supabaseAdmin } from '../../config/supabase';
 import { OnboardingInput, UpdateProfileInput } from './user.schema';
 import { PLAN_LIMITS } from '../billing/billing.constants';
+import * as billingService from '../billing/billing.service';
 
 function calculateStreak(moodEntries: any[]) {
   if (!moodEntries || moodEntries.length === 0) return 0;
@@ -86,30 +87,59 @@ export async function checkUserExists(email: string) {
 }
 
 export async function createProfile(userId: string, email: string, fullName?: string) {
-  const profile = await prisma.profiles.create({
-    data: {
+  const profile = await prisma.profiles.upsert({
+    where: { id: userId },
+    create: {
       id: userId,
       email,
       full_name: fullName || email.split('@')[0],
       role: 'user',
-      credits: 30, // Initialize with 30 minutes for Trial
+      credits: 30,
       credits_seconds: 30 * 60,
+    },
+    update: {
+      email,
+      full_name: fullName || email.split('@')[0],
     },
   });
 
   // Create Trial Subscription (7 days)
-  await prisma.subscriptions.create({
-    data: {
-      user_id: userId,
-      plan_type: 'trial',
-      status: 'active',
-      start_date: new Date(),
-      end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      billing_cycle: 'monthly', // Not really relevant for trial but required by schema default
-    }
+  const existingTrial = await prisma.subscriptions.findFirst({
+    where: { user_id: userId, plan_type: 'trial' },
+    select: { id: true },
   });
+  if (!existingTrial) {
+    await prisma.subscriptions.create({
+      data: {
+        user_id: userId,
+        plan_type: 'trial',
+        status: 'active',
+        start_date: new Date(),
+        end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        billing_cycle: 'monthly',
+      },
+    });
+  }
 
   return profile;
+}
+
+export async function createProfileForPaidSignup(userId: string, email: string, fullName?: string) {
+  return prisma.profiles.upsert({
+    where: { id: userId },
+    create: {
+      id: userId,
+      email,
+      full_name: fullName || email.split('@')[0],
+      role: 'user',
+      credits: 0,
+      credits_seconds: 0,
+    },
+    update: {
+      email,
+      full_name: fullName || email.split('@')[0],
+    },
+  });
 }
 
 const userProfileCache = new Map<string, { data: any; timestamp: number }>();
@@ -121,15 +151,31 @@ export async function getProfile(userId: string) {
   let result: any;
 
   if (cached && Date.now() - cached.timestamp < PROFILE_CACHE_TTL) {
-    result = { ...cached.data };
-  } else {
+    // If user just upgraded, cache can keep returning trial for a short window.
+    // When we detect "trial" and the user has a Stripe customer, do a one-time sync.
+    const cachedPlan = (cached.data?.subscription_plan || 'trial') as keyof typeof PLAN_LIMITS;
+    const hasStripeCustomer = !!cached.data?.stripe_customer_id;
+
+    if (cachedPlan === 'trial' && hasStripeCustomer) {
+      try {
+        await billingService.syncSubscriptionWithStripe(userId);
+        userProfileCache.delete(userId);
+      } catch {
+        // ignore and fall back to cached
+      }
+    } else {
+      result = { ...cached.data };
+    }
+  }
+
+  if (!result) {
     // Optimized to use a single query to prevent connection pool exhaustion
     const profileResult = await prisma.profiles.findUnique({
       where: { id: userId },
       include: {
         companion_profiles: true,
         subscriptions: {
-          where: { status: 'active' },
+          where: { status: { in: ['active', 'trialing', 'past_due'] } },
           orderBy: { created_at: 'desc' },
           take: 1,
         },
@@ -163,8 +209,26 @@ export async function getProfile(userId: string) {
 
     if (!profileResult) return null;
 
-    const activeSubscription = profileResult.subscriptions[0];
+    let activeSubscription = profileResult.subscriptions[0];
     const latestEmergencyContact = profileResult.emergency_contacts[0];
+
+    // If we still think the user is on trial but they have a Stripe customer,
+    // try a sync to recover from missing/rewritten billing tables.
+    const maybePlanType = (activeSubscription?.plan_type || 'trial') as keyof typeof PLAN_LIMITS;
+    if (maybePlanType === 'trial' && profileResult.stripe_customer_id) {
+      try {
+        await billingService.syncSubscriptionWithStripe(userId);
+        activeSubscription = await prisma.subscriptions.findFirst({
+          where: {
+            user_id: userId,
+            status: { in: ['active', 'trialing', 'past_due'] },
+          },
+          orderBy: { created_at: 'desc' },
+        }) || activeSubscription;
+      } catch {
+        // ignore sync failures; fall back to DB state
+      }
+    }
 
     const completedSessionsCount = profileResult._count.app_sessions;
     const moodEntriesCount = profileResult._count.mood_entries;
