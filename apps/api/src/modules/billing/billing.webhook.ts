@@ -5,6 +5,29 @@ import { STRIPE_PRICE_IDS, PLAN_LIMITS } from './billing.constants';
 
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
+async function addSubscriptionAllowance(userId: string, minutesToAdd: number) {
+  if (!minutesToAdd || minutesToAdd <= 0) return;
+
+  const profile = await prisma.profiles.findUnique({
+    where: { id: userId },
+    select: { credits: true, credits_seconds: true },
+  });
+
+  const existingMinutes = profile?.credits ?? 0;
+  const existingSeconds =
+    profile?.credits_seconds && profile.credits_seconds > 0
+      ? profile.credits_seconds
+      : existingMinutes * 60;
+
+  const newSeconds = existingSeconds + minutesToAdd * 60;
+  const newMinutes = newSeconds === 0 ? 0 : Math.ceil(newSeconds / 60);
+
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: { credits: newMinutes, credits_seconds: newSeconds },
+  });
+}
+
 export async function stripeWebhookHandler(request: FastifyRequest, reply: FastifyReply) {
   if (!WEBHOOK_SECRET) {
     request.log.error('STRIPE_WEBHOOK_SECRET is not set');
@@ -238,58 +261,71 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
   // Fetch full subscription details
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
-  // Update or create subscription in DB
-  // We should find by user_id or create.
-  // First, check if we already have this subscription tracked (idempotency)
-  let existingSub = await prisma.subscriptions.findFirst({
-      where: { stripe_sub_id: subscription.id }
+  const existingByStripeId = await prisma.subscriptions.findFirst({
+    where: { stripe_sub_id: subscription.id },
+    select: { id: true, plan_type: true },
   });
 
-  if (!existingSub) {
-      // If not, look for a user's subscription to upgrade (e.g. trial)
-      existingSub = await prisma.subscriptions.findFirst({
-          where: { user_id: userId },
-          orderBy: { created_at: 'desc' }
-      });
-  }
+  const pendingCandidate = !existingByStripeId
+    ? await prisma.subscriptions.findFirst({
+        where: {
+          user_id: userId,
+          stripe_sub_id: null,
+          status: { in: ['incomplete', 'incomplete_expired'] },
+          plan_type: planType,
+        },
+        orderBy: { created_at: 'desc' },
+        select: { id: true, plan_type: true },
+      })
+    : null;
 
-  if (existingSub) {
-      await prisma.subscriptions.update({
-          where: { id: existingSub.id },
-          data: {
-              stripe_sub_id: subscription.id,
-              status: subscription.status,
-              plan_type: planType,
-              start_date: new Date(subscription.current_period_start * 1000),
-              end_date: new Date(subscription.current_period_end * 1000),
-              next_billing_at: new Date(subscription.current_period_end * 1000),
-          }
-      });
-  } else {
-      await prisma.subscriptions.create({
-          data: {
-              user_id: userId,
-              stripe_sub_id: subscription.id,
-              status: subscription.status,
-              plan_type: planType,
-              start_date: new Date(subscription.current_period_start * 1000),
-              end_date: new Date(subscription.current_period_end * 1000),
-              next_billing_at: new Date(subscription.current_period_end * 1000),
-          }
-      });
-  }
+  const previousPlanType =
+    (existingByStripeId?.plan_type || pendingCandidate?.plan_type || null) as string | null;
 
-  // Update credits based on plan
-  let credits = 0;
-  if (planType === 'core') credits = PLAN_LIMITS.core.credits;
-  else if (planType === 'pro') credits = PLAN_LIMITS.pro.credits;
-  else if (planType === 'trial') credits = PLAN_LIMITS.trial.credits;
-
-  if (credits > 0) {
-    await prisma.profiles.update({
-      where: { id: userId },
-      data: { credits }, 
+  if (existingByStripeId) {
+    await prisma.subscriptions.update({
+      where: { id: existingByStripeId.id },
+      data: {
+        status: subscription.status,
+        plan_type: planType,
+        start_date: new Date(subscription.current_period_start * 1000),
+        end_date: new Date(subscription.current_period_end * 1000),
+        next_billing_at: new Date(subscription.current_period_end * 1000),
+      },
     });
+  } else if (pendingCandidate) {
+    await prisma.subscriptions.update({
+      where: { id: pendingCandidate.id },
+      data: {
+        stripe_sub_id: subscription.id,
+        status: subscription.status,
+        plan_type: planType,
+        start_date: new Date(subscription.current_period_start * 1000),
+        end_date: new Date(subscription.current_period_end * 1000),
+        next_billing_at: new Date(subscription.current_period_end * 1000),
+      },
+    });
+  } else {
+    await prisma.subscriptions.create({
+      data: {
+        user_id: userId,
+        stripe_sub_id: subscription.id,
+        status: subscription.status,
+        plan_type: planType,
+        start_date: new Date(subscription.current_period_start * 1000),
+        end_date: new Date(subscription.current_period_end * 1000),
+        next_billing_at: new Date(subscription.current_period_end * 1000),
+      },
+    });
+  }
+
+  const shouldGrant =
+    ['active', 'trialing'].includes(subscription.status) &&
+    (!existingByStripeId || previousPlanType !== planType);
+
+  if (shouldGrant) {
+    const planCredits = PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS]?.credits ?? 0;
+    await addSubscriptionAllowance(userId, planCredits);
   }
 }
 
@@ -300,10 +336,56 @@ async function handleSubscriptionUpdated(subscription: any) {
 
   if (!existingSub) return;
 
+  // Detect plan change from Stripe price ID (covers Billing Portal upgrades/downgrades)
+  // Webhook payloads can vary: price may be an object or a string ID.
+  const firstItem = subscription?.items?.data?.[0];
+  const priceId: string | undefined =
+    (typeof firstItem?.price === 'string'
+      ? firstItem.price
+      : firstItem?.price?.id) ||
+    // Older Stripe shapes sometimes include plan ID
+    (typeof firstItem?.plan === 'string'
+      ? firstItem.plan
+      : firstItem?.plan?.id);
+  let newPlanType: keyof typeof PLAN_LIMITS | null = null;
+  if (priceId === STRIPE_PRICE_IDS.core) newPlanType = 'core';
+  else if (priceId === STRIPE_PRICE_IDS.pro) newPlanType = 'pro';
+  else if (subscription?.metadata?.planType && PLAN_LIMITS[subscription.metadata.planType as keyof typeof PLAN_LIMITS]) {
+    newPlanType = subscription.metadata.planType as keyof typeof PLAN_LIMITS;
+  }
+
+  const previousPlanType = (existingSub.plan_type || 'trial') as keyof typeof PLAN_LIMITS;
+  const planChanged = !!newPlanType && previousPlanType !== newPlanType;
+
+  if (planChanged && newPlanType) {
+    const planCredits = PLAN_LIMITS[newPlanType]?.credits ?? 0;
+    if (planCredits > 0) {
+      const profile = await prisma.profiles.findUnique({
+        where: { id: existingSub.user_id },
+        select: { credits: true, credits_seconds: true },
+      });
+
+      const existingMinutes = profile?.credits ?? 0;
+      const existingSeconds =
+        profile?.credits_seconds && profile.credits_seconds > 0
+          ? profile.credits_seconds
+          : existingMinutes * 60;
+
+      await prisma.profiles.update({
+        where: { id: existingSub.user_id },
+        data: {
+          credits: existingMinutes + planCredits,
+          credits_seconds: existingSeconds + planCredits * 60,
+        },
+      });
+    }
+  }
+
   await prisma.subscriptions.update({
     where: { id: existingSub.id },
     data: {
       status: subscription.status,
+      ...(planChanged && newPlanType ? { plan_type: newPlanType } : {}),
       end_date: new Date(subscription.current_period_end * 1000),
       next_billing_at: new Date(subscription.current_period_end * 1000),
     },
@@ -327,10 +409,11 @@ async function handleSubscriptionDeleted(subscription: any) {
 }
 
 async function handleInvoicePaymentSucceeded(invoice: any, request: FastifyRequest) {
-  if (invoice.billing_reason === 'subscription_create') {
-    // Already handled by checkout.session.completed usually, or we can double check
-    return;
-  }
+  // IMPORTANT:
+  // - Upgrades/downgrades should NOT reset credits (we carry-over on checkout/session handling).
+  // - Only true cycle renewals should reset the subscription bucket back to the plan allowance.
+  const billingReason = invoice.billing_reason as string | undefined;
+  if (billingReason === 'subscription_create') return;
 
   const subscriptionId = invoice.subscription;
   if (!subscriptionId) return;
@@ -351,19 +434,31 @@ async function handleInvoicePaymentSucceeded(invoice: any, request: FastifyReque
       },
     });
 
-    // Renew credits
-    // In a real app, you might check if credits should rollover or reset
-    // Here we reset them based on the plan again
-    let credits = 0;
-    const planType = existingSub.plan_type;
-    if (planType === 'core') credits = 200;
-    else if (planType === 'pro') credits = 400;
-    else if (planType === 'trial') credits = 30;
+    // Never overwrite remaining credits after payments.
+    // On renewals, we ADD the new cycle allowance on top of any remaining minutes.
+    // This guarantees users never lose unused time (trial -> paid, paid -> upgraded, renewals).
+    if (billingReason === 'subscription_cycle') {
+      const planType = (existingSub.plan_type || 'trial') as keyof typeof PLAN_LIMITS;
+      const planCredits = PLAN_LIMITS[planType]?.credits ?? 0;
+      if (planCredits <= 0) return;
 
-    if (credits > 0) {
+      const profile = await prisma.profiles.findUnique({
+        where: { id: existingSub.user_id },
+        select: { credits: true, credits_seconds: true },
+      });
+
+      const existingMinutes = profile?.credits ?? 0;
+      const existingSeconds =
+        profile?.credits_seconds && profile.credits_seconds > 0
+          ? profile.credits_seconds
+          : existingMinutes * 60;
+
       await prisma.profiles.update({
         where: { id: existingSub.user_id },
-        data: { credits }, 
+        data: {
+          credits: existingMinutes + planCredits,
+          credits_seconds: existingSeconds + planCredits * 60,
+        },
       });
     }
   }

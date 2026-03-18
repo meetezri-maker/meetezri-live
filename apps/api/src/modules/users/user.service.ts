@@ -275,10 +275,9 @@ export async function getProfile(userId: string) {
       credits_remaining: totalSeconds === 0 ? 0 : Math.ceil(totalSeconds / 60),
       credits_remaining_seconds: totalSeconds,
       credits_total:
-        (planDetails?.credits || 30) +
-        (profileResult.purchased_credits || 0),
+        totalSeconds === 0 ? 0 : Math.ceil(totalSeconds / 60),
       credits_total_seconds:
-        (planDetails?.credits || 30) * 60 + purchasedSeconds,
+        totalSeconds,
       subscription_plan: internalPlanType,
       subscriptions: activeSubscription ? [activeSubscription] : [],
     };
@@ -315,6 +314,19 @@ export async function getProfile(userId: string) {
 }
 
 export async function getCredits(userId: string) {
+  const activeSub = await prisma.subscriptions.findFirst({
+    where: {
+      user_id: userId,
+      status: { in: ['active', 'trialing', 'past_due'] },
+    },
+    orderBy: { created_at: 'desc' },
+    select: {
+      start_date: true,
+      end_date: true,
+      created_at: true,
+    },
+  });
+
   const profile = await prisma.profiles.findUnique({
     where: { id: userId },
     select: {
@@ -336,6 +348,23 @@ export async function getCredits(userId: string) {
       : (profile?.purchased_credits || 0) * 60;
   const totalSeconds = subscriptionSeconds + purchasedSeconds;
 
+  // "Subscription total" should reflect the full allowance accrued this billing period,
+  // including stacked upgrades: total = remaining + used_this_period.
+  const periodStart = activeSub?.start_date || activeSub?.created_at || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const periodEnd = activeSub?.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+  const usedAgg = await prisma.app_sessions.aggregate({
+    where: {
+      user_id: userId,
+      status: 'completed',
+      ended_at: { not: null, gte: periodStart, lte: periodEnd },
+    },
+    _sum: { billed_seconds: true },
+  });
+
+  const usedSecondsThisPeriod = Math.max(0, usedAgg._sum.billed_seconds || 0);
+  const subscriptionTotalSeconds = subscriptionSeconds + usedSecondsThisPeriod;
+
   return {
     credits: totalSeconds === 0 ? 0 : Math.ceil(totalSeconds / 60),
     subscription:
@@ -345,6 +374,8 @@ export async function getCredits(userId: string) {
     credits_seconds: totalSeconds,
     subscription_seconds: subscriptionSeconds,
     purchased_seconds: purchasedSeconds,
+    subscription_total: subscriptionTotalSeconds === 0 ? 0 : Math.ceil(subscriptionTotalSeconds / 60),
+    subscription_total_seconds: subscriptionTotalSeconds,
   };
 }
 
