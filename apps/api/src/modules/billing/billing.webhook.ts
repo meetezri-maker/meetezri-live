@@ -48,8 +48,13 @@ export async function stripeWebhookHandler(request: FastifyRequest, reply: Fasti
       case 'customer.subscription.deleted':
         await handleSubscriptionDeleted(event.data.object as any);
         break;
+      case 'invoice.created':
+      case 'invoice.finalized':
+        await tryAnnotateInvoiceWithMinutes(event.data.object as any, request);
+        break;
       case 'invoice.payment_succeeded':
-        await handleInvoicePaymentSucceeded(event.data.object as any);
+        await tryAnnotateInvoiceWithMinutes(event.data.object as any, request);
+        await handleInvoicePaymentSucceeded(event.data.object as any, request);
         break;
       default:
         request.log.info({ type: event.type }, 'Unhandled event type');
@@ -62,6 +67,88 @@ export async function stripeWebhookHandler(request: FastifyRequest, reply: Fasti
   }
 
   return reply.send({ received: true });
+}
+
+async function tryAnnotateInvoiceWithMinutes(invoiceEvent: any, request: FastifyRequest) {
+  const invoiceId = invoiceEvent?.id as string | undefined;
+  if (!invoiceId) return;
+
+  try {
+    const invoice = await stripe.invoices.retrieve(invoiceId, {
+      expand: ['lines.data.price'],
+    });
+
+    const existingCustomFields = (((invoice as any).custom_fields as any[]) || []) as any[];
+    const hasMinutesCustomField = existingCustomFields.some(
+      (f: any) => (f?.name || '').toLowerCase() === 'minutes'
+    );
+    const footer: string = (invoice as any).footer || '';
+    const hasMinutesInFooter = footer.toLowerCase().includes('minutes:');
+
+    const creditsFromMetadata = invoice.metadata?.credits
+      ? parseInt(invoice.metadata.credits, 10)
+      : undefined;
+
+    const creditsFromLines = (invoice.lines?.data || []).reduce((sum, line: any) => {
+      const value = line.metadata?.credits
+        ? parseInt(line.metadata.credits, 10)
+        : 0;
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+
+    const totalCredits =
+      (Number.isFinite(creditsFromMetadata || NaN) ? creditsFromMetadata || 0 : 0) +
+      creditsFromLines;
+
+    const planTypeFromMetadata =
+      (invoice.metadata?.planType as string | undefined) ||
+      (invoice.metadata?.plan_type as string | undefined);
+
+    const priceIds = (invoice.lines?.data || [])
+      .map((line: any) => line.price?.id)
+      .filter((id: any): id is string => typeof id === 'string');
+
+    let planTypeFromPrice: keyof typeof PLAN_LIMITS | null = null;
+    if (priceIds.includes(STRIPE_PRICE_IDS.core)) planTypeFromPrice = 'core';
+    else if (priceIds.includes(STRIPE_PRICE_IDS.pro)) planTypeFromPrice = 'pro';
+
+    const planType = (planTypeFromPrice || (planTypeFromMetadata as any) || null) as
+      | keyof typeof PLAN_LIMITS
+      | null;
+
+    const minutes =
+      totalCredits > 0
+        ? totalCredits
+        : planType && PLAN_LIMITS[planType]
+          ? PLAN_LIMITS[planType].credits
+          : null;
+
+    if (!minutes || !Number.isFinite(minutes) || minutes <= 0) return;
+
+    // Put minutes into the footer too because Stripe PDFs always render it,
+    // while custom_fields may not appear depending on template/settings.
+    const footerLine = `Minutes: ${minutes}`;
+    const nextFooter =
+      hasMinutesInFooter
+        ? footer
+        : footer
+          ? `${footer}\n${footerLine}`
+          : footerLine;
+
+    await stripe.invoices.update(invoice.id, {
+      metadata: {
+        ...(invoice.metadata || {}),
+        minutes_purchased: String(minutes),
+        plan_type: planType ? String(planType) : (invoice.metadata as any)?.plan_type,
+      },
+      footer: nextFooter,
+      custom_fields: hasMinutesCustomField
+        ? existingCustomFields
+        : [...existingCustomFields, { name: 'Minutes', value: String(minutes) }],
+    });
+  } catch (error: any) {
+    request.log.warn({ error: error?.message || error, invoiceId }, 'Failed to annotate invoice with minutes');
+  }
 }
 
 async function handleCheckoutSessionCompleted(session: any, request: FastifyRequest) {
@@ -239,7 +326,7 @@ async function handleSubscriptionDeleted(subscription: any) {
   });
 }
 
-async function handleInvoicePaymentSucceeded(invoice: any) {
+async function handleInvoicePaymentSucceeded(invoice: any, request: FastifyRequest) {
   if (invoice.billing_reason === 'subscription_create') {
     // Already handled by checkout.session.completed usually, or we can double check
     return;

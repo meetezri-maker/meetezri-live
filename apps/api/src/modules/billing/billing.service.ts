@@ -362,18 +362,66 @@ export async function getInvoicesForUser(userId: string) {
   const invoices = await stripe.invoices.list({
     customer: profile.stripe_customer_id,
     limit: 50,
+    expand: ['data.lines.data.price'],
   });
 
-  const result = invoices.data.map((invoice) => ({
-    id: invoice.id,
-    status: invoice.status,
-    amount_due: (invoice.amount_due || 0) / 100,
-    currency: invoice.currency,
-    created: new Date(invoice.created * 1000).toISOString(),
-    hosted_invoice_url: invoice.hosted_invoice_url || null,
-    invoice_pdf: invoice.invoice_pdf || null,
-    description: invoice.description || null,
-  }));
+  const planTypeByPriceId = new Map<string, keyof typeof PLAN_LIMITS>([
+    [STRIPE_PRICE_IDS.core, 'core'],
+    [STRIPE_PRICE_IDS.pro, 'pro'],
+  ]);
+
+  const result = invoices.data.map((invoice) => {
+    const creditsFromMetadata = invoice.metadata?.credits
+      ? parseInt(invoice.metadata.credits, 10)
+      : undefined;
+
+    const creditsFromLines = (invoice.lines?.data || []).reduce((sum, line) => {
+      const value = line.metadata?.credits
+        ? parseInt(line.metadata.credits, 10)
+        : 0;
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+
+    const totalCredits =
+      (Number.isFinite(creditsFromMetadata || NaN) ? creditsFromMetadata || 0 : 0) +
+      creditsFromLines;
+
+    const planTypeFromMetadata =
+      (invoice.metadata?.planType as string | undefined) ||
+      (invoice.metadata?.plan_type as string | undefined);
+
+    const planTypeFromPriceId =
+      (invoice.lines?.data || [])
+        .map((line) => line.price?.id)
+        .filter((id): id is string => typeof id === 'string')
+        .map((id) => planTypeByPriceId.get(id))
+        .find((value): value is keyof typeof PLAN_LIMITS => !!value);
+
+    const planType =
+      (planTypeFromPriceId as string | undefined) ||
+      (planTypeFromMetadata as string | undefined) ||
+      null;
+
+    const minutesPurchased =
+      totalCredits > 0
+        ? totalCredits
+        : planType && PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS]
+          ? PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS].credits
+          : null;
+
+    return {
+      id: invoice.id,
+      status: invoice.status,
+      amount_due: (invoice.amount_due || 0) / 100,
+      currency: invoice.currency,
+      created: new Date(invoice.created * 1000).toISOString(),
+      hosted_invoice_url: invoice.hosted_invoice_url || null,
+      invoice_pdf: invoice.invoice_pdf || null,
+      description: invoice.description || null,
+      minutes_purchased: minutesPurchased,
+      plan_type: planType,
+    };
+  });
 
   userInvoicesCache.set(userId, { data: result, timestamp: now });
   return result;
