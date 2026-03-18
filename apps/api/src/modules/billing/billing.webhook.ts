@@ -72,6 +72,19 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
     return;
   }
 
+  const customerId = session.customer as string | undefined;
+  if (customerId) {
+    // Persist linkage so we can always re-sync from Stripe even after DB restores.
+    try {
+      await prisma.profiles.update({
+        where: { id: userId },
+        data: { stripe_customer_id: customerId },
+      });
+    } catch (error) {
+      request.log.error({ error, userId, customerId }, 'Failed to update stripe_customer_id on profile');
+    }
+  }
+
   // Handle one-time credit purchase
   if (session.metadata?.type === 'credits') {
     const credits = parseInt(session.metadata.credits || '0', 10);
@@ -134,7 +147,6 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
   }
 
   const subscriptionId = session.subscription as string;
-  const customerId = session.customer as string;
 
   // Fetch full subscription details
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);

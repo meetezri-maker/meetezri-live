@@ -48,12 +48,14 @@ export async function signupHandler(
     if (createError) throw createError;
     if (!user.user) throw new Error('Failed to create user');
 
-    // Link subscription if paid flow
+    const fullName = `${firstName} ${lastName}`.trim();
+
     if (request.body.stripe_session_id) {
       try {
+        await userService.createProfileForPaidSignup(user.user.id, email, fullName);
         await billingService.linkSubscriptionToUser(user.user.id, request.body.stripe_session_id);
       } catch (error) {
-        request.log.error({ error }, 'Failed to link subscription to new user');
+        request.log.error({ error }, 'Failed to attach paid subscription during signup');
       }
     }
 
