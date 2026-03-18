@@ -557,6 +557,11 @@ export function Billing() {
                         <p className="text-xs text-muted-foreground">
                           {invoice.created ? new Date(invoice.created).toLocaleDateString() : ''} •{" "}
                           <span className="capitalize">{invoice.status}</span>
+                          {typeof invoice.minutes_purchased === 'number' && invoice.minutes_purchased > 0 && (
+                            <>
+                              {" "}• {invoice.minutes_purchased} min
+                            </>
+                          )}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -574,7 +579,7 @@ export function Billing() {
                             variant="outline"
                             onClick={() => {
                               if (invoice.hosted_invoice_url) {
-                                window.location.href = invoice.hosted_invoice_url;
+                                window.open(invoice.hosted_invoice_url, "_blank", "noopener,noreferrer");
                               }
                             }}
                             className="flex items-center gap-2"
@@ -589,7 +594,7 @@ export function Billing() {
                             variant="ghost"
                             onClick={() => {
                               if (invoice.invoice_pdf) {
-                                window.location.href = invoice.invoice_pdf;
+                                window.open(invoice.invoice_pdf, "_blank", "noopener,noreferrer");
                               }
                             }}
                           >
