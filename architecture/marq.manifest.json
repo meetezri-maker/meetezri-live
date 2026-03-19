@@ -1,0 +1,369 @@
+{
+  "schemaVersion": "marq.manifest.generation.v1",
+  "generatedAt": "2026-03-18",
+  "projectOverview": {
+    "repoRoot": ".",
+    "workspaceTooling": {
+      "packageManager": {
+        "tool": "pnpm",
+        "evidence": ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"]
+      },
+      "additionalLockfilesDetected": {
+        "packageLock": {
+          "files": ["package-lock.json", "apps/web/package-lock.json"],
+          "evidence": ["package-lock.json", "apps/web/package-lock.json"]
+        }
+      },
+      "typescript": {
+        "evidence": ["tsconfig.json", "apps/api/tsconfig.json", "apps/web/tsconfig.json", "apps/realtime/tsconfig.json"]
+      }
+    },
+    "workspaces": [
+      {
+        "name": "apps/api",
+        "kind": "service",
+        "language": "ts",
+        "runtime": "node",
+        "packageEvidence": "apps/api/package.json"
+      },
+      {
+        "name": "apps/web",
+        "kind": "app",
+        "language": "ts",
+        "runtime": "browser",
+        "packageEvidence": "apps/web/package.json"
+      },
+      {
+        "name": "apps/realtime",
+        "kind": "service",
+        "language": "ts",
+        "runtime": "node",
+        "packageEvidence": "apps/realtime/package.json"
+      },
+      {
+        "name": "packages/shared",
+        "kind": "package",
+        "language": "ts",
+        "runtime": "node",
+        "packageEvidence": "packages/shared/package.json"
+      }
+    ]
+  },
+  "domainMap": [
+    {
+      "domain": "api/modules/billing",
+      "directory": "apps/api/src/modules/billing",
+      "evidence": [
+        "apps/api/src/modules/billing/billing.routes.ts",
+        "apps/api/src/modules/billing/index.ts",
+        "apps/api/src/modules/billing/services/subscription.service.ts",
+        "apps/api/src/modules/billing/services/invoices.service.ts",
+        "apps/api/src/modules/billing/services/payg.service.ts",
+        "apps/api/src/modules/billing/services/stripe-customer.service.ts",
+        "apps/api/src/modules/billing/billing.validation.ts",
+        "apps/api/src/modules/billing/billing.cache.ts",
+        "apps/api/src/modules/billing/billing.config.ts",
+        "apps/api/src/modules/billing/billing.service.ts",
+        "apps/api/src/modules/billing/billing.webhook.ts"
+      ]
+    },
+    {
+      "domain": "api/modules/users",
+      "directory": "apps/api/src/modules/users",
+      "evidence": [
+        "apps/api/src/modules/users/user.routes.ts",
+        "apps/api/src/modules/users/emergency-contacts.routes.ts",
+        "apps/api/src/modules/users/user.service.ts"
+      ]
+    },
+    {
+      "domain": "api/modules/email",
+      "directory": "apps/api/src/modules/email",
+      "evidence": [
+        "apps/api/src/modules/email/email.routes.ts",
+        "apps/api/src/modules/email/email.service.ts",
+        "apps/api/src/modules/email/email.schema.ts"
+      ]
+    },
+    {
+      "domain": "api/modules/system-settings",
+      "directory": "apps/api/src/modules/system-settings",
+      "evidence": [
+        "apps/api/src/modules/system-settings/system-settings.routes.ts",
+        "apps/api/src/modules/system-settings/system-settings.schema.ts"
+      ]
+    },
+    {
+      "domain": "api/modules/sessions",
+      "directory": "apps/api/src/modules/sessions",
+      "evidence": [
+        "apps/api/src/modules/sessions/sessions.routes.ts",
+        "apps/api/src/modules/sessions/sessions.schema.ts"
+      ]
+    },
+    {
+      "domain": "api/modules/moods",
+      "directory": "apps/api/src/modules/moods",
+      "evidence": [
+        "apps/api/src/modules/moods/moods.routes.ts",
+        "apps/api/src/modules/moods/moods.schema.ts"
+      ]
+    },
+    {
+      "domain": "api/modules/journal",
+      "directory": "apps/api/src/modules/journal",
+      "evidence": [
+        "apps/api/src/modules/journal/journal.routes.ts",
+        "apps/api/src/modules/journal/journal.schema.ts"
+      ]
+    },
+    {
+      "domain": "api/modules/wellness",
+      "directory": "apps/api/src/modules/wellness",
+      "evidence": [
+        "apps/api/src/modules/wellness/wellness.routes.ts",
+        "apps/api/src/modules/wellness/wellness.schema.ts"
+      ]
+    },
+    {
+      "domain": "api/modules/sleep",
+      "directory": "apps/api/src/modules/sleep",
+      "evidence": [
+        "apps/api/src/modules/sleep/sleep.routes.ts",
+        "apps/api/src/modules/sleep/sleep.schema.ts"
+      ]
+    },
+    {
+      "domain": "api/modules/habits",
+      "directory": "apps/api/src/modules/habits",
+      "evidence": [
+        "apps/api/src/modules/habits/habits.routes.ts",
+        "apps/api/src/modules/habits/habits.schema.ts"
+      ]
+    },
+    {
+      "domain": "api/modules/notifications",
+      "directory": "apps/api/src/modules/notifications",
+      "evidence": [
+        "apps/api/src/modules/notifications/notifications.routes.ts",
+        "apps/api/src/modules/notifications/notifications.schema.ts"
+      ]
+    },
+    {
+      "domain": "api/modules/ai-avatars",
+      "directory": "apps/api/src/modules/ai-avatars",
+      "evidence": [
+        "apps/api/src/modules/ai-avatars/ai-avatars.routes.ts",
+        "apps/api/src/modules/ai-avatars/ai-avatars.schema.ts"
+      ]
+    },
+    {
+      "domain": "api/modules/admin",
+      "directory": "apps/api/src/modules/admin",
+      "evidence": [
+        "apps/api/src/modules/admin/admin.routes.ts",
+        "apps/api/src/modules/admin/admin.schema.ts"
+      ]
+    },
+    {
+      "domain": "web/app",
+      "directory": "apps/web/src/app",
+      "evidence": ["apps/web/src/app/App.tsx"]
+    },
+    {
+      "domain": "shared",
+      "directory": "packages/shared/src",
+      "evidence": ["packages/shared/src/index.ts"]
+    }
+  ],
+  "serviceMap": [
+    {
+      "service": "api",
+      "workspace": "apps/api",
+      "entrypoint": "apps/api/src/app.ts",
+      "evidence": ["apps/api/src/app.ts"],
+      "contractsEvidence": [
+        "apps/api/src/modules/billing/billing.schema.ts",
+        "apps/api/src/modules/users/user.schema.ts",
+        "apps/api/src/modules/email/email.schema.ts"
+      ]
+    },
+    {
+      "service": "realtime",
+      "workspace": "apps/realtime",
+      "entrypoint": "apps/realtime/src/server.ts",
+      "evidence": ["apps/realtime/src/server.ts"]
+    },
+    {
+      "service": "web",
+      "workspace": "apps/web",
+      "entrypoint": "apps/web/src/main.tsx",
+      "evidence": ["apps/web/src/main.tsx", "apps/web/src/app/App.tsx", "apps/web/vite.config.ts"]
+    }
+  ],
+  "dependencyGraph": {
+    "nodes": [
+      { "id": "workspace:apps/api", "evidence": ["apps/api/package.json"] },
+      { "id": "workspace:apps/web", "evidence": ["apps/web/package.json"] },
+      { "id": "workspace:apps/realtime", "evidence": ["apps/realtime/package.json"] },
+      { "id": "workspace:packages/shared", "evidence": ["packages/shared/package.json"] },
+      { "id": "domain:api/modules/billing", "evidence": ["apps/api/src/modules/billing/billing.routes.ts"] },
+      { "id": "domain:api/modules/users", "evidence": ["apps/api/src/modules/users/user.routes.ts"] },
+      { "id": "domain:web/app", "evidence": ["apps/web/src/app/App.tsx"] },
+      { "id": "external:supabase", "evidence": ["apps/api/src/config/supabase.ts", "apps/web/src/lib/supabase.ts", "apps/realtime/src/config/supabase.ts"] },
+      { "id": "external:stripe", "evidence": ["apps/api/src/config/stripe.ts"] },
+      { "id": "external:postgresql", "evidence": ["apps/api/prisma/schema.prisma"] },
+      { "id": "external:prisma", "evidence": ["apps/api/src/lib/prisma.ts"] }
+    ],
+    "edges": [
+      {
+        "from": "workspace:apps/api",
+        "to": "workspace:packages/shared",
+        "type": "workspace-dependency",
+        "evidence": ["apps/api/package.json"]
+      },
+      {
+        "from": "workspace:apps/realtime",
+        "to": "workspace:packages/shared",
+        "type": "workspace-dependency",
+        "evidence": ["apps/realtime/package.json"]
+      },
+      {
+        "from": "workspace:apps/api",
+        "to": "domain:api/modules/billing",
+        "type": "contains-domain",
+        "evidence": ["apps/api/src/app.ts", "apps/api/src/modules/billing/billing.routes.ts"]
+      },
+      {
+        "from": "workspace:apps/api",
+        "to": "domain:api/modules/users",
+        "type": "contains-domain",
+        "evidence": ["apps/api/src/app.ts", "apps/api/src/modules/users/user.routes.ts"]
+      },
+      {
+        "from": "domain:api/modules/billing",
+        "to": "external:stripe",
+        "type": "uses-external",
+        "evidence": ["apps/api/src/modules/billing/billing.webhook.ts", "apps/api/src/modules/billing/billing.service.ts"]
+      },
+      {
+        "from": "workspace:apps/api",
+        "to": "external:supabase",
+        "type": "uses-external",
+        "evidence": ["apps/api/src/config/supabase.ts", "apps/api/src/app.ts"]
+      },
+      {
+        "from": "workspace:apps/realtime",
+        "to": "external:supabase",
+        "type": "uses-external",
+        "evidence": ["apps/realtime/src/config/supabase.ts", "apps/realtime/src/server.ts"]
+      },
+      {
+        "from": "workspace:apps/web",
+        "to": "external:supabase",
+        "type": "uses-external",
+        "evidence": ["apps/web/src/lib/supabase.ts"]
+      },
+      {
+        "from": "workspace:apps/api",
+        "to": "external:prisma",
+        "type": "uses-external",
+        "evidence": ["apps/api/src/lib/prisma.ts"]
+      },
+      {
+        "from": "external:prisma",
+        "to": "external:postgresql",
+        "type": "connects-to",
+        "evidence": ["apps/api/prisma/schema.prisma"]
+      }
+    ]
+  },
+  "architectureRiskRegister": [
+    {
+      "riskId": "RISK-INMEM-RATELIMIT",
+      "title": "In-memory rate limiting state",
+      "evidence": ["apps/api/src/plugins/simple-rate-limit.ts"],
+      "severity": "medium"
+    },
+    {
+      "riskId": "RISK-INMEM-AUTHCACHE",
+      "title": "In-memory user role/permission cache",
+      "evidence": ["apps/api/src/plugins/auth.ts"],
+      "severity": "medium"
+    },
+    {
+      "riskId": "RISK-INMEM-BILLINGCACHE",
+      "title": "In-memory billing invoice/subscription caches",
+      "evidence": ["apps/api/src/modules/billing/billing.service.ts"],
+      "severity": "medium"
+    },
+    {
+      "riskId": "RISK-WEBHOOK-ACK-ERROR",
+      "title": "Webhook handler acknowledges even when processing fails",
+      "evidence": ["apps/api/src/modules/billing/billing.webhook.ts"],
+      "severity": "high"
+    },
+    {
+      "riskId": "RISK-REALTIME-CORS-STAR",
+      "title": "Realtime Socket.IO allows all origins",
+      "evidence": ["apps/realtime/src/server.ts"],
+      "severity": "medium"
+    },
+    {
+      "riskId": "RISK-DUP-LOCKFILES",
+      "title": "Multiple lockfiles indicate duplicate dependency engines",
+      "evidence": ["pnpm-lock.yaml", "package-lock.json", "apps/web/package-lock.json"],
+      "severity": "medium"
+    },
+    {
+      "riskId": "RISK-MISSING-TESTS",
+      "title": "No test/spec files detected",
+      "evidence": ["apps/api/package.json", "apps/realtime/package.json"],
+      "severity": "high",
+      "status": "MISSING_EVIDENCE",
+      "evidenceSearched": ["**/*.{test,spec}.{ts,tsx,js,jsx}", "**/__tests__/**"]
+    },
+    {
+      "riskId": "RISK-BULLMQ-UNUSED",
+      "title": "BullMQ dependency present but usage not evidenced",
+      "evidence": ["apps/api/package.json"],
+      "severity": "low",
+      "status": "MISSING_EVIDENCE"
+    }
+  ],
+  "systemHealthMetrics": {
+    "architectureScore": {
+      "start": 100,
+      "deductions": [
+        {
+          "rule": "duplicate engines",
+          "points": 10,
+          "evidence": ["pnpm-lock.yaml", "package-lock.json", "apps/web/package-lock.json"]
+        },
+        {
+          "rule": "missing tests",
+          "points": 8,
+          "evidence": ["apps/api/package.json", "apps/realtime/package.json"]
+        }
+      ],
+      "final": 82
+    },
+    "monolithicFilesOver2000Lines": {
+      "count": 0,
+      "evidence": ["apps/api/prisma/schema.prisma"]
+    },
+    "dbSchemaSources": {
+      "sources": ["apps/api/prisma/schema.prisma"],
+      "count": 1
+    },
+    "apiContractsPresent": {
+      "status": "present",
+      "evidence": [
+        "apps/api/src/modules/billing/billing.schema.ts",
+        "apps/api/src/modules/users/user.schema.ts",
+        "apps/api/src/modules/email/email.schema.ts",
+        "apps/api/src/modules/billing/billing.routes.ts"
+      ]
+    }
+  }
+}

@@ -41,14 +41,14 @@ export function Dashboard() {
   const [confirmEmailDismissed, setConfirmEmailDismissed] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
 
-  const isTrialUser = profile?.subscription_plan === "trial" || profile?.subscription_plan == null;
-  // Only show when email is not verified: trust API (email_verified / needs_email_verification) first
   const emailVerified = profile?.email_verified === true;
-  const needsEmailVerification =
-    !emailVerified &&
-    (profile?.needs_email_verification === true ||
-      (isTrialUser && user?.email_confirmed_at == null));
-  const showConfirmEmailPopup = needsEmailVerification && !confirmEmailDismissed;
+  const signupType = profile?.signup_type;
+  // Required behavior:
+  // - show popup only for trial users
+  // - show only on /app/dashboard
+  // - show only when email is NOT verified
+  const showConfirmEmailPopup =
+    signupType === "trial" && !emailVerified && !confirmEmailDismissed;
 
   const moodEmojis: Record<string, string> = {
     "Happy": "😊",
@@ -266,38 +266,30 @@ export function Dashboard() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex flex-col gap-2 sm:flex-row">
-            <Button variant="outline" onClick={() => setConfirmEmailDismissed(true)} className="w-full sm:w-auto">
-              I&apos;ll do it later
+            <Button
+              onClick={async () => {
+                // Required behavior: close popup immediately after click.
+                setConfirmEmailDismissed(true);
+                await handleResendVerification();
+              }}
+              disabled={resendLoading}
+              className="w-full sm:w-auto"
+            >
+              {resendLoading ? "Sending…" : "Email Verification"}
             </Button>
-            <Button onClick={handleResendVerification} disabled={resendLoading} className="w-full sm:w-auto">
-              {resendLoading ? "Sending…" : "Send Verification Email"}
+            <Button
+              variant="outline"
+              onClick={() => setConfirmEmailDismissed(true)}
+              className="w-full sm:w-auto"
+            >
+              Do It Later
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {/* Always-visible message for free trial users who need to verify email */}
-        {needsEmailVerification && (
-          <Alert className="mb-6 border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-100 [&>svg]:text-amber-600">
-            <Mail className="h-4 w-4" />
-            <AlertTitle>Verify your email to secure your free trial</AlertTitle>
-            <AlertDescription className="flex flex-col gap-2">
-              <span>
-                We sent a verification link to <strong>{user?.email}</strong>. Open your inbox, find the email from MeetEzri, and <strong>click the link in that email</strong> to verify your account. No need to log in again—just click the link.
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-fit border-amber-600 text-amber-800 hover:bg-amber-100 dark:border-amber-500 dark:text-amber-200 dark:hover:bg-amber-900/50"
-                onClick={handleResendVerification}
-                disabled={resendLoading}
-              >
-                {resendLoading ? "Sending…" : "Resend verification email"}
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
+        {/* Verification popup is the single source of truth for prompting on dashboard */}
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}

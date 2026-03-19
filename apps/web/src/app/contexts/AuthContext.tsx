@@ -70,8 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           window.history.replaceState(null, '', window.location.pathname);
         }
         applyAppearanceForUser(session.user);
-        // Optimize: Don't wait for profile fetch to unblock UI
-        setIsLoading(false);
+        // Wait for profile bootstrap so UI doesn't assume authentication.
         fetchProfile();
       } else {
         // No session, check for errors in URL
@@ -88,8 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         applyAppearanceForUser(session.user);
-        // Optimize: Don't wait for profile fetch to unblock UI
-        setIsLoading(false);
+        setIsLoading(true);
         fetchProfile();
       } else {
         setProfile(null);

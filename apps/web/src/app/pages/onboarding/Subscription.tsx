@@ -7,7 +7,6 @@ import { SUBSCRIPTION_PLANS, PlanTier } from "../../utils/subscriptionPlans";
 import { Check, Loader2, Sparkles, Zap, Crown } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,7 +32,8 @@ export function OnboardingSubscription() {
   const [viewMode, setViewMode] = useState<'list' | 'single'>('list');
 
   const form = useForm<SubscriptionValues>({
-    resolver: zodResolver(subscriptionSchema),
+    // Cast to avoid Zod minor-version type mismatches between deps.
+    resolver: zodResolver(subscriptionSchema as any),
     defaultValues: {
       selectedPlan: "trial",
     },
@@ -52,43 +52,16 @@ export function OnboardingSubscription() {
   const onSubmit = async (values: SubscriptionValues) => {
     setIsProcessing(true);
     try {
-      console.log("Processing subscription for plan:", values.selectedPlan);
-      
-      if (values.selectedPlan === "trial") {
-        toast.info("Activating your free trial...");
-        // For trial, just create subscription and move on
-        const result = await api.billing.createSubscription({
-          plan_type: "trial",
-          billing_cycle: "monthly"
-        });
-        console.log("Trial subscription result:", result);
-        
-        // Navigate to wellness baseline
-        navigate("/onboarding/wellness-baseline");
-      } else {
-        toast.info("Redirecting to checkout...");
-        // For paid plans, redirect to Stripe
-        // We need to provide full URL for success/cancel
-        const origin = window.location.origin;
-        const successUrl = `${origin}/onboarding/wellness-baseline?session_id={CHECKOUT_SESSION_ID}`;
-        const cancelUrl = `${origin}/onboarding/subscription`;
-
-        const result = await api.billing.createSubscription({
-          plan_type: values.selectedPlan,
-          billing_cycle: "monthly",
-          successUrl,
-          cancelUrl
-        });
-        console.log("Paid subscription result:", result);
-
-        if (result.checkoutUrl) {
-          window.location.href = result.checkoutUrl;
-        } else if (result.subscription) {
-          // Fallback if backend handled it without checkout (e.g. 100% coupon or error in logic)
-          console.warn("Received subscription object for paid plan instead of checkout URL");
-          navigate("/onboarding/wellness-baseline");
-        }
+      // Subscription/billing must not happen inside onboarding for plan buyers.
+      // Signup flow already created billing/subscription (or the trialDetails step did it).
+      try {
+        window.localStorage.setItem("selectedPlan", values.selectedPlan);
+      } catch {
+        // ignore storage errors
       }
+
+      toast.success("Plan selected. Continuing onboarding...");
+      navigate("/onboarding/wellness-baseline");
     } catch (error) {
       console.error("Subscription error:", error);
       toast.error("Failed to process subscription selection");

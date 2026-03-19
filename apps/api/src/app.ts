@@ -108,15 +108,23 @@ app.register(rawBody, {
 });
 
 // Check if secret is Base64 (common for Supabase) and decode it if necessary
-const rawSecret = process.env.SUPABASE_JWT_SECRET || 'supersecret';
-let secret: string | Buffer = rawSecret;
-if (rawSecret.length > 20 && !rawSecret.includes(' ') && rawSecret.endsWith('=')) {
-  try {
-    secret = Buffer.from(rawSecret, 'base64');
-    console.log('Detected Base64 JWT Secret, decoded to buffer.');
-  } catch (e) {
-    console.log('Failed to decode JWT Secret as Base64, using as string.');
+const rawSecret = process.env.SUPABASE_JWT_SECRET;
+let secret: string | Buffer | undefined;
+if (rawSecret) {
+  // If the secret is Base64 (common for Supabase), decode it; otherwise use as-is.
+  if (rawSecret.length > 20 && !rawSecret.includes(' ') && rawSecret.endsWith('=')) {
+    try {
+      secret = Buffer.from(rawSecret, 'base64');
+      console.log('Detected Base64 JWT Secret, decoded to buffer.');
+    } catch (e) {
+      console.log('Failed to decode JWT Secret as Base64, using as string.');
+      secret = rawSecret;
+    }
+  } else {
+    secret = rawSecret;
   }
+} else {
+  console.error('SUPABASE_JWT_SECRET is missing; HS256 JWT verification is disabled.');
 }
 
 // Dynamic secret provider for handling both symmetric (HS256) and asymmetric (ES256/RS256) keys
@@ -169,15 +177,22 @@ const secretProvider = async (reqOrHeader: any, tokenOrPayload: any) => {
   // console.log('Decoding header:', header);
 
   // If alg is HS256, use the Supabase JWT Secret (symmetric)
-  if (header?.alg === 'HS256' || !header?.alg) {
-      return secret;
+  if (header?.alg === 'HS256') {
+    if (!secret) {
+      throw new Error('SUPABASE_JWT_SECRET is required for HS256 verification');
+    }
+    return secret;
   }
 
-  // If alg is RS256/ES256, use JWKS from Supabase (asymmetric)
+  // Reject tokens without alg (or other unexpected algs) instead of falling back to a default secret.
+  if (!header?.alg) {
+    throw new Error('JWT header "alg" is missing; rejecting token');
+  }
+
+  // If alg is RS256/ES256/PS256, use JWKS from Supabase (asymmetric)
   const projectUrl = process.env.SUPABASE_URL;
   if (!projectUrl) {
-      console.error('SUPABASE_URL is missing, cannot fetch JWKS');
-      return secret; // Fallback to secret, though it will likely fail for RS256
+    throw new Error('SUPABASE_URL is missing, cannot fetch JWKS');
   }
 
   const jwks = await getJwks(projectUrl);
@@ -199,7 +214,7 @@ const secretProvider = async (reqOrHeader: any, tokenOrPayload: any) => {
 app.register(jwt, {
   secret: secretProvider as any,
   verify: {
-      allowedIss: [process.env.SUPABASE_URL + '/auth/v1'], // Optional: Verify Issuer
+      allowedIss: process.env.SUPABASE_URL ? [process.env.SUPABASE_URL + '/auth/v1'] : undefined, // Optional: Verify Issuer
       extractToken: (req) => {
           // Standard Bearer token extraction
           if (req.headers.authorization && req.headers.authorization.split(' ')[0] === 'Bearer') {

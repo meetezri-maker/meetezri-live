@@ -56,9 +56,8 @@ export async function stripeWebhookHandler(request: FastifyRequest, reply: Fasti
     }
   } catch (error) {
     request.log.error({ error }, 'Error processing webhook event');
-    // Return 200 to acknowledge receipt even if processing failed to avoid retries loops for bad logic
-    // But ideally 500 triggers retry. For dev/sandbox, 200 is safer to avoid spam.
-    return reply.status(200).send({ error: 'Error processing event' });
+    // Return non-2xx so Stripe retries delivery; ensures entitlement updates aren't silently skipped.
+    return reply.status(500).send({ error: 'Error processing event' });
   }
 
   return reply.send({ received: true });
@@ -140,6 +139,7 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
   }
 
   const planType = session.metadata?.planType;
+  const billingCycle = session.metadata?.billing_cycle ?? session.metadata?.billingCycle;
 
   if (!planType) {
     console.warn('Missing planType in checkout session', session.id);
@@ -173,6 +173,7 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
               stripe_sub_id: subscription.id,
               status: subscription.status,
               plan_type: planType,
+              ...(billingCycle ? { billing_cycle: billingCycle } : {}),
               start_date: new Date(subscription.current_period_start * 1000),
               end_date: new Date(subscription.current_period_end * 1000),
               next_billing_at: new Date(subscription.current_period_end * 1000),
@@ -185,6 +186,7 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
               stripe_sub_id: subscription.id,
               status: subscription.status,
               plan_type: planType,
+              ...(billingCycle ? { billing_cycle: billingCycle } : {}),
               start_date: new Date(subscription.current_period_start * 1000),
               end_date: new Date(subscription.current_period_end * 1000),
               next_billing_at: new Date(subscription.current_period_end * 1000),

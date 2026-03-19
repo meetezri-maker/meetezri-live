@@ -16,7 +16,7 @@ import {
   getAllPaygTransactions,
   syncPaygCredits,
   createGuestCheckoutSession,
-} from './billing.service';
+} from './index';
 import { CreateSubscriptionInput, UpdateSubscriptionInput, CreateCreditPurchaseInput } from './billing.schema';
 
 interface UserPayload {

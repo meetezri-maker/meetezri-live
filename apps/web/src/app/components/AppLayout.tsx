@@ -21,8 +21,8 @@ import {
 import { MobileBottomNav } from "./MobileBottomNav";
 import { useAuth } from "../contexts/AuthContext";
 import { useNotifications } from "../contexts/NotificationsContext";
-import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -201,48 +201,9 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const resendVerification = async () => {
     if (!user?.email) return;
-    
-    // Explicitly determine the base URL
-    let origin = window.location.origin;
-    
-    // Safety override: If we are on the production domain, ensure we use the HTTPS production URL
-    // This guards against any weird browser behavior or proxy issues
-    if (origin.includes('meetezri-live-web.vercel.app') || origin.includes('vercel.app')) {
-      origin = 'https://meetezri-live-web.vercel.app';
-    }
-    
-    const redirectUrl = `${origin}/auth/callback?redirect=${encodeURIComponent('/app/user-profile')}`;
-    
-    // Debugging Alert - Remove after fixing
-    // alert(`Resending to: ${redirectUrl}`);
-    console.log("Resending verification to:", redirectUrl);
-    console.log("Supabase URL:", import.meta.env.VITE_SUPABASE_URL); // Debugging check
-
     try {
-      // If the user is technically "confirmed" (due to Confirm Email OFF setting) but flagged as unverified,
-      // we send a Magic Link instead of a signup verification email.
-      if (user.email_confirmed_at && user.user_metadata?.email_verification_required) {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: user.email,
-          options: {
-            emailRedirectTo: redirectUrl,
-            // data: { ... } // Optional: could pass data to know it's a verification flow
-          }
-        });
-        if (error) throw error;
-        toast.success("Verification link sent! Please check your email and click the sign-in link to verify.");
-      } else {
-        // Standard flow for genuinely unconfirmed users
-        const { error } = await supabase.auth.resend({
-          type: "signup",
-          email: user.email,
-          options: {
-            emailRedirectTo: redirectUrl
-          }
-        });
-        if (error) throw error;
-        toast.success("Verification email sent. Check your inbox.");
-      }
+      await api.resendVerificationEmail();
+      toast.success("Verification link sent! Please check your inbox.");
     } catch (error: any) {
       toast.error(error.message || "Failed to send verification email.");
     }

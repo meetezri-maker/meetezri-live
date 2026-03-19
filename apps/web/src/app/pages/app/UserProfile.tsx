@@ -139,7 +139,7 @@ export function UserProfile() {
 
   // Use React Hook Form
   const form = useForm<ProfileFormValues>({
-    resolver: zodResolver(profileSchema),
+    resolver: zodResolver(profileSchema as any),
     defaultValues: {
       name: "",
       email: "",
@@ -398,13 +398,8 @@ export function UserProfile() {
     try {
       setResending(true);
       
-      // Use window.location.origin as the primary source of truth
-      let baseUrl = window.location.origin;
-      
-      // Safety override: If we are on the production domain, ensure we use the HTTPS production URL
-      if (baseUrl.includes('meetezri-live-web.vercel.app')) {
-        baseUrl = 'https://meetezri-live-web.vercel.app';
-      }
+      // Use environment-aware base URL, but fall back to current origin.
+      const baseUrl = import.meta.env.VITE_WEB_BASE_URL || window.location.origin;
 
       const currentPath = window.location.pathname + window.location.search;
       const redirectTo = `${baseUrl}/auth/callback?redirect=${encodeURIComponent(currentPath)}`;

@@ -36,6 +36,9 @@ export function Login() {
   const { user, profile, isLoading: isAuthLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
+  const onboardingStartRoute =
+    profile?.signup_type === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome';
+
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -46,9 +49,13 @@ export function Login() {
 
   useEffect(() => {
     if (!isAuthLoading && user && profile) {
-      navigate("/app/dashboard");
+      if (profile.onboarding_completed === true) {
+        navigate("/app/dashboard");
+      } else {
+        navigate(onboardingStartRoute);
+      }
     }
-  }, [user, profile, isAuthLoading, navigate]);
+  }, [user, profile, isAuthLoading, navigate, onboardingStartRoute]);
 
   const handleGoogleLogin = async () => {
     try {
@@ -66,16 +73,8 @@ export function Login() {
 
   const handleResendVerification = async (emailToResend: string) => {
     try {
-      // Use window.location.origin as the primary source of truth for the redirect base URL
-      let baseUrl = window.location.origin;
-      
-      // Safety override: If we are on the production domain, ensure we use the HTTPS production URL
-      if (baseUrl.includes('meetezri-live-web.vercel.app')) {
-        baseUrl = 'https://meetezri-live-web.vercel.app';
-      } else if (baseUrl.includes('localhost')) {
-         // Only fallback to env var if we are on localhost and want to override port? 
-         // But usually window.location.origin is correct even for localhost.
-      }
+      // Use environment-aware base URL, but fall back to current origin.
+      const baseUrl = import.meta.env.VITE_WEB_BASE_URL || window.location.origin;
 
       const currentPath = window.location.pathname + window.location.search;
       const redirectTo = `${baseUrl}/auth/callback?redirect=${encodeURIComponent(currentPath)}`;
@@ -108,12 +107,12 @@ export function Login() {
 
       // Check if profile exists
       try {
-        await api.getMe();
-        navigate("/app/dashboard");
+        const me = await api.getMe();
+        navigate(me?.onboarding_completed === true ? "/app/dashboard" : "/onboarding/welcome");
       } catch (err: any) {
         // Only redirect to onboarding if profile is explicitly not found
         if (err.message === 'Profile not found') {
-          navigate("/onboarding/welcome");
+          navigate(onboardingStartRoute);
         } else {
           // For other errors (server down, etc), show error
           console.error('Profile fetch error:', err);

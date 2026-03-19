@@ -45,7 +45,7 @@ export function OnboardingProfileSetup() {
   const [availableTimezones] = useState<string[]>((Intl as any).supportedValuesOf('timeZone'));
 
   const form = useForm<ProfileSetupValues>({
-    resolver: zodResolver(profileSetupSchema),
+    resolver: zodResolver(profileSetupSchema as any),
     defaultValues: {
       firstName: data.firstName || "",
       lastName: data.lastName || "",
@@ -176,10 +176,24 @@ export function OnboardingProfileSetup() {
         timezone: values.timezone 
       });
       
-      const selectedPlan = typeof window !== "undefined" ? window.localStorage.getItem("selectedPlan") : null;
-      const planPurchased = typeof window !== "undefined" ? window.localStorage.getItem("planPurchased") === "1" : false;
-      
-      if (planPurchased || selectedPlan === "trial") {
+      const selectedPlan =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("selectedPlan")
+          : null;
+
+      // Trial flow: after completing profile setup, return to dashboard.
+      if (selectedPlan === "trial") {
+        navigate("/app/dashboard");
+        return;
+      }
+
+      const planPurchased =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("planPurchased") === "1"
+          : false;
+
+      // Paid flow: continue with the onboarding wizard.
+      if (planPurchased) {
         navigate("/onboarding/wellness-baseline");
       } else {
         navigate("/onboarding/subscription");

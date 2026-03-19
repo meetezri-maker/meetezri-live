@@ -34,7 +34,7 @@ export function AuthCallback() {
     // Trial users (Soft Verification) -> Profile to complete setup
     if (targetUser?.user_metadata?.email_verification_required) {
       // We must return the path with the verified param so the alert shows
-      return '/app/user-profile?verified=true';
+      return '/onboarding/profile-setup?verified=true';
     }
 
     // 4. Heuristic for New Paid Users (if param is lost)
@@ -61,7 +61,7 @@ export function AuthCallback() {
               data: { email_verification_required: false }
             });
             toast.success("Email verified successfully!");
-            navigate('/app/user-profile?verified=true', { replace: true });
+            navigate('/onboarding/profile-setup?verified=true', { replace: true });
             return;
           } catch (e) {
             console.error("Failed to clear verification flag", e);
@@ -95,7 +95,7 @@ export function AuthCallback() {
           toast.success("Email verified successfully!");
         });
         // Redirect to profile with verified flag
-        navigate('/app/user-profile?verified=true', { replace: true });
+        navigate('/onboarding/profile-setup?verified=true', { replace: true });
         return;
       }
       navigate(getRedirectPath(), { replace: true });

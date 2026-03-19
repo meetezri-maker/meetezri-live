@@ -74,34 +74,304 @@ export async function getUserEmail(userId: string): Promise<string | null> {
   return user?.email || null;
 }
 
-export async function checkUserExists(email: string) {
-  const existingUser = await prisma.users.findFirst({
-    where: { email: email }
-  });
+type AccountState =
+  | 'NO_ACCOUNT'
+  | 'AUTH_CREATED_BUT_PROFILE_NOT_CREATED'
+  | 'AUTH_CREATED_PROFILE_CREATED_ONBOARDING_INCOMPLETE'
+  | 'EMAIL_UNVERIFIED'
+  | 'EMAIL_VERIFIED_ONBOARDING_INCOMPLETE'
+  | 'FULLY_ONBOARDED';
 
-  if (existingUser) {
-    return { exists: true, reason: 'email' };
+function resolveOnboardingCompleted(profile: any): boolean {
+  const signupType =
+    normalizeSignupType(profile?.signup_type) ??
+    (profile?.subscription_plan === "trial" ? "trial" : null);
+
+  const isTrial = signupType === "trial";
+
+  // Explicit DB flag (nullable for backwards-compatibility).
+  // Trial flow: `onboarding_completed` may remain false for legacy rows;
+  // we still need deterministic "trial profile complete" behavior.
+  if (profile?.onboarding_completed === true) return true;
+  if (profile?.onboarding_completed === false && !isTrial) return false;
+
+  // Deterministic inference.
+  const fullNameOk =
+    typeof profile?.full_name === 'string' && profile.full_name.trim().length > 1;
+
+  const emergencyRelationshipOk =
+    typeof profile?.emergency_contact_relationship === 'string' &&
+    profile.emergency_contact_relationship.trim().length > 0;
+
+  const timezoneOk =
+    typeof profile?.timezone === 'string' && profile.timezone.trim().length > 0;
+
+  // The role is required for downstream product logic.
+  const roleOk = typeof profile?.role === 'string' && profile.role.length > 0;
+
+  // Trial: "complete profile" means the trial profile setup is done.
+  if (isTrial) {
+    return fullNameOk && timezoneOk && emergencyRelationshipOk && roleOk;
   }
 
-  return { exists: false };
+  // Plan: preserve the stricter definition used for the paid onboarding wizard.
+  const goalsOk =
+    Array.isArray(profile?.selected_goals) && profile.selected_goals.length > 0;
+
+  const permissionsOk =
+    profile?.permissions &&
+    typeof profile.permissions === 'object' &&
+    Object.keys(profile.permissions).length > 0;
+
+  const notificationPrefsOk =
+    profile?.notification_preferences &&
+    typeof profile.notification_preferences === 'object' &&
+    Object.keys(profile.notification_preferences).length > 0;
+
+  return fullNameOk && goalsOk && emergencyRelationshipOk && permissionsOk && notificationPrefsOk && roleOk;
 }
 
-export async function createProfile(userId: string, email: string, fullName?: string) {
-  const profile = await prisma.profiles.upsert({
-    where: { id: userId },
-    create: {
-      id: userId,
-      email,
-      full_name: fullName || email.split('@')[0],
-      role: 'user',
-      credits: 30,
-      credits_seconds: 30 * 60,
-    },
-    update: {
-      email,
-      full_name: fullName || email.split('@')[0],
+export async function resolveAccountStateByEmail(email: string) {
+  const authUser = await prisma.users.findFirst({
+    where: { email },
+    select: {
+      id: true,
+      email_confirmed_at: true,
+      raw_user_meta_data: true,
     },
   });
+
+  if (!authUser) {
+    return {
+      state: 'NO_ACCOUNT' as AccountState,
+      auth_exists: false,
+      profile_exists: false,
+      auth_user_id: null as string | null,
+      onboarding_completed: false,
+      email_verified: false,
+      needs_email_verification: false,
+      email,
+      onboarding_completed_at: null,
+      signup_type: null as 'trial' | 'plan' | null,
+    };
+  }
+
+  const emailConfirmed = !!authUser.email_confirmed_at;
+  const rawMeta: any = authUser.raw_user_meta_data as any;
+  const verificationRequired = rawMeta?.email_verification_required === true;
+  const emailVerified = emailConfirmed && !verificationRequired;
+
+  let profile: any = null;
+  try {
+    // Primary: include new columns when present.
+    profile = await prisma.profiles.findUnique({
+      where: { id: authUser.id },
+      select: {
+        id: true,
+        onboarding_completed: true,
+        onboarding_completed_at: true,
+        signup_type: true,
+        full_name: true,
+        role: true,
+        selected_goals: true,
+        emergency_contact_relationship: true,
+        permissions: true,
+        notification_preferences: true,
+      },
+    });
+  } catch {
+    // Fallback for older DBs where new onboarding columns are missing.
+    profile = await prisma.profiles.findUnique({
+      where: { id: authUser.id },
+      select: {
+        id: true,
+        full_name: true,
+        role: true,
+        selected_goals: true,
+        emergency_contact_relationship: true,
+        permissions: true,
+        notification_preferences: true,
+      },
+    });
+  }
+
+  if (!profile) {
+    return {
+      state: 'AUTH_CREATED_BUT_PROFILE_NOT_CREATED' as AccountState,
+      auth_exists: true,
+      profile_exists: false,
+      auth_user_id: authUser.id,
+      onboarding_completed: false,
+      email_verified: emailVerified,
+      needs_email_verification: !emailVerified,
+      email,
+      onboarding_completed_at: null,
+      signup_type: normalizeSignupType((rawMeta as any)?.signup_type ?? (rawMeta as any)?.signupType ?? (rawMeta as any)?.signup) as any,
+    };
+  }
+
+  const onboardingCompletedResolved = resolveOnboardingCompleted(profile);
+  const signupTypeResolved =
+    normalizeSignupType((profile as any).signup_type) ??
+    normalizeSignupType(rawMeta?.signup_type ?? rawMeta?.signupType ?? rawMeta?.signup) ??
+    null;
+
+  // FULLY_ONBOARDED requires both onboarding completion and email verification.
+  if (onboardingCompletedResolved && emailVerified) {
+    return {
+      state: 'FULLY_ONBOARDED' as AccountState,
+      auth_exists: true,
+      profile_exists: true,
+      auth_user_id: authUser.id,
+      onboarding_completed: true,
+      email_verified: true,
+      needs_email_verification: false,
+      email,
+      onboarding_completed_at: profile.onboarding_completed_at ?? null,
+      signup_type: signupTypeResolved,
+    };
+  }
+
+  if (!emailVerified) {
+    // Explicitly cover unverified email cases even if onboarding is partially present.
+    return {
+      state: 'EMAIL_UNVERIFIED' as AccountState,
+      auth_exists: true,
+      profile_exists: true,
+      auth_user_id: authUser.id,
+      onboarding_completed: onboardingCompletedResolved,
+      email_verified: false,
+      needs_email_verification: true,
+      email,
+      onboarding_completed_at: profile.onboarding_completed_at ?? null,
+      signup_type: signupTypeResolved,
+    };
+  }
+
+  // Email verified but onboarding not complete.
+  if (!onboardingCompletedResolved) {
+    return {
+      state: 'EMAIL_VERIFIED_ONBOARDING_INCOMPLETE' as AccountState,
+      auth_exists: true,
+      profile_exists: true,
+      auth_user_id: authUser.id,
+      onboarding_completed: false,
+      email_verified: true,
+      needs_email_verification: false,
+      email,
+      onboarding_completed_at: profile.onboarding_completed_at ?? null,
+      signup_type: signupTypeResolved,
+    };
+  }
+
+  // If onboarding is completed but email verification is still ambiguous,
+  // return a dedicated state for safer client behavior.
+  return {
+    state: 'AUTH_CREATED_PROFILE_CREATED_ONBOARDING_INCOMPLETE' as AccountState,
+    auth_exists: true,
+    profile_exists: true,
+    auth_user_id: authUser.id,
+    onboarding_completed: onboardingCompletedResolved,
+    email_verified: emailVerified,
+    needs_email_verification: !emailVerified,
+    email,
+    onboarding_completed_at: profile.onboarding_completed_at ?? null,
+    signup_type: signupTypeResolved,
+  };
+}
+
+export async function checkUserExists(email: string) {
+  const resolved = await resolveAccountStateByEmail(email);
+  return {
+    exists: resolved.state !== 'NO_ACCOUNT',
+    ...resolved,
+  };
+}
+
+export async function getSignupTypeFromAuthMeta(authUserId: string): Promise<'trial' | 'plan' | null> {
+  try {
+    const authUser = await prisma.users.findUnique({
+      where: { id: authUserId },
+      select: { raw_user_meta_data: true },
+    });
+
+    const meta: any = authUser?.raw_user_meta_data as any;
+    const raw = meta?.signup_type ?? meta?.signupType ?? meta?.signup;
+    if (raw === 'trial' || raw === 'plan') return raw;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeSignupType(raw: any): 'trial' | 'plan' | null {
+  if (raw === 'trial' || raw === 'plan') return raw;
+  return null;
+}
+
+export async function setSignupTypeForProfile(userId: string, signupType: 'trial' | 'plan' | null) {
+  if (!signupType) return null;
+  try {
+    return await prisma.profiles.update({
+      where: { id: userId },
+      data: { signup_type: signupType },
+    });
+  } catch {
+    // Ignore if column doesn't exist yet.
+    return null;
+  }
+}
+
+export async function createProfile(
+  userId: string,
+  email: string,
+  fullName?: string,
+  signupType?: 'trial' | 'plan' | null
+) {
+  // If signupType isn't explicitly provided, infer from Supabase auth metadata.
+  const resolvedSignupType =
+    normalizeSignupType(signupType) ?? (await getSignupTypeFromAuthMeta(userId));
+  let profile: any;
+  try {
+    profile = await prisma.profiles.upsert({
+      where: { id: userId },
+      create: {
+        id: userId,
+        email,
+        full_name: fullName || email.split('@')[0],
+        role: 'user',
+        credits: 30,
+        credits_seconds: 30 * 60,
+        onboarding_completed: false,
+        onboarding_completed_at: null,
+        signup_type: resolvedSignupType,
+      },
+      update: {
+        email,
+        full_name: fullName || email.split('@')[0],
+        onboarding_completed: false,
+        onboarding_completed_at: null,
+        ...(resolvedSignupType ? { signup_type: resolvedSignupType } : {}),
+      },
+    });
+  } catch {
+    // Backwards-compatibility for DBs missing new columns.
+    profile = await prisma.profiles.upsert({
+      where: { id: userId },
+      create: {
+        id: userId,
+        email,
+        full_name: fullName || email.split('@')[0],
+        role: 'user',
+        credits: 30,
+        credits_seconds: 30 * 60,
+      },
+      update: {
+        email,
+        full_name: fullName || email.split('@')[0],
+      },
+    });
+  }
 
   // Create Trial Subscription (7 days)
   const existingTrial = await prisma.subscriptions.findFirst({
@@ -124,22 +394,53 @@ export async function createProfile(userId: string, email: string, fullName?: st
   return profile;
 }
 
-export async function createProfileForPaidSignup(userId: string, email: string, fullName?: string) {
-  return prisma.profiles.upsert({
-    where: { id: userId },
-    create: {
-      id: userId,
-      email,
-      full_name: fullName || email.split('@')[0],
-      role: 'user',
-      credits: 0,
-      credits_seconds: 0,
-    },
-    update: {
-      email,
-      full_name: fullName || email.split('@')[0],
-    },
-  });
+export async function createProfileForPaidSignup(
+  userId: string,
+  email: string,
+  fullName?: string,
+  signupType?: 'trial' | 'plan' | null
+) {
+  const resolvedSignupType = normalizeSignupType(signupType) ?? 'plan';
+  try {
+    return await prisma.profiles.upsert({
+      where: { id: userId },
+      create: {
+        id: userId,
+        email,
+        full_name: fullName || email.split('@')[0],
+        role: 'user',
+        credits: 0,
+        credits_seconds: 0,
+        onboarding_completed: false,
+        onboarding_completed_at: null,
+        signup_type: resolvedSignupType,
+      },
+      update: {
+        email,
+        full_name: fullName || email.split('@')[0],
+        onboarding_completed: false,
+        onboarding_completed_at: null,
+        ...(resolvedSignupType ? { signup_type: resolvedSignupType } : {}),
+      },
+    });
+  } catch {
+    // Backwards-compatibility for DBs missing new columns.
+    return await prisma.profiles.upsert({
+      where: { id: userId },
+      create: {
+        id: userId,
+        email,
+        full_name: fullName || email.split('@')[0],
+        role: 'user',
+        credits: 0,
+        credits_seconds: 0,
+      },
+      update: {
+        email,
+        full_name: fullName || email.split('@')[0],
+      },
+    });
+  }
 }
 
 const userProfileCache = new Map<string, { data: any; timestamp: number }>();
@@ -308,6 +609,13 @@ export async function getProfile(userId: string) {
   result.email_verified = emailVerified;
   result.needs_email_verification = planType === "trial" && !emailVerified;
 
+  // Resolve onboarding completion deterministically:
+  // - use explicit DB flag when present
+  // - otherwise infer from legacy onboarding fields (for backwards-compatibility)
+  const onboardingCompletedResolved = resolveOnboardingCompleted(result);
+  result.onboarding_completed = onboardingCompletedResolved;
+  result.needs_onboarding = !onboardingCompletedResolved;
+
   // Update cache with fresh verification flags
   userProfileCache.set(userId, { data: result, timestamp: Date.now() });
 
@@ -400,6 +708,7 @@ export async function updateProfile(userId: string, data: UpdateProfileInput) {
 export async function completeOnboarding(userId: string, data: OnboardingInput) {
   console.log('Completing onboarding for user:', userId, 'Data:', JSON.stringify(data, null, 2));
   const { role, license_number, specializations, languages, ...profileData } = data;
+  const completedAt = new Date();
 
   // Update profile
   const profile = await prisma.profiles.upsert({
@@ -408,10 +717,14 @@ export async function completeOnboarding(userId: string, data: OnboardingInput) 
       id: userId,
       ...profileData,
       role,
+      onboarding_completed: true,
+      onboarding_completed_at: completedAt,
     },
     update: {
       ...profileData,
       role,
+      onboarding_completed: true,
+      onboarding_completed_at: completedAt,
     },
   });
 

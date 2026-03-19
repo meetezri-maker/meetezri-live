@@ -6,9 +6,21 @@ import { createClient } from '@supabase/supabase-js';
 dotenv.config();
 
 const httpServer = createServer();
+
+const allowedOrigins =
+  (process.env.REALTIME_CORS_ORIGINS || process.env.CLIENT_URL || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin:
+      allowedOrigins.length > 0
+        ? allowedOrigins
+        : process.env.NODE_ENV === 'production'
+          ? false
+          : '*',
     methods: ["GET", "POST"]
   }
 });

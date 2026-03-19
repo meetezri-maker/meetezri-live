@@ -11,6 +11,51 @@ interface UserPayload {
   role?: string;
 }
 
+function isLocalWebOrigin(value?: string | null) {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    const host = url.hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  } catch {
+    return value.includes('localhost') || value.includes('127.0.0.1') || value.includes('::1');
+  }
+}
+
+function getWebBaseUrlFromRequest(
+  request: FastifyRequest
+): { webBaseUrl: string; source: string } {
+  const origin = request.headers.origin;
+  const referer = request.headers.referer;
+
+  // 1) Prefer the actual browser origin when it is clearly local.
+  if (origin && isLocalWebOrigin(origin)) {
+    try {
+      return { webBaseUrl: new URL(origin).origin, source: 'request.origin' };
+    } catch {
+      return { webBaseUrl: origin, source: 'request.origin(raw)' };
+    }
+  }
+
+  // 2) If origin is missing, try referer.
+  if (referer && isLocalWebOrigin(referer)) {
+    try {
+      return { webBaseUrl: new URL(referer).origin, source: 'request.referer' };
+    } catch {
+      return { webBaseUrl: referer, source: 'request.referer(raw)' };
+    }
+  }
+
+  // 3) Environment-aware fallback.
+  // Prefer WEB_BASE_URL, then APP_URL (legacy), then localhost for safety.
+  const envWebBaseUrl =
+    process.env.WEB_BASE_URL ||
+    process.env.APP_URL ||
+    'http://localhost:5173';
+
+  return { webBaseUrl: envWebBaseUrl, source: 'env' };
+}
+
 export async function checkUserExistsHandler(
   request: FastifyRequest<{ Body: CheckUserInput }>,
   reply: FastifyReply
@@ -26,60 +71,85 @@ export async function signupHandler(
 ) {
   const { email, password, firstName, lastName } = request.body;
 
-  // Double check if user exists
-  const existingUser = await userService.checkUserExists(email);
-  if (existingUser.exists) {
-    return reply.code(400).send({ message: 'User already exists' });
+  const accountState = await userService.resolveAccountStateByEmail(email);
+  request.log.info({ email, state: accountState.state }, 'Signup attempt resolved account state');
+
+  const signupType: 'trial' | 'plan' =
+    accountState.signup_type === 'trial'
+      ? 'trial'
+      : 'plan';
+
+  // If onboarding is fully complete, don't allow duplicate account creation.
+  if (accountState.state === 'FULLY_ONBOARDED') {
+    return reply.code(400).send({ message: 'Account already active. Please log in.' });
   }
 
   try {
-    // 1. Create user in Supabase Auth (unconfirmed)
-    // We disable email confirmation here so Supabase doesn't send the default email
-    const { data: user, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: false,
-      user_metadata: {
-        first_name: firstName,
-        last_name: lastName,
-      }
-    });
-
-    if (createError) throw createError;
-    if (!user.user) throw new Error('Failed to create user');
-
     const fullName = `${firstName} ${lastName}`.trim();
 
-    if (request.body.stripe_session_id) {
+    // Reuse existing auth row when signup retry happens after partial failures.
+    let authUserId = accountState.auth_user_id;
+
+    // 1. Create user in Supabase Auth (unconfirmed) only if the auth row is missing
+    if (!authUserId) {
+      const { data: user, error: createError } =
+        await supabaseAdmin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: false,
+          user_metadata: {
+            first_name: firstName,
+            last_name: lastName,
+          },
+        });
+
+      if (createError) throw createError;
+      if (!user.user) throw new Error('Failed to create user');
+
+      authUserId = user.user.id;
+    }
+
+    if (request.body.stripe_session_id && authUserId) {
       try {
-        await userService.createProfileForPaidSignup(user.user.id, email, fullName);
-        await billingService.linkSubscriptionToUser(user.user.id, request.body.stripe_session_id);
+        await userService.createProfileForPaidSignup(authUserId, email, fullName);
+        await billingService.linkSubscriptionToUser(authUserId, request.body.stripe_session_id);
       } catch (error) {
         request.log.error({ error }, 'Failed to attach paid subscription during signup');
       }
     }
 
-    // Determine base URL from request origin or fallback
-    const origin = request.headers.origin;
-    const referer = request.headers.referer;
-    
-    // Log headers to debug environment issues
-    request.log.info({ origin, referer, appUrlEnv: process.env.APP_URL }, 'Determining redirect base URL');
-
-    let appUrl = process.env.APP_URL || 'http://localhost:5173';
-    
-    // Prefer Origin or Referer if they match localhost (dev environment)
-    if (origin && origin.includes('localhost')) {
-      appUrl = origin;
-    } else if (referer && referer.includes('localhost')) {
-      // Extract base URL from referer (e.g. http://localhost:5173/signup -> http://localhost:5173)
-      try {
-        const url = new URL(referer);
-        appUrl = url.origin;
-      } catch (e) {}
+    // If the email is already verified, do not resend verification.
+    // The client will redirect based on onboarding completion state.
+    if (accountState.state !== 'NO_ACCOUNT' && !accountState.needs_email_verification) {
+      return reply.code(200).send({
+        success: true,
+        message:
+          'Account setup exists but onboarding is not complete. Please continue onboarding.',
+        action: 'continue_onboarding',
+        next_route:
+          signupType === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome',
+      });
     }
 
-    const redirectParam = encodeURIComponent('/onboarding/welcome');
+    // Determine base URL for Supabase redirect.
+    // Required behavior:
+    // - Local users -> localhost base
+    // - Production users -> production base
+    const { webBaseUrl: appUrl, source } = getWebBaseUrlFromRequest(request);
+    request.log.info(
+      {
+        source,
+        origin: request.headers.origin,
+        referer: request.headers.referer,
+        WEB_BASE_URL: process.env.WEB_BASE_URL,
+        APP_URL: process.env.APP_URL,
+      },
+      'Determining redirect base URL (signup)'
+    );
+
+    const redirectParam = encodeURIComponent(
+      signupType === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome'
+    );
     const finalRedirectTo = `${appUrl}/auth/callback?redirect=${redirectParam}`;
     
     request.log.info({ finalRedirectTo }, 'Generated verification link redirect URL');
@@ -118,7 +188,11 @@ export async function signupHandler(
       `Confirm your email by visiting: ${verificationLink}`
     );
 
-    return reply.code(201).send({ success: true, message: 'User created successfully. Please check your email to verify your account.' });
+    return reply.code(201).send({
+      success: true,
+      message: 'Verification email sent. Please check your inbox to verify your account.',
+      action: 'verification_sent',
+    });
 
   } catch (error: any) {
     request.log.error({ error }, 'Signup failed');
@@ -139,12 +213,37 @@ export async function resendVerificationHandler(
   }
 
   try {
-    const appUrl = process.env.APP_URL || 'http://localhost:5173';
+    const { webBaseUrl: appUrl, source } = getWebBaseUrlFromRequest(request);
+    request.log.info(
+      {
+        source,
+        origin: request.headers.origin,
+        referer: request.headers.referer,
+        WEB_BASE_URL: process.env.WEB_BASE_URL,
+        APP_URL: process.env.APP_URL,
+      },
+      'Determining redirect base URL (resend verification)'
+    );
+
+    // Decide where the verified user should land.
+    // - If onboarding is done, go to dashboard
+    // - Otherwise, resume onboarding
+    const profile = await userService.getProfile(userId);
+    const redirectTarget =
+      profile?.onboarding_completed === true
+        ? '/app/dashboard'
+        : profile?.signup_type === 'trial'
+          ? '/onboarding/profile-setup'
+          : '/onboarding/welcome';
+    const redirectTo = `${appUrl}/auth/callback?redirect=${encodeURIComponent(
+      redirectTarget
+    )}`;
+
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email,
       options: {
-        redirectTo: `${appUrl}/auth/callback`,
+        redirectTo,
       },
     });
 
@@ -231,6 +330,18 @@ export async function initProfileHandler(
   
   const existingProfile = await userService.getProfile(user.sub);
   if (existingProfile) {
+    // Ensure flow type exists for deterministic trial vs plan routing.
+    if (!existingProfile.signup_type) {
+      try {
+        const signupType = await userService.getSignupTypeFromAuthMeta(user.sub);
+        if (signupType) {
+          await userService.setSignupTypeForProfile(user.sub, signupType);
+        }
+      } catch (e) {
+        request.log.warn({ e }, 'Failed to backfill signup_type on initProfile');
+      }
+      return await userService.getProfile(user.sub);
+    }
     return existingProfile;
   }
 
