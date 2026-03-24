@@ -121,7 +121,8 @@ export function Billing() {
           planId: planId,
           status: subData.status as any,
           creditsRemaining,
-          creditsTotal: plan.credits,
+          // Show a stacked "total" when users upgrade mid-cycle (e.g., 200 + 400 = 600)
+          creditsTotal: creditsData.subscription_total ?? plan.credits,
           billingCycle: {
             startDate: subData.start_date || new Date().toISOString(),
             endDate: subData.next_billing_at || new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString(),
@@ -557,6 +558,11 @@ export function Billing() {
                         <p className="text-xs text-muted-foreground">
                           {invoice.created ? new Date(invoice.created).toLocaleDateString() : ''} •{" "}
                           <span className="capitalize">{invoice.status}</span>
+                          {typeof invoice.minutes_purchased === 'number' && invoice.minutes_purchased > 0 && (
+                            <>
+                              {" "}• {invoice.minutes_purchased} min
+                            </>
+                          )}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -574,7 +580,7 @@ export function Billing() {
                             variant="outline"
                             onClick={() => {
                               if (invoice.hosted_invoice_url) {
-                                window.location.href = invoice.hosted_invoice_url;
+                                window.open(invoice.hosted_invoice_url, "_blank", "noopener,noreferrer");
                               }
                             }}
                             className="flex items-center gap-2"
@@ -589,7 +595,7 @@ export function Billing() {
                             variant="ghost"
                             onClick={() => {
                               if (invoice.invoice_pdf) {
-                                window.location.href = invoice.invoice_pdf;
+                                window.open(invoice.invoice_pdf, "_blank", "noopener,noreferrer");
                               }
                             }}
                           >

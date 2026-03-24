@@ -21,6 +21,35 @@ const CLIENT_URL =
     ? 'https://meetezri-live-web.vercel.app'
     : 'http://localhost:5173');
 
+async function addSubscriptionAllowance(userId: string, minutesToAdd: number) {
+  if (!minutesToAdd || minutesToAdd <= 0) return;
+
+  const profile = await prisma.profiles.findUnique({
+    where: { id: userId },
+    select: {
+      credits: true,
+      credits_seconds: true,
+    },
+  });
+
+  const existingMinutes = profile?.credits ?? 0;
+  const existingSeconds =
+    profile?.credits_seconds && profile.credits_seconds > 0
+      ? profile.credits_seconds
+      : existingMinutes * 60;
+
+  const newSeconds = existingSeconds + minutesToAdd * 60;
+  const newMinutes = newSeconds === 0 ? 0 : Math.ceil(newSeconds / 60);
+
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: {
+      credits: newMinutes,
+      credits_seconds: newSeconds,
+    },
+  });
+}
+
 async function getOrCreateStripeCustomer(userId: string, email: string) {
   const profile = await prisma.profiles.findUnique({ where: { id: userId } });
   
@@ -129,9 +158,10 @@ export async function createCheckoutSession(userId: string, email: string, data:
     throw new Error('Invalid plan type');
   }
 
-  // SAVE INTENT: Create a pending subscription in DB so UI knows what user selected
-  const pendingSub = await prisma.subscriptions.create({
-    data: {
+  // SAVE INTENT: Reuse the latest subscription row instead of creating a new one.
+  // This prevents plan switches from spamming the `subscriptions` table with extra rows.
+  const existingLatest = await prisma.subscriptions.findFirst({
+    where: {
       user_id: userId,
       plan_type: data.plan_type,
       status: 'incomplete', // Will be updated by webhook or sync
@@ -140,6 +170,29 @@ export async function createCheckoutSession(userId: string, email: string, data:
       // No end date yet
     }
   });
+
+  const pendingSub = existingLatest
+    ? await prisma.subscriptions.update({
+        where: { id: existingLatest.id },
+        data: {
+          plan_type: data.plan_type,
+          status: 'incomplete', // Will be updated by webhook or sync
+          billing_cycle: 'monthly',
+          start_date: new Date(),
+          // leave end_date as-is; webhook/sync will set correct cycle bounds
+          updated_at: new Date(),
+        },
+      })
+    : await prisma.subscriptions.create({
+        data: {
+          user_id: userId,
+          plan_type: data.plan_type,
+          status: 'incomplete', // Will be updated by webhook or sync
+          billing_cycle: 'monthly',
+          start_date: new Date(),
+          // No end date yet
+        },
+      });
 
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
@@ -253,18 +306,46 @@ export async function createCreditPurchaseSession(userId: string, email: string,
 
 export async function linkSubscriptionToUser(userId: string, sessionId: string) {
   const session = await stripe.checkout.sessions.retrieve(sessionId);
-  if (!session.customer) return;
+  const customerId = session.customer as string | undefined;
+  const subscriptionId = session.subscription as string | undefined;
+  if (!customerId || !subscriptionId) return;
 
-  const customerId = session.customer as string;
-  
-  // Update user profile
   await prisma.profiles.update({
     where: { id: userId },
-    data: { stripe_customer_id: customerId }
+    data: { stripe_customer_id: customerId },
   });
 
-  // Sync subscriptions
-  await syncSubscriptionWithStripe(userId);
+  const stripeSub = await stripe.subscriptions.retrieve(subscriptionId);
+  const priceId = stripeSub.items.data[0]?.price?.id;
+  if (!priceId) return;
+
+  let planType: keyof typeof PLAN_LIMITS = 'trial';
+  if (priceId === STRIPE_PRICE_IDS.core) planType = 'core';
+  else if (priceId === STRIPE_PRICE_IDS.pro) planType = 'pro';
+
+  if (planType === 'trial') return;
+
+  const existingByStripeId = await prisma.subscriptions.findFirst({
+    where: { stripe_sub_id: stripeSub.id },
+    select: { id: true },
+  });
+
+  if (existingByStripeId) return;
+
+  await prisma.subscriptions.create({
+    data: {
+      user_id: userId,
+      stripe_sub_id: stripeSub.id,
+      status: stripeSub.status,
+      plan_type: planType,
+      billing_cycle: 'monthly',
+      start_date: new Date(stripeSub.current_period_start * 1000),
+      end_date: new Date(stripeSub.current_period_end * 1000),
+      next_billing_at: new Date(stripeSub.current_period_end * 1000),
+    },
+  });
+
+  await addSubscriptionAllowance(userId, PLAN_LIMITS[planType].credits);
 }
 
 export async function createPortalSession(userId: string) {
@@ -365,18 +446,66 @@ export async function getInvoicesForUser(userId: string) {
   const invoices = await stripe.invoices.list({
     customer: profile.stripe_customer_id,
     limit: 50,
+    expand: ['data.lines.data.price'],
   });
 
-  const result = invoices.data.map((invoice) => ({
-    id: invoice.id,
-    status: invoice.status,
-    amount_due: (invoice.amount_due || 0) / 100,
-    currency: invoice.currency,
-    created: new Date(invoice.created * 1000).toISOString(),
-    hosted_invoice_url: invoice.hosted_invoice_url || null,
-    invoice_pdf: invoice.invoice_pdf || null,
-    description: invoice.description || null,
-  }));
+  const planTypeByPriceId = new Map<string, keyof typeof PLAN_LIMITS>([
+    [STRIPE_PRICE_IDS.core, 'core'],
+    [STRIPE_PRICE_IDS.pro, 'pro'],
+  ]);
+
+  const result = invoices.data.map((invoice) => {
+    const creditsFromMetadata = invoice.metadata?.credits
+      ? parseInt(invoice.metadata.credits, 10)
+      : undefined;
+
+    const creditsFromLines = (invoice.lines?.data || []).reduce((sum, line) => {
+      const value = line.metadata?.credits
+        ? parseInt(line.metadata.credits, 10)
+        : 0;
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+
+    const totalCredits =
+      (Number.isFinite(creditsFromMetadata || NaN) ? creditsFromMetadata || 0 : 0) +
+      creditsFromLines;
+
+    const planTypeFromMetadata =
+      (invoice.metadata?.planType as string | undefined) ||
+      (invoice.metadata?.plan_type as string | undefined);
+
+    const planTypeFromPriceId =
+      (invoice.lines?.data || [])
+        .map((line) => line.price?.id)
+        .filter((id): id is string => typeof id === 'string')
+        .map((id) => planTypeByPriceId.get(id))
+        .find((value): value is keyof typeof PLAN_LIMITS => !!value);
+
+    const planType =
+      (planTypeFromPriceId as string | undefined) ||
+      (planTypeFromMetadata as string | undefined) ||
+      null;
+
+    const minutesPurchased =
+      totalCredits > 0
+        ? totalCredits
+        : planType && PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS]
+          ? PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS].credits
+          : null;
+
+    return {
+      id: invoice.id,
+      status: invoice.status,
+      amount_due: (invoice.amount_due || 0) / 100,
+      currency: invoice.currency,
+      created: new Date(invoice.created * 1000).toISOString(),
+      hosted_invoice_url: invoice.hosted_invoice_url || null,
+      invoice_pdf: invoice.invoice_pdf || null,
+      description: invoice.description || null,
+      minutes_purchased: minutesPurchased,
+      plan_type: planType,
+    };
+  });
 
   userInvoicesCache.set(userId, { data: result, timestamp: now });
   return result;
@@ -623,19 +752,26 @@ export async function syncSubscriptionWithStripe(userId: string) {
     return getSubscription(userId);
   }
 
-  // Update DB
-  // First try to find by stripe_sub_id
-  let existingSub = await prisma.subscriptions.findFirst({
-    where: { stripe_sub_id: activeSub.id }
+  const existingByStripeId = await prisma.subscriptions.findFirst({
+    where: { stripe_sub_id: activeSub.id },
+    select: { id: true, plan_type: true },
   });
 
-  // If not found by ID, find by user and most recent (likely the trial or pending one)
-  if (!existingSub) {
-    existingSub = await prisma.subscriptions.findFirst({
-        where: { user_id: userId },
-        orderBy: { created_at: 'desc' }
-    });
-  }
+  const pendingCandidate = !existingByStripeId
+    ? await prisma.subscriptions.findFirst({
+        where: {
+          user_id: userId,
+          stripe_sub_id: null,
+          status: { in: ['incomplete', 'incomplete_expired'] },
+          plan_type: planType,
+        },
+        orderBy: { created_at: 'desc' },
+        select: { id: true, plan_type: true },
+      })
+    : null;
+
+  const previousPlanType =
+    (existingByStripeId?.plan_type || pendingCandidate?.plan_type || null) as string | null;
 
   let updatedSub;
   const subData = {
@@ -648,34 +784,32 @@ export async function syncSubscriptionWithStripe(userId: string) {
     updated_at: new Date(),
   };
 
-  if (existingSub) {
+  if (existingByStripeId) {
     updatedSub = await prisma.subscriptions.update({
-        where: { id: existingSub.id },
-        data: subData
+      where: { id: existingByStripeId.id },
+      data: subData,
+    });
+  } else if (pendingCandidate) {
+    updatedSub = await prisma.subscriptions.update({
+      where: { id: pendingCandidate.id },
+      data: subData,
     });
   } else {
     updatedSub = await prisma.subscriptions.create({
-        data: {
-            user_id: userId,
-            ...subData,
-            billing_cycle: 'monthly', // Default
-        }
+      data: {
+        user_id: userId,
+        ...subData,
+        billing_cycle: 'monthly',
+      },
     });
   }
 
-  // Sync Credits (Optional: Only if active/trialing)
-  if (['active', 'trialing'].includes(activeSub.status)) {
-    const limits = PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS];
-    if (limits) {
-      // Ensure both minute and second-based credits are updated for the new plan
-      await prisma.profiles.update({
-        where: { id: userId },
-        data: { 
-          credits: limits.credits,
-          credits_seconds: limits.credits * 60,
-        },
-      });
-    }
+  const shouldGrant =
+    ['active', 'trialing'].includes(activeSub.status) &&
+    (!existingByStripeId || previousPlanType !== planType);
+
+  if (shouldGrant) {
+    await addSubscriptionAllowance(userId, PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS].credits);
   }
 
   return updatedSub;

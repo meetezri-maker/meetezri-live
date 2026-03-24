@@ -40,6 +40,8 @@ export const invoiceResponseSchema = z.object({
   hosted_invoice_url: z.string().nullable(),
   invoice_pdf: z.string().nullable(),
   description: z.string().nullable(),
+  minutes_purchased: z.number().nullable().optional(),
+  plan_type: z.string().nullable().optional(),
 });
 
 export const adminInvoiceResponseSchema = invoiceResponseSchema.extend({

@@ -101,6 +101,8 @@ export function Dashboard() {
   const creditsTotal = profile?.credits_total || 200;
   const userPlan = profile?.subscription_plan || "Basic Plan";
   const [liveCreditsSeconds, setLiveCreditsSeconds] = useState<number | null>(null);
+  const [liveCreditsTotalSeconds, setLiveCreditsTotalSeconds] = useState<number | null>(null);
+  const [liveCreditsTotalMinutes, setLiveCreditsTotalMinutes] = useState<number | null>(null);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -114,7 +116,14 @@ export function Dashboard() {
     // Use the dedicated credits endpoint (no-cache) for accurate seconds display
     const loadCredits = async () => {
       try {
-        const { credits_seconds, credits } = await api.getCredits();
+        const {
+          credits_seconds,
+          credits,
+          subscription_total_seconds,
+          subscription_total,
+          purchased_seconds,
+          purchased,
+        } = await api.getCredits();
         const seconds =
           typeof credits_seconds === "number"
             ? Math.max(0, credits_seconds)
@@ -122,9 +131,31 @@ export function Dashboard() {
             ? Math.max(0, credits) * 60
             : null;
         setLiveCreditsSeconds(seconds);
+        const totalSeconds =
+          (typeof subscription_total_seconds === "number"
+            ? Math.max(0, subscription_total_seconds)
+            : typeof subscription_total === "number"
+            ? Math.max(0, subscription_total) * 60
+            : null);
+        const purchasedSecondsValue =
+          (typeof purchased_seconds === "number"
+            ? Math.max(0, purchased_seconds)
+            : typeof purchased === "number"
+            ? Math.max(0, purchased) * 60
+            : 0);
+        if (totalSeconds !== null) {
+          const combined = totalSeconds + purchasedSecondsValue;
+          setLiveCreditsTotalSeconds(combined);
+          setLiveCreditsTotalMinutes(Math.ceil(combined / 60));
+        } else {
+          setLiveCreditsTotalSeconds(null);
+          setLiveCreditsTotalMinutes(null);
+        }
       } catch (e) {
         // Fall back to profile-derived fields below
         setLiveCreditsSeconds(null);
+        setLiveCreditsTotalSeconds(null);
+        setLiveCreditsTotalMinutes(null);
       }
     };
     loadCredits();
@@ -138,9 +169,16 @@ export function Dashboard() {
       : creditsRemaining * 60;
 
   const creditsTotalSeconds =
-    typeof profile?.credits_total_seconds === "number"
+    liveCreditsTotalSeconds !== null
+      ? liveCreditsTotalSeconds
+      : typeof profile?.credits_total_seconds === "number"
       ? Math.max(0, profile.credits_total_seconds)
       : creditsTotal * 60;
+
+  const creditsTotalMinutes =
+    liveCreditsTotalMinutes !== null
+      ? liveCreditsTotalMinutes
+      : creditsTotal;
 
   const quickActions = [
     {
@@ -420,7 +458,7 @@ export function Dashboard() {
                 <div className="flex flex-row gap-2 mt-1">
                 <h3 className="  font-bold "> Total minutes: </h3>
                 <p className="text-xl font-semibold font-mono">
-                  {creditsTotal} 
+                  {creditsTotalMinutes} 
                 </p>
                  
                 </div>
