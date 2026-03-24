@@ -2,5 +2,5 @@
 -- trial vs plan buyer.
 
 ALTER TABLE public.profiles
-ADD COLUMN signup_type TEXT;
+ADD COLUMN IF NOT EXISTS signup_type TEXT;
 

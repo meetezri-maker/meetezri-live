@@ -244,6 +244,35 @@ app.register(emergencyContactRoutes, { prefix: '/api/emergency-contacts' });
 app.register(notificationRoutes, { prefix: '/api/notifications' });
 app.register(aiAvatarsRoutes, { prefix: '/api/ai-avatars' });
 
+app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) => {
+  const statusCode =
+    typeof error?.statusCode === 'number'
+      ? error.statusCode
+      : typeof error?.status === 'number'
+      ? error.status
+      : 500;
+
+  const isServerError = statusCode >= 500;
+  const message = isServerError ? 'An unexpected error occurred' : (error?.message || 'Request failed');
+  const errorName =
+    typeof error?.name === 'string'
+      ? error.name
+      : isServerError
+      ? 'Internal Server Error'
+      : 'Bad Request';
+
+  if (isServerError) {
+    request.log.error({ err: error, requestId: request.id }, 'Unhandled API error');
+  }
+
+  reply.code(statusCode).send({
+    statusCode,
+    error: errorName,
+    message,
+    requestId: request.id,
+  });
+});
+
 // Health check routes
 app.get('/health', async () => ({ ok: true }));
 app.get('/api/health', async () => ({ ok: true }));

@@ -1041,6 +1041,18 @@ model payment_transactions {
   @@schema("public")
 }
 
+/// Processed Stripe webhook events (id = Stripe event id, e.g. evt_...).
+/// Used for cross-instance idempotency and safe retries after partial failures.
+model stripe_webhook_events {
+  id           String    @id
+  event_type   String
+  status       String    @default("processing")
+  processed_at DateTime? @db.Timestamptz(6)
+  created_at   DateTime  @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model reports_daily {
   id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid

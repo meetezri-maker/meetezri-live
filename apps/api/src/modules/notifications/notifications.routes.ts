@@ -69,6 +69,7 @@ export async function notificationRoutes(app: FastifyInstance) {
 
   // Admin only - creating notifications
   app.post('/', {
+    preHandler: [app.authenticate, app.authorize(['super_admin', 'org_admin', 'team_admin'])],
     schema: {
       // @ts-ignore
       tags: ['Notifications'],
@@ -80,6 +81,7 @@ export async function notificationRoutes(app: FastifyInstance) {
   });
 
   app.post('/broadcast', {
+    preHandler: [app.authenticate, app.authorize(['super_admin', 'org_admin', 'team_admin'])],
     schema: {
       // @ts-ignore
       tags: ['Notifications'],
