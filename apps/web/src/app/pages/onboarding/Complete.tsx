@@ -6,9 +6,35 @@ import { motion } from "motion/react";
 import { Heart, Sparkles, Video, MessageSquare, TrendingUp, ArrowRight, Loader2 } from "lucide-react";
 import { FloatingElement } from "../../components/FloatingElement";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { useEffect, useRef } from "react";
 
 export function OnboardingComplete() {
   const { completeOnboarding, isLoading } = useOnboarding();
+  const { profile } = useAuth();
+  const hasAutoRedirectedRef = useRef(false);
+
+  // Plan buyer regression fix:
+  // When we land on `/onboarding/complete`, persist completion and redirect to dashboard.
+  useEffect(() => {
+    if (hasAutoRedirectedRef.current) return;
+    if (!profile) return;
+    const signupTypeEffective =
+      profile.signup_type ??
+      (profile.subscription_plan === "trial" ? "trial" : "plan");
+    if (signupTypeEffective !== "plan") return;
+
+    if (profile.onboarding_completed === true) {
+      hasAutoRedirectedRef.current = true;
+      window.location.href = "/app/dashboard";
+      return;
+    }
+
+    if (!isLoading) {
+      hasAutoRedirectedRef.current = true;
+      completeOnboarding("/app/dashboard");
+    }
+  }, [profile, isLoading, completeOnboarding]);
 
   const quickTips = [
     {
@@ -184,7 +210,7 @@ export function OnboardingComplete() {
             <Button 
               size="lg" 
               className="w-full group relative overflow-hidden"
-              onClick={() => completeOnboarding('/app/session-lobby')}
+              onClick={() => completeOnboarding('/app/dashboard')}
               disabled={isLoading}
             >
               <span className="relative z-10 flex items-center justify-center gap-2 text-lg py-6">

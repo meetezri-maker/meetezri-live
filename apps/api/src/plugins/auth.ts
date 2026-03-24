@@ -16,6 +16,19 @@ const userRoleCache = new Map<
 >();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+const APP_API_PREFIXES = [
+  '/api/users/credits',
+  '/api/sessions',
+  '/api/moods',
+  '/api/journal',
+  '/api/wellness',
+  '/api/sleep',
+  '/api/habits',
+  '/api/notifications',
+  '/api/ai-avatars',
+  '/api/emergency-contacts',
+];
+
 export default fp(async (fastify: FastifyInstance) => {
   fastify.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -60,53 +73,48 @@ export default fp(async (fastify: FastifyInstance) => {
           user.onboarding_completed = cached.onboardingCompleted;
 
           const path = request.url.split('?')[0] || '';
-          const APP_API_PREFIXES = [
-            '/api/users/credits',
-            '/api/sessions',
-            '/api/moods',
-            '/api/journal',
-            '/api/wellness',
-            '/api/sleep',
-            '/api/habits',
-            '/api/notifications',
-            '/api/ai-avatars',
-            '/api/emergency-contacts',
-          ];
           const isOnboardingApi = path.startsWith('/api/users/onboarding');
           const isAppApi = APP_API_PREFIXES.some((p) => path.startsWith(p));
           const isBillingApi = path.startsWith('/api/billing');
 
+          // Cache-staleness guard: when cached onboarding status is incomplete for paid users,
+          // re-check once before denying app/billing access.
+          if ((isAppApi || isBillingApi) && !cached.onboardingCompleted && cached.signupType !== 'trial') {
+            userRoleCache.delete(user.sub);
+          } else {
+
           // Plan buyers must not initiate billing while onboarding is incomplete.
-          if (isBillingApi && !cached.onboardingCompleted && cached.signupType === 'plan') {
-            reply.code(403).send({
-              statusCode: 403,
-              error: 'Forbidden',
-              message: 'Billing is not allowed during onboarding for plan buyers.',
-            });
-            return;
-          }
+            if (isBillingApi && !cached.onboardingCompleted && cached.signupType === 'plan') {
+              reply.code(403).send({
+                statusCode: 403,
+                error: 'Forbidden',
+                message: 'Billing is not allowed during onboarding for plan buyers.',
+              });
+              return;
+            }
 
-          if (isOnboardingApi && cached.onboardingCompleted) {
-            reply.code(403).send({
-              statusCode: 403,
-              error: 'Forbidden',
-              message: 'Onboarding is already completed for this account.',
-            });
-            return;
-          }
+            if (isOnboardingApi && cached.onboardingCompleted) {
+              reply.code(403).send({
+                statusCode: 403,
+                error: 'Forbidden',
+                message: 'Onboarding is already completed for this account.',
+              });
+              return;
+            }
 
-          if (
-            isAppApi &&
-            !cached.onboardingCompleted &&
-            cached.signupType !== 'trial'
-          ) {
-            reply.code(403).send({
-              statusCode: 403,
-              error: 'Forbidden',
-              message:
-                'Onboarding is incomplete. Please complete onboarding before using the app.',
-            });
-            return;
+            if (
+              isAppApi &&
+              !cached.onboardingCompleted &&
+              cached.signupType !== 'trial'
+            ) {
+              reply.code(403).send({
+                statusCode: 403,
+                error: 'Forbidden',
+                message:
+                  'Onboarding is incomplete. Please complete onboarding before using the app.',
+              });
+              return;
+            }
           }
         } else {
           // Fetch from DB if not in cache or expired
@@ -245,19 +253,6 @@ export default fp(async (fastify: FastifyInstance) => {
             // Backend route guard: deny app API usage until onboarding is complete
             const path = request.url.split('?')[0] || '';
 
-            const APP_API_PREFIXES = [
-              '/api/users/credits',
-              '/api/sessions',
-              '/api/moods',
-              '/api/journal',
-              '/api/wellness',
-              '/api/sleep',
-              '/api/habits',
-              '/api/notifications',
-              '/api/ai-avatars',
-              '/api/emergency-contacts',
-            ];
-
             const isOnboardingApi = path.startsWith('/api/users/onboarding');
             const isAppApi = APP_API_PREFIXES.some((p) => path.startsWith(p));
 
@@ -296,18 +291,6 @@ export default fp(async (fastify: FastifyInstance) => {
           } else {
             // Profile missing -> treat onboarding as incomplete and block app API usage.
             const path = request.url.split('?')[0] || '';
-            const APP_API_PREFIXES = [
-              '/api/users/credits',
-              '/api/sessions',
-              '/api/moods',
-              '/api/journal',
-              '/api/wellness',
-              '/api/sleep',
-              '/api/habits',
-              '/api/notifications',
-              '/api/ai-avatars',
-              '/api/emergency-contacts',
-            ];
             const isOnboardingApi = path.startsWith('/api/users/onboarding');
             const isAppApi = APP_API_PREFIXES.some((p) => path.startsWith(p));
 

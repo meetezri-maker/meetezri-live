@@ -59,6 +59,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    const maybeClearEmailVerificationRequired = async (sessionUser: User | null) => {
+      if (!sessionUser) return;
+      // Prevent overly-aggressive metadata clearing.
+      // We should only clear `email_verification_required` during the auth callback flow,
+      // otherwise trial users can lose the "verification required" state before they
+      // actually click/complete email verification.
+      if (typeof window !== 'undefined') {
+        const pathname = window.location.pathname || '';
+        if (!pathname.startsWith('/auth/callback')) return;
+      }
+      try {
+        const needsClear =
+          (sessionUser.user_metadata as any)?.email_verification_required === true;
+        const emailConfirmedAt = (sessionUser as any)?.email_confirmed_at;
+        if (needsClear && emailConfirmedAt) {
+          await supabase.auth.updateUser({
+            data: { email_verification_required: false },
+          });
+          // No toast here to avoid UX noise during redirect flows.
+        }
+      } catch {
+        // Best-effort only; do not block app navigation.
+      }
+    };
+
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -70,8 +95,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           window.history.replaceState(null, '', window.location.pathname);
         }
         applyAppearanceForUser(session.user);
-        // Wait for profile bootstrap so UI doesn't assume authentication.
-        fetchProfile();
+        // Clear verification metadata when Supabase says the email is confirmed.
+        maybeClearEmailVerificationRequired(session.user).finally(() => {
+          // Wait for profile bootstrap so UI doesn't assume authentication.
+          fetchProfile();
+        });
       } else {
         // No session, check for errors in URL
         handleAuthErrors();
@@ -88,7 +116,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         applyAppearanceForUser(session.user);
         setIsLoading(true);
-        fetchProfile();
+        maybeClearEmailVerificationRequired(session.user).finally(() => {
+          fetchProfile();
+        });
       } else {
         setProfile(null);
         setIsLoading(false);

@@ -42,7 +42,9 @@ export function Dashboard() {
   const [resendLoading, setResendLoading] = useState(false);
 
   const emailVerified = profile?.email_verified === true;
-  const signupType = profile?.signup_type;
+  const signupType =
+    profile?.signup_type ??
+    (profile?.subscription_plan === "trial" ? "trial" : null);
   // Required behavior:
   // - show popup only for trial users
   // - show only on /app/dashboard

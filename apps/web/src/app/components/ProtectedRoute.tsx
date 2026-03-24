@@ -52,7 +52,10 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   // - redirect other app routes to the trial onboarding start route.
   if (isAppRoute && !onboardingCompleted) {
     const isDashboardRoute = location.pathname === "/app/dashboard";
-    if (signupType === "trial" && isDashboardRoute) {
+    const isTrialUserProfileRoute =
+      location.pathname === "/app/user-profile" ||
+      location.pathname.startsWith("/app/user-profile?");
+    if (signupType === "trial" && (isDashboardRoute || isTrialUserProfileRoute)) {
       return <>{children}</>;
     }
     return <Navigate to={onboardingStartRoute} replace />;

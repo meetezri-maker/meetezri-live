@@ -17,6 +17,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
+  resolveVerificationRedirectForFlow,
+} from "@/lib/verificationRedirect";
+import {
   Form,
   FormControl,
   FormField,
@@ -182,13 +185,31 @@ export function Signup() {
         }
       }
 
-      if (selectedPlan === 'trial' && !planPurchased) {
+      if (selectedPlan === 'trial') {
         // For free trial: create account client-side so a session is established immediately
         
-        // Explicitly set redirect URL to avoid defaults.
-        // Use environment-aware base URL, but fall back to current window origin.
-        const baseUrl = import.meta.env.VITE_WEB_BASE_URL || window.location.origin;
-        const redirectUrl = `${baseUrl}/auth/callback?redirect=${encodeURIComponent('/onboarding/profile-setup')}`;
+        const {
+          emailRedirectTo: redirectUrl,
+          targetPath,
+          baseUrl,
+          isLocal,
+          source,
+        } = resolveVerificationRedirectForFlow("trial");
+        
+        // Required debug logging: exact emailRedirectTo passed to Supabase.
+        console.log("Trial signup: supabase.auth.signUp emailRedirectTo (exact):", redirectUrl, {
+          flow: "frontend_trial_supabase_signup",
+          origin: window.location.origin,
+          hostname: window.location.hostname,
+          env: import.meta.env.DEV ? "dev" : "prod",
+          isLocal,
+          VITE_WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
+          WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
+          APP_URL: undefined,
+          targetPath,
+          baseUrlResolved: baseUrl,
+          baseUrlSource: source,
+        });
 
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: data.email,
@@ -690,9 +711,28 @@ export function Signup() {
                                     action: {
                                       label: "Resend Email",
                                       onClick: async () => {
-                                        const baseUrl =
-                                          import.meta.env.VITE_WEB_BASE_URL || window.location.origin;
-                                        const redirectUrl = `${baseUrl}/auth/callback?redirect=${encodeURIComponent('/app/user-profile')}`;
+                                        const {
+                                          emailRedirectTo: redirectUrl,
+                                          targetPath,
+                                          baseUrl,
+                                          isLocal,
+                                          source,
+                                        } = resolveVerificationRedirectForFlow("trial");
+
+                                        // Required debug logging: exact emailRedirectTo passed to Supabase.
+                                        console.log("Trial retry resend: supabase.auth.resend emailRedirectTo (exact):", redirectUrl, {
+                                          flow: "frontend_trial_supabase_resend",
+                                          origin: window.location.origin,
+                                          hostname: window.location.hostname,
+                                          env: import.meta.env.DEV ? "dev" : "prod",
+                                          isLocal,
+                                          VITE_WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
+                                          WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
+                                          APP_URL: undefined,
+                                          targetPath,
+                                          baseUrlResolved: baseUrl,
+                                          baseUrlSource: source,
+                                        });
                                         
                                         await supabase.auth.resend({ 
                                           type: "signup", 

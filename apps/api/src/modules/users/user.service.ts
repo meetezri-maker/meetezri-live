@@ -587,8 +587,10 @@ export async function getProfile(userId: string) {
     userProfileCache.set(userId, { data: result, timestamp: Date.now() });
   }
 
-  // Always fetch fresh email verification status from Supabase (so verification link click is reflected quickly)
-  let emailVerified = true;
+  // Always fetch fresh email verification status from Supabase.
+  // IMPORTANT: default to `false` when we cannot verify, so UI doesn't incorrectly
+  // treat users as verified (which breaks the trial verification popup).
+  let emailVerified = false;
   try {
     const { data: authData } = await supabaseAdmin.auth.admin.getUserById(
       userId,
@@ -600,9 +602,21 @@ export async function getProfile(userId: string) {
     
     // User is verified ONLY if confirmed by Supabase AND doesn't have the required flag
     emailVerified = isConfirmed && !verificationRequired;
+
+  // Debug visibility: explain why `email_verified` was computed.
+  console.log("[emailVerified debug]", {
+    userId,
+    email_confirmed_at: user?.email_confirmed_at ?? null,
+    email_verification_required: user?.user_metadata?.email_verification_required ?? null,
+    verificationRequired,
+    computedEmailVerified: emailVerified,
+    subscription_plan: result?.subscription_plan ?? null,
+    signup_type: (result as any)?.signup_type ?? null,
+  });
   } catch {
-    // If we can't fetch, keep whatever is currently in result.email_verified
-    emailVerified = result?.email_verified ?? true;
+    // If we can't fetch, fall back to whatever is already present (if any),
+    // otherwise keep it as false (safe default for UX).
+    emailVerified = result?.email_verified === true;
   }
 
   const planType = (result.subscription_plan || "trial") as keyof typeof PLAN_LIMITS;

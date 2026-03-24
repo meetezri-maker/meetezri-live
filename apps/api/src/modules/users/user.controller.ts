@@ -56,6 +56,20 @@ function getWebBaseUrlFromRequest(
   return { webBaseUrl: envWebBaseUrl, source: 'env' };
 }
 
+function resolvePostVerificationTargetPath(signupType: 'trial' | 'plan') {
+  return signupType === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome';
+}
+
+function buildVerificationRedirectTo(
+  webBaseUrl: string,
+  signupType: 'trial' | 'plan'
+) {
+  const targetPath = resolvePostVerificationTargetPath(signupType);
+  // Use exact final route URLs per flow so Supabase sends users directly.
+  const redirectTo = `${webBaseUrl}${targetPath}`;
+  return { redirectTo, targetPath };
+}
+
 export async function checkUserExistsHandler(
   request: FastifyRequest<{ Body: CheckUserInput }>,
   reply: FastifyReply
@@ -131,28 +145,37 @@ export async function signupHandler(
       });
     }
 
-    // Determine base URL for Supabase redirect.
-    // Required behavior:
-    // - Local users -> localhost base
-    // - Production users -> production base
-    const { webBaseUrl: appUrl, source } = getWebBaseUrlFromRequest(request);
+    const { webBaseUrl: baseUrl, source: baseUrlSource } =
+      getWebBaseUrlFromRequest(request);
+
+    const { redirectTo: finalRedirectTo, targetPath } =
+      buildVerificationRedirectTo(baseUrl, signupType);
+
+    // Required debug logging: exact redirectTo passed to Supabase (Auth admin generateLink).
     request.log.info(
       {
-        source,
-        origin: request.headers.origin,
-        referer: request.headers.referer,
-        WEB_BASE_URL: process.env.WEB_BASE_URL,
-        APP_URL: process.env.APP_URL,
+        env: {
+          NODE_ENV: process.env.NODE_ENV,
+          WEB_BASE_URL: process.env.WEB_BASE_URL,
+          APP_URL: process.env.APP_URL,
+          CLIENT_URL: process.env.CLIENT_URL,
+        },
+        request: {
+          origin: request.headers.origin,
+          referer: request.headers.referer,
+          baseUrl,
+          baseUrlSource,
+          isLocal: baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1'),
+          signupType,
+          targetPath,
+        },
+        supabase: {
+          type: 'signup',
+          redirectTo: finalRedirectTo,
+        },
       },
-      'Determining redirect base URL (signup)'
+      'Supabase signup generateLink redirectTo (exact, per-flow)'
     );
-
-    const redirectParam = encodeURIComponent(
-      signupType === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome'
-    );
-    const finalRedirectTo = `${appUrl}/auth/callback?redirect=${redirectParam}`;
-    
-    request.log.info({ finalRedirectTo }, 'Generated verification link redirect URL');
 
     // 2. Generate verification link
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
@@ -160,7 +183,7 @@ export async function signupHandler(
       email,
       password,
       options: {
-        redirectTo: finalRedirectTo
+        redirectTo: finalRedirectTo,
       }
     });
 
@@ -213,31 +236,55 @@ export async function resendVerificationHandler(
   }
 
   try {
-    const { webBaseUrl: appUrl, source } = getWebBaseUrlFromRequest(request);
-    request.log.info(
-      {
-        source,
-        origin: request.headers.origin,
-        referer: request.headers.referer,
-        WEB_BASE_URL: process.env.WEB_BASE_URL,
-        APP_URL: process.env.APP_URL,
-      },
-      'Determining redirect base URL (resend verification)'
+    const profile = await userService.getProfile(userId);
+    // Resolve flow type deterministically.
+    let signupTypeResolved: 'trial' | 'plan' | null = null;
+    if (profile?.signup_type === 'trial' || profile?.signup_type === 'plan') {
+      signupTypeResolved = profile.signup_type;
+    } else {
+      try {
+        const metaSignup = await userService.getSignupTypeFromAuthMeta(userId);
+        if (metaSignup) signupTypeResolved = metaSignup;
+      } catch {
+        // leave as null
+      }
+    }
+
+    const { webBaseUrl: baseUrl, source: baseUrlSource } =
+      getWebBaseUrlFromRequest(request);
+
+    const signupTypeForRedirect: 'trial' | 'plan' =
+      signupTypeResolved === 'trial' ? 'trial' : 'plan';
+    const { redirectTo, targetPath } = buildVerificationRedirectTo(
+      baseUrl,
+      signupTypeForRedirect
     );
 
-    // Decide where the verified user should land.
-    // - If onboarding is done, go to dashboard
-    // - Otherwise, resume onboarding
-    const profile = await userService.getProfile(userId);
-    const redirectTarget =
-      profile?.onboarding_completed === true
-        ? '/app/dashboard'
-        : profile?.signup_type === 'trial'
-          ? '/onboarding/profile-setup'
-          : '/onboarding/welcome';
-    const redirectTo = `${appUrl}/auth/callback?redirect=${encodeURIComponent(
-      redirectTarget
-    )}`;
+    // Required debug logging: exact redirectTo passed to Supabase (Auth admin generateLink).
+    request.log.info(
+      {
+        env: {
+          NODE_ENV: process.env.NODE_ENV,
+          WEB_BASE_URL: process.env.WEB_BASE_URL,
+          APP_URL: process.env.APP_URL,
+          CLIENT_URL: process.env.CLIENT_URL,
+        },
+        request: {
+          origin: request.headers.origin,
+          referer: request.headers.referer,
+          baseUrl,
+          baseUrlSource,
+          isLocal: baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1'),
+          signupTypeResolved,
+          targetPath,
+        },
+        supabase: {
+          type: 'magiclink',
+          redirectTo,
+        },
+      },
+      'Supabase resend generateLink redirectTo (exact, per-flow)'
+    );
 
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',

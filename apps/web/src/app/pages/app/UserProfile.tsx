@@ -37,6 +37,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { resolveVerificationRedirectForFlow } from "@/lib/verificationRedirect";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Progress } from "../../components/ui/progress";
 
@@ -117,7 +118,7 @@ type ProfileFormValues = z.infer<typeof profileSchema>;
 export function UserProfile() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signOut, user } = useAuth();
+  const { signOut, user, refreshProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [showVerifiedAlert, setShowVerifiedAlert] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -132,10 +133,13 @@ export function UserProfile() {
     const params = new URLSearchParams(location.search);
     if (params.get("verified") === "true") {
       setShowVerifiedAlert(true);
+      // Deterministic: after successful email verification redirect,
+      // force a fresh `/api/users/me` fetch so `email_verified`-based UI updates.
+      refreshProfile().catch(() => {});
       // Clean up the URL
       navigate(location.pathname, { replace: true });
     }
-  }, [location, navigate]);
+  }, [location, navigate, refreshProfile]);
 
   // Use React Hook Form
   const form = useForm<ProfileFormValues>({
@@ -398,11 +402,26 @@ export function UserProfile() {
     try {
       setResending(true);
       
-      // Use environment-aware base URL, but fall back to current origin.
-      const baseUrl = import.meta.env.VITE_WEB_BASE_URL || window.location.origin;
-
-      const currentPath = window.location.pathname + window.location.search;
-      const redirectTo = `${baseUrl}/auth/callback?redirect=${encodeURIComponent(currentPath)}`;
+      const signupType =
+        (user as any)?.user_metadata?.signup_type === "trial" ? "trial" : "plan";
+      const { emailRedirectTo: redirectTo, targetPath, baseUrl, isLocal, source } =
+        resolveVerificationRedirectForFlow(signupType);
+      
+      // Required debug logging: exact emailRedirectTo passed to Supabase.
+      console.log("Resend (UserProfile): supabase.auth.resend emailRedirectTo (exact):", redirectTo, {
+        flow: "frontend_userprofile_supabase_resend",
+        origin: window.location.origin,
+        hostname: window.location.hostname,
+        env: import.meta.env.DEV ? "dev" : "prod",
+        isLocal,
+        signupType,
+        targetPath,
+        VITE_WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
+        WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
+        APP_URL: undefined,
+        baseUrlResolved: baseUrl,
+        baseUrlSource: source,
+      });
       
       const { error } = await supabase.auth.resend({
         type: 'signup',

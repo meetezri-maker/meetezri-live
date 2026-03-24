@@ -15,6 +15,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { resolveVerificationRedirectForFlow } from "@/lib/verificationRedirect";
 import {
   Form,
   FormControl,
@@ -40,7 +41,7 @@ export function Login() {
     profile?.signup_type === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome';
 
   const form = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
+    resolver: zodResolver(loginSchema as any),
     defaultValues: {
       email: "",
       password: "",
@@ -73,13 +74,29 @@ export function Login() {
 
   const handleResendVerification = async (emailToResend: string) => {
     try {
-      // Use environment-aware base URL, but fall back to current origin.
-      const baseUrl = import.meta.env.VITE_WEB_BASE_URL || window.location.origin;
+      const signupType = profile?.signup_type === "trial" ? "trial" : "plan";
+      const { emailRedirectTo: redirectTo, targetPath, baseUrl, isLocal, source } =
+        resolveVerificationRedirectForFlow(signupType);
 
-      const currentPath = window.location.pathname + window.location.search;
-      const redirectTo = `${baseUrl}/auth/callback?redirect=${encodeURIComponent(currentPath)}`;
-      
-      console.log("Resending verification (Login Page) to:", redirectTo);
+      // Required debug logging: exact emailRedirectTo passed to Supabase.
+      console.log(
+        "Resend (Login Page): supabase.auth.resend emailRedirectTo (exact):",
+        redirectTo,
+        {
+          origin: window.location.origin,
+          hostname: window.location.hostname,
+          env: import.meta.env.DEV ? "dev" : "prod",
+          isLocal,
+          signupType,
+          targetPath,
+          VITE_WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
+          WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
+          APP_URL: undefined,
+          baseUrlResolved: baseUrl,
+          baseUrlSource: source,
+          flow: "frontend_login_supabase_resend",
+        }
+      );
 
       const { error } = await supabase.auth.resend({
         type: 'signup',
@@ -108,7 +125,11 @@ export function Login() {
       // Check if profile exists
       try {
         const me = await api.getMe();
-        navigate(me?.onboarding_completed === true ? "/app/dashboard" : "/onboarding/welcome");
+        const resolvedOnboardingStartRoute =
+          me?.signup_type === "trial" ? "/onboarding/profile-setup" : "/onboarding/welcome";
+        navigate(
+          me?.onboarding_completed === true ? "/app/dashboard" : resolvedOnboardingStartRoute
+        );
       } catch (err: any) {
         // Only redirect to onboarding if profile is explicitly not found
         if (err.message === 'Profile not found') {
