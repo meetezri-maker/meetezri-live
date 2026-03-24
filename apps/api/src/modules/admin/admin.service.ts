@@ -1,6 +1,6 @@
 
 import prisma from '../../lib/prisma';
-import { Prisma } from '@prisma/client';
+import { Prisma, $Enums } from '@prisma/client';
 import { DashboardStats } from './admin.schema';
 import { endSession } from '../sessions/sessions.service';
 import { notificationsService } from '../notifications/notifications.service';
@@ -938,8 +938,13 @@ export async function deletePushCampaign(id: string) {
 export async function getSupportTickets(page: number = 1, limit: number = 20, status?: string) {
   const skip = Math.max(0, (page - 1) * limit);
   const take = Math.min(Math.max(limit, 1), 100);
+  const ticketStatuses = Object.values($Enums.ticket_status) as $Enums.ticket_status[];
+  const statusFilter =
+    status && ticketStatuses.includes(status as $Enums.ticket_status)
+      ? (status as $Enums.ticket_status)
+      : undefined;
   return prisma.support_tickets.findMany({
-    where: status ? { status } : undefined,
+    where: statusFilter ? { status: statusFilter } : undefined,
     skip,
     take,
     orderBy: { created_at: 'desc' },
