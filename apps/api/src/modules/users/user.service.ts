@@ -3,6 +3,7 @@ import { supabaseAdmin } from '../../config/supabase';
 import { OnboardingInput, UpdateProfileInput } from './user.schema';
 import { PLAN_LIMITS } from '../billing/billing.constants';
 import * as billingService from '../billing/billing.service';
+import { getLifetimeUsedSeconds } from '../billing/credit-balance.service';
 
 function calculateStreak(moodEntries: any[]) {
   if (!moodEntries || moodEntries.length === 0) return 0;
@@ -575,16 +576,25 @@ export async function getProfile(userId: string) {
       },
       credits_remaining: totalSeconds === 0 ? 0 : Math.ceil(totalSeconds / 60),
       credits_remaining_seconds: totalSeconds,
-      credits_total:
-        totalSeconds === 0 ? 0 : Math.ceil(totalSeconds / 60),
-      credits_total_seconds:
-        totalSeconds,
       subscription_plan: internalPlanType,
       subscriptions: activeSubscription ? [activeSubscription] : [],
     };
 
     userProfileCache.set(userId, { data: result, timestamp: Date.now() });
   }
+
+  const usedSecondsLifetime = await getLifetimeUsedSeconds(userId);
+  const remainingSecondsForAccount =
+    typeof result.credits_remaining_seconds === 'number'
+      ? result.credits_remaining_seconds
+      : Math.max(0, (result.credits_remaining || 0) * 60);
+  const totalAccountSeconds = remainingSecondsForAccount + usedSecondsLifetime;
+  result.minutes_used =
+    usedSecondsLifetime === 0 ? 0 : Math.ceil(usedSecondsLifetime / 60);
+  result.total_minutes =
+    totalAccountSeconds === 0 ? 0 : Math.ceil(totalAccountSeconds / 60);
+  result.credits_total = result.total_minutes;
+  result.credits_total_seconds = totalAccountSeconds;
 
   // Always fetch fresh email verification status from Supabase.
   // IMPORTANT: default to `false` when we cannot verify, so UI doesn't incorrectly
@@ -636,19 +646,6 @@ export async function getProfile(userId: string) {
 }
 
 export async function getCredits(userId: string) {
-  const activeSub = await prisma.subscriptions.findFirst({
-    where: {
-      user_id: userId,
-      status: { in: ['active', 'trialing', 'past_due'] },
-    },
-    orderBy: { created_at: 'desc' },
-    select: {
-      start_date: true,
-      end_date: true,
-      created_at: true,
-    },
-  });
-
   const profile = await prisma.profiles.findUnique({
     where: { id: userId },
     select: {
@@ -656,7 +653,7 @@ export async function getCredits(userId: string) {
       purchased_credits: true,
       credits_seconds: true,
       purchased_credits_seconds: true,
-    }
+    },
   });
 
   const subscriptionSeconds =
@@ -668,35 +665,32 @@ export async function getCredits(userId: string) {
       profile.purchased_credits_seconds > 0)
       ? profile.purchased_credits_seconds
       : (profile?.purchased_credits || 0) * 60;
-  const totalSeconds = subscriptionSeconds + purchasedSeconds;
+  const remainingSeconds = subscriptionSeconds + purchasedSeconds;
 
-  // "Subscription total" should reflect the full allowance accrued this billing period,
-  // including stacked upgrades: total = remaining + used_this_period.
-  const periodStart = activeSub?.start_date || activeSub?.created_at || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const periodEnd = activeSub?.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const usedSecondsLifetime = await getLifetimeUsedSeconds(userId);
+  const totalAccountSeconds = remainingSeconds + usedSecondsLifetime;
 
-  const usedAgg = await prisma.app_sessions.aggregate({
-    where: {
-      user_id: userId,
-      status: 'completed',
-      ended_at: { not: null, gte: periodStart, lte: periodEnd },
-    },
-    _sum: { billed_seconds: true },
-  });
+  const ceilMin = (sec: number) => (sec === 0 ? 0 : Math.ceil(sec / 60));
 
-  const usedSecondsThisPeriod = Math.max(0, usedAgg._sum.billed_seconds || 0);
-  const subscriptionTotalSeconds = subscriptionSeconds + usedSecondsThisPeriod;
+  // Subscription-bucket capacity view: remaining subscription time + all lifetime usage.
+  // (Usage is drawn from subscription first, then PAYG; this matches stacked upgrades without PAYG.
+  // With active PAYG balance, treat as an upper-bound approximation for the monthly card.)
+  const subscriptionTotalSeconds = subscriptionSeconds + usedSecondsLifetime;
 
   return {
-    credits: totalSeconds === 0 ? 0 : Math.ceil(totalSeconds / 60),
-    subscription:
-      subscriptionSeconds === 0 ? 0 : Math.ceil(subscriptionSeconds / 60),
-    purchased:
-      purchasedSeconds === 0 ? 0 : Math.ceil(purchasedSeconds / 60),
-    credits_seconds: totalSeconds,
+    credits: ceilMin(remainingSeconds),
+    subscription: ceilMin(subscriptionSeconds),
+    purchased: ceilMin(purchasedSeconds),
+    credits_seconds: remainingSeconds,
     subscription_seconds: subscriptionSeconds,
     purchased_seconds: purchasedSeconds,
-    subscription_total: subscriptionTotalSeconds === 0 ? 0 : Math.ceil(subscriptionTotalSeconds / 60),
+    used_seconds: usedSecondsLifetime,
+    used_minutes: ceilMin(usedSecondsLifetime),
+    remaining_seconds: remainingSeconds,
+    remaining_minutes: ceilMin(remainingSeconds),
+    total_seconds: totalAccountSeconds,
+    total_minutes: ceilMin(totalAccountSeconds),
+    subscription_total: ceilMin(subscriptionTotalSeconds),
     subscription_total_seconds: subscriptionTotalSeconds,
   };
 }

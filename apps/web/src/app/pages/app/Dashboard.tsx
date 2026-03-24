@@ -97,12 +97,15 @@ export function Dashboard() {
   const streakDays = profile?.streak_days || 0;
   
   // Real data from backend
-  const creditsRemaining = profile?.credits_remaining || 0;
-  const creditsTotal = profile?.credits_total || 200;
+  const creditsRemaining =
+    profile?.credits_remaining != null ? profile.credits_remaining : 0;
+  const creditsTotal =
+    profile?.credits_total != null ? profile.credits_total : 200;
   const userPlan = profile?.subscription_plan || "Basic Plan";
   const [liveCreditsSeconds, setLiveCreditsSeconds] = useState<number | null>(null);
-  const [liveCreditsTotalSeconds, setLiveCreditsTotalSeconds] = useState<number | null>(null);
-  const [liveCreditsTotalMinutes, setLiveCreditsTotalMinutes] = useState<number | null>(null);
+  const [liveAccountTotalMinutes, setLiveAccountTotalMinutes] = useState<number | null>(null);
+  const [liveAccountUsedMinutes, setLiveAccountUsedMinutes] = useState<number | null>(null);
+  const [liveAccountRemainingMinutes, setLiveAccountRemainingMinutes] = useState<number | null>(null);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -113,53 +116,42 @@ export function Dashboard() {
   };
 
   useEffect(() => {
-    // Use the dedicated credits endpoint (no-cache) for accurate seconds display
     const loadCredits = async () => {
       try {
-        const {
-          credits_seconds,
-          credits,
-          subscription_total_seconds,
-          subscription_total,
-          purchased_seconds,
-          purchased,
-        } = await api.getCredits();
+        const data = await api.getCredits();
         const seconds =
-          typeof credits_seconds === "number"
-            ? Math.max(0, credits_seconds)
-            : typeof credits === "number"
-            ? Math.max(0, credits) * 60
-            : null;
+          typeof data.remaining_seconds === "number"
+            ? Math.max(0, data.remaining_seconds)
+            : typeof data.credits_seconds === "number"
+              ? Math.max(0, data.credits_seconds)
+              : typeof data.credits === "number"
+                ? Math.max(0, data.credits) * 60
+                : null;
         setLiveCreditsSeconds(seconds);
-        const totalSeconds =
-          (typeof subscription_total_seconds === "number"
-            ? Math.max(0, subscription_total_seconds)
-            : typeof subscription_total === "number"
-            ? Math.max(0, subscription_total) * 60
-            : null);
-        const purchasedSecondsValue =
-          (typeof purchased_seconds === "number"
-            ? Math.max(0, purchased_seconds)
-            : typeof purchased === "number"
-            ? Math.max(0, purchased) * 60
-            : 0);
-        if (totalSeconds !== null) {
-          const combined = totalSeconds + purchasedSecondsValue;
-          setLiveCreditsTotalSeconds(combined);
-          setLiveCreditsTotalMinutes(Math.ceil(combined / 60));
+        if (typeof data.total_minutes === "number") {
+          setLiveAccountTotalMinutes(Math.max(0, data.total_minutes));
         } else {
-          setLiveCreditsTotalSeconds(null);
-          setLiveCreditsTotalMinutes(null);
+          setLiveAccountTotalMinutes(null);
         }
-      } catch (e) {
-        // Fall back to profile-derived fields below
+        if (typeof data.used_minutes === "number") {
+          setLiveAccountUsedMinutes(Math.max(0, data.used_minutes));
+        } else {
+          setLiveAccountUsedMinutes(null);
+        }
+        if (typeof data.remaining_minutes === "number") {
+          setLiveAccountRemainingMinutes(Math.max(0, data.remaining_minutes));
+        } else {
+          setLiveAccountRemainingMinutes(null);
+        }
+      } catch {
         setLiveCreditsSeconds(null);
-        setLiveCreditsTotalSeconds(null);
-        setLiveCreditsTotalMinutes(null);
+        setLiveAccountTotalMinutes(null);
+        setLiveAccountUsedMinutes(null);
+        setLiveAccountRemainingMinutes(null);
       }
     };
-    loadCredits();
-  }, []);
+    void loadCredits();
+  }, [user?.id, profile?.credits_total, profile?.credits_remaining]);
 
   const creditsRemainingSeconds =
     liveCreditsSeconds !== null
@@ -168,17 +160,27 @@ export function Dashboard() {
       ? Math.max(0, profile.credits_remaining_seconds)
       : creditsRemaining * 60;
 
-  const creditsTotalSeconds =
-    liveCreditsTotalSeconds !== null
-      ? liveCreditsTotalSeconds
-      : typeof profile?.credits_total_seconds === "number"
-      ? Math.max(0, profile.credits_total_seconds)
-      : creditsTotal * 60;
+  const accountRemainingMinutesDisplay =
+    liveAccountRemainingMinutes !== null
+      ? liveAccountRemainingMinutes
+      : creditsRemaining;
 
   const creditsTotalMinutes =
-    liveCreditsTotalMinutes !== null
-      ? liveCreditsTotalMinutes
+    liveAccountTotalMinutes !== null
+      ? liveAccountTotalMinutes
       : creditsTotal;
+
+  const accountUsedMinutesDisplay =
+    liveAccountUsedMinutes !== null
+      ? liveAccountUsedMinutes
+      : typeof profile?.minutes_used === "number"
+        ? profile.minutes_used
+        : null;
+
+  const creditsRemainingLow =
+    liveAccountRemainingMinutes !== null
+      ? liveAccountRemainingMinutes
+      : creditsRemaining;
 
   const quickActions = [
     {
@@ -433,14 +435,14 @@ export function Dashboard() {
             >
               <Card
                 className={`h-full p-6 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-shadow flex flex-col ${
-                  creditsRemaining <= 50
+                  creditsRemainingLow <= 50
                     ? "bg-gradient-to-br from-amber-500 to-orange-500"
                     : "bg-gradient-to-br from-green-500 to-emerald-500"
                 }`}
               >
                 <div className="flex items-center justify-between ">
                   <Clock className="w-8 h-8" />
-                  {creditsRemaining <= 50 && (
+                  {creditsRemainingLow <= 50 && (
                     <motion.div
                       animate={{ scale: [1, 1.2, 1] }}
                       transition={{ duration: 1.5, repeat: Infinity }}
@@ -450,17 +452,26 @@ export function Dashboard() {
                   )}
                 </div>
                 <div className="flex flex-col gap-2 mt-1">
-                <h3 className="font-bold ">Time Remaining</h3>
+                <h3 className="font-bold ">Time remaining</h3>
                 <p className="text-xl font-semibold font-mono">
                   {formatTime(creditsRemainingSeconds)}
                 </p>
-                </div>
-                <div className="flex flex-row gap-2 mt-1">
-                <h3 className="  font-bold "> Total minutes: </h3>
-                <p className="text-xl font-semibold font-mono">
-                  {creditsTotalMinutes} 
+                <p className="text-sm font-medium text-white/90">
+                  {accountRemainingMinutesDisplay} min · all buckets
                 </p>
-                 
+                </div>
+                <div className="flex flex-col gap-1 mt-2">
+                <div className="flex flex-row gap-2 items-baseline">
+                <h3 className="font-bold">Total minutes</h3>
+                <p className="text-xl font-semibold font-mono">
+                  {creditsTotalMinutes}
+                </p>
+                </div>
+                {accountUsedMinutesDisplay != null && (
+                  <p className="text-sm text-white/90">
+                    Used: {accountUsedMinutesDisplay} min
+                  </p>
+                )}
                 </div>
                 <p className="text-xs text-white/90 ">
                   {userPlan} • Click to manage

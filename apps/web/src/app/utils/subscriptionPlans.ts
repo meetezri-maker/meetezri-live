@@ -112,8 +112,8 @@ export interface UserSubscription {
   userId: string;
   planId: PlanTier;
   status: 'active' | 'expired' | 'cancelled' | 'trial';
-  creditsRemaining: number; // Minutes left this billing cycle
-  creditsTotal: number; // Total minutes for this plan
+  creditsRemaining: number; // Minutes left in subscription bucket
+  creditsTotal: number; // Subscription-bucket capacity view (remaining + used; stacked upgrades)
   billingCycle: {
     startDate: string; // ISO date
     endDate: string; // ISO date
@@ -124,6 +124,11 @@ export interface UserSubscription {
   usageHistory: UsageRecord[];
   createdAt: string;
   updatedAt: string;
+  /** All pools: remaining subscription + PAYG + lifetime used (canonical account capacity). */
+  accountTotalMinutes?: number;
+  accountUsedMinutes?: number;
+  /** Remaining minutes across subscription + PAYG buckets. */
+  accountRemainingMinutes?: number;
 }
 
 export interface UsageRecord {
