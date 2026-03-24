@@ -5,7 +5,7 @@ import {
   updateContactHandler,
   deleteContactHandler,
 } from './emergency-contacts.controller';
-import { createEmergencyContactSchema, updateEmergencyContactSchema, emergencyContactResponseSchema } from './emergency-contacts.schema';
+import { createEmergencyContactSchema, updateEmergencyContactWithFieldsSchema, emergencyContactResponseSchema } from './emergency-contacts.schema';
 import { z } from 'zod';
 
 export async function emergencyContactRoutes(fastify: FastifyInstance) {
@@ -42,7 +42,7 @@ export async function emergencyContactRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate],
       schema: {
         params: z.object({ id: z.string().uuid() }),
-        body: updateEmergencyContactSchema,
+        body: updateEmergencyContactWithFieldsSchema,
         response: {
           200: emergencyContactResponseSchema,
         },

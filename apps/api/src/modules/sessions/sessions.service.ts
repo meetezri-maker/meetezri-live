@@ -1,53 +1,61 @@
 import prisma from '../../lib/prisma';
+import { Prisma } from '@prisma/client';
 import { emailService } from '../email/email.service';
 import { CreateSessionInput, CreateMessageInput } from './sessions.schema';
 
-async function deductCreditsSeconds(userId: string, secondsUsed: number) {
+type DbClient = Prisma.TransactionClient | typeof prisma;
+
+async function deductCreditsSeconds(db: DbClient, userId: string, secondsUsed: number) {
   if (secondsUsed <= 0) return;
-  const profile = await prisma.profiles.findUnique({
-    where: { id: userId },
-    select: {
-      credits: true,
-      purchased_credits: true,
-      credits_seconds: true,
-      purchased_credits_seconds: true,
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const profile = await db.profiles.findUnique({
+      where: { id: userId },
+      select: {
+        credits: true,
+        purchased_credits: true,
+        credits_seconds: true,
+        purchased_credits_seconds: true,
+      },
+    });
+
+    if (!profile) return;
+
+    const storedSubSeconds = profile.credits_seconds || 0;
+    const storedPurSeconds = profile.purchased_credits_seconds || 0;
+    const subSeconds = storedSubSeconds > 0 ? storedSubSeconds : (profile.credits || 0) * 60;
+    const purSeconds = storedPurSeconds > 0 ? storedPurSeconds : (profile.purchased_credits || 0) * 60;
+
+    let newSubSeconds = subSeconds;
+    let newPurSeconds = purSeconds;
+    if (newSubSeconds >= secondsUsed) {
+      newSubSeconds -= secondsUsed;
+    } else {
+      const remaining = secondsUsed - newSubSeconds;
+      newSubSeconds = 0;
+      newPurSeconds = Math.max(0, newPurSeconds - remaining);
     }
-  });
 
-  if (!profile) return;
+    const newSubCredits = newSubSeconds === 0 ? 0 : Math.ceil(newSubSeconds / 60);
+    const newPurCredits = newPurSeconds === 0 ? 0 : Math.ceil(newPurSeconds / 60);
 
-  const subSeconds =
-    (profile.credits_seconds && profile.credits_seconds > 0)
-      ? profile.credits_seconds
-      : (profile.credits || 0) * 60;
-  const purSeconds =
-    (profile.purchased_credits_seconds && profile.purchased_credits_seconds > 0)
-      ? profile.purchased_credits_seconds
-      : (profile.purchased_credits || 0) * 60;
+    const updated = await db.profiles.updateMany({
+      where: {
+        id: userId,
+        credits_seconds: storedSubSeconds,
+        purchased_credits_seconds: storedPurSeconds,
+      },
+      data: {
+        credits: newSubCredits,
+        purchased_credits: Math.max(0, newPurCredits),
+        credits_seconds: newSubSeconds,
+        purchased_credits_seconds: newPurSeconds,
+      },
+    });
 
-  let newSubSeconds = subSeconds;
-  let newPurSeconds = purSeconds;
-
-  if (newSubSeconds >= secondsUsed) {
-    newSubSeconds -= secondsUsed;
-  } else {
-    const remaining = secondsUsed - newSubSeconds;
-    newSubSeconds = 0;
-    newPurSeconds = Math.max(0, newPurSeconds - remaining);
+    if (updated.count === 1) return;
   }
 
-  const newSubCredits = newSubSeconds === 0 ? 0 : Math.ceil(newSubSeconds / 60);
-  const newPurCredits = newPurSeconds === 0 ? 0 : Math.ceil(newPurSeconds / 60);
-
-  await prisma.profiles.update({
-    where: { id: userId },
-    data: {
-      credits: newSubCredits,
-      purchased_credits: Math.max(0, newPurCredits),
-      credits_seconds: newSubSeconds,
-      purchased_credits_seconds: newPurSeconds,
-    }
-  });
+  throw new Error('Failed to deduct credits safely after retries');
 }
 
 export async function createSession(userId: string, input: CreateSessionInput) {
@@ -245,7 +253,7 @@ export async function endSession(
   const billNow = Math.max(0, secondsUsed - alreadyBilled);
   if (billNow > 0) {
     try {
-      await deductCreditsSeconds(userId, billNow);
+      await deductCreditsSeconds(prisma, userId, billNow);
     } catch (error) {
       console.error('Error deducting credits:', error);
     }
@@ -300,7 +308,7 @@ export async function heartbeatSession(userId: string, sessionId: string, elapse
     }
 
     // Deduct + mark billed seconds atomically
-    await deductCreditsSeconds(userId, delta);
+    await deductCreditsSeconds(tx, userId, delta);
     await tx.app_sessions.update({
       where: { id: sessionId },
       data: { billed_seconds: desired }

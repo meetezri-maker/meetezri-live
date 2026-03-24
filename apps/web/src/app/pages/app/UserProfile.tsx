@@ -115,6 +115,17 @@ const profileSchema = z.object({
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
+const toProfileGoals = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value as string[];
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
 export function UserProfile() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -353,22 +364,44 @@ export function UserProfile() {
   const onSubmit = async (data: ProfileFormValues) => {
     setIsSaving(true);
     try {
-      const updatedProfile = await api.updateProfile({
-        full_name: data.name,
-        email: data.email,
-        phone: data.phone,
-        age: data.birthday, // Mapped from birthday field which is actually age
-        avatar_url: profileImage,
-        pronouns: data.pronouns,
-        timezone: data.location,
-        in_therapy: data.in_therapy,
-        // on_medication: data.on_medication,
-        selected_goals: data.selected_goals || [],
-        selected_triggers: data.selected_triggers || [],
-        emergency_contact_name: data.emergency_contact_name,
-        emergency_contact_phone: data.emergency_contact_phone,
-        emergency_contact_relationship: data.emergency_contact_relationship
-      });
+      const dirty = form.formState.dirtyFields;
+      const profilePatch: Record<string, unknown> = {};
+
+      if (dirty.name) profilePatch.full_name = data.name;
+      if (dirty.email) profilePatch.email = data.email;
+      if (dirty.phone) profilePatch.phone = data.phone;
+      if (dirty.birthday) profilePatch.age = data.birthday; // mapped from age input
+      if (dirty.pronouns) profilePatch.pronouns = data.pronouns;
+      if (dirty.location) profilePatch.timezone = data.location;
+      if (dirty.in_therapy) profilePatch.in_therapy = data.in_therapy;
+      if (dirty.selected_goals) profilePatch.selected_goals = data.selected_goals || [];
+      if (dirty.selected_triggers) profilePatch.selected_triggers = data.selected_triggers || [];
+
+      // Avatar is uploaded independently; only patch it when it changed.
+      if (profileImage !== rawProfile?.avatar_url) {
+        profilePatch.avatar_url = profileImage;
+      }
+
+      // Keep emergency contact updates partial-safe while preserving schema compatibility.
+      const emergencyDirty =
+        !!dirty.emergency_contact_name ||
+        !!dirty.emergency_contact_phone ||
+        !!dirty.emergency_contact_relationship;
+
+      if (emergencyDirty) {
+        profilePatch.emergency_contact_name = data.emergency_contact_name || rawProfile?.emergency_contact_name || "";
+        profilePatch.emergency_contact_phone = data.emergency_contact_phone || rawProfile?.emergency_contact_phone || "";
+        profilePatch.emergency_contact_relationship =
+          data.emergency_contact_relationship || rawProfile?.emergency_contact_relationship || "";
+      }
+
+      if (Object.keys(profilePatch).length === 0) {
+        toast.success("No changes to save");
+        setIsEditing(false);
+        return;
+      }
+
+      const updatedProfile = await api.updateProfile(profilePatch);
       
       // Update form with returned data to ensure sync
       form.reset({
@@ -380,8 +413,8 @@ export function UserProfile() {
         location: updatedProfile.timezone || '',
         in_therapy: updatedProfile.in_therapy || 'Not specified',
         // on_medication: updatedProfile.on_medication || 'Not specified',
-        selected_goals: updatedProfile.selected_goals || [],
-        selected_triggers: updatedProfile.selected_triggers || [],
+        selected_goals: toProfileGoals(updatedProfile.selected_goals),
+        selected_triggers: toProfileGoals(updatedProfile.selected_triggers),
         emergency_contact_name: updatedProfile.emergency_contact_name || '',
         emergency_contact_phone: updatedProfile.emergency_contact_phone || '',
         emergency_contact_relationship: updatedProfile.emergency_contact_relationship || ''
@@ -500,6 +533,9 @@ export function UserProfile() {
   ];
   
   const needsEmailVerification = !!user && !(user as any).email_confirmed_at;
+  const effectiveNeedsVerification =
+    (rawProfile as any)?.needs_email_verification ??
+    (rawProfile ? !(rawProfile as any)?.email_verified : needsEmailVerification);
 
   if (isLoading) {
     return (
@@ -582,7 +618,7 @@ export function UserProfile() {
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {needsEmailVerification && (
+        {effectiveNeedsVerification && (
           <div className="mb-6 p-4 border-2 border-yellow-300 bg-yellow-50 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-3">
               <AlertTriangle className="w-5 h-5 text-yellow-700" />

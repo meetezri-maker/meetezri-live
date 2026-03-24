@@ -24,15 +24,14 @@ export async function getSleepEntries(userId: string) {
 }
 
 export async function getSleepEntryById(userId: string, id: string) {
-  return prisma.sleep_entries.findUnique({
-    where: { id },
+  return prisma.sleep_entries.findFirst({
+    where: { id, user_id: userId },
   });
 }
 
 export async function updateSleepEntry(userId: string, id: string, data: UpdateSleepEntryInput) {
-  // Ensure user owns the entry
-  const entry = await prisma.sleep_entries.findUnique({ where: { id } });
-  if (!entry || entry.user_id !== userId) {
+  const entry = await prisma.sleep_entries.findFirst({ where: { id, user_id: userId } });
+  if (!entry) {
     throw new Error('Sleep entry not found or unauthorized');
   }
 
@@ -43,9 +42,8 @@ export async function updateSleepEntry(userId: string, id: string, data: UpdateS
 }
 
 export async function deleteSleepEntry(userId: string, id: string) {
-  // Ensure user owns the entry
-  const entry = await prisma.sleep_entries.findUnique({ where: { id } });
-  if (!entry || entry.user_id !== userId) {
+  const entry = await prisma.sleep_entries.findFirst({ where: { id, user_id: userId } });
+  if (!entry) {
     throw new Error('Sleep entry not found or unauthorized');
   }
 

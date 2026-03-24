@@ -15,6 +15,8 @@ export const updateHabitSchema = z.object({
   color: z.string().optional(),
   icon: z.string().optional(),
   is_archived: z.boolean().optional(),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: "At least one field is required for update",
 });
 
 export const logHabitSchema = z.object({

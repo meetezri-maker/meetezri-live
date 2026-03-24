@@ -11,6 +11,19 @@ interface UserPayload {
   role?: string;
 }
 
+function sanitizeSelfProfileResponse(profile: Record<string, any> | null) {
+  if (!profile) return profile;
+  const sanitized = { ...profile };
+
+  // Internal/billing/admin-oriented keys should not be exposed from self profile endpoints.
+  delete (sanitized as any).stripe_customer_id;
+  delete (sanitized as any).stripe_subscription_id;
+  delete (sanitized as any).organization_id;
+  delete (sanitized as any).deleted_at;
+
+  return sanitized;
+}
+
 function isLocalWebOrigin(value?: string | null) {
   if (!value) return false;
   try {
@@ -365,7 +378,7 @@ export async function getMeHandler(
     return reply.code(404).send({ message: 'Profile not found' });
   }
 
-  return profile;
+  return sanitizeSelfProfileResponse(profile as any);
 }
 
 export async function initProfileHandler(
@@ -387,9 +400,10 @@ export async function initProfileHandler(
       } catch (e) {
         request.log.warn({ e }, 'Failed to backfill signup_type on initProfile');
       }
-      return await userService.getProfile(user.sub);
+      const refreshedProfile = await userService.getProfile(user.sub);
+      return sanitizeSelfProfileResponse(refreshedProfile as any);
     }
-    return existingProfile;
+    return sanitizeSelfProfileResponse(existingProfile as any);
   }
 
   let email = user.email;
@@ -454,7 +468,7 @@ export async function initProfileHandler(
   try {
     const profile = await userService.createProfile(user.sub, email);
     request.log.info({ profile }, 'Profile initialized successfully');
-    return profile;
+    return sanitizeSelfProfileResponse(profile as any);
   } catch (error) {
     request.log.error({ error }, 'Failed to initialize profile');
     return reply.code(500).send({ message: 'Failed to initialize profile' });
@@ -485,7 +499,7 @@ export async function updateProfileHandler(
 
   const updatedProfile = await userService.updateProfile(user.sub, result.data);
   request.log.info({ updatedProfile }, 'Profile updated successfully');
-  return updatedProfile;
+  return sanitizeSelfProfileResponse(updatedProfile as any);
 }
 
 export async function completeOnboardingHandler(
@@ -503,7 +517,7 @@ export async function completeOnboardingHandler(
 
   try {
     const profile = await userService.completeOnboarding(user.sub, result.data);
-    return profile;
+    return sanitizeSelfProfileResponse(profile as any);
   } catch (error) {
     request.log.error({ error }, 'Onboarding completion failed');
     throw error;

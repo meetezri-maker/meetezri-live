@@ -61,7 +61,10 @@ export async function createCheckoutSession(userId: string, email: string, data:
       // Reset/Set credits for trial
       await prisma.profiles.update({
         where: { id: userId },
-        data: { credits: trialCredits },
+        data: {
+          credits: trialCredits,
+          credits_seconds: trialCredits * 60,
+        },
       });
 
       return { subscription: updated };
@@ -81,7 +84,10 @@ export async function createCheckoutSession(userId: string, email: string, data:
     // Set credits for trial
     await prisma.profiles.update({
       where: { id: userId },
-      data: { credits: trialCredits },
+      data: {
+        credits: trialCredits,
+        credits_seconds: trialCredits * 60,
+      },
     });
 
     return { subscription };

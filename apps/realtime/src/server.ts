@@ -7,11 +7,9 @@ dotenv.config();
 
 const httpServer = createServer();
 
-const allowedOrigins =
-  (process.env.REALTIME_CORS_ORIGINS || process.env.CLIENT_URL || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+const allowedOrigins = parseRealtimeCorsOrigins(
+  process.env.REALTIME_CORS_ORIGINS || process.env.CLIENT_URL
+);
 
 const io = new Server(httpServer, {
   cors: {
@@ -26,6 +24,7 @@ const io = new Server(httpServer, {
 });
 
 import { supabaseAdmin } from './config/supabase';
+import { parseRealtimeCorsOrigins } from './parse-cors-origins';
 
 type TranscriptMessage = {
   id: string;

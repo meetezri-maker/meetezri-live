@@ -288,7 +288,14 @@ export default function App() {
             <Route path="/app/billing" element={<Billing />} />
             <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />
             
-            {/* Admin Routes - Protected (Super Admin area) */}
+            {/* Admin Routes - Protected and role-gated */}
+            <Route
+              element={
+                <ProtectedRoute allowedRoles={['super_admin', 'org_admin', 'team_admin']}>
+                  <Outlet />
+                </ProtectedRoute>
+              }
+            >
             {/* Dashboards */}
             <Route path="/admin/super-admin-dashboard" element={<SuperAdminDashboard />} />
             <Route path="/admin/org-admin-dashboard" element={<OrgAdminDashboard />} />
@@ -385,6 +392,7 @@ export default function App() {
             <Route path="/admin/backup-recovery" element={<BackupRecovery />} />
 
             {/* No generic /admin/* fallback so every admin URL must point to a real page */}
+            </Route>
           </Route>
 
           {/* Error Pages */}

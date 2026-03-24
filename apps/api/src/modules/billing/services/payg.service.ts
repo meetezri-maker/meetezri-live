@@ -221,6 +221,9 @@ export async function syncPaygCredits(userId: string) {
           purchased_credits: {
             increment: credits,
           },
+          purchased_credits_seconds: {
+            increment: credits * 60,
+          },
         },
       });
     });

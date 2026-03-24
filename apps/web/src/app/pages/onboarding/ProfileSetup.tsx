@@ -38,7 +38,7 @@ type ProfileSetupValues = z.infer<typeof profileSetupSchema>;
 
 export function OnboardingProfileSetup() {
   const navigate = useNavigate();
-  const { data, updateData } = useOnboarding();
+  const { data, updateData, completeOnboarding } = useOnboarding();
   const { user } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -183,7 +183,16 @@ export function OnboardingProfileSetup() {
 
       // Trial flow: after completing profile setup, return to dashboard.
       if (selectedPlan === "trial") {
-        navigate("/app/dashboard");
+        await completeOnboarding("/app/dashboard", {
+          firstName: values.firstName,
+          lastName: values.lastName,
+          pronouns: values.pronouns,
+          age: values.age,
+          timezone: values.timezone,
+          selectedPlan: "trial",
+          signupType: "trial",
+        });
+        setIsLoading(false);
         return;
       }
 

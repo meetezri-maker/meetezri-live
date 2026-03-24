@@ -10,10 +10,19 @@ const wellnessToolsCache = new Map<string, { data: any[]; timestamp: number }>()
 const WELLNESS_STATS_CACHE_TTL = 60 * 1000; // 60 seconds
 const wellnessStatsCache = new Map<string, { data: any; timestamp: number }>();
 
+function clearWellnessToolCaches() {
+  wellnessToolsCache.clear();
+}
+
+function clearUserWellnessCaches(userId: string) {
+  progressCache.delete(userId);
+  wellnessStatsCache.delete(userId);
+}
+
 export async function createWellnessTool(data: CreateWellnessToolInput & { created_by?: string }) {
   const { created_by, image_url, content, ...rest } = data;
 
-  return prisma.wellness_tools.create({
+  const created = await prisma.wellness_tools.create({
     data: {
       title: data.title,
       category: data.category,
@@ -31,6 +40,8 @@ export async function createWellnessTool(data: CreateWellnessToolInput & { creat
       } : {}),
     },
   });
+  clearWellnessToolCaches();
+  return created;
 }
 
 export async function getWellnessChallengesWithStats() {
@@ -136,6 +147,7 @@ export async function toggleWellnessToolFavorite(userId: string, toolId: string)
         }
       }
     });
+    clearWellnessToolCaches();
     return { is_favorite: false };
   } else {
     await prisma.favorite_wellness_tools.create({
@@ -144,6 +156,7 @@ export async function toggleWellnessToolFavorite(userId: string, toolId: string)
         tool_id: toolId
       }
     });
+    clearWellnessToolCaches();
     return { is_favorite: true };
   }
 }
@@ -168,22 +181,34 @@ export async function getWellnessToolById(userId: string, id: string) {
 }
 
 export async function updateWellnessTool(id: string, data: UpdateWellnessToolInput) {
-  return prisma.wellness_tools.update({
+  const updated = await prisma.wellness_tools.update({
     where: { id },
     data: {
       ...data,
       updated_at: new Date(),
     },
   });
+  clearWellnessToolCaches();
+  return updated;
 }
 
 export async function deleteWellnessTool(id: string) {
-  return prisma.wellness_tools.delete({
+  const deleted = await prisma.wellness_tools.delete({
     where: { id },
   });
+  clearWellnessToolCaches();
+  return deleted;
 }
 
 export async function trackWellnessProgress(userId: string, toolId: string, durationSpent: number, rating?: number) {
+  const tool = await prisma.wellness_tools.findUnique({
+    where: { id: toolId }
+  });
+
+  if (!tool) {
+    throw new Error('Wellness tool not found');
+  }
+
   const result = await prisma.user_wellness_progress.create({
     data: {
       user_id: userId,
@@ -193,7 +218,7 @@ export async function trackWellnessProgress(userId: string, toolId: string, dura
       completed_at: new Date(),
     },
   });
-  progressCache.delete(userId);
+  clearUserWellnessCaches(userId);
   return result;
 }
 
@@ -216,7 +241,7 @@ export async function startWellnessSession(userId: string, toolId: string) {
     throw new Error('Wellness tool not found');
   }
 
-  return prisma.user_wellness_progress.create({
+  const session = await prisma.user_wellness_progress.create({
     data: {
       user_id: userId,
       tool_id: toolId,
@@ -224,9 +249,22 @@ export async function startWellnessSession(userId: string, toolId: string) {
       completed_at: null,
     },
   });
+  clearUserWellnessCaches(userId);
+  return session;
 }
 
-export async function completeWellnessSession(progressId: string, durationSpent: number, rating?: number) {
+export async function completeWellnessSession(userId: string, progressId: string, durationSpent: number, rating?: number) {
+  const progress = await prisma.user_wellness_progress.findFirst({
+    where: {
+      id: progressId,
+      user_id: userId,
+    },
+  });
+
+  if (!progress) {
+    throw new Error('Session not found');
+  }
+
   const result = await prisma.user_wellness_progress.update({
     where: { id: progressId },
     data: {
@@ -235,7 +273,7 @@ export async function completeWellnessSession(progressId: string, durationSpent:
       completed_at: new Date(),
     },
   });
-  progressCache.delete(result.user_id);
+  clearUserWellnessCaches(result.user_id);
   return result;
 }
 

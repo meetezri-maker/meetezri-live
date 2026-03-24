@@ -9,6 +9,10 @@ export const createEmergencyContactSchema = z.object({
 });
 
 export const updateEmergencyContactSchema = createEmergencyContactSchema.partial();
+export const updateEmergencyContactWithFieldsSchema = updateEmergencyContactSchema.refine(
+  (data) => Object.keys(data).length > 0,
+  { message: 'At least one field is required for update' }
+);
 
 export const emergencyContactResponseSchema = z.object({
   id: z.string().uuid(),

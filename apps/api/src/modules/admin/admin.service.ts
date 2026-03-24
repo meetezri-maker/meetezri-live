@@ -3,6 +3,7 @@ import prisma from '../../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { DashboardStats } from './admin.schema';
 import { endSession } from '../sessions/sessions.service';
+import { notificationsService } from '../notifications/notifications.service';
 
 // Simple in-memory cache for dashboard stats
 const STATS_CACHE_TTL = 60 * 1000; // 60 seconds
@@ -29,7 +30,7 @@ const COMMUNITY_GROUPS_CACHE_TTL = 60 * 1000; // 60 seconds
 let communityGroupsCache: { data: any[]; timestamp: number } | null = null;
 
 const ACTIVITY_LOGS_CACHE_TTL = 120 * 1000; // 120 seconds
-let activityLogsCache: { data: any[]; timestamp: number } | null = null;
+const activityLogsCache = new Map<string, { data: any[]; timestamp: number }>();
 
 const CRISIS_EVENTS_CACHE_TTL = 120 * 1000; // 120 seconds
 const crisisEventsCache = new Map<string, { data: any[]; timestamp: number }>();
@@ -38,7 +39,7 @@ const EMAIL_TEMPLATES_CACHE_TTL = 120 * 1000; // 120 seconds
 let emailTemplatesCache: { data: any[]; timestamp: number } | null = null;
 
 const ERROR_LOGS_CACHE_TTL = 120 * 1000; // 120 seconds
-let errorLogsCache: { data: any[]; timestamp: number } | null = null;
+const errorLogsCache = new Map<string, { data: any[]; timestamp: number }>();
 
 const LIVE_SESSIONS_CACHE_TTL = 120 * 1000; // 120 seconds
 let liveSessionsCache: { data: any[]; timestamp: number } | null = null;
@@ -227,7 +228,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     hourlyActivity,
     revenueData,
     platformDistribution,
-    featureUsage
+    featureUsage,
+    mockedSections: ['systemHealth', 'userGrowth', 'revenueData', 'platformDistribution']
   };
 
   statsCache = { data: result, timestamp: Date.now() };
@@ -571,6 +573,7 @@ export async function getNotificationAudienceCounts() {
 }
 
 export async function createManualNotification(data: any) {
+  manualNotificationsCache = null;
   // Helper to check preferences
   const shouldSend = (prefs: any) => !prefs || prefs.pushEnabled !== false;
 
@@ -591,20 +594,19 @@ export async function createManualNotification(data: any) {
 
     if (eligibleUsers.length === 0) return { count: 0 };
 
-    return prisma.notifications.createMany({
-      data: eligibleUsers.map(u => ({
-        user_id: u.id,
+    return notificationsService.createManyForUsers(
+      eligibleUsers.map((u) => u.id),
+      {
+        type: data.type || 'system',
         title: data.title,
         message: data.message,
-        type: data.type || 'system',
         metadata: {
           ...baseMetadata,
           target_audience: 'segment',
           target_count: eligibleUsers.length,
         },
-        created_at: new Date()
-      }))
-    });
+      }
+    );
   }
 
   if (data.target_audience === 'all') {
@@ -616,20 +618,19 @@ export async function createManualNotification(data: any) {
 
     if (eligibleUsers.length === 0) return { count: 0 };
     
-    return prisma.notifications.createMany({
-      data: eligibleUsers.map(u => ({
-        user_id: u.id,
+    return notificationsService.createManyForUsers(
+      eligibleUsers.map((u) => u.id),
+      {
+        type: data.type || 'system',
         title: data.title,
         message: data.message,
-        type: data.type || 'system',
         metadata: {
           ...baseMetadata,
           target_audience: 'all',
           target_count: eligibleUsers.length,
         },
-        created_at: new Date()
-      })),
-    });
+      }
+    );
   }
   
   if (data.target_audience === 'premium') {
@@ -645,20 +646,19 @@ export async function createManualNotification(data: any) {
     
     if (eligibleUsers.length === 0) return { count: 0 };
 
-    return prisma.notifications.createMany({
-      data: eligibleUsers.map(s => ({
-        user_id: s.user_id,
+    return notificationsService.createManyForUsers(
+      eligibleUsers.map((s) => s.user_id),
+      {
+        type: data.type || 'system',
         title: data.title,
         message: data.message,
-        type: data.type || 'system',
         metadata: {
           ...baseMetadata,
           target_audience: 'premium',
           target_count: eligibleUsers.length,
         },
-        created_at: new Date()
-      })),
-    });
+      }
+    );
   }
   
   if (data.target_audience === 'trial') {
@@ -674,20 +674,19 @@ export async function createManualNotification(data: any) {
     
     if (eligibleUsers.length === 0) return { count: 0 };
 
-    return prisma.notifications.createMany({
-      data: eligibleUsers.map(s => ({
-        user_id: s.user_id,
+    return notificationsService.createManyForUsers(
+      eligibleUsers.map((s) => s.user_id),
+      {
+        type: data.type || 'system',
         title: data.title,
         message: data.message,
-        type: data.type || 'system',
         metadata: {
           ...baseMetadata,
           target_audience: 'trial',
           target_count: eligibleUsers.length,
         },
-        created_at: new Date()
-      })),
-    });
+      }
+    );
   }
   
   if (data.target_audience === 'active') {
@@ -714,20 +713,19 @@ export async function createManualNotification(data: any) {
     
     if (eligibleUsers.length === 0) return { count: 0 };
     
-    return prisma.notifications.createMany({
-      data: eligibleUsers.map(u => ({
-        user_id: u.id,
+    return notificationsService.createManyForUsers(
+      eligibleUsers.map((u) => u.id),
+      {
+        type: data.type || 'system',
         title: data.title,
         message: data.message,
-        type: data.type || 'system',
         metadata: {
           ...baseMetadata,
           target_audience: 'active',
           target_count: eligibleUsers.length,
         },
-        created_at: new Date()
-      })),
-    });
+      }
+    );
   }
 
   if (data.userIds && Array.isArray(data.userIds)) {
@@ -740,20 +738,19 @@ export async function createManualNotification(data: any) {
 
     if (eligibleUsers.length === 0) return { count: 0 };
 
-    return prisma.notifications.createMany({
-      data: eligibleUsers.map(u => ({
-        user_id: u.id,
+    return notificationsService.createManyForUsers(
+      eligibleUsers.map((u) => u.id),
+      {
+        type: data.type || 'system',
         title: data.title,
         message: data.message,
-        type: data.type || 'system',
         metadata: {
           ...baseMetadata,
           target_audience: data.target_audience || 'specific',
           target_count: eligibleUsers.length,
         },
-        created_at: new Date()
-      })),
-    });
+      }
+    );
   }
   
   if (data.user_id) {
@@ -938,8 +935,13 @@ export async function deletePushCampaign(id: string) {
 }
 
 // 5. Support Tickets
-export async function getSupportTickets() {
+export async function getSupportTickets(page: number = 1, limit: number = 20, status?: string) {
+  const skip = Math.max(0, (page - 1) * limit);
+  const take = Math.min(Math.max(limit, 1), 100);
   return prisma.support_tickets.findMany({
+    where: status ? { status } : undefined,
+    skip,
+    take,
     orderBy: { created_at: 'desc' },
     include: {
       profiles_support_tickets_user_idToprofiles: {
@@ -1064,14 +1066,17 @@ export async function flagSessionForReview(sessionId: string) {
 }
 //
 // 8. Activity Logs
-export async function getActivityLogs() {
+export async function getActivityLogs(page: number = 1, limit: number = 25) {
   const now = Date.now();
-  if (activityLogsCache && (now - activityLogsCache.timestamp < ACTIVITY_LOGS_CACHE_TTL)) {
-    return activityLogsCache.data;
-  }
+  const cacheKey = `${page}_${limit}`;
+  const cached = activityLogsCache.get(cacheKey);
+  if (cached && (now - cached.timestamp < ACTIVITY_LOGS_CACHE_TTL)) return cached.data;
+  const skip = Math.max(0, (page - 1) * limit);
+  const take = Math.min(Math.max(limit, 1), 100);
 
   const result = await prisma.activity_events.findMany({
-    take: 100,
+    skip,
+    take,
     orderBy: { timestamp: 'desc' },
     include: {
       profiles: {
@@ -1080,19 +1085,22 @@ export async function getActivityLogs() {
     }
   });
 
-  activityLogsCache = { data: result, timestamp: Date.now() };
+  activityLogsCache.set(cacheKey, { data: result, timestamp: Date.now() });
   return result;
 }
 
 // 9. Session Recordings / History
-export async function getSessionRecordings() {
+export async function getSessionRecordings(page: number = 1, limit: number = 20) {
+  const skip = Math.max(0, (page - 1) * limit);
+  const take = Math.min(Math.max(limit, 1), 100);
   return prisma.app_sessions.findMany({
     where: {
       started_at: { not: null },
       ended_at: { not: null }
     },
     orderBy: { created_at: 'desc' },
-    take: 100,
+    skip,
+    take,
     include: {
       profiles: {
         select: { full_name: true, email: true }
@@ -1112,18 +1120,21 @@ export async function getSessionRecordingTranscript(sessionId: string) {
 }
 //
 // 10. Error Logs
-export async function getErrorLogs() {
+export async function getErrorLogs(page: number = 1, limit: number = 25) {
   const now = Date.now();
-  if (errorLogsCache && (now - errorLogsCache.timestamp < ERROR_LOGS_CACHE_TTL)) {
-    return errorLogsCache.data;
-  }
+  const cacheKey = `${page}_${limit}`;
+  const cached = errorLogsCache.get(cacheKey);
+  if (cached && (now - cached.timestamp < ERROR_LOGS_CACHE_TTL)) return cached.data;
+  const skip = Math.max(0, (page - 1) * limit);
+  const take = Math.min(Math.max(limit, 1), 100);
 
   const result = await prisma.error_logs.findMany({
+    skip,
     orderBy: { created_at: 'desc' },
-    take: 100
+    take
   });
 
-  errorLogsCache = { data: result, timestamp: Date.now() };
+  errorLogsCache.set(cacheKey, { data: result, timestamp: Date.now() });
   return result;
 }
 
@@ -1144,9 +1155,9 @@ function mapCrisisStatusToDb(status: string): string {
   return status;
 }
 
-export async function getCrisisEvents(status?: string) {
+export async function getCrisisEvents(status?: string, page: number = 1, limit: number = 20) {
   const now = Date.now();
-  const cacheKey = status || 'all';
+  const cacheKey = `${status || 'all'}_${page}_${limit}`;
   const cached = crisisEventsCache.get(cacheKey);
   if (cached && (now - cached.timestamp < CRISIS_EVENTS_CACHE_TTL)) {
     return cached.data;
@@ -1157,10 +1168,14 @@ export async function getCrisisEvents(status?: string) {
     where.status = mapCrisisStatusToDb(status);
   }
 
+  const skip = Math.max(0, (page - 1) * limit);
+  const take = Math.min(Math.max(limit, 1), 100);
+
   const events = await prisma.crisis_events.findMany({
     where,
+    skip,
     orderBy: { created_at: 'desc' },
-    take: 100,
+    take,
     include: {
       profiles_crisis_events_user_idToprofiles: {
         select: { full_name: true, email: true }

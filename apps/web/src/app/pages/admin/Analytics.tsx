@@ -91,6 +91,8 @@ export function Analytics() {
       };
     });
 
+  const mockedSections: string[] = dashboard?.mockedSections || [];
+
   let revenueChange = "";
   let revenueTrend: "up" | "down" = "up";
   if (dashboard?.revenueData && dashboard.revenueData.length >= 2) {
@@ -222,6 +224,12 @@ export function Analytics() {
             </motion.button>
           </div>
         </motion.div>
+
+        {mockedSections.length > 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Some analytics data is mocked/estimated: {mockedSections.join(", ")}.
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
