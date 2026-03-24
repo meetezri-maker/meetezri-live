@@ -4,6 +4,10 @@ import { CreateMoodInput } from "./moods.schema";
 const ALL_MOODS_CACHE_TTL = 120 * 1000; // 120 seconds
 let allMoodsCache: { data: any[]; timestamp: number } | null = null;
 
+function clearMoodsCache() {
+  allMoodsCache = null;
+}
+
 export async function createMood(userId: string, input: CreateMoodInput) {
   // Update user profile current mood as well
   await prisma.profiles.update({
@@ -11,7 +15,7 @@ export async function createMood(userId: string, input: CreateMoodInput) {
     data: { current_mood: input.mood },
   });
 
-  return prisma.mood_entries.create({
+  const created = await prisma.mood_entries.create({
     data: {
       user_id: userId,
       mood: input.mood,
@@ -20,6 +24,8 @@ export async function createMood(userId: string, input: CreateMoodInput) {
       notes: input.notes,
     },
   });
+  clearMoodsCache();
+  return created;
 }
 
 export async function getMoodsByUserId(userId: string) {

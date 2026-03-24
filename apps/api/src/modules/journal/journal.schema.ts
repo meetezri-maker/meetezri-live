@@ -14,6 +14,8 @@ export const updateJournalSchema = z.object({
   mood_tags: z.array(z.string()).optional(),
   is_private: z.boolean().optional(),
   location: z.string().optional(),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: 'At least one field is required for update',
 });
 
 export const journalResponseSchema = z.object({

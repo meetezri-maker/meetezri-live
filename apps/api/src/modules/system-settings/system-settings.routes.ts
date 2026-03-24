@@ -3,23 +3,15 @@ import { upsertSettingHandler, getSettingHandler, getAllSettingsHandler } from "
 import { upsertSettingSchema, getSettingSchema } from "./system-settings.schema";
 
 export async function systemSettingsRoutes(app: FastifyInstance) {
-  // Debug logging for authentication middleware
-  if (!app.authenticate) {
-    app.log.error("CRITICAL: app.authenticate is undefined in systemSettingsRoutes. Auth plugin may not be loaded correctly.");
-  } else {
-    app.log.info("systemSettingsRoutes: app.authenticate is available.");
-  }
-
-  // Debug logging for authorization middleware
-  if (!app.authorize) {
-    app.log.error("CRITICAL: app.authorize is undefined in systemSettingsRoutes.");
+  // Fail fast instead of failing open when auth decorators are unavailable.
+  if (!app.authenticate || !app.authorize) {
+    throw new Error("Authentication/authorization decorators are not registered");
   }
 
   app.get(
     "/",
     {
-      // Ensure authenticate is defined before passing to onRequest
-      onRequest: app.authenticate ? [app.authenticate] : [],
+      preHandler: [app.authenticate, app.authorize(["super_admin", "org_admin", "team_admin"])],
     },
     getAllSettingsHandler
   );
@@ -30,7 +22,7 @@ export async function systemSettingsRoutes(app: FastifyInstance) {
       schema: {
         params: getSettingSchema,
       },
-      onRequest: app.authenticate ? [app.authenticate] : [],
+      preHandler: [app.authenticate, app.authorize(["super_admin", "org_admin", "team_admin"])],
     },
     getSettingHandler
   );
@@ -38,11 +30,7 @@ export async function systemSettingsRoutes(app: FastifyInstance) {
   app.post(
     "/",
     {
-      // Ensure both middlewares are defined
-      onRequest: [
-        app.authenticate, 
-        app.authorize ? app.authorize(["super_admin", "org_admin", "team_admin"]) : async () => {}
-      ].filter(Boolean),
+      preHandler: [app.authenticate, app.authorize(["super_admin", "org_admin", "team_admin"])],
       schema: {
         body: upsertSettingSchema,
       },

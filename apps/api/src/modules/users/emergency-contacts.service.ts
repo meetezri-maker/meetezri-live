@@ -71,6 +71,7 @@ export async function updateEmergencyContact(userId: string, contactId: string, 
     data: {
       ...data,
       email: data.email === '' ? null : data.email,
+      updated_at: new Date(),
     },
   });
 }

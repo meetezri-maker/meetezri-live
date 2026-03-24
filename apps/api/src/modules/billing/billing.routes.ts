@@ -11,6 +11,7 @@ import {
 import * as billingController from './billing.controller';
 import { stripeWebhookHandler } from './billing.webhook';
 import { z } from 'zod';
+import { adminBillingSubscriptionsQuerySchema } from './billing.validation';
 
 export async function billingRoutes(app: FastifyInstance) {
   app.post(
@@ -169,6 +170,7 @@ export async function billingRoutes(app: FastifyInstance) {
     '/admin/subscriptions',
     {
       schema: {
+        querystring: adminBillingSubscriptionsQuerySchema,
         response: {
           200: z.array(subscriptionResponseSchema.extend({
             id: z.string().optional(),

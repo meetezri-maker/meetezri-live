@@ -4,6 +4,10 @@ import { CreateHabitInput, UpdateHabitInput, LogHabitInput } from "./habits.sche
 const HABITS_CACHE_TTL = 60 * 1000; // 60 seconds
 const habitsCache = new Map<string, { data: any[]; timestamp: number }>();
 
+function clearHabitsCacheForUser(userId: string) {
+  habitsCache.delete(userId);
+}
+
 export async function createHabit(userId: string, data: CreateHabitInput) {
   // Check if profile exists
   const profile = await prisma.profiles.findUnique({
@@ -14,7 +18,7 @@ export async function createHabit(userId: string, data: CreateHabitInput) {
     throw new Error('User profile not found. Please complete onboarding first.');
   }
 
-  return prisma.habits.create({
+  const created = await prisma.habits.create({
     data: {
       name: data.name!,
       category: data.category,
@@ -26,6 +30,8 @@ export async function createHabit(userId: string, data: CreateHabitInput) {
       },
     },
   });
+  clearHabitsCacheForUser(userId);
+  return created;
 }
 
 export async function getHabits(userId: string) {
@@ -67,10 +73,12 @@ export async function updateHabit(userId: string, habitId: string, data: UpdateH
     throw new Error("Habit not found or unauthorized");
   }
 
-  return prisma.habits.update({
+  const updated = await prisma.habits.update({
     where: { id: habitId },
     data,
   });
+  clearHabitsCacheForUser(userId);
+  return updated;
 }
 
 export async function deleteHabit(userId: string, habitId: string) {
@@ -85,9 +93,11 @@ export async function deleteHabit(userId: string, habitId: string) {
 
   // Instead of hard delete, we might want to archive, but the requirement implies deletion capability.
   // The schema supports hard delete (cascade), so we can just delete.
-  return prisma.habits.delete({
+  const deleted = await prisma.habits.delete({
     where: { id: habitId },
   });
+  clearHabitsCacheForUser(userId);
+  return deleted;
 }
 
 export async function logHabitCompletion(userId: string, habitId: string, data: LogHabitInput) {
@@ -109,12 +119,14 @@ export async function logHabitCompletion(userId: string, habitId: string, data: 
   // or handle it in the controller.
   // For simplicity, let's create a log. If the user wants to "uncomplete", they delete the log.
   
-  return prisma.habit_logs.create({
+  const created = await prisma.habit_logs.create({
     data: {
       habit_id: habitId,
       completed_at: completedAt,
     },
   });
+  clearHabitsCacheForUser(userId);
+  return created;
 }
 
 export async function removeHabitCompletion(userId: string, habitId: string, dateStr: string) {
@@ -151,6 +163,7 @@ export async function removeHabitCompletion(userId: string, habitId: string, dat
         },
       },
     });
+    clearHabitsCacheForUser(userId);
     return { success: true, count: logs.length };
   }
 

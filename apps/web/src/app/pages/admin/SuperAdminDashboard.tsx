@@ -98,6 +98,7 @@ export function SuperAdminDashboard() {
   const revenueData = stats?.revenueData || [];
   const platformDistribution = stats?.platformDistribution || [];
   const systemHealth = stats?.systemHealth || [];
+  const mockedSections: string[] = stats?.mockedSections || [];
 
   const recentAlerts = [
     {
@@ -165,6 +166,12 @@ export function SuperAdminDashboard() {
             </div>
           </div>
         </motion.div>
+
+        {mockedSections.length > 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Some dashboard metrics are currently mocked/estimated: {mockedSections.join(", ")}.
+          </div>
+        )}
 
         {/* Animated Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

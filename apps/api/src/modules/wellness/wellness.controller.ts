@@ -128,6 +128,7 @@ export async function completeWellnessSessionHandler(
 ) {
   try {
     const progress = await completeWellnessSession(
+      (request.user as any).sub,
       request.params.progressId,
       request.body.duration_spent,
       request.body.feedback_rating

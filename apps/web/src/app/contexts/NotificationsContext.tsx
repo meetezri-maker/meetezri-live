@@ -31,12 +31,27 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
+  const computeUnreadCount = (items: Notification[]) =>
+    items.reduce((count, item) => count + (item.is_read ? 0 : 1), 0);
+
+  const syncUnreadCount = async () => {
+    try {
+      const result = await api.notifications.getUnreadCount();
+      const count = Number(result?.count ?? 0);
+      if (!Number.isNaN(count)) {
+        setUnreadCount(count);
+      }
+    } catch (error) {
+      console.error('Failed to sync unread count:', error);
+    }
+  };
+
   const fetchNotifications = async () => {
     if (!user) return;
     try {
       const data = await api.notifications.getAll();
       setNotifications(data);
-      setUnreadCount(data.filter((n: Notification) => !n.is_read).length);
+      setUnreadCount(computeUnreadCount(data));
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
     } finally {
@@ -59,15 +74,23 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
             table: 'notifications',
             filter: `user_id=eq.${user.id}`,
           },
-          (payload) => {
+          async (payload) => {
             const newNotification = payload.new as Notification;
-            setNotifications((prev) => [newNotification, ...prev]);
-            setUnreadCount((prev) => prev + 1);
+            setNotifications((prev) => {
+              // Realtime can replay inserts on reconnect; dedupe by id.
+              if (prev.some((item) => item.id === newNotification.id)) {
+                return prev;
+              }
+              const next = [newNotification, ...prev];
+              setUnreadCount(computeUnreadCount(next));
+              return next;
+            });
             
             // Show toast
             toast(newNotification.title || 'New Notification', {
                 description: newNotification.message,
             });
+            await syncUnreadCount();
           }
         )
         .subscribe();
@@ -84,10 +107,12 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const markAsRead = async (id: string) => {
     try {
       await api.notifications.markAsRead(id);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
+      setNotifications((prev) => {
+        const next = prev.map((n) => (n.id === id ? { ...n, is_read: true } : n));
+        setUnreadCount(computeUnreadCount(next));
+        return next;
+      });
+      await syncUnreadCount();
     } catch (error) {
       console.error('Failed to mark as read:', error);
       toast.error('Failed to mark as read');
@@ -99,6 +124,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       await api.notifications.markAllAsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
+      await syncUnreadCount();
     } catch (error) {
       console.error('Failed to mark all as read:', error);
       toast.error('Failed to mark all as read');

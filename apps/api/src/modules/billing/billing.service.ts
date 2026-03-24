@@ -1,3 +1,5 @@
+export * from './index';
+
 import prisma from '../../lib/prisma';
 import { stripe } from '../../config/stripe';
 import { STRIPE_PRICE_IDS, PLAN_LIMITS } from './billing.constants';
@@ -113,7 +115,7 @@ export async function createCheckoutSession(userId: string, email: string, data:
         data: {
           plan_type: 'trial',
           status: 'active',
-          billing_cycle: 'monthly',
+          billing_cycle: data.billing_cycle,
           amount: 0,
           end_date: null, // Ongoing until upgraded or limits hit
         }
@@ -133,7 +135,7 @@ export async function createCheckoutSession(userId: string, email: string, data:
         user_id: userId,
         plan_type: 'trial',
         status: 'active',
-        billing_cycle: 'monthly',
+        billing_cycle: data.billing_cycle,
         amount: 0,
         start_date: new Date(),
       }
@@ -161,9 +163,12 @@ export async function createCheckoutSession(userId: string, email: string, data:
   const existingLatest = await prisma.subscriptions.findFirst({
     where: {
       user_id: userId,
-      status: { in: ['active', 'trialing', 'past_due', 'incomplete'] as any },
-    },
-    orderBy: { created_at: 'desc' },
+      plan_type: data.plan_type,
+      status: 'incomplete', // Will be updated by webhook or sync
+      billing_cycle: data.billing_cycle,
+      start_date: new Date(),
+      // No end date yet
+    }
   });
 
   const pendingSub = existingLatest
@@ -202,6 +207,7 @@ export async function createCheckoutSession(userId: string, email: string, data:
     metadata: {
       userId,
       planType: data.plan_type,
+      billing_cycle: data.billing_cycle,
       subscriptionId: pendingSub.id, // Link to our DB ID if useful
     },
     success_url: data.successUrl || `${CLIENT_URL}/app/billing?success=true`,

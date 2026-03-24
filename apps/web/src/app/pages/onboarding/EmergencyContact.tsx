@@ -30,11 +30,54 @@ import {
   FormMessage,
 } from "../../components/ui/form";
 
-const emergencyContactSchema = z.object({
-  emergencyName: z.string().optional(),
-  emergencyPhone: z.string().optional(),
-  emergencyRelationship: z.string().optional(),
-});
+const emergencyContactSchema = z
+  .object({
+    emergencyName: z.string().trim().optional(),
+    emergencyPhone: z.string().trim().optional(),
+    emergencyRelationship: z.string().trim().optional(),
+  })
+  .superRefine((values, ctx) => {
+    const name = values.emergencyName ?? "";
+    const phone = values.emergencyPhone ?? "";
+    const relationship = values.emergencyRelationship ?? "";
+
+    const hasAny = Boolean(name || phone || relationship);
+    const hasAll = Boolean(name && phone && relationship);
+    if (hasAny && !hasAll) {
+      if (!name) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["emergencyName"],
+          message: "Name is required when adding an emergency contact",
+        });
+      }
+      if (!phone) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["emergencyPhone"],
+          message: "Phone is required when adding an emergency contact",
+        });
+      }
+      if (!relationship) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["emergencyRelationship"],
+          message: "Relationship is required when adding an emergency contact",
+        });
+      }
+    }
+
+    if (phone) {
+      const digits = phone.replace(/[^\d+]/g, "");
+      if (!/^\+?\d{7,15}$/.test(digits)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["emergencyPhone"],
+          message: "Enter a valid phone number",
+        });
+      }
+    }
+  });
 
 type EmergencyContactValues = z.infer<typeof emergencyContactSchema>;
 

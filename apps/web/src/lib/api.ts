@@ -849,9 +849,16 @@ export const api = {
     },
 
     // Support Tickets
-    async getSupportTickets() {
+    async getSupportTickets(params?: { page?: number; limit?: number; status?: string }) {
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/support-tickets`, { method: 'GET', headers });
+      const query = params
+        ? `?${new URLSearchParams(
+            Object.entries(params)
+              .filter(([, value]) => value !== undefined && value !== null)
+              .reduce((acc, [key, value]) => ({ ...acc, [key]: String(value) }), {} as Record<string, string>)
+          ).toString()}`
+        : '';
+      const res = await fetch(`${API_URL}/admin/support-tickets${query}`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch tickets');
     },
     async updateSupportTicket(id: string, data: any) {
@@ -888,14 +895,28 @@ export const api = {
       const res = await fetch(`${API_URL}/admin/live-sessions/${id}/flag`, { method: 'POST', headers });
       return handleResponse(res, 'Failed to flag session');
     },
-    async getActivityLogs() {
+    async getActivityLogs(params?: { page?: number; limit?: number }) {
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/activity-logs`, { method: 'GET', headers });
+      const query = params
+        ? `?${new URLSearchParams(
+            Object.entries(params)
+              .filter(([, value]) => value !== undefined && value !== null)
+              .reduce((acc, [key, value]) => ({ ...acc, [key]: String(value) }), {} as Record<string, string>)
+          ).toString()}`
+        : '';
+      const res = await fetch(`${API_URL}/admin/activity-logs${query}`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch activity logs');
     },
-    async getSessionRecordings() {
+    async getSessionRecordings(params?: { page?: number; limit?: number }) {
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/session-recordings`, { method: 'GET', headers });
+      const query = params
+        ? `?${new URLSearchParams(
+            Object.entries(params)
+              .filter(([, value]) => value !== undefined && value !== null)
+              .reduce((acc, [key, value]) => ({ ...acc, [key]: String(value) }), {} as Record<string, string>)
+          ).toString()}`
+        : '';
+      const res = await fetch(`${API_URL}/admin/session-recordings${query}`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch recordings');
     },
     async getSessionRecordingTranscript(id: string) {
@@ -903,15 +924,28 @@ export const api = {
       const res = await fetch(`${API_URL}/admin/session-recordings/${id}/transcript`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch session transcript');
     },
-    async getErrorLogs() {
+    async getErrorLogs(params?: { page?: number; limit?: number }) {
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/error-logs`, { method: 'GET', headers });
+      const query = params
+        ? `?${new URLSearchParams(
+            Object.entries(params)
+              .filter(([, value]) => value !== undefined && value !== null)
+              .reduce((acc, [key, value]) => ({ ...acc, [key]: String(value) }), {} as Record<string, string>)
+          ).toString()}`
+        : '';
+      const res = await fetch(`${API_URL}/admin/error-logs${query}`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch error logs');
     },
 
-    async getCrisisEvents(status?: string) {
+    async getCrisisEvents(params?: { status?: string; page?: number; limit?: number }) {
       const headers = await getHeaders();
-      const query = status ? `?status=${encodeURIComponent(status)}` : '';
+      const query = params
+        ? `?${new URLSearchParams(
+            Object.entries(params)
+              .filter(([, value]) => value !== undefined && value !== null)
+              .reduce((acc, [key, value]) => ({ ...acc, [key]: String(value) }), {} as Record<string, string>)
+          ).toString()}`
+        : '';
       const res = await fetch(`${API_URL}/admin/crisis-events${query}`, {
         method: 'GET',
         headers,

@@ -38,6 +38,59 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     );
   }
 
+  // Onboarding access control (server-derived, not client heuristics)
+  const onboardingCompleted = profile?.onboarding_completed === true;
+  const emailVerified = profile?.email_verified === true;
+  const signupType = (profile?.signup_type as 'trial' | 'plan' | undefined) ?? (profile?.subscription_plan === 'trial' ? 'trial' : 'plan');
+  const onboardingStartRoute =
+    signupType === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome';
+  const isOnboardingRoute = location.pathname.startsWith('/onboarding');
+  const isAppRoute = location.pathname.startsWith('/app');
+
+  // Trial flow requirement:
+  // - allow `/app/dashboard` even when onboarding is not complete yet (email verification popup may be shown)
+  // - redirect other app routes to the trial onboarding start route.
+  if (isAppRoute && !onboardingCompleted) {
+    const isDashboardRoute = location.pathname === "/app/dashboard";
+    const isTrialUserProfileRoute =
+      location.pathname === "/app/user-profile" ||
+      location.pathname.startsWith("/app/user-profile?");
+    if (signupType === "trial" && (isDashboardRoute || isTrialUserProfileRoute)) {
+      return <>{children}</>;
+    }
+    return <Navigate to={onboardingStartRoute} replace />;
+  }
+
+  // Never allow re-entering onboarding after completion.
+  if (isOnboardingRoute && onboardingCompleted) {
+    return <Navigate to="/app/dashboard" replace />;
+  }
+
+  // Never allow paid onboarding steps until email is verified.
+  // Trial flow should allow the "complete profile" step from the dashboard stage,
+  // so we do NOT block trial onboarding routes on email verification.
+  if (isOnboardingRoute && !onboardingCompleted && !emailVerified && signupType !== 'trial') {
+    return <Navigate to="/verify-email" replace />;
+  }
+
+  // Flow-specific: trial users should not begin at the welcome landing.
+  if (
+    isOnboardingRoute &&
+    !onboardingCompleted &&
+    signupType === 'trial' &&
+    location.pathname === '/onboarding/welcome'
+  ) {
+    return <Navigate to="/onboarding/profile-setup" replace />;
+  }
+
+  // Trial flow isolation: while trial profile is incomplete, only allow the
+  // Trial "complete profile" route. Prevent entry into the paid onboarding steps.
+  if (isOnboardingRoute && !onboardingCompleted && signupType === 'trial') {
+    if (!location.pathname.startsWith(onboardingStartRoute)) {
+      return <Navigate to={onboardingStartRoute} replace />;
+    }
+  }
+
   if (allowedRoles && allowedRoles.length > 0 && !hasRole(allowedRoles)) {
     // If user tries to access an area they don't have role for:
     // - Admin paths -> permission denied page

@@ -1,15 +1,17 @@
 import React, { createContext, useContext, useState } from 'react';
 import { api } from '@/lib/api';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/app/contexts/AuthContext';
 
 interface OnboardingData {
+  storageVersion?: number;
   userId?: string;
+  signupType?: 'trial' | 'plan';
+  selectedPlan?: 'trial' | 'core' | 'pro';
   firstName: string;
   lastName: string;
   pronouns: string;
-  role: 'user' | 'companion';
+  role: 'user' | 'therapist';
   age?: string;
   timezone?: string;
   currentMood?: string;
@@ -30,26 +32,44 @@ interface OnboardingData {
 interface OnboardingContextType {
   data: OnboardingData;
   updateData: (data: Partial<OnboardingData>) => void;
-  completeOnboarding: (redirectPath?: string) => Promise<void>;
+  completeOnboarding: (redirectPath?: string, overrides?: Partial<OnboardingData>) => Promise<void>;
   isLoading: boolean;
 }
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'ezri_onboarding_data';
+const STORAGE_VERSION = 1;
+
+function getDefaultOnboardingData(userId?: string, signupType?: 'trial' | 'plan'): OnboardingData {
+  return {
+    storageVersion: STORAGE_VERSION,
+    userId,
+    signupType,
+    firstName: '',
+    lastName: '',
+    pronouns: '',
+    role: 'user',
+  };
+}
 
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   
   const [data, setData] = useState<OnboardingData>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
+        const normalizedRole = parsed?.role === 'companion' ? 'therapist' : parsed?.role;
+        const migrated = {
+          ...parsed,
+          storageVersion: STORAGE_VERSION,
+          role: normalizedRole ?? 'user',
+        };
         // Security check: Only load data if it belongs to the current user
         if (user && parsed.userId === user.id) {
-          return parsed;
+          return migrated;
         }
         // If userId doesn't match or is missing, ignore stored data
         // This effectively clears the leak for new sessions
@@ -57,26 +77,14 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     } catch (error) {
       console.error('Failed to load onboarding data:', error);
     }
-    return {
-      userId: user?.id,
-      firstName: '',
-      lastName: '',
-      pronouns: '',
-      role: 'user',
-    };
+    return getDefaultOnboardingData(user?.id);
   });
 
   // Handle user changes (login/logout/switch)
   React.useEffect(() => {
     // If no user, reset to empty state
     if (!user) {
-      setData({
-        userId: undefined,
-        firstName: '',
-        lastName: '',
-        pronouns: '',
-        role: 'user',
-      });
+      setData(getDefaultOnboardingData(undefined));
       return;
     }
 
@@ -87,7 +95,13 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed.userId === user.id) {
-            setData(parsed);
+            const normalizedRole = parsed?.role === 'companion' ? 'therapist' : parsed?.role;
+            setData({
+              ...parsed,
+              storageVersion: STORAGE_VERSION,
+              role: normalizedRole ?? 'user',
+              signupType: parsed?.signupType ?? profile?.signup_type ?? (profile?.subscription_plan === 'trial' ? 'trial' : 'plan'),
+            });
             return;
           }
         }
@@ -96,54 +110,60 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       }
 
       // Default for new user
-      setData({
-        userId: user.id,
-        firstName: '',
-        lastName: '',
-        pronouns: '',
-        role: 'user',
-      });
+      setData(getDefaultOnboardingData(user.id, profile?.signup_type ?? (profile?.subscription_plan === 'trial' ? 'trial' : 'plan')));
     }
-  }, [user?.id]); // Only re-run when user ID changes
+  }, [user?.id, profile?.signup_type, profile?.subscription_plan]); // Only re-run on identity/flow changes
   const [isLoading, setIsLoading] = useState(false);
 
   // Save to localStorage whenever data changes
   React.useEffect(() => {
     try {
       // Ensure we always tag data with current user ID
-      const dataToSave = { ...data, userId: user?.id };
+      const dataToSave = {
+        ...data,
+        storageVersion: STORAGE_VERSION,
+        userId: user?.id,
+        signupType: data.signupType ?? profile?.signup_type ?? (profile?.subscription_plan === 'trial' ? 'trial' : 'plan'),
+      };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     } catch (error) {
       console.error('Failed to save onboarding data:', error);
     }
-  }, [data, user]);
+  }, [data, user, profile?.signup_type, profile?.subscription_plan]);
 
   const updateData = (newData: Partial<OnboardingData>) => {
     setData((prev) => ({ ...prev, ...newData }));
   };
 
-  const completeOnboarding = async (redirectPath = '/app/dashboard') => {
+  const completeOnboarding = async (
+    redirectPath = '/app/dashboard',
+    overrides: Partial<OnboardingData> = {}
+  ) => {
     setIsLoading(true);
     try {
+      const finalData: OnboardingData = {
+        ...data,
+        ...overrides,
+      };
       await api.completeOnboarding({
-        full_name: `${data.firstName} ${data.lastName}`.trim(),
-        role: data.role,
-        pronouns: data.pronouns,
-        age: data.age,
-        timezone: data.timezone,
-        current_mood: data.currentMood,
-        selected_goals: data.selectedGoals,
-        in_therapy: data.inTherapy,
-        on_medication: data.onMedication,
-        selected_triggers: data.selectedTriggers,
-        selected_avatar: data.selectedAvatar,
-        selected_environment: data.selectedEnvironment,
-        avatar_url: data.avatar_url,
-        emergency_contact_name: data.emergencyContactName,
-        emergency_contact_phone: data.emergencyContactPhone,
-        emergency_contact_relationship: data.emergencyContactRelationship,
-        permissions: data.permissions,
-        notification_preferences: data.notificationPreferences,
+        full_name: `${finalData.firstName} ${finalData.lastName}`.trim(),
+        role: finalData.role,
+        pronouns: finalData.pronouns,
+        age: finalData.age,
+        timezone: finalData.timezone,
+        current_mood: finalData.currentMood,
+        selected_goals: finalData.selectedGoals,
+        in_therapy: finalData.inTherapy,
+        on_medication: finalData.onMedication,
+        selected_triggers: finalData.selectedTriggers,
+        selected_avatar: finalData.selectedAvatar,
+        selected_environment: finalData.selectedEnvironment,
+        avatar_url: finalData.avatar_url,
+        emergency_contact_name: finalData.emergencyContactName,
+        emergency_contact_phone: finalData.emergencyContactPhone,
+        emergency_contact_relationship: finalData.emergencyContactRelationship,
+        permissions: finalData.permissions,
+        notification_preferences: finalData.notificationPreferences,
       });
       
       // Clear storage on success

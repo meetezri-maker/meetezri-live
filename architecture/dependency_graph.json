@@ -1,0 +1,491 @@
+{
+  "nodes": [
+    {
+      "id": "domain:web/app",
+      "type": "domain",
+      "path": "apps/web/src/app"
+    },
+    {
+      "id": "domain:web/api-client",
+      "type": "domain",
+      "path": "apps/web/src/lib/api.ts"
+    },
+    {
+      "id": "domain:api/app",
+      "type": "domain",
+      "path": "apps/api/src/app.ts"
+    },
+    {
+      "id": "domain:api/auth",
+      "type": "domain",
+      "path": "apps/api/src/plugins/auth.ts"
+    },
+    {
+      "id": "domain:api/prisma",
+      "type": "domain",
+      "path": "apps/api/src/lib/prisma.ts"
+    },
+    {
+      "id": "domain:api/stripe",
+      "type": "domain",
+      "path": "apps/api/src/config/stripe.ts"
+    },
+    {
+      "id": "domain:api/supabase",
+      "type": "domain",
+      "path": "apps/api/src/config/supabase.ts"
+    },
+    {
+      "id": "domain:shared",
+      "type": "domain",
+      "path": "packages/shared/src/index.ts"
+    },
+    {
+      "id": "domain:api/modules/billing",
+      "type": "domain",
+      "path": "apps/api/src/modules/billing"
+    },
+    {
+      "id": "domain:api/modules/users",
+      "type": "domain",
+      "path": "apps/api/src/modules/users"
+    },
+    {
+      "id": "domain:api/modules/email",
+      "type": "domain",
+      "path": "apps/api/src/modules/email"
+    },
+    {
+      "id": "domain:api/modules/system-settings",
+      "type": "domain",
+      "path": "apps/api/src/modules/system-settings"
+    },
+    {
+      "id": "domain:api/modules/sessions",
+      "type": "domain",
+      "path": "apps/api/src/modules/sessions"
+    },
+    {
+      "id": "domain:api/modules/moods",
+      "type": "domain",
+      "path": "apps/api/src/modules/moods"
+    },
+    {
+      "id": "domain:api/modules/journal",
+      "type": "domain",
+      "path": "apps/api/src/modules/journal"
+    },
+    {
+      "id": "domain:api/modules/wellness",
+      "type": "domain",
+      "path": "apps/api/src/modules/wellness"
+    },
+    {
+      "id": "domain:api/modules/sleep",
+      "type": "domain",
+      "path": "apps/api/src/modules/sleep"
+    },
+    {
+      "id": "domain:api/modules/habits",
+      "type": "domain",
+      "path": "apps/api/src/modules/habits"
+    },
+    {
+      "id": "domain:api/modules/notifications",
+      "type": "domain",
+      "path": "apps/api/src/modules/notifications"
+    },
+    {
+      "id": "domain:api/modules/ai-avatars",
+      "type": "domain",
+      "path": "apps/api/src/modules/ai-avatars"
+    },
+    {
+      "id": "domain:api/modules/admin",
+      "type": "domain",
+      "path": "apps/api/src/modules/admin"
+    },
+    {
+      "id": "domain:api/realtime",
+      "type": "domain",
+      "path": "apps/realtime/src"
+    },
+    {
+      "id": "domain:api/prisma.schema",
+      "type": "domain",
+      "path": "apps/api/prisma/schema.prisma"
+    },
+    {
+      "id": "domain:api/modules/billing/billing.webhook.ts",
+      "type": "domain",
+      "path": "apps/api/src/modules/billing/billing.webhook.ts"
+    },
+    {
+      "id": "domain:api/modules/billing/billing.controller.ts",
+      "type": "domain",
+      "path": "apps/api/src/modules/billing/billing.controller.ts"
+    },
+    {
+      "id": "domain:api/modules/billing/billing.routes.ts",
+      "type": "domain",
+      "path": "apps/api/src/modules/billing/billing.routes.ts"
+    },
+    {
+      "id": "domain:api/modules/billing/services/subscription.service.ts",
+      "type": "domain",
+      "path": "apps/api/src/modules/billing/services/subscription.service.ts"
+    },
+    {
+      "id": "domain:api/modules/billing/services/invoices.service.ts",
+      "type": "domain",
+      "path": "apps/api/src/modules/billing/services/invoices.service.ts"
+    },
+    {
+      "id": "domain:api/modules/billing/services/payg.service.ts",
+      "type": "domain",
+      "path": "apps/api/src/modules/billing/services/payg.service.ts"
+    },
+    {
+      "id": "domain:api/modules/email/email.service.ts",
+      "type": "domain",
+      "path": "apps/api/src/modules/email/email.service.ts"
+    }
+  ],
+  "edges": [
+    {
+      "from": "domain:web/app",
+      "to": "domain:web/api-client",
+      "type": "DIRECT",
+      "reason": "Web Billing page imports and uses the centralized API client for billing operations.",
+      "evidence": "apps/web/src/app/pages/app/Billing.tsx"
+    },
+    {
+      "from": "domain:web/api-client",
+      "to": "domain:api/modules/billing",
+      "type": "DIRECT",
+      "reason": "API client calls billing endpoints under `${API_URL}/billing`.",
+      "evidence": "apps/web/src/lib/api.ts"
+    },
+    {
+      "from": "domain:web/api-client",
+      "to": "domain:api/modules/users",
+      "type": "DIRECT",
+      "reason": "API client calls user endpoints under `${API_URL}/users/*`.",
+      "evidence": "apps/web/src/lib/api.ts"
+    },
+    {
+      "from": "domain:web/api-client",
+      "to": "domain:api/modules/email",
+      "type": "DIRECT",
+      "reason": "API client calls email send endpoint `${API_URL}/email/send`.",
+      "evidence": "apps/web/src/lib/api.ts"
+    },
+    {
+      "from": "domain:web/api-client",
+      "to": "domain:api/modules/system-settings",
+      "type": "DIRECT",
+      "reason": "API client calls system settings endpoints `${API_URL}/system-settings`.",
+      "evidence": "apps/web/src/lib/api.ts"
+    },
+    {
+      "from": "domain:web/api-client",
+      "to": "domain:api/modules/sessions",
+      "type": "DIRECT",
+      "reason": "API client calls sessions endpoints `${API_URL}/sessions*`.",
+      "evidence": "apps/web/src/lib/api.ts"
+    },
+    {
+      "from": "domain:web/api-client",
+      "to": "domain:api/modules/moods",
+      "type": "DIRECT",
+      "reason": "API client calls moods endpoints `${API_URL}/moods*`.",
+      "evidence": "apps/web/src/lib/api.ts"
+    },
+    {
+      "from": "domain:web/api-client",
+      "to": "domain:api/modules/journal",
+      "type": "DIRECT",
+      "reason": "API client calls journal endpoints `${API_URL}/journal*`.",
+      "evidence": "apps/web/src/lib/api.ts"
+    },
+    {
+      "from": "domain:web/api-client",
+      "to": "domain:api/modules/wellness",
+      "type": "DIRECT",
+      "reason": "API client calls wellness endpoints `${API_URL}/wellness*`.",
+      "evidence": "apps/web/src/lib/api.ts"
+    },
+    {
+      "from": "domain:web/api-client",
+      "to": "domain:api/modules/habits",
+      "type": "DIRECT",
+      "reason": "API client calls habits endpoints `${API_URL}/habits*`.",
+      "evidence": "apps/web/src/lib/api.ts"
+    },
+    {
+      "from": "domain:web/api-client",
+      "to": "domain:api/modules/sleep",
+      "type": "DIRECT",
+      "reason": "API client calls sleep endpoints `${API_URL}/sleep*`.",
+      "evidence": "apps/web/src/lib/api.ts"
+    },
+    {
+      "from": "domain:web/api-client",
+      "to": "domain:api/modules/notifications",
+      "type": "DIRECT",
+      "reason": "API client calls notifications endpoints `${API_URL}/notifications*`.",
+      "evidence": "apps/web/src/lib/api.ts"
+    },
+    {
+      "from": "domain:web/api-client",
+      "to": "domain:api/modules/ai-avatars",
+      "type": "DIRECT",
+      "reason": "API client calls AI avatars endpoints `${API_URL}/ai-avatars*`.",
+      "evidence": "apps/web/src/lib/api.ts"
+    },
+    {
+      "from": "domain:web/api-client",
+      "to": "domain:api/modules/admin",
+      "type": "DIRECT",
+      "reason": "API client calls admin endpoints under `${API_URL}/admin*`.",
+      "evidence": "apps/web/src/lib/api.ts"
+    },
+    {
+      "from": "domain:api/app",
+      "to": "domain:api/modules/billing",
+      "type": "DIRECT",
+      "reason": "API app registers the billing route module at `/api/billing`.",
+      "evidence": "apps/api/src/app.ts"
+    },
+    {
+      "from": "domain:api/app",
+      "to": "domain:api/modules/users",
+      "type": "DIRECT",
+      "reason": "API app registers the users route module at `/api/users`.",
+      "evidence": "apps/api/src/app.ts"
+    },
+    {
+      "from": "domain:api/app",
+      "to": "domain:api/modules/email",
+      "type": "DIRECT",
+      "reason": "API app registers the email route module at `/api/email`.",
+      "evidence": "apps/api/src/app.ts"
+    },
+    {
+      "from": "domain:api/app",
+      "to": "domain:api/modules/system-settings",
+      "type": "DIRECT",
+      "reason": "API app registers the system settings route module at `/api/system-settings`.",
+      "evidence": "apps/api/src/app.ts"
+    },
+    {
+      "from": "domain:api/app",
+      "to": "domain:api/modules/sessions",
+      "type": "DIRECT",
+      "reason": "API app registers the sessions route module at `/api/sessions`.",
+      "evidence": "apps/api/src/app.ts"
+    },
+    {
+      "from": "domain:api/app",
+      "to": "domain:api/modules/moods",
+      "type": "DIRECT",
+      "reason": "API app registers the moods route module at `/api/moods`.",
+      "evidence": "apps/api/src/app.ts"
+    },
+    {
+      "from": "domain:api/app",
+      "to": "domain:api/modules/journal",
+      "type": "DIRECT",
+      "reason": "API app registers the journal route module at `/api/journal`.",
+      "evidence": "apps/api/src/app.ts"
+    },
+    {
+      "from": "domain:api/app",
+      "to": "domain:api/modules/wellness",
+      "type": "DIRECT",
+      "reason": "API app registers the wellness route module at `/api/wellness`.",
+      "evidence": "apps/api/src/app.ts"
+    },
+    {
+      "from": "domain:api/app",
+      "to": "domain:api/modules/sleep",
+      "type": "DIRECT",
+      "reason": "API app registers the sleep route module at `/api/sleep`.",
+      "evidence": "apps/api/src/app.ts"
+    },
+    {
+      "from": "domain:api/app",
+      "to": "domain:api/modules/habits",
+      "type": "DIRECT",
+      "reason": "API app registers the habits route module at `/api/habits`.",
+      "evidence": "apps/api/src/app.ts"
+    },
+    {
+      "from": "domain:api/app",
+      "to": "domain:api/modules/notifications",
+      "type": "DIRECT",
+      "reason": "API app registers the notifications route module at `/api/notifications`.",
+      "evidence": "apps/api/src/app.ts"
+    },
+    {
+      "from": "domain:api/app",
+      "to": "domain:api/modules/ai-avatars",
+      "type": "DIRECT",
+      "reason": "API app registers the AI avatars route module at `/api/ai-avatars`.",
+      "evidence": "apps/api/src/app.ts"
+    },
+    {
+      "from": "domain:api/app",
+      "to": "domain:api/modules/admin",
+      "type": "DIRECT",
+      "reason": "API app registers the admin route module at `/api/admin`.",
+      "evidence": "apps/api/src/app.ts"
+    },
+    {
+      "from": "domain:web/api-client",
+      "to": "domain:api/auth",
+      "type": "INDIRECT",
+      "reason": "Web API client sends `Authorization: Bearer <token>` which is consumed by API JWT verification.",
+      "evidence": "apps/web/src/lib/api.ts"
+    },
+    {
+      "from": "domain:api/auth",
+      "to": "domain:api/supabase",
+      "type": "EXTERNAL",
+      "reason": "API JWT verification fetches Supabase JWKS via `${projectUrl}/auth/v1/.well-known/jwks.json`.",
+      "evidence": "apps/api/src/app.ts"
+    },
+    {
+      "from": "domain:api/modules/billing",
+      "to": "domain:api/auth",
+      "type": "DIRECT",
+      "reason": "Billing routes protect endpoints using `app.authenticate` / `app.authorize`.",
+      "evidence": "apps/api/src/modules/billing/billing.routes.ts"
+    },
+    {
+      "from": "domain:api/modules/users",
+      "to": "domain:api/auth",
+      "type": "DIRECT",
+      "reason": "Users routes protect endpoints with `fastify.authenticate` / `fastify.authorize`.",
+      "evidence": "apps/api/src/modules/users/user.routes.ts"
+    },
+    {
+      "from": "domain:api/modules/email",
+      "to": "domain:api/auth",
+      "type": "DIRECT",
+      "reason": "Email routes protect `/send` with `fastify.authenticate`.",
+      "evidence": "apps/api/src/modules/email/email.routes.ts"
+    },
+    {
+      "from": "domain:api/modules/sessions",
+      "to": "domain:api/auth",
+      "type": "DIRECT",
+      "reason": "Sessions routes protect endpoints with `app.authenticate` / `app.authorize`.",
+      "evidence": "apps/api/src/modules/sessions/sessions.routes.ts"
+    },
+    {
+      "from": "domain:api/modules/billing",
+      "to": "domain:api/prisma",
+      "type": "DIRECT",
+      "reason": "Billing services import and use Prisma client for subscription/invoice processing.",
+      "evidence": "apps/api/src/modules/billing/services/subscription.service.ts"
+    },
+    {
+      "from": "domain:api/modules/users",
+      "to": "domain:api/prisma",
+      "type": "DIRECT",
+      "reason": "User services import and use Prisma for profiles/users and related flows.",
+      "evidence": "apps/api/src/modules/users/user.service.ts"
+    },
+    {
+      "from": "domain:api/modules/sessions",
+      "to": "domain:api/prisma",
+      "type": "DIRECT",
+      "reason": "Session services import and use Prisma to manage credits/profiles.",
+      "evidence": "apps/api/src/modules/sessions/sessions.service.ts"
+    },
+    {
+      "from": "domain:api/prisma",
+      "to": "domain:api/prisma.schema",
+      "type": "DIRECT",
+      "reason": "Prisma client is generated from the schema source file.",
+      "evidence": "apps/api/prisma/schema.prisma"
+    },
+    {
+      "from": "domain:api/modules/billing",
+      "to": "domain:api/stripe",
+      "type": "DIRECT",
+      "reason": "Billing services and webhook use the Stripe SDK (checkout, invoices, subscriptions).",
+      "evidence": "apps/api/src/modules/billing/billing.webhook.ts"
+    },
+    {
+      "from": "domain:api/modules/billing/billing.routes.ts",
+      "to": "domain:api/modules/billing/billing.controller.ts",
+      "type": "DIRECT",
+      "reason": "Billing routes call exported handler functions from billing controller.",
+      "evidence": "apps/api/src/modules/billing/billing.routes.ts"
+    },
+    {
+      "from": "domain:api/modules/billing/billing.controller.ts",
+      "to": "domain:api/modules/billing/services/subscription.service.ts",
+      "type": "DIRECT",
+      "reason": "Billing controller imports billing service entrypoints for subscription/portal/credits operations.",
+      "evidence": "apps/api/src/modules/billing/billing.controller.ts"
+    },
+    {
+      "from": "domain:api/modules/billing/billing.webhook.ts",
+      "to": "domain:api/modules/billing/services/subscription.service.ts",
+      "type": "DIRECT",
+      "reason": "Webhook updates subscription/credits state via Prisma in billing service flow.",
+      "evidence": "apps/api/src/modules/billing/billing.webhook.ts"
+    },
+    {
+      "from": "domain:api/modules/email",
+      "to": "domain:api/modules/email/email.service.ts",
+      "type": "DIRECT",
+      "reason": "Email controller routes delegate to the EmailService implementation.",
+      "evidence": "apps/api/src/modules/email/email.routes.ts"
+    },
+    {
+      "from": "domain:api/modules/email/email.service.ts",
+      "to": "domain:api/supabase",
+      "type": "MISSING_EVIDENCE",
+      "reason": "No evidence of Supabase usage in email service.",
+      "evidence": "MISSING_EVIDENCE"
+    },
+    {
+      "from": "domain:api/realtime",
+      "to": "domain:api/supabase",
+      "type": "EXTERNAL",
+      "reason": "Realtime server authenticates Socket.IO connections using Supabase admin auth.",
+      "evidence": "apps/realtime/src/server.ts"
+    }
+  ],
+  "high_risk_nodes": [
+    {
+      "id": "domain:api/auth",
+      "reason": "Auth chokepoint; JWT verification and role enrichment gate many routes."
+    },
+    {
+      "id": "domain:web/api-client",
+      "reason": "Centralized UI API client used across many pages and endpoints."
+    },
+    {
+      "id": "domain:api/prisma",
+      "reason": "Single Prisma client used by multiple services/domains; failures affect many flows."
+    },
+    {
+      "id": "domain:api/modules/billing/billing.webhook.ts",
+      "reason": "Stripe webhook handler updates entitlements; incorrect handling breaks billing correctness."
+    },
+    {
+      "id": "domain:api/modules/email/email.service.ts",
+      "reason": "Email transport config includes hardcoded insecure TLS/debug settings and rejects unauthorized certs."
+    },
+    {
+      "id": "dependency-engine:lockfiles",
+      "reason": "Multiple lockfiles exist, increasing risk of dependency resolution drift."
+    }
+  ]
+}
+

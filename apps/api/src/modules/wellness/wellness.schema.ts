@@ -24,6 +24,8 @@ export const updateWellnessToolSchema = z.object({
   difficulty: z.string().optional(),
   status: z.enum(['draft', 'published', 'archived']).optional(),
   icon: z.string().optional(),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: 'At least one field is required for update',
 });
 
 export const wellnessToolResponseSchema = z.object({

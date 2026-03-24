@@ -128,8 +128,11 @@ export async function getCrisisEventsHandler(
   reply: FastifyReply
 ) {
   try {
-    const status = (request.query as any)?.status as string | undefined;
-    const events = await getCrisisEvents(status);
+    const query = (request.query || {}) as any;
+    const status = query.status as string | undefined;
+    const page = query.page && !isNaN(parseInt(query.page, 10)) ? parseInt(query.page, 10) : 1;
+    const limit = query.limit && !isNaN(parseInt(query.limit, 10)) ? parseInt(query.limit, 10) : 20;
+    const events = await getCrisisEvents(status, page, limit);
     return reply.code(200).send(events);
   } catch (error) {
     request.log.error(error);
@@ -427,7 +430,11 @@ export async function deletePushCampaignHandler(
 // Support Tickets
 export async function getSupportTicketsHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
-    const tickets = await getSupportTickets();
+    const query = (request.query || {}) as any;
+    const page = query.page && !isNaN(parseInt(query.page, 10)) ? parseInt(query.page, 10) : 1;
+    const limit = query.limit && !isNaN(parseInt(query.limit, 10)) ? parseInt(query.limit, 10) : 20;
+    const status = query.status as string | undefined;
+    const tickets = await getSupportTickets(page, limit, status);
     return reply.code(200).send(tickets);
   } catch (error) {
     request.log.error(error);
@@ -511,7 +518,10 @@ export async function flagSessionForReviewHandler(
 
 export async function getActivityLogsHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
-    const logs = await getActivityLogs();
+    const query = (request.query || {}) as any;
+    const page = query.page && !isNaN(parseInt(query.page, 10)) ? parseInt(query.page, 10) : 1;
+    const limit = query.limit && !isNaN(parseInt(query.limit, 10)) ? parseInt(query.limit, 10) : 25;
+    const logs = await getActivityLogs(page, limit);
     return reply.code(200).send(logs);
   } catch (error) {
     request.log.error(error);
@@ -521,7 +531,10 @@ export async function getActivityLogsHandler(request: FastifyRequest, reply: Fas
 
 export async function getSessionRecordingsHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
-    const recordings = await getSessionRecordings();
+    const query = (request.query || {}) as any;
+    const page = query.page && !isNaN(parseInt(query.page, 10)) ? parseInt(query.page, 10) : 1;
+    const limit = query.limit && !isNaN(parseInt(query.limit, 10)) ? parseInt(query.limit, 10) : 20;
+    const recordings = await getSessionRecordings(page, limit);
     return reply.code(200).send(recordings);
   } catch (error) {
     request.log.error(error);
@@ -544,7 +557,10 @@ export async function getSessionRecordingTranscriptHandler(
 
 export async function getErrorLogsHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
-    const logs = await getErrorLogs();
+    const query = (request.query || {}) as any;
+    const page = query.page && !isNaN(parseInt(query.page, 10)) ? parseInt(query.page, 10) : 1;
+    const limit = query.limit && !isNaN(parseInt(query.limit, 10)) ? parseInt(query.limit, 10) : 25;
+    const logs = await getErrorLogs(page, limit);
     return reply.code(200).send(logs);
   } catch (error) {
     request.log.error(error);

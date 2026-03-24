@@ -40,7 +40,8 @@ export const dashboardStatsSchema = z.object({
   featureUsage: z.array(z.object({
     feature: z.string(),
     usage: z.number()
-  }))
+  })),
+  mockedSections: z.array(z.string()).optional()
 });
 
 export type DashboardStats = z.infer<typeof dashboardStatsSchema>;
