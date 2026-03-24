@@ -8,6 +8,7 @@ import {
   SUBSCRIPTIONS_CACHE_TTL,
 } from '../billing.cache';
 import { getOrCreateStripeCustomer } from './stripe-customer.service';
+import { addSubscriptionAllowanceMinutes } from '../credit-balance.service';
 
 export async function getSubscription(userId: string) {
   const sub = await prisma.subscriptions.findFirst({
@@ -351,19 +352,26 @@ export async function syncSubscriptionWithStripe(userId: string) {
     return getSubscription(userId);
   }
 
-  // Update DB
-  // First try to find by stripe_sub_id
-  let existingSub = await prisma.subscriptions.findFirst({
+  const existingByStripeId = await prisma.subscriptions.findFirst({
     where: { stripe_sub_id: activeSub.id },
+    select: { id: true, plan_type: true },
   });
 
-  // If not found by ID, find by user and most recent (likely the trial or pending one)
-  if (!existingSub) {
-    existingSub = await prisma.subscriptions.findFirst({
-      where: { user_id: userId },
-      orderBy: { created_at: 'desc' },
-    });
-  }
+  const pendingCandidate = !existingByStripeId
+    ? await prisma.subscriptions.findFirst({
+        where: {
+          user_id: userId,
+          stripe_sub_id: null,
+          status: { in: ['incomplete', 'incomplete_expired'] },
+          plan_type: planType,
+        },
+        orderBy: { created_at: 'desc' },
+        select: { id: true, plan_type: true },
+      })
+    : null;
+
+  const previousPlanType =
+    (existingByStripeId?.plan_type || pendingCandidate?.plan_type || null) as string | null;
 
   let updatedSub: any;
   const subData: any = {
@@ -376,9 +384,14 @@ export async function syncSubscriptionWithStripe(userId: string) {
     updated_at: new Date(),
   };
 
-  if (existingSub) {
+  if (existingByStripeId) {
     updatedSub = await prisma.subscriptions.update({
-      where: { id: existingSub.id },
+      where: { id: existingByStripeId.id },
+      data: subData,
+    });
+  } else if (pendingCandidate) {
+    updatedSub = await prisma.subscriptions.update({
+      where: { id: pendingCandidate.id },
       data: subData,
     });
   } else {
@@ -386,24 +399,19 @@ export async function syncSubscriptionWithStripe(userId: string) {
       data: {
         user_id: userId,
         ...subData,
-        billing_cycle: 'monthly', // Default (kept as-is to avoid functional drift)
+        billing_cycle: 'monthly',
       },
     });
   }
 
-  // Sync Credits (Optional: Only if active/trialing)
-  if (['active', 'trialing'].includes(activeSub.status)) {
-    const limits = PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS];
-    if (limits) {
-      // Ensure both minute and second-based credits are updated for the new plan
-      await prisma.profiles.update({
-        where: { id: userId },
-        data: {
-          credits: limits.credits,
-          credits_seconds: limits.credits * 60,
-        },
-      });
-    }
+  // Stack plan minutes (same rules as Stripe webhooks / billing.service sync).
+  const shouldGrant =
+    ['active', 'trialing'].includes(activeSub.status) &&
+    (!existingByStripeId || previousPlanType !== planType);
+
+  if (shouldGrant) {
+    const planCredits = PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS]?.credits ?? 0;
+    await addSubscriptionAllowanceMinutes(userId, planCredits);
   }
 
   return updatedSub;

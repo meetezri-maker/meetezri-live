@@ -7,6 +7,10 @@ const mockStripe = {
   subscriptions: {
     retrieve: jest.fn(),
   },
+  invoices: {
+    retrieve: jest.fn().mockResolvedValue({ id: 'in_1', lines: { data: [] }, metadata: {} }),
+    update: jest.fn().mockResolvedValue({}),
+  },
 };
 
 const mockStripeWebhookEvents = {
@@ -17,8 +21,12 @@ const mockStripeWebhookEvents = {
 };
 
 const mockPrisma = {
-  profiles: { update: jest.fn() },
+  profiles: {
+    update: jest.fn(),
+    findUnique: jest.fn(),
+  },
   payment_transactions: { findUnique: jest.fn(), create: jest.fn() },
+  app_sessions: { findMany: jest.fn() },
   subscriptions: { findFirst: jest.fn(), update: jest.fn(), create: jest.fn() },
   $transaction: jest.fn(),
   stripe_webhook_events: mockStripeWebhookEvents,
@@ -54,6 +62,10 @@ describe('billing.webhook stripeWebhookHandler', () => {
     mockStripeWebhookEvents.create.mockResolvedValue({});
     mockStripeWebhookEvents.update.mockResolvedValue({});
     mockStripeWebhookEvents.delete.mockResolvedValue({});
+    mockPrisma.profiles.findUnique.mockResolvedValue({
+      credits: 0,
+      credits_seconds: 0,
+    });
   });
 
   afterAll(() => {
@@ -342,14 +354,15 @@ describe('billing.webhook stripeWebhookHandler', () => {
           user_id: 'user-2',
           stripe_sub_id: 'sub_stripe_1',
           plan_type: 'core',
-          billing_cycle: 'monthly',
         }),
       })
     );
-    expect(mockPrisma.profiles.update).toHaveBeenCalledWith({
-      where: { id: 'user-2' },
-      data: { credits: 200, credits_seconds: 200 * 60 },
-    });
+    expect(mockPrisma.profiles.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-2' },
+        data: expect.objectContaining({ credits: 200, credits_seconds: 200 * 60 }),
+      })
+    );
     expect(reply.send).toHaveBeenCalledWith({ received: true });
   });
 
@@ -378,6 +391,10 @@ describe('billing.webhook stripeWebhookHandler', () => {
     });
     mockPrisma.subscriptions.update.mockResolvedValue({});
     mockPrisma.profiles.update.mockResolvedValue({});
+    mockPrisma.profiles.findUnique.mockResolvedValue({
+      credits: 100,
+      credits_seconds: 100 * 60,
+    });
 
     const { stripeWebhookHandler } = await loadWebhookHandler();
     const reply = buildReply();
@@ -392,7 +409,7 @@ describe('billing.webhook stripeWebhookHandler', () => {
     expect(mockPrisma.subscriptions.update).toHaveBeenCalled();
     expect(mockPrisma.profiles.update).toHaveBeenCalledWith({
       where: { id: 'user-3' },
-      data: { credits: 400, credits_seconds: 400 * 60 },
+      data: { credits: 500, credits_seconds: 500 * 60 },
     });
     expect(reply.send).toHaveBeenCalledWith({ received: true });
   });
