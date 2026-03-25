@@ -46,6 +46,7 @@ import { OnboardingComplete } from '@/app/pages/onboarding/Complete';
 
 // User App Pages
 import { Dashboard } from '@/app/pages/app/Dashboard';
+import { MoodCheckIn } from '@/app/pages/app/MoodCheckIn';
 import { UserProfile } from '@/app/pages/app/UserProfile';
 import { SessionLobby } from '@/app/pages/app/SessionLobby';
 import { ActiveSession } from '@/app/pages/app/ActiveSession';
@@ -282,6 +283,7 @@ export default function App() {
           
             {/* App Routes */}
             <Route path="/app/dashboard" element={<Dashboard />} />
+            <Route path="/app/mood-checkin" element={<MoodCheckIn />} />
             <Route path="/app/session-lobby" element={<SessionLobby />} />
             <Route path="/app/active-session" element={<ActiveSession />} />
             <Route path="/app/user-profile" element={<UserProfile />} />
