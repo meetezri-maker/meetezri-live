@@ -70,7 +70,10 @@ function getWebBaseUrlFromRequest(
 }
 
 function resolvePostVerificationTargetPath(signupType: 'trial' | 'plan') {
-  return signupType === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome';
+  // Redirect-only fix:
+  // Trial verification magiclink should return to the in-app profile route.
+  // Paid flow remains unchanged.
+  return signupType === 'trial' ? '/app/user-profile' : '/onboarding/welcome';
 }
 
 function buildVerificationRedirectTo(

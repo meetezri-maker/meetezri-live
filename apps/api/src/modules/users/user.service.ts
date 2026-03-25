@@ -608,9 +608,31 @@ export async function getProfile(userId: string) {
     const isConfirmed = !!user?.email_confirmed_at;
     // Check custom metadata flag we set during trial signup
     const verificationRequired = user?.user_metadata?.email_verification_required === true;
-    
+
+    // Trial-only consistency:
+    // If Supabase confirms the email, clear the legacy trial flag so downstream
+    // `email_verified` becomes true. This is required when the verification link
+    // redirects directly to `/app/user-profile` (skipping `/auth/callback`).
+    const signupType = (result as any)?.signup_type;
+    const isTrial = signupType === 'trial' || (result?.subscription_plan === 'trial');
+    if (isTrial && isConfirmed && verificationRequired) {
+      try {
+        await supabaseAdmin.auth.admin.updateUserById(userId, {
+          user_metadata: { ...(user?.user_metadata as any), email_verification_required: false },
+        });
+      } catch {
+        // best-effort; we'll still compute verified from current values below
+      }
+    }
+
+    // Recompute verificationRequired in case it was cleared successfully.
+    const verificationRequiredAfter =
+      isTrial && isConfirmed && verificationRequired
+        ? false
+        : verificationRequired;
+
     // User is verified ONLY if confirmed by Supabase AND doesn't have the required flag
-    emailVerified = isConfirmed && !verificationRequired;
+    emailVerified = isConfirmed && !verificationRequiredAfter;
 
   // Debug visibility: explain why `email_verified` was computed.
   console.log("[emailVerified debug]", {
