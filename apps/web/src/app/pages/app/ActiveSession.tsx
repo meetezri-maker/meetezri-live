@@ -130,11 +130,17 @@ type MorphBinding = {
 function ThreeAvatar({
   isSpeaking,
   audioLevel,
+  speechPulse,
+  speechSentenceEndPulse,
 }: {
   isSpeaking: boolean;
   audioLevel: number;
+  speechPulse: number;
+  speechSentenceEndPulse: number;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const MOUTH_GAIN = 6; // allow >1 morph influence for low-amplitude rigs
+  const MOUTH_MAX = 8; // hard ceiling to avoid extreme deformation
 
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -154,6 +160,9 @@ function ThreeAvatar({
 
   const blinkRafRef = useRef<number | null>(null);
   const blinkTimeoutRef = useRef<number | null>(null);
+  const blinkFnRef = useRef<((duration?: number, onDone?: () => void) => void) | null>(
+    null
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -363,11 +372,11 @@ function ThreeAvatar({
       if (!scene || !camera || !renderer) return;
 
       // Smooth mouth using a stable lerp factor in [0,1]
-      const target = THREE.MathUtils.clamp(mouthTargetRef.current, 0, 1);
+      const target = THREE.MathUtils.clamp(mouthTargetRef.current, 0, 1.5);
       const lerpFactor = target > mouthSmoothedRef.current ? 0.25 : 0.35;
       mouthSmoothedRef.current +=
         (target - mouthSmoothedRef.current) * lerpFactor;
-      const mouth = THREE.MathUtils.clamp(mouthSmoothedRef.current, 0, 1);
+      const mouth = THREE.MathUtils.clamp(mouthSmoothedRef.current, 0, 1.5);
 
       // Apply mouth morphs — conservative ranges to avoid extreme deformation.
       // Also avoid any targets that look like full head/neck controls.
@@ -395,7 +404,8 @@ function ThreeAvatar({
             strength = mouth * 0.8;
           }
 
-          influences[index] = THREE.MathUtils.clamp(strength, 0, 1);
+          const boosted = strength * MOUTH_GAIN;
+          influences[index] = THREE.MathUtils.clamp(boosted, 0, MOUTH_MAX);
         });
       }
 
@@ -455,6 +465,8 @@ function ThreeAvatar({
       blinkRafRef.current = requestAnimationFrame(tick);
     }
 
+    blinkFnRef.current = animateBlink;
+
     function scheduleNextBlink() {
       if (!modelRef.current) return;
 
@@ -513,76 +525,63 @@ function ThreeAvatar({
           containerRef.current.removeChild(rendererRef.current.domElement);
         }
       }
+
+      blinkFnRef.current = null;
     };
   }, []);
 
-  // useEffect(() => {
-  //   if (!isSpeaking) {
-  //     mouthTargetRef.current = 0;
-  //     return;
-  //   }
+  useEffect(() => {
+    if (!isSpeaking) {
+      mouthTargetRef.current = 0;
+      return;
+    }
 
-  //   const interval = window.setInterval(() => {
-  //     const normalizedAudio = THREE.MathUtils.clamp(audioLevel / 35, 0, 1);
+    // Each speech boundary pulse briefly opens the mouth; the render loop smooths it.
+    // Keep this short to avoid a stuck-open mouth on long words.
+    mouthTargetRef.current = Math.max(mouthTargetRef.current, 1.25);
+    const t = window.setTimeout(() => {
+      mouthTargetRef.current = Math.min(mouthTargetRef.current, 0.25);
+    }, 85);
 
-  //     const t = performance.now() / 1000;
-  //     const speechPulse =
-  //       Math.max(0, Math.sin(t * 11)) * 0.35 +
-  //       Math.max(0, Math.sin(t * 17)) * 0.18;
-
-  //     const target = normalizedAudio * 0.75 + speechPulse * 0.45;
-
-  //     mouthTargetRef.current = THREE.MathUtils.clamp(target, 0, 1);
-  //   }, 1000 / 30);
-
-  //   return () => {
-  //     clearInterval(interval);
-  //     mouthTargetRef.current = 0;
-  //   };
-  // }, [isSpeaking, audioLevel]);
+    return () => window.clearTimeout(t);
+  }, [speechPulse, isSpeaking]);
 
   useEffect(() => {
-    let rafId: number | null = null;
-  
-    const animateMouth = () => {
-      if (!isSpeaking) {
-        mouthTargetRef.current = 0;
-        return;
-      }
-  
-      const t = performance.now() / 1000;
-  
-      // Fake speech pattern, opens and closes naturally
-      const base =
-        Math.max(0, Math.sin(t * 10.5)) * 0.45 +
-        Math.max(0, Math.sin(t * 16.8)) * 0.25 +
-        Math.max(0, Math.sin(t * 23.7)) * 0.12;
-  
-      // Small randomness to avoid robotic loop
-      const flutter = (Math.sin(t * 31.3) + 1) * 0.04;
-  
-      // Optional tiny contribution from audioLevel, but do NOT rely on it
-      const audioBoost = THREE.MathUtils.clamp(audioLevel / 120, 0, 0.12);
-  
-      // const target = THREE.MathUtils.clamp(base + flutter + audioBoost, 0, 0.85);
-      const target = THREE.MathUtils.clamp((base + flutter + audioBoost) * 2.8, 0, 1);
-  
-      // Add natural short pauses so mouth does not stay open
-      const phraseGate = Math.max(0, Math.sin(t * 2.4));
-      mouthTargetRef.current = phraseGate > 0.08 ? target : target * 0.15;
-  
-      rafId = requestAnimationFrame(animateMouth);
-    };
-  
-    if (isSpeaking) {
-      animateMouth();
-    } else {
+    if (!isSpeaking) return;
+    const blink = blinkFnRef.current;
+    if (!blink) return;
+
+    // Sentence-end punctuation: quick "social" blink.
+    blink(120);
+  }, [speechSentenceEndPulse, isSpeaking]);
+
+  useEffect(() => {
+    // Fallback: if no boundary events fire (browser-dependent), still animate lightly.
+    if (!isSpeaking) {
       mouthTargetRef.current = 0;
+      return;
     }
-  
+
+    let rafId: number | null = null;
+    const start = performance.now();
+
+    const tick = () => {
+      if (!isSpeaking) return;
+
+      const elapsed = (performance.now() - start) / 1000;
+      const gentle =
+        Math.max(0, Math.sin(elapsed * 8.5)) * 0.22 +
+        Math.max(0, Math.sin(elapsed * 13.2)) * 0.12;
+      const audioBoost = THREE.MathUtils.clamp(audioLevel / 140, 0, 0.1);
+      const target = THREE.MathUtils.clamp(gentle + audioBoost, 0, 0.45);
+
+      mouthTargetRef.current = Math.max(mouthTargetRef.current, target);
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
-      mouthTargetRef.current = 0;
     };
   }, [isSpeaking, audioLevel]);
   return <div ref={containerRef} className="w-full h-full min-h-[500px]" />;
@@ -671,6 +670,8 @@ export function ActiveSession() {
   const isSessionEndingRef = useRef(false);
 
   const [currentSubtitle, setCurrentSubtitle] = useState<string | null>(null);
+  const [speechPulse, setSpeechPulse] = useState(0);
+  const [speechSentenceEndPulse, setSpeechSentenceEndPulse] = useState(0);
 
   // ── Audio Visualizer ────────────────────────────────────────────────────
   useEffect(() => {
@@ -788,11 +789,26 @@ export function ActiveSession() {
         }, estimatedDurationMs);
       };
 
+      utterance.onboundary = (event: SpeechSynthesisEvent) => {
+        // Not all browsers fire this reliably; when it does, it's the best "timing" proxy we have.
+        // We treat boundaries as mouth-open pulses; sentence-ending punctuation triggers a blink.
+        try {
+          setSpeechPulse((v) => v + 1);
+
+          const idx = typeof event.charIndex === "number" ? event.charIndex : -1;
+          const ch = idx >= 0 && idx < text.length ? text[idx] : "";
+          if (ch === "." || ch === "!" || ch === "?" || ch === "\n") {
+            setSpeechSentenceEndPulse((v) => v + 1);
+          }
+        } catch {}
+      };
+
       utterance.onend = () => {
         if (speechEndTimeoutRef.current)
           window.clearTimeout(speechEndTimeoutRef.current);
         setIsEzriSpeaking(false);
         isEzriSpeakingRef.current = false;
+        setSpeechPulse((v) => v + 1);
 
         if (currentUtteranceRef.current === utterance) {
           currentUtteranceRef.current = null;
@@ -815,6 +831,7 @@ export function ActiveSession() {
           window.clearTimeout(speechEndTimeoutRef.current);
         setIsEzriSpeaking(false);
         isEzriSpeakingRef.current = false;
+        setSpeechPulse((v) => v + 1);
 
         if (currentUtteranceRef.current === utterance) {
           currentUtteranceRef.current = null;
@@ -1785,7 +1802,12 @@ export function ActiveSession() {
                 ease: "easeInOut",
               }}
             >
-              <ThreeAvatar isSpeaking={isEzriSpeaking} audioLevel={audioLevel} />
+              <ThreeAvatar
+                isSpeaking={isEzriSpeaking}
+                audioLevel={audioLevel}
+                speechPulse={speechPulse}
+                speechSentenceEndPulse={speechSentenceEndPulse}
+              />
             </motion.div>
 
             {isEzriSpeaking && (
