@@ -139,8 +139,14 @@ function ThreeAvatar({
   speechSentenceEndPulse: number;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const MOUTH_GAIN = 6; // allow >1 morph influence for low-amplitude rigs
-  const MOUTH_MAX = 8; // hard ceiling to avoid extreme deformation
+  // Different morphs respond very differently. On many rigs a generic "mouth"
+  // morph balloons the lower lip if overdriven; "jaw/open" is usually safer to boost.
+  const JAW_GAIN = 120;
+  const JAW_MAX = 200;
+  const MOUTH_GAIN = 18;
+  const MOUTH_MAX = 35;
+  const OTHER_MOUTH_GAIN = 60;
+  const OTHER_MOUTH_MAX = 120;
 
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -156,6 +162,8 @@ function ThreeAvatar({
   const eyelidBonesRef = useRef<THREE.Bone[]>([]);
 
   const mouthTargetRef = useRef(0);
+  const mouthBaseRef = useRef(0);
+  const mouthPulseRef = useRef(0);
   const mouthSmoothedRef = useRef(0);
 
   const blinkRafRef = useRef<number | null>(null);
@@ -371,6 +379,12 @@ function ThreeAvatar({
 
       if (!scene || !camera || !renderer) return;
 
+      // Envelope: base movement + fast-decaying pulse
+      // Pulse decays every frame so lips keep moving naturally during speech.
+      mouthPulseRef.current *= 0.68;
+      if (mouthPulseRef.current < 0.001) mouthPulseRef.current = 0;
+      mouthTargetRef.current = mouthBaseRef.current + mouthPulseRef.current;
+
       // Smooth mouth using a stable lerp factor in [0,1]
       const target = THREE.MathUtils.clamp(mouthTargetRef.current, 0, 1.5);
       const lerpFactor = target > mouthSmoothedRef.current ? 0.25 : 0.35;
@@ -404,8 +418,21 @@ function ThreeAvatar({
             strength = mouth * 0.8;
           }
 
-          const boosted = strength * MOUTH_GAIN;
-          influences[index] = THREE.MathUtils.clamp(boosted, 0, MOUTH_MAX);
+          // Non-linear shaping helps avoid "first boundary ballooning" on some rigs.
+          const shaped = Math.pow(THREE.MathUtils.clamp(strength, 0, 1.5), 0.72);
+
+          const isJawLike =
+            lower.includes("jaw") ||
+            lower.includes("jawopen") ||
+            lower.includes("mouthopen") ||
+            lower.includes("open");
+
+          const isGenericMouth = lower.trim() === "mouth";
+
+          const gain = isJawLike ? JAW_GAIN : isGenericMouth ? MOUTH_GAIN : OTHER_MOUTH_GAIN;
+          const max = isJawLike ? JAW_MAX : isGenericMouth ? MOUTH_MAX : OTHER_MOUTH_MAX;
+
+          influences[index] = THREE.MathUtils.clamp(shaped * gain, 0, max);
         });
       }
 
@@ -533,17 +560,13 @@ function ThreeAvatar({
   useEffect(() => {
     if (!isSpeaking) {
       mouthTargetRef.current = 0;
+      mouthBaseRef.current = 0;
+      mouthPulseRef.current = 0;
       return;
     }
 
-    // Each speech boundary pulse briefly opens the mouth; the render loop smooths it.
-    // Keep this short to avoid a stuck-open mouth on long words.
-    mouthTargetRef.current = Math.max(mouthTargetRef.current, 1.25);
-    const t = window.setTimeout(() => {
-      mouthTargetRef.current = Math.min(mouthTargetRef.current, 0.25);
-    }, 85);
-
-    return () => window.clearTimeout(t);
+    // Each speech boundary pulse briefly opens the mouth.
+    mouthPulseRef.current = Math.max(mouthPulseRef.current, 1.05);
   }, [speechPulse, isSpeaking]);
 
   useEffect(() => {
@@ -559,6 +582,8 @@ function ThreeAvatar({
     // Fallback: if no boundary events fire (browser-dependent), still animate lightly.
     if (!isSpeaking) {
       mouthTargetRef.current = 0;
+      mouthBaseRef.current = 0;
+      mouthPulseRef.current = 0;
       return;
     }
 
@@ -570,12 +595,18 @@ function ThreeAvatar({
 
       const elapsed = (performance.now() - start) / 1000;
       const gentle =
-        Math.max(0, Math.sin(elapsed * 8.5)) * 0.22 +
-        Math.max(0, Math.sin(elapsed * 13.2)) * 0.12;
+        Math.max(0, Math.sin(elapsed * 8.5)) * 0.24 +
+        Math.max(0, Math.sin(elapsed * 13.2)) * 0.14;
       const audioBoost = THREE.MathUtils.clamp(audioLevel / 140, 0, 0.1);
-      const target = THREE.MathUtils.clamp(gentle + audioBoost, 0, 0.45);
+      const base = THREE.MathUtils.clamp(gentle + audioBoost, 0, 0.6);
 
-      mouthTargetRef.current = Math.max(mouthTargetRef.current, target);
+      // Smooth closure modulation (no hard snapping to 0).
+      // Often gets near-closed, but stays stable on rigs that hate discontinuities.
+      const closure = (Math.sin(elapsed * 3.1) + 1) / 2; // 0..1
+      const modulatedBase = base * (0.15 + 0.85 * closure);
+
+      // Base moves continuously; pulse adds on top (decays in render loop).
+      mouthBaseRef.current = modulatedBase;
       rafId = requestAnimationFrame(tick);
     };
 
