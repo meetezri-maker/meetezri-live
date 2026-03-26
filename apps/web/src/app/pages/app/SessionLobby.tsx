@@ -49,6 +49,7 @@ export function SessionLobby() {
   const navigate = useNavigate();
   const [selectedMode, setSelectedMode] = useState<"now" | "schedule">("now");
   const [selectedDuration, setSelectedDuration] = useState(30);
+  const [showMinutesPicker, setShowMinutesPicker] = useState(false);
   const [showCustomizeModal, setShowCustomizeModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState("Voice 1");
@@ -153,8 +154,21 @@ export function SessionLobby() {
     const allowed = durations.filter((d) => d <= minutesAvailable);
     if (allowed.length > 0) {
       setSelectedDuration(allowed[allowed.length - 1]);
+    } else {
+      setSelectedDuration(Math.max(1, Math.floor(minutesAvailable)));
     }
   }, [minutesAvailable, selectedDuration]);
+
+  useEffect(() => {
+    if (!showMinutesPicker) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowMinutesPicker(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showMinutesPicker]);
+
+  const isOnOwnPace = minutesAvailable > 0 && selectedDuration === minutesAvailable;
 
   const handleSaveCustomize = () => {
     setSelectedVoice(tempSelectedVoice);
@@ -406,17 +420,14 @@ export function SessionLobby() {
             >
               <Card className="p-6 shadow-xl">
                 <h2 className="text-xl font-bold mb-4">Session Type</h2>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   <motion.button
                     type="button"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => {
-                      if (selectedMode === "now") {
-                        void handleStartSession();
-                        return;
-                      }
                       setSelectedMode("now");
+                      setShowMinutesPicker(true);
                     }}
                     className={`p-6 rounded-xl border-2 transition-all w-full ${
                       selectedMode === "now"
@@ -428,76 +439,151 @@ export function SessionLobby() {
                     <h3 className="font-bold mb-1">Start Now</h3>
                     <p className="text-sm text-muted-foreground">Begin immediately</p>
                   </motion.button>
+                </div>
+              </Card>
+            </motion.div>
 
-                  <motion.button
-                    type="button"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      if (selectedMode === "schedule") {
-                        setShowScheduleModal(true);
-                        return;
-                      }
-                      setSelectedMode("schedule");
-                    }}
-                    className={`p-6 rounded-xl border-2 transition-all ${
-                      selectedMode === "schedule"
-                        ? "border-primary bg-primary/10 shadow-lg"
-                        : "border-border hover:border-primary/50"
-                    }`}
+            {/* Duration Selection Popup */}
+            <AnimatePresence>
+              {selectedMode === "now" && showMinutesPicker && (
+                <>
+                  {/* Backdrop */}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setShowMinutesPicker(false)}
+                    className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
                   >
-                    <Calendar className={`w-8 h-8 mb-3 mx-auto ${selectedMode === "schedule" ? "text-primary" : "text-gray-400"}`} />
-                    <h3 className="font-bold mb-1">Schedule</h3>
-                    <p className="text-sm text-muted-foreground">Pick a time</p>
-                  </motion.button>
-                </div>
-              </Card>
-            </motion.div>
-
-            {/* Duration Selection */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Card className="p-6 shadow-xl">
-                <div className="flex items-center gap-2 mb-4">
-                  <Clock className="w-5 h-5 text-primary" />
-                  <h2 className="text-xl font-bold">Session Duration</h2>
-                </div>
-                <div className="grid grid-cols-4 gap-3">
-                  {durations.map((duration, index) => (
-                    <motion.button
-                      key={duration}
-                      type="button"
-                      initial={{ opacity: 0, scale: 0.8 }}
+                    {/* Modal */}
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: 0.3 + index * 0.05 }}
-                      whileHover={durationDisabled.get(duration) ? undefined : { scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => {
-                        if (durationDisabled.get(duration)) return;
-                        setSelectedDuration(duration);
-                      }}
-                      disabled={durationDisabled.get(duration)}
-                      className={`p-4 rounded-xl border-2 transition-all ${
-                        durationDisabled.get(duration)
-                          ? "border-border opacity-40 cursor-not-allowed"
-                          : selectedDuration === duration
-                          ? "border-primary bg-primary text-primary-foreground shadow-lg"
-                          : "border-border hover:border-primary/50"
-                      }`}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full max-w-xl flex flex-col"
                     >
-                      <div className="text-2xl font-bold">{duration}</div>
-                      <div className="text-xs mt-1">min</div>
-                    </motion.button>
-                  ))}
+                      <Card className="p-6 shadow-2xl bg-white dark:bg-gray-900 overflow-hidden">
+                        <div className="flex items-center justify-between gap-3 mb-4">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-5 h-5 text-primary" />
+                            <h2 className="text-xl font-bold">Choose session minutes</h2>
+                          </div>
+                          <motion.button
+                            type="button"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => setShowMinutesPicker(false)}
+                            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          >
+                            <X className="w-5 h-5" />
+                          </motion.button>
+                        </div>
+
+                <div className="mb-4 flex items-center justify-between gap-3 text-sm">
+                  <p className="text-muted-foreground">
+                    Remaining: <span className="font-semibold text-foreground">{minutesAvailable} min</span>
+                  </p>
+                  <p className="text-muted-foreground">
+                    Selected: <span className="font-semibold text-foreground">{selectedDuration} min</span>
+                  </p>
                 </div>
-                <div className="mt-3 text-xs text-muted-foreground">
-                  Minutes available: <span className="font-medium">{minutesAvailable}</span>
-                </div>
-              </Card>
-            </motion.div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {durations.map((duration, index) => (
+                            <motion.button
+                              key={duration}
+                              type="button"
+                              initial={{ opacity: 0, scale: 0.8 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ delay: 0.06 + index * 0.05 }}
+                              whileHover={durationDisabled.get(duration) ? undefined : { scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => {
+                                if (durationDisabled.get(duration)) return;
+                                setSelectedDuration(duration);
+                              }}
+                              disabled={durationDisabled.get(duration)}
+                        className={`relative p-4 rounded-xl border-2 transition-all ${
+                          durationDisabled.get(duration)
+                            ? "border-border opacity-40 cursor-not-allowed"
+                            : selectedDuration === duration
+                            ? "border-primary bg-primary/10 shadow-lg ring-2 ring-primary/20"
+                            : "border-border hover:border-primary/50"
+                        }`}
+                        aria-pressed={selectedDuration === duration}
+                            >
+                              <div className="text-2xl font-bold">{duration}</div>
+                              <div className="text-xs mt-1">min</div>
+                        {selectedDuration === duration && (
+                          <Check className="absolute top-3 right-3 w-4 h-4 text-primary" />
+                        )}
+                            </motion.button>
+                          ))}
+                        </div>
+
+                        {/* Text option: use all remaining minutes */}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            if (minutesAvailable <= 0) return;
+                            // Use ALL remaining minutes (minutesAvailable is already clamped to remaining credits).
+                            setSelectedDuration(minutesAvailable);
+                          }}
+                          disabled={minutesAvailable <= 0}
+                    className={`mt-4 w-full h-12 border-amber-200 dark:border-amber-800 hover:from-amber-100 hover:to-orange-200 dark:hover:to-orange-900/40 transition-all ${
+                      isOnOwnPace
+                        ? "bg-amber-50/90 dark:bg-amber-900/30 ring-2 ring-amber-500/25"
+                        : "bg-gradient-to-r from-amber-50 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30"
+                    }`}
+                    aria-pressed={isOnOwnPace}
+                        >
+                    <div className="flex items-center justify-between w-full gap-3">
+                      <div className="flex items-center gap-2">
+                        {isOnOwnPace ? <Check className="w-4 h-4 text-amber-700" /> : null}
+                        <span className="font-semibold">On your own pace</span>
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        {minutesAvailable} min
+                      </span>
+                    </div>
+                        </Button>
+
+                  <div className="mt-5 flex items-center justify-between gap-3">
+                    <p className="text-xs text-muted-foreground">
+                      Selected duration: <span className="font-medium text-foreground">{selectedDuration} min</span>
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowMinutesPicker(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => void handleStartSession()}
+                        disabled={
+                          isStarting ||
+                          minutesAvailable <= 0 ||
+                          selectedDuration > minutesAvailable ||
+                          selectedDuration < 1
+                        }
+                        className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-2xl hover:shadow-purple-500/50 transition-all"
+                      >
+                        <Video className="w-4 h-4 mr-2" />
+                        Start Now
+                      </Button>
+                    </div>
+                  </div>
+                      </Card>
+                    </motion.div>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
 
             {/* Ezri Preview */}
             <motion.div
@@ -683,6 +769,36 @@ export function SessionLobby() {
                 </div>
               </Card>
             </motion.div>
+
+              {/* Schedule (moved above Upcoming) */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <Card className="p-6 shadow-xl">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Calendar className="w-5 h-5 text-primary" />
+                    <h3 className="font-bold">Schedule</h3>
+                  </div>
+                  <Button
+                    type="button"
+                    disabled={minutesAvailable <= 0 || selectedDuration > minutesAvailable}
+                    className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-purple-500/10 hover:from-indigo-500 hover:to-purple-500 transition-all flex items-center gap-3 px-4"
+                    onClick={() => {
+                      setSelectedMode("schedule");
+                      setShowMinutesPicker(false);
+                      setShowScheduleModal(true);
+                    }}
+                  >
+                    <Calendar className="w-5 h-5 mr-2" />
+                    <div className="flex flex-col leading-tight">
+                      <span className="font-bold text-sm">Schedule for later</span>
+                      <span className="text-xs text-white/80">Pick a date & time</span>
+                    </div>
+                  </Button>
+                </Card>
+              </motion.div>
 
             {/* Upcoming Sessions */}
             <motion.div

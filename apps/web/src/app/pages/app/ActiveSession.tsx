@@ -182,6 +182,7 @@ function ThreeAvatar({
   const mouthBindingsRef = useRef<MorphBinding[]>([]);
   const blinkBindingsRef = useRef<MorphBinding[]>([]);
   const jawBoneRef = useRef<THREE.Bone | null>(null);
+  const jawDefaultRotXRef = useRef<number | null>(null);
   const eyelidBonesRef = useRef<THREE.Bone[]>([]);
   const eyelidDefaultRotXRef = useRef<Map<string, number>>(new Map());
 
@@ -302,6 +303,7 @@ function ThreeAvatar({
 
             if (/jaw|mouth|chin/.test(boneName)) {
               jawBoneRef.current = child as THREE.Bone;
+              jawDefaultRotXRef.current = (child as THREE.Bone).rotation.x;
               console.log("[Avatar] Jaw bone:", child.name);
             }
 
@@ -410,7 +412,7 @@ function ThreeAvatar({
 
       // Word-boundary mouth envelope: fast open + reliable close.
       mouthPulseRef.current *= 0.9;
-      mouthBaseRef.current *= 0.92;
+      mouthBaseRef.current *= 0.911;
       if (mouthPulseRef.current < 0.001) mouthPulseRef.current = 0;
       if (mouthBaseRef.current < 0.001) mouthBaseRef.current = 0;
       mouthTargetRef.current = mouthBaseRef.current + mouthPulseRef.current;
@@ -498,8 +500,16 @@ function ThreeAvatar({
         });
       }
 
-      // Disable jaw bone rotation entirely to avoid moving the whole head
-      // out of frame for rigs where the "jaw" bone also controls head/neck.
+      // If the GLB uses a jaw bone (not just morph targets) for teeth opening,
+      // drive it gently based on the current mouth value.
+      if (jawBoneRef.current) {
+        const jaw = jawBoneRef.current;
+        const defaultX = jawDefaultRotXRef.current ?? jaw.rotation.x;
+        // Use a conservative mouth value for bone rotation.
+        const mouthForJaw = THREE.MathUtils.clamp(mouthSmoothedRef.current, 0, 1);
+        jaw.rotation.x = defaultX + mouthForJaw * 0.48;
+      }
+
       // Slight scale pulse while speaking
       if (model) {
         const speakingScale = isSpeaking ? 1.01 : 1;
@@ -535,8 +545,8 @@ function ThreeAvatar({
       const tick = (now: number) => {
         const t = Math.min((now - start) / duration, 1);
         // Human-like blink: fast close, short hold, then open.
-        const closeT = 0.55;
-        const holdT = 0.15;
+        const closeT = 0.42;
+        const holdT = 0.12;
         const openT = 1 - closeT - holdT;
         const smoothstep = (x: number) => x * x * (3 - 2 * x);
 
@@ -561,14 +571,16 @@ function ThreeAvatar({
             !lower.includes("lid") &&
             !lower.includes("wink") &&
             !lower.includes("squint");
-          const maxBlink = isRiskyEyes ? 0.35 : 0.82;
+          const maxBlink = isRiskyEyes ? 0.28 : 0.82;
           influences[index] = initialInfluence + blinkValue * maxBlink;
         }
         );
 
+        const hasMorphBlink = blinkBindingsRef.current.length > 0;
         eyelidBonesRef.current.forEach((bone) => {
           const defaultX = eyelidDefaultRotXRef.current.get(bone.uuid) ?? 0;
-          bone.rotation.x = defaultX + 0.33 * blinkValue;
+          // If morph targets already handle blink, avoid doubling with bones.
+          bone.rotation.x = hasMorphBlink ? defaultX : defaultX + 0.28 * blinkValue;
         });
 
         if (t < 1) {
