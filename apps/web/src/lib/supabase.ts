@@ -11,3 +11,11 @@ export const supabase = createClient(
   supabaseUrl || '',
   supabaseAnonKey || ''
 );
+
+// Dev-only debug helpers (do not affect auth behavior).
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  (window as any).__MEETEZRI_SUPABASE_URL__ = supabaseUrl || '';
+  (window as any).__MEETEZRI_SUPABASE_PROJECT_REF__ = (supabaseUrl || '')
+    .replace(/^https?:\/\//, '')
+    .split('.supabase.co')[0] || '';
+}

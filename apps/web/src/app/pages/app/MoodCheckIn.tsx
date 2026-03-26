@@ -15,9 +15,11 @@ import {
 import { useState } from "react";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
+import { useAuth } from "../../contexts/AuthContext";
 
 export function MoodCheckIn() {
   const navigate = useNavigate();
+  const { refreshProfile } = useAuth();
   const [selectedMood, setSelectedMood] = useState("");
   const [selectedIntensity, setSelectedIntensity] = useState(5);
   const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
@@ -68,10 +70,24 @@ export function MoodCheckIn() {
         notes: notes || undefined,
       });
 
+      const optimisticMoodPayload = {
+        mood: selectedMood,
+        intensity: selectedIntensity,
+        created_at: new Date().toISOString(),
+      };
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(
+          "ezri_latest_mood_checkin",
+          JSON.stringify(optimisticMoodPayload),
+        );
+      }
+
+      // Refresh shared auth/profile state so dashboard reflects the new check-in immediately.
+      await refreshProfile();
       setSubmitted(true);
       setTimeout(() => {
-        navigate("/app/dashboard");
-      }, 2000);
+        navigate("/app/dashboard", { state: { latestMoodCheckin: optimisticMoodPayload } });
+      }, 800);
     } catch (error) {
       console.error(error);
       toast.error("Failed to submit mood check-in");

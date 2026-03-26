@@ -12,6 +12,11 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const location = useLocation();
 
   if (isLoading) {
+    // If we already have a signed-in user, never unmount the entire route tree.
+    // Background auth refreshes (often triggered by tab switching) should be silent.
+    if (user) {
+      return <>{children}</>;
+    }
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -46,6 +51,25 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     signupType === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome';
   const isOnboardingRoute = location.pathname.startsWith('/onboarding');
   const isAppRoute = location.pathname.startsWith('/app');
+
+  // Trial flow rule (per spec):
+  // - trial users must NEVER be redirected to any /onboarding/* route
+  // - trial users may access session lobby + dashboard + user profile
+  if (signupType === 'trial') {
+    if (isOnboardingRoute) {
+      return <Navigate to="/app/dashboard" replace />;
+    }
+    if (
+      location.pathname === '/app/dashboard' ||
+      location.pathname === '/app/user-profile' ||
+      location.pathname === '/app/session-lobby'
+    ) {
+      return <>{children}</>;
+    }
+    // For other /app routes, preserve existing trial behavior: allow route rendering
+    // unless upstream pages enforce their own restrictions.
+    return <>{children}</>;
+  }
 
   // Trial flow requirement:
   // - allow `/app/dashboard` even when onboarding is not complete yet (email verification popup may be shown)
