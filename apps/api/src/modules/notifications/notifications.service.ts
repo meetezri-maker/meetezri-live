@@ -3,6 +3,26 @@ import { Prisma } from '@prisma/client';
 import { CreateNotificationInput } from './notifications.schema';
 
 export const notificationsService = {
+  async filterRecentDuplicates(
+    userIds: string[],
+    input: Pick<CreateNotificationInput, 'type' | 'title' | 'message'>
+  ) {
+    if (userIds.length === 0) return [];
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const existing = await prisma.notifications.findMany({
+      where: {
+        user_id: { in: userIds },
+        type: input.type,
+        title: input.title ?? null,
+        message: input.message ?? null,
+        created_at: { gte: tenMinutesAgo },
+      },
+      select: { user_id: true },
+    });
+    const existingUserIds = new Set(existing.map((item) => item.user_id));
+    return userIds.filter((id) => !existingUserIds.has(id));
+  },
+
   async create(input: CreateNotificationInput) {
     const profile = await prisma.profiles.findUnique({
       where: { id: input.user_id },
@@ -27,13 +47,21 @@ export const notificationsService = {
       } 
     });
     
-    const data = profiles
+    const dedupedUserIds = Array.from(
+      new Set(
+        profiles
       .filter(p => {
         const prefs = p.notification_preferences as any;
         return !prefs || prefs.pushEnabled !== false;
       })
-      .map(p => ({
-        user_id: p.id,
+          .map((p) => p.id)
+      )
+    );
+
+    const targetUserIds = await this.filterRecentDuplicates(dedupedUserIds, input);
+
+    const data = targetUserIds.map((userId) => ({
+        user_id: userId,
         type: input.type,
         title: input.title,
         message: input.message,
@@ -45,6 +73,26 @@ export const notificationsService = {
 
     return prisma.notifications.createMany({
       data,
+    });
+  },
+
+  async createManyForUsers(
+    userIds: string[],
+    input: Omit<CreateNotificationInput, 'user_id'>
+  ) {
+    const dedupedUserIds = Array.from(new Set(userIds));
+    const targetUserIds = await this.filterRecentDuplicates(dedupedUserIds, input);
+    if (targetUserIds.length === 0) return { count: 0 };
+
+    return prisma.notifications.createMany({
+      data: targetUserIds.map((id) => ({
+        user_id: id,
+        type: input.type,
+        title: input.title,
+        message: input.message,
+        metadata: input.metadata,
+        is_read: false
+      })),
     });
   },
 

@@ -6,6 +6,7 @@ import { AuthProvider } from '@/app/contexts/AuthContext';
 import { NotificationsProvider } from '@/app/contexts/NotificationsContext';
 import { SafetyProvider } from '@/app/contexts/SafetyContext';
 import { OnboardingProvider } from '@/app/contexts/OnboardingContext';
+import { useAuth } from '@/app/contexts/AuthContext';
 import { ProtectedRoute } from '@/app/components/ProtectedRoute';
 
 // Components
@@ -46,6 +47,7 @@ import { OnboardingComplete } from '@/app/pages/onboarding/Complete';
 
 // User App Pages
 import { Dashboard } from '@/app/pages/app/Dashboard';
+import { MoodCheckIn } from '@/app/pages/app/MoodCheckIn';
 import { UserProfile } from '@/app/pages/app/UserProfile';
 import { SessionLobby } from '@/app/pages/app/SessionLobby';
 import { ActiveSession } from '@/app/pages/app/ActiveSession';
@@ -135,22 +137,37 @@ import { NoDeviceAccess } from '@/app/pages/errors/NoDeviceAccess';
 import { AdminLogin } from '@/app/pages/admin/AdminLogin';
 import { AdminCredentials } from '@/app/pages/admin/AdminCredentials';
 import { TwoFactorAuth } from '@/app/pages/admin/TwoFactorAuth';
+import { MoodHistory } from './pages/app/MoodHistory';
 
 function NetworkWatcher() {
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
+    let offlineTimer: number | null = null;
+
     const handleOnline = () => {
+      if (offlineTimer) {
+        window.clearTimeout(offlineTimer);
+        offlineTimer = null;
+      }
       if (location.pathname === '/error/offline') {
         navigate('/app/dashboard');
       }
     };
 
     const handleOffline = () => {
-      if (location.pathname !== '/error/offline') {
-        navigate('/error/offline');
-      }
+      // Some browsers/devtools can emit transient offline events when the tab is backgrounded
+      // (or the HMR websocket is throttled). Avoid redirecting while hidden, and debounce.
+      if (document.visibilityState !== 'visible') return;
+
+      if (offlineTimer) window.clearTimeout(offlineTimer);
+      offlineTimer = window.setTimeout(() => {
+        offlineTimer = null;
+        if (!navigator.onLine && location.pathname !== '/error/offline') {
+          navigate('/error/offline');
+        }
+      }, 1200);
     };
 
     window.addEventListener('online', handleOnline);
@@ -161,6 +178,7 @@ function NetworkWatcher() {
     }
 
     return () => {
+      if (offlineTimer) window.clearTimeout(offlineTimer);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
@@ -168,6 +186,8 @@ function NetworkWatcher() {
 
   return null;
 }
+
+// (Removed temporary reload/route persistence helpers; the actual fix is in AuthContext + ProtectedRoute.)
 
 export default function App() {
   useEffect(() => {
@@ -282,13 +302,22 @@ export default function App() {
           
             {/* App Routes */}
             <Route path="/app/dashboard" element={<Dashboard />} />
+            <Route path="/app/mood-checkin" element={<MoodCheckIn />} />
+            <Route path="/app/mood-history" element={<MoodHistory />} />
             <Route path="/app/session-lobby" element={<SessionLobby />} />
             <Route path="/app/active-session" element={<ActiveSession />} />
             <Route path="/app/user-profile" element={<UserProfile />} />
             <Route path="/app/billing" element={<Billing />} />
             <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />
             
-            {/* Admin Routes - Protected (Super Admin area) */}
+            {/* Admin Routes - Protected and role-gated */}
+            <Route
+              element={
+                <ProtectedRoute allowedRoles={['super_admin', 'org_admin', 'team_admin']}>
+                  <Outlet />
+                </ProtectedRoute>
+              }
+            >
             {/* Dashboards */}
             <Route path="/admin/super-admin-dashboard" element={<SuperAdminDashboard />} />
             <Route path="/admin/org-admin-dashboard" element={<OrgAdminDashboard />} />
@@ -385,6 +414,7 @@ export default function App() {
             <Route path="/admin/backup-recovery" element={<BackupRecovery />} />
 
             {/* No generic /admin/* fallback so every admin URL must point to a real page */}
+            </Route>
           </Route>
 
           {/* Error Pages */}

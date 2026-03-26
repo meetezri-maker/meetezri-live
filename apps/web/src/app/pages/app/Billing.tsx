@@ -95,11 +95,18 @@ export function Billing() {
         const plan = SUBSCRIPTION_PLANS[planId];
         const now = new Date();
         
-        // Use credits data from the dedicated endpoint which bypasses cache
+        // Canonical amounts from GET /users/credits (subscription + PAYG + lifetime used)
         const subscriptionCredits = creditsData.subscription ?? latestProfile?.credits ?? 0;
         const purchasedCredits = creditsData.purchased ?? latestProfile?.purchased_credits ?? 0;
-        const totalAvailableCredits = subscriptionCredits + purchasedCredits;
-        
+        const accountRemainingMinutes =
+          creditsData.remaining_minutes ??
+          subscriptionCredits + purchasedCredits;
+        const accountTotalMinutes =
+          creditsData.total_minutes ??
+          accountRemainingMinutes + (creditsData.used_minutes ?? latestProfile?.minutes_used ?? 0);
+        const accountUsedMinutes =
+          creditsData.used_minutes ?? latestProfile?.minutes_used ?? 0;
+
         const creditsRemaining = subscriptionCredits;
         const payAsYouGoCredits = purchasedCredits;
 
@@ -132,7 +139,10 @@ export function Billing() {
           totalSpent: 0,
           usageHistory,
           createdAt: subData.created_at || new Date().toISOString(),
-          updatedAt: subData.updated_at || new Date().toISOString()
+          updatedAt: subData.updated_at || new Date().toISOString(),
+          accountTotalMinutes,
+          accountUsedMinutes,
+          accountRemainingMinutes,
         };
 
         setUserSubscription(subscription);
@@ -374,10 +384,19 @@ export function Billing() {
 
           {/* Credits Remaining Card */}
           <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-2 border-blue-200 dark:border-blue-800">
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2 mb-2">
               <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <h3 className="font-semibold text-blue-900 dark:text-blue-100">Minutes Balance</h3>
             </div>
+            {userSubscription.accountTotalMinutes != null && (
+              <p className="text-sm text-blue-800/80 dark:text-blue-200/80 mb-4">
+                Account:{" "}
+                <span className="font-semibold">{userSubscription.accountRemainingMinutes ?? 0} min</span>{" "}
+                remaining ·{" "}
+                <span className="font-semibold">{userSubscription.accountTotalMinutes} min</span> total ·{" "}
+                <span className="font-semibold">{userSubscription.accountUsedMinutes ?? 0} min</span> used
+              </p>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               {/* Plan Minutes */}
@@ -442,7 +461,8 @@ export function Billing() {
               Back to Settings
             </Link>
 
-            {(userSubscription.creditsRemaining + userSubscription.payAsYouGoCredits) <= 50 && (
+            {(userSubscription.accountRemainingMinutes ??
+              userSubscription.creditsRemaining + userSubscription.payAsYouGoCredits) <= 50 && (
               <div className="flex items-start gap-2 p-3 mt-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-amber-700 dark:text-amber-400">

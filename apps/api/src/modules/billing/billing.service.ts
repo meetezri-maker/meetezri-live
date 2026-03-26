@@ -1,6 +1,9 @@
+export * from './index';
+
 import prisma from '../../lib/prisma';
 import { stripe } from '../../config/stripe';
 import { STRIPE_PRICE_IDS, PLAN_LIMITS } from './billing.constants';
+import { addSubscriptionAllowanceMinutes } from './credit-balance.service';
 import { CreateSubscriptionInput, UpdateSubscriptionInput, CreateCreditPurchaseInput } from './billing.schema';
 
 // Simple in-memory cache for billing data
@@ -113,7 +116,7 @@ export async function createCheckoutSession(userId: string, email: string, data:
         data: {
           plan_type: 'trial',
           status: 'active',
-          billing_cycle: 'monthly',
+          billing_cycle: data.billing_cycle,
           amount: 0,
           end_date: null, // Ongoing until upgraded or limits hit
         }
@@ -133,7 +136,7 @@ export async function createCheckoutSession(userId: string, email: string, data:
         user_id: userId,
         plan_type: 'trial',
         status: 'active',
-        billing_cycle: 'monthly',
+        billing_cycle: data.billing_cycle,
         amount: 0,
         start_date: new Date(),
       }
@@ -202,6 +205,7 @@ export async function createCheckoutSession(userId: string, email: string, data:
     metadata: {
       userId,
       planType: data.plan_type,
+      billing_cycle: data.billing_cycle,
       subscriptionId: pendingSub.id, // Link to our DB ID if useful
     },
     success_url: data.successUrl || `${CLIENT_URL}/app/billing?success=true`,
@@ -865,9 +869,12 @@ export async function syncPaygCredits(userId: string) {
         where: { id: userId },
         data: {
           purchased_credits: {
-            increment: credits
-          }
-        }
+            increment: credits,
+          },
+          purchased_credits_seconds: {
+            increment: credits * 60,
+          },
+        },
       });
     });
 

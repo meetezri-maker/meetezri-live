@@ -33,6 +33,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "./ui/button";
 import { useAuth } from "../contexts/AuthContext";
+import { Navigate } from "react-router-dom";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -238,11 +239,18 @@ const roleInfo: Record<AdminRole, { name: string; gradient: string; icon: any }>
 export function AdminLayoutNew({ children }: AdminLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, hasRole } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isAdmin = hasRole(["super_admin", "org_admin", "team_admin"]);
   
-  // Use profile role or fallback
-  const adminRole: AdminRole = (profile?.role as AdminRole) || "team_admin";
+  if (profile && !isAdmin) {
+    return <Navigate to="/error/permission-denied" replace />;
+  }
+
+  // Use explicit role only; no permissive fallback for non-admin roles
+  const adminRole: AdminRole = profile?.role === "super_admin" || profile?.role === "org_admin" || profile?.role === "team_admin"
+    ? profile.role
+    : "team_admin";
   const adminEmail = user?.email || "admin@ezri.com";
   
   // Find which section contains the current page

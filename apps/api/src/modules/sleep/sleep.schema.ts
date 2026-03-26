@@ -14,6 +14,8 @@ export const updateSleepEntrySchema = z.object({
   quality_rating: z.number().min(0).max(100).optional(),
   factors: z.array(z.string()).optional(),
   notes: z.string().optional(),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: 'At least one field is required for update',
 });
 
 export const sleepEntryResponseSchema = z.object({

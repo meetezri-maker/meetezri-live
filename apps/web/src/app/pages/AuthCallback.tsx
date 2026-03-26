@@ -4,6 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 
 export function AuthCallback() {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -11,6 +12,13 @@ export function AuthCallback() {
   const location = useLocation();
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [errorMessage, setErrorMessage] = useState<string>('');
+
+  const isSafeRedirectPath = (value: string) => {
+    if (!value.startsWith('/')) return false;
+    // Prevent redirect loops back into auth/public entry points.
+    const blockedPrefixes = ['/auth/callback', '/login', '/signup', '/verify-email'];
+    return !blockedPrefixes.some((prefix) => value === prefix || value.startsWith(`${prefix}?`));
+  };
 
   const getRedirectPath = (currentUser?: any) => {
     const targetUser = currentUser || user;
@@ -28,13 +36,15 @@ export function AuthCallback() {
 
     console.log("Resolved Redirect Path:", requested);
 
-    if (requested && requested.startsWith('/')) return requested;
+    if (requested && isSafeRedirectPath(requested)) return requested;
 
     // 3. Smart Fallback based on User Metadata
     // Trial users (Soft Verification) -> Profile to complete setup
     if (targetUser?.user_metadata?.email_verification_required) {
-      // We must return the path with the verified param so the alert shows
-      return '/app/user-profile?verified=true';
+      // Only trial users land on the profile route after verification.
+      const signupType = targetUser?.user_metadata?.signup_type;
+      if (signupType === 'trial') return '/onboarding/profile-setup';
+      return '/onboarding/welcome';
     }
 
     // 4. Heuristic for New Paid Users (if param is lost)
@@ -56,20 +66,63 @@ export function AuthCallback() {
   const finalizeVerification = async (sessionUser: any) => {
       // If this is a Trial User verifying for the first time
       if (sessionUser?.user_metadata?.email_verification_required) {
+        const signupType = sessionUser?.user_metadata?.signup_type;
+        if (signupType !== 'trial') {
+          // For non-trial users, fall through to deterministic routing.
+        } else {
           try {
             await supabase.auth.updateUser({
               data: { email_verification_required: false }
             });
             toast.success("Email verified successfully!");
-            navigate('/app/user-profile?verified=true', { replace: true });
+            navigate('/onboarding/profile-setup', { replace: true });
             return;
           } catch (e) {
             console.error("Failed to clear verification flag", e);
           }
+        }
       }
-      
-      // Standard redirect
-      navigate(getRedirectPath(sessionUser), { replace: true });
+
+      // Deterministic routing:
+      // Prefer URL-provided redirect (for older links), otherwise resolve from backend profile.
+      const searchParams = new URLSearchParams(location.search);
+      let requested =
+        searchParams.get('redirect') || searchParams.get('next') || null;
+
+      if (!requested && location.hash) {
+        const hashStr = location.hash.substring(1);
+        const hashParams = new URLSearchParams(hashStr);
+        requested = hashParams.get('redirect') || hashParams.get('next') || null;
+      }
+
+      if (requested && isSafeRedirectPath(requested)) {
+        navigate(requested, { replace: true });
+        return;
+      }
+
+      try {
+        const me = await api.getMe();
+        console.log("AuthCallback: api.getMe after verification", {
+          email_verified: me?.email_verified,
+          signup_type: me?.signup_type,
+          onboarding_completed: me?.onboarding_completed,
+        });
+        if (me?.onboarding_completed === true) {
+          navigate('/app/dashboard', { replace: true });
+          return;
+        }
+
+        if (me?.signup_type === 'trial') {
+          navigate('/onboarding/profile-setup', { replace: true });
+          return;
+        }
+
+        navigate('/onboarding/welcome', { replace: true });
+        return;
+      } catch (e) {
+        // Fallback: metadata/heuristics-based navigation.
+        navigate(getRedirectPath(sessionUser), { replace: true });
+      }
   };
 
   useEffect(() => {
@@ -85,22 +138,37 @@ export function AuthCallback() {
       return;
     }
 
-    // Immediate redirect if user is already loaded AND we are not processing a new login
+    // Immediate redirect if user is already loaded AND we are not processing
+    // the auth callback tokens (code/access_token) yet.
     if (user) {
+      const searchParams = new URLSearchParams(location.search);
+      const hasCode = !!searchParams.get('code');
+      const hasHash =
+        location.hash.includes('access_token') ||
+        location.hash.includes('error') ||
+        location.hash.includes('type=recovery');
+
+      if (hasCode || hasHash) return;
+
       // If user has the "email_verification_required" flag, clear it since they just completed an auth flow
       if (user.user_metadata?.email_verification_required) {
+        const signupType = user.user_metadata?.signup_type;
+        if (signupType !== 'trial') {
+          navigate('/onboarding/welcome', { replace: true });
+          return;
+        }
         supabase.auth.updateUser({
           data: { email_verification_required: false }
         }).then(() => {
           toast.success("Email verified successfully!");
         });
         // Redirect to profile with verified flag
-        navigate('/app/user-profile?verified=true', { replace: true });
+        navigate('/onboarding/profile-setup', { replace: true });
         return;
       }
       navigate(getRedirectPath(), { replace: true });
     }
-  }, [user, navigate, location.search]);
+  }, [user, navigate, location.search, location.hash]);
 
   useEffect(() => {
     console.log("AuthCallback mounted. URL:", window.location.href);

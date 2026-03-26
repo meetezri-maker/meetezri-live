@@ -35,9 +35,6 @@ export async function getSleepEntryByIdHandler(
   if (!entry) {
     return reply.code(404).send({ message: 'Sleep entry not found' });
   }
-  if (entry.user_id !== user.sub) {
-    return reply.code(403).send({ message: 'Unauthorized' });
-  }
   return reply.send(entry);
 }
 

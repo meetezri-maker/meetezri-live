@@ -23,6 +23,11 @@ export default fp(async (fastify: FastifyInstance, opts: RateLimitOptions) => {
   const { max = 100, timeWindow = 60000 } = opts || {};
 
   fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
+    const path = request.url.split('?')[0] || '';
+
+    // Stripe retries webhook deliveries; global per-IP throttling here can cause dropped entitlement sync.
+    if (path === '/api/billing/webhook') return;
+
     // Skip if it's an OPTIONS request (CORS preflight)
     if (request.method === 'OPTIONS') return;
 

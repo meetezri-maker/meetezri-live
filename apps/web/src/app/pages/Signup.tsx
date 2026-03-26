@@ -17,6 +17,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
+  resolveVerificationRedirectForFlow,
+} from "@/lib/verificationRedirect";
+import {
   Form,
   FormControl,
   FormField,
@@ -56,7 +59,8 @@ export function Signup() {
     && trialContact.relationship.trim().length >= 2;
 
   const form = useForm<SignupFormValues>({
-    resolver: zodResolver(signupSchema),
+    // Cast to avoid Zod minor-version type mismatches between deps.
+    resolver: zodResolver(signupSchema as any),
     defaultValues: {
       firstName: "",
       lastName: "",
@@ -70,12 +74,11 @@ export function Signup() {
     if (!isAuthLoading && user && profile) {
       try {
         const selectedPlan = window.localStorage.getItem('selectedPlan');
-        const planPurchased = window.localStorage.getItem('planPurchased') === '1';
-        if (selectedPlan === 'trial' && !planPurchased && phase === 'trialDetails') {
+        if (selectedPlan === 'trial' && phase === 'trialDetails') {
           return;
         }
       } catch {}
-      navigate("/app/dashboard");
+      navigate(profile?.onboarding_completed === true ? "/app/dashboard" : "/onboarding/welcome");
     }
   }, [user, profile, isAuthLoading, navigate, phase]);
 
@@ -85,6 +88,10 @@ export function Signup() {
       const current = window.localStorage.getItem('selectedPlan');
       if (!current) {
         window.localStorage.setItem('selectedPlan', 'trial');
+        window.localStorage.removeItem('planPurchased');
+      } else if (current === 'trial') {
+        // Avoid state conflicts if `planPurchased` was left over from a previous flow.
+        window.localStorage.removeItem('planPurchased');
       }
     } catch {}
   }, []);
@@ -127,26 +134,82 @@ export function Signup() {
     try {
       // Check if user exists before attempting signup
       const checkResult = await api.checkUserExists(data.email);
-      
-      if (checkResult.exists) {
-        toast.error("Account already exists. Please log in instead.");
-        setIsLoading(false);
-        // Optional: navigate("/login");
-        return;
-      }
 
+      // Used to decide whether to use trial-signup vs paid-signup retry logic.
       const selectedPlan = window.localStorage.getItem('selectedPlan');
       const planPurchased = window.localStorage.getItem('planPurchased') === '1';
 
-      if (selectedPlan === 'trial' && !planPurchased) {
+      if (checkResult.exists) {
+        // Trial flow uses Supabase client-side signUp, so on retry we must avoid it.
+        if (selectedPlan === 'trial') {
+          if (checkResult.state === 'FULLY_ONBOARDED') {
+            toast.error("Your account is already active. Please sign in.");
+            setIsLoading(false);
+            navigate("/login");
+            return;
+          }
+
+          if (checkResult.state === 'EMAIL_UNVERIFIED') {
+            toast.error("Your account exists but email verification is still pending.");
+            setIsLoading(false);
+            navigate("/verify-email");
+            return;
+          }
+
+          // Email verified but onboarding incomplete OR profile missing:
+          toast.error("Your account setup is incomplete. Please sign in to continue onboarding.");
+          setIsLoading(false);
+          navigate("/login");
+          return;
+        }
+
+        // Paid flow retry:
+        // - FULLY_ONBOARDED -> go to app/dashboard after login
+        // - onboarding incomplete (email verified) -> redirect them to login so ProtectedRoute sends them to onboarding
+        // - email unverified/profile missing -> proceed to backend /users/signup to resend verification email
+        if (checkResult.state === 'FULLY_ONBOARDED') {
+          toast.error("Your account is already active. Please sign in.");
+          setIsLoading(false);
+          navigate("/login");
+          return;
+        }
+
+        if (
+          checkResult.state === 'EMAIL_VERIFIED_ONBOARDING_INCOMPLETE' ||
+          checkResult.state === 'AUTH_CREATED_PROFILE_CREATED_ONBOARDING_INCOMPLETE'
+        ) {
+          toast.error("Your account setup is incomplete. Please sign in to continue onboarding.");
+          setIsLoading(false);
+          navigate("/login");
+          return;
+        }
+      }
+
+      if (selectedPlan === 'trial') {
         // For free trial: create account client-side so a session is established immediately
         
-        // Explicitly set redirect URL to avoid defaults
-        let origin = window.location.origin;
-        if (origin.includes('meetezri-live-web.vercel.app')) {
-          origin = 'https://meetezri-live-web.vercel.app';
-        }
-        const redirectUrl = `${origin}/auth/callback?redirect=${encodeURIComponent('/app/user-profile')}`;
+        const {
+          emailRedirectTo: redirectUrl,
+          targetPath,
+          baseUrl,
+          isLocal,
+          source,
+        } = resolveVerificationRedirectForFlow("trial");
+        
+        // Required debug logging: exact emailRedirectTo passed to Supabase.
+        console.log("Trial signup: supabase.auth.signUp emailRedirectTo (exact):", redirectUrl, {
+          flow: "frontend_trial_supabase_signup",
+          origin: window.location.origin,
+          hostname: window.location.hostname,
+          env: import.meta.env.DEV ? "dev" : "prod",
+          isLocal,
+          VITE_WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
+          WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
+          APP_URL: undefined,
+          targetPath,
+          baseUrlResolved: baseUrl,
+          baseUrlSource: source,
+        });
 
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: data.email,
@@ -156,7 +219,8 @@ export function Signup() {
             data: {
               first_name: data.firstName,
               last_name: data.lastName,
-              email_verification_required: true
+              email_verification_required: true,
+              signup_type: 'trial',
             },
           },
         });
@@ -172,7 +236,7 @@ export function Signup() {
       // Paid/other flows: use backend signup to send branded emails
       const stripeSessionId = window.localStorage.getItem('stripeSessionId');
       
-      await api.signup({
+      const signupRes = await api.signup({
         email: data.email,
         password: data.password,
         firstName: data.firstName,
@@ -180,8 +244,15 @@ export function Signup() {
         stripe_session_id: stripeSessionId || undefined
       });
 
-      toast.success("Account created! Please verify your email to continue.");
-      navigate("/verify-email");
+      if (signupRes?.action === 'continue_onboarding') {
+        toast.success(signupRes?.message || "Please sign in to continue onboarding.");
+        navigate("/login");
+      } else {
+        toast.success(
+          signupRes?.message || "Account created! Please verify your email to continue."
+        );
+        navigate("/verify-email");
+      }
     } catch (error: any) {
       const rawMessage = error.message || "";
       const message = rawMessage.toLowerCase();
@@ -640,11 +711,28 @@ export function Signup() {
                                     action: {
                                       label: "Resend Email",
                                       onClick: async () => {
-                                        let origin = window.location.origin;
-                                        if (origin.includes('meetezri-live-web.vercel.app')) {
-                                          origin = 'https://meetezri-live-web.vercel.app';
-                                        }
-                                        const redirectUrl = `${origin}/auth/callback?redirect=${encodeURIComponent('/app/user-profile')}`;
+                                        const {
+                                          emailRedirectTo: redirectUrl,
+                                          targetPath,
+                                          baseUrl,
+                                          isLocal,
+                                          source,
+                                        } = resolveVerificationRedirectForFlow("trial");
+
+                                        // Required debug logging: exact emailRedirectTo passed to Supabase.
+                                        console.log("Trial retry resend: supabase.auth.resend emailRedirectTo (exact):", redirectUrl, {
+                                          flow: "frontend_trial_supabase_resend",
+                                          origin: window.location.origin,
+                                          hostname: window.location.hostname,
+                                          env: import.meta.env.DEV ? "dev" : "prod",
+                                          isLocal,
+                                          VITE_WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
+                                          WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
+                                          APP_URL: undefined,
+                                          targetPath,
+                                          baseUrlResolved: baseUrl,
+                                          baseUrlSource: source,
+                                        });
                                         
                                         await supabase.auth.resend({ 
                                           type: "signup", 
@@ -688,10 +776,8 @@ export function Signup() {
                             console.error("Post-signup setup error:", subErr);
                           }
 
-                          try {
-                            window.localStorage.setItem("planPurchased", "1");
-                          } catch {}
-
+                          // Trial flow: after emergency contact + terms, land on dashboard (email verification popup will handle the rest).
+                          // Do not route into the paid/plan onboarding wizard here.
                           navigate("/app/dashboard");
                         } catch (err: any) {
                           toast.error(err.message || "Failed to start session");

@@ -20,7 +20,7 @@ import {
 
 const wellnessBaselineSchema = z.object({
   currentMood: z.string().optional(),
-  selectedGoals: z.array(z.string()).default([]),
+  selectedGoals: z.array(z.string()).min(1, "Please select at least one goal"),
 });
 
 type WellnessBaselineValues = z.infer<typeof wellnessBaselineSchema>;

@@ -38,14 +38,14 @@ type ProfileSetupValues = z.infer<typeof profileSetupSchema>;
 
 export function OnboardingProfileSetup() {
   const navigate = useNavigate();
-  const { data, updateData } = useOnboarding();
+  const { data, updateData, completeOnboarding } = useOnboarding();
   const { user } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [availableTimezones] = useState<string[]>((Intl as any).supportedValuesOf('timeZone'));
 
   const form = useForm<ProfileSetupValues>({
-    resolver: zodResolver(profileSetupSchema),
+    resolver: zodResolver(profileSetupSchema as any),
     defaultValues: {
       firstName: data.firstName || "",
       lastName: data.lastName || "",
@@ -176,10 +176,33 @@ export function OnboardingProfileSetup() {
         timezone: values.timezone 
       });
       
-      const selectedPlan = typeof window !== "undefined" ? window.localStorage.getItem("selectedPlan") : null;
-      const planPurchased = typeof window !== "undefined" ? window.localStorage.getItem("planPurchased") === "1" : false;
-      
-      if (planPurchased || selectedPlan === "trial") {
+      const selectedPlan =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("selectedPlan")
+          : null;
+
+      // Trial flow: after completing profile setup, return to dashboard.
+      if (selectedPlan === "trial") {
+        await completeOnboarding("/app/dashboard", {
+          firstName: values.firstName,
+          lastName: values.lastName,
+          pronouns: values.pronouns,
+          age: values.age,
+          timezone: values.timezone,
+          selectedPlan: "trial",
+          signupType: "trial",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      const planPurchased =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("planPurchased") === "1"
+          : false;
+
+      // Paid flow: continue with the onboarding wizard.
+      if (planPurchased) {
         navigate("/onboarding/wellness-baseline");
       } else {
         navigate("/onboarding/subscription");

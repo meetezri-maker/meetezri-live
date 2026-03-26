@@ -6,14 +6,25 @@ import { createClient } from '@supabase/supabase-js';
 dotenv.config();
 
 const httpServer = createServer();
+
+const allowedOrigins = parseRealtimeCorsOrigins(
+  process.env.REALTIME_CORS_ORIGINS || process.env.CLIENT_URL
+);
+
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin:
+      allowedOrigins.length > 0
+        ? allowedOrigins
+        : process.env.NODE_ENV === 'production'
+          ? false
+          : '*',
     methods: ["GET", "POST"]
   }
 });
 
 import { supabaseAdmin } from './config/supabase';
+import { parseRealtimeCorsOrigins } from './parse-cors-origins';
 
 type TranscriptMessage = {
   id: string;

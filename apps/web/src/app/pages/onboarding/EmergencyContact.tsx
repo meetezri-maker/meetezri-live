@@ -31,9 +31,18 @@ import {
 } from "../../components/ui/form";
 
 const emergencyContactSchema = z.object({
-  emergencyName: z.string().optional(),
-  emergencyPhone: z.string().optional(),
-  emergencyRelationship: z.string().optional(),
+  emergencyName: z.string().trim().min(2, "Emergency contact name is required"),
+  emergencyPhone: z
+    .string()
+    .trim()
+    .min(1, "Emergency contact phone is required")
+    .refine((phone) => /^\+?\d{7,15}$/.test(phone.replace(/[^\d+]/g, "")), {
+      message: "Enter a valid phone number",
+    }),
+  emergencyRelationship: z
+    .string()
+    .trim()
+    .min(2, "Emergency contact relationship is required"),
 });
 
 type EmergencyContactValues = z.infer<typeof emergencyContactSchema>;
@@ -51,6 +60,7 @@ export function OnboardingEmergencyContact() {
 
   const form = useForm<EmergencyContactValues>({
     resolver: zodResolver(emergencyContactSchema),
+    mode: "onChange",
     defaultValues: {
       emergencyName: data.emergencyContactName || "",
       emergencyPhone: data.emergencyContactPhone || "",
@@ -88,7 +98,7 @@ export function OnboardingEmergencyContact() {
       currentStep={7}
       totalSteps={8}
       title="Emergency Contact"
-      subtitle="Help us keep you safe (optional but recommended)"
+      subtitle="Help us keep you safe (required)"
     >
       <div className="space-y-6">
         {/* Crisis Resources Info */}
@@ -286,7 +296,7 @@ export function OnboardingEmergencyContact() {
                 <Button 
                   type="submit"
                   className="w-full group relative overflow-hidden"
-                  disabled={isLoading}
+                  disabled={!form.formState.isValid || isLoading}
                 >
                   <span className="relative z-10 flex items-center justify-center gap-2">
                     {isLoading ? (
@@ -322,7 +332,7 @@ export function OnboardingEmergencyContact() {
           transition={{ delay: 0.9 }}
           className="text-center text-sm text-muted-foreground"
         >
-          All fields are optional • You can skip this step
+          All fields are required to continue
         </motion.p>
       </div>
 

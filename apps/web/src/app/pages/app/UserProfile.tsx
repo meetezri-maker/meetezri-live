@@ -37,6 +37,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { resolveVerificationRedirectForFlow } from "@/lib/verificationRedirect";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Progress } from "../../components/ui/progress";
 
@@ -114,10 +115,21 @@ const profileSchema = z.object({
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
+const toProfileGoals = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value as string[];
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
 export function UserProfile() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signOut, user } = useAuth();
+  const { signOut, user, refreshProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [showVerifiedAlert, setShowVerifiedAlert] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -132,14 +144,17 @@ export function UserProfile() {
     const params = new URLSearchParams(location.search);
     if (params.get("verified") === "true") {
       setShowVerifiedAlert(true);
+      // Deterministic: after successful email verification redirect,
+      // force a fresh `/api/users/me` fetch so `email_verified`-based UI updates.
+      refreshProfile().catch(() => {});
       // Clean up the URL
       navigate(location.pathname, { replace: true });
     }
-  }, [location, navigate]);
+  }, [location, navigate, refreshProfile]);
 
   // Use React Hook Form
   const form = useForm<ProfileFormValues>({
-    resolver: zodResolver(profileSchema),
+    resolver: zodResolver(profileSchema as any),
     defaultValues: {
       name: "",
       email: "",
@@ -349,22 +364,44 @@ export function UserProfile() {
   const onSubmit = async (data: ProfileFormValues) => {
     setIsSaving(true);
     try {
-      const updatedProfile = await api.updateProfile({
-        full_name: data.name,
-        email: data.email,
-        phone: data.phone,
-        age: data.birthday, // Mapped from birthday field which is actually age
-        avatar_url: profileImage,
-        pronouns: data.pronouns,
-        timezone: data.location,
-        in_therapy: data.in_therapy,
-        // on_medication: data.on_medication,
-        selected_goals: data.selected_goals || [],
-        selected_triggers: data.selected_triggers || [],
-        emergency_contact_name: data.emergency_contact_name,
-        emergency_contact_phone: data.emergency_contact_phone,
-        emergency_contact_relationship: data.emergency_contact_relationship
-      });
+      const dirty = form.formState.dirtyFields;
+      const profilePatch: Record<string, unknown> = {};
+
+      if (dirty.name) profilePatch.full_name = data.name;
+      if (dirty.email) profilePatch.email = data.email;
+      if (dirty.phone) profilePatch.phone = data.phone;
+      if (dirty.birthday) profilePatch.age = data.birthday; // mapped from age input
+      if (dirty.pronouns) profilePatch.pronouns = data.pronouns;
+      if (dirty.location) profilePatch.timezone = data.location;
+      if (dirty.in_therapy) profilePatch.in_therapy = data.in_therapy;
+      if (dirty.selected_goals) profilePatch.selected_goals = data.selected_goals || [];
+      if (dirty.selected_triggers) profilePatch.selected_triggers = data.selected_triggers || [];
+
+      // Avatar is uploaded independently; only patch it when it changed.
+      if (profileImage !== rawProfile?.avatar_url) {
+        profilePatch.avatar_url = profileImage;
+      }
+
+      // Keep emergency contact updates partial-safe while preserving schema compatibility.
+      const emergencyDirty =
+        !!dirty.emergency_contact_name ||
+        !!dirty.emergency_contact_phone ||
+        !!dirty.emergency_contact_relationship;
+
+      if (emergencyDirty) {
+        profilePatch.emergency_contact_name = data.emergency_contact_name || rawProfile?.emergency_contact_name || "";
+        profilePatch.emergency_contact_phone = data.emergency_contact_phone || rawProfile?.emergency_contact_phone || "";
+        profilePatch.emergency_contact_relationship =
+          data.emergency_contact_relationship || rawProfile?.emergency_contact_relationship || "";
+      }
+
+      if (Object.keys(profilePatch).length === 0) {
+        toast.success("No changes to save");
+        setIsEditing(false);
+        return;
+      }
+
+      const updatedProfile = await api.updateProfile(profilePatch);
       
       // Update form with returned data to ensure sync
       form.reset({
@@ -376,8 +413,8 @@ export function UserProfile() {
         location: updatedProfile.timezone || '',
         in_therapy: updatedProfile.in_therapy || 'Not specified',
         // on_medication: updatedProfile.on_medication || 'Not specified',
-        selected_goals: updatedProfile.selected_goals || [],
-        selected_triggers: updatedProfile.selected_triggers || [],
+        selected_goals: toProfileGoals(updatedProfile.selected_goals),
+        selected_triggers: toProfileGoals(updatedProfile.selected_triggers),
         emergency_contact_name: updatedProfile.emergency_contact_name || '',
         emergency_contact_phone: updatedProfile.emergency_contact_phone || '',
         emergency_contact_relationship: updatedProfile.emergency_contact_relationship || ''
@@ -398,16 +435,26 @@ export function UserProfile() {
     try {
       setResending(true);
       
-      // Use window.location.origin as the primary source of truth
-      let baseUrl = window.location.origin;
+      const signupType =
+        (user as any)?.user_metadata?.signup_type === "trial" ? "trial" : "plan";
+      const { emailRedirectTo: redirectTo, targetPath, baseUrl, isLocal, source } =
+        resolveVerificationRedirectForFlow(signupType);
       
-      // Safety override: If we are on the production domain, ensure we use the HTTPS production URL
-      if (baseUrl.includes('meetezri-live-web.vercel.app')) {
-        baseUrl = 'https://meetezri-live-web.vercel.app';
-      }
-
-      const currentPath = window.location.pathname + window.location.search;
-      const redirectTo = `${baseUrl}/auth/callback?redirect=${encodeURIComponent(currentPath)}`;
+      // Required debug logging: exact emailRedirectTo passed to Supabase.
+      console.log("Resend (UserProfile): supabase.auth.resend emailRedirectTo (exact):", redirectTo, {
+        flow: "frontend_userprofile_supabase_resend",
+        origin: window.location.origin,
+        hostname: window.location.hostname,
+        env: import.meta.env.DEV ? "dev" : "prod",
+        isLocal,
+        signupType,
+        targetPath,
+        VITE_WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
+        WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
+        APP_URL: undefined,
+        baseUrlResolved: baseUrl,
+        baseUrlSource: source,
+      });
       
       const { error } = await supabase.auth.resend({
         type: 'signup',
@@ -486,6 +533,9 @@ export function UserProfile() {
   ];
   
   const needsEmailVerification = !!user && !(user as any).email_confirmed_at;
+  const effectiveNeedsVerification =
+    (rawProfile as any)?.needs_email_verification ??
+    (rawProfile ? !(rawProfile as any)?.email_verified : needsEmailVerification);
 
   if (isLoading) {
     return (
@@ -568,7 +618,7 @@ export function UserProfile() {
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {needsEmailVerification && (
+        {effectiveNeedsVerification && (
           <div className="mb-6 p-4 border-2 border-yellow-300 bg-yellow-50 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-3">
               <AlertTriangle className="w-5 h-5 text-yellow-700" />

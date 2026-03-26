@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
@@ -21,6 +21,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const lastUserIdRef = useRef<string | null>(null);
 
   const hasRole = (role: string | string[]) => {
     if (!profile?.role) return false;
@@ -59,6 +60,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    const maybeClearEmailVerificationRequired = async (sessionUser: User | null) => {
+      if (!sessionUser) return;
+      // Prevent overly-aggressive metadata clearing.
+      // We should only clear `email_verification_required` during the auth callback flow,
+      // otherwise trial users can lose the "verification required" state before they
+      // actually click/complete email verification.
+      if (typeof window !== 'undefined') {
+        const pathname = window.location.pathname || '';
+        if (!pathname.startsWith('/auth/callback')) return;
+      }
+      try {
+        const needsClear =
+          (sessionUser.user_metadata as any)?.email_verification_required === true;
+        const emailConfirmedAt = (sessionUser as any)?.email_confirmed_at;
+        if (needsClear && emailConfirmedAt) {
+          await supabase.auth.updateUser({
+            data: { email_verification_required: false },
+          });
+          // No toast here to avoid UX noise during redirect flows.
+        }
+      } catch {
+        // Best-effort only; do not block app navigation.
+      }
+    };
+
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -70,9 +96,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           window.history.replaceState(null, '', window.location.pathname);
         }
         applyAppearanceForUser(session.user);
-        // Optimize: Don't wait for profile fetch to unblock UI
-        setIsLoading(false);
-        fetchProfile();
+        // Clear verification metadata when Supabase says the email is confirmed.
+        maybeClearEmailVerificationRequired(session.user).finally(() => {
+          // Wait for profile bootstrap so UI doesn't assume authentication.
+          fetchProfile();
+        });
       } else {
         // No session, check for errors in URL
         handleAuthErrors();
@@ -88,12 +116,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         applyAppearanceForUser(session.user);
-        // Optimize: Don't wait for profile fetch to unblock UI
-        setIsLoading(false);
-        fetchProfile();
+        const incomingUserId = session.user.id;
+        const lastUserId = lastUserIdRef.current;
+        const isSameUser = lastUserId === incomingUserId;
+        lastUserIdRef.current = incomingUserId;
+
+        // Avoid route-tree teardown on tab focus/auth refresh events.
+        // Only enter a blocking loading state when we don't yet have a profile for this user.
+        if (!isSameUser || !profile) {
+          setIsLoading(true);
+        }
+        maybeClearEmailVerificationRequired(session.user).finally(() => {
+          fetchProfile();
+        });
       } else {
         setProfile(null);
         setIsLoading(false);
+        lastUserIdRef.current = null;
         applyAppearanceForUser(null);
       }
     });

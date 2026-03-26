@@ -3,7 +3,7 @@ import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Skeleton } from "../../components/ui/skeleton";
 import { motion } from "motion/react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { Video, Heart, BookOpen, TrendingUp, Calendar, Sparkles, ArrowRight, Award, Target, Flame, Clock, Zap, Mail } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -35,20 +35,30 @@ interface BackendSession {
 }
 
 export function Dashboard() {
+  const location = useLocation();
   const { user, profile, refreshProfile } = useAuth();
   const [upcomingSessionsCount, setUpcomingSessionsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [confirmEmailDismissed, setConfirmEmailDismissed] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
 
-  const isTrialUser = profile?.subscription_plan === "trial" || profile?.subscription_plan == null;
-  // Only show when email is not verified: trust API (email_verified / needs_email_verification) first
-  const emailVerified = profile?.email_verified === true;
-  const needsEmailVerification =
-    !emailVerified &&
-    (profile?.needs_email_verification === true ||
-      (isTrialUser && user?.email_confirmed_at == null));
-  const showConfirmEmailPopup = needsEmailVerification && !confirmEmailDismissed;
+  const rawSignupType =
+    (user as any)?.user_metadata?.signup_type ??
+    (user as any)?.user_metadata?.signupType ??
+    (user as any)?.user_metadata?.signup ??
+    null;
+  const signupType =
+    profile?.signup_type ??
+    (String(rawSignupType).toLowerCase() === "trial" ? "trial" : null) ??
+    (profile?.subscription_plan === "trial" ? "trial" : null);
+  const isUnverified =
+    !!user && (!user.email_confirmed_at || (user as any)?.user_metadata?.email_verification_required);
+  // Required behavior:
+  // - show popup only for trial users
+  // - show only on /app/dashboard
+  // - show only when email is NOT verified
+  const showConfirmEmailPopup =
+    signupType === "trial" && isUnverified && !confirmEmailDismissed;
 
   const moodEmojis: Record<string, string> = {
     "Happy": "😊",
@@ -67,6 +77,22 @@ export function Dashboard() {
     // Case-insensitive lookup
     const entry = Object.entries(moodEmojis).find(([label]) => label.toLowerCase() === mood.toLowerCase());
     return entry ? entry[1] : "😐"; // Default to neutral face if not found
+  };
+
+  const resolveLatestMoodFromClient = () => {
+    const fromNavigation = (location.state as any)?.latestMoodCheckin?.mood;
+    if (typeof fromNavigation === "string" && fromNavigation.trim()) {
+      return fromNavigation;
+    }
+    if (typeof window === "undefined") return null;
+    try {
+      const saved = window.sessionStorage.getItem("ezri_latest_mood_checkin");
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      return typeof parsed?.mood === "string" && parsed.mood.trim() ? parsed.mood : null;
+    } catch {
+      return null;
+    }
   };
 
   useEffect(() => {
@@ -91,12 +117,23 @@ export function Dashboard() {
   }, []);
 
   const firstName = profile?.full_name?.split(" ")[0] || "Friend";
-  const currentMood = profile?.current_mood || "Calm";
+  const optimisticMood = resolveLatestMoodFromClient();
+  const currentMood = optimisticMood || profile?.current_mood || "Calm";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!optimisticMood || !profile?.current_mood) return;
+    if (optimisticMood.toLowerCase() === String(profile.current_mood).toLowerCase()) {
+      window.sessionStorage.removeItem("ezri_latest_mood_checkin");
+    }
+  }, [optimisticMood, profile?.current_mood]);
   const streakDays = profile?.streak_days || 0;
   
   // Real data from backend
-  const creditsRemaining = profile?.credits_remaining || 0;
-  const creditsTotal = profile?.credits_total || 200;
+  const creditsRemaining =
+    profile?.credits_remaining != null ? profile.credits_remaining : 0;
+  const creditsTotal =
+    profile?.credits_total != null ? profile.credits_total : 200;
   const userPlan = profile?.subscription_plan || "Basic Plan";
   const [liveCreditsSeconds, setLiveCreditsSeconds] = useState<number | null>(null);
   const [liveCreditsTotalSeconds, setLiveCreditsTotalSeconds] = useState<number | null>(null);
@@ -111,7 +148,6 @@ export function Dashboard() {
   };
 
   useEffect(() => {
-    // Use the dedicated credits endpoint (no-cache) for accurate seconds display
     const loadCredits = async () => {
       try {
         const {
@@ -123,11 +159,13 @@ export function Dashboard() {
           purchased,
         } = await api.getCredits();
         const seconds =
-          typeof credits_seconds === "number"
-            ? Math.max(0, credits_seconds)
-            : typeof credits === "number"
-            ? Math.max(0, credits) * 60
-            : null;
+          typeof data.remaining_seconds === "number"
+            ? Math.max(0, data.remaining_seconds)
+            : typeof data.credits_seconds === "number"
+              ? Math.max(0, data.credits_seconds)
+              : typeof data.credits === "number"
+                ? Math.max(0, data.credits) * 60
+                : null;
         setLiveCreditsSeconds(seconds);
         const totalSeconds =
           (typeof subscription_total_seconds === "number"
@@ -156,8 +194,8 @@ export function Dashboard() {
         setLiveCreditsTotalMinutes(null);
       }
     };
-    loadCredits();
-  }, []);
+    void loadCredits();
+  }, [user?.id, profile?.credits_total, profile?.credits_remaining]);
 
   const creditsRemainingSeconds =
     liveCreditsSeconds !== null
@@ -304,38 +342,30 @@ export function Dashboard() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex flex-col gap-2 sm:flex-row">
-            <Button variant="outline" onClick={() => setConfirmEmailDismissed(true)} className="w-full sm:w-auto">
-              I&apos;ll do it later
+            <Button
+              onClick={async () => {
+                // Required behavior: close popup immediately after click.
+                setConfirmEmailDismissed(true);
+                await handleResendVerification();
+              }}
+              disabled={resendLoading}
+              className="w-full sm:w-auto"
+            >
+              {resendLoading ? "Sending…" : "Email Verification"}
             </Button>
-            <Button onClick={handleResendVerification} disabled={resendLoading} className="w-full sm:w-auto">
-              {resendLoading ? "Sending…" : "Send Verification Email"}
+            <Button
+              variant="outline"
+              onClick={() => setConfirmEmailDismissed(true)}
+              className="w-full sm:w-auto"
+            >
+              Do It Later
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {/* Always-visible message for free trial users who need to verify email */}
-        {needsEmailVerification && (
-          <Alert className="mb-6 border-amber-500/50 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-100 [&>svg]:text-amber-600">
-            <Mail className="h-4 w-4" />
-            <AlertTitle>Verify your email to secure your free trial</AlertTitle>
-            <AlertDescription className="flex flex-col gap-2">
-              <span>
-                We sent a verification link to <strong>{user?.email}</strong>. Open your inbox, find the email from MeetEzri, and <strong>click the link in that email</strong> to verify your account. No need to log in again—just click the link.
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-fit border-amber-600 text-amber-800 hover:bg-amber-100 dark:border-amber-500 dark:text-amber-200 dark:hover:bg-amber-900/50"
-                onClick={handleResendVerification}
-                disabled={resendLoading}
-              >
-                {resendLoading ? "Sending…" : "Resend verification email"}
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
+        {/* Verification popup is the single source of truth for prompting on dashboard */}
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -439,14 +469,14 @@ export function Dashboard() {
             >
               <Card
                 className={`h-full p-6 text-white shadow-xl cursor-pointer hover:shadow-2xl transition-shadow flex flex-col ${
-                  creditsRemaining <= 50
+                  creditsRemainingLow <= 50
                     ? "bg-gradient-to-br from-amber-500 to-orange-500"
                     : "bg-gradient-to-br from-green-500 to-emerald-500"
                 }`}
               >
                 <div className="flex items-center justify-between ">
                   <Clock className="w-8 h-8" />
-                  {creditsRemaining <= 50 && (
+                  {creditsRemainingLow <= 50 && (
                     <motion.div
                       animate={{ scale: [1, 1.2, 1] }}
                       transition={{ duration: 1.5, repeat: Infinity }}
@@ -456,17 +486,26 @@ export function Dashboard() {
                   )}
                 </div>
                 <div className="flex flex-col gap-2 mt-1">
-                <h3 className="font-bold ">Time Remaining</h3>
+                <h3 className="font-bold ">Time remaining</h3>
                 <p className="text-xl font-semibold font-mono">
                   {formatTime(creditsRemainingSeconds)}
                 </p>
+                <p className="text-sm font-medium text-white/90">
+                  {accountRemainingMinutesDisplay} min · all buckets
+                </p>
                 </div>
-                <div className="flex flex-row gap-2 mt-1">
-                <h3 className="  font-bold "> Total minutes: </h3>
+                <div className="flex flex-col gap-1 mt-2">
+                <div className="flex flex-row gap-2 items-baseline">
+                <h3 className="font-bold">Total minutes</h3>
                 <p className="text-xl font-semibold font-mono">
                   {creditsTotalMinutes} 
                 </p>
-                 
+                </div>
+                {accountUsedMinutesDisplay != null && (
+                  <p className="text-sm text-white/90">
+                    Used: {accountUsedMinutesDisplay} min
+                  </p>
+                )}
                 </div>
                 <p className="text-xs text-white/90 ">
                   {userPlan} • Click to manage
