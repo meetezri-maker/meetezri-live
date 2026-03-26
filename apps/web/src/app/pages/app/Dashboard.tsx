@@ -3,7 +3,7 @@ import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Skeleton } from "../../components/ui/skeleton";
 import { motion } from "motion/react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { Video, Heart, BookOpen, TrendingUp, Calendar, Sparkles, ArrowRight, Award, Target, Flame, Clock, Zap, Mail } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -35,6 +35,7 @@ interface BackendSession {
 }
 
 export function Dashboard() {
+  const location = useLocation();
   const { user, profile, refreshProfile } = useAuth();
   const [upcomingSessionsCount, setUpcomingSessionsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -78,6 +79,22 @@ export function Dashboard() {
     return entry ? entry[1] : "😐"; // Default to neutral face if not found
   };
 
+  const resolveLatestMoodFromClient = () => {
+    const fromNavigation = (location.state as any)?.latestMoodCheckin?.mood;
+    if (typeof fromNavigation === "string" && fromNavigation.trim()) {
+      return fromNavigation;
+    }
+    if (typeof window === "undefined") return null;
+    try {
+      const saved = window.sessionStorage.getItem("ezri_latest_mood_checkin");
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      return typeof parsed?.mood === "string" && parsed.mood.trim() ? parsed.mood : null;
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -100,7 +117,16 @@ export function Dashboard() {
   }, []);
 
   const firstName = profile?.full_name?.split(" ")[0] || "Friend";
-  const currentMood = profile?.current_mood || "Calm";
+  const optimisticMood = resolveLatestMoodFromClient();
+  const currentMood = optimisticMood || profile?.current_mood || "Calm";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!optimisticMood || !profile?.current_mood) return;
+    if (optimisticMood.toLowerCase() === String(profile.current_mood).toLowerCase()) {
+      window.sessionStorage.removeItem("ezri_latest_mood_checkin");
+    }
+  }, [optimisticMood, profile?.current_mood]);
   const streakDays = profile?.streak_days || 0;
   
   // Real data from backend

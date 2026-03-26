@@ -42,7 +42,7 @@ import { LowMinutesWarning } from "@/app/components/modals/LowMinutesWarning";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-const AVATAR_MODEL_PATH = "/C1v4.glb";
+const AVATAR_MODEL_PATH = "/C1v5.glb";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Keyword lists — covers Ready Player Me, Blender ARKit, Mixamo, CC3/CC4,
@@ -121,32 +121,55 @@ function isMouthName(name: string): boolean {
   return MOUTH_KEYWORDS.some((k) => lower === k || lower.includes(k));
 }
 
+function getSpeechOpennessAt(text: string, idx: number): number {
+  if (!text || idx < 0 || idx >= text.length) return 0.1;
+  const window = text.slice(Math.max(0, idx - 1), Math.min(text.length, idx + 4)).toLowerCase();
+  let score = 0;
+
+  for (const ch of window) {
+    if ("aeiou".includes(ch)) score += 1.0;
+    else if ("yw".includes(ch)) score += 0.55;
+    else if ("fvszxj".includes(ch)) score += 0.45;
+    else if ("rlntdkg".includes(ch)) score += 0.35;
+    else if ("bmp".includes(ch)) score -= 0.5; // bilabials tend to close lips
+    else if (ch === " " || ch === "," || ch === "." || ch === "!" || ch === "?") score -= 0.35;
+  }
+
+  const normalized = (score + 1.5) / 4.5;
+  return THREE.MathUtils.clamp(normalized, 0.02, 1);
+}
+
 type MorphBinding = {
   mesh: THREE.Mesh;
   index: number;
   name: string;
+  initialInfluence: number;
 };
 
 function ThreeAvatar({
   isSpeaking,
   audioLevel,
   speechPulse,
-  speechSentenceEndPulse,
+  speechText,
+  speechCharIndex,
 }: {
   isSpeaking: boolean;
   audioLevel: number;
   speechPulse: number;
-  speechSentenceEndPulse: number;
+  speechText: string;
+  speechCharIndex: number;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Different morphs respond very differently. On many rigs a generic "mouth"
   // morph balloons the lower lip if overdriven; "jaw/open" is usually safer to boost.
-  const JAW_GAIN = 120;
-  const JAW_MAX = 200;
-  const MOUTH_GAIN = 18;
-  const MOUTH_MAX = 35;
-  const OTHER_MOUTH_GAIN = 60;
-  const OTHER_MOUTH_MAX = 120;
+  // Favor jaw/mouth-open targets for visible teeth opening.
+  // Keep generic lip-shape targets conservative to avoid deformation.
+  const JAW_GAIN = 142;
+  const JAW_MAX = 176;
+  const MOUTH_GAIN = 5;
+  const MOUTH_MAX = 10;
+  const OTHER_MOUTH_GAIN = 22;
+  const OTHER_MOUTH_MAX = 34;
 
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -160,11 +183,13 @@ function ThreeAvatar({
   const blinkBindingsRef = useRef<MorphBinding[]>([]);
   const jawBoneRef = useRef<THREE.Bone | null>(null);
   const eyelidBonesRef = useRef<THREE.Bone[]>([]);
+  const eyelidDefaultRotXRef = useRef<Map<string, number>>(new Map());
 
   const mouthTargetRef = useRef(0);
   const mouthBaseRef = useRef(0);
   const mouthPulseRef = useRef(0);
   const mouthSmoothedRef = useRef(0);
+  const lastBoundaryAtRef = useRef(0);
 
   const blinkRafRef = useRef<number | null>(null);
   const blinkTimeoutRef = useRef<number | null>(null);
@@ -252,6 +277,7 @@ function ThreeAvatar({
                   mesh: child as THREE.Mesh,
                   index,
                   name,
+                  initialInfluence: influences[index] ?? 0,
                 });
               });
 
@@ -265,6 +291,7 @@ function ThreeAvatar({
                   mesh: child as THREE.Mesh,
                   index,
                   name,
+                  initialInfluence: influences[index] ?? 0,
                 });
               });
             }
@@ -279,7 +306,9 @@ function ThreeAvatar({
             }
 
             if (/eyelid|upperlid|lowerlid|lid/.test(boneName)) {
-              eyelidBonesRef.current.push(child as THREE.Bone);
+              const bone = child as THREE.Bone;
+              eyelidDefaultRotXRef.current.set(bone.uuid, bone.rotation.x);
+              eyelidBonesRef.current.push(bone);
               console.log("[Avatar] Eyelid bone:", child.name);
             }
           }
@@ -379,10 +408,11 @@ function ThreeAvatar({
 
       if (!scene || !camera || !renderer) return;
 
-      // Envelope: base movement + fast-decaying pulse
-      // Pulse decays every frame so lips keep moving naturally during speech.
-      mouthPulseRef.current *= 0.68;
+      // Word-boundary mouth envelope: fast open + reliable close.
+      mouthPulseRef.current *= 0.9;
+      mouthBaseRef.current *= 0.92;
       if (mouthPulseRef.current < 0.001) mouthPulseRef.current = 0;
+      if (mouthBaseRef.current < 0.001) mouthBaseRef.current = 0;
       mouthTargetRef.current = mouthBaseRef.current + mouthPulseRef.current;
 
       // Smooth mouth using a stable lerp factor in [0,1]
@@ -406,7 +436,13 @@ function ThreeAvatar({
           }
 
           let strength = mouth;
-          if (lower.includes("jaw") || lower.includes("open") || lower.includes("mouth")) {
+          if (
+            lower.includes("jaw") ||
+            lower.includes("open") ||
+            lower.includes("mouth") ||
+            lower.includes("teeth") ||
+            lower.includes("tooth")
+          ) {
             strength = mouth * 1.0;
           } else if (lower.includes("aa") || lower.includes("ah") || lower.includes("oh")) {
             strength = mouth * 0.9;
@@ -428,9 +464,35 @@ function ThreeAvatar({
             lower.includes("open");
 
           const isGenericMouth = lower.trim() === "mouth";
+          const isTeethLike = lower.includes("teeth") || lower.includes("tooth");
+          const isRiskyLipShape =
+            lower.includes("lip") ||
+            lower.includes("smile") ||
+            lower.includes("frown") ||
+            lower.includes("pucker") ||
+            lower.includes("stretch") ||
+            lower.includes("press") ||
+            lower.includes("roll");
 
-          const gain = isJawLike ? JAW_GAIN : isGenericMouth ? MOUTH_GAIN : OTHER_MOUTH_GAIN;
-          const max = isJawLike ? JAW_MAX : isGenericMouth ? MOUTH_MAX : OTHER_MOUTH_MAX;
+          const isOpenTarget = isJawLike || isTeethLike;
+          const gain = isOpenTarget
+            ? isTeethLike
+              ? JAW_GAIN * 1.15
+              : JAW_GAIN
+            : isGenericMouth
+            ? MOUTH_GAIN
+            : isRiskyLipShape
+            ? OTHER_MOUTH_GAIN * 0.35
+            : OTHER_MOUTH_GAIN;
+          const max = isOpenTarget
+            ? isTeethLike
+              ? JAW_MAX * 1.55
+              : JAW_MAX
+            : isGenericMouth
+            ? MOUTH_MAX
+            : isRiskyLipShape
+            ? OTHER_MOUTH_MAX * 0.45
+            : OTHER_MOUTH_MAX;
 
           influences[index] = THREE.MathUtils.clamp(shaped * gain, 0, max);
         });
@@ -453,32 +515,60 @@ function ThreeAvatar({
     renderLoop();
 
     function clearBlinkState() {
-      blinkBindingsRef.current.forEach(({ mesh, index }) => {
+      blinkBindingsRef.current.forEach(
+        ({ mesh, index, initialInfluence }) => {
         const influences = mesh.morphTargetInfluences;
         if (!influences || index >= influences.length) return;
-        influences[index] = 0;
-      });
+        influences[index] = initialInfluence;
+      }
+      );
 
       eyelidBonesRef.current.forEach((bone) => {
-        bone.rotation.x = 0;
+        const defaultX = eyelidDefaultRotXRef.current.get(bone.uuid) ?? 0;
+        bone.rotation.x = defaultX;
       });
     }
 
-    function animateBlink(duration = 160, onDone?: () => void) {
+    function animateBlink(duration = 180, onDone?: () => void) {
       const start = performance.now();
 
       const tick = (now: number) => {
         const t = Math.min((now - start) / duration, 1);
-        const blinkValue = t < 0.5 ? t * 2 : (1 - t) * 2;
+        // Human-like blink: fast close, short hold, then open.
+        const closeT = 0.55;
+        const holdT = 0.15;
+        const openT = 1 - closeT - holdT;
+        const smoothstep = (x: number) => x * x * (3 - 2 * x);
 
-        blinkBindingsRef.current.forEach(({ mesh, index }) => {
+        let blinkValue = 0;
+        if (t < closeT) {
+          blinkValue = smoothstep(t / closeT);
+        } else if (t < closeT + holdT) {
+          blinkValue = 1;
+        } else {
+          const x = (t - closeT - holdT) / openT; // 0..1
+          blinkValue = 1 - smoothstep(x);
+        }
+
+        blinkBindingsRef.current.forEach(
+          ({ mesh, index, name, initialInfluence }) => {
           const influences = mesh.morphTargetInfluences;
           if (!influences || index >= influences.length) return;
-          influences[index] = blinkValue;
-        });
+          const lower = name.toLowerCase();
+          const isRiskyEyes =
+            lower.includes("eyes") &&
+            !lower.includes("blink") &&
+            !lower.includes("lid") &&
+            !lower.includes("wink") &&
+            !lower.includes("squint");
+          const maxBlink = isRiskyEyes ? 0.35 : 0.82;
+          influences[index] = initialInfluence + blinkValue * maxBlink;
+        }
+        );
 
         eyelidBonesRef.current.forEach((bone) => {
-          bone.rotation.x = 0.35 * blinkValue;
+          const defaultX = eyelidDefaultRotXRef.current.get(bone.uuid) ?? 0;
+          bone.rotation.x = defaultX + 0.33 * blinkValue;
         });
 
         if (t < 1) {
@@ -497,7 +587,7 @@ function ThreeAvatar({
     function scheduleNextBlink() {
       if (!modelRef.current) return;
 
-      const delay = 2000 + Math.random() * 3000;
+      const delay = 2500 + Math.random() * 2300;
       blinkTimeoutRef.current = window.setTimeout(() => {
         const hasBlinkTargets =
           blinkBindingsRef.current.length > 0 || eyelidBonesRef.current.length > 0;
@@ -507,7 +597,18 @@ function ThreeAvatar({
           return;
         }
 
-        animateBlink(160, scheduleNextBlink);
+        const blinkDuration = 140 + Math.random() * 90;
+        const doDoubleBlink = Math.random() < 0.08;
+        if (doDoubleBlink) {
+          animateBlink(blinkDuration, () => {
+            window.setTimeout(
+              () => animateBlink(120, scheduleNextBlink),
+              110
+            );
+          });
+        } else {
+          animateBlink(blinkDuration, scheduleNextBlink);
+        }
       }, delay);
     }
 
@@ -562,21 +663,22 @@ function ThreeAvatar({
       mouthTargetRef.current = 0;
       mouthBaseRef.current = 0;
       mouthPulseRef.current = 0;
+      lastBoundaryAtRef.current = 0;
       return;
     }
 
-    // Each speech boundary pulse briefly opens the mouth.
-    mouthPulseRef.current = Math.max(mouthPulseRef.current, 1.05);
+    // Boundary-driven talk cycle: opens on syllable, then naturally closes.
+    const openness = getSpeechOpennessAt(speechText, speechCharIndex);
+    mouthBaseRef.current = Math.max(
+      mouthBaseRef.current,
+      openness * 0.16 + 0.05
+    );
+    mouthPulseRef.current = Math.max(
+      mouthPulseRef.current,
+      openness * 1.32 + 0.38
+    );
+    lastBoundaryAtRef.current = performance.now();
   }, [speechPulse, isSpeaking]);
-
-  useEffect(() => {
-    if (!isSpeaking) return;
-    const blink = blinkFnRef.current;
-    if (!blink) return;
-
-    // Sentence-end punctuation: quick "social" blink.
-    blink(120);
-  }, [speechSentenceEndPulse, isSpeaking]);
 
   useEffect(() => {
     // Fallback: if no boundary events fire (browser-dependent), still animate lightly.
@@ -594,19 +696,20 @@ function ThreeAvatar({
       if (!isSpeaking) return;
 
       const elapsed = (performance.now() - start) / 1000;
-      const gentle =
-        Math.max(0, Math.sin(elapsed * 8.5)) * 0.24 +
-        Math.max(0, Math.sin(elapsed * 13.2)) * 0.14;
-      const audioBoost = THREE.MathUtils.clamp(audioLevel / 140, 0, 0.1);
-      const base = THREE.MathUtils.clamp(gentle + audioBoost, 0, 0.6);
+      const sinceBoundary = performance.now() - lastBoundaryAtRef.current;
 
-      // Smooth closure modulation (no hard snapping to 0).
-      // Often gets near-closed, but stays stable on rigs that hate discontinuities.
-      const closure = (Math.sin(elapsed * 3.1) + 1) / 2; // 0..1
-      const modulatedBase = base * (0.15 + 0.85 * closure);
+      // If boundary timings are available, avoid synthetic fake speech.
+      if (sinceBoundary < 260) {
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
 
-      // Base moves continuously; pulse adds on top (decays in render loop).
-      mouthBaseRef.current = modulatedBase;
+      // Boundary unsupported: tiny fallback so avatar is not frozen.
+      const fallback =
+        Math.max(0, Math.sin(elapsed * 7.2)) * 0.08 +
+        Math.max(0, Math.sin(elapsed * 11.9 + 0.5)) * 0.04 +
+        THREE.MathUtils.clamp(audioLevel / 260, 0, 0.04);
+      mouthBaseRef.current = Math.max(mouthBaseRef.current, fallback);
       rafId = requestAnimationFrame(tick);
     };
 
@@ -614,7 +717,7 @@ function ThreeAvatar({
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [isSpeaking, audioLevel]);
+  }, [isSpeaking, audioLevel, speechText, speechCharIndex]);
   return <div ref={containerRef} className="w-full h-full min-h-[500px]" />;
 }
 
@@ -685,6 +788,7 @@ export function ActiveSession() {
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const isEzriSpeakingRef = useRef(false);
   const speechEndTimeoutRef = useRef<number | null>(null);
+  const speechFallbackIntervalRef = useRef<number | null>(null);
   const transcriptRef = useRef<
     { role: string; content: string; timestamp: number }[]
   >([]);
@@ -702,7 +806,8 @@ export function ActiveSession() {
 
   const [currentSubtitle, setCurrentSubtitle] = useState<string | null>(null);
   const [speechPulse, setSpeechPulse] = useState(0);
-  const [speechSentenceEndPulse, setSpeechSentenceEndPulse] = useState(0);
+  const [speechText, setSpeechText] = useState("");
+  const [speechCharIndex, setSpeechCharIndex] = useState(0);
 
   // ── Audio Visualizer ────────────────────────────────────────────────────
   useEffect(() => {
@@ -755,7 +860,15 @@ export function ActiveSession() {
     }
 
     try {
+      const stopFallbackSpeechDriver = () => {
+        if (speechFallbackIntervalRef.current) {
+          window.clearInterval(speechFallbackIntervalRef.current);
+          speechFallbackIntervalRef.current = null;
+        }
+      };
+
       if (synth.speaking || synth.pending) {
+        stopFallbackSpeechDriver();
         currentUtteranceRef.current = null;
         synth.cancel();
       }
@@ -777,11 +890,14 @@ export function ActiveSession() {
         3000,
         (wordCount / 2.5) * 1000 + 2000
       );
+      let sawNativeBoundary = false;
 
       utterance.onstart = () => {
         console.log("Speech started");
         setIsEzriSpeaking(true);
         isEzriSpeakingRef.current = true;
+        setSpeechText(text);
+        setSpeechCharIndex(0);
 
         // If sound is off, pause immediately (so we can resume mid-sentence later)
         if (isSoundOffRef.current) {
@@ -799,6 +915,45 @@ export function ActiveSession() {
         if (speechEndTimeoutRef.current)
           window.clearTimeout(speechEndTimeoutRef.current);
 
+        stopFallbackSpeechDriver();
+        const startAt = performance.now();
+        let lastDrivenIdx = -1;
+        let lastPulseAt = 0;
+
+        // Fallback driver for browsers/voices that don't emit onboundary reliably.
+        // Use a slightly stretched duration so mouth pacing is not too fast.
+        const effectiveDurationMs = estimatedDurationMs * 1.25;
+        speechFallbackIntervalRef.current = window.setInterval(() => {
+          if (!isEzriSpeakingRef.current) return;
+          const now = performance.now();
+          const elapsed = now - startAt;
+          const progress = THREE.MathUtils.clamp(elapsed / effectiveDurationMs, 0, 1);
+          const idx = Math.min(text.length - 1, Math.max(0, Math.floor(progress * text.length)));
+          setSpeechCharIndex(idx);
+
+          // If native boundaries are missing, emit pulses from simulated text progress.
+          if (!sawNativeBoundary && idx !== lastDrivenIdx) {
+            const ch = text[idx]?.toLowerCase?.() ?? "";
+            const shouldPulse =
+              /[aeiou]/.test(ch) ||
+              ch === " " ||
+              ch === "," ||
+              ch === "." ||
+              ch === "!" ||
+              ch === "?";
+
+            if (shouldPulse && now - lastPulseAt > 115) {
+              setSpeechPulse((v) => v + 1);
+              lastPulseAt = now;
+            }
+          }
+          lastDrivenIdx = idx;
+
+          if (progress >= 1) {
+            stopFallbackSpeechDriver();
+          }
+        }, 40);
+
         speechEndTimeoutRef.current = window.setTimeout(() => {
           console.warn(
             `Speech synthesis timed out after ${estimatedDurationMs}ms, forcing reset`
@@ -810,6 +965,7 @@ export function ActiveSession() {
               currentUtteranceRef.current = null;
               setCurrentSubtitle(null);
             }
+            stopFallbackSpeechDriver();
             synth.cancel();
             if (recognitionRef.current && !isListening) {
               try {
@@ -824,22 +980,22 @@ export function ActiveSession() {
         // Not all browsers fire this reliably; when it does, it's the best "timing" proxy we have.
         // We treat boundaries as mouth-open pulses; sentence-ending punctuation triggers a blink.
         try {
+          sawNativeBoundary = true;
           setSpeechPulse((v) => v + 1);
-
           const idx = typeof event.charIndex === "number" ? event.charIndex : -1;
-          const ch = idx >= 0 && idx < text.length ? text[idx] : "";
-          if (ch === "." || ch === "!" || ch === "?" || ch === "\n") {
-            setSpeechSentenceEndPulse((v) => v + 1);
-          }
+          setSpeechCharIndex(idx >= 0 ? idx : 0);
         } catch {}
       };
 
       utterance.onend = () => {
         if (speechEndTimeoutRef.current)
           window.clearTimeout(speechEndTimeoutRef.current);
+        stopFallbackSpeechDriver();
         setIsEzriSpeaking(false);
         isEzriSpeakingRef.current = false;
         setSpeechPulse((v) => v + 1);
+        setSpeechCharIndex(0);
+        setSpeechText("");
 
         if (currentUtteranceRef.current === utterance) {
           currentUtteranceRef.current = null;
@@ -860,9 +1016,12 @@ export function ActiveSession() {
         console.error("Speech synthesis error:", e);
         if (speechEndTimeoutRef.current)
           window.clearTimeout(speechEndTimeoutRef.current);
+        stopFallbackSpeechDriver();
         setIsEzriSpeaking(false);
         isEzriSpeakingRef.current = false;
         setSpeechPulse((v) => v + 1);
+        setSpeechCharIndex(0);
+        setSpeechText("");
 
         if (currentUtteranceRef.current === utterance) {
           currentUtteranceRef.current = null;
@@ -883,6 +1042,10 @@ export function ActiveSession() {
       if (synth.paused) synth.resume();
     } catch (error) {
       console.error("Failed to play avatar audio:", error);
+      if (speechFallbackIntervalRef.current) {
+        window.clearInterval(speechFallbackIntervalRef.current);
+        speechFallbackIntervalRef.current = null;
+      }
       setIsEzriSpeaking(false);
       isEzriSpeakingRef.current = false;
       if (recognitionRef.current && !isListening) {
@@ -1837,7 +2000,8 @@ export function ActiveSession() {
                 isSpeaking={isEzriSpeaking}
                 audioLevel={audioLevel}
                 speechPulse={speechPulse}
-                speechSentenceEndPulse={speechSentenceEndPulse}
+                speechText={speechText}
+                speechCharIndex={speechCharIndex}
               />
             </motion.div>
 

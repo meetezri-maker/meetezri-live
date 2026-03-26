@@ -137,6 +137,7 @@ import { NoDeviceAccess } from '@/app/pages/errors/NoDeviceAccess';
 import { AdminLogin } from '@/app/pages/admin/AdminLogin';
 import { AdminCredentials } from '@/app/pages/admin/AdminCredentials';
 import { TwoFactorAuth } from '@/app/pages/admin/TwoFactorAuth';
+import { MoodHistory } from './pages/app/MoodHistory';
 
 function NetworkWatcher() {
   const navigate = useNavigate();
@@ -302,6 +303,7 @@ export default function App() {
             {/* App Routes */}
             <Route path="/app/dashboard" element={<Dashboard />} />
             <Route path="/app/mood-checkin" element={<MoodCheckIn />} />
+            <Route path="/app/mood-history" element={<MoodHistory />} />
             <Route path="/app/session-lobby" element={<SessionLobby />} />
             <Route path="/app/active-session" element={<ActiveSession />} />
             <Route path="/app/user-profile" element={<UserProfile />} />
