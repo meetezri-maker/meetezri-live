@@ -12,6 +12,7 @@ import { PWAInstallPrompt } from "../../components/PWAInstallPrompt";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
+import { dbg } from "@/app/utils/debugLifecycle";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,11 @@ export function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [confirmEmailDismissed, setConfirmEmailDismissed] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+
+  useEffect(() => {
+    dbg("mount:Dashboard");
+    return () => dbg("unmount:Dashboard");
+  }, []);
 
   const emailVerified = profile?.email_verified === true;
   const signupType =
@@ -74,6 +80,7 @@ export function Dashboard() {
   useEffect(() => {
     const loadData = async () => {
       try {
+        dbg("Dashboard.loadData.start");
         await refreshProfile();
         const sessions = await api.sessions.list({ status: "scheduled" });
         const now = new Date();
@@ -86,6 +93,7 @@ export function Dashboard() {
       } catch (error) {
         console.error("Failed to fetch upcoming sessions", error);
       } finally {
+        dbg("Dashboard.loadData.done");
         setIsLoading(false);
       }
     };

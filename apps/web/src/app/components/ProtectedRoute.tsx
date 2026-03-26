@@ -12,6 +12,11 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const location = useLocation();
 
   if (isLoading) {
+    // If we already have a signed-in user, never unmount the entire route tree.
+    // Background auth refreshes (often triggered by tab switching) should be silent.
+    if (user) {
+      return <>{children}</>;
+    }
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

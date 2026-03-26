@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { dbg } from '@/app/utils/debugLifecycle';
 
 interface AuthContextType {
   user: User | null;
@@ -21,6 +22,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const lastUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    dbg("mount:AuthProvider");
+    return () => dbg("unmount:AuthProvider");
+  }, []);
 
   const hasRole = (role: string | string[]) => {
     if (!profile?.role) return false;
@@ -59,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    dbg("effect:AuthProvider.init");
     const maybeClearEmailVerificationRequired = async (sessionUser: User | null) => {
       if (!sessionUser) return;
       // Prevent overly-aggressive metadata clearing.
@@ -86,6 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      dbg("auth:getSession.result", { hasSession: Boolean(session), userId: session?.user?.id });
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -111,17 +120,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      dbg("auth:onAuthStateChange", { event: _event, hasSession: Boolean(session), userId: session?.user?.id });
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
         applyAppearanceForUser(session.user);
-        setIsLoading(true);
+        const incomingUserId = session.user.id;
+        const lastUserId = lastUserIdRef.current;
+        const isSameUser = lastUserId === incomingUserId;
+        lastUserIdRef.current = incomingUserId;
+
+        // Avoid route-tree teardown on tab focus/auth refresh events.
+        // Only enter a blocking loading state when we don't yet have a profile for this user.
+        if (!isSameUser || !profile) {
+          setIsLoading(true);
+        }
         maybeClearEmailVerificationRequired(session.user).finally(() => {
           fetchProfile();
         });
       } else {
         setProfile(null);
         setIsLoading(false);
+        lastUserIdRef.current = null;
         applyAppearanceForUser(null);
       }
     });

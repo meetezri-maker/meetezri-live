@@ -23,6 +23,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useNotifications } from "../contexts/NotificationsContext";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { dbg } from "@/app/utils/debugLifecycle";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -33,6 +34,16 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
   const { unreadCount } = useNotifications();
+
+  useEffect(() => {
+    dbg("mount:AppLayout", { path: location.pathname });
+    return () => dbg("unmount:AppLayout", { path: location.pathname });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    dbg("render:AppLayout.path", { path: location.pathname });
+  }, [location.pathname]);
 
   const appearanceStorageKey = useMemo(() => {
     if (typeof window === "undefined") return "ezri_appearance_settings";
