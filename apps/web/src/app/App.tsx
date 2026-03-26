@@ -186,122 +186,7 @@ function NetworkWatcher() {
   return null;
 }
 
-function RoutePersistence() {
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  // Save last in-app route on every navigation.
-  useEffect(() => {
-    try {
-      const url = `${location.pathname}${location.search}${location.hash}`;
-      // Only persist internal SPA routes.
-      if (location.pathname.startsWith("/app") || location.pathname.startsWith("/admin") || location.pathname.startsWith("/onboarding")) {
-        window.sessionStorage.setItem("ezri_last_route", url);
-      }
-    } catch {
-      // Ignore storage errors
-    }
-  }, [location.pathname, location.search, location.hash]);
-
-  // On initial mount, if we land on a public route after a browser reload/discard,
-  // restore the last known in-app route for a seamless resume.
-  useEffect(() => {
-    try {
-      const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
-      const navType = nav?.type;
-      const last = window.sessionStorage.getItem("ezri_last_route");
-      const isPublic =
-        location.pathname === "/" ||
-        location.pathname === "/login" ||
-        location.pathname === "/signup" ||
-        location.pathname === "/pricing" ||
-        location.pathname === "/how-it-works";
-
-      if ((navType === "reload" || navType === "back_forward") && isPublic && last) {
-        navigate(last, { replace: true });
-      }
-    } catch {
-      // Ignore
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return null;
-}
-
-function ReloadDiagnostics() {
-  const location = useLocation();
-
-  useEffect(() => {
-    try {
-      const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
-      const navType = nav?.type ?? "unknown";
-      const wasDiscarded = (document as any).wasDiscarded === true;
-      const bootCount = Number(window.sessionStorage.getItem("ezri_boot_count") ?? "0") + 1;
-      window.sessionStorage.setItem("ezri_boot_count", String(bootCount));
-
-      // Expose a small snapshot for debugging without opening devtools.
-      window.sessionStorage.setItem(
-        "ezri_last_boot_info",
-        JSON.stringify({
-          bootCount,
-          navType,
-          wasDiscarded,
-          url: `${location.pathname}${location.search}${location.hash}`,
-          ts: new Date().toISOString(),
-        })
-      );
-
-      // Console signal (useful if devtools is open).
-      // eslint-disable-next-line no-console
-      console.log("[Ezri reload diagnostics]", {
-        bootCount,
-        navType,
-        wasDiscarded,
-        url: `${location.pathname}${location.search}${location.hash}`,
-      });
-    } catch {
-      // Ignore
-    }
-    // Only on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return null;
-}
-
-function AuthResumeRedirect() {
-  const { user, isLoading } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (isLoading) return;
-    if (!user) return;
-
-    // If the browser reload/discard drops us onto a public/auth page,
-    // immediately resume to the last in-app route.
-    const isResumeCandidate =
-      location.pathname === "/" ||
-      location.pathname === "/login" ||
-      location.pathname === "/signup" ||
-      location.pathname === "/pricing" ||
-      location.pathname === "/how-it-works";
-
-    if (!isResumeCandidate) return;
-
-    try {
-      const last = window.sessionStorage.getItem("ezri_last_route");
-      if (last && last !== location.pathname) {
-        navigate(last, { replace: true });
-      }
-    } catch {
-      // Ignore
-    }
-  }, [isLoading, user, location.pathname, navigate]);
-
-  return null;
-}
+// (Removed temporary reload/route persistence helpers; the actual fix is in AuthContext + ProtectedRoute.)
 
 export default function App() {
   useEffect(() => {
@@ -370,9 +255,6 @@ export default function App() {
         <BrowserRouter>
         <ThemeManager />
         <NetworkWatcher />
-        <RoutePersistence />
-        <ReloadDiagnostics />
-        <AuthResumeRedirect />
         <MobileMetaTags />
         <Toaster />
         <Routes>

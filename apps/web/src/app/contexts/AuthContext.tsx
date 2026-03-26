@@ -3,7 +3,6 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import { dbg } from '@/app/utils/debugLifecycle';
 
 interface AuthContextType {
   user: User | null;
@@ -23,11 +22,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const lastUserIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    dbg("mount:AuthProvider");
-    return () => dbg("unmount:AuthProvider");
-  }, []);
 
   const hasRole = (role: string | string[]) => {
     if (!profile?.role) return false;
@@ -66,7 +60,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    dbg("effect:AuthProvider.init");
     const maybeClearEmailVerificationRequired = async (sessionUser: User | null) => {
       if (!sessionUser) return;
       // Prevent overly-aggressive metadata clearing.
@@ -94,7 +87,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      dbg("auth:getSession.result", { hasSession: Boolean(session), userId: session?.user?.id });
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -120,7 +112,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      dbg("auth:onAuthStateChange", { event: _event, hasSession: Boolean(session), userId: session?.user?.id });
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
