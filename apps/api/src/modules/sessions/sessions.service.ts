@@ -76,13 +76,32 @@ export async function createSession(userId: string, input: CreateSessionInput) {
       throw new Error('User profile not found. Please complete onboarding first.');
     }
 
-    // Check for active subscription and trial expiry
-    const subscription = await prisma.subscriptions.findFirst({
-      where: { user_id: userId, status: 'active' }
+    // Check active subscription state.
+    // Some legacy users can have both old trial rows and a paid active subscription.
+    // In that case, paid plans must take precedence over expired trial records.
+    const activeSubscriptions = await prisma.subscriptions.findMany({
+      where: { user_id: userId, status: 'active' },
+      orderBy: { created_at: 'desc' },
+      select: {
+        plan_type: true,
+        end_date: true,
+      },
     });
 
-    if (subscription?.plan_type === 'trial' && subscription.end_date && new Date() > subscription.end_date) {
-      throw new Error('Your trial has expired. Please upgrade to continue.');
+    const hasActivePaidSubscription = activeSubscriptions.some(
+      (sub) => sub.plan_type !== 'trial'
+    );
+
+    if (!hasActivePaidSubscription) {
+      const latestTrialSubscription = activeSubscriptions.find(
+        (sub) => sub.plan_type === 'trial'
+      );
+      if (
+        latestTrialSubscription?.end_date &&
+        new Date() > latestTrialSubscription.end_date
+      ) {
+        throw new Error('Your trial has expired. Please upgrade to continue.');
+      }
     }
 
     // Check if user has sufficient credits

@@ -41,16 +41,23 @@ export function Dashboard() {
   const [confirmEmailDismissed, setConfirmEmailDismissed] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
 
-  const emailVerified = profile?.email_verified === true;
+  const rawSignupType =
+    (user as any)?.user_metadata?.signup_type ??
+    (user as any)?.user_metadata?.signupType ??
+    (user as any)?.user_metadata?.signup ??
+    null;
   const signupType =
     profile?.signup_type ??
+    (String(rawSignupType).toLowerCase() === "trial" ? "trial" : null) ??
     (profile?.subscription_plan === "trial" ? "trial" : null);
+  const isUnverified =
+    !!user && (!user.email_confirmed_at || (user as any)?.user_metadata?.email_verification_required);
   // Required behavior:
   // - show popup only for trial users
   // - show only on /app/dashboard
   // - show only when email is NOT verified
   const showConfirmEmailPopup =
-    signupType === "trial" && !emailVerified && !confirmEmailDismissed;
+    signupType === "trial" && isUnverified && !confirmEmailDismissed;
 
   const moodEmojis: Record<string, string> = {
     "Happy": "😊",
