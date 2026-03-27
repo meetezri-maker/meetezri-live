@@ -83,6 +83,29 @@ export async function releaseStripeWebhookClaim(eventId: string): Promise<void> 
   await prisma.stripe_webhook_events.delete({ where: { id: eventId } }).catch(() => {});
 }
 
+async function addSubscriptionAllowance(userId: string, minutesToAdd: number) {
+  if (!minutesToAdd || minutesToAdd <= 0) return;
+
+  const profile = await prisma.profiles.findUnique({
+    where: { id: userId },
+    select: { credits: true, credits_seconds: true },
+  });
+
+  const existingMinutes = profile?.credits ?? 0;
+  const existingSeconds =
+    profile?.credits_seconds && profile.credits_seconds > 0
+      ? profile.credits_seconds
+      : existingMinutes * 60;
+
+  const newSeconds = existingSeconds + minutesToAdd * 60;
+  const newMinutes = newSeconds === 0 ? 0 : Math.ceil(newSeconds / 60);
+
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: { credits: newMinutes, credits_seconds: newSeconds },
+  });
+}
+
 export async function stripeWebhookHandler(request: FastifyRequest, reply: FastifyReply) {
   const webhookSecret = getStripeWebhookSecret();
   if (!webhookSecret?.trim()) {
@@ -401,7 +424,7 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
 
   if (shouldGrant) {
     const planCredits = PLAN_LIMITS[planType as keyof typeof PLAN_LIMITS]?.credits ?? 0;
-    await addSubscriptionAllowanceMinutes(userId, planCredits);
+    await addSubscriptionAllowance(userId, planCredits);
   }
 }
 
@@ -436,7 +459,24 @@ async function handleSubscriptionUpdated(subscription: any) {
   if (planChanged && newPlanType) {
     const planCredits = PLAN_LIMITS[newPlanType]?.credits ?? 0;
     if (planCredits > 0) {
-      await addSubscriptionAllowanceMinutes(existingSub.user_id, planCredits);
+      const profile = await prisma.profiles.findUnique({
+        where: { id: existingSub.user_id },
+        select: { credits: true, credits_seconds: true },
+      });
+
+      const existingMinutes = profile?.credits ?? 0;
+      const existingSeconds =
+        profile?.credits_seconds && profile.credits_seconds > 0
+          ? profile.credits_seconds
+          : existingMinutes * 60;
+
+      await prisma.profiles.update({
+        where: { id: existingSub.user_id },
+        data: {
+          credits: existingMinutes + planCredits,
+          credits_seconds: existingSeconds + planCredits * 60,
+        },
+      });
     }
   }
 
@@ -501,7 +541,24 @@ async function handleInvoicePaymentSucceeded(invoice: any, request: FastifyReque
       const planCredits = PLAN_LIMITS[planType]?.credits ?? 0;
       if (planCredits <= 0) return;
 
-      await addSubscriptionAllowanceMinutes(existingSub.user_id, planCredits);
+      const profile = await prisma.profiles.findUnique({
+        where: { id: existingSub.user_id },
+        select: { credits: true, credits_seconds: true },
+      });
+
+      const existingMinutes = profile?.credits ?? 0;
+      const existingSeconds =
+        profile?.credits_seconds && profile.credits_seconds > 0
+          ? profile.credits_seconds
+          : existingMinutes * 60;
+
+      await prisma.profiles.update({
+        where: { id: existingSub.user_id },
+        data: {
+          credits: existingMinutes + planCredits,
+          credits_seconds: existingSeconds + planCredits * 60,
+        },
+      });
     }
   }
 }

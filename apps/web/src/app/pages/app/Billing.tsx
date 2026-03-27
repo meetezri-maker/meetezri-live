@@ -128,9 +128,8 @@ export function Billing() {
           planId: planId,
           status: subData.status as any,
           creditsRemaining,
-          creditsTotal:
-            creditsData.subscription_total ??
-            plan.credits,
+          // Show a stacked "total" when users upgrade mid-cycle (e.g., 200 + 400 = 600)
+          creditsTotal: creditsData.subscription_total ?? plan.credits,
           billingCycle: {
             startDate: subData.start_date || new Date().toISOString(),
             endDate: subData.next_billing_at || new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString(),
@@ -675,7 +674,7 @@ export function Billing() {
             <div className="text-center py-12">
               <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
               <p className="text-muted-foreground">No sessions yet</p>
-              <Link to="/app/meet">
+              <Link to="/app/session-lobby">
                 <Button className="mt-4">
                   Start Your First Session
                   <ArrowRight className="w-4 h-4 ml-2" />

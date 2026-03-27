@@ -136,9 +136,8 @@ export function Dashboard() {
     profile?.credits_total != null ? profile.credits_total : 200;
   const userPlan = profile?.subscription_plan || "Basic Plan";
   const [liveCreditsSeconds, setLiveCreditsSeconds] = useState<number | null>(null);
-  const [liveAccountTotalMinutes, setLiveAccountTotalMinutes] = useState<number | null>(null);
-  const [liveAccountUsedMinutes, setLiveAccountUsedMinutes] = useState<number | null>(null);
-  const [liveAccountRemainingMinutes, setLiveAccountRemainingMinutes] = useState<number | null>(null);
+  const [liveCreditsTotalSeconds, setLiveCreditsTotalSeconds] = useState<number | null>(null);
+  const [liveCreditsTotalMinutes, setLiveCreditsTotalMinutes] = useState<number | null>(null);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -151,36 +150,46 @@ export function Dashboard() {
   useEffect(() => {
     const loadCredits = async () => {
       try {
-        const data = await api.getCredits();
+        const {
+          credits_seconds,
+          credits,
+          subscription_total_seconds,
+          subscription_total,
+          purchased_seconds,
+          purchased,
+        } = await api.getCredits();
         const seconds =
-          typeof data.remaining_seconds === "number"
-            ? Math.max(0, data.remaining_seconds)
-            : typeof data.credits_seconds === "number"
-              ? Math.max(0, data.credits_seconds)
-              : typeof data.credits === "number"
-                ? Math.max(0, data.credits) * 60
+          typeof credits_seconds === "number"
+            ? Math.max(0, credits_seconds)
+            : typeof credits === "number"
+                ? Math.max(0, credits) * 60
                 : null;
         setLiveCreditsSeconds(seconds);
-        if (typeof data.total_minutes === "number") {
-          setLiveAccountTotalMinutes(Math.max(0, data.total_minutes));
+        const totalSeconds =
+          (typeof subscription_total_seconds === "number"
+            ? Math.max(0, subscription_total_seconds)
+            : typeof subscription_total === "number"
+            ? Math.max(0, subscription_total) * 60
+            : null);
+        const purchasedSecondsValue =
+          (typeof purchased_seconds === "number"
+            ? Math.max(0, purchased_seconds)
+            : typeof purchased === "number"
+            ? Math.max(0, purchased) * 60
+            : 0);
+        if (totalSeconds !== null) {
+          const combined = totalSeconds + purchasedSecondsValue;
+          setLiveCreditsTotalSeconds(combined);
+          setLiveCreditsTotalMinutes(Math.ceil(combined / 60));
         } else {
-          setLiveAccountTotalMinutes(null);
+          setLiveCreditsTotalSeconds(null);
+          setLiveCreditsTotalMinutes(null);
         }
-        if (typeof data.used_minutes === "number") {
-          setLiveAccountUsedMinutes(Math.max(0, data.used_minutes));
-        } else {
-          setLiveAccountUsedMinutes(null);
-        }
-        if (typeof data.remaining_minutes === "number") {
-          setLiveAccountRemainingMinutes(Math.max(0, data.remaining_minutes));
-        } else {
-          setLiveAccountRemainingMinutes(null);
-        }
-      } catch {
+      } catch (e) {
+        // Fall back to profile-derived fields below
         setLiveCreditsSeconds(null);
-        setLiveAccountTotalMinutes(null);
-        setLiveAccountUsedMinutes(null);
-        setLiveAccountRemainingMinutes(null);
+        setLiveCreditsTotalSeconds(null);
+        setLiveCreditsTotalMinutes(null);
       }
     };
     void loadCredits();
@@ -193,27 +202,27 @@ export function Dashboard() {
       ? Math.max(0, profile.credits_remaining_seconds)
       : creditsRemaining * 60;
 
-  const accountRemainingMinutesDisplay =
-    liveAccountRemainingMinutes !== null
-      ? liveAccountRemainingMinutes
-      : creditsRemaining;
+  const creditsTotalSeconds =
+    liveCreditsTotalSeconds !== null
+      ? liveCreditsTotalSeconds
+      : typeof profile?.credits_total_seconds === "number"
+      ? Math.max(0, profile.credits_total_seconds)
+      : creditsTotal * 60;
 
   const creditsTotalMinutes =
-    liveAccountTotalMinutes !== null
-      ? liveAccountTotalMinutes
+    liveCreditsTotalMinutes !== null
+      ? liveCreditsTotalMinutes
       : creditsTotal;
 
-  const accountUsedMinutesDisplay =
-    liveAccountUsedMinutes !== null
-      ? liveAccountUsedMinutes
-      : typeof profile?.minutes_used === "number"
-        ? profile.minutes_used
-        : null;
-
-  const creditsRemainingLow =
-    liveAccountRemainingMinutes !== null
-      ? liveAccountRemainingMinutes
-      : creditsRemaining;
+  const accountRemainingMinutesDisplay = Math.max(
+    0,
+    Math.ceil(creditsRemainingSeconds / 60)
+  );
+  const accountUsedMinutesDisplay = Math.max(
+    0,
+    Math.ceil((creditsTotalSeconds - creditsRemainingSeconds) / 60)
+  );
+  const creditsRemainingLow = accountRemainingMinutesDisplay;
 
   const quickActions = [
     {
@@ -497,7 +506,7 @@ export function Dashboard() {
                 <div className="flex flex-row gap-2 items-baseline">
                 <h3 className="font-bold">Total minutes</h3>
                 <p className="text-xl font-semibold font-mono">
-                  {creditsTotalMinutes}
+                  {creditsTotalMinutes} 
                 </p>
                 </div>
                 {accountUsedMinutesDisplay != null && (
