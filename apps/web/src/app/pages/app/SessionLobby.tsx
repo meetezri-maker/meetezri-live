@@ -2,7 +2,7 @@ import { AppLayout } from "../../components/AppLayout";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { motion, AnimatePresence } from "motion/react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Video,
   Calendar,
@@ -47,6 +47,8 @@ interface UpcomingSession {
 export function SessionLobby() {
   const { profile } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [showCarveoutBanner, setShowCarveoutBanner] = useState(false);
   const [selectedMode, setSelectedMode] = useState<"now" | "schedule">("now");
   const [selectedDuration, setSelectedDuration] = useState(30);
   const [showMinutesPicker, setShowMinutesPicker] = useState(false);
@@ -80,6 +82,14 @@ export function SessionLobby() {
     loadUpcomingSessions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // After ending a session: show carve-out prompt once; clear router state so refresh/back don't repeat
+  useEffect(() => {
+    const st = location.state as { showCarveoutPrompt?: boolean } | null | undefined;
+    if (!st?.showCarveoutPrompt) return;
+    setShowCarveoutBanner(true);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state, location.pathname, navigate]);
 
   // Sync temp state when modal opens
   useEffect(() => {
@@ -833,11 +843,29 @@ export function SessionLobby() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.4 }}
             >
-              <Card className="p-6 shadow-xl">
+              <Card className="p-6 shadow-xl overflow-hidden">
                 <div className="flex items-center gap-2 mb-4">
                   <Calendar className="w-5 h-5 text-primary" />
                   <h3 className="font-bold">Schedule</h3>
                 </div>
+                {showCarveoutBanner && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.35 }}
+                    className="mb-4 relative rounded-2xl border-2 border-purple-400/40 bg-gradient-to-br from-violet-500/15 via-fuchsia-500/10 to-amber-400/15 dark:from-violet-500/25 dark:via-fuchsia-500/15 dark:to-amber-500/10 p-4 shadow-lg shadow-purple-500/10"
+                  >
+                    <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-gradient-to-br from-pink-400/30 to-purple-500/20 blur-2xl pointer-events-none" />
+                    <div className="relative flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-md">
+                        <Sparkles className="h-5 w-5" />
+                      </div>
+                      <p className="text-sm sm:text-base font-semibold leading-snug text-foreground">
+                        Do you want to carve out time for the next time we talk?
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
                 <Button
                   type="button"
                   disabled={minutesAvailable <= 0 || selectedDuration > minutesAvailable}

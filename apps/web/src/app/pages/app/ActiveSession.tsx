@@ -1816,6 +1816,7 @@ export function ActiveSession() {
   };
 
   const handleEndSession = async () => {
+    setShowEndConfirm(false);
     await endSessionAndCleanup();
 
     const durationSeconds = sessionTime;
@@ -1832,10 +1833,11 @@ export function ActiveSession() {
         },
       });
     } else {
-      navigate("/app/dashboard", {
+      navigate("/app/session-lobby", {
         state: {
           sessionId,
           sessionDuration: durationSeconds,
+          showCarveoutPrompt: true,
         },
       });
     }
