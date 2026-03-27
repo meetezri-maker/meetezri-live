@@ -785,6 +785,7 @@ export function ActiveSession() {
     "excellent" | "good" | "poor"
   >("excellent");
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [isEndingSession, setIsEndingSession] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const sessionContainerRef = useRef<HTMLDivElement>(null);
   const [showPermissionRequest, setShowPermissionRequest] = useState(false);
@@ -1816,30 +1817,39 @@ export function ActiveSession() {
   };
 
   const handleEndSession = async () => {
+    // Show full-screen ending state immediately so the confirm dialog is not
+    // replaced by the live session UI while we wait for the API + navigation.
+    setIsEndingSession(true);
     setShowEndConfirm(false);
-    await endSessionAndCleanup();
 
-    const durationSeconds = sessionTime;
+    try {
+      await endSessionAndCleanup();
 
-    const needsCooldown =
-      currentState === "HIGH_RISK" || currentState === "SAFETY_MODE";
+      const durationSeconds = sessionTime;
 
-    if (needsCooldown) {
-      navigate("/app/settings/cooldown-screen", {
-        state: {
-          sessionId,
-          safetyLevel: currentState,
-          sessionDuration: durationSeconds,
-        },
-      });
-    } else {
-      navigate("/app/session-lobby", {
-        state: {
-          sessionId,
-          sessionDuration: durationSeconds,
-          showCarveoutPrompt: true,
-        },
-      });
+      const needsCooldown =
+        currentState === "HIGH_RISK" || currentState === "SAFETY_MODE";
+
+      if (needsCooldown) {
+        navigate("/app/settings/cooldown-screen", {
+          state: {
+            sessionId,
+            safetyLevel: currentState,
+            sessionDuration: durationSeconds,
+          },
+        });
+      } else {
+        navigate("/app/session-lobby", {
+          state: {
+            sessionId,
+            sessionDuration: durationSeconds,
+            showCarveoutPrompt: true,
+          },
+        });
+      }
+    } catch (e) {
+      console.error("End session navigation failed:", e);
+      setIsEndingSession(false);
     }
   };
 
@@ -1904,8 +1914,21 @@ export function ActiveSession() {
   return (
     <div
       ref={sessionContainerRef}
-      className="h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col overflow-hidden"
+      className="h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col overflow-hidden relative"
     >
+      {/* Immediate takeover while ending — avoids flash of session UI after confirm closes */}
+      {isEndingSession && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-md px-6">
+          <Loader2 className="h-12 w-12 text-purple-400 animate-spin mb-4" />
+          <p className="text-lg font-semibold text-white text-center">
+            Ending session…
+          </p>
+          <p className="text-sm text-gray-400 mt-2 text-center max-w-sm">
+            Hang on — we&apos;re saving your session and taking you to the lobby.
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <motion.div
         initial={{ y: -50, opacity: 0 }}
