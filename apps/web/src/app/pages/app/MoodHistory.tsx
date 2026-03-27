@@ -10,12 +10,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  Lock
+  Lock,
+  Star
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -47,21 +50,53 @@ const MOOD_MAPPING: Record<string, { label: string; score: number; color: string
   "🤩": { label: "Excited", score: 9, color: "#a855f7" }, // purple-500
   "😰": { label: "Anxious", score: 4, color: "#f97316" }, // orange-500
   "😢": { label: "Sad", score: 2, color: "#6366f1" },    // indigo-500
-  "😡": { label: "Angry", score: 1, color: "#ef4444" }    // red-500
+  "😡": { label: "Angry", score: 1, color: "#ef4444" },   // red-500
+  "😴": { label: "Tired", score: 5, color: "#6b7280" },   // gray-500
+  "😐": { label: "Neutral", score: 6, color: "#94a3b8" }  // slate-400
 };
 
 // Helper to get mood info from emoji or label
 const getMoodInfo = (mood: string) => {
   if (!mood) return null;
+  const trimmedMood = mood.trim();
+  const normalizedMood = trimmedMood.toLowerCase();
+
+  const aliasToEmoji: Record<string, string> = {
+    happy: "😊",
+    calm: "😌",
+    excited: "🤩",
+    anxious: "😰",
+    sad: "😢",
+    angry: "😡",
+    tired: "😴",
+    neutral: "😐",
+    "😠": "😡"
+  };
   
   // Try direct lookup (emoji)
-  if (MOOD_MAPPING[mood]) return { ...MOOD_MAPPING[mood], emoji: mood };
+  if (MOOD_MAPPING[trimmedMood]) return { ...MOOD_MAPPING[trimmedMood], emoji: trimmedMood };
+
+  // Try lookup by known aliases (lowercase values from API)
+  const mappedEmoji = aliasToEmoji[normalizedMood];
+  if (mappedEmoji && MOOD_MAPPING[mappedEmoji]) {
+    return { ...MOOD_MAPPING[mappedEmoji], emoji: mappedEmoji };
+  }
   
   // Try finding by label (case-insensitive)
-  const entry = Object.entries(MOOD_MAPPING).find(([emoji, info]) => 
-    info.label.toLowerCase() === mood.toLowerCase()
+  const entry = Object.entries(MOOD_MAPPING).find(([emoji, info]) =>
+    info.label.toLowerCase() === normalizedMood
   );
   if (entry) return { ...entry[1], emoji: entry[0] };
+
+  // If a custom emoji is saved in DB, still show it in calendar/list.
+  if (/[\u{1F300}-\u{1FAFF}]/u.test(trimmedMood)) {
+    return {
+      label: "Mood",
+      score: 5,
+      color: "#9ca3af",
+      emoji: trimmedMood
+    };
+  }
   
   return null;
 };
@@ -94,8 +129,11 @@ export function MoodHistory() {
 
   const [selectedView, setSelectedView] = useState<"week" | "month" | "year">("week");
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [calendarDate, setCalendarDate] = useState(new Date());
   const [entries, setEntries] = useState<MoodEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [favoriteEntryIds, setFavoriteEntryIds] = useState<string[]>([]);
 
   const getPeriodRange = () => {
     if (selectedView === "week") {
@@ -181,6 +219,14 @@ export function MoodHistory() {
     });
   };
 
+  const goToPreviousCalendarMonth = () => {
+    setCalendarDate((prev) => subMonths(prev, 1));
+  };
+
+  const goToNextCalendarMonth = () => {
+    setCalendarDate((prev) => addMonths(prev, 1));
+  };
+
   const exportCurrentPeriod = () => {
     const { start, end } = getPeriodRange();
     const periodEntries = entries
@@ -223,6 +269,33 @@ export function MoodHistory() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
+
+  const getEntryKey = (entry: MoodEntry) => `${entry.source}:${entry.id}`;
+
+  const toggleFavorite = (entry: MoodEntry) => {
+    const entryKey = getEntryKey(entry);
+    setFavoriteEntryIds((prev) =>
+      prev.includes(entryKey) ? prev.filter((id) => id !== entryKey) : [...prev, entryKey]
+    );
+  };
+
+  const recentCheckIns = useMemo(() => {
+    const fromCheckIns = entries.filter((entry) => entry.source === "check-in");
+    return fromCheckIns.slice(0, 12);
+  }, [entries]);
+
+  const favoriteCount = useMemo(
+    () => recentCheckIns.filter((entry) => favoriteEntryIds.includes(getEntryKey(entry))).length,
+    [recentCheckIns, favoriteEntryIds]
+  );
+
+  const displayedCheckIns = useMemo(
+    () =>
+      showFavoritesOnly
+        ? recentCheckIns.filter((entry) => favoriteEntryIds.includes(getEntryKey(entry)))
+        : recentCheckIns,
+    [showFavoritesOnly, recentCheckIns, favoriteEntryIds]
+  );
 
 
 
@@ -320,24 +393,27 @@ export function MoodHistory() {
 
     // 3. Calendar Data
     let calendarData: any[] = [];
-    if (selectedView === "month") {
-        const monthStart = startOfMonth(currentDate);
-        const monthEnd = endOfMonth(currentDate);
+    {
+        const monthStart = startOfMonth(calendarDate);
+        const monthEnd = endOfMonth(calendarDate);
         const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
         const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
         
         const calendarInterval = eachDayOfInterval({ start: startDate, end: endDate });
         calendarData = calendarInterval.map(day => {
-            // Find the latest entry for the day
-            const dayEntries = periodEntries.filter(e => isSameDay(new Date(e.created_at), day));
-            // Prefer check-in over journal if multiple? Or just latest.
-            const dayEntry = dayEntries.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+            // Prefer latest check-in entry; fallback to latest journal entry.
+            const dayEntries = entries.filter(e => isSameDay(new Date(e.created_at), day));
+            const latestCheckIn = dayEntries
+              .filter((entry) => entry.source === "check-in")
+              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+            const latestAny = dayEntries.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+            const dayEntry = latestCheckIn || latestAny;
             
             const info = dayEntry ? getMoodInfo(dayEntry.mood) : null;
             
             return {
                 day: day.getDate(),
-                isCurrentMonth: day.getMonth() === currentDate.getMonth(),
+                isCurrentMonth: day.getMonth() === calendarDate.getMonth(),
                 mood: dayEntry?.intensity,
                 emoji: info?.emoji || "",
                 date: day
@@ -411,7 +487,7 @@ export function MoodHistory() {
     ];
 
     return { chartData: finalChartData, distributionData, calendarData, insightsData };
-  }, [selectedView, currentDate, entries]);
+  }, [selectedView, currentDate, calendarDate, entries]);
 
 
   return (
@@ -638,45 +714,181 @@ export function MoodHistory() {
               </motion.div>
             </div>
 
+            {/* Emotion Intensity */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.55 }}
+              className="mb-6"
+            >
+              <Card className="p-6 shadow-xl">
+                <h2 className="text-xl font-bold mb-4">Emotion Intensity</h2>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                    <XAxis
+                      dataKey="day"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#6b7280" }}
+                    />
+                    <YAxis domain={[0, 10]} hide />
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: "8px",
+                        border: "none",
+                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)"
+                      }}
+                      formatter={(value: any) => [`${value ?? 0}/10`, "Intensity"]}
+                    />
+                    <Bar dataKey="intensity" fill="#a855f7" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
+            </motion.div>
+
             {/* Calendar View */}
-            {selectedView === "month" && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
-              >
-                <Card className="p-6 shadow-xl">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold">Monthly Overview</h2>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+            >
+              <Card className="p-6 shadow-xl">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold">Calendar View</h2>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={goToPreviousCalendarMonth}
+                      className="p-2 rounded-full hover:bg-gray-100"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <span className="font-medium min-w-[120px] text-center">
+                      {format(calendarDate, "MMMM yyyy")}
+                    </span>
+                    <button
+                      onClick={goToNextCalendarMonth}
+                      className="p-2 rounded-full hover:bg-gray-100"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
                   </div>
-                  
-                  <div className="grid grid-cols-7 gap-2">
-                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-                      <div key={day} className="text-center text-sm font-medium text-gray-400 py-2">
-                        {day}
-                      </div>
-                    ))}
-                    {calendarData.map((day, index) => (
-                      <div
-                        key={index}
-                        className={`
-                          aspect-square rounded-xl p-2 transition-all relative group
-                          ${day.isCurrentMonth ? "bg-gray-50 hover:bg-gray-100" : "opacity-30"}
-                          ${day.mood ? "cursor-pointer" : ""}
-                        `}
-                      >
-                        <span className="text-xs text-gray-400 font-medium">{day.day}</span>
-                        {day.mood && (
-                          <div className="absolute inset-0 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-                            {day.emoji}
+                </div>
+                
+                <div className="grid grid-cols-7 gap-2">
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+                    <div key={day} className="text-center text-sm font-medium text-gray-400 py-2">
+                      {day}
+                    </div>
+                  ))}
+                  {calendarData.map((day, index) => (
+                    <div
+                      key={index}
+                      className={`
+                        aspect-square rounded-xl p-2 transition-all relative group
+                        ${day.isCurrentMonth ? "bg-gray-50 hover:bg-gray-100" : "opacity-30"}
+                          ${day.emoji ? "cursor-pointer" : ""}
+                      `}
+                    >
+                      <span className="text-xs text-gray-400 font-medium">{day.day}</span>
+                      {day.emoji && (
+                        <div className="absolute inset-0 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                          {day.emoji}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </motion.div>
+
+            {/* Recent Check-ins */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.65 }}
+              className="mt-6"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">
+                  {showFavoritesOnly ? `Favourite Check-ins (${favoriteCount})` : "Recent Check-ins"}
+                </h2>
+                <button
+                  onClick={() => setShowFavoritesOnly((v) => !v)}
+                  className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full transition-colors ${
+                    showFavoritesOnly
+                      ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  <Heart className="w-4 h-4" />
+                  {showFavoritesOnly ? "Show All" : `View Favourites (${favoriteCount})`}
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {displayedCheckIns.length === 0 && (
+                  <Card className="p-8 text-center text-muted-foreground shadow-md">
+                    <Heart className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                    <p>
+                      {showFavoritesOnly
+                        ? "No favourite check-ins yet. Tap the star on any entry to save it."
+                        : "No recent check-ins available yet."}
+                    </p>
+                  </Card>
+                )}
+
+                {displayedCheckIns.map((entry) => {
+                  const info = getMoodInfo(entry.mood);
+                  const isFavorite = favoriteEntryIds.includes(getEntryKey(entry));
+                  return (
+                    <motion.div
+                      key={getEntryKey(entry)}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      whileHover={{ y: -2 }}
+                    >
+                      <Card className="p-4 shadow-md hover:shadow-lg transition-all">
+                        <div className="flex items-center gap-4">
+                          <span className="text-3xl">{info?.emoji || "🙂"}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="font-semibold">{info?.label || entry.mood}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {format(new Date(entry.created_at), "MMM d, yyyy h:mm a")}
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground truncate">
+                              {entry.notes || "No notes added"}
+                            </p>
                           </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              </motion.div>
-            )}
+                          <div className="flex items-center gap-3 flex-shrink-0">
+                            <div className="text-right">
+                              <div className="text-lg font-bold text-primary">{entry.intensity}/10</div>
+                            </div>
+                            <motion.button
+                              whileHover={{ scale: 1.2 }}
+                              whileTap={{ scale: 0.85 }}
+                              onClick={() => toggleFavorite(entry)}
+                              className="p-1.5 rounded-full hover:bg-amber-50 transition-colors"
+                              title={isFavorite ? "Remove from favourites" : "Add to favourites"}
+                            >
+                              <Star
+                                className={`w-5 h-5 transition-all ${
+                                  isFavorite
+                                    ? "text-amber-400 fill-amber-400"
+                                    : "text-gray-300 hover:text-amber-400"
+                                }`}
+                              />
+                            </motion.button>
+                          </div>
+                        </div>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </motion.div>
           </>
         )}
       </div>
