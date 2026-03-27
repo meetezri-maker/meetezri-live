@@ -9,13 +9,22 @@ import {
   ArrowRight,
   CheckCircle,
   Sparkles,
-  TrendingUp,
-  Lock
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
 import { useAuth } from "../../contexts/AuthContext";
+
+const MOOD_OPTIONS = [
+  { value: "happy", emoji: "😊", label: "Happy", color: "from-yellow-400 to-orange-500" },
+  { value: "calm", emoji: "😌", label: "Calm", color: "from-blue-400 to-cyan-500" },
+  { value: "anxious", emoji: "😰", label: "Anxious", color: "from-purple-400 to-pink-500" },
+  { value: "sad", emoji: "😢", label: "Sad", color: "from-blue-500 to-indigo-600" },
+  { value: "angry", emoji: "😠", label: "Angry", color: "from-red-500 to-orange-600" },
+  { value: "tired", emoji: "😴", label: "Tired", color: "from-gray-400 to-gray-600" },
+  { value: "excited", emoji: "🤩", label: "Excited", color: "from-pink-500 to-rose-600" },
+  { value: "neutral", emoji: "😐", label: "Neutral", color: "from-gray-300 to-gray-500" },
+] as const;
 
 export function MoodCheckIn() {
   const navigate = useNavigate();
@@ -26,17 +35,9 @@ export function MoodCheckIn() {
   const [notes, setNotes] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const moods = [
-    { value: "happy", emoji: "😊", label: "Happy", color: "from-yellow-400 to-orange-500" },
-    { value: "calm", emoji: "😌", label: "Calm", color: "from-blue-400 to-cyan-500" },
-    { value: "anxious", emoji: "😰", label: "Anxious", color: "from-purple-400 to-pink-500" },
-    { value: "sad", emoji: "😢", label: "Sad", color: "from-blue-500 to-indigo-600" },
-    { value: "angry", emoji: "😠", label: "Angry", color: "from-red-500 to-orange-600" },
-    { value: "tired", emoji: "😴", label: "Tired", color: "from-gray-400 to-gray-600" },
-    { value: "excited", emoji: "🤩", label: "Excited", color: "from-pink-500 to-rose-600" },
-    { value: "neutral", emoji: "😐", label: "Neutral", color: "from-gray-300 to-gray-500" }
-  ];
+  const [insightLoading, setInsightLoading] = useState(true);
+  const [monthCheckinCount, setMonthCheckinCount] = useState<number | null>(null);
+  const [topMoodInsight, setTopMoodInsight] = useState<{ label: string; emoji: string } | null>(null);
 
   const activities = [
     { value: "work", label: "Work", emoji: "💼" },
@@ -46,6 +47,66 @@ export function MoodCheckIn() {
     { value: "hobby", label: "Hobby", emoji: "🎨" },
     { value: "family", label: "Family", emoji: "👨‍👩‍👧" }
   ];
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const entries = (await api.moods.getMyMoods()) as {
+          mood: string;
+          created_at: string;
+        }[];
+        if (cancelled) return;
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const inMonth = entries.filter((e) => {
+          const d = new Date(e.created_at);
+          return !Number.isNaN(d.getTime()) && d >= monthStart && d <= now;
+        });
+        setMonthCheckinCount(inMonth.length);
+        if (inMonth.length === 0) {
+          setTopMoodInsight(null);
+          return;
+        }
+        const counts = new Map<string, number>();
+        for (const e of inMonth) {
+          const key = String(e.mood ?? "")
+            .toLowerCase()
+            .trim();
+          if (!key) continue;
+          counts.set(key, (counts.get(key) ?? 0) + 1);
+        }
+        let bestKey = "";
+        let bestCount = 0;
+        for (const [k, c] of counts) {
+          if (c > bestCount) {
+            bestCount = c;
+            bestKey = k;
+          }
+        }
+        const moodDef = MOOD_OPTIONS.find((m) => m.value === bestKey);
+        setTopMoodInsight(
+          moodDef
+            ? { label: moodDef.label, emoji: moodDef.emoji }
+            : {
+                label:
+                  bestKey.charAt(0).toUpperCase() + bestKey.slice(1),
+                emoji: "😐",
+              },
+        );
+      } catch {
+        if (!cancelled) {
+          setMonthCheckinCount(null);
+          setTopMoodInsight(null);
+        }
+      } finally {
+        if (!cancelled) setInsightLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const toggleActivity = (value: string) => {
     if (selectedActivities.includes(value)) {
@@ -164,7 +225,7 @@ export function MoodCheckIn() {
             <Card className="p-6 shadow-xl">
               <Label className="text-lg mb-4 block">How are you feeling?</Label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {moods.map((mood, index) => (
+                {MOOD_OPTIONS.map((mood, index) => (
                   <motion.button
                     key={mood.value}
                     type="button"
@@ -308,7 +369,24 @@ export function MoodCheckIn() {
                 <div>
                   <h3 className="font-bold mb-2">Quick Insight</h3>
                   <p className="text-sm text-muted-foreground">
-                    You've checked in 12 times this month! Your most common mood is "Calm" 😌
+                    {insightLoading ? (
+                      "Loading your mood patterns…"
+                    ) : monthCheckinCount === null ? (
+                      "We couldn’t load your mood history. Try again in a moment."
+                    ) : monthCheckinCount === 0 ? (
+                      "You haven’t logged a mood check-in this month yet. Complete one below to start tracking patterns."
+                    ) : topMoodInsight ? (
+                      <>
+                        You&apos;ve checked in {monthCheckinCount}{" "}
+                        {monthCheckinCount === 1 ? "time" : "times"} this month! Your most
+                        common mood is &quot;{topMoodInsight.label}&quot; {topMoodInsight.emoji}
+                      </>
+                    ) : (
+                      <>
+                        You&apos;ve checked in {monthCheckinCount}{" "}
+                        {monthCheckinCount === 1 ? "time" : "times"} this month.
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
