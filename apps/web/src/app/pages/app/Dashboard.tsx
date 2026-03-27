@@ -498,9 +498,9 @@ export function Dashboard() {
                 <p className="text-xl font-semibold font-mono">
                   {formatTime(creditsRemainingSeconds)}
                 </p>
-                <p className="text-sm font-medium text-white/90">
-                  {accountRemainingMinutesDisplay} min · all buckets
-                </p>
+                {/* <p className="text-sm font-medium text-white/90">
+                  {accountRemainingMinutesDisplay} min
+                </p> */}
                 </div>
                 <div className="flex flex-col gap-1 mt-2">
                 <div className="flex flex-row gap-2 items-baseline">
@@ -509,11 +509,11 @@ export function Dashboard() {
                   {creditsTotalMinutes} 
                 </p>
                 </div>
-                {accountUsedMinutesDisplay != null && (
+                {/* {accountUsedMinutesDisplay != null && (
                   <p className="text-sm text-white/90">
                     Used: {accountUsedMinutesDisplay} min
                   </p>
-                )}
+                )} */}
                 </div>
                 <p className="text-xs text-white/90 ">
                   {userPlan} • Click to manage
