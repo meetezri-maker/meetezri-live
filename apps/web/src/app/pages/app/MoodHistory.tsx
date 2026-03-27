@@ -97,6 +97,25 @@ export function MoodHistory() {
   const [entries, setEntries] = useState<MoodEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const getPeriodRange = () => {
+    if (selectedView === "week") {
+      return {
+        start: startOfWeek(currentDate, { weekStartsOn: 1 }),
+        end: endOfWeek(currentDate, { weekStartsOn: 1 })
+      };
+    }
+    if (selectedView === "month") {
+      return {
+        start: startOfMonth(currentDate),
+        end: endOfMonth(currentDate)
+      };
+    }
+    return {
+      start: startOfYear(currentDate),
+      end: endOfYear(currentDate)
+    };
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -162,6 +181,49 @@ export function MoodHistory() {
     });
   };
 
+  const exportCurrentPeriod = () => {
+    const { start, end } = getPeriodRange();
+    const periodEntries = entries
+      .filter((entry) => {
+        const date = new Date(entry.created_at);
+        return date >= start && date <= end;
+      })
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    if (periodEntries.length === 0) {
+      return;
+    }
+
+    const csvRows = [
+      ["Date", "Mood", "Mood Label", "Intensity", "Source", "Activities", "Notes"].join(","),
+      ...periodEntries.map((entry) => {
+        const info = getMoodInfo(entry.mood);
+        const values = [
+          format(new Date(entry.created_at), "yyyy-MM-dd HH:mm"),
+          entry.mood,
+          info?.label ?? "",
+          String(entry.intensity),
+          entry.source,
+          entry.activities?.join(" | ") ?? "",
+          entry.notes ?? ""
+        ];
+        return values
+          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+          .join(",");
+      })
+    ];
+
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `mood-history-${selectedView}-${format(currentDate, "yyyy-MM-dd")}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
 
 
   // Process data based on selected view and date
@@ -188,14 +250,21 @@ export function MoodHistory() {
     const days = eachDayOfInterval({ start, end });
     const chartData = days.map(day => {
       const dayEntries = periodEntries.filter(e => isSameDay(new Date(e.created_at), day));
-      if (dayEntries.length === 0) return { day: format(day, selectedView === "year" ? "MMM" : "EEE"), fullDate: day, mood: null, intensity: null };
+      if (dayEntries.length === 0) {
+        return {
+          day: format(day, selectedView === "week" ? "EEE" : selectedView === "month" ? "d" : "MMM"),
+          fullDate: day,
+          mood: null,
+          intensity: null
+        };
+      }
       
       const totalScore = dayEntries.reduce((acc, entry) => {
         return acc + entry.intensity;
       }, 0);
       
       return {
-        day: format(day, selectedView === "year" ? "MMM" : "EEE"),
+        day: format(day, selectedView === "week" ? "EEE" : selectedView === "month" ? "d" : "MMM"),
         fullDate: day,
         mood: Number((totalScore / dayEntries.length).toFixed(1)),
         intensity: Math.floor(totalScore / dayEntries.length)
@@ -254,8 +323,8 @@ export function MoodHistory() {
     if (selectedView === "month") {
         const monthStart = startOfMonth(currentDate);
         const monthEnd = endOfMonth(currentDate);
-        const startDate = startOfWeek(monthStart);
-        const endDate = endOfWeek(monthEnd);
+        const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
+        const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
         
         const calendarInterval = eachDayOfInterval({ start: startDate, end: endDate });
         calendarData = calendarInterval.map(day => {
@@ -364,6 +433,8 @@ export function MoodHistory() {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              onClick={exportCurrentPeriod}
+              disabled={entries.length === 0}
               className="hidden sm:flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
             >
               <Download className="w-4 h-4" />

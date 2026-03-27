@@ -159,12 +159,10 @@ export function Dashboard() {
           purchased,
         } = await api.getCredits();
         const seconds =
-          typeof data.remaining_seconds === "number"
-            ? Math.max(0, data.remaining_seconds)
-            : typeof data.credits_seconds === "number"
-              ? Math.max(0, data.credits_seconds)
-              : typeof data.credits === "number"
-                ? Math.max(0, data.credits) * 60
+          typeof credits_seconds === "number"
+            ? Math.max(0, credits_seconds)
+            : typeof credits === "number"
+                ? Math.max(0, credits) * 60
                 : null;
         setLiveCreditsSeconds(seconds);
         const totalSeconds =
@@ -215,6 +213,16 @@ export function Dashboard() {
     liveCreditsTotalMinutes !== null
       ? liveCreditsTotalMinutes
       : creditsTotal;
+
+  const accountRemainingMinutesDisplay = Math.max(
+    0,
+    Math.ceil(creditsRemainingSeconds / 60)
+  );
+  const accountUsedMinutesDisplay = Math.max(
+    0,
+    Math.ceil((creditsTotalSeconds - creditsRemainingSeconds) / 60)
+  );
+  const creditsRemainingLow = accountRemainingMinutesDisplay;
 
   const quickActions = [
     {

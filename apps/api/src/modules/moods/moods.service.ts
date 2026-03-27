@@ -1,5 +1,6 @@
 import prisma from "../../lib/prisma";
 import { CreateMoodInput } from "./moods.schema";
+import { invalidateUserProfileCache } from "../users/user.service";
 
 const ALL_MOODS_CACHE_TTL = 120 * 1000; // 120 seconds
 let allMoodsCache: { data: any[]; timestamp: number } | null = null;
@@ -24,6 +25,7 @@ export async function createMood(userId: string, input: CreateMoodInput) {
       notes: input.notes,
     },
   });
+  invalidateUserProfileCache(userId);
   clearMoodsCache();
   return created;
 }

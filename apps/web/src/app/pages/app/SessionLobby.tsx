@@ -49,6 +49,8 @@ export function SessionLobby() {
   const navigate = useNavigate();
   const [selectedMode, setSelectedMode] = useState<"now" | "schedule">("now");
   const [selectedDuration, setSelectedDuration] = useState(30);
+  const [showMinutesPicker, setShowMinutesPicker] = useState(false);
+  const [customMinutesInput, setCustomMinutesInput] = useState("30");
   const [showCustomizeModal, setShowCustomizeModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState("Voice 1");
@@ -153,8 +155,40 @@ export function SessionLobby() {
     const allowed = durations.filter((d) => d <= minutesAvailable);
     if (allowed.length > 0) {
       setSelectedDuration(allowed[allowed.length - 1]);
+    } else {
+      setSelectedDuration(Math.max(1, Math.floor(minutesAvailable)));
     }
   }, [minutesAvailable, selectedDuration]);
+
+  useEffect(() => {
+    if (!showMinutesPicker) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowMinutesPicker(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showMinutesPicker]);
+
+  useEffect(() => {
+    if (!showMinutesPicker) return;
+    setCustomMinutesInput(String(selectedDuration));
+  }, [showMinutesPicker, selectedDuration]);
+
+  const isOnOwnPace = minutesAvailable > 0 && selectedDuration === minutesAvailable;
+  const customMinutesValue = Number(customMinutesInput);
+  const isCustomMinutesValid =
+    customMinutesInput.trim() !== "" &&
+    Number.isFinite(customMinutesValue) &&
+    customMinutesValue >= 1 &&
+    customMinutesValue <= minutesAvailable;
+
+  const applyCustomMinutes = () => {
+    if (!isCustomMinutesValid) {
+      toast.error(`Enter minutes between 1 and ${minutesAvailable}.`);
+      return;
+    }
+    setSelectedDuration(Math.floor(customMinutesValue));
+  };
 
   const handleSaveCustomize = () => {
     setSelectedVoice(tempSelectedVoice);
@@ -406,17 +440,14 @@ export function SessionLobby() {
             >
               <Card className="p-6 shadow-xl">
                 <h2 className="text-xl font-bold mb-4">Session Type</h2>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   <motion.button
                     type="button"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => {
-                      if (selectedMode === "now") {
-                        void handleStartSession();
-                        return;
-                      }
                       setSelectedMode("now");
+                      setShowMinutesPicker(true);
                     }}
                     className={`p-6 rounded-xl border-2 transition-all w-full ${
                       selectedMode === "now"
@@ -429,75 +460,196 @@ export function SessionLobby() {
                     <p className="text-sm text-muted-foreground">Begin immediately</p>
                   </motion.button>
 
-                  <motion.button
-                    type="button"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      if (selectedMode === "schedule") {
-                        setShowScheduleModal(true);
-                        return;
-                      }
-                      setSelectedMode("schedule");
-                    }}
-                    className={`p-6 rounded-xl border-2 transition-all ${
-                      selectedMode === "schedule"
-                        ? "border-primary bg-primary/10 shadow-lg"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    <Calendar className={`w-8 h-8 mb-3 mx-auto ${selectedMode === "schedule" ? "text-primary" : "text-gray-400"}`} />
-                    <h3 className="font-bold mb-1">Schedule</h3>
-                    <p className="text-sm text-muted-foreground">Pick a time</p>
-                  </motion.button>
                 </div>
               </Card>
             </motion.div>
 
-            {/* Duration Selection */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Card className="p-6 shadow-xl">
-                <div className="flex items-center gap-2 mb-4">
-                  <Clock className="w-5 h-5 text-primary" />
-                  <h2 className="text-xl font-bold">Session Duration</h2>
-                </div>
-                <div className="grid grid-cols-4 gap-3">
-                  {durations.map((duration, index) => (
-                    <motion.button
-                      key={duration}
-                      type="button"
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: 0.3 + index * 0.05 }}
-                      whileHover={durationDisabled.get(duration) ? undefined : { scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => {
-                        if (durationDisabled.get(duration)) return;
-                        setSelectedDuration(duration);
-                      }}
-                      disabled={durationDisabled.get(duration)}
-                      className={`p-4 rounded-xl border-2 transition-all ${
-                        durationDisabled.get(duration)
-                          ? "border-border opacity-40 cursor-not-allowed"
-                          : selectedDuration === duration
-                          ? "border-primary bg-primary text-primary-foreground shadow-lg"
-                          : "border-border hover:border-primary/50"
-                      }`}
-                    >
-                      <div className="text-2xl font-bold">{duration}</div>
-                      <div className="text-xs mt-1">min</div>
-                    </motion.button>
-                  ))}
-                </div>
-                <div className="mt-3 text-xs text-muted-foreground">
-                  Minutes available: <span className="font-medium">{minutesAvailable}</span>
-                </div>
-              </Card>
-            </motion.div>
+            {/* Duration Selection Popup */}
+            <AnimatePresence>
+              {selectedMode === "now" && showMinutesPicker && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowMinutesPicker(false)}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                >
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full max-w-xl flex flex-col"
+                  >
+                    <Card className="p-0 shadow-2xl bg-white dark:bg-gray-900 overflow-hidden border-0">
+                      <div className="relative px-6 py-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white">
+                        <div className="absolute -top-10 -right-10 w-28 h-28 rounded-full bg-white/20 blur-2xl" />
+                        <div className="absolute -bottom-12 -left-8 w-24 h-24 rounded-full bg-white/15 blur-2xl" />
+                        <div className="relative flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-5 h-5 text-white" />
+                            <h2 className="text-xl font-bold">Choose session minutes</h2>
+                          </div>
+                          <motion.button
+                            type="button"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => setShowMinutesPicker(false)}
+                            className="p-2 rounded-full hover:bg-white/20 transition-colors"
+                          >
+                            <X className="w-5 h-5" />
+                          </motion.button>
+                        </div>
+                        <p className="relative mt-2 text-sm text-white/90">
+                          Pick how long you want to talk with Ezri today.
+                        </p>
+                      </div>
+
+                      <div className="p-6">
+                      <div className="flex items-center justify-between gap-3 mb-5 text-sm">
+                        <p className="text-muted-foreground">
+                          Remaining: <span className="font-semibold text-foreground">{minutesAvailable} min</span>
+                        </p>
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                          Selected: {selectedDuration} min
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {durations.map((duration, index) => {
+                          const isDisabled = !!durationDisabled.get(duration);
+                          const isSelected = selectedDuration === duration;
+                          return (
+                          <motion.button
+                            key={duration}
+                            type="button"
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.06 + index * 0.05 }}
+                            whileHover={isDisabled ? undefined : { y: -2, scale: 1.04 }}
+                            whileTap={{ scale: 0.96 }}
+                            onClick={() => {
+                              if (isDisabled) return;
+                              setSelectedDuration(duration);
+                            }}
+                            disabled={isDisabled}
+                            className={`relative p-4 rounded-2xl border transition-all text-left ${
+                              isDisabled
+                                ? "border-border bg-muted/20 opacity-45 cursor-not-allowed"
+                                : isSelected
+                                ? "border-primary bg-gradient-to-br from-primary/15 to-fuchsia-500/10 shadow-lg ring-2 ring-primary/20"
+                                : "border-border bg-background hover:border-primary/40 hover:bg-primary/5"
+                            }`}
+                            aria-pressed={isSelected}
+                          >
+                            <div className="text-2xl font-bold">{duration}</div>
+                            <div className="text-xs mt-1 text-muted-foreground">minutes</div>
+                            {isSelected && (
+                              <Check className="absolute top-3 right-3 w-4 h-4 text-primary" />
+                            )}
+                          </motion.button>
+                        )})}
+                      </div>
+
+                      <div className="mt-4 rounded-2xl border border-border/70 bg-muted/20 p-3">
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <p className="text-sm font-medium">Custom minutes</p>
+                          <p className="text-xs text-muted-foreground">
+                            1 - {minutesAvailable} min
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            max={minutesAvailable}
+                            step={1}
+                            inputMode="numeric"
+                            value={customMinutesInput}
+                            onChange={(e) => setCustomMinutesInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") applyCustomMinutes();
+                            }}
+                            className="h-10 w-32 rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                            placeholder="e.g. 22"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-10"
+                            onClick={applyCustomMinutes}
+                            disabled={!isCustomMinutesValid}
+                          >
+                            Apply
+                          </Button>
+                        </div>
+                        {customMinutesInput.trim() !== "" && !isCustomMinutesValid && (
+                          <p className="mt-2 text-xs text-red-600 dark:text-red-400">
+                            Please enter a valid value between 1 and {minutesAvailable}.
+                          </p>
+                        )}
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          if (minutesAvailable <= 0) return;
+                          setSelectedDuration(minutesAvailable);
+                        }}
+                        disabled={minutesAvailable <= 0}
+                        className={`mt-4 w-full h-12 border-amber-200 dark:border-amber-800 transition-all hover:text-black dark:hover:text-white ${
+                          isOnOwnPace
+                            ? "bg-gradient-to-r from-amber-100 to-orange-200 dark:from-amber-900/40 dark:to-orange-900/40 ring-2 ring-amber-500/30 shadow-md"
+                            : "bg-gradient-to-r from-amber-50 to-orange-100 dark:from-amber-900/25 dark:to-orange-900/25 hover:from-amber-100 hover:to-orange-200 dark:hover:from-amber-900/40 dark:hover:to-orange-900/40"
+                        }`}
+                        aria-pressed={isOnOwnPace}
+                      >
+                        <div className="flex items-center justify-between w-full gap-3">
+                          <div className="flex items-center gap-2">
+                            {isOnOwnPace ? <Check className="w-4 h-4 text-amber-700" /> : null}
+                            <span className="font-semibold">At your own pace</span>
+                          </div>
+                          <span className="text-sm text-muted-foreground">
+                            Use all {minutesAvailable} min
+                          </span>
+                        </div>
+                      </Button>
+
+                      <div className="mt-5 flex items-center justify-between gap-3">
+                        <p className="text-xs text-muted-foreground">
+                          Selected duration: <span className="font-medium text-foreground">{selectedDuration} min</span>
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setShowMinutesPicker(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={() => void handleStartSession()}
+                            disabled={
+                              isStarting ||
+                              minutesAvailable <= 0 ||
+                              selectedDuration > minutesAvailable ||
+                              selectedDuration < 1
+                            }
+                            className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-2xl hover:shadow-purple-500/50 transition-all"
+                          >
+                            <Video className="w-4 h-4 mr-2" />
+                            Start Now
+                          </Button>
+                        </div>
+                      </div>
+                      </div>
+                    </Card>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Ezri Preview */}
             <motion.div
@@ -603,7 +755,7 @@ export function SessionLobby() {
                   <Button 
                     type="button"
                     className="w-full h-16 text-lg group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:shadow-2xl hover:shadow-purple-500/50 transition-all"
-                    onClick={handleStartSession}
+                    onClick={() => setShowMinutesPicker(true)}
                     disabled={isStarting || selectedDuration > minutesAvailable}
                   >
                     <motion.div
@@ -624,22 +776,13 @@ export function SessionLobby() {
                         )}
                       </motion.div>
                       <span className="font-bold">
-                        {isStarting ? "Starting Session..." : `Start Session Now (${selectedDuration} min)`}
+                        {isStarting ? "Starting Session..." : "Start Session Now"}
                       </span>
                       {!isStarting && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
                     </span>
                   </Button>
                 </motion.div>
-              ) : (
-                <Button 
-                  type="button"
-                  className="w-full h-16 text-lg bg-gradient-to-r from-gray-600 to-gray-700"
-                  onClick={() => setShowScheduleModal(true)}
-                >
-                  <Calendar className="w-5 h-5 mr-2" />
-                  Schedule for Later
-                </Button>
-              )}
+              ) : null}
             </motion.div>
           </div>
 
@@ -681,6 +824,36 @@ export function SessionLobby() {
                     Customize
                   </Button>
                 </div>
+              </Card>
+            </motion.div>
+
+            {/* Schedule (moved above Upcoming) */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Card className="p-6 shadow-xl">
+                <div className="flex items-center gap-2 mb-4">
+                  <Calendar className="w-5 h-5 text-primary" />
+                  <h3 className="font-bold">Schedule</h3>
+                </div>
+                <Button
+                  type="button"
+                  disabled={minutesAvailable <= 0 || selectedDuration > minutesAvailable}
+                  className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-purple-500/10 hover:from-indigo-500 hover:to-purple-500 transition-all flex items-center gap-3 px-4"
+                  onClick={() => {
+                    setSelectedMode("schedule");
+                    setShowMinutesPicker(false);
+                    setShowScheduleModal(true);
+                  }}
+                >
+                  <Calendar className="w-5 h-5 mr-2" />
+                  <div className="flex flex-col leading-tight">
+                    <span className="font-bold text-sm">Schedule for later</span>
+                    <span className="text-xs text-white/80">Pick a date & time</span>
+                  </div>
+                </Button>
               </Card>
             </motion.div>
 

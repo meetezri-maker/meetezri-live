@@ -447,6 +447,10 @@ export async function createProfileForPaidSignup(
 const userProfileCache = new Map<string, { data: any; timestamp: number }>();
 const PROFILE_CACHE_TTL = 30 * 1000; // 30 seconds
 
+export function invalidateUserProfileCache(userId: string) {
+  userProfileCache.delete(userId);
+}
+
 export async function getProfile(userId: string) {
   // Check cache first
   const cached = userProfileCache.get(userId);
@@ -710,11 +714,6 @@ export async function getCredits(userId: string) {
   const totalAccountSeconds = remainingSeconds + usedSecondsLifetime;
 
   const ceilMin = (sec: number) => (sec === 0 ? 0 : Math.ceil(sec / 60));
-
-  // Subscription-bucket capacity view: remaining subscription time + all lifetime usage.
-  // (Usage is drawn from subscription first, then PAYG; this matches stacked upgrades without PAYG.
-  // With active PAYG balance, treat as an upper-bound approximation for the monthly card.)
-  const subscriptionTotalSeconds = subscriptionSeconds + usedSecondsLifetime;
 
   // "Subscription total" should reflect the full allowance accrued this billing period,
   // including stacked upgrades: total = remaining + used_this_period.
