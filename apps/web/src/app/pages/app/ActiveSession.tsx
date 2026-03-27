@@ -89,7 +89,8 @@ const BLINK_KEYWORDS = [
   "eyeblinkright",
   "eyesquintleft",
   "eyesquintright",
-  "eyes", // important for your GLB
+  // NOTE: do NOT include generic "eyes" here — it frequently maps to a non-blink
+  // control and will deform/hide the face instead of closing eyelids.
 ];
 
 const MOUTH_KEYWORDS = [
@@ -112,6 +113,9 @@ const MOUTH_KEYWORDS = [
 function isBlinkName(name: string): boolean {
   const lower = name.toLowerCase().trim();
   if (EXACT_EYE_NAMES.includes(lower)) return true;
+  // Some rigs only expose a generic "eyes" morph. We allow it as a last-resort
+  // blink target (we clamp it very conservatively in the blink animator).
+  if (lower === "eyes") return true;
   return BLINK_KEYWORDS.some((k) => lower === k || lower.includes(k));
 }
 
@@ -550,6 +554,9 @@ function ThreeAvatar({
           blinkValue = 1 - smoothstep(x);
         }
 
+        const useBoneBlink = eyelidBonesRef.current.length > 0;
+        const useMorphBlink = blinkBindingsRef.current.length > 0 && !useBoneBlink;
+
         blinkBindingsRef.current.forEach(
           ({ mesh, index, name, initialInfluence }) => {
           const influences = mesh.morphTargetInfluences;
@@ -561,14 +568,21 @@ function ThreeAvatar({
             !lower.includes("lid") &&
             !lower.includes("wink") &&
             !lower.includes("squint");
-          const maxBlink = isRiskyEyes ? 0.35 : 0.82;
-          influences[index] = initialInfluence + blinkValue * maxBlink;
+          const maxBlink =
+            lower === "eyes"
+              ? 0.66
+              : isRiskyEyes
+              ? 0.44
+              : 0.44;
+          influences[index] = useMorphBlink
+            ? initialInfluence + blinkValue * maxBlink
+            : initialInfluence;
         }
         );
 
         eyelidBonesRef.current.forEach((bone) => {
           const defaultX = eyelidDefaultRotXRef.current.get(bone.uuid) ?? 0;
-          bone.rotation.x = defaultX + 0.33 * blinkValue;
+          bone.rotation.x = useBoneBlink ? defaultX + 0.28 * blinkValue : defaultX;
         });
 
         if (t < 1) {
@@ -587,7 +601,7 @@ function ThreeAvatar({
     function scheduleNextBlink() {
       if (!modelRef.current) return;
 
-      const delay = 2500 + Math.random() * 2300;
+      const delay = 3500 + Math.random() * 3000;
       blinkTimeoutRef.current = window.setTimeout(() => {
         const hasBlinkTargets =
           blinkBindingsRef.current.length > 0 || eyelidBonesRef.current.length > 0;
@@ -598,7 +612,7 @@ function ThreeAvatar({
         }
 
         const blinkDuration = 140 + Math.random() * 90;
-        const doDoubleBlink = Math.random() < 0.08;
+        const doDoubleBlink = Math.random() < 0.04;
         if (doDoubleBlink) {
           animateBlink(blinkDuration, () => {
             window.setTimeout(
@@ -671,11 +685,11 @@ function ThreeAvatar({
     const openness = getSpeechOpennessAt(speechText, speechCharIndex);
     mouthBaseRef.current = Math.max(
       mouthBaseRef.current,
-      openness * 0.16 + 0.05
+      openness * 0.14 + 0.045
     );
     mouthPulseRef.current = Math.max(
       mouthPulseRef.current,
-      openness * 1.32 + 0.38
+      openness * 1.18 + 0.34
     );
     lastBoundaryAtRef.current = performance.now();
   }, [speechPulse, isSpeaking]);
