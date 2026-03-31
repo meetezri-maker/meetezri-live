@@ -101,6 +101,15 @@ const getMoodInfo = (mood: string) => {
   return null;
 };
 
+const ACTIVITY_MAPPING: Record<string, { label: string; emoji: string }> = {
+  work: { label: "Work", emoji: "💼" },
+  exercise: { label: "Exercise", emoji: "🏃" },
+  social: { label: "Social", emoji: "👥" },
+  rest: { label: "Rest", emoji: "🛌" },
+  hobby: { label: "Hobby", emoji: "🎨" },
+  family: { label: "Family", emoji: "👨‍👩‍👧" }
+};
+
 export function MoodHistory() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -318,6 +327,8 @@ export function MoodHistory() {
       const date = new Date(entry.created_at);
       return date >= start && date <= end;
     });
+    const periodCheckIns = periodEntries.filter((e) => e.source === "check-in");
+    const periodInsightEntries = periodCheckIns.length > 0 ? periodCheckIns : periodEntries;
 
     // 1. Chart Data (Mood Trend)
     const days = eachDayOfInterval({ start, end });
@@ -422,57 +433,111 @@ export function MoodHistory() {
     }
 
     // 4. Insights
-    const avgMood = periodEntries.length > 0 
-        ? (periodEntries.reduce((acc, e) => acc + e.intensity, 0) / periodEntries.length).toFixed(1)
-        : "0";
-    
-    const midPoint = new Date(start.getTime() + (end.getTime() - start.getTime()) / 2);
-    const firstHalf = periodEntries.filter(e => new Date(e.created_at) < midPoint);
-    const secondHalf = periodEntries.filter(e => new Date(e.created_at) >= midPoint);
-    const firstAvg = firstHalf.length ? firstHalf.reduce((acc, e) => acc + e.intensity, 0) / firstHalf.length : 0;
-    const secondAvg = secondHalf.length ? secondHalf.reduce((acc, e) => acc + e.intensity, 0) / secondHalf.length : 0;
-    const trend = firstAvg > 0 ? ((secondAvg - firstAvg) / firstAvg) * 100 : 0;
+    // Average mood for the selected period (prefer check-ins; fallback to journals if no check-ins).
+    const currAvg =
+      periodInsightEntries.length > 0
+        ? periodInsightEntries.reduce((acc, e) => acc + e.intensity, 0) / periodInsightEntries.length
+        : 0;
+    const avgMood = periodInsightEntries.length > 0 ? currAvg.toFixed(1) : null;
 
-    // Find best day
-    const dayCounts: Record<string, { total: number, count: number }> = {};
-    periodEntries.forEach(e => {
-        const dayName = format(new Date(e.created_at), "EEEE");
-        if (!dayCounts[dayName]) dayCounts[dayName] = { total: 0, count: 0 };
-        dayCounts[dayName].total += e.intensity;
-        dayCounts[dayName].count++;
+    // Mood trend vs previous period (aligned with the selected view).
+    let prevStart: Date;
+    let prevEnd: Date;
+    if (selectedView === "week") {
+      prevStart = startOfWeek(subWeeks(currentDate, 1), { weekStartsOn: 1 });
+      prevEnd = endOfWeek(subWeeks(currentDate, 1), { weekStartsOn: 1 });
+    } else if (selectedView === "month") {
+      prevStart = startOfMonth(subMonths(currentDate, 1));
+      prevEnd = endOfMonth(subMonths(currentDate, 1));
+    } else {
+      prevStart = startOfYear(subYears(currentDate, 1));
+      prevEnd = endOfYear(subYears(currentDate, 1));
+    }
+
+    const prevPeriodEntries = entries.filter((e) => {
+      const d = new Date(e.created_at);
+      return d >= prevStart && d <= prevEnd;
+    });
+    const prevPeriodCheckIns = prevPeriodEntries.filter((e) => e.source === "check-in");
+    const prevPeriodInsightEntries =
+      prevPeriodCheckIns.length > 0 ? prevPeriodCheckIns : prevPeriodEntries;
+
+    const prevAvg =
+      prevPeriodInsightEntries.length > 0
+        ? prevPeriodInsightEntries.reduce((acc, e) => acc + e.intensity, 0) /
+          prevPeriodInsightEntries.length
+        : 0;
+
+    let trendPercent: number | null;
+    if (prevPeriodInsightEntries.length === 0 && periodInsightEntries.length > 0) {
+      trendPercent = null; // nothing to compare against yet
+    } else if (prevAvg > 0 && periodInsightEntries.length > 0) {
+      trendPercent = ((currAvg - prevAvg) / prevAvg) * 100;
+    } else {
+      trendPercent = 0;
+    }
+
+    // Best day = weekday of the best *date* average within the period.
+    // We average entries per date first, then pick the best date.
+    const dateBuckets: Record<string, { total: number; count: number; date: Date }> = {};
+    periodInsightEntries.forEach((e) => {
+      const d = new Date(e.created_at);
+      const key = format(d, "yyyy-MM-dd");
+      if (!dateBuckets[key]) {
+        dateBuckets[key] = {
+          total: 0,
+          count: 0,
+          date: new Date(d.getFullYear(), d.getMonth(), d.getDate())
+        };
+      }
+      dateBuckets[key].total += e.intensity;
+      dateBuckets[key].count += 1;
     });
     let bestDay = "N/A";
-    let maxScore = -1;
-    Object.entries(dayCounts).forEach(([day, data]) => {
-        const avg = data.total / data.count;
-        if (avg > maxScore) {
-            maxScore = avg;
-            bestDay = day;
-        }
+    let maxDailyAvg = -1;
+    Object.values(dateBuckets).forEach((bucket) => {
+      const dailyAvg = bucket.total / bucket.count;
+      if (dailyAvg > maxDailyAvg) {
+        maxDailyAvg = dailyAvg;
+        bestDay = format(bucket.date, "EEEE");
+      }
     });
 
     const insightsData = [
         {
           icon: TrendingUp,
           title: "Mood Trend",
-          value: `${trend > 0 ? "+" : ""}${trend.toFixed(0)}%`,
-          description: "Vs previous period",
-          color: trend >= 0 ? "text-green-500" : "text-red-500",
-          bgColor: trend >= 0 ? "bg-green-50" : "bg-red-50"
+          value:
+            trendPercent === null
+              ? "—"
+              : `${trendPercent > 0 ? "+" : ""}${trendPercent.toFixed(0)}%`,
+          description: trendPercent === null ? "No prior period to compare" : "Vs previous period",
+          color:
+            trendPercent === null
+              ? "text-slate-500"
+              : trendPercent >= 0
+                ? "text-green-500"
+                : "text-red-500",
+          bgColor:
+            trendPercent === null
+              ? "bg-slate-50"
+              : trendPercent >= 0
+                ? "bg-green-50"
+                : "bg-red-50"
         },
         {
           icon: Heart,
           title: "Average Mood",
-          value: `${avgMood}/10`,
-          description: "This period",
+          value: avgMood === null ? "—" : `${avgMood}/10`,
+          description: avgMood === null ? "No entries this period" : "This period",
           color: "text-blue-500",
           bgColor: "bg-blue-50"
         },
         {
           icon: Calendar,
           title: "Check-ins",
-          value: periodEntries.length.toString(),
-          description: "Total entries",
+          value: periodCheckIns.length.toString(),
+          description: "Total check-ins",
           color: "text-purple-500",
           bgColor: "bg-purple-50"
         },
@@ -841,6 +906,17 @@ export function MoodHistory() {
                 {displayedCheckIns.map((entry) => {
                   const info = getMoodInfo(entry.mood);
                   const isFavorite = favoriteEntryIds.includes(getEntryKey(entry));
+                  const activities = (entry.activities || [])
+                    .map((value) => {
+                      const key = String(value || "").trim().toLowerCase();
+                      const mapped = ACTIVITY_MAPPING[key];
+                      return mapped
+                        ? { value: key, ...mapped }
+                        : key
+                          ? { value: key, label: key, emoji: "•" }
+                          : null;
+                    })
+                    .filter(Boolean) as Array<{ value: string; label: string; emoji: string }>;
                   return (
                     <motion.div
                       key={getEntryKey(entry)}
@@ -861,6 +937,20 @@ export function MoodHistory() {
                             <p className="text-sm text-muted-foreground truncate">
                               {entry.notes || "No notes added"}
                             </p>
+                            {activities.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {activities.map((a) => (
+                                  <span
+                                    key={`${entry.id}-${a.value}`}
+                                    className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 text-xs"
+                                    title={a.label}
+                                  >
+                                    <span className="text-sm leading-none">{a.emoji}</span>
+                                    <span className="leading-none">{a.label}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center gap-3 flex-shrink-0">
                             <div className="text-right">

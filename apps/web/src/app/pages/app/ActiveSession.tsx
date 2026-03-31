@@ -38,11 +38,16 @@ import { SafetyBoundaryMessage } from "@/app/components/safety/SafetyBoundaryMes
 import { SafetyResourceCard } from "@/app/components/safety/SafetyResourceCard";
 import { getSafetyResources } from "@/app/utils/safetyResources";
 import { LowMinutesWarning } from "@/app/components/modals/LowMinutesWarning";
+import { getEzriConfig } from "@/lib/ezri/config";
+import { getOrCreateEzriUserid } from "@/lib/ezri/ids";
+import { createEzriApiClient } from "@/lib/ezri/apiClient";
+import { EzriRealtimeClient, type EzriWsStatus } from "@/lib/ezri/realtimeClient";
+import { normalizeAudioSource, toObjectUrl } from "@/lib/ezri/audio";
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-const AVATAR_MODEL_PATH = "/C1v5.glb";
+const AVATAR_MODEL_PATH = "/T1.glb";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Keyword lists — covers Ready Player Me, Blender ARKit, Mixamo, CC3/CC4,
@@ -125,6 +130,32 @@ function isMouthName(name: string): boolean {
   return MOUTH_KEYWORDS.some((k) => lower === k || lower.includes(k));
 }
 
+function isUpperEyelidBoneName(name: string): boolean {
+  const n = name.toLowerCase();
+  return (
+    n.includes("eyelidupper") ||
+    n.includes("eyelid_upper") ||
+    n.includes("upperlid") ||
+    n.includes("upper_lid") ||
+    n.includes("lashupper") ||
+    n.includes("upperlash") ||
+    n.includes("lashesupper")
+  );
+}
+
+function isLowerEyelidBoneName(name: string): boolean {
+  const n = name.toLowerCase();
+  return (
+    n.includes("eyelidlower") ||
+    n.includes("eyelid_lower") ||
+    n.includes("lowerlid") ||
+    n.includes("lower_lid") ||
+    n.includes("lashlower") ||
+    n.includes("lowerlash") ||
+    n.includes("lasheslower")
+  );
+}
+
 function getSpeechOpennessAt(text: string, idx: number): number {
   if (!text || idx < 0 || idx >= text.length) return 0.1;
   const window = text.slice(Math.max(0, idx - 1), Math.min(text.length, idx + 4)).toLowerCase();
@@ -186,8 +217,16 @@ function ThreeAvatar({
   const mouthBindingsRef = useRef<MorphBinding[]>([]);
   const blinkBindingsRef = useRef<MorphBinding[]>([]);
   const jawBoneRef = useRef<THREE.Bone | null>(null);
+  const jawDefaultRotXRef = useRef<number | null>(null);
   const eyelidBonesRef = useRef<THREE.Bone[]>([]);
   const eyelidDefaultRotXRef = useRef<Map<string, number>>(new Map());
+  const eyelidDefaultRotZRef = useRef<Map<string, number>>(new Map());
+  const eyelidDefaultRotYRef = useRef<Map<string, number>>(new Map());
+  const eyelidDefaultPosYRef = useRef<Map<string, number>>(new Map());
+  const eyelidDefaultPosZRef = useRef<Map<string, number>>(new Map());
+  const lipBonesUpperRef = useRef<THREE.Bone[]>([]);
+  const lipBonesLowerRef = useRef<THREE.Bone[]>([]);
+  const lipDefaultRotXRef = useRef<Map<string, number>>(new Map());
 
   const mouthTargetRef = useRef(0);
   const mouthBaseRef = useRef(0);
@@ -240,7 +279,11 @@ function ThreeAvatar({
     mouthBindingsRef.current = [];
     blinkBindingsRef.current = [];
     jawBoneRef.current = null;
+    jawDefaultRotXRef.current = null;
     eyelidBonesRef.current = [];
+    lipBonesUpperRef.current = [];
+    lipBonesLowerRef.current = [];
+    lipDefaultRotXRef.current = new Map();
     mouthTargetRef.current = 0;
     mouthSmoothedRef.current = 0;
 
@@ -306,14 +349,33 @@ function ThreeAvatar({
 
             if (/jaw|mouth|chin/.test(boneName)) {
               jawBoneRef.current = child as THREE.Bone;
+              jawDefaultRotXRef.current = (child as THREE.Bone).rotation.x;
               console.log("[Avatar] Jaw bone:", child.name);
             }
 
             if (/eyelid|upperlid|lowerlid|lid/.test(boneName)) {
               const bone = child as THREE.Bone;
               eyelidDefaultRotXRef.current.set(bone.uuid, bone.rotation.x);
+              eyelidDefaultRotYRef.current.set(bone.uuid, bone.rotation.y);
+              eyelidDefaultRotZRef.current.set(bone.uuid, bone.rotation.z);
+              eyelidDefaultPosYRef.current.set(bone.uuid, bone.position.y);
+              eyelidDefaultPosZRef.current.set(bone.uuid, bone.position.z);
               eyelidBonesRef.current.push(bone);
               console.log("[Avatar] Eyelid bone:", child.name);
+            }
+
+            // Lip bones (bone rigs vary a lot; these patterns cover most exports)
+            if (/(upperlip|upper_lip|lipupper|lip_upper|up_lip|uplip)/.test(boneName)) {
+              const bone = child as THREE.Bone;
+              lipDefaultRotXRef.current.set(bone.uuid, bone.rotation.x);
+              lipBonesUpperRef.current.push(bone);
+              console.log("[Avatar] Upper lip bone:", child.name);
+            }
+            if (/(lowerlip|lower_lip|liplower|lip_lower|low_lip|lowlip)/.test(boneName)) {
+              const bone = child as THREE.Bone;
+              lipDefaultRotXRef.current.set(bone.uuid, bone.rotation.x);
+              lipBonesLowerRef.current.push(bone);
+              console.log("[Avatar] Lower lip bone:", child.name);
             }
           }
         });
@@ -367,12 +429,12 @@ function ThreeAvatar({
         scaledBox.getSize(scaledSize);
         scaledBox.getCenter(scaledCenter);
 
-        const portraitHeight = scaledSize.y * 0.38;
+        const portraitHeight = scaledSize.y * 0.98;
         const fovRad = (camera.fov * Math.PI) / 180;
         const distance = portraitHeight / 2 / Math.tan(fovRad / 2);
-        const lookAtY = scaledCenter.y + scaledSize.y * 0.36;
+        const lookAtY = scaledCenter.y + scaledSize.y * 0.12;
 
-        camera.position.set(scaledCenter.x, lookAtY, distance * 0.9);
+        camera.position.set(scaledCenter.x, lookAtY, distance * 1);
         camera.lookAt(
           new THREE.Vector3(scaledCenter.x, lookAtY, scaledCenter.z)
         );
@@ -502,8 +564,33 @@ function ThreeAvatar({
         });
       }
 
-      // Disable jaw bone rotation entirely to avoid moving the whole head
-      // out of frame for rigs where the "jaw" bone also controls head/neck.
+      // Bone-driven mouth (preferred for bone-rigged avatars)
+      // Shape & cap so jaw doesn't over-open.
+      const mouthForBones = Math.pow(
+        THREE.MathUtils.clamp(mouthSmoothedRef.current, 0, 1),
+        0.85
+      );
+
+      if (jawBoneRef.current) {
+        const jaw = jawBoneRef.current;
+        const defaultX = jawDefaultRotXRef.current ?? jaw.rotation.x;
+        jaw.rotation.x = defaultX + mouthForBones * 0.42;
+      }
+
+      if (lipBonesUpperRef.current.length > 0) {
+        lipBonesUpperRef.current.forEach((bone) => {
+          const defaultX = lipDefaultRotXRef.current.get(bone.uuid) ?? bone.rotation.x;
+          bone.rotation.x = defaultX - mouthForBones * 0.09;
+        });
+      }
+
+      if (lipBonesLowerRef.current.length > 0) {
+        lipBonesLowerRef.current.forEach((bone) => {
+          const defaultX = lipDefaultRotXRef.current.get(bone.uuid) ?? bone.rotation.x;
+          bone.rotation.x = defaultX + mouthForBones * 0.12;
+        });
+      }
+
       // Slight scale pulse while speaking
       if (model) {
         const speakingScale = isSpeaking ? 1.01 : 1;
@@ -529,33 +616,33 @@ function ThreeAvatar({
 
       eyelidBonesRef.current.forEach((bone) => {
         const defaultX = eyelidDefaultRotXRef.current.get(bone.uuid) ?? 0;
+        const defaultY = eyelidDefaultRotYRef.current.get(bone.uuid) ?? 0;
         bone.rotation.x = defaultX;
+        bone.rotation.y = defaultY;
+        const defaultZ = eyelidDefaultRotZRef.current.get(bone.uuid);
+        if (typeof defaultZ === "number") bone.rotation.z = defaultZ;
+        const defaultPosY = eyelidDefaultPosYRef.current.get(bone.uuid);
+        if (typeof defaultPosY === "number") bone.position.y = defaultPosY;
+        const defaultPosZ = eyelidDefaultPosZRef.current.get(bone.uuid);
+        if (typeof defaultPosZ === "number") bone.position.z = defaultPosZ;
       });
     }
 
-    function animateBlink(duration = 180, onDone?: () => void) {
+    function animateBlink(duration = 320, onDone?: () => void) {
       const start = performance.now();
 
       const tick = (now: number) => {
         const t = Math.min((now - start) / duration, 1);
-        // Human-like blink: fast close, short hold, then open.
-        const closeT = 0.55;
-        const holdT = 0.15;
-        const openT = 1 - closeT - holdT;
+        // Smooth blink (no hard "hold" plateau).
         const smoothstep = (x: number) => x * x * (3 - 2 * x);
+        const tri = t < 0.5 ? t * 2 : (1 - t) * 2; // 0..1..0
+        const blinkValue = smoothstep(tri);
 
-        let blinkValue = 0;
-        if (t < closeT) {
-          blinkValue = smoothstep(t / closeT);
-        } else if (t < closeT + holdT) {
-          blinkValue = 1;
-        } else {
-          const x = (t - closeT - holdT) / openT; // 0..1
-          blinkValue = 1 - smoothstep(x);
-        }
-
+        // Use BOTH when possible:
+        // - If eyelid bones are weighted, they give smooth motion.
+        // - If bones are present but not weighted (common), morph blink still works.
         const useBoneBlink = eyelidBonesRef.current.length > 0;
-        const useMorphBlink = blinkBindingsRef.current.length > 0 && !useBoneBlink;
+        const useMorphBlink = blinkBindingsRef.current.length > 0;
 
         blinkBindingsRef.current.forEach(
           ({ mesh, index, name, initialInfluence }) => {
@@ -570,10 +657,10 @@ function ThreeAvatar({
             !lower.includes("squint");
           const maxBlink =
             lower === "eyes"
-              ? 0.66
+              ? 0.38
               : isRiskyEyes
-              ? 0.44
-              : 0.44;
+              ? 0.22
+              : 0.88;
           influences[index] = useMorphBlink
             ? initialInfluence + blinkValue * maxBlink
             : initialInfluence;
@@ -582,7 +669,40 @@ function ThreeAvatar({
 
         eyelidBonesRef.current.forEach((bone) => {
           const defaultX = eyelidDefaultRotXRef.current.get(bone.uuid) ?? 0;
-          bone.rotation.x = useBoneBlink ? defaultX + 0.28 * blinkValue : defaultX;
+          const defaultY = eyelidDefaultRotYRef.current.get(bone.uuid) ?? 0;
+          const defaultZ = eyelidDefaultRotZRef.current.get(bone.uuid) ?? 0;
+          const defaultPosY = eyelidDefaultPosYRef.current.get(bone.uuid) ?? bone.position.y;
+          const defaultPosZ = eyelidDefaultPosZRef.current.get(bone.uuid) ?? bone.position.z;
+          if (!useBoneBlink) {
+            bone.rotation.x = defaultX;
+            bone.rotation.y = defaultY;
+            bone.rotation.z = defaultZ;
+            bone.position.y = defaultPosY;
+            bone.position.z = defaultPosZ;
+            return;
+          }
+
+          // Upper eyelid closes by rotating down; lower eyelid closes by rotating up (opposite X).
+          const boneScale = useMorphBlink ? 0.55 : 1;
+          const magnitude = 0.48 * boneScale * blinkValue;
+          const upper = isUpperEyelidBoneName(bone.name);
+          const lower = isLowerEyelidBoneName(bone.name);
+          let deltaX = 0;
+          // Local X sign is rig-dependent; flipped so blink closes instead of opening wider.
+          if (upper && !lower) {
+            deltaX = +magnitude; // upper lid moves down toward closed
+          } else if (lower && !upper) {
+            deltaX = -magnitude; // lower lid moves up toward closed
+          } else {
+            deltaX = +magnitude; // generic "lid" / ambiguous → treat as upper
+          }
+          bone.rotation.x = defaultX + deltaX;
+          bone.rotation.y = defaultY;
+          bone.rotation.z = defaultZ;
+          bone.position.y = defaultPosY;
+          bone.position.z = defaultPosZ;
+
+          bone.updateMatrixWorld(true);
         });
 
         if (t < 1) {
@@ -601,7 +721,8 @@ function ThreeAvatar({
     function scheduleNextBlink() {
       if (!modelRef.current) return;
 
-      const delay = 3500 + Math.random() * 3000;
+      // Slow down + avoid back-to-back blinks (no "double blink" bursts).
+      const delay = 2200 + Math.random() * 3200;
       blinkTimeoutRef.current = window.setTimeout(() => {
         const hasBlinkTargets =
           blinkBindingsRef.current.length > 0 || eyelidBonesRef.current.length > 0;
@@ -611,18 +732,8 @@ function ThreeAvatar({
           return;
         }
 
-        const blinkDuration = 140 + Math.random() * 90;
-        const doDoubleBlink = Math.random() < 0.04;
-        if (doDoubleBlink) {
-          animateBlink(blinkDuration, () => {
-            window.setTimeout(
-              () => animateBlink(120, scheduleNextBlink),
-              110
-            );
-          });
-        } else {
-          animateBlink(blinkDuration, scheduleNextBlink);
-        }
+        const blinkDuration = 300 + Math.random() * 200;
+        animateBlink(blinkDuration, scheduleNextBlink);
       }, delay);
     }
 
@@ -630,7 +741,8 @@ function ThreeAvatar({
       if (blinkTimeoutRef.current) {
         clearTimeout(blinkTimeoutRef.current);
       }
-      scheduleNextBlink();
+      // Trigger one blink immediately so we can verify eyelid bones affect the mesh.
+      animateBlink(340, scheduleNextBlink);
     }
 
     return () => {
@@ -745,6 +857,17 @@ export function ActiveSession() {
   const { user, refreshProfile } = useAuth();
   const { sessionId: stateSessionId, duration, config } = location.state || {};
 
+  const ezriConfig = useMemo(() => {
+    try {
+      return getEzriConfig();
+    } catch (e: any) {
+      // Don’t crash the whole session UI if env is missing; surface actionable error.
+      console.error(e);
+      toast.error(e?.message || "Ezri env is missing/misconfigured.");
+      return null;
+    }
+  }, []);
+
   const apiSessionId = useMemo(() => {
     if (typeof stateSessionId === "string" && stateSessionId.length > 0) return stateSessionId;
     try {
@@ -799,10 +922,7 @@ export function ActiveSession() {
   const isSoundOffRef = useRef(isSoundOff);
   const isSessionPausedRef = useRef(false);
   const scriptStepRef = useRef(0);
-  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const isEzriSpeakingRef = useRef(false);
-  const speechEndTimeoutRef = useRef<number | null>(null);
-  const speechFallbackIntervalRef = useRef<number | null>(null);
   const transcriptRef = useRef<
     { role: string; content: string; timestamp: number }[]
   >([]);
@@ -817,11 +937,268 @@ export function ActiveSession() {
   const lastSpeechStartRef = useRef(0);
   const isRecognitionActiveRef = useRef(false);
   const isSessionEndingRef = useRef(false);
+  /** Throttle sonner toasts — same id + rapid updates can trigger "Maximum update depth exceeded". */
+  const lastInterimToastAtRef = useRef(0);
+  const lastInterimTextRef = useRef("");
+  /** Watchdog should not depend on `audioLevel` (updates every animation frame). */
+  const audioLevelForWatchdogRef = useRef(0);
+  const lastSilentMicWarnAtRef = useRef(0);
+
+  useEffect(() => {
+    audioLevelForWatchdogRef.current = audioLevel;
+  }, [audioLevel]);
 
   const [currentSubtitle, setCurrentSubtitle] = useState<string | null>(null);
   const [speechPulse, setSpeechPulse] = useState(0);
   const [speechText, setSpeechText] = useState("");
   const [speechCharIndex, setSpeechCharIndex] = useState(0);
+
+  const stopAudioAndSpeechDriver = () => {
+    if (speechDriverIntervalRef.current) {
+      window.clearInterval(speechDriverIntervalRef.current);
+      speechDriverIntervalRef.current = null;
+    }
+    if (audioRef.current) {
+      try {
+        // Prevent "Empty src attribute" spam when we intentionally stop/clear audio.
+        audioRef.current.onended = null;
+        audioRef.current.onerror = null;
+        audioRef.current.onloadedmetadata = null;
+        audioRef.current.pause();
+        // Avoid setting src="" (triggers MEDIA_ERR_SRC_NOT_SUPPORTED in some browsers).
+        audioRef.current.removeAttribute("src");
+        audioRef.current.load();
+      } catch {}
+      audioRef.current = null;
+    }
+    if (audioUrlRevokeRef.current) {
+      try {
+        audioUrlRevokeRef.current();
+      } catch {}
+      audioUrlRevokeRef.current = null;
+    }
+    setIsEzriSpeaking(false);
+    isEzriSpeakingRef.current = false;
+    setSpeechText("");
+    setSpeechCharIndex(0);
+    setCurrentSubtitle(null);
+  };
+
+  const driveSpeechAnimationForText = (text: string, durationMs: number) => {
+    if (!text) return;
+    if (speechDriverIntervalRef.current) {
+      window.clearInterval(speechDriverIntervalRef.current);
+      speechDriverIntervalRef.current = null;
+    }
+    const startAt = performance.now();
+    const effectiveDurationMs = Math.max(1200, durationMs);
+    let lastIdx = -1;
+    let lastPulseAt = 0;
+    speechDriverIntervalRef.current = window.setInterval(() => {
+      if (!isEzriSpeakingRef.current) return;
+      const elapsed = performance.now() - startAt;
+      const progress = THREE.MathUtils.clamp(elapsed / effectiveDurationMs, 0, 1);
+      const idx = Math.min(text.length - 1, Math.max(0, Math.floor(progress * text.length)));
+      setSpeechCharIndex(idx);
+      if (idx !== lastIdx) {
+        const ch = text[idx]?.toLowerCase?.() ?? "";
+        const shouldPulse = /[aeiou]/.test(ch) || ch === " " || ch === "," || ch === "." || ch === "!" || ch === "?";
+        if (shouldPulse && performance.now() - lastPulseAt > 120) {
+          setSpeechPulse((v) => v + 1);
+          lastPulseAt = performance.now();
+        }
+      }
+      lastIdx = idx;
+      if (progress >= 1) {
+        if (speechDriverIntervalRef.current) {
+          window.clearInterval(speechDriverIntervalRef.current);
+          speechDriverIntervalRef.current = null;
+        }
+      }
+    }, 40);
+  };
+
+  const playEzriAudio = async (
+    text: string,
+    audioSource: any,
+    opts?: { onDone?: () => void }
+  ) => {
+    if (typeof window === "undefined") return;
+    if (isSoundOffRef.current) {
+      // Respect “sound off”: don’t start playback, but keep subtitle for accessibility.
+      setCurrentSubtitle(text);
+      return;
+    }
+
+    audioPlaySeqRef.current += 1;
+    const seq = audioPlaySeqRef.current;
+
+    stopAudioAndSpeechDriver();
+    setCurrentSubtitle(text);
+    setSpeechText(text);
+    setSpeechCharIndex(0);
+    setIsEzriSpeaking(true);
+    isEzriSpeakingRef.current = true;
+
+    let url = "";
+    let revoke: (() => void) | undefined;
+    try {
+      if (!audioSource) {
+        throw new Error("Empty audioSource");
+      }
+      const normalized = await normalizeAudioSource(audioSource);
+      const out = toObjectUrl(normalized);
+      url = (out.url || "").trim();
+      revoke = out.revoke;
+      if (!url) {
+        throw new Error("Empty audio URL from toObjectUrl()");
+      }
+    } catch (e) {
+      if (seq !== audioPlaySeqRef.current) return;
+      console.error("Ezri audio source invalid; refusing to play.", { audioSource, error: e });
+      stopAudioAndSpeechDriver();
+      toast.error("Audio playback failed (empty audio source).");
+      opts?.onDone?.();
+      return;
+    }
+
+    audioUrlRevokeRef.current = revoke ?? null;
+
+    const audio = new Audio();
+    audioRef.current = audio;
+    audio.preload = "auto";
+    audio.src = url;
+
+    audio.onloadedmetadata = () => {
+      if (seq !== audioPlaySeqRef.current) return;
+      const ms = Number.isFinite(audio.duration) ? Math.max(800, audio.duration * 1000) : 3500;
+      driveSpeechAnimationForText(text, ms);
+    };
+
+    audio.onended = () => {
+      if (seq !== audioPlaySeqRef.current) return;
+      stopAudioAndSpeechDriver();
+      setSpeechPulse((v) => v + 1);
+      // Do NOT call recognition.start() here.
+      // Recognition auto-restart is handled centrally by recognition.onend.
+      opts?.onDone?.();
+    };
+
+    audio.onerror = () => {
+      if (seq !== audioPlaySeqRef.current) return;
+      // If we cleared src as part of an intentional stop, ignore.
+      if (!audio.src) return;
+      const me = audio.error;
+      console.error("Ezri audio playback failed", {
+        mediaErrorCode: me?.code,
+        mediaErrorMessage: me?.message,
+      });
+      stopAudioAndSpeechDriver();
+      toast.error("Audio playback failed (unsupported or interrupted).");
+      opts?.onDone?.();
+    };
+
+    try {
+      if (recognitionRef.current && isListening) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+      await audio.play();
+    } catch (e: any) {
+      if (seq !== audioPlaySeqRef.current) return;
+      if (e?.name === "AbortError") return;
+      console.error("Audio play() failed:", e);
+      stopAudioAndSpeechDriver();
+      toast.error("Audio playback failed (autoplay blocked or unsupported).");
+      opts?.onDone?.();
+    }
+  };
+
+  const speakViaEzriTts = async (text: string) => {
+    if (!ezriApi || !ezriConfig) return;
+    try {
+      const ttsProvider = ezriConfig.defaults.ttsProvider;
+      const res = await ezriApi.speakRest({ text, tts_provider: ttsProvider });
+      await playEzriAudio(text, res.audio);
+    } catch (e: any) {
+      console.error("Ezri speak failed:", e);
+      toast.error(e?.message || "Ezri speak failed");
+    }
+  };
+
+  const appendAssistantFinal = (text: string) => {
+    if (!text.trim()) return;
+    setTranscript((prev) => [
+      ...prev,
+      { role: "assistant", content: text, timestamp: Date.now() },
+    ]);
+  };
+
+  const handleUserText = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    // Safety analysis should be based on real user content (not mock phrases).
+    try {
+      const analysis = analyzeTextForSafety(trimmed, currentState);
+      if (analysis.confidence > 0.6 && analysis.suggestedState !== currentState) {
+        updateState(analysis.suggestedState, "conversation_analysis", analysis.detectedSignals);
+      }
+    } catch {}
+
+    setIsEzriThinking(true);
+    let spokeViaWebSocket = false;
+    try {
+      const ws = wsClientRef.current;
+      if (ws && ws.getStatus() === "connected") {
+        spokeViaWebSocket = true;
+        wsActiveTurnRef.current += 1;
+        wsAudioSeenTurnRef.current = 0;
+        wsAssistantBufferRef.current = "";
+        wsLastFinalTextRef.current = "";
+        if (wsSpeakFallbackTimerRef.current) {
+          window.clearTimeout(wsSpeakFallbackTimerRef.current);
+          wsSpeakFallbackTimerRef.current = null;
+        }
+        try {
+          ws.sendChat(trimmed);
+        } catch (e: any) {
+          spokeViaWebSocket = false;
+          throw e;
+        }
+      }
+
+      if (spokeViaWebSocket) {
+        return;
+      }
+
+      if (!ezriApi || !ezriConfig) {
+        throw new Error("Ezri is not configured (missing env).");
+      }
+
+      const brainProvider = ezriConfig.defaults.brainProvider;
+      const res = await ezriApi.sendChatRest({
+        prompt: trimmed,
+        provider: brainProvider,
+        userid: ezriUserid,
+        session_id: sessionId,
+      });
+
+      if (res.text) appendAssistantFinal(res.text);
+      if (res.audio) {
+        await playEzriAudio(res.text || trimmed, res.audio);
+      } else if (res.text) {
+        await speakViaEzriTts(res.text);
+      }
+    } catch (e: any) {
+      console.error("Ezri chat failed:", e);
+      toast.error(e?.message || "Ezri chat failed");
+    } finally {
+      // WebSocket replies clear thinking in onAssistantText / onAudio / onError.
+      if (!spokeViaWebSocket) setIsEzriThinking(false);
+    }
+  };
 
   // ── Audio Visualizer ────────────────────────────────────────────────────
   useEffect(() => {
@@ -861,245 +1238,13 @@ export function ActiveSession() {
     };
   }, [stream]);
 
-  // ── speakAvatar ─────────────────────────────────────────────────────────
-  const speakAvatar = (text: string) => {
-    console.log("speakAvatar called with:", text);
-    setCurrentSubtitle(text);
-
-    if (typeof window === "undefined") return;
-    const synth = (window as any).speechSynthesis as SpeechSynthesis | undefined;
-    if (!synth) {
-      toast.error("Speech synthesis not supported");
-      return;
-    }
-
-    try {
-      const stopFallbackSpeechDriver = () => {
-        if (speechFallbackIntervalRef.current) {
-          window.clearInterval(speechFallbackIntervalRef.current);
-          speechFallbackIntervalRef.current = null;
-        }
-      };
-
-      if (synth.speaking || synth.pending) {
-        stopFallbackSpeechDriver();
-        currentUtteranceRef.current = null;
-        synth.cancel();
-      }
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      currentUtteranceRef.current = utterance;
-      utterance.rate = 1;
-      utterance.pitch = 1;
-      utterance.volume = isSoundOffRef.current ? 0 : 1;
-
-      const voices = synth.getVoices();
-      const preferredVoice =
-        voices.find((v) => v.name.includes("Google") && v.lang.startsWith("en")) ||
-        voices.find((v) => v.lang.startsWith("en"));
-      if (preferredVoice) utterance.voice = preferredVoice;
-
-      const wordCount = text.split(/\s+/).length;
-      const estimatedDurationMs = Math.max(
-        3000,
-        (wordCount / 2.5) * 1000 + 2000
-      );
-      let sawNativeBoundary = false;
-
-      utterance.onstart = () => {
-        console.log("Speech started");
-        setIsEzriSpeaking(true);
-        isEzriSpeakingRef.current = true;
-        setSpeechText(text);
-        setSpeechCharIndex(0);
-
-        // If sound is off, pause immediately (so we can resume mid-sentence later)
-        if (isSoundOffRef.current) {
-          try {
-            synth.pause();
-          } catch {}
-        }
-
-        if (recognitionRef.current && isListening) {
-          try {
-            recognitionRef.current.stop();
-          } catch (e) {}
-        }
-
-        if (speechEndTimeoutRef.current)
-          window.clearTimeout(speechEndTimeoutRef.current);
-
-        stopFallbackSpeechDriver();
-        const startAt = performance.now();
-        let lastDrivenIdx = -1;
-        let lastPulseAt = 0;
-
-        // Fallback driver for browsers/voices that don't emit onboundary reliably.
-        // Use a slightly stretched duration so mouth pacing is not too fast.
-        const effectiveDurationMs = estimatedDurationMs * 1.25;
-        speechFallbackIntervalRef.current = window.setInterval(() => {
-          if (!isEzriSpeakingRef.current) return;
-          const now = performance.now();
-          const elapsed = now - startAt;
-          const progress = THREE.MathUtils.clamp(elapsed / effectiveDurationMs, 0, 1);
-          const idx = Math.min(text.length - 1, Math.max(0, Math.floor(progress * text.length)));
-          setSpeechCharIndex(idx);
-
-          // If native boundaries are missing, emit pulses from simulated text progress.
-          if (!sawNativeBoundary && idx !== lastDrivenIdx) {
-            const ch = text[idx]?.toLowerCase?.() ?? "";
-            const shouldPulse =
-              /[aeiou]/.test(ch) ||
-              ch === " " ||
-              ch === "," ||
-              ch === "." ||
-              ch === "!" ||
-              ch === "?";
-
-            if (shouldPulse && now - lastPulseAt > 115) {
-              setSpeechPulse((v) => v + 1);
-              lastPulseAt = now;
-            }
-          }
-          lastDrivenIdx = idx;
-
-          if (progress >= 1) {
-            stopFallbackSpeechDriver();
-          }
-        }, 40);
-
-        speechEndTimeoutRef.current = window.setTimeout(() => {
-          console.warn(
-            `Speech synthesis timed out after ${estimatedDurationMs}ms, forcing reset`
-          );
-          if (isEzriSpeakingRef.current) {
-            setIsEzriSpeaking(false);
-            isEzriSpeakingRef.current = false;
-            if (currentUtteranceRef.current === utterance) {
-              currentUtteranceRef.current = null;
-              setCurrentSubtitle(null);
-            }
-            stopFallbackSpeechDriver();
-            synth.cancel();
-            if (recognitionRef.current && !isListening) {
-              try {
-                recognitionRef.current.start();
-              } catch (e) {}
-            }
-          }
-        }, estimatedDurationMs);
-      };
-
-      utterance.onboundary = (event: SpeechSynthesisEvent) => {
-        // Not all browsers fire this reliably; when it does, it's the best "timing" proxy we have.
-        // We treat boundaries as mouth-open pulses; sentence-ending punctuation triggers a blink.
-        try {
-          sawNativeBoundary = true;
-          setSpeechPulse((v) => v + 1);
-          const idx = typeof event.charIndex === "number" ? event.charIndex : -1;
-          setSpeechCharIndex(idx >= 0 ? idx : 0);
-        } catch {}
-      };
-
-      utterance.onend = () => {
-        if (speechEndTimeoutRef.current)
-          window.clearTimeout(speechEndTimeoutRef.current);
-        stopFallbackSpeechDriver();
-        setIsEzriSpeaking(false);
-        isEzriSpeakingRef.current = false;
-        setSpeechPulse((v) => v + 1);
-        setSpeechCharIndex(0);
-        setSpeechText("");
-
-        if (currentUtteranceRef.current === utterance) {
-          currentUtteranceRef.current = null;
-          setCurrentSubtitle(null);
-        }
-
-        if (recognitionRef.current && !isListening) {
-          try {
-            recognitionRef.current.start();
-          } catch (e) {
-            console.error("Failed to restart recognition after speech:", e);
-          }
-        }
-        setIsEzriSpeaking(false);
-      };
-
-      utterance.onerror = (e) => {
-        console.error("Speech synthesis error:", e);
-        if (speechEndTimeoutRef.current)
-          window.clearTimeout(speechEndTimeoutRef.current);
-        stopFallbackSpeechDriver();
-        setIsEzriSpeaking(false);
-        isEzriSpeakingRef.current = false;
-        setSpeechPulse((v) => v + 1);
-        setSpeechCharIndex(0);
-        setSpeechText("");
-
-        if (currentUtteranceRef.current === utterance) {
-          currentUtteranceRef.current = null;
-          setCurrentSubtitle(null);
-        }
-
-        if (recognitionRef.current && !isListening) {
-          try {
-            recognitionRef.current.start();
-          } catch (e) {
-            console.error("Failed to restart recognition after error:", e);
-          }
-        }
-        setIsEzriSpeaking(false);
-      };
-
-      synth.speak(utterance);
-      if (synth.paused) synth.resume();
-    } catch (error) {
-      console.error("Failed to play avatar audio:", error);
-      if (speechFallbackIntervalRef.current) {
-        window.clearInterval(speechFallbackIntervalRef.current);
-        speechFallbackIntervalRef.current = null;
-      }
-      setIsEzriSpeaking(false);
-      isEzriSpeakingRef.current = false;
-      if (recognitionRef.current && !isListening) {
-        try {
-          recognitionRef.current.start();
-        } catch (e) {}
-      }
-    }
-  };
-
   useEffect(() => {
     isMutedRef.current = isMuted;
   }, [isMuted]);
 
   useEffect(() => {
     isSoundOffRef.current = isSoundOff;
-  }, [isSoundOff]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const synth = (window as any).speechSynthesis as SpeechSynthesis | undefined;
-    if (!synth) return;
-    if (isSoundOff) {
-      try {
-        // Pause instead of cancel so subtitles/transcript don't vanish and
-        // we can resume from the same point later.
-        synth.pause();
-      } catch {}
-    }
-  }, [isSoundOff]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const synth = (window as any).speechSynthesis as SpeechSynthesis | undefined;
-    if (!synth) return;
-    if (!isSoundOff) {
-      try {
-        synth.resume();
-      } catch {}
-    }
+    if (isSoundOff) stopAudioAndSpeechDriver();
   }, [isSoundOff]);
 
   useEffect(() => {
@@ -1186,7 +1331,15 @@ export function ActiveSession() {
 
         if (!isFinal) {
           console.log("Interim:", trimmed);
-          toast(`Listening: "${trimmed}"`, { id: "speech-interim" });
+          const now = Date.now();
+          if (
+            trimmed !== lastInterimTextRef.current ||
+            now - lastInterimToastAtRef.current > 450
+          ) {
+            lastInterimTextRef.current = trimmed;
+            lastInterimToastAtRef.current = now;
+            toast(`Listening: "${trimmed}"`, { id: "ezri-speech-interim" });
+          }
           return;
         }
 
@@ -1198,7 +1351,7 @@ export function ActiveSession() {
           scriptStepRef.current
         );
         toast.success(`Heard: "${trimmed}"`, {
-          id: "speech-interim",
+          id: "ezri-speech-final",
           duration: 2000,
         });
 
@@ -1220,10 +1373,8 @@ export function ActiveSession() {
         if (speechTimeoutRef.current)
           window.clearTimeout(speechTimeoutRef.current);
 
-        let assistantText = "";
-        const currentStep = scriptStepRef.current;
-        let nextStep = currentStep;
-
+        // Real Ezri backend integration (WS primary, REST fallback)
+        // Special case: user asks to repeat last assistant line
         if (
           lowerTrimmed === "repeat question" ||
           lowerTrimmed === "what did you say" ||
@@ -1233,177 +1384,12 @@ export function ActiveSession() {
             .slice()
             .reverse()
             .find((t) => t.role === "assistant");
-          assistantText = lastAssistant
-            ? lastAssistant.content
-            : "I haven't said anything yet.";
-          nextStep = currentStep;
-        } else if (
-          lowerTrimmed.includes("repeat") ||
-          lowerTrimmed.startsWith("say ")
-        ) {
-          assistantText = trimmed;
-          nextStep = currentStep;
-        } else if (
-          lowerTrimmed.includes("hear me") ||
-          lowerTrimmed.includes("listening")
-        ) {
-          assistantText = `Yes, I can hear you. I heard: "${trimmed}".`;
-          nextStep = currentStep;
-        } else if (
-          lowerTrimmed === "test" ||
-          lowerTrimmed.includes("testing")
-        ) {
-          assistantText = "Test received. I am listening and ready.";
-          nextStep = currentStep;
-        } else if (currentStep === 0) {
-          assistantText = "Hey. How's today treating you?";
-          nextStep = 1;
-        } else if (currentStep === 1) {
-          if (
-            lowerTrimmed.match(
-              /(long|busy|draining|tough|hard|bad|terrible|awful|stress|tired|exhausted|shitty|crap|sad|rough|difficult)/
-            )
-          ) {
-            assistantText = "Long as in busy… or long as in draining?";
-            nextStep = 2;
-          } else if (
-            lowerTrimmed.match(
-              /(good|great|fine|okay|ok|well|nice|awesome|amazing|happy|calm|peaceful|alright|not bad)/
-            )
-          ) {
-            assistantText =
-              "I'm glad to hear that. Even on good days, it helps to pause. What's been the best part?";
-            nextStep = 10;
-          } else {
-            assistantText = `I hear you saying "${trimmed}". Sometimes days just blur together. Would you say it's been more draining, or just busy?`;
-            nextStep = 2;
-          }
-        } else if (currentStep === 2) {
-          if (
-            lowerTrimmed.match(
-              /(draining|exhausting|tired|both|heavy|mental|emotional|soul|spirit)/
-            )
-          ) {
-            assistantText =
-              "That kind of day sticks to you. What took most of your energy?";
-            nextStep = 3;
-          } else if (
-            lowerTrimmed.match(
-              /(busy|work|lot|time|rushed|hurried|chaos|crazy|hectic)/
-            )
-          ) {
-            assistantText =
-              "Busyness can be its own kind of heavy. What took up most of your time?";
-            nextStep = 3;
-          } else {
-            assistantText = `Yeah, "${trimmed}" adds up. What took the most energy out of you today?`;
-            nextStep = 3;
-          }
-        } else if (currentStep === 3) {
-          if (
-            lowerTrimmed.match(
-              /(work|meeting|job|boss|colleague|email|deadline|project|client|customer)/
-            )
-          ) {
-            assistantText =
-              "Too many conversations and not enough breathing space?";
-            nextStep = 4;
-          } else {
-            assistantText =
-              "That sounds heavy. Does it feel like you didn't have enough breathing space?";
-            nextStep = 4;
-          }
-        } else if (currentStep === 4) {
-          if (
-            lowerTrimmed.match(
-              /(exactly|yes|yeah|yep|right|totally|definitely|sure|absolutely|maybe|sort of|kind of)/
-            )
-          ) {
-            assistantText =
-              "Yeah. That builds up. Did anything today feel even slightly good?";
-            nextStep = 5;
-          } else {
-            assistantText =
-              "I understand. Amidst all that, did anything today feel even slightly good?";
-            nextStep = 5;
-          }
-        } else if (currentStep === 5) {
-          if (
-            lowerTrimmed.match(
-              /(coffee|friend|lunch|break|walk|tea|sun|weather|music|song|food|meal|dinner|sleep|nap|cat|dog|pet|kids|child|partner|spouse)/
-            )
-          ) {
-            assistantText =
-              "There it is. What about it felt different from the rest of the day?";
-            nextStep = 6;
-          } else if (
-            lowerTrimmed.match(/(no|nothing|not really|nope|none|nada)/)
-          ) {
-            assistantText =
-              "That's honest. Sometimes we just need to get through it. If you could have 20 minutes of calm tonight, what would you do?";
-            nextStep = 7;
-          } else {
-            assistantText =
-              "It's important to notice those moments. What about it felt different?";
-            nextStep = 6;
-          }
-        } else if (currentStep === 6) {
-          if (
-            lowerTrimmed.match(
-              /(calm|peace|quiet|relax|pressure|slow|happy|joy|smile|laugh|fun|safe|warm)/
-            )
-          ) {
-            assistantText =
-              "So calm exists in your day. It just gets crowded out. If tonight had even 20 minutes of that same calm… what would you do?";
-            nextStep = 7;
-          } else {
-            assistantText =
-              "That feeling is worth holding onto. If tonight had even 20 minutes of that... what would you do?";
-            nextStep = 7;
-          }
-        } else if (currentStep === 7) {
-          if (
-            lowerTrimmed.match(
-              /(sit|quiet|phone|nothing|read|sleep|rest|bath|shower|meditate|tv|watch|movie|game|play|music|listen)/
-            )
-          ) {
-            assistantText =
-              "That sounds like your nervous system asking for a reset. You don't need to solve your whole life tonight. Just protect those 20 minutes.";
-            nextStep = 8;
-          } else {
-            assistantText =
-              "That sounds exactly like what you need. A reset. You don't need to solve everything tonight. Just protect those 20 minutes.";
-            nextStep = 8;
-          }
-        } else if (currentStep === 8) {
-          assistantText =
-            "Good. Then let's make that the goal for today. Nothing dramatic. Just quiet.";
-          nextStep = 9;
-        } else if (currentStep === 10) {
-          assistantText =
-            "That sounds lovely. Holding onto that feeling can help carry you through the rest of the week.";
-          nextStep = 9;
+          const toRepeat = lastAssistant?.content || "I haven't said anything yet.";
+          void speakViaEzriTts(toRepeat);
+          return;
         }
 
-        if (!assistantText) {
-          assistantText = trimmed.endsWith("?")
-            ? `I heard you ask: "${trimmed}". Let's focus on your day for now.`
-            : `I heard: "${trimmed}". Please go on.`;
-        }
-
-        scriptStepRef.current = nextStep;
-
-        speechTimeoutRef.current = window.setTimeout(() => {
-          setTranscript((prev) => [
-            ...prev,
-            {
-              role: "assistant",
-              content: assistantText,
-              timestamp: Date.now(),
-            },
-          ]);
-          speakAvatar(assistantText);
-        }, 1500);
+        void handleUserText(trimmed);
       }
     };
 
@@ -1482,37 +1468,23 @@ export function ActiveSession() {
         } catch (e) {}
       }
 
-      if (isListening && audioLevel < 2 && !isEzriSpeakingRef.current) {
-        console.warn(
-          "Watchdog: Microphone seems silent despite 'Listening' state."
-        );
+      if (
+        isListening &&
+        audioLevelForWatchdogRef.current < 2 &&
+        !isEzriSpeakingRef.current
+      ) {
+        const now = Date.now();
+        if (now - lastSilentMicWarnAtRef.current > 60_000) {
+          lastSilentMicWarnAtRef.current = now;
+          console.warn(
+            "Watchdog: Microphone seems silent despite 'Listening' state."
+          );
+        }
       }
     }, 5000);
 
     return () => clearInterval(watchdog);
-  }, [permissionsGranted, isListening, audioLevel]);
-
-  // ── Initial greeting ────────────────────────────────────────────────────
-  useEffect(() => {
-    if (
-      permissionsGranted &&
-      scriptStepRef.current === 0 &&
-      transcript.length === 0
-    ) {
-      const initialText = "Hey. How's today treating you?";
-
-      const timer = setTimeout(() => {
-        scriptStepRef.current = 1;
-        setTranscript((prev) => [
-          ...prev,
-          { role: "assistant", content: initialText, timestamp: Date.now() },
-        ]);
-        speakAvatar(initialText);
-      }, 1000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [permissionsGranted, transcript.length]);
+  }, [permissionsGranted, isListening]);
 
   // ── Media stream ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1613,6 +1585,144 @@ export function ActiveSession() {
   const [sessionId] = useState(() => apiSessionId || `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
   const [hasSessionEnded, setHasSessionEnded] = useState(false);
 
+  const ezriUserid = useMemo(() => getOrCreateEzriUserid(user?.id), [user?.id]);
+  const ezriApi = useMemo(() => (ezriConfig ? createEzriApiClient(ezriConfig.apiBase) : null), [ezriConfig]);
+
+  const [ezriWsStatus, setEzriWsStatus] = useState<EzriWsStatus>("disconnected");
+  const [isEzriThinking, setIsEzriThinking] = useState(false);
+  const wsClientRef = useRef<EzriRealtimeClient | null>(null);
+  const wsAssistantBufferRef = useRef<string>("");
+  const wsLastFinalTextRef = useRef<string>("");
+  const wsAudioQueueRef = useRef<{ subtitle: string; audio: any }[]>([]);
+  const wsIsPlaybackActiveRef = useRef(false);
+  const wsTtsDoneReceivedRef = useRef(false);
+  const wsActiveTurnRef = useRef(0);
+  const wsAudioSeenTurnRef = useRef(0);
+  const wsSpeakFallbackTimerRef = useRef<number | null>(null);
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRevokeRef = useRef<(() => void) | null>(null);
+  const speechDriverIntervalRef = useRef<number | null>(null);
+  const audioPlaySeqRef = useRef<number>(0);
+
+  // ── Ezri WebSocket (primary realtime) ────────────────────────────────────
+  useEffect(() => {
+    if (!ezriConfig) return;
+    if (hasSessionEnded) return;
+
+    const client =
+      wsClientRef.current ||
+      new EzriRealtimeClient({
+        onStatus: (s) => setEzriWsStatus(s),
+        onAssistantText: (text, kind) => {
+          if (kind === "partial") {
+            wsAssistantBufferRef.current += text;
+            return;
+          }
+
+          const full = (wsAssistantBufferRef.current + text).trim();
+          wsAssistantBufferRef.current = "";
+          wsLastFinalTextRef.current = full;
+
+          if (wsSpeakFallbackTimerRef.current) {
+            window.clearTimeout(wsSpeakFallbackTimerRef.current);
+            wsSpeakFallbackTimerRef.current = null;
+          }
+
+          if (full) {
+            appendAssistantFinal(full);
+            const activeTurn = wsActiveTurnRef.current;
+            wsSpeakFallbackTimerRef.current = window.setTimeout(() => {
+              if (wsAudioSeenTurnRef.current === activeTurn) return;
+              void speakViaEzriTts(full);
+            }, 900);
+          }
+          setIsEzriThinking(false);
+        },
+        onTtsDone: () => {
+          wsTtsDoneReceivedRef.current = true;
+          // If audio finished before tts_done arrives, finalize immediately.
+          if (!wsIsPlaybackActiveRef.current && wsAudioQueueRef.current.length === 0) {
+            try {
+              wsClientRef.current?.sendPlaybackDone();
+            } catch {}
+            wsTtsDoneReceivedRef.current = false;
+          }
+        },
+        onInterrupt: () => {
+          // Mirror reference behavior: stop playback now, clear queue, allow mic to reopen.
+          wsAudioQueueRef.current = [];
+          wsIsPlaybackActiveRef.current = false;
+          wsTtsDoneReceivedRef.current = false;
+          stopAudioAndSpeechDriver();
+          try {
+            wsClientRef.current?.sendPlaybackDone();
+          } catch {}
+          setIsEzriThinking(false);
+        },
+        onAudio: (audio) => {
+          const buffered = wsAssistantBufferRef.current.trim();
+          const subtitle = buffered || wsLastFinalTextRef.current.trim() || "…";
+          wsAudioSeenTurnRef.current = wsActiveTurnRef.current;
+          if (wsSpeakFallbackTimerRef.current) {
+            window.clearTimeout(wsSpeakFallbackTimerRef.current);
+            wsSpeakFallbackTimerRef.current = null;
+          }
+          wsAudioQueueRef.current.push({ subtitle, audio });
+          const playNext = () => {
+            if (wsIsPlaybackActiveRef.current) return;
+            const next = wsAudioQueueRef.current.shift();
+            if (!next) {
+              if (wsTtsDoneReceivedRef.current) {
+                try {
+                  wsClientRef.current?.sendPlaybackDone();
+                } catch {}
+                wsTtsDoneReceivedRef.current = false;
+              }
+              return;
+            }
+            wsIsPlaybackActiveRef.current = true;
+            void playEzriAudio(next.subtitle, next.audio, {
+              onDone: () => {
+                wsIsPlaybackActiveRef.current = false;
+                playNext();
+              },
+            });
+          };
+          playNext();
+          setIsEzriThinking(false);
+        },
+        onError: (err, ctx) => {
+          console.error("Ezri WS error:", err, ctx);
+          const msg =
+            typeof err === "string"
+              ? err
+              : (err as Error)?.message || "Ezri connection error";
+          toast.error(msg);
+          setIsEzriThinking(false);
+        },
+      });
+
+    wsClientRef.current = client;
+
+    client.connect({
+      wsBase: ezriConfig.wsBase,
+      userid: ezriUserid,
+      sessionId,
+      brainProvider: ezriConfig.defaults.brainProvider,
+      ttsProvider: ezriConfig.defaults.ttsProvider,
+      sttProvider: ezriConfig.defaults.sttProvider,
+    });
+
+    return () => {
+      if (wsSpeakFallbackTimerRef.current) {
+        window.clearTimeout(wsSpeakFallbackTimerRef.current);
+        wsSpeakFallbackTimerRef.current = null;
+      }
+      client.disconnect();
+    };
+  }, [ezriConfig, ezriUserid, sessionId, hasSessionEnded]);
+
   const currentAvatar = {
     name: config?.avatar || "Maya Chen",
     status: "listening",
@@ -1629,35 +1739,8 @@ export function ActiveSession() {
     }
   }, [currentState, lastSafetyState]);
 
-  useEffect(() => {
-    const analysisInterval = setInterval(() => {
-      const mockPhrases = [
-        "I'm feeling okay today",
-        "Things have been really hard lately",
-        "I'm struggling with everything",
-        "I don't know if I can keep going",
-      ];
-
-      if (Math.random() < 0.3 && !isSessionPaused) {
-        const randomPhrase =
-          mockPhrases[Math.floor(Math.random() * mockPhrases.length)];
-        const analysis = analyzeTextForSafety(randomPhrase, currentState);
-
-        if (
-          analysis.confidence > 0.6 &&
-          analysis.suggestedState !== currentState
-        ) {
-          updateState(
-            analysis.suggestedState,
-            "conversation_analysis",
-            analysis.detectedSignals
-          );
-        }
-      }
-    }, 10000);
-
-    return () => clearInterval(analysisInterval);
-  }, [currentState, isSessionPaused, updateState]);
+  // Safety analysis should be driven by real conversation content (see `handleUserText`),
+  // not synthetic mock phrases.
 
   useEffect(() => {
     if (isSessionPaused || hasSessionEnded) return;
@@ -1792,6 +1875,8 @@ export function ActiveSession() {
       setIsListening(false);
     }
 
+    stopAudioAndSpeechDriver();
+
     setIsUploading(true);
     const durationSeconds = sessionTime;
 
@@ -1879,10 +1964,7 @@ export function ActiveSession() {
   const handleResetSession = () => {
     setIsEzriSpeaking(false);
     isEzriSpeakingRef.current = false;
-    if (currentUtteranceRef.current) {
-      window.speechSynthesis.cancel();
-      currentUtteranceRef.current = null;
-    }
+    stopAudioAndSpeechDriver();
     if (stream) {
       stream.getTracks().forEach((t) => t.stop());
       setStream(null);
@@ -1937,6 +2019,21 @@ export function ActiveSession() {
                     className="w-2 h-2 bg-green-400 rounded-full"
                   />
                   <span className="text-sm text-gray-300">Live</span>
+                </div>
+                <span className="text-sm text-gray-400">•</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-purple-200">
+                    Ezri:
+                    <span className="ml-1 font-semibold">
+                      {ezriWsStatus === "connected"
+                        ? "Connected"
+                        : ezriWsStatus === "connecting"
+                        ? "Connecting"
+                        : ezriWsStatus === "reconnecting"
+                        ? "Reconnecting"
+                        : "Disconnected"}
+                    </span>
+                  </span>
                 </div>
                 <span className="text-sm text-gray-400">•</span>
                 <span className="text-sm text-gray-300 font-mono">
