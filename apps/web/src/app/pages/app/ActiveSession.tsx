@@ -47,7 +47,11 @@ import { normalizeAudioSource, toObjectUrl } from "@/lib/ezri/audio";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-const AVATAR_MODEL_PATH = "/T1.glb";
+// Use Vite base path so production deployments under sub-paths work.
+const AVATAR_MODEL_PATH = new URL(
+  "T1.glb",
+  import.meta.env.BASE_URL
+).toString();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Keyword lists — covers Ready Player Me, Blender ARKit, Mixamo, CC3/CC4,
