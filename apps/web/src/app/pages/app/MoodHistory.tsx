@@ -478,12 +478,35 @@ export function MoodHistory() {
     }
 
     // Best day = weekday of the best *date* average within the period.
-    // Only consider "happy" moods (exclude anxious/sad/tired/angry).
+    // Only consider "happy" moods (exclude anxious/sad/tired/angry), using both
+    // resolved labels and raw stored mood values (to handle emoji variants).
     const excludedBestDayLabels = new Set(["Angry", "Tired", "Anxious", "Sad"]);
+    const excludedBestDayRaw = new Set([
+      "angry",
+      "tired",
+      "anxious",
+      "sad",
+      "😡",
+      "😠",
+      "😰",
+      "😢",
+      "😴"
+    ]);
+    const normalizeMoodKey = (mood: string) =>
+      String(mood ?? "")
+        .trim()
+        .toLowerCase()
+        // strip common emoji variation selector so 😠️ matches 😠
+        .replace(/\uFE0F/g, "");
+
     const bestDayEntries = periodInsightEntries.filter((e) => {
+      const rawKey = normalizeMoodKey(e.mood);
+      if (excludedBestDayRaw.has(rawKey)) return false;
       const info = getMoodInfo(e.mood);
-      const label = info?.label || "";
-      return !excludedBestDayLabels.has(label);
+      if (info?.label && excludedBestDayLabels.has(info.label)) return false;
+      const emojiKey = normalizeMoodKey(info?.emoji || "");
+      if (emojiKey && excludedBestDayRaw.has(emojiKey)) return false;
+      return true;
     });
 
     // We average entries per date first, then pick the best date.
