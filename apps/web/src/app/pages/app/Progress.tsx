@@ -39,6 +39,10 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Skeleton } from "../../components/ui/skeleton";
+import {
+  formatWellnessDuration,
+  wellnessProgressTotalSeconds,
+} from "@/lib/wellnessLocalProgress";
 
 import { useNavigate } from "react-router-dom";
 
@@ -403,8 +407,10 @@ export function Progress() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold text-cyan-600">{p.totalMinutes}m</p>
-                      <p className="text-xs text-gray-500">Total Time</p>
+                      <p className="text-lg font-bold text-cyan-600">
+                        {formatWellnessDuration(wellnessProgressTotalSeconds(p))}
+                      </p>
+                      <p className="text-xs text-gray-500">Total time</p>
                     </div>
                   </div>
                 ))}

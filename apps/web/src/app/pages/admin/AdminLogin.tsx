@@ -68,11 +68,10 @@ export function AdminLogin() {
     setMfaFactorId(null);
   };
 
-  const verifyRoleAndNavigate = async () => {
+  const verifyRoleAndNavigate = async (accessToken?: string) => {
     if (!selectedRole) return;
 
-    // Verify role
-    const profile = await api.getMe();
+    const profile = await api.getMe(accessToken);
     
     // Strict role check: The user must have the exact role or be a super_admin
     // Exception: If the user is a super_admin in DB, they can login as any role they want (for testing/management)
@@ -116,7 +115,9 @@ export function AdminLogin() {
     setIsLoading(true);
 
     try {
-      const { data: { user }, error: authError } = await supabase.auth.signInWithPassword({
+      await supabase.auth.signOut({ scope: "local" });
+
+      const { data: { user, session }, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -130,10 +131,10 @@ export function AdminLogin() {
       if (factorsError) throw factorsError;
 
       const totpFactor = factors?.totp?.[0];
+      const accessToken = session?.access_token;
 
-      // Check global 2FA requirement
       try {
-        const settings = await api.getSettings();
+        const settings = await api.getSettings(accessToken);
         const require2FA = settings.find((s: any) => s.key === 'security.require_2fa');
         
         if (require2FA?.value === true && !totpFactor) {
@@ -172,7 +173,7 @@ export function AdminLogin() {
         return;
       }
 
-      await verifyRoleAndNavigate();
+      await verifyRoleAndNavigate(accessToken);
 
     } catch (err: any) {
       const rawMsg = err?.message || "Authentication failed";
@@ -185,7 +186,9 @@ export function AdminLogin() {
         try {
           // Small backoff then retry once
           await new Promise((r) => setTimeout(r, 500));
-          const { data: { user }, error: retryError } = await supabase.auth.signInWithPassword({
+          await supabase.auth.signOut({ scope: "local" });
+
+          const { data: { user, session }, error: retryError } = await supabase.auth.signInWithPassword({
             email,
             password,
           });
@@ -197,13 +200,14 @@ export function AdminLogin() {
           const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
           if (factorsError) throw factorsError;
           const totpFactor = factors?.totp?.[0];
+          const accessToken = session?.access_token;
           if (totpFactor) {
             setMfaFactorId(totpFactor.id);
             setStep("mfa");
             setIsLoading(false);
             return;
           }
-          await verifyRoleAndNavigate();
+          await verifyRoleAndNavigate(accessToken);
           return;
         } catch (retryErr: any) {
           console.error("Retry sign-in failed:", retryErr);

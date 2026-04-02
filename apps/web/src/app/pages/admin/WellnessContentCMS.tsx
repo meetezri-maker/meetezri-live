@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -30,6 +30,7 @@ import {
   X,
   Save,
 } from "lucide-react";
+import { WELLNESS_TOOL_CATEGORIES } from "../../../lib/wellnessToolCategories";
 
 interface Content {
   id: number;
@@ -49,6 +50,7 @@ interface Content {
 }
 
 export function WellnessContentCMS() {
+  const [content] = useState<Content[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -78,129 +80,6 @@ export function WellnessContentCMS() {
     alert(`Publishing: ${item.title}\n\nThis draft will be published and become available to all users.`);
   };
 
-  const content: Content[] = [
-    {
-      id: 1,
-      title: "Understanding Anxiety: A Complete Guide",
-      type: "article",
-      category: "Anxiety Management",
-      status: "published",
-      author: "Dr. Emily Chen",
-      publishDate: "Dec 28, 2024",
-      views: 12456,
-      likes: 1234,
-      comments: 89,
-      rating: 4.8,
-      tags: ["anxiety", "mental-health", "coping-strategies"],
-      excerpt: "A comprehensive guide to understanding and managing anxiety in daily life...",
-    },
-    {
-      id: 2,
-      title: "5-Minute Mindfulness Meditation",
-      type: "audio",
-      category: "Meditation",
-      status: "published",
-      author: "Sarah Williams",
-      publishDate: "Dec 27, 2024",
-      views: 8923,
-      likes: 892,
-      comments: 45,
-      rating: 4.9,
-      tags: ["meditation", "mindfulness", "breathing"],
-      excerpt: "A quick guided meditation to help you center yourself and find calm...",
-    },
-    {
-      id: 3,
-      title: "Breathing Techniques for Stress Relief",
-      type: "video",
-      category: "Stress Management",
-      status: "published",
-      author: "Marcus Johnson",
-      publishDate: "Dec 26, 2024",
-      views: 15678,
-      likes: 1567,
-      comments: 123,
-      rating: 4.7,
-      tags: ["breathing", "stress-relief", "wellness"],
-      excerpt: "Learn effective breathing techniques to reduce stress and anxiety instantly...",
-    },
-    {
-      id: 4,
-      title: "Progressive Muscle Relaxation Exercise",
-      type: "exercise",
-      category: "Relaxation",
-      status: "published",
-      author: "Dr. Sarah Williams",
-      publishDate: "Dec 25, 2024",
-      views: 6734,
-      likes: 673,
-      comments: 34,
-      rating: 4.6,
-      tags: ["relaxation", "exercise", "tension-relief"],
-      excerpt: "A step-by-step guide to progressive muscle relaxation for deep relaxation...",
-    },
-    {
-      id: 5,
-      title: "Sleep Hygiene: Your Guide to Better Rest",
-      type: "guide",
-      category: "Sleep Health",
-      status: "published",
-      author: "Dr. Michael Brown",
-      publishDate: "Dec 24, 2024",
-      views: 11234,
-      likes: 1123,
-      comments: 67,
-      rating: 4.9,
-      tags: ["sleep", "health", "wellness"],
-      excerpt: "Discover the science-backed strategies for improving your sleep quality...",
-    },
-    {
-      id: 6,
-      title: "Dealing with Workplace Stress",
-      type: "article",
-      category: "Stress Management",
-      status: "draft",
-      author: "Emily Chen",
-      publishDate: "Not published",
-      views: 0,
-      likes: 0,
-      comments: 0,
-      rating: 0,
-      tags: ["workplace", "stress", "productivity"],
-      excerpt: "Practical strategies for managing stress in professional environments...",
-    },
-    {
-      id: 7,
-      title: "Morning Yoga for Mental Clarity",
-      type: "video",
-      category: "Exercise",
-      status: "scheduled",
-      author: "Luna Martinez",
-      publishDate: "Jan 1, 2025",
-      views: 0,
-      likes: 0,
-      comments: 0,
-      rating: 0,
-      tags: ["yoga", "morning-routine", "exercise"],
-      excerpt: "Start your day with this gentle yoga flow designed to clear your mind...",
-    },
-    {
-      id: 8,
-      title: "Journaling for Mental Health",
-      type: "guide",
-      category: "Self-Care",
-      status: "published",
-      author: "Dr. Emily Chen",
-      publishDate: "Dec 23, 2024",
-      views: 9456,
-      likes: 945,
-      comments: 56,
-      rating: 4.8,
-      tags: ["journaling", "self-care", "mental-health"],
-      excerpt: "Learn how journaling can improve your mental health and emotional well-being...",
-    },
-  ];
-
   const filteredContent = content.filter((item) => {
     const matchesSearch =
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -212,26 +91,19 @@ export function WellnessContentCMS() {
     return matchesSearch && matchesType && matchesStatus && matchesCategory;
   });
 
-  const stats = {
-    total: content.length,
-    published: content.filter((c) => c.status === "published").length,
-    draft: content.filter((c) => c.status === "draft").length,
-    scheduled: content.filter((c) => c.status === "scheduled").length,
-    totalViews: content.reduce((sum, c) => sum + c.views, 0),
-    avgRating: (content.filter(c => c.rating > 0).reduce((sum, c) => sum + c.rating, 0) / content.filter(c => c.rating > 0).length).toFixed(1),
-  };
-
-  const categories = [
-    "Anxiety Management",
-    "Stress Management",
-    "Meditation",
-    "Sleep Health",
-    "Exercise",
-    "Self-Care",
-    "Relaxation",
-    "Depression Support",
-    "Mindfulness",
-  ];
+  const stats = useMemo(() => {
+    const rated = content.filter((c) => c.rating > 0);
+    const avgRating =
+      rated.length === 0 ? "0" : (rated.reduce((sum, c) => sum + c.rating, 0) / rated.length).toFixed(1);
+    return {
+      total: content.length,
+      published: content.filter((c) => c.status === "published").length,
+      draft: content.filter((c) => c.status === "draft").length,
+      scheduled: content.filter((c) => c.status === "scheduled").length,
+      totalViews: content.reduce((sum, c) => sum + c.views, 0),
+      avgRating,
+    };
+  }, [content]);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -389,7 +261,9 @@ export function WellnessContentCMS() {
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Total Views</p>
                   <p className="text-2xl font-bold text-purple-600">
-                    {(stats.totalViews / 1000).toFixed(1)}K
+                    {stats.totalViews >= 1000
+                      ? `${(stats.totalViews / 1000).toFixed(1)}K`
+                      : stats.totalViews.toLocaleString()}
                   </p>
                 </div>
                 <Eye className="w-8 h-8 text-purple-500" />
@@ -451,7 +325,7 @@ export function WellnessContentCMS() {
                     onChange={(e) => setFilterCategory(e.target.value)}
                   >
                     <option value="all">All Categories</option>
-                    {categories.map((cat) => (
+                    {WELLNESS_TOOL_CATEGORIES.map((cat) => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
@@ -599,11 +473,13 @@ export function WellnessContentCMS() {
             <BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
             <h3 className="font-bold text-xl mb-2">No Content Found</h3>
             <p className="text-muted-foreground mb-4">
-              No content matches the current filters
+              {content.length === 0
+              ? "No content yet. Create an item to get started."
+              : "No content matches the current filters."}
             </p>
             <Button onClick={() => setShowCreateModal(true)}>
               <Plus className="w-4 h-4 mr-2" />
-              Create Your First Content
+              Create Content
             </Button>
           </motion.div>
         )}
@@ -654,7 +530,7 @@ export function WellnessContentCMS() {
                     <div>
                       <label className="block text-sm font-medium mb-2">Category</label>
                       <select className="w-full px-3 py-2 border rounded-lg">
-                        {categories.map((cat) => (
+                        {WELLNESS_TOOL_CATEGORIES.map((cat) => (
                           <option key={cat}>{cat}</option>
                         ))}
                       </select>
@@ -886,7 +762,7 @@ export function WellnessContentCMS() {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
                       <select className="w-full px-3 py-2 border rounded-lg" defaultValue={editModalContent.category}>
-                        {categories.map((cat) => (
+                        {WELLNESS_TOOL_CATEGORIES.map((cat) => (
                           <option key={cat} value={cat}>{cat}</option>
                         ))}
                       </select>

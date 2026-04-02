@@ -1,6 +1,7 @@
 import prisma from "../../lib/prisma";
 import { CreateMoodInput } from "./moods.schema";
 import { invalidateUserProfileCache } from "../users/user.service";
+import { notificationsService } from "../notifications/notifications.service";
 
 const ALL_MOODS_CACHE_TTL = 120 * 1000; // 120 seconds
 let allMoodsCache: { data: any[]; timestamp: number } | null = null;
@@ -31,6 +32,7 @@ export async function createMood(userId: string, input: CreateMoodInput) {
 }
 
 export async function getMoodsByUserId(userId: string) {
+  await notificationsService.ensureStreakRiskReminder(userId, "mood");
   return prisma.mood_entries.findMany({
     where: { user_id: userId },
     orderBy: { created_at: "desc" },

@@ -43,7 +43,7 @@ describe("wellness.service", () => {
     mockPrisma.wellness_tools.create.mockResolvedValue({ id: toolId });
     const created = await createWellnessTool({
       title: "Breathing",
-      category: "mindfulness",
+      category: "Meditation",
       is_premium: false,
       status: "draft",
     });

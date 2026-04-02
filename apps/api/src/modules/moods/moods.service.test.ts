@@ -11,6 +11,14 @@ jest.mock("../../lib/prisma", () => ({
   default: mockPrisma,
 }));
 
+const ensureStreakRiskReminder = jest.fn();
+
+jest.mock("../notifications/notifications.service", () => ({
+  notificationsService: {
+    ensureStreakRiskReminder,
+  },
+}));
+
 import { createMood, getMoodsByUserId, getAllMoods } from "./moods.service";
 
 describe("moods.service", () => {
@@ -30,6 +38,7 @@ describe("moods.service", () => {
   it("lists user moods ordered by newest first", async () => {
     mockPrisma.mood_entries.findMany.mockResolvedValue([{ id: "m1" }]);
     const result = await getMoodsByUserId(userId);
+    expect(ensureStreakRiskReminder).toHaveBeenCalledWith(userId, "mood");
     expect(mockPrisma.mood_entries.findMany).toHaveBeenCalledWith({
       where: { user_id: userId },
       orderBy: { created_at: "desc" },

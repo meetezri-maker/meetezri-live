@@ -4,6 +4,7 @@ import { AppLayout } from '@/app/components/AppLayout';
 import { BookOpen, Video, Headphones, FileText, Search, Filter, Star, Clock, Play, Download, Bookmark, Heart, TrendingUp, Award, ArrowLeft } from 'lucide-react';
 import { AnimatedCard } from '@/app/components/AnimatedCard';
 import { Link } from 'react-router-dom';
+import { WELLNESS_TOOL_CATEGORIES } from '@/lib/wellnessToolCategories';
 
 interface Resource {
   id: string;
@@ -30,7 +31,7 @@ export function Resources() {
       title: 'Understanding Anxiety: A Complete Guide',
       description: 'Learn about the science behind anxiety, common triggers, and evidence-based strategies to manage it effectively.',
       type: 'article',
-      category: 'Mental Health',
+      category: 'Anxiety Management',
       duration: '15 min read',
       difficulty: 'beginner',
       rating: 4.8,
@@ -44,7 +45,7 @@ export function Resources() {
       title: 'Guided Meditation for Better Sleep',
       description: 'A calming 20-minute guided meditation designed to help you relax and prepare for restful sleep.',
       type: 'audio',
-      category: 'Sleep',
+      category: 'Sleep Health',
       duration: '20 min',
       difficulty: 'beginner',
       rating: 4.9,
@@ -72,7 +73,7 @@ export function Resources() {
       title: '5-4-3-2-1 Grounding Exercise',
       description: 'A quick and effective grounding technique to help manage anxiety and bring you back to the present moment.',
       type: 'exercise',
-      category: 'Anxiety Relief',
+      category: 'Anxiety Management',
       duration: '5 min',
       difficulty: 'beginner',
       rating: 4.9,
@@ -86,7 +87,7 @@ export function Resources() {
       title: 'Building Emotional Resilience',
       description: 'Explore strategies to develop emotional resilience and bounce back stronger from life\'s challenges.',
       type: 'article',
-      category: 'Personal Growth',
+      category: 'Self-Care',
       duration: '10 min read',
       difficulty: 'intermediate',
       rating: 4.6,
@@ -100,7 +101,7 @@ export function Resources() {
       title: 'Box Breathing for Calm',
       description: 'Master the box breathing technique used by Navy SEALs to achieve instant calm and focus.',
       type: 'exercise',
-      category: 'Breathing Techniques',
+      category: 'Relaxation',
       duration: '3 min',
       difficulty: 'beginner',
       rating: 4.8,
@@ -114,7 +115,7 @@ export function Resources() {
       title: 'Understanding Depression: Signs & Support',
       description: 'Comprehensive video on recognizing depression symptoms and finding appropriate support and treatment.',
       type: 'video',
-      category: 'Mental Health',
+      category: 'Depression Support',
       duration: '25 min',
       difficulty: 'intermediate',
       rating: 4.7,
@@ -147,16 +148,7 @@ export function Resources() {
     { id: 'exercise', label: 'Exercises', icon: Award }
   ];
 
-  const categories = [
-    'All Categories',
-    'Mental Health',
-    'Sleep',
-    'Stress Management',
-    'Anxiety Relief',
-    'Personal Growth',
-    'Breathing Techniques',
-    'Relaxation'
-  ];
+  const categories = ['All Categories', ...WELLNESS_TOOL_CATEGORIES];
 
   const stats = {
     totalResources: 156,

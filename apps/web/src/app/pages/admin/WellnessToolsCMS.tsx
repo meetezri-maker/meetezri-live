@@ -24,6 +24,11 @@ import {
   Target,
   X,
   Loader2,
+  Music,
+  Smile,
+  Activity,
+  Leaf,
+  HeartPulse,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
@@ -32,6 +37,14 @@ import { useNavigate } from "react-router-dom";
 import { AnimatePresence } from "motion/react";
 import { api } from "../../../lib/api";
 import { formatDistanceToNow } from "date-fns";
+import { WELLNESS_TOOL_CATEGORIES, type WellnessToolCategory } from "../../../lib/wellnessToolCategories";
+import {
+  mergeWellnessToolsForAdminDisplay,
+  placeholderWellnessToolId,
+  isWellnessPlaceholderId,
+  CATEGORY_ICON_HEX,
+  CATEGORY_ICON_NAME,
+} from "../../../lib/mergeAdminWellnessTools";
 
 interface WellnessTool {
   id: string;
@@ -47,6 +60,8 @@ interface WellnessTool {
   rating: number;
   lastUpdated: string;
   createdBy: string;
+  /** Not persisted — shown until a real tool exists for this category */
+  isPlaceholder?: boolean;
 }
 
 const iconMap: Record<string, any> = {
@@ -58,7 +73,33 @@ const iconMap: Record<string, any> = {
   Sparkles,
   Sun,
   Zap,
+  Music,
+  Smile,
+  Activity,
+  Leaf,
+  HeartPulse,
 };
+
+function buildPlaceholderTool(category: WellnessToolCategory): WellnessTool {
+  const iconName = CATEGORY_ICON_NAME[category];
+  return {
+    id: placeholderWellnessToolId(category),
+    title: `${category} — add your tool`,
+    category,
+    description:
+      "No tool in the database for this category yet. Create and publish one in the editor to replace this row.",
+    duration: 5,
+    difficulty: "Beginner",
+    status: "draft",
+    icon: iconMap[iconName] || Sparkles,
+    iconColor: CATEGORY_ICON_HEX[category],
+    usageCount: 0,
+    rating: 0,
+    lastUpdated: "—",
+    createdBy: "—",
+    isPlaceholder: true,
+  };
+}
 
 export function WellnessToolsCMS() {
   const navigate = useNavigate();
@@ -82,7 +123,8 @@ export function WellnessToolsCMS() {
     try {
       setIsLoading(true);
       const tools = await api.wellness.getAll();
-      const mappedTools: WellnessTool[] = tools.map((t: any) => ({
+      const list = Array.isArray(tools) ? tools : [];
+      const mappedTools: WellnessTool[] = list.map((t: any) => ({
         id: t.id,
         title: t.title,
         category: t.category,
@@ -91,13 +133,15 @@ export function WellnessToolsCMS() {
         difficulty: (t.difficulty as any) || "Beginner",
         status: (t.status as any) || "draft",
         icon: iconMap[t.icon || "Sparkles"] || Sparkles,
-        iconColor: "#8b5cf6", // Default purple for now, could be dynamic
+        iconColor: "#8b5cf6",
         usageCount: t.usage_count || 0,
         rating: Number(t.rating) || 0,
         lastUpdated: formatDistanceToNow(new Date(t.updated_at), { addSuffix: true }),
         createdBy: t.profiles?.full_name || "Admin",
+        isPlaceholder: false,
       }));
-      setWellnessTools(mappedTools);
+      const merged = mergeWellnessToolsForAdminDisplay(mappedTools, buildPlaceholderTool);
+      setWellnessTools(merged);
     } catch (error) {
       console.error("Failed to fetch wellness tools:", error);
     } finally {
@@ -105,25 +149,12 @@ export function WellnessToolsCMS() {
     }
   };
 
-  const categories = [
-    "All Categories",
-    "Breathing",
-    "Meditation",
-    "Sleep",
-    "Anxiety Relief",
-    "Stress Management",
-    "Mindfulness",
-    "Energy Boost",
-  ];
-
   const filteredTools = wellnessTools.filter((tool) => {
     const matchesSearch =
       tool.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tool.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory =
-      selectedCategory === "all" ||
-      selectedCategory === "All Categories" ||
-      tool.category === selectedCategory;
+      selectedCategory === "all" || tool.category === selectedCategory;
     const matchesStatus =
       selectedStatus === "all" || tool.status === selectedStatus;
     return matchesSearch && matchesCategory && matchesStatus;
@@ -173,18 +204,22 @@ export function WellnessToolsCMS() {
   };
 
   const handleBulkAction = async (action: string) => {
-    console.log(`Bulk action: ${action} for tools:`, selectedTools);
+    const realIds = selectedTools.filter((id) => !isWellnessPlaceholderId(id));
+    if (realIds.length === 0) {
+      alert("Select saved tools only — placeholders cannot be bulk-updated.");
+      return;
+    }
     try {
       if (action === "delete") {
-        if (!confirm(`Are you sure you want to delete ${selectedTools.length} tools?`)) return;
-        await Promise.all(selectedTools.map(id => api.wellness.delete(id)));
-        alert(`Successfully deleted ${selectedTools.length} tools`);
+        if (!confirm(`Are you sure you want to delete ${realIds.length} tools?`)) return;
+        await Promise.all(realIds.map((id) => api.wellness.delete(id)));
+        alert(`Successfully deleted ${realIds.length} tools`);
       } else if (action === "publish") {
-        await Promise.all(selectedTools.map(id => api.wellness.update(id, { status: "published" })));
-        alert(`Successfully published ${selectedTools.length} tools`);
+        await Promise.all(realIds.map((id) => api.wellness.update(id, { status: "published" })));
+        alert(`Successfully published ${realIds.length} tools`);
       } else if (action === "archive") {
-        await Promise.all(selectedTools.map(id => api.wellness.update(id, { status: "archived" })));
-        alert(`Successfully archived ${selectedTools.length} tools`);
+        await Promise.all(realIds.map((id) => api.wellness.update(id, { status: "archived" })));
+        alert(`Successfully archived ${realIds.length} tools`);
       }
       await fetchTools();
       setSelectedTools([]);
@@ -200,15 +235,27 @@ export function WellnessToolsCMS() {
   };
 
   const handleCopyTool = (tool: WellnessTool) => {
+    if (tool.isPlaceholder) {
+      alert("Create a real tool first — placeholders are not copied.");
+      return;
+    }
     alert(`Copied: ${tool.title}\n\nThis would create a duplicate of this tool that you can modify and publish as a new version.`);
   };
 
   const handleDeleteTool = (tool: WellnessTool) => {
+    if (tool.isPlaceholder) {
+      alert("This is a category placeholder — it disappears when you publish a tool for this category.");
+      return;
+    }
     setDeleteModalTool(tool);
   };
 
   const handleConfirmDelete = async () => {
     if (!deleteModalTool) return;
+    if (deleteModalTool.isPlaceholder || isWellnessPlaceholderId(deleteModalTool.id)) {
+      setDeleteModalTool(null);
+      return;
+    }
     try {
       await api.wellness.delete(deleteModalTool.id);
       await fetchTools();
@@ -316,7 +363,7 @@ export function WellnessToolsCMS() {
                 className="px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
                 <option value="all">All Categories</option>
-                {categories.slice(1).map((cat) => (
+                {WELLNESS_TOOL_CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
                     {cat}
                   </option>
@@ -440,9 +487,10 @@ export function WellnessToolsCMS() {
                     <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
+                        disabled={tool.isPlaceholder}
                         checked={selectedTools.includes(tool.id)}
                         onChange={() => handleSelectTool(tool.id)}
-                        className="w-4 h-4 rounded border-gray-300 text-purple-500 focus:ring-purple-500"
+                        className="w-4 h-4 rounded border-gray-300 text-purple-500 focus:ring-purple-500 disabled:opacity-40"
                       />
                       <div
                         className="w-12 h-12 rounded-xl flex items-center justify-center"
@@ -454,7 +502,12 @@ export function WellnessToolsCMS() {
                         />
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      {tool.isPlaceholder && (
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                          Placeholder
+                        </span>
+                      )}
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium ${
                           tool.status === "published"
@@ -542,9 +595,14 @@ export function WellnessToolsCMS() {
                         size="sm"
                         variant="ghost"
                         onClick={() =>
-                          navigate(`/admin/wellness-tool-editor?id=${tool.id}`)
+                          tool.isPlaceholder
+                            ? navigate(
+                                `/admin/wellness-tool-editor?category=${encodeURIComponent(tool.category)}`
+                              )
+                            : navigate(`/admin/wellness-tool-editor?id=${tool.id}`)
                         }
                         className="text-blue-600 hover:text-blue-700"
+                        title={tool.isPlaceholder ? "Create tool for this category" : "Edit"}
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
@@ -695,7 +753,13 @@ export function WellnessToolsCMS() {
                       className="flex-1"
                       onClick={() => {
                         setViewModalTool(null);
-                        navigate(`/admin/wellness-tool-editor?id=${viewModalTool.id}`);
+                        if (viewModalTool.isPlaceholder) {
+                          navigate(
+                            `/admin/wellness-tool-editor?category=${encodeURIComponent(viewModalTool.category)}`
+                          );
+                        } else {
+                          navigate(`/admin/wellness-tool-editor?id=${viewModalTool.id}`);
+                        }
                       }}
                     >
                       <Edit className="w-4 h-4 mr-2" />

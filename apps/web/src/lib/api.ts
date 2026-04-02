@@ -6,9 +6,10 @@ const API_URL =
     ? 'http://localhost:3001/api'
     : 'https://meetezri-live-api.vercel.app/api');
 
-async function getHeaders() {
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
+async function getHeaders(accessToken?: string) {
+  const token =
+    accessToken ||
+    (await supabase.auth.getSession()).data.session?.access_token;
 
   return {
     'Content-Type': 'application/json',
@@ -41,8 +42,8 @@ async function handleBlobResponse(res: Response, errorMessage: string) {
 }
 
 export const api = {
-  async getMe() {
-    const headers = await getHeaders();
+  async getMe(accessToken?: string) {
+    const headers = await getHeaders(accessToken);
     const res = await fetch(`${API_URL}/users/me`, {
       method: 'GET',
       headers,
@@ -147,8 +148,8 @@ export const api = {
     return handleResponse(res, 'Failed to send email');
   },
 
-  async getSettings() {
-    const headers = await getHeaders();
+  async getSettings(accessToken?: string) {
+    const headers = await getHeaders(accessToken);
     const res = await fetch(`${API_URL}/system-settings`, {
       method: 'GET',
       headers,

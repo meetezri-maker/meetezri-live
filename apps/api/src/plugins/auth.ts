@@ -29,6 +29,91 @@ const APP_API_PREFIXES = [
   '/api/emergency-contacts',
 ];
 
+const ADMIN_ROLES = ['super_admin', 'org_admin', 'team_admin'] as const;
+const PRIVILEGED_API_PREFIXES = ['/api/admin', '/api/system-settings', '/api/billing/admin'];
+
+function normalizeAppRole(role?: string | null) {
+  if (!role) return undefined;
+
+  switch (role) {
+    case 'super':
+      return 'super_admin';
+    case 'org':
+      return 'org_admin';
+    case 'team':
+      return 'team_admin';
+    default:
+      return role;
+  }
+}
+
+function isAdminRole(role?: string | null) {
+  return !!role && ADMIN_ROLES.includes(role as (typeof ADMIN_ROLES)[number]);
+}
+
+function isPrivilegedApi(path: string) {
+  return PRIVILEGED_API_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+function inferAdminRoleFromAuthUser(authUser: {
+  is_super_admin?: boolean | null;
+  raw_app_meta_data?: any;
+  raw_user_meta_data?: any;
+} | null) {
+  if (!authUser) return undefined;
+  if (authUser.is_super_admin === true) return 'super_admin';
+
+  const metadataCandidates = [authUser.raw_app_meta_data, authUser.raw_user_meta_data];
+
+  for (const metadata of metadataCandidates) {
+    const candidate = normalizeAppRole(
+      metadata?.app_role ?? metadata?.admin_role ?? metadata?.role
+    );
+
+    if (isAdminRole(candidate)) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
+async function resolveAppRole(
+  userId: string,
+  profileRole: string | null | undefined,
+  usePrivilegedFallback: boolean
+) {
+  const normalizedProfileRole = normalizeAppRole(profileRole);
+
+  if (!usePrivilegedFallback || isAdminRole(normalizedProfileRole)) {
+    return normalizedProfileRole;
+  }
+
+  const authUser = await prisma.users.findUnique({
+    where: { id: userId },
+    select: {
+      is_super_admin: true,
+      raw_app_meta_data: true,
+      raw_user_meta_data: true,
+    },
+  });
+
+  const inferredAdminRole = inferAdminRoleFromAuthUser(authUser);
+
+  if (!inferredAdminRole) {
+    return normalizedProfileRole;
+  }
+
+  if (inferredAdminRole !== normalizedProfileRole) {
+    await prisma.profiles.updateMany({
+      where: { id: userId },
+      data: { role: inferredAdminRole },
+    });
+  }
+
+  return inferredAdminRole;
+}
+
 export default fp(async (fastify: FastifyInstance) => {
   fastify.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -66,13 +151,14 @@ export default fp(async (fastify: FastifyInstance) => {
         // Check cache first
         const cached = userRoleCache.get(user.sub);
         const now = Date.now();
+        const path = request.url.split('?')[0] || '';
+        const isPrivilegedRoute = isPrivilegedApi(path);
 
-        if (cached && (now - cached.timestamp < CACHE_TTL)) {
-          user.appRole = cached.role;
+        if (cached && !isPrivilegedRoute && (now - cached.timestamp < CACHE_TTL)) {
+          user.appRole = normalizeAppRole(cached.role);
           user.permissions = cached.permissions;
           user.onboarding_completed = cached.onboardingCompleted;
 
-          const path = request.url.split('?')[0] || '';
           const isOnboardingApi = path.startsWith('/api/users/onboarding');
           const isAppApi = APP_API_PREFIXES.some((p) => path.startsWith(p));
           const isBillingApi = path.startsWith('/api/billing');
@@ -156,7 +242,9 @@ export default fp(async (fastify: FastifyInstance) => {
           }
           
           if (profile) {
-            user.appRole = profile.role; // Use appRole to avoid conflict with Supabase role
+            const resolvedAppRole = await resolveAppRole(user.sub, profile.role, isPrivilegedRoute);
+
+            user.appRole = resolvedAppRole;
             user.permissions = profile.permissions;
 
             let signupTypeResolved: 'trial' | 'plan' | null = null;
@@ -207,7 +295,7 @@ export default fp(async (fastify: FastifyInstance) => {
                 (profile as any).timezone.trim().length > 0;
 
               const roleOk =
-                typeof profile.role === 'string' && profile.role.length > 0;
+                typeof resolvedAppRole === 'string' && resolvedAppRole.length > 0;
 
               // Trial: fullName + timezone + emergency contact + role.
               if (signupTypeResolved === 'trial') {
@@ -243,7 +331,7 @@ export default fp(async (fastify: FastifyInstance) => {
             
             // Update cache
             userRoleCache.set(user.sub, {
-              role: profile.role ?? 'user',
+              role: resolvedAppRole ?? 'user',
               permissions: profile.permissions,
               onboardingCompleted: onboardingCompletedResolved,
               signupType: signupTypeResolved,

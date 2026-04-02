@@ -13,6 +13,14 @@ jest.mock("../../lib/prisma", () => ({
   default: mockPrisma,
 }));
 
+const ensureStreakRiskReminder = jest.fn();
+
+jest.mock("../notifications/notifications.service", () => ({
+  notificationsService: {
+    ensureStreakRiskReminder,
+  },
+}));
+
 import {
   createJournalEntry,
   getJournalEntries,
@@ -38,6 +46,7 @@ describe("journal.service", () => {
   it("lists journal entries for a user", async () => {
     mockPrisma.journal_entries.findMany.mockResolvedValue([{ id }]);
     const result = await getJournalEntries(userId);
+    expect(ensureStreakRiskReminder).toHaveBeenCalledWith(userId, "journal");
     expect(mockPrisma.journal_entries.findMany).toHaveBeenCalledWith({
       where: { user_id: userId },
       orderBy: { created_at: "desc" },

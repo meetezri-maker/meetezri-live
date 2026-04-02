@@ -28,22 +28,43 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 const email = 'saifali87154@gmail.com';
 const password = 'Password123!';
 
+async function findAuthUserByEmail(targetEmail) {
+  let page = 1;
+  const perPage = 200;
+
+  while (true) {
+    const {
+      data,
+      error,
+    } = await supabaseAdmin.auth.admin.listUsers({
+      page,
+      perPage,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const users = data?.users || [];
+    const user = users.find((candidate) => candidate.email === targetEmail);
+
+    if (user) {
+      return user;
+    }
+
+    if (users.length < perPage) {
+      return null;
+    }
+
+    page += 1;
+  }
+}
+
 async function main() {
   try {
     console.log(`Ensuring admin user exists for ${email}...`);
 
-    // 1. Find or create Supabase auth user
-    const {
-      data: { users },
-      error: listError,
-    } = await supabaseAdmin.auth.admin.listUsers();
-
-    if (listError) {
-      console.error('Error listing Supabase users:', listError);
-      process.exit(1);
-    }
-
-    let user = users.find((u) => u.email === email);
+    let user = await findAuthUserByEmail(email);
 
     if (!user) {
       console.log('User not found in auth.users, creating...');
@@ -51,32 +72,50 @@ async function main() {
         email,
         password,
         email_confirm: true,
+        app_metadata: {
+          role: 'super_admin',
+          app_role: 'super_admin',
+        },
       });
 
       if (createError) {
+        if (createError.code === 'email_exists') {
+          user = await findAuthUserByEmail(email);
+        }
+      }
+
+      if (createError && !user) {
         console.error('Error creating Supabase user:', createError);
         process.exit(1);
       }
 
-      user = data.user;
-      console.log('Created Supabase user with id:', user.id);
+      if (!user) {
+        user = data.user;
+      }
+
+      console.log('Using Supabase user with id:', user.id);
     } else {
       console.log('Found existing Supabase user with id:', user.id);
-
-      // Optionally reset password to ensure it matches what the UI expects
-      const { error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
-        password,
-      });
-      if (passwordError) {
-        console.error('Error updating password:', passwordError);
-      } else {
-        console.log('Password updated for existing user.');
-      }
     }
 
     const userId = user.id;
 
-    // 2. Ensure a profile exists with super_admin role
+    const { error: updateAuthError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      password,
+      email_confirm: true,
+      app_metadata: {
+        ...(user.app_metadata || {}),
+        role: 'super_admin',
+        app_role: 'super_admin',
+      },
+    });
+
+    if (updateAuthError) {
+      console.error('Error updating auth user metadata/password:', updateAuthError);
+    } else {
+      console.log('Auth user password and admin metadata updated.');
+    }
+
     console.log('Upserting profile with super_admin role...');
     const profile = await prisma.profiles.upsert({
       where: { id: userId },

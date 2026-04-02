@@ -1,9 +1,24 @@
 import { z } from 'zod';
 
+/** Must match apps/web/src/lib/wellnessToolCategories.ts */
+export const WELLNESS_TOOL_CATEGORIES = [
+  'Anxiety Management',
+  'Stress Management',
+  'Meditation',
+  'Sleep Health',
+  'Exercise',
+  'Self-Care',
+  'Relaxation',
+  'Depression Support',
+  'Mindfulness',
+] as const;
+
+export const wellnessToolCategorySchema = z.enum(WELLNESS_TOOL_CATEGORIES);
+
 export const createWellnessToolSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
-  category: z.string(),
+  category: wellnessToolCategorySchema,
   duration_minutes: z.number().optional(),
   content: z.string().optional(),
   image_url: z.string().optional(),
@@ -16,8 +31,9 @@ export const createWellnessToolSchema = z.object({
 export const updateWellnessToolSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
-  category: z.string().optional(),
+  category: wellnessToolCategorySchema.optional(),
   duration_minutes: z.number().optional(),
+  /** Guided script JSON; stored in DB `content_url` (text). */
   content: z.string().optional(),
   image_url: z.string().optional(),
   is_premium: z.boolean().optional(),

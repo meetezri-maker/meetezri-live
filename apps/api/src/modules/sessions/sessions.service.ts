@@ -179,18 +179,16 @@ async function sendScheduledSessionEmails(userId: string, session: any) {
 
     const sessionTitle = session.title || 'Your Ezri session';
 
-    // Immediate confirmation email
-    const htmlConfirmation = `
-      <p>Hi there,</p>
-      <p>Your session <strong>${sessionTitle}</strong> has been scheduled for <strong>${formattedDateTime}</strong>.</p>
-      <p>If you did not make this change or need to reschedule, please log in to your MeetEzri account.</p>
-      <p>— The MeetEzri Team</p>
-    `;
+    const sessionScheduledEmail = emailService.buildSessionScheduledEmail({
+      sessionTitle,
+      formattedDateTime,
+    });
 
     await emailService.sendEmail(
       email,
-      'Your Ezri session is scheduled',
-      htmlConfirmation
+      sessionScheduledEmail.subject,
+      sessionScheduledEmail.html,
+      sessionScheduledEmail.text
     );
 
     // Best-effort reminder about 1 hour before the session starts
@@ -204,17 +202,16 @@ async function sendScheduledSessionEmails(userId: string, session: any) {
       if (delayMs > 0) {
         setTimeout(async () => {
           try {
-            const htmlReminder = `
-              <p>Hi there,</p>
-              <p>This is a reminder that your session <strong>${sessionTitle}</strong> is starting in about one hour, at <strong>${formattedDateTime}</strong>.</p>
-              <p>You can join your session from your MeetEzri dashboard.</p>
-              <p>— The MeetEzri Team</p>
-            `;
+            const sessionReminderEmail = emailService.buildSessionReminderEmail({
+              sessionTitle,
+              formattedDateTime,
+            });
 
             await emailService.sendEmail(
               email,
-              'Reminder: Your Ezri session is coming up',
-              htmlReminder
+              sessionReminderEmail.subject,
+              sessionReminderEmail.html,
+              sessionReminderEmail.text
             );
           } catch (err) {
             console.error('Failed to send scheduled session reminder email:', err);

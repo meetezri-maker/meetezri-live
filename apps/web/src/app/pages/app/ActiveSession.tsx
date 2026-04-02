@@ -23,7 +23,13 @@ import {
   Play,
   Loader2
 } from "lucide-react";
-import { useState, useEffect, useRef, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  type MutableRefObject,
+} from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/app/components/ui/button";
@@ -48,10 +54,8 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 // Use Vite base path so production deployments under sub-paths work.
-const AVATAR_MODEL_PATH = new URL(
-  "T1.glb",
-  import.meta.env.BASE_URL
-).toString();
+// NOTE: BASE_URL is usually relative (e.g. "/"), so don't pass it to `new URL()`.
+const AVATAR_MODEL_PATH = `${import.meta.env.BASE_URL}T1.glb`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Keyword lists — covers Ready Player Me, Blender ARKit, Mixamo, CC3/CC4,
@@ -175,7 +179,8 @@ function getSpeechOpennessAt(text: string, idx: number): number {
   }
 
   const normalized = (score + 1.5) / 4.5;
-  return THREE.MathUtils.clamp(normalized, 0.02, 1);
+  // Cap vowel score so the envelope can open clearly without pegging max all the time.
+  return THREE.MathUtils.clamp(normalized, 0.02, 0.92);
 }
 
 type MorphBinding = {
@@ -184,20 +189,133 @@ type MorphBinding = {
   name: string;
   initialInfluence: number;
 };
+function storeFaceBoneDefault(bone: THREE.Bone, map: Map<string, { x: number; y: number; z: number }>) {
+  if (!map.has(bone.uuid)) {
+    map.set(bone.uuid, {
+      x: bone.rotation.x,
+      y: bone.rotation.y,
+      z: bone.rotation.z,
+    });
+  }
+}
+
+function isJawBoneName(name: string): boolean {
+  const n = name.toLowerCase();
+  if (n.includes("jawline")) return false;
+  return n.includes("jaw");
+}
+
+function isChinBoneName(name: string): boolean {
+  const n = name.toLowerCase();
+  return n.includes("chin");
+}
+
+function isJawlineBoneName(name: string): boolean {
+  const n = name.toLowerCase();
+  return n.includes("jawline");
+}
+
+function isMouthInteriorBoneName(name: string): boolean {
+  const n = name.toLowerCase();
+  return n.includes("mouthinterior");
+}
+
+function isUnderChinBoneName(name: string): boolean {
+  const n = name.toLowerCase();
+  return n.includes("underchin");
+}
+
+/** Driven separately from the main mouth loop — subtle puff / smile sync. */
+function isCheekMorphName(name: string): boolean {
+  const lower = name.toLowerCase().trim();
+  if (/eye/.test(lower) && /squint/.test(lower) && !/cheek/.test(lower)) {
+    return false;
+  }
+  return (
+    lower.includes("cheek") ||
+    lower.includes("nasolabial") ||
+    lower.includes("puff") ||
+    lower.includes("buccinator") ||
+    (lower.includes("smile") && !lower.includes("eye")) ||
+    (lower.includes("squint") && lower.includes("cheek"))
+  );
+}
+
+function isCheekBoneName(name: string): boolean {
+  const n = name.toLowerCase();
+  return (
+    n.includes("cheek") ||
+    n.includes("zygomatic") ||
+    n.includes("nasolabial") ||
+    n.includes("buccinator") ||
+    (n.includes("smile") &&
+      (n.includes("facial") || /l_|_l|r_|_r|left|right/.test(n)))
+  );
+}
+
+/** T1 / MetaHuman: animate a small set of cheek movers; skip dense IPV helpers (noise + cancel). */
+function isPrimaryCheekBoneName(name: string): boolean {
+  const n = name.toLowerCase();
+  if (n.includes("12ipv")) return false;
+  if (n.includes("cheekinner")) return true;
+  if (n.includes("cheeklower") && !/cheeklower[0-9]/.test(n)) return true;
+  if (n.includes("cheeklower1") || n.includes("cheeklower2")) return true;
+  if (n.includes("nasolabialbulge")) return true;
+  if (n.includes("masseter")) return true;
+  return false;
+}
+
+/** Main jaw rotator — exclude jawline/bulge/recess so we do not double-open the whole face. */
+function isPrimaryJawBoneName(name: string): boolean {
+  const n = name.toLowerCase();
+  if (!n.includes("jaw")) return false;
+  if (n.includes("jawline") || n.includes("jawbulge") || n.includes("jawrecess")) return false;
+  if (n.includes("12ipv")) return false;
+  return true;
+}
+
+/** Center mouth/lip drivers (stronger deltas than peripheral chain bones). */
+function isCenterLipBoneName(name: string): boolean {
+  const n = name.toLowerCase();
+  if (n.includes("12ipv")) return false;
+  return (
+    n === "facial_c_mouthupper" ||
+    n === "facial_c_mouthlower" ||
+    n === "facial_c_lipupper" ||
+    n === "facial_c_liplower" ||
+    n === "facial_c_lowerliprotation"
+  );
+}
+
+function isCheekRelatedMorphKeyForLog(name: string): boolean {
+  const lower = name.toLowerCase();
+  return /cheek|smile|nasolabial|puff|squint/.test(lower);
+}
 
 function ThreeAvatar({
   isSpeaking,
   audioLevel,
+  /** Per-frame mouth driver (mic or TTS RMS). State props lag behind RAF; ref does not. */
+  mouthAudioLevelRef,
   speechPulse,
   speechText,
   speechCharIndex,
 }: {
   isSpeaking: boolean;
   audioLevel: number;
+  mouthAudioLevelRef: MutableRefObject<number>;
   speechPulse: number;
   speechText: string;
   speechCharIndex: number;
 }) {
+  const isSpeakingRef = useRef(isSpeaking);
+  const audioLevelRef = useRef(audioLevel);
+  useEffect(() => {
+    isSpeakingRef.current = isSpeaking;
+  }, [isSpeaking]);
+  useEffect(() => {
+    audioLevelRef.current = audioLevel;
+  }, [audioLevel]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Different morphs respond very differently. On many rigs a generic "mouth"
   // morph balloons the lower lip if overdriven; "jaw/open" is usually safer to boost.
@@ -220,8 +338,8 @@ function ThreeAvatar({
 
   const mouthBindingsRef = useRef<MorphBinding[]>([]);
   const blinkBindingsRef = useRef<MorphBinding[]>([]);
-  const jawBoneRef = useRef<THREE.Bone | null>(null);
-  const jawDefaultRotXRef = useRef<number | null>(null);
+  // const jawBoneRef = useRef<THREE.Bone | null>(null);
+  // const jawDefaultRotXRef = useRef<number | null>(null);
   const eyelidBonesRef = useRef<THREE.Bone[]>([]);
   const eyelidDefaultRotXRef = useRef<Map<string, number>>(new Map());
   const eyelidDefaultRotZRef = useRef<Map<string, number>>(new Map());
@@ -231,7 +349,20 @@ function ThreeAvatar({
   const lipBonesUpperRef = useRef<THREE.Bone[]>([]);
   const lipBonesLowerRef = useRef<THREE.Bone[]>([]);
   const lipDefaultRotXRef = useRef<Map<string, number>>(new Map());
+  const jawBonesRef = useRef<THREE.Bone[]>([]);
+  const chinBonesRef = useRef<THREE.Bone[]>([]);
+  const jawlineBonesRef = useRef<THREE.Bone[]>([]);
+  const mouthInteriorBonesRef = useRef<THREE.Bone[]>([]);
+  const underChinBonesRef = useRef<THREE.Bone[]>([]);
+  const cheekBindingsRef = useRef<MorphBinding[]>([]);
+  const cheekBonesRef = useRef<THREE.Bone[]>([]);
+  const lastMouthFrameTimeRef = useRef(performance.now());
+  /** Follows mouth envelope with a short delay (secondary motion for lips vs jaw). */
+  const lipDelayedRef = useRef(0);
 
+  const faceBoneDefaultsRef = useRef<
+    Map<string, { x: number; y: number; z: number }>
+  >(new Map());
   const mouthTargetRef = useRef(0);
   const mouthBaseRef = useRef(0);
   const mouthPulseRef = useRef(0);
@@ -282,15 +413,23 @@ function ThreeAvatar({
     // Reset refs
     mouthBindingsRef.current = [];
     blinkBindingsRef.current = [];
-    jawBoneRef.current = null;
-    jawDefaultRotXRef.current = null;
+    // jawBoneRef.current = null;
+    // jawDefaultRotXRef.current = null;
     eyelidBonesRef.current = [];
     lipBonesUpperRef.current = [];
     lipBonesLowerRef.current = [];
     lipDefaultRotXRef.current = new Map();
     mouthTargetRef.current = 0;
     mouthSmoothedRef.current = 0;
-
+    lipDelayedRef.current = 0;
+    jawBonesRef.current = [];
+    chinBonesRef.current = [];
+    jawlineBonesRef.current = [];
+    mouthInteriorBonesRef.current = [];
+    underChinBonesRef.current = [];
+    cheekBindingsRef.current = [];
+    cheekBonesRef.current = [];
+    faceBoneDefaultsRef.current = new Map();
     const loader = new GLTFLoader();
 
     loader.load(
@@ -298,7 +437,13 @@ function ThreeAvatar({
       (gltf) => {
         const model = gltf.scene;
         modelRef.current = model;
-
+        // const model = gltf.scene;
+        // modelRef.current = model;
+        
+        // 👇 ADD THIS (SAFE - DEBUG ONLY)
+        (window as any).avatarGltf = gltf;
+        (window as any).avatarModel = model;
+        (window as any).avatarScene = scene;
         console.group("[Avatar] Morph inventory");
 
         model.traverse((child: any) => {
@@ -317,6 +462,16 @@ function ThreeAvatar({
               const entries = Object.entries(dict) as [string, number][];
 
               console.log(`Mesh: "${child.name}" →`, entries.map(([n]) => n));
+
+              for (const name of Object.keys(dict)) {
+                if (isCheekRelatedMorphKeyForLog(name)) {
+                  console.log(
+                    "[Avatar] Morph key (cheek/smile/nasolabial/puff/squint):",
+                    child.name,
+                    name
+                  );
+                }
+              }
 
               // Mouth bindings
               const mouthCandidates = entries.filter(([name]) =>
@@ -345,20 +500,28 @@ function ThreeAvatar({
                   initialInfluence: influences[index] ?? 0,
                 });
               });
+
+              const cheekCandidates = entries.filter(([name]) =>
+                isCheekMorphName(name)
+              );
+              cheekCandidates.forEach(([name, index]) => {
+                cheekBindingsRef.current.push({
+                  mesh: child as THREE.Mesh,
+                  index,
+                  name,
+                  initialInfluence: influences[index] ?? 0,
+                });
+              });
             }
           }
 
           if ((child as any).isBone) {
+            const bone = child as THREE.Bone;
             const boneName = (child.name || "").toLowerCase();
-
-            if (/jaw|mouth|chin/.test(boneName)) {
-              jawBoneRef.current = child as THREE.Bone;
-              jawDefaultRotXRef.current = (child as THREE.Bone).rotation.x;
-              console.log("[Avatar] Jaw bone:", child.name);
-            }
-
+          
+            storeFaceBoneDefault(bone, faceBoneDefaultsRef.current);
+          
             if (/eyelid|upperlid|lowerlid|lid/.test(boneName)) {
-              const bone = child as THREE.Bone;
               eyelidDefaultRotXRef.current.set(bone.uuid, bone.rotation.x);
               eyelidDefaultRotYRef.current.set(bone.uuid, bone.rotation.y);
               eyelidDefaultRotZRef.current.set(bone.uuid, bone.rotation.z);
@@ -367,19 +530,47 @@ function ThreeAvatar({
               eyelidBonesRef.current.push(bone);
               console.log("[Avatar] Eyelid bone:", child.name);
             }
-
-            // Lip bones (bone rigs vary a lot; these patterns cover most exports)
+          
             if (/(upperlip|upper_lip|lipupper|lip_upper|up_lip|uplip)/.test(boneName)) {
-              const bone = child as THREE.Bone;
               lipDefaultRotXRef.current.set(bone.uuid, bone.rotation.x);
               lipBonesUpperRef.current.push(bone);
               console.log("[Avatar] Upper lip bone:", child.name);
             }
+          
             if (/(lowerlip|lower_lip|liplower|lip_lower|low_lip|lowlip)/.test(boneName)) {
-              const bone = child as THREE.Bone;
               lipDefaultRotXRef.current.set(bone.uuid, bone.rotation.x);
               lipBonesLowerRef.current.push(bone);
               console.log("[Avatar] Lower lip bone:", child.name);
+            }
+          
+            if (isJawBoneName(boneName)) {
+              jawBonesRef.current.push(bone);
+              console.log("[Avatar] Jaw bone:", child.name);
+            }
+          
+            if (isChinBoneName(boneName)) {
+              chinBonesRef.current.push(bone);
+              console.log("[Avatar] Chin bone:", child.name);
+            }
+          
+            if (isJawlineBoneName(boneName)) {
+              jawlineBonesRef.current.push(bone);
+              console.log("[Avatar] Jawline bone:", child.name);
+            }
+          
+            if (isMouthInteriorBoneName(boneName)) {
+              mouthInteriorBonesRef.current.push(bone);
+              console.log("[Avatar] Mouth interior bone:", child.name);
+            }
+          
+            if (isUnderChinBoneName(boneName)) {
+              underChinBonesRef.current.push(bone);
+              console.log("[Avatar] Under chin bone:", child.name);
+            }
+
+            if (isCheekBoneName(boneName)) {
+              cheekBonesRef.current.push(bone);
+              console.log("[Avatar] Cheek bone (L/R / zygomatic / nasolabial):", child.name);
             }
           }
         });
@@ -394,13 +585,26 @@ function ThreeAvatar({
           "| eyelid bones:",
           eyelidBonesRef.current.length
         );
+        console.log("[Avatar] jaw bones count:", jawBonesRef.current.length);
+        console.log("[Avatar] chin bones count:", chinBonesRef.current.length);
+        console.log("[Avatar] jawline bones count:", jawlineBonesRef.current.length);
+        console.log("[Avatar] mouth interior bones count:", mouthInteriorBonesRef.current.length);
+        console.log("[Avatar] under chin bones count:", underChinBonesRef.current.length);
+        console.log(
+          "[Avatar] Cheek morph detection — bound targets:",
+          cheekBindingsRef.current.map((b) => `${b.mesh.name}:${b.name}`)
+        );
+        console.log(
+          "[Avatar] Cheek bone usage — bones:",
+          cheekBonesRef.current.map((b) => b.name)
+        );
 
-        if (
-          mouthBindingsRef.current.length === 0 &&
-          jawBoneRef.current === null
-        ) {
-          console.warn("[Avatar] No mouth morphs or jaw bone found.");
-        }
+        // if (
+        //   mouthBindingsRef.current.length === 0 &&
+        //   jawBoneRef.current === null
+        // ) {
+        //   console.warn("[Avatar] No mouth morphs or jaw bone found.");
+        // }
 
         if (
           blinkBindingsRef.current.length === 0 &&
@@ -478,19 +682,66 @@ function ThreeAvatar({
 
       if (!scene || !camera || !renderer) return;
 
+      const now = performance.now();
+      const dt = Math.min(
+        0.05,
+        Math.max(0.001, (now - lastMouthFrameTimeRef.current) / 1000)
+      );
+      lastMouthFrameTimeRef.current = now;
+
+      const speaking = isSpeakingRef.current;
+      const audioLevelNow = mouthAudioLevelRef.current;
+
       // Word-boundary mouth envelope: fast open + reliable close.
       mouthPulseRef.current *= 0.9;
       mouthBaseRef.current *= 0.92;
       if (mouthPulseRef.current < 0.001) mouthPulseRef.current = 0;
       if (mouthBaseRef.current < 0.001) mouthBaseRef.current = 0;
-      mouthTargetRef.current = mouthBaseRef.current + mouthPulseRef.current;
+      let envelope = mouthBaseRef.current + mouthPulseRef.current;
+      if (speaking) {
+        envelope += (Math.random() - 0.5) * 0.01;
+      }
+      mouthTargetRef.current = envelope;
 
-      // Smooth mouth using a stable lerp factor in [0,1]
-      const target = THREE.MathUtils.clamp(mouthTargetRef.current, 0, 1.5);
-      const lerpFactor = target > mouthSmoothedRef.current ? 0.25 : 0.35;
-      mouthSmoothedRef.current +=
-        (target - mouthSmoothedRef.current) * lerpFactor;
-      const mouth = THREE.MathUtils.clamp(mouthSmoothedRef.current, 0, 1.5);
+      const target = THREE.MathUtils.clamp(mouthTargetRef.current, 0, 1.08);
+      const openLambda = 20;
+      const closeLambda = 11;
+      const lambda =
+        target > mouthSmoothedRef.current ? openLambda : closeLambda;
+      mouthSmoothedRef.current = THREE.MathUtils.damp(
+        mouthSmoothedRef.current,
+        target,
+        lambda,
+        dt
+      );
+
+      const mouthViseme = THREE.MathUtils.clamp(mouthSmoothedRef.current, 0, 1.28);
+      // Tuned for both mic (~20–120) and boosted TTS RMS (~25–200): same divisor family.
+      const audioNorm = speaking
+        ? THREE.MathUtils.clamp(audioLevelNow / 360, 0, 1)
+        : 0;
+      // Viseme timing + live level: audio must lift the jaw when text envelope lags (common in conversation).
+      const mouth = Math.max(mouthViseme, speaking ? audioNorm * 0.88 : 0);
+      const jawOpen = THREE.MathUtils.clamp(
+        mouth * (0.9 + audioNorm * 0.34) + (speaking ? audioNorm * 0.055 : 0),
+        0,
+        1.22
+      );
+
+      lipDelayedRef.current = THREE.MathUtils.damp(
+        lipDelayedRef.current,
+        Math.max(mouthSmoothedRef.current, speaking ? audioNorm * 0.82 : 0),
+        20,
+        dt
+      );
+      const lipFromMic = speaking
+        ? THREE.MathUtils.clamp(audioLevelNow / 360, 0, 1)
+        : 0;
+      const lipFollow = THREE.MathUtils.clamp(
+        lipDelayedRef.current * 0.58 + lipFromMic * 0.58,
+        0,
+        1.22
+      );
 
       // Apply mouth morphs — conservative ranges to avoid extreme deformation.
       // Also avoid any targets that look like full head/neck controls.
@@ -505,6 +756,23 @@ function ThreeAvatar({
             return;
           }
 
+          if (isCheekMorphName(name)) {
+            return;
+          }
+
+          const isUpperLipMorph =
+            (lower.includes("upper") &&
+              (lower.includes("lip") || lower.includes("lips"))) ||
+            lower.includes("upperlip") ||
+            lower.includes("lip_upper") ||
+            lower.includes("uplip");
+          const isLowerLipMorph =
+            (lower.includes("lower") &&
+              (lower.includes("lip") || lower.includes("lips"))) ||
+            lower.includes("lowerlip") ||
+            lower.includes("lip_lower") ||
+            lower.includes("lowlip");
+
           let strength = mouth;
           if (
             lower.includes("jaw") ||
@@ -513,18 +781,30 @@ function ThreeAvatar({
             lower.includes("teeth") ||
             lower.includes("tooth")
           ) {
-            strength = mouth * 1.0;
+            if (isUpperLipMorph) {
+              strength = jawOpen * (1 - lipFollow * 0.42);
+            } else if (isLowerLipMorph) {
+              strength = lipFollow;
+            } else if (
+              lower.includes("teeth") ||
+              lower.includes("tooth") ||
+              lower.includes("jaw") ||
+              lower.includes("open")
+            ) {
+              strength = jawOpen;
+            } else {
+              strength = jawOpen * 0.9;
+            }
           } else if (lower.includes("aa") || lower.includes("ah") || lower.includes("oh")) {
-            strength = mouth * 0.9;
+            strength = jawOpen * 0.88;
           } else if (lower.includes("ee") || lower.includes("ih")) {
-            strength = mouth * 0.7;
+            strength = jawOpen * 0.65;
           } else if (lower.includes("uh")) {
-            strength = mouth * 0.8;
+            strength = jawOpen * 0.75;
           } else {
-            strength = mouth * 0.8;
+            strength = mouth * 0.78;
           }
 
-          // Non-linear shaping helps avoid "first boundary ballooning" on some rigs.
           const shaped = Math.pow(THREE.MathUtils.clamp(strength, 0, 1.5), 0.72);
 
           const isJawLike =
@@ -547,7 +827,7 @@ function ThreeAvatar({
           const isOpenTarget = isJawLike || isTeethLike;
           const gain = isOpenTarget
             ? isTeethLike
-              ? JAW_GAIN * 1.15
+              ? JAW_GAIN * 1.12
               : JAW_GAIN
             : isGenericMouth
             ? MOUTH_GAIN
@@ -556,7 +836,7 @@ function ThreeAvatar({
             : OTHER_MOUTH_GAIN;
           const max = isOpenTarget
             ? isTeethLike
-              ? JAW_MAX * 1.55
+              ? JAW_MAX * 1.42
               : JAW_MAX
             : isGenericMouth
             ? MOUTH_MAX
@@ -568,38 +848,114 @@ function ThreeAvatar({
         });
       }
 
-      // Bone-driven mouth (preferred for bone-rigged avatars)
-      // Shape & cap so jaw doesn't over-open.
-      const mouthForBones = Math.pow(
-        THREE.MathUtils.clamp(mouthSmoothedRef.current, 0, 1),
-        0.85
+      const ampNorm = THREE.MathUtils.clamp(audioLevelNow / 420, 0, 1);
+      const cheekDriver = THREE.MathUtils.lerp(
+        0.08,
+        0.38,
+        THREE.MathUtils.clamp(
+          Math.pow(THREE.MathUtils.clamp(jawOpen, 0, 1), 1.05) * 0.55 +
+            ampNorm * 0.45,
+          0,
+          1
+        )
       );
 
-      if (jawBoneRef.current) {
-        const jaw = jawBoneRef.current;
-        const defaultX = jawDefaultRotXRef.current ?? jaw.rotation.x;
-        jaw.rotation.x = defaultX + mouthForBones * 0.42;
+      if (cheekBindingsRef.current.length > 0) {
+        cheekBindingsRef.current.forEach(
+          ({ mesh, index, name, initialInfluence }) => {
+            const influences = mesh.morphTargetInfluences;
+            if (!influences || index >= influences.length) return;
+            const lower = name.toLowerCase();
+            let k = 0.85;
+            if (lower.includes("puff") || lower.includes("cheek")) k = 1;
+            if (lower.includes("nasolabial")) k = 0.72;
+            if (lower.includes("smile")) k = 0.78;
+            influences[index] = THREE.MathUtils.clamp(
+              initialInfluence + cheekDriver * k * 0.95,
+              0,
+              0.42
+            );
+          }
+        );
       }
 
-      if (lipBonesUpperRef.current.length > 0) {
-        lipBonesUpperRef.current.forEach((bone) => {
-          const defaultX = lipDefaultRotXRef.current.get(bone.uuid) ?? bone.rotation.x;
-          bone.rotation.x = defaultX - mouthForBones * 0.09;
-        });
-      }
+      cheekBonesRef.current.forEach((bone) => {
+        if (!isPrimaryCheekBoneName(bone.name)) return;
+        const d = faceBoneDefaultsRef.current.get(bone.uuid);
+        if (!d) return;
+        const c = cheekDriver;
+        const bn = (bone.name || "").toLowerCase();
+        const side = /r_|_r|right|\.r\b/.test(bn)
+          ? -1
+          : /l_|_l|left|\.l\b/.test(bn)
+            ? 1
+            : 0;
+        const yaw = side !== 0 ? side * c * 0.14 : c * 0.04;
+        const pitch = c * 0.12;
+        const roll = side !== 0 ? side * c * 0.07 : 0;
+        bone.rotation.y = d.y + yaw;
+        bone.rotation.x = d.x + pitch;
+        bone.rotation.z = d.z + roll;
+      });
 
-      if (lipBonesLowerRef.current.length > 0) {
-        lipBonesLowerRef.current.forEach((bone) => {
-          const defaultX = lipDefaultRotXRef.current.get(bone.uuid) ?? bone.rotation.x;
-          bone.rotation.x = defaultX + mouthForBones * 0.12;
-        });
-      }
+      // Bone-driven mouth (T1.glb: no morphs — bones only)
+      const mouthForJaw = Math.pow(
+        THREE.MathUtils.clamp(jawOpen, 0, 1),
+        1.04
+      );
+      const mouthForLips = Math.pow(
+        THREE.MathUtils.clamp(lipFollow, 0, 1),
+        0.93
+      );
+
+      const applyFaceBoneX = (bone: THREE.Bone, delta: number) => {
+        const d = faceBoneDefaultsRef.current.get(bone.uuid);
+        if (!d) return;
+        bone.rotation.x = d.x + delta;
+      };
+
+      jawBonesRef.current.forEach((bone) => {
+        const n = bone.name || "";
+        const primary = isPrimaryJawBoneName(n);
+        const mult = primary ? 0.225 : 0.052;
+        applyFaceBoneX(bone, mouthForJaw * mult);
+      });
+
+      lipBonesUpperRef.current.forEach((bone) => {
+        const center = isCenterLipBoneName(bone.name);
+        const mult = center ? 0.115 : 0.038;
+        applyFaceBoneX(bone, -mouthForLips * mult);
+      });
+
+      lipBonesLowerRef.current.forEach((bone) => {
+        const center = isCenterLipBoneName(bone.name);
+        const mult = center ? 0.145 : 0.046;
+        applyFaceBoneX(bone, mouthForLips * mult);
+      });
+
+      chinBonesRef.current.forEach((bone) => {
+        const n = (bone.name || "").toLowerCase();
+        const main = n === "facial_c_chin" || n.includes("facial_c_chin1");
+        applyFaceBoneX(bone, mouthForJaw * (main ? 0.07 : 0.028));
+      });
+
+      jawlineBonesRef.current.forEach((bone) => {
+        applyFaceBoneX(bone, mouthForJaw * 0.028);
+      });
+
+      mouthInteriorBonesRef.current.forEach((bone) => {
+        applyFaceBoneX(bone, mouthForJaw * 0.022);
+      });
+
+      underChinBonesRef.current.forEach((bone) => {
+        applyFaceBoneX(bone, mouthForJaw * 0.022);
+      });
 
       // Slight scale pulse while speaking
       if (model) {
-        const speakingScale = isSpeaking ? 1.01 : 1;
-        const audioPulse = isSpeaking
-          ? 1 + Math.min(audioLevel / 1200, 0.006)
+        const speakingScale = speaking ? 1.01 : 1;
+        const audioPulse = speaking
+          ? 1 + Math.min(audioLevelNow / 1200, 0.006)
           : 1;
         model.scale.setScalar(baseScaleRef.current * speakingScale * audioPulse);
       }
@@ -797,15 +1153,15 @@ function ThreeAvatar({
       return;
     }
 
-    // Boundary-driven talk cycle: opens on syllable, then naturally closes.
+    // Boundary-driven talk cycle: balance visible motion vs. “stuck wide open”.
     const openness = getSpeechOpennessAt(speechText, speechCharIndex);
     mouthBaseRef.current = Math.max(
       mouthBaseRef.current,
-      openness * 0.14 + 0.045
+      openness * 0.095 + 0.028
     );
     mouthPulseRef.current = Math.max(
       mouthPulseRef.current,
-      openness * 1.18 + 0.34
+      openness * 0.72 + 0.1
     );
     lastBoundaryAtRef.current = performance.now();
   }, [speechPulse, isSpeaking]);
@@ -836,9 +1192,9 @@ function ThreeAvatar({
 
       // Boundary unsupported: tiny fallback so avatar is not frozen.
       const fallback =
-        Math.max(0, Math.sin(elapsed * 7.2)) * 0.08 +
-        Math.max(0, Math.sin(elapsed * 11.9 + 0.5)) * 0.04 +
-        THREE.MathUtils.clamp(audioLevel / 260, 0, 0.04);
+        Math.max(0, Math.sin(elapsed * 7.2)) * 0.065 +
+        Math.max(0, Math.sin(elapsed * 11.9 + 0.5)) * 0.038 +
+        THREE.MathUtils.clamp(audioLevel / 300, 0, 0.038);
       mouthBaseRef.current = Math.max(mouthBaseRef.current, fallback);
       rafId = requestAnimationFrame(tick);
     };
@@ -928,6 +1284,8 @@ export function ActiveSession() {
   const isSessionPausedRef = useRef(false);
   const scriptStepRef = useRef(0);
   const isEzriSpeakingRef = useRef(false);
+  /** Single source for ThreeAvatar RMS: updated every RAF (TTS tap or mic), never React state. */
+  const mouthAudioLevelRef = useRef(0);
   const transcriptRef = useRef<
     { role: string; content: string; timestamp: number }[]
   >([]);
@@ -957,8 +1315,22 @@ export function ActiveSession() {
   const [speechPulse, setSpeechPulse] = useState(0);
   const [speechText, setSpeechText] = useState("");
   const [speechCharIndex, setSpeechCharIndex] = useState(0);
+  /** RMS-ish level from Ezri TTS `<audio>` (mic is quiet while she speaks — must not drive lip sync). */
+  const [ezriPlaybackLevel, setEzriPlaybackLevel] = useState(0);
+  const playbackAudioContextRef = useRef<AudioContext | null>(null);
+  const ttsAnalyserRafRef = useRef<number | null>(null);
+  const ezriPlaybackSmoothRef = useRef(0);
+  const ttsMouthTapOkRef = useRef(false);
 
   const stopAudioAndSpeechDriver = () => {
+    if (ttsAnalyserRafRef.current) {
+      cancelAnimationFrame(ttsAnalyserRafRef.current);
+      ttsAnalyserRafRef.current = null;
+    }
+    ezriPlaybackSmoothRef.current = 0;
+    ttsMouthTapOkRef.current = false;
+    mouthAudioLevelRef.current = 0;
+    setEzriPlaybackLevel(0);
     if (speechDriverIntervalRef.current) {
       window.clearInterval(speechDriverIntervalRef.current);
       speechDriverIntervalRef.current = null;
@@ -1005,10 +1377,23 @@ export function ActiveSession() {
       const progress = THREE.MathUtils.clamp(elapsed / effectiveDurationMs, 0, 1);
       const idx = Math.min(text.length - 1, Math.max(0, Math.floor(progress * text.length)));
       setSpeechCharIndex(idx);
+      if (!ttsMouthTapOkRef.current) {
+        const o = getSpeechOpennessAt(text, idx);
+        mouthAudioLevelRef.current = 26 + o * 118;
+      }
       if (idx !== lastIdx) {
         const ch = text[idx]?.toLowerCase?.() ?? "";
-        const shouldPulse = /[aeiou]/.test(ch) || ch === " " || ch === "," || ch === "." || ch === "!" || ch === "?";
-        if (shouldPulse && performance.now() - lastPulseAt > 120) {
+        const vowelOrBreak =
+          /[aeiou]/.test(ch) ||
+          ch === " " ||
+          ch === "," ||
+          ch === "." ||
+          ch === "!" ||
+          ch === "?";
+        const plosive = /[tdkgpb]/.test(ch);
+        const shouldPulse = vowelOrBreak || plosive;
+        const minGap = plosive && !vowelOrBreak ? 95 : 72;
+        if (shouldPulse && performance.now() - lastPulseAt > minGap) {
           setSpeechPulse((v) => v + 1);
           lastPulseAt = performance.now();
         }
@@ -1073,6 +1458,52 @@ export function ActiveSession() {
     audioRef.current = audio;
     audio.preload = "auto";
     audio.src = url;
+
+    // Drive jaw/lips from Ezri’s **amplitude** (RMS). Raw FFT averages are too low for speech vs mic.
+    try {
+      if (ttsAnalyserRafRef.current) {
+        cancelAnimationFrame(ttsAnalyserRafRef.current);
+        ttsAnalyserRafRef.current = null;
+      }
+      ezriPlaybackSmoothRef.current = 0;
+      let ctx = playbackAudioContextRef.current;
+      if (!ctx || ctx.state === "closed") {
+        ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        playbackAudioContextRef.current = ctx;
+      }
+      if (ctx.state === "suspended") void ctx.resume();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.45;
+      const source = ctx.createMediaElementSource(audio);
+      source.connect(analyser);
+      analyser.connect(ctx.destination);
+      const bufferLength = analyser.fftSize;
+      const dataArray = new Uint8Array(bufferLength);
+      const attachSeq = seq;
+      const tick = () => {
+        if (attachSeq !== audioPlaySeqRef.current) return;
+        analyser.getByteTimeDomainData(dataArray);
+        let sumSq = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          const x = (dataArray[i] - 128) / 128;
+          sumSq += x * x;
+        }
+        const rms = Math.sqrt(sumSq / bufferLength);
+        // Map to a similar scale as the mic bar (typical 20–120); TTS RMS often 0.02–0.2.
+        const instant = Math.min(240, 22 + rms * 980);
+        ezriPlaybackSmoothRef.current +=
+          (instant - ezriPlaybackSmoothRef.current) * 0.5;
+        mouthAudioLevelRef.current = ezriPlaybackSmoothRef.current;
+        setEzriPlaybackLevel(ezriPlaybackSmoothRef.current);
+        ttsAnalyserRafRef.current = requestAnimationFrame(tick);
+      };
+      ttsAnalyserRafRef.current = requestAnimationFrame(tick);
+      ttsMouthTapOkRef.current = true;
+    } catch (e) {
+      ttsMouthTapOkRef.current = false;
+      console.warn("[Avatar] TTS playback analyser failed; mouth uses text timing only.", e);
+    }
 
     audio.onloadedmetadata = () => {
       if (seq !== audioPlaySeqRef.current) return;
@@ -1228,7 +1659,11 @@ export function ActiveSession() {
         analyser.getByteFrequencyData(dataArray);
         let sum = 0;
         for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
-        setAudioLevel(sum / bufferLength);
+        const level = sum / bufferLength;
+        setAudioLevel(level);
+        if (!isEzriSpeakingRef.current) {
+          mouthAudioLevelRef.current = level;
+        }
         animationFrameId = requestAnimationFrame(updateAudioLevel);
       };
 
@@ -2148,6 +2583,7 @@ export function ActiveSession() {
               <ThreeAvatar
                 isSpeaking={isEzriSpeaking}
                 audioLevel={audioLevel}
+                mouthAudioLevelRef={mouthAudioLevelRef}
                 speechPulse={speechPulse}
                 speechText={speechText}
                 speechCharIndex={speechCharIndex}

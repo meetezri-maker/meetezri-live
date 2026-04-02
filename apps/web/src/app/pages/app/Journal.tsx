@@ -679,7 +679,7 @@ export function Journal() {
                 <Button
                   onClick={() => setShowNewEntry(true)}
                   variant="outline"
-                  className="bg-white text-primary hover:bg-white/90"
+                  className="bg-white text-primary "
                   size="sm"
                 >
                   Write About This

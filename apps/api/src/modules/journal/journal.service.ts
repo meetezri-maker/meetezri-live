@@ -1,5 +1,6 @@
 import prisma from '../../lib/prisma';
 import { CreateJournalInput, UpdateJournalInput } from './journal.schema';
+import { notificationsService } from '../notifications/notifications.service';
 
 export async function createJournalEntry(userId: string, data: CreateJournalInput) {
   return prisma.journal_entries.create({
@@ -11,6 +12,7 @@ export async function createJournalEntry(userId: string, data: CreateJournalInpu
 }
 
 export async function getJournalEntries(userId: string) {
+  await notificationsService.ensureStreakRiskReminder(userId, 'journal');
   return prisma.journal_entries.findMany({
     where: {
       user_id: userId,

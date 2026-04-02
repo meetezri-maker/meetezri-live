@@ -20,7 +20,9 @@ function clearUserWellnessCaches(userId: string) {
 }
 
 export async function createWellnessTool(data: CreateWellnessToolInput & { created_by?: string }) {
-  const { created_by, image_url, content, ...rest } = data;
+  const { created_by, image_url, content } = data;
+  /** Guided JSON lives in `content_url` (text column) when no separate asset URL. */
+  const storedContent = image_url ?? content ?? null;
 
   const created = await prisma.wellness_tools.create({
     data: {
@@ -32,7 +34,7 @@ export async function createWellnessTool(data: CreateWellnessToolInput & { creat
       is_premium: data.is_premium,
       status: data.status,
       icon: data.icon,
-      content_url: image_url,
+      content_url: storedContent,
       ...(created_by ? {
         profiles: {
           connect: { id: created_by },
@@ -181,12 +183,33 @@ export async function getWellnessToolById(userId: string, id: string) {
 }
 
 export async function updateWellnessTool(id: string, data: UpdateWellnessToolInput) {
+  const patch: {
+    title?: string;
+    description?: string | null;
+    category?: string;
+    duration_minutes?: number | null;
+    difficulty?: string | null;
+    is_premium?: boolean | null;
+    status?: string | null;
+    icon?: string | null;
+    content_url?: string | null;
+    updated_at: Date;
+  } = { updated_at: new Date() };
+
+  if (data.title !== undefined) patch.title = data.title;
+  if (data.description !== undefined) patch.description = data.description;
+  if (data.category !== undefined) patch.category = data.category;
+  if (data.duration_minutes !== undefined) patch.duration_minutes = data.duration_minutes;
+  if (data.difficulty !== undefined) patch.difficulty = data.difficulty;
+  if (data.is_premium !== undefined) patch.is_premium = data.is_premium;
+  if (data.status !== undefined) patch.status = data.status;
+  if (data.icon !== undefined) patch.icon = data.icon;
+  if (data.content !== undefined) patch.content_url = data.content;
+  else if (data.image_url !== undefined) patch.content_url = data.image_url;
+
   const updated = await prisma.wellness_tools.update({
     where: { id },
-    data: {
-      ...data,
-      updated_at: new Date(),
-    },
+    data: patch,
   });
   clearWellnessToolCaches();
   return updated;
@@ -297,12 +320,16 @@ export async function getUserWellnessProgress(userId: string) {
     GROUP BY wp.tool_id, wt.title
   `;
 
-  const result = progress.map(p => ({
-    toolId: p.tool_id,
-    toolTitle: p.toolTitle,
-    sessionsCompleted: p.sessionsCompleted,
-    totalMinutes: Math.round((p.totalSeconds || 0) / 60),
-  }));
+  const result = progress.map(p => {
+    const totalSeconds = Number(p.totalSeconds) || 0;
+    return {
+      toolId: p.tool_id,
+      toolTitle: p.toolTitle,
+      sessionsCompleted: p.sessionsCompleted,
+      totalSeconds,
+      totalMinutes: Math.round(totalSeconds / 60),
+    };
+  });
 
   progressCache.set(userId, { data: result, timestamp: Date.now() });
   return result;

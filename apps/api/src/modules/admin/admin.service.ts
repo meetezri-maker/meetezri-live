@@ -4,6 +4,7 @@ import { Prisma, $Enums } from '@prisma/client';
 import { DashboardStats } from './admin.schema';
 import { endSession } from '../sessions/sessions.service';
 import { notificationsService } from '../notifications/notifications.service';
+import { emailService } from '../email/email.service';
 
 // Simple in-memory cache for dashboard stats
 const STATS_CACHE_TTL = 60 * 1000; // 60 seconds
@@ -887,6 +888,20 @@ export async function getEmailTemplates() {
     return emailTemplatesCache.data;
   }
 
+  const existingTemplates = await prisma.email_templates.findMany({
+    orderBy: { name: 'asc' }
+  });
+
+  if (existingTemplates.length === 0) {
+    const defaultTemplates = emailService.getDefaultTemplateRecords();
+    if (defaultTemplates.length > 0) {
+      await prisma.email_templates.createMany({
+        data: defaultTemplates,
+        skipDuplicates: true,
+      });
+    }
+  }
+
   const result = await prisma.email_templates.findMany({
     orderBy: { name: 'asc' }
   });
@@ -896,18 +911,24 @@ export async function getEmailTemplates() {
 }
 
 export async function createEmailTemplate(data: any) {
-  return prisma.email_templates.create({ data });
+  const result = await prisma.email_templates.create({ data });
+  emailTemplatesCache = null;
+  return result;
 }
 
 export async function updateEmailTemplate(id: string, data: any) {
-  return prisma.email_templates.update({
+  const result = await prisma.email_templates.update({
     where: { id },
     data
   });
+  emailTemplatesCache = null;
+  return result;
 }
 
 export async function deleteEmailTemplate(id: string) {
-  return prisma.email_templates.delete({ where: { id } });
+  const result = await prisma.email_templates.delete({ where: { id } });
+  emailTemplatesCache = null;
+  return result;
 }
 
 // 4. Push Campaigns

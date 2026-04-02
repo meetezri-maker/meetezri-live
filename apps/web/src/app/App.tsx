@@ -138,6 +138,8 @@ import { AdminLogin } from '@/app/pages/admin/AdminLogin';
 import { AdminCredentials } from '@/app/pages/admin/AdminCredentials';
 import { TwoFactorAuth } from '@/app/pages/admin/TwoFactorAuth';
 import { MoodHistory } from './pages/app/MoodHistory';
+import { Journal } from './pages/app/Journal';
+import { WellnessTools } from './pages/app/WellnessTools';
 
 function NetworkWatcher() {
   const navigate = useNavigate();
@@ -304,6 +306,8 @@ export default function App() {
             <Route path="/app/dashboard" element={<Dashboard />} />
             <Route path="/app/mood-checkin" element={<MoodCheckIn />} />
             <Route path="/app/mood-history" element={<MoodHistory />} />
+            <Route path="/app/journal" element={<Journal />} />
+            <Route path="/app/wellness-tools" element={<WellnessTools />} />
             <Route path="/app/session-lobby" element={<SessionLobby />} />
             <Route path="/app/active-session" element={<ActiveSession />} />
             <Route path="/app/user-profile" element={<UserProfile />} />

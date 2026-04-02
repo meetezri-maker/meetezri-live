@@ -208,23 +208,17 @@ export async function signupHandler(
 
     if (!verificationLink) throw new Error('Failed to generate verification link');
 
-    // 3. Send custom email with target="_blank"
+    const welcomeVerificationEmail = emailService.buildWelcomeVerificationEmail({
+      firstName,
+      verificationLink,
+      audience: signupType,
+    });
+
     await emailService.sendEmail(
       email,
-      'Confirm your email - MeetEzri',
-      `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Welcome to MeetEzri!</h2>
-        <p>Hi ${firstName},</p>
-        <p>Please confirm your email address to get started.</p>
-        <p>Click the button below to verify your account:</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${verificationLink}" target="_blank" style="background-color: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Confirm Email</a>
-        </div>
-        <p>If you didn't sign up for MeetEzri, you can ignore this email.</p>
-      </div>
-      `,
-      `Confirm your email by visiting: ${verificationLink}`
+      welcomeVerificationEmail.subject,
+      welcomeVerificationEmail.html,
+      welcomeVerificationEmail.text
     );
 
     return reply.code(201).send({
@@ -314,22 +308,16 @@ export async function resendVerificationHandler(
     const verificationLink = linkData.properties?.action_link;
     if (!verificationLink) throw new Error('Failed to generate verification link');
 
+    const verificationReminderEmail = emailService.buildVerificationReminderEmail({
+      verificationLink,
+      audience: signupTypeResolved === 'trial' ? 'trial' : 'plan',
+    });
+
     await emailService.sendEmail(
       email,
-      'Verify your email - MeetEzri',
-      `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Verify your email</h2>
-        <p>Hi,</p>
-        <p>Please verify your email address to secure your MeetEzri free trial account.</p>
-        <p>Click the button below to verify:</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${verificationLink}" target="_blank" style="background-color: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Verify my email</a>
-        </div>
-        <p>If you didn't sign up for MeetEzri, you can ignore this email.</p>
-      </div>
-      `,
-      `Verify your email by visiting: ${verificationLink}`
+      verificationReminderEmail.subject,
+      verificationReminderEmail.html,
+      verificationReminderEmail.text
     );
 
     return reply.code(200).send({ success: true, message: 'Verification email sent' });

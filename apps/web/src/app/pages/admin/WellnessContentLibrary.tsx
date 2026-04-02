@@ -29,6 +29,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence } from "motion/react";
+import { WELLNESS_TOOL_CATEGORIES } from "../../../lib/wellnessToolCategories";
 
 interface ContentItem {
   id: string;
@@ -81,7 +82,7 @@ export function WellnessContentLibrary() {
       id: "2",
       title: "Quick Desk Stretch Routine",
       type: "activity",
-      category: "Physical Wellness",
+      category: "Exercise",
       description: "5-minute stretches to do at your desk",
       content: "Activity instructions...",
       tags: ["stretching", "desk work", "quick"],
@@ -97,7 +98,7 @@ export function WellnessContentLibrary() {
       id: "3",
       title: "Deep Breathing Benefits",
       type: "tip",
-      category: "Breathing",
+      category: "Relaxation",
       description: "Why deep breathing is essential for stress management",
       content: "Tip content...",
       tags: ["breathing", "stress", "quick tip"],
@@ -130,7 +131,7 @@ export function WellnessContentLibrary() {
       id: "5",
       title: "Sleep Hygiene Checklist",
       type: "article",
-      category: "Sleep",
+      category: "Sleep Health",
       description: "Complete guide to better sleep habits",
       content: "Article content...",
       tags: ["sleep", "hygiene", "checklist"],
@@ -178,7 +179,7 @@ export function WellnessContentLibrary() {
       id: "8",
       title: "Anxiety Relief Techniques",
       type: "article",
-      category: "Anxiety Relief",
+      category: "Anxiety Management",
       description: "Evidence-based methods to calm anxiety",
       content: "Article content...",
       tags: ["anxiety", "relief", "techniques"],
@@ -394,12 +395,11 @@ export function WellnessContentLibrary() {
                 className="px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
                 <option value="all">All Categories</option>
-                <option value="Mental Wellness">Mental Wellness</option>
-                <option value="Physical Wellness">Physical Wellness</option>
-                <option value="Sleep">Sleep</option>
-                <option value="Meditation">Meditation</option>
-                <option value="Mindfulness">Mindfulness</option>
-                <option value="Stress Management">Stress Management</option>
+                {WELLNESS_TOOL_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
               </select>
             </div>
           </Card>
@@ -761,11 +761,16 @@ export function WellnessContentLibrary() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                      <input
-                        type="text"
-                        defaultValue={editModalContent.category}
+                      <select
                         className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      />
+                        defaultValue={editModalContent.category}
+                      >
+                        {WELLNESS_TOOL_CATEGORIES.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 

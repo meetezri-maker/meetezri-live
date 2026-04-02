@@ -22,21 +22,78 @@ import {
   Zap,
   Target,
   CheckCircle2,
+  Music,
+  Smile,
+  Activity,
+  Leaf,
+  HeartPulse,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { api } from "../../../lib/api";
+import {
+  WELLNESS_TOOL_CATEGORIES,
+  isWellnessToolCategory,
+} from "../../../lib/wellnessToolCategories";
+
+function parseGuidedPayloadFromContentUrl(
+  raw: string | null | undefined
+): Partial<{
+  scriptSteps: { id: string; duration: number; instruction: string }[];
+  tags: string[];
+  enabledForGuidedMode: boolean;
+  audioEnabled: boolean;
+  visualsEnabled: boolean;
+}> | null {
+  if (!raw || !raw.trim()) return null;
+  if (/^https?:\/\//i.test(raw.trim())) return null;
+  try {
+    const j = JSON.parse(raw) as Record<string, unknown>;
+    if (j && typeof j === "object" && Array.isArray((j as { scriptSteps?: unknown }).scriptSteps)) {
+      return j as Partial<{
+        scriptSteps: { id: string; duration: number; instruction: string }[];
+        tags: string[];
+        enabledForGuidedMode: boolean;
+        audioEnabled: boolean;
+        visualsEnabled: boolean;
+      }>;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+const EDITOR_ICON_NAMES = new Set([
+  "Wind",
+  "Brain",
+  "Moon",
+  "Sun",
+  "Heart",
+  "Zap",
+  "Target",
+  "Sparkles",
+  "Music",
+  "Smile",
+  "Activity",
+  "Leaf",
+  "HeartPulse",
+]);
 
 export function WellnessToolEditor() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get("id");
+  const categoryFromQuery = searchParams.get("category");
   const [showPreview, setShowPreview] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingTool, setIsLoadingTool] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
-    category: "Breathing",
+    category: WELLNESS_TOOL_CATEGORIES[0],
     description: "",
     duration: 5,
     difficulty: "Beginner",
@@ -52,16 +109,6 @@ export function WellnessToolEditor() {
 
   const [tagInput, setTagInput] = useState("");
 
-  const categories = [
-    "Breathing",
-    "Meditation",
-    "Sleep",
-    "Anxiety Relief",
-    "Stress Management",
-    "Mindfulness",
-    "Energy Boost",
-  ];
-
   const iconOptions = [
     { name: "Wind", icon: Wind, color: "#06b6d4" },
     { name: "Brain", icon: Brain, color: "#8b5cf6" },
@@ -71,7 +118,64 @@ export function WellnessToolEditor() {
     { name: "Zap", icon: Zap, color: "#10b981" },
     { name: "Target", icon: Target, color: "#f97316" },
     { name: "Sparkles", icon: Sparkles, color: "#a855f7" },
+    { name: "Music", icon: Music, color: "#10b981" },
+    { name: "Smile", icon: Smile, color: "#f59e0b" },
+    { name: "Activity", icon: Activity, color: "#16a34a" },
+    { name: "Leaf", icon: Leaf, color: "#0d9488" },
+    { name: "HeartPulse", icon: HeartPulse, color: "#0284c7" },
   ];
+
+  useEffect(() => {
+    if (editId || !categoryFromQuery) return;
+    if (isWellnessToolCategory(categoryFromQuery)) {
+      setFormData((prev) => ({ ...prev, category: categoryFromQuery }));
+    }
+  }, [editId, categoryFromQuery]);
+
+  useEffect(() => {
+    if (!editId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setIsLoadingTool(true);
+        const t = await api.wellness.getTool(editId);
+        if (cancelled || !t) return;
+        const guided = parseGuidedPayloadFromContentUrl(t.content_url);
+        const rawIcon = typeof t.icon === "string" ? t.icon : "Sparkles";
+        const icon = EDITOR_ICON_NAMES.has(rawIcon) ? rawIcon : "Sparkles";
+        setFormData({
+          title: t.title || "",
+          category: isWellnessToolCategory(t.category)
+            ? t.category
+            : WELLNESS_TOOL_CATEGORIES[0],
+          description: t.description || "",
+          duration: t.duration_minutes ?? 5,
+          difficulty: (t.difficulty as "Beginner" | "Intermediate" | "Advanced") || "Beginner",
+          icon,
+          tags: guided?.tags ?? [],
+          scriptSteps:
+            guided?.scriptSteps && guided.scriptSteps.length > 0
+              ? guided.scriptSteps.map((s, i) => ({
+                  id: s.id || String(i + 1),
+                  duration: typeof s.duration === "number" ? s.duration : 60,
+                  instruction: s.instruction || "",
+                }))
+              : [{ id: "1", duration: 60, instruction: "" }],
+          enabledForGuidedMode: guided?.enabledForGuidedMode ?? true,
+          audioEnabled: guided?.audioEnabled ?? false,
+          visualsEnabled: guided?.visualsEnabled ?? true,
+        });
+      } catch (e) {
+        console.error(e);
+        alert("Failed to load wellness tool.");
+      } finally {
+        if (!cancelled) setIsLoadingTool(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editId]);
 
   const handleAddTag = () => {
     if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
@@ -142,11 +246,15 @@ export function WellnessToolEditor() {
           tags: formData.tags,
           enabledForGuidedMode: formData.enabledForGuidedMode,
           audioEnabled: formData.audioEnabled,
-          visualsEnabled: formData.visualsEnabled
-        })
+          visualsEnabled: formData.visualsEnabled,
+        }),
       };
 
-      await api.wellness.create(payload);
+      if (editId) {
+        await api.wellness.update(editId, payload);
+      } else {
+        await api.wellness.create(payload);
+      }
       navigate("/admin/wellness-tools-cms");
     } catch (error) {
       console.error("Failed to save tool:", error);
@@ -157,6 +265,17 @@ export function WellnessToolEditor() {
   };
 
   const selectedIcon = iconOptions.find((opt) => opt.name === formData.icon);
+  const PreviewIconComponent = selectedIcon?.icon;
+
+  if (editId && isLoadingTool) {
+    return (
+      <AdminLayoutNew>
+        <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[40vh]">
+          <p className="text-gray-600">Loading tool…</p>
+        </div>
+      </AdminLayoutNew>
+    );
+  }
 
   return (
     <AdminLayoutNew>
@@ -177,7 +296,7 @@ export function WellnessToolEditor() {
             </Button>
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">
-                Create Wellness Tool
+                {editId ? "Edit Wellness Tool" : "Create Wellness Tool"}
               </h1>
               <p className="text-gray-600">
                 Build a guided wellness exercise for users
@@ -253,7 +372,7 @@ export function WellnessToolEditor() {
                       }
                       className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                     >
-                      {categories.map((cat) => (
+                      {WELLNESS_TOOL_CATEGORIES.map((cat) => (
                         <option key={cat} value={cat}>
                           {cat}
                         </option>
@@ -539,7 +658,7 @@ export function WellnessToolEditor() {
 
                 <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
                   <p className="text-sm text-blue-800">
-                    💡 <strong>Tip:</strong> Keep instructions clear and concise. Use
+                    <strong>Tip:</strong> Keep instructions clear and concise. Use
                     calming language and specific timing cues.
                   </p>
                 </div>
@@ -556,14 +675,14 @@ export function WellnessToolEditor() {
                   <h3 className="text-xl font-bold text-gray-900 mb-4">Preview</h3>
 
                   <div className="bg-gradient-to-br from-purple-100 to-pink-100 rounded-xl p-8 text-center">
-                    {selectedIcon && (
+                    {selectedIcon && PreviewIconComponent && (
                       <div
                         className="w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center"
                         style={{
                           backgroundColor: `${selectedIcon.color}20`,
                         }}
                       >
-                        <selectedIcon.icon
+                        <PreviewIconComponent
                           className="w-10 h-10"
                           style={{ color: selectedIcon.color }}
                         />

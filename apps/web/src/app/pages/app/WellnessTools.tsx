@@ -8,7 +8,6 @@ import {
   Wind,
   Brain,
   Music,
-  Coffee,
   Sun,
   Moon,
   Smile,
@@ -19,16 +18,180 @@ import {
   Clock,
   Star,
   Sparkles,
-  Lock
+  Lock,
+  Activity,
+  Leaf,
+  HeartPulse,
+  type LucideIcon,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Skeleton } from "../../components/ui/skeleton";
+import {
+  WELLNESS_TOOL_CATEGORIES,
+  WELLNESS_CATEGORY_GRADIENT,
+  type WellnessToolCategory,
+} from "../../../lib/wellnessToolCategories";
+import {
+  mergeWellnessProgressWithLocal,
+  loadLocalProgress,
+  recordBuiltinSession,
+  BUILTIN_MIN_SECONDS,
+  formatWellnessDuration,
+  wellnessProgressTotalSeconds,
+  type WellnessProgressRow,
+} from "../../../lib/wellnessLocalProgress";
+
+const BUILTIN_FAVORITES_KEY = "wellness-builtin-favorites";
+
+function loadBuiltinFavoriteMap(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(BUILTIN_FAVORITES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistBuiltinFavorite(id: string, favorite: boolean) {
+  const map = loadBuiltinFavoriteMap();
+  map[id] = favorite;
+  localStorage.setItem(BUILTIN_FAVORITES_KEY, JSON.stringify(map));
+}
+
+type WellnessExerciseItem = {
+  id: string;
+  source: "builtin" | "api";
+  category: string;
+  title: string;
+  description: string;
+  duration: string;
+  difficulty: string;
+  icon: LucideIcon;
+  color: string;
+  favorite: boolean;
+};
+
+/** Shown even when the CMS has no published tools; merged with API tools. */
+function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
+  const favMap = loadBuiltinFavoriteMap();
+  const raw: Omit<WellnessExerciseItem, "source" | "favorite">[] = [
+    {
+      id: "box-breathing",
+      category: "Relaxation",
+      title: "Box Breathing",
+      description: "4-4-4-4 breathing pattern to reduce stress",
+      duration: "5 min",
+      difficulty: "Beginner",
+      icon: Wind,
+      color: WELLNESS_CATEGORY_GRADIENT.Relaxation,
+    },
+    {
+      id: "body-scan",
+      category: "Meditation",
+      title: "Body Scan Meditation",
+      description: "Progressive relaxation from head to toe",
+      duration: "10 min",
+      difficulty: "Beginner",
+      icon: Brain,
+      color: WELLNESS_CATEGORY_GRADIENT.Meditation,
+    },
+    {
+      id: "478-breathing",
+      category: "Relaxation",
+      title: "4-7-8 Breathing",
+      description: "Natural tranquilizer for the nervous system",
+      duration: "3 min",
+      difficulty: "Beginner",
+      icon: Wind,
+      color: WELLNESS_CATEGORY_GRADIENT.Relaxation,
+    },
+    {
+      id: "mindfulness",
+      category: "Mindfulness",
+      title: "Mindfulness Practice",
+      description: "Present moment awareness meditation",
+      duration: "15 min",
+      difficulty: "Intermediate",
+      icon: Brain,
+      color: WELLNESS_CATEGORY_GRADIENT.Mindfulness,
+    },
+    {
+      id: "rain-sounds",
+      category: "Relaxation",
+      title: "Rain & Thunder",
+      description: "Calming nature sounds for relaxation",
+      duration: "∞",
+      difficulty: "Any",
+      icon: Music,
+      color: WELLNESS_CATEGORY_GRADIENT.Relaxation,
+    },
+    {
+      id: "gratitude",
+      category: "Self-Care",
+      title: "Gratitude Reflection",
+      description: "Focus on three things you're grateful for",
+      duration: "5 min",
+      difficulty: "Beginner",
+      icon: Smile,
+      color: WELLNESS_CATEGORY_GRADIENT["Self-Care"],
+    },
+    {
+      id: "morning-meditation",
+      category: "Meditation",
+      title: "Morning Meditation",
+      description: "Start your day with positive intentions",
+      duration: "10 min",
+      difficulty: "Beginner",
+      icon: Sun,
+      color: WELLNESS_CATEGORY_GRADIENT.Meditation,
+    },
+    {
+      id: "sleep-meditation",
+      category: "Sleep Health",
+      title: "Sleep Meditation",
+      description: "Wind down and prepare for restful sleep",
+      duration: "20 min",
+      difficulty: "Beginner",
+      icon: Moon,
+      color: WELLNESS_CATEGORY_GRADIENT["Sleep Health"],
+    },
+  ];
+
+  const defaultFavorite: Record<string, boolean> = {
+    "box-breathing": true,
+    "body-scan": false,
+    "478-breathing": true,
+    mindfulness: false,
+    "rain-sounds": true,
+    gratitude: false,
+    "morning-meditation": false,
+    "sleep-meditation": true,
+  };
+
+  return raw.map((row) => ({
+    ...row,
+    source: "builtin" as const,
+    favorite: favMap[row.id] ?? defaultFavorite[row.id] ?? false,
+  }));
+}
+
+/** Built-ins first; API tools appended. Skip API rows that duplicate a built-in title (case-insensitive). */
+function mergeBuiltinAndApi(
+  builtins: WellnessExerciseItem[],
+  apiItems: WellnessExerciseItem[]
+): WellnessExerciseItem[] {
+  const titles = new Set(builtins.map((b) => b.title.toLowerCase().trim()));
+  const extra = apiItems.filter((t) => !titles.has(t.title.toLowerCase().trim()));
+  return [...builtins, ...extra];
+}
 
 export function WellnessTools() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const navigate = useNavigate();
 
   // Feature Gate for Trial Users
@@ -60,59 +223,98 @@ export function WellnessTools() {
   const [phaseTimer, setPhaseTimer] = useState(0);
   const [guidedExercise, setGuidedExercise] = useState<string | null>(null);
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
-  const [exercises, setExercises] = useState<any[]>([]);
+  const [exercises, setExercises] = useState<WellnessExerciseItem[]>([]);
   const [progress, setProgress] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  /** Tracks whether the active exercise is built-in (no backend UUID session/progress). */
+  const activeExerciseSourceRef = useRef<"builtin" | "api">("api");
 
-  const iconMap: any = { Wind, Brain, Music, Smile, Sun, Moon, Star, Sparkles, Heart };
-  const colorMap: any = {
-    Breathing: "from-blue-400 to-cyan-500",
-    Meditation: "from-purple-400 to-pink-500",
-    Sounds: "from-green-400 to-emerald-500",
-    Gratitude: "from-amber-400 to-orange-500"
+  const iconMap: Record<string, LucideIcon> = {
+    Wind,
+    Brain,
+    Music,
+    Smile,
+    Sun,
+    Moon,
+    Star,
+    Sparkles,
+    Heart,
   };
+  const categoryIcons: Record<WellnessToolCategory, LucideIcon> = {
+    "Anxiety Management": Heart,
+    "Stress Management": Wind,
+    Meditation: Brain,
+    "Sleep Health": Moon,
+    Exercise: Activity,
+    "Self-Care": Sparkles,
+    Relaxation: Music,
+    "Depression Support": HeartPulse,
+    Mindfulness: Leaf,
+  };
+  const categories = WELLNESS_TOOL_CATEGORIES.map((label) => ({
+    icon: categoryIcons[label],
+    label,
+    color: WELLNESS_CATEGORY_GRADIENT[label],
+  }));
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [toolsRes, progressRes] = await Promise.all([
           api.wellness.getAll(),
-          api.wellness.getProgress()
+          api.wellness.getProgress(),
         ]);
 
-        const publishedTools = toolsRes.filter((t: any) => !t.status || t.status === "published");
+        const list = Array.isArray(toolsRes) ? toolsRes : [];
+        const publishedTools = list.filter((t: any) => !t.status || t.status === "published");
 
-        const mappedTools = publishedTools.map((t: any) => ({
+        const mappedApi: WellnessExerciseItem[] = publishedTools.map((t: any) => ({
           id: t.id,
+          source: "api" as const,
           category: t.category,
           title: t.title,
           description: t.description || "",
           duration: t.duration_minutes ? `${t.duration_minutes} min` : "∞",
           difficulty: t.difficulty || "Beginner",
           icon: iconMap[t.icon || "Sparkles"] || Sparkles,
-          color: colorMap[t.category] || "from-indigo-400 to-purple-500",
-          favorite: t.is_favorite || false
+          color:
+            WELLNESS_CATEGORY_GRADIENT[t.category as WellnessToolCategory] ||
+            "from-indigo-400 to-purple-500",
+          favorite: Boolean(t.is_favorite),
         }));
 
-        setExercises(mappedTools);
-        setProgress(progressRes);
+        const builtins = getBuiltinWellnessExercises();
+        setExercises(mergeBuiltinAndApi(builtins, mappedApi));
+        const apiProg = Array.isArray(progressRes) ? progressRes : [];
+        setProgress(
+          user?.id
+            ? mergeWellnessProgressWithLocal(
+                apiProg as WellnessProgressRow[],
+                loadLocalProgress(user.id)
+              )
+            : apiProg
+        );
       } catch (error) {
         console.error("Failed to fetch wellness data:", error);
+        setExercises(getBuiltinWellnessExercises());
+        setProgress(
+          user?.id
+            ? mergeWellnessProgressWithLocal([], loadLocalProgress(user.id))
+            : []
+        );
       } finally {
         setIsLoading(false);
       }
     };
-    
-    fetchData();
-  }, []);
 
-  const categories = [
-    { icon: Wind, label: "Breathing", color: "from-blue-400 to-cyan-500" },
-    { icon: Brain, label: "Meditation", color: "from-purple-400 to-pink-500" },
-    { icon: Music, label: "Sounds", color: "from-green-400 to-emerald-500" },
-    { icon: Smile, label: "Gratitude", color: "from-amber-400 to-orange-500" }
-  ];
+    fetchData();
+  }, [user?.id]);
+
+  const totalTimeSeconds = progress.reduce(
+    (acc, curr) => acc + wellnessProgressTotalSeconds(curr),
+    0
+  );
 
   const stats = [
     { 
@@ -121,8 +323,8 @@ export function WellnessTools() {
       icon: Star 
     },
     { 
-      label: "Total Minutes", 
-      value: progress.reduce((acc, curr) => acc + curr.totalMinutes, 0).toString(), 
+      label: "Total time", 
+      value: formatWellnessDuration(totalTimeSeconds), 
       icon: Clock 
     },
     { 
@@ -138,8 +340,14 @@ export function WellnessTools() {
     setTimer(0);
     setBreathPhase("inhale");
     setPhaseTimer(0);
-    
-    // Start session in backend
+
+    const ex = exercises.find((x) => x.id === exerciseId);
+    activeExerciseSourceRef.current = ex?.source === "builtin" ? "builtin" : "api";
+    if (ex?.source === "builtin") {
+      setCurrentSessionId(null);
+      return;
+    }
+
     try {
       const session = await api.wellness.startSession(exerciseId);
       if (session && session.id) {
@@ -152,21 +360,32 @@ export function WellnessTools() {
 
   const handleToggleFavorite = async (exerciseId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    const ex = exercises.find((x) => x.id === exerciseId);
+    if (ex?.source === "builtin") {
+      const next = !ex.favorite;
+      persistBuiltinFavorite(exerciseId, next);
+      setExercises((prev) =>
+        prev.map((item) => (item.id === exerciseId ? { ...item, favorite: next } : item))
+      );
+      return;
+    }
     try {
       await api.wellness.toggleFavorite(exerciseId);
-      setExercises(prev => prev.map(ex => 
-        ex.id === exerciseId ? { ...ex, favorite: !ex.favorite } : ex
-      ));
+      setExercises((prev) =>
+        prev.map((item) =>
+          item.id === exerciseId ? { ...item, favorite: !item.favorite } : item
+        )
+      );
     } catch (error) {
       console.error("Failed to toggle wellness favorite:", error);
     }
   };
 
   const handleCloseExercise = () => {
-    // Capture current state before clearing
     const exerciseId = activeExercise;
     const timeSpent = timer;
     const sessionId = currentSessionId;
+    const source = activeExerciseSourceRef.current;
 
     setActiveExercise(null);
     setIsPlaying(false);
@@ -174,23 +393,49 @@ export function WellnessTools() {
     setBreathPhase("inhale");
     setPhaseTimer(0);
     setCurrentSessionId(null);
+    activeExerciseSourceRef.current = "api";
 
-    // Track progress if meaningful time spent (e.g. > 10 seconds)
-    if (exerciseId && timeSpent > 10) {
-      const promise = sessionId 
+    if (!exerciseId) return;
+
+    // Built-in tools have no API tool id — persist progress locally and merge into the dashboard.
+    if (source === "builtin" && user?.id && timeSpent >= BUILTIN_MIN_SECONDS) {
+      const ex = exercises.find((x) => x.id === exerciseId);
+      if (ex) {
+        recordBuiltinSession(user.id, exerciseId, ex.title, timeSpent);
+        void api.wellness
+          .getProgress()
+          .then((apiProg) => {
+            const arr = Array.isArray(apiProg) ? apiProg : [];
+            setProgress(
+              mergeWellnessProgressWithLocal(arr as WellnessProgressRow[], loadLocalProgress(user.id))
+            );
+          })
+          .catch((err) => console.error("Failed to refresh progress after built-in session:", err));
+      }
+      return;
+    }
+
+    if (timeSpent > 10 && source === "api") {
+      const promise = sessionId
         ? api.wellness.completeSession(sessionId, { duration_spent: timeSpent })
         : api.wellness.trackProgress(exerciseId, { duration_spent: timeSpent });
 
       promise
-        .then(() => {
-          return api.wellness.getProgress();
+        .then(() => api.wellness.getProgress())
+        .then((apiProg) => {
+          const arr = Array.isArray(apiProg) ? apiProg : [];
+          setProgress(
+            user?.id
+              ? mergeWellnessProgressWithLocal(arr as WellnessProgressRow[], loadLocalProgress(user.id))
+              : arr
+          );
         })
-        .then(setProgress)
-        .catch(err => console.error("Failed to track progress on close:", err));
+        .catch((err) => console.error("Failed to track progress on close:", err));
     }
   };
 
   const activeExerciseData = exercises.find((ex) => ex.id === activeExercise);
+  const ActiveExerciseIcon = activeExerciseData?.icon;
 
   useEffect(() => {
     if (isPlaying && activeExerciseData) {
@@ -198,28 +443,51 @@ export function WellnessTools() {
         setTimer((prevTimer) => prevTimer + 1);
         setPhaseTimer((prevPhaseTimer) => prevPhaseTimer + 1);
 
-        const duration = parseInt(activeExerciseData.duration.replace(" min", ""), 10) * 60;
+        const durLabel = activeExerciseData.duration.trim();
+        const durationSec =
+          durLabel === "∞" || durLabel.toLowerCase() === "infinity"
+            ? Number.POSITIVE_INFINITY
+            : parseInt(durLabel.replace(/\s*min\s*/i, "").trim(), 10) * 60;
 
-        if (timer >= duration) {
+        if (Number.isFinite(durationSec) && timer >= durationSec) {
           setIsPlaying(false);
           setTimer(0);
           setBreathPhase("inhale");
           setPhaseTimer(0);
-          
-          // Track progress
-          if (activeExercise) {
+
+          if (activeExercise && activeExerciseSourceRef.current === "api") {
             const promise = currentSessionId
-              ? api.wellness.completeSession(currentSessionId, { duration_spent: duration })
-              : api.wellness.trackProgress(activeExercise, { duration_spent: duration });
+              ? api.wellness.completeSession(currentSessionId, { duration_spent: durationSec })
+              : api.wellness.trackProgress(activeExercise, { duration_spent: durationSec });
 
             promise
               .then(() => {
-                // Refresh progress
                 setCurrentSessionId(null);
                 return api.wellness.getProgress();
               })
-              .then(setProgress)
-              .catch(err => console.error("Failed to track progress:", err));
+              .then((apiProg) => {
+                const arr = Array.isArray(apiProg) ? apiProg : [];
+                setProgress(
+                  user?.id
+                    ? mergeWellnessProgressWithLocal(arr as WellnessProgressRow[], loadLocalProgress(user.id))
+                    : arr
+                );
+              })
+              .catch((err) => console.error("Failed to track progress:", err));
+          } else {
+            setCurrentSessionId(null);
+            if (activeExercise && user?.id && activeExerciseData && activeExerciseSourceRef.current === "builtin") {
+              recordBuiltinSession(user.id, activeExercise, activeExerciseData.title, durationSec);
+              void api.wellness
+                .getProgress()
+                .then((apiProg) => {
+                  const arr = Array.isArray(apiProg) ? apiProg : [];
+                  setProgress(
+                    mergeWellnessProgressWithLocal(arr as WellnessProgressRow[], loadLocalProgress(user.id))
+                  );
+                })
+                .catch((err) => console.error("Failed to refresh progress after built-in timer:", err));
+            }
           }
         }
 
@@ -240,7 +508,18 @@ export function WellnessTools() {
 
       return () => clearInterval(interval);
     }
-  }, [isPlaying, activeExerciseData, timer, breathPhase, phaseTimer]);
+  }, [
+    isPlaying,
+    activeExerciseData,
+    timer,
+    breathPhase,
+    phaseTimer,
+    activeExercise,
+    currentSessionId,
+    user?.id,
+  ]);
+
+  const favoriteCount = exercises.filter((ex) => ex.favorite).length;
 
   if (isLoading) {
     return (
@@ -344,8 +623,10 @@ export function WellnessTools() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-gray-900">{p.totalMinutes} min</p>
-                        <p className="text-xs text-gray-500">Total Time</p>
+                        <p className="font-bold text-gray-900">
+                          {formatWellnessDuration(wellnessProgressTotalSeconds(p))}
+                        </p>
+                        <p className="text-xs text-gray-500">Total time</p>
                       </div>
                     </div>
                   ))}
@@ -362,7 +643,7 @@ export function WellnessTools() {
           className="mb-8"
         >
           <h2 className="text-xl font-bold mb-4">Categories</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {categories.map((category, index) => {
               const Icon = category.icon;
               return (
@@ -391,7 +672,9 @@ export function WellnessTools() {
         >
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold">
-              {showOnlyFavorites ? "Favorite Exercises" : "All Exercises"}
+              {showOnlyFavorites
+                ? `Favorite Exercises (${favoriteCount})`
+                : "All Exercises"}
             </h2>
             <button 
               onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
@@ -405,7 +688,7 @@ export function WellnessTools() {
               ) : (
                 <>
                   <Heart className="w-4 h-4" />
-                  View Favorites
+                  View Favorites ({favoriteCount})
                 </>
               )}
             </button>
@@ -533,7 +816,7 @@ export function WellnessTools() {
                         transition={{ duration: 2, repeat: Infinity }}
                         className="w-24 h-24 mx-auto mb-4 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm"
                       >
-                        <activeExerciseData.icon className="w-12 h-12" />
+                        {ActiveExerciseIcon ? <ActiveExerciseIcon className="w-12 h-12" /> : null}
                       </motion.div>
                       <h2 className="text-2xl font-bold mb-2">{activeExerciseData.title}</h2>
                       <p className="text-white/90">{activeExerciseData.description}</p>
