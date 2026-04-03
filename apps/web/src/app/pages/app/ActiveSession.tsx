@@ -265,13 +265,22 @@ function isPrimaryCheekBoneName(name: string): boolean {
   return false;
 }
 
-/** Main jaw rotator — exclude jawline/bulge/recess so we do not double-open the whole face. */
-function isPrimaryJawBoneName(name: string): boolean {
+/** Only MetaHuman / T1 main mandible — other “jaw*” bones can move the whole head/torso visually. */
+function isMainMandibleBoneName(name: string): boolean {
+  const n = name.toLowerCase().trim();
+  return n === "facial_c_jaw";
+}
+
+/** Animate a small set of chin movers only (not every 12IPV chin helper). */
+function isPrimaryChinBoneName(name: string): boolean {
   const n = name.toLowerCase();
-  if (!n.includes("jaw")) return false;
-  if (n.includes("jawline") || n.includes("jawbulge") || n.includes("jawrecess")) return false;
   if (n.includes("12ipv")) return false;
-  return true;
+  return (
+    n === "facial_c_chin" ||
+    n === "facial_c_chin1" ||
+    n === "facial_c_chin2" ||
+    n === "facial_c_chin3"
+  );
 }
 
 /** Center mouth/lip drivers (stronger deltas than peripheral chain bones). */
@@ -879,23 +888,16 @@ function ThreeAvatar({
         );
       }
 
+      // Cheeks: X-only — Y/Z on nested face bones read as whole head/body bobbing on screen.
       cheekBonesRef.current.forEach((bone) => {
         if (!isPrimaryCheekBoneName(bone.name)) return;
         const d = faceBoneDefaultsRef.current.get(bone.uuid);
         if (!d) return;
         const c = cheekDriver;
-        const bn = (bone.name || "").toLowerCase();
-        const side = /r_|_r|right|\.r\b/.test(bn)
-          ? -1
-          : /l_|_l|left|\.l\b/.test(bn)
-            ? 1
-            : 0;
-        const yaw = side !== 0 ? side * c * 0.14 : c * 0.04;
-        const pitch = c * 0.12;
-        const roll = side !== 0 ? side * c * 0.07 : 0;
-        bone.rotation.y = d.y + yaw;
+        const pitch = c * 0.08;
         bone.rotation.x = d.x + pitch;
-        bone.rotation.z = d.z + roll;
+        bone.rotation.y = d.y;
+        bone.rotation.z = d.z;
       });
 
       // Bone-driven mouth (T1.glb: no morphs — bones only)
@@ -915,10 +917,8 @@ function ThreeAvatar({
       };
 
       jawBonesRef.current.forEach((bone) => {
-        const n = bone.name || "";
-        const primary = isPrimaryJawBoneName(n);
-        const mult = primary ? 0.225 : 0.052;
-        applyFaceBoneX(bone, mouthForJaw * mult);
+        if (!isMainMandibleBoneName(bone.name)) return;
+        applyFaceBoneX(bone, mouthForJaw * 0.26);
       });
 
       lipBonesUpperRef.current.forEach((bone) => {
@@ -934,9 +934,10 @@ function ThreeAvatar({
       });
 
       chinBonesRef.current.forEach((bone) => {
+        if (!isPrimaryChinBoneName(bone.name)) return;
         const n = (bone.name || "").toLowerCase();
-        const main = n === "facial_c_chin" || n.includes("facial_c_chin1");
-        applyFaceBoneX(bone, mouthForJaw * (main ? 0.07 : 0.028));
+        const main = n === "facial_c_chin" || n === "facial_c_chin1";
+        applyFaceBoneX(bone, mouthForJaw * (main ? 0.06 : 0.032));
       });
 
       jawlineBonesRef.current.forEach((bone) => {
@@ -951,13 +952,8 @@ function ThreeAvatar({
         applyFaceBoneX(bone, mouthForJaw * 0.022);
       });
 
-      // Slight scale pulse while speaking
       if (model) {
-        const speakingScale = speaking ? 1.01 : 1;
-        const audioPulse = speaking
-          ? 1 + Math.min(audioLevelNow / 1200, 0.006)
-          : 1;
-        model.scale.setScalar(baseScaleRef.current * speakingScale * audioPulse);
+        model.scale.setScalar(baseScaleRef.current);
       }
 
       renderer.render(scene, camera);
@@ -2544,13 +2540,9 @@ export function ActiveSession() {
         </div>
       </motion.div>
 
-      {/* Video Session Area */}
+      {/* Video Session Area — plain divs (no layout/scale motion on the avatar card). */}
       <div className="flex-1 relative overflow-hidden p-6">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full h-full rounded-3xl overflow-hidden relative bg-gradient-to-br from-amber-900/30 via-orange-900/20 to-purple-900/30 backdrop-blur-xl border-2 border-white/10 shadow-2xl"
-        >
+        <div className="w-full h-full rounded-3xl overflow-hidden relative bg-gradient-to-br from-amber-900/30 via-orange-900/20 to-purple-900/30 backdrop-blur-xl border-2 border-white/10 shadow-2xl">
           <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
             <AnimatePresence>
               {isEzriSpeaking && (
@@ -2558,28 +2550,15 @@ export function ActiveSession() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="absolute inset-0 bg-gradient-to-b from-purple-500/20 via-transparent to-transparent pointer-events-none"
+                  className="absolute inset-0 bg-gradient-to-b from-purple-500/15 via-transparent to-transparent pointer-events-none"
                 >
-                  <motion.div
-                    animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                    className="absolute inset-0 bg-gradient-radial from-purple-500/30 to-transparent blur-3xl"
-                  />
+                  <div className="absolute inset-0 bg-gradient-radial from-purple-500/20 to-transparent blur-3xl opacity-50" />
                 </motion.div>
               )}
             </AnimatePresence>
 
-            <motion.div
-              className="relative z-10 w-full h-full"
-              animate={{
-                y: isEzriSpeaking ? [0, -2, 0, -1, 0] : [0, -1, 0],
-              }}
-              transition={{
-                duration: isEzriSpeaking ? 2 : 4,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-            >
+            {/* Stable container — do not animate `y` here or the whole avatar bobs up/down. */}
+            <div className="relative z-10 w-full h-full">
               <ThreeAvatar
                 isSpeaking={isEzriSpeaking}
                 audioLevel={audioLevel}
@@ -2588,7 +2567,7 @@ export function ActiveSession() {
                 speechText={speechText}
                 speechCharIndex={speechCharIndex}
               />
-            </motion.div>
+            </div>
 
             {isEzriSpeaking && (
               <motion.div
@@ -2618,7 +2597,7 @@ export function ActiveSession() {
           </div>
 
           {/* Avatar Name */}
-          <div className="absolute top-6 left-6 bg-black/60 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/20">
+          <div className="absolute top-6 left-6 bg-black/60 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/20 z-20">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-purple-400" />
               <p className="text-sm font-semibold text-white">
@@ -2750,7 +2729,7 @@ export function ActiveSession() {
               )}
             </motion.div>
           </div>
-        </motion.div>
+        </div>
 
         {/* Subtitles */}
         <AnimatePresence>
