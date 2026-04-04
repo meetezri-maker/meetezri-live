@@ -26,9 +26,12 @@ import {
   Eye,
   Download,
   Smile,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
+import { toast } from "sonner";
 import {
   LineChart,
   Line,
@@ -47,36 +50,151 @@ import {
   Legend,
 } from "recharts";
 
-export function SuperAdminDashboard() {
-  const navigate = useNavigate();
+function formatTimeAgo(iso: string) {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
 
-  // Stats state
+export function SuperAdminDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [recentMoods, setRecentMoods] = useState<any[]>([]);
+  const [activityFeed, setActivityFeed] = useState<
+    { action: string; user: string; time: string; type: string }[]
+  >([]);
+  const [crisisAlerts, setCrisisAlerts] = useState<
+    { id: string; type: string; message: string; time: string; status: string }[]
+  >([]);
   const [loading, setLoading] = useState(true);
+  const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
+  const [sessionWeekOffset, setSessionWeekOffset] = useState(0);
 
-  // Fetch real data
   useEffect(() => {
+    let cancelled = false;
+
     const fetchStats = async () => {
       try {
-        const [data, moods] = await Promise.all([
-          api.admin.getStats(),
-          api.moods.getAllMoods()
+        const [data, moods, recent] = await Promise.all([
+          api.admin.getStats({ chartPeriod, sessionWeekOffset }),
+          api.moods.getAllMoods(),
+          api.admin.getRecentActivity(),
         ]);
+        if (cancelled) return;
+
         setStats(data);
-        setRecentMoods(moods.slice(0, 5));
+
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        const todays = (moods || []).filter(
+          (m: any) => new Date(m.created_at) >= start
+        );
+        setRecentMoods(todays);
+
+        const feed: {
+          action: string;
+          user: string;
+          time: string;
+          type: string;
+          at: number;
+        }[] = [];
+
+        for (const s of recent.sessions || []) {
+          feed.push({
+            action: "Session activity",
+            user: s.profiles?.full_name || s.profiles?.email || "User",
+            time: formatTimeAgo(s.started_at),
+            type: "session",
+            at: new Date(s.started_at).getTime(),
+          });
+        }
+        for (const m of recent.moodEntries || []) {
+          feed.push({
+            action: "Mood check-in",
+            user: m.profiles?.full_name || m.profiles?.email || "User",
+            time: formatTimeAgo(m.created_at),
+            type: "journal",
+            at: new Date(m.created_at).getTime(),
+          });
+        }
+        for (const a of recent.alerts || []) {
+          feed.push({
+            action: "Crisis alert",
+            user: a.profiles?.full_name || a.profiles?.email || "User",
+            time: formatTimeAgo(a.created_at),
+            type: "crisis",
+            at: new Date(a.created_at).getTime(),
+          });
+        }
+
+        feed.sort((x, y) => y.at - x.at);
+        setActivityFeed(feed.slice(0, 12).map(({ at: _a, ...rest }) => rest));
+
+        setCrisisAlerts(
+          (recent.alerts || []).map((a: any) => ({
+            id: a.id,
+            type:
+              a.risk_level === "critical" || a.risk_level === "high"
+                ? "critical"
+                : "warning",
+            message: `Crisis (${a.risk_level}): ${a.event_type || "Pending review"}`,
+            time: formatTimeAgo(a.created_at),
+            status: "pending",
+          }))
+        );
       } catch (error) {
         console.error("Failed to fetch admin stats", error);
+        toast.error("Could not load dashboard data.");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchStats();
-    // Refresh every 30 seconds
     const interval = setInterval(fetchStats, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [chartPeriod, sessionWeekOffset]);
+
+  const exportReport = () => {
+    try {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        chartPeriod,
+        sessionWeekOffset,
+        stats,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ezri-super-admin-report-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Report downloaded.");
+    } catch {
+      toast.error("Export failed.");
+    }
+  };
+
+  const trendSubtitle = useMemo(() => {
+    if (chartPeriod === "week") return "New signups per week (last 12 weeks)";
+    if (chartPeriod === "year") return "New signups by year";
+    return "Total users over time (monthly)";
+  }, [chartPeriod]);
+
+  const revenueSubtitle = useMemo(() => {
+    if (chartPeriod === "week") return "Payment volume by week (Stripe)";
+    if (chartPeriod === "year") return "Payment volume by year (Stripe)";
+    return "Payment volume by month (Stripe)";
+  }, [chartPeriod]);
 
   if (loading && !stats) {
     return (
@@ -100,38 +218,6 @@ export function SuperAdminDashboard() {
   const systemHealth = stats?.systemHealth || [];
   const mockedSections: string[] = stats?.mockedSections || [];
 
-  const recentAlerts = [
-    {
-      id: 1,
-      type: "critical",
-      message: "High server load detected on DB-2",
-      time: "5 minutes ago",
-      status: "pending",
-    },
-    {
-      id: 2,
-      type: "warning",
-      message: "Organization exceeded user limit: HealthCare Corp",
-      time: "12 minutes ago",
-      status: "pending",
-    },
-    {
-      id: 3,
-      type: "info",
-      message: "Scheduled maintenance completed successfully",
-      time: "1 hour ago",
-      status: "resolved",
-    },
-  ];
-
-  const liveActivity = [
-    { action: "New user signup", user: "Emma Wilson", time: "2s ago", type: "signup" },
-    { action: "Session completed", user: "Michael Chen", time: "15s ago", type: "session" },
-    { action: "Organization upgraded", user: "HealthCare Corp", time: "1m ago", type: "upgrade" },
-    { action: "Crisis alert resolved", user: "Sarah Johnson", time: "3m ago", type: "crisis" },
-    { action: "New journal entry", user: "David Brown", time: "5m ago", type: "journal" },
-  ];
-
   return (
     <AdminLayoutNew>
       <div className="space-y-6">
@@ -153,12 +239,12 @@ export function SuperAdminDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" type="button" onClick={exportReport}>
                 <Download className="w-4 h-4 mr-2" />
                 Export Report
               </Button>
-              <Link to="/admin/system-settings">
-                <Button size="sm">
+              <Link to="/admin/system-settings-enhanced">
+                <Button size="sm" type="button">
                   <Settings className="w-4 h-4 mr-2" />
                   Settings
                 </Button>
@@ -291,14 +377,20 @@ export function SuperAdminDashboard() {
                     <TrendingUp className="w-5 h-5 text-purple-500" />
                     User Growth Trend
                   </h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                  7-month user growth
-                </p>
+                  <p className="text-sm text-muted-foreground mt-1">{trendSubtitle}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm">
-                    Last 7 Months
-                  </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {(["week", "month", "year"] as const).map((p) => (
+                    <Button
+                      key={p}
+                      variant={chartPeriod === p ? "default" : "outline"}
+                      size="sm"
+                      type="button"
+                      onClick={() => setChartPeriod(p)}
+                    >
+                      {p === "week" ? "Week" : p === "month" ? "Month" : "Year"}
+                    </Button>
+                  ))}
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={300}>
@@ -411,15 +503,46 @@ export function SuperAdminDashboard() {
             transition={{ delay: 0.6 }}
           >
             <Card className="p-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
                 <div>
                   <h2 className="font-bold text-xl flex items-center gap-2">
                     <BarChart3 className="w-5 h-5 text-cyan-500" />
                     Weekly Session Activity
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Sessions per day with avg duration
+                    Sessions per day (UTC week) — offset {sessionWeekOffset || "current"}
                   </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setSessionWeekOffset((o) => Math.min(52, o + 1))}
+                    aria-label="Previous week"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSessionWeekOffset(0)}
+                  >
+                    This week
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setSessionWeekOffset((o) => Math.max(0, o - 1))}
+                    disabled={sessionWeekOffset <= 0}
+                    aria-label="Next week"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={280}>
@@ -451,11 +574,9 @@ export function SuperAdminDashboard() {
                 <div>
                   <h2 className="font-bold text-xl flex items-center gap-2">
                     <DollarSign className="w-5 h-5 text-green-500" />
-                    Revenue Trend (MRR)
+                    Revenue Trend
                   </h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Monthly recurring revenue growth
-                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">{revenueSubtitle}</p>
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={280}>
@@ -501,7 +622,7 @@ export function SuperAdminDashboard() {
               </div>
 
               <div className="space-y-3 max-h-80 overflow-y-auto">
-                {liveActivity.map((activity, index) => (
+                {(activityFeed.length ? activityFeed : [{ action: "No recent activity", user: "—", time: "", type: "session" }]).map((activity, index) => (
                   <motion.div
                     key={index}
                     initial={{ opacity: 0, x: -20 }}
@@ -553,7 +674,10 @@ export function SuperAdminDashboard() {
               </div>
 
               <div className="space-y-3">
-                {recentAlerts.map((alert, index) => (
+                {(crisisAlerts.length ? crisisAlerts : []).length === 0 && (
+                  <p className="text-sm text-muted-foreground py-4">No pending crisis alerts.</p>
+                )}
+                {crisisAlerts.map((alert, index) => (
                   <motion.div
                     key={alert.id}
                     initial={{ opacity: 0, x: -20 }}
@@ -657,7 +781,7 @@ export function SuperAdminDashboard() {
                   Recent Mood Check-ins
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Latest user emotional states and check-ins
+                  Today&apos;s mood check-ins (all recorded today)
                 </p>
               </div>
             </div>
@@ -724,7 +848,7 @@ export function SuperAdminDashboard() {
               Quick Actions
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              <Link to="/admin/system-settings">
+              <Link to="/admin/system-settings-enhanced">
                 <Button variant="outline" className="w-full justify-start gap-2 bg-white hover:bg-gray-50 hover:text-gray-700">
                   <Settings className="w-4 h-4" />
                   Settings
@@ -750,7 +874,7 @@ export function SuperAdminDashboard() {
               </Link>
               <Link to="/admin/user-management">
                 <Button variant="outline" size="sm">
-                  View All
+                  View All Users
                 </Button>
               </Link>
               <Link to="/admin/support-tickets">

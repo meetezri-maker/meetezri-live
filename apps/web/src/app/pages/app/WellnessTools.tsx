@@ -8,7 +8,6 @@ import {
   Wind,
   Brain,
   Music,
-  Sun,
   Moon,
   Smile,
   Play,
@@ -22,9 +21,13 @@ import {
   Activity,
   Leaf,
   HeartPulse,
+  Shield,
+  Waves,
+  CloudRain,
+  HandHelping,
   type LucideIcon,
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -43,6 +46,7 @@ import {
   wellnessProgressTotalSeconds,
   type WellnessProgressRow,
 } from "../../../lib/wellnessLocalProgress";
+import { getWellnessToolLucideIcon } from "../../../lib/wellnessToolIcons";
 
 const BUILTIN_FAVORITES_KEY = "wellness-builtin-favorites";
 
@@ -76,19 +80,29 @@ type WellnessExerciseItem = {
   favorite: boolean;
 };
 
-/** Shown even when the CMS has no published tools; merged with API tools. */
+/** One built-in per canonical category (icons align with admin category accents; each tool has a distinct icon). */
 function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
   const favMap = loadBuiltinFavoriteMap();
   const raw: Omit<WellnessExerciseItem, "source" | "favorite">[] = [
     {
-      id: "box-breathing",
-      category: "Relaxation",
-      title: "Box Breathing",
-      description: "4-4-4-4 breathing pattern to reduce stress",
+      id: "grounding-54321",
+      category: "Anxiety Management",
+      title: "Grounding 5-4-3-2-1",
+      description: "Name five things you see, four you feel, three you hear, two you smell, one you taste",
       duration: "5 min",
       difficulty: "Beginner",
-      icon: Wind,
-      color: WELLNESS_CATEGORY_GRADIENT.Relaxation,
+      icon: Shield,
+      color: WELLNESS_CATEGORY_GRADIENT["Anxiety Management"],
+    },
+    {
+      id: "stress-release-waves",
+      category: "Stress Management",
+      title: "Tension Release Scan",
+      description: "Notice and soften stress in the body with slow breathing",
+      duration: "8 min",
+      difficulty: "Beginner",
+      icon: Waves,
+      color: WELLNESS_CATEGORY_GRADIENT["Stress Management"],
     },
     {
       id: "body-scan",
@@ -101,34 +115,24 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       color: WELLNESS_CATEGORY_GRADIENT.Meditation,
     },
     {
-      id: "478-breathing",
-      category: "Relaxation",
-      title: "4-7-8 Breathing",
-      description: "Natural tranquilizer for the nervous system",
-      duration: "3 min",
+      id: "sleep-meditation",
+      category: "Sleep Health",
+      title: "Sleep Meditation",
+      description: "Wind down and prepare for restful sleep",
+      duration: "20 min",
       difficulty: "Beginner",
-      icon: Wind,
-      color: WELLNESS_CATEGORY_GRADIENT.Relaxation,
+      icon: Moon,
+      color: WELLNESS_CATEGORY_GRADIENT["Sleep Health"],
     },
     {
-      id: "mindfulness",
-      category: "Mindfulness",
-      title: "Mindfulness Practice",
-      description: "Present moment awareness meditation",
-      duration: "15 min",
-      difficulty: "Intermediate",
-      icon: Brain,
-      color: WELLNESS_CATEGORY_GRADIENT.Mindfulness,
-    },
-    {
-      id: "rain-sounds",
-      category: "Relaxation",
-      title: "Rain & Thunder",
-      description: "Calming nature sounds for relaxation",
-      duration: "∞",
-      difficulty: "Any",
-      icon: Music,
-      color: WELLNESS_CATEGORY_GRADIENT.Relaxation,
+      id: "gentle-movement",
+      category: "Exercise",
+      title: "Gentle Movement",
+      description: "Light stretches and mobility to reconnect with your body",
+      duration: "10 min",
+      difficulty: "Beginner",
+      icon: Activity,
+      color: WELLNESS_CATEGORY_GRADIENT.Exercise,
     },
     {
       id: "gratitude",
@@ -141,36 +145,58 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       color: WELLNESS_CATEGORY_GRADIENT["Self-Care"],
     },
     {
-      id: "morning-meditation",
-      category: "Meditation",
-      title: "Morning Meditation",
-      description: "Start your day with positive intentions",
-      duration: "10 min",
+      id: "box-breathing",
+      category: "Relaxation",
+      title: "Box Breathing",
+      description: "4-4-4-4 breathing pattern to reduce stress",
+      duration: "5 min",
       difficulty: "Beginner",
-      icon: Sun,
-      color: WELLNESS_CATEGORY_GRADIENT.Meditation,
+      icon: Wind,
+      color: WELLNESS_CATEGORY_GRADIENT.Relaxation,
     },
     {
-      id: "sleep-meditation",
-      category: "Sleep Health",
-      title: "Sleep Meditation",
-      description: "Wind down and prepare for restful sleep",
-      duration: "20 min",
+      id: "compassion-pause",
+      category: "Depression Support",
+      title: "Compassion Pause",
+      description: "A short pause with kind phrases you can repeat softly",
+      duration: "6 min",
       difficulty: "Beginner",
-      icon: Moon,
-      color: WELLNESS_CATEGORY_GRADIENT["Sleep Health"],
+      icon: HandHelping,
+      color: WELLNESS_CATEGORY_GRADIENT["Depression Support"],
+    },
+    {
+      id: "mindful-anchor",
+      category: "Mindfulness",
+      title: "Mindful Anchor Breath",
+      description: "Anchor attention on the breath and gentle body awareness",
+      duration: "12 min",
+      difficulty: "Intermediate",
+      icon: Leaf,
+      color: WELLNESS_CATEGORY_GRADIENT.Mindfulness,
+    },
+    {
+      id: "rain-sounds",
+      category: "Relaxation",
+      title: "Rain & Thunder",
+      description: "Calming nature sounds for relaxation",
+      duration: "∞",
+      difficulty: "Any",
+      icon: CloudRain,
+      color: WELLNESS_CATEGORY_GRADIENT.Relaxation,
     },
   ];
 
   const defaultFavorite: Record<string, boolean> = {
-    "box-breathing": true,
+    "grounding-54321": false,
+    "stress-release-waves": false,
     "body-scan": false,
-    "478-breathing": true,
-    mindfulness: false,
-    "rain-sounds": true,
-    gratitude: false,
-    "morning-meditation": false,
     "sleep-meditation": true,
+    "gentle-movement": false,
+    gratitude: false,
+    "box-breathing": true,
+    "compassion-pause": false,
+    "mindful-anchor": false,
+    "rain-sounds": true,
   };
 
   return raw.map((row) => ({
@@ -178,6 +204,21 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
     source: "builtin" as const,
     favorite: favMap[row.id] ?? defaultFavorite[row.id] ?? false,
   }));
+}
+
+/** First exercise in list order for each canonical category (built-ins are ordered by category). */
+function pickOneExercisePerCategory(list: WellnessExerciseItem[]): WellnessExerciseItem[] {
+  const out: WellnessExerciseItem[] = [];
+  for (const cat of WELLNESS_TOOL_CATEGORIES) {
+    const found = list.find((e) => e.category === cat);
+    if (found) out.push(found);
+  }
+  return out;
+}
+
+/** DOM id for the spotlight card for a category (used with scrollIntoView). */
+function wellnessSpotlightElementId(category: WellnessToolCategory): string {
+  return `wellness-spotlight-${category.toLowerCase().replace(/\s+/g, "-")}`;
 }
 
 /** Built-ins first; API tools appended. Skip API rows that duplicate a built-in title (case-insensitive). */
@@ -223,6 +264,7 @@ export function WellnessTools() {
   const [phaseTimer, setPhaseTimer] = useState(0);
   const [guidedExercise, setGuidedExercise] = useState<string | null>(null);
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<WellnessToolCategory | "all">("all");
   const [exercises, setExercises] = useState<WellnessExerciseItem[]>([]);
   const [progress, setProgress] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -230,17 +272,6 @@ export function WellnessTools() {
   /** Tracks whether the active exercise is built-in (no backend UUID session/progress). */
   const activeExerciseSourceRef = useRef<"builtin" | "api">("api");
 
-  const iconMap: Record<string, LucideIcon> = {
-    Wind,
-    Brain,
-    Music,
-    Smile,
-    Sun,
-    Moon,
-    Star,
-    Sparkles,
-    Heart,
-  };
   const categoryIcons: Record<WellnessToolCategory, LucideIcon> = {
     "Anxiety Management": Heart,
     "Stress Management": Wind,
@@ -277,7 +308,7 @@ export function WellnessTools() {
           description: t.description || "",
           duration: t.duration_minutes ? `${t.duration_minutes} min` : "∞",
           difficulty: t.difficulty || "Beginner",
-          icon: iconMap[t.icon || "Sparkles"] || Sparkles,
+          icon: getWellnessToolLucideIcon(typeof t.icon === "string" ? t.icon : "Sparkles"),
           color:
             WELLNESS_CATEGORY_GRADIENT[t.category as WellnessToolCategory] ||
             "from-indigo-400 to-purple-500",
@@ -315,6 +346,35 @@ export function WellnessTools() {
     (acc, curr) => acc + wellnessProgressTotalSeconds(curr),
     0
   );
+
+  const onePerCategory = useMemo(() => pickOneExercisePerCategory(exercises), [exercises]);
+
+  const displayExercises = useMemo(() => {
+    let base = showOnlyFavorites ? exercises.filter((ex) => ex.favorite) : exercises;
+    if (categoryFilter !== "all") {
+      base = base.filter((e) => e.category === categoryFilter);
+    }
+    return base;
+  }, [exercises, showOnlyFavorites, categoryFilter]);
+
+  const goToCategory = useCallback((cat: WellnessToolCategory | "all") => {
+    if (cat === "all") {
+      setCategoryFilter("all");
+      window.setTimeout(() => {
+        document.getElementById("wellness-all-exercises-section")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 0);
+      return;
+    }
+    setCategoryFilter(cat);
+    window.setTimeout(() => {
+      document
+        .getElementById(wellnessSpotlightElementId(cat))
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 50);
+  }, []);
 
   const stats = [
     { 
@@ -635,30 +695,137 @@ export function WellnessTools() {
           </div>
         </motion.div>
 
-        {/* Categories */}
+        {/* Category tabs — jump to that category’s starter exercise below */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.18 }}
           className="mb-8"
         >
           <h2 className="text-xl font-bold mb-4">Categories</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {categories.map((category, index) => {
               const Icon = category.icon;
+              const active = categoryFilter === category.label;
               return (
                 <motion.button
                   key={category.label}
-                  initial={{ opacity: 0, scale: 0.9 }}
+                  type="button"
+                  initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.3 + index * 0.05 }}
-                  whileHover={{ scale: 1.05, y: -5 }}
-                  whileTap={{ scale: 0.95 }}
-                  className={`p-6 rounded-xl bg-gradient-to-br ${category.color} text-white shadow-lg`}
+                  transition={{ delay: 0.2 + index * 0.04 }}
+                  whileHover={{ scale: 1.04, y: -4 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => goToCategory(category.label)}
+                  className={`p-5 rounded-xl bg-gradient-to-br ${category.color} text-white shadow-lg text-center transition-[box-shadow] ${
+                    active ? "ring-4 ring-white/80 ring-offset-2 ring-offset-slate-100" : ""
+                  }`}
                 >
                   <Icon className="w-8 h-8 mb-2 mx-auto" />
-                  <p className="font-bold">{category.label}</p>
+                  <p className="font-bold text-sm leading-tight">{category.label}</p>
                 </motion.button>
+              );
+            })}
+          </div>
+        </motion.div>
+
+        {/* One tool per category (same nine categories as admin CMS) */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="mb-8"
+        >
+          <h2 className="text-xl font-bold mb-1">One exercise per category</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Nine categories — one starter exercise each. Every tool has its own icon.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {onePerCategory.map((exercise, index) => {
+              const Icon = exercise.icon;
+              return (
+                <motion.div
+                  key={`spotlight-${exercise.id}`}
+                  id={wellnessSpotlightElementId(exercise.category as WellnessToolCategory)}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.22 + index * 0.04 }}
+                  whileHover={{ y: -4 }}
+                  className="scroll-mt-28"
+                >
+                  <Card className="p-5 shadow-lg hover:shadow-xl transition-all border border-slate-100">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                          {exercise.category}
+                        </p>
+                        <h3 className="font-bold text-lg leading-snug">{exercise.title}</h3>
+                      </div>
+                      <div
+                        className={`p-3 rounded-xl bg-gradient-to-br ${exercise.color} text-white shrink-0`}
+                      >
+                        <Icon className="w-6 h-6" />
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{exercise.description}</p>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => setGuidedExercise(exercise.id)}
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 border-purple-200 hover:bg-purple-50"
+                      >
+                        <Sparkles className="w-4 h-4 mr-1 text-purple-600" />
+                        Ezri
+                      </Button>
+                      <Button onClick={() => handleStartExercise(exercise.id)} size="sm" className="flex-1">
+                        <Play className="w-4 h-4 mr-1" />
+                        Start
+                      </Button>
+                    </div>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </div>
+        </motion.div>
+
+        {/* Category filters (admin-aligned names) */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="mb-6"
+        >
+          <h2 className="text-lg font-semibold mb-3">Filter by category</h2>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => goToCategory("all")}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium border transition-colors ${
+                categoryFilter === "all"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
+              }`}
+            >
+              All
+            </button>
+            {categories.map(({ label, icon: CatIcon, color }) => {
+              const active = categoryFilter === label;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => goToCategory(label)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium border transition-colors ${
+                    active
+                      ? `bg-gradient-to-r ${color} text-white border-transparent shadow-md`
+                      : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
+                  }`}
+                >
+                  <CatIcon className="w-3.5 h-3.5 shrink-0 opacity-90" />
+                  <span className="max-w-[10rem] sm:max-w-none truncate">{label}</span>
+                </button>
               );
             })}
           </div>
@@ -666,15 +833,19 @@ export function WellnessTools() {
 
         {/* Exercises Grid */}
         <motion.div
+          id="wellness-all-exercises-section"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
+          className="scroll-mt-24"
         >
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold">
               {showOnlyFavorites
-                ? `Favorite Exercises (${favoriteCount})`
-                : "All Exercises"}
+                ? `Favorite exercises (${favoriteCount})`
+                : categoryFilter === "all"
+                  ? "All exercises"
+                  : `${categoryFilter}`}
             </h2>
             <button 
               onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
@@ -694,7 +865,12 @@ export function WellnessTools() {
             </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {(showOnlyFavorites ? exercises.filter(ex => ex.favorite) : exercises).map((exercise, index) => {
+            {displayExercises.length === 0 ? (
+              <p className="text-muted-foreground col-span-full text-center py-8">
+                No exercises match this filter. Try another category or show all.
+              </p>
+            ) : (
+            displayExercises.map((exercise, index) => {
               const Icon = exercise.icon;
               return (
                 <motion.div
@@ -758,7 +934,8 @@ export function WellnessTools() {
                   </Card>
                 </motion.div>
               );
-            })}
+            })
+            )}
           </div>
         </motion.div>
 

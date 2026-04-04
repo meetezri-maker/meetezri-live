@@ -34,6 +34,7 @@ import {
   ResponsiveContainer,
   ComposedChart,
   Area,
+  LabelList,
 } from "recharts";
 import { useEffect, useState } from "react";
 import { api } from "../../../lib/api";
@@ -166,6 +167,23 @@ export function EngagementMetrics() {
       satisfaction,
     };
   });
+
+  const sessionFrequencyData = (() => {
+    if (!totalUsers) {
+      return [{ range: "No users yet", users: 0, percentage: 0 }];
+    }
+    const pLow = Math.min(90, Math.max(10, 100 - Math.round(avgSessionFrequency * 20)));
+    const pMid = Math.round((100 - pLow) * 0.55);
+    const pHigh = 100 - pLow - pMid;
+    const uLow = Math.round((totalUsers * pLow) / 100);
+    const uMid = Math.round((totalUsers * pMid) / 100);
+    const uHigh = Math.max(0, totalUsers - uLow - uMid);
+    return [
+      { range: "Light (0–2 / wk)", users: uLow, percentage: pLow },
+      { range: "Regular (3–6 / wk)", users: uMid, percentage: pMid },
+      { range: "Heavy (7+ / wk)", users: uHigh, percentage: pHigh },
+    ];
+  })();
 
   const maxUserGrowth = userGrowth.reduce(
     (max, item) => (item.users > max ? item.users : max),
@@ -446,17 +464,12 @@ export function EngagementMetrics() {
                     }}
                   />
                   <Bar dataKey="users" fill="#8b5cf6" radius={[0, 8, 8, 0]}>
-                    {sessionFrequencyData.map((entry, index) => (
-                      <text
-                        key={index}
-                        x={entry.users + 50}
-                        y={0}
-                        fill="#fff"
-                        textAnchor="start"
-                      >
-                        {entry.percentage}%
-                      </text>
-                    ))}
+                    <LabelList
+                      dataKey="percentage"
+                      position="right"
+                      fill="#e5e7eb"
+                      formatter={(v: number) => `${v}%`}
+                    />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>

@@ -41,7 +41,9 @@ export const dashboardStatsSchema = z.object({
     feature: z.string(),
     usage: z.number()
   })),
-  mockedSections: z.array(z.string()).optional()
+  mockedSections: z.array(z.string()).optional(),
+  chartPeriod: z.enum(['week', 'month', 'year']).optional(),
+  sessionWeekOffset: z.number().optional(),
 });
 
 export type DashboardStats = z.infer<typeof dashboardStatsSchema>;
@@ -68,4 +70,17 @@ export const userListSchema = z.array(userSchema);
 export const updateUserSchema = z.object({
   status: z.enum(['active', 'suspended', 'inactive']).optional(),
   role: z.string().optional(),
+});
+
+export const createAdminUserSchema = z.object({
+  email: z
+    .string()
+    .transform((s) => s.trim().toLowerCase())
+    .pipe(z.string().min(3).email('Invalid email address')),
+  full_name: z
+    .string()
+    .transform((s) => s.trim())
+    .pipe(z.string().min(1, 'Name is required').max(200)),
+  status: z.enum(['active', 'suspended', 'inactive']).optional(),
+  subscription: z.enum(['trial', 'core', 'pro']).optional(),
 });

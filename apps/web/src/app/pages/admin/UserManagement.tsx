@@ -30,6 +30,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../../lib/api";
 import { format } from "date-fns";
+import { toast } from "sonner";
 
 interface User {
   id: string;
@@ -72,6 +73,7 @@ export function UserManagement() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [currentPage, setCurrentPage] = useState(1);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [addUserSubmitting, setAddUserSubmitting] = useState(false);
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -1048,25 +1050,53 @@ export function UserManagement() {
                     Cancel
                   </Button>
                   <Button
-                    onClick={() => {
+                    disabled={addUserSubmitting}
+                    onClick={async () => {
                       if (!newUser.name || !newUser.email) {
-                        alert("Please fill in all required fields (Name and Email)");
+                        toast.error("Please enter name and email.");
                         return;
                       }
-                      alert(`✅ User "${newUser.name}" (${newUser.email}) has been added!\n\nDetails:\n• Status: ${newUser.status}\n• Subscription: ${newUser.subscription}${newUser.organization ? `\n• Organization: ${newUser.organization}` : ""}\n\nThis is a demo - in production, this would create the user in the database.`);
-                      setShowAddUserModal(false);
-                      setNewUser({
-                        name: "",
-                        email: "",
-                        status: "active",
-                        subscription: "trial",
-                        organization: "",
-                      });
+                      const emailTrim = newUser.email.trim();
+                      const emailLooksValid =
+                        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim);
+                      if (!emailLooksValid) {
+                        toast.error(
+                          "Please enter a valid email address (use a dot before the domain, e.g. user@maildrop.cc)."
+                        );
+                        return;
+                      }
+                      setAddUserSubmitting(true);
+                      try {
+                        await api.admin.createUser({
+                          email: emailTrim,
+                          full_name: newUser.name.trim(),
+                          status: newUser.status,
+                          subscription: newUser.subscription,
+                        });
+                        toast.success(
+                          "Invite sent. The user will receive an email to set their password (from your Supabase / SMTP settings)."
+                        );
+                        setShowAddUserModal(false);
+                        setNewUser({
+                          name: "",
+                          email: "",
+                          status: "active",
+                          subscription: "trial",
+                          organization: "",
+                        });
+                        await fetchUsers();
+                      } catch (e: unknown) {
+                        const msg =
+                          e instanceof Error ? e.message : "Could not create user.";
+                        toast.error(msg);
+                      } finally {
+                        setAddUserSubmitting(false);
+                      }
                     }}
                     className="gap-2"
                   >
                     <UserPlus className="w-4 h-4" />
-                    Add User
+                    {addUserSubmitting ? "Adding…" : "Add User"}
                   </Button>
                 </div>
               </Card>

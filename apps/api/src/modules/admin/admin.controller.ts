@@ -1,8 +1,8 @@
 
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { 
-  getDashboardStats, getAllUsers, getUserById, updateUser, deleteUser, getUserAuditLogs, getRecentActivity,
-  getUserSegments, createUserSegment, deleteUserSegment,
+  getDashboardStats, getAllUsers, getUserById, createUserByAdmin, updateUser, deleteUser, getUserAuditLogs, getRecentActivity,
+  getUserSegmentationDashboard, createUserSegment, deleteUserSegment,
   getManualNotifications, createManualNotification, getNotificationAudienceCounts,
   getNudges, createNudge, updateNudge, deleteNudge,
   getNudgeTemplates, createNudgeTemplate, updateNudgeTemplate, deleteNudgeTemplate,
@@ -12,17 +12,27 @@ import {
   getCommunityStats, getCommunityGroups,
   getLiveSessions, getActivityLogs, getGlobalAuditLogs, getSessionRecordings, getErrorLogs, getSessionRecordingTranscript,
   getCrisisEvents, getCrisisEvent, updateCrisisEventStatus,
-  endLiveSessionByAdmin, flagSessionForReview
+  endLiveSessionByAdmin, flagSessionForReview,
+  getOrgTeamMembers, addOrgTeamMember, updateOrgTeamMember, removeOrgTeamMember,
 } from './admin.service';
-import { updateUserSchema } from './admin.schema';
+import { updateUserSchema, createAdminUserSchema } from './admin.schema';
 import { z } from 'zod';
+import type { DashboardStatsQuery } from './admin.service';
 
 export async function getDashboardStatsHandler(
   request: FastifyRequest,
   reply: FastifyReply
 ) {
   try {
-    const stats = await getDashboardStats();
+    const q = request.query as Record<string, string | undefined>;
+    const cp = q.chartPeriod;
+    const chartPeriod: DashboardStatsQuery['chartPeriod'] =
+      cp === 'week' || cp === 'year' ? cp : 'month';
+    const sessionWeekOffset = Math.min(
+      52,
+      Math.max(0, parseInt(q.sessionWeekOffset || '0', 10) || 0)
+    );
+    const stats = await getDashboardStats({ chartPeriod, sessionWeekOffset });
     return reply.code(200).send(stats);
   } catch (error) {
     request.log.error(error);
@@ -60,6 +70,45 @@ export async function getUsersHandler(
       message: 'Failed to fetch users',
       error: error instanceof Error ? error.message : String(error)
     });
+  }
+}
+
+function resolveWebBaseUrl(request: FastifyRequest): string {
+  const origin = request.headers.origin;
+  const referer = request.headers.referer;
+  if (origin && /^https?:\/\//i.test(origin)) {
+    try {
+      return new URL(origin).origin;
+    } catch {
+      /* fall through */
+    }
+  }
+  if (referer && /^https?:\/\//i.test(referer)) {
+    try {
+      return new URL(referer).origin;
+    } catch {
+      /* fall through */
+    }
+  }
+  return (
+    process.env.WEB_BASE_URL ||
+    process.env.APP_URL ||
+    'http://localhost:5173'
+  );
+}
+
+export async function createUserHandler(
+  request: FastifyRequest<{ Body: z.infer<typeof createAdminUserSchema> }>,
+  reply: FastifyReply
+) {
+  try {
+    const webBaseUrl = resolveWebBaseUrl(request);
+    const user = await createUserByAdmin(request.body, webBaseUrl);
+    return reply.code(201).send(user);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to create user';
+    request.log.error({ error }, 'createUser failed');
+    return reply.code(400).send({ message });
   }
 }
 
@@ -177,8 +226,8 @@ export async function updateCrisisEventStatusHandler(
 // User Segmentation
 export async function getUserSegmentsHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
-    const segments = await getUserSegments();
-    return reply.code(200).send(segments);
+    const dashboard = await getUserSegmentationDashboard();
+    return reply.code(200).send(dashboard);
   } catch (error) {
     request.log.error(error);
     return reply.code(500).send({ message: 'Failed to fetch segments' });
@@ -578,5 +627,104 @@ export async function getErrorLogsHandler(request: FastifyRequest, reply: Fastif
   } catch (error) {
     request.log.error(error);
     return reply.code(500).send({ message: 'Failed to fetch error logs' });
+  }
+}
+
+// Organization team (Team Management)
+export async function getOrgTeamHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const user = request.user as { sub?: string; appRole?: string };
+    if (!user.sub) return reply.code(401).send({ message: 'Unauthorized' });
+    const q = (request.query || {}) as { org_id?: string };
+    const data = await getOrgTeamMembers(user.sub, user.appRole, q.org_id);
+    return reply.code(200).send(data);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to load organization team' });
+  }
+}
+
+export async function addOrgTeamMemberHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const user = request.user as { sub?: string; appRole?: string };
+    if (!user.sub) return reply.code(401).send({ message: 'Unauthorized' });
+    const body = (request.body || {}) as {
+      org_id?: string;
+      email?: string;
+      full_name?: string;
+      phone?: string;
+      profile_role?: 'org_admin' | 'team_admin' | 'user';
+    };
+    const profile_role = body.profile_role ?? 'team_admin';
+    if (!['org_admin', 'team_admin', 'user'].includes(profile_role)) {
+      return reply.code(400).send({ message: 'Invalid profile_role' });
+    }
+    const webBaseUrl = resolveWebBaseUrl(request);
+    const data = await addOrgTeamMember(
+      user.sub,
+      user.appRole,
+      {
+        org_id: body.org_id,
+        email: String(body.email ?? ''),
+        full_name: String(body.full_name ?? ''),
+        phone: body.phone,
+        profile_role,
+      },
+      webBaseUrl
+    );
+    return reply.code(201).send(data);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to add member';
+    request.log.error({ error }, 'addOrgTeamMember');
+    const code = msg === 'Forbidden' ? 403 : 400;
+    return reply.code(code).send({ message: msg });
+  }
+}
+
+export async function updateOrgTeamMemberHandler(
+  request: FastifyRequest<{ Params: { userId: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const user = request.user as { sub?: string; appRole?: string };
+    if (!user.sub) return reply.code(401).send({ message: 'Unauthorized' });
+    const q = (request.query || {}) as { org_id?: string };
+    const body = (request.body || {}) as {
+      phone?: string;
+      profile_role?: 'org_admin' | 'team_admin' | 'user';
+      account_status?: string;
+      org_role?: string;
+    };
+    if (
+      body.profile_role &&
+      !['org_admin', 'team_admin', 'user'].includes(body.profile_role)
+    ) {
+      return reply.code(400).send({ message: 'Invalid profile_role' });
+    }
+    const data = await updateOrgTeamMember(user.sub, user.appRole, q.org_id, request.params.userId, body);
+    return reply.code(200).send(data);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to update member';
+    request.log.error({ error }, 'updateOrgTeamMember');
+    const code = msg === 'Forbidden' ? 403 : 400;
+    return reply.code(code).send({ message: msg });
+  }
+}
+
+export async function removeOrgTeamMemberHandler(
+  request: FastifyRequest<{ Params: { userId: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const user = request.user as { sub?: string; appRole?: string };
+    if (!user.sub) return reply.code(401).send({ message: 'Unauthorized' });
+    const q = (request.query || {}) as { org_id?: string };
+    const data = await removeOrgTeamMember(user.sub, user.appRole, q.org_id, request.params.userId);
+    return reply.code(200).send(data);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to remove member';
+    request.log.error({ error }, 'removeOrgTeamMember');
+    const code = msg === 'Forbidden' ? 403 : 400;
+    return reply.code(code).send({ message: msg });
   }
 }

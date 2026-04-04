@@ -767,7 +767,7 @@ export function OrgAdminDashboard() {
                   Support
                 </Button>
               </Link>
-              <Link to="/admin/system-settings">
+              <Link to="/admin/system-settings-enhanced">
                 <Button variant="outline" className="w-full justify-start gap-2 bg-white hover:bg-gray-50 hover:text-gray-700">
                   <Settings className="w-4 h-4" />
                   Settings

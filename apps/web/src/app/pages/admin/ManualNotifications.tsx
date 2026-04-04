@@ -89,22 +89,28 @@ export function ManualNotifications() {
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const [segmentsData, notificationsData, countsData, usersData] =
+      const [segmentsRes, notificationsData, countsData, usersData] =
         await Promise.all([
           api.admin.getUserSegments(),
           api.admin.getManualNotifications(),
           api.admin.getNotificationAudienceCounts(),
           api.admin.getUsers(),
         ]);
-      
-      setSegments(segmentsData.map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        count: s.user_count
-      })));
+
+      const segmentsData = Array.isArray(segmentsRes)
+        ? segmentsRes
+        : (segmentsRes as { segments?: unknown[] }).segments ?? [];
+
+      setSegments(
+        segmentsData.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          count: s.user_count ?? 0,
+        }))
+      );
 
       if (segmentsData.length > 0) {
-        setSelectedSegment(segmentsData[0].id);
+        setSelectedSegment((segmentsData[0] as { id: string }).id);
       }
 
       setAudienceCounts({

@@ -5,10 +5,39 @@ import { DashboardStats } from './admin.schema';
 import { endSession } from '../sessions/sessions.service';
 import { notificationsService } from '../notifications/notifications.service';
 import { emailService } from '../email/email.service';
+import { supabaseAdmin } from '../../config/supabase';
+import * as userService from '../users/user.service';
 
-// Simple in-memory cache for dashboard stats
+// Simple in-memory cache for dashboard stats (keyed by query options)
 const STATS_CACHE_TTL = 60 * 1000; // 60 seconds
-let statsCache: { data: DashboardStats; timestamp: number } | null = null;
+const statsCache = new Map<string, { data: DashboardStats; timestamp: number }>();
+
+export type DashboardStatsQuery = {
+  chartPeriod?: 'week' | 'month' | 'year';
+  sessionWeekOffset?: number;
+};
+
+function statsCacheKey(opts: DashboardStatsQuery): string {
+  return JSON.stringify({
+    chartPeriod: opts.chartPeriod ?? 'month',
+    sessionWeekOffset: opts.sessionWeekOffset ?? 0,
+  });
+}
+
+function utcMonday(d: Date): Date {
+  const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = x.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  x.setUTCDate(x.getUTCDate() + diff);
+  x.setUTCHours(0, 0, 0, 0);
+  return x;
+}
+
+function addUtcDays(d: Date, n: number): Date {
+  const x = new Date(d);
+  x.setUTCDate(x.getUTCDate() + n);
+  return x;
+}
 
 // Simple in-memory cache for users list
 const USERS_CACHE_TTL = 30 * 1000; // 30 seconds
@@ -45,15 +74,36 @@ const errorLogsCache = new Map<string, { data: any[]; timestamp: number }>();
 const LIVE_SESSIONS_CACHE_TTL = 120 * 1000; // 120 seconds
 let liveSessionsCache: { data: any[]; timestamp: number } | null = null;
 
-export async function getDashboardStats(): Promise<DashboardStats> {
+export async function getDashboardStats(
+  opts: DashboardStatsQuery = {}
+): Promise<DashboardStats> {
   const now = Date.now();
-  if (statsCache && (now - statsCache.timestamp < STATS_CACHE_TTL)) {
-    return statsCache.data;
+  const cacheKey = statsCacheKey(opts);
+  const cached = statsCache.get(cacheKey);
+  if (cached && now - cached.timestamp < STATS_CACHE_TTL) {
+    return cached.data;
   }
-  // Use 'now' from above
+
+  const chartPeriod = opts.chartPeriod ?? 'month';
+  const sessionWeekOffset = Math.min(52, Math.max(0, opts.sessionWeekOffset ?? 0));
+
   const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
-  
-  const [countsResult, revenueResult, dailyStats, hourlyStats] = await Promise.all([
+
+  const weekStart = addUtcDays(utcMonday(new Date(now)), -sessionWeekOffset * 7);
+  const weekEnd = addUtcDays(weekStart, 7);
+
+  const [
+    countsResult,
+    revenueResult,
+    hourlyStats,
+    dailyStatsWeek,
+    userGrowthMonthly,
+    userGrowthWeekly,
+    userGrowthYearly,
+    revenueMonthly,
+    revenueWeekly,
+    revenueYearly,
+  ] = await Promise.all([
     // 1. Optimized: Single query for all counts using raw SQL
     prisma.$queryRaw`
       SELECT 
@@ -74,17 +124,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       _sum: { amount: true },
       where: { status: 'active' }
     }),
-    // 3. Real session activity for last 7 days - Optimized with Group By
-    prisma.$queryRaw`
-      SELECT 
-        DATE(started_at) as date,
-        COUNT(*) as count,
-        COALESCE(SUM(duration_minutes), 0) as total_duration
-      FROM app_sessions
-      WHERE started_at >= ${sevenDaysAgo}
-      GROUP BY DATE(started_at)
-    `,
-    // 4. Hourly stats for last 7 days - Optimized
+    // 3. Hourly stats for last 7 days - Optimized
     prisma.$queryRaw`
       SELECT 
         EXTRACT(HOUR FROM started_at) as hour,
@@ -92,6 +132,77 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       FROM app_sessions
       WHERE started_at >= ${sevenDaysAgo}
       GROUP BY EXTRACT(HOUR FROM started_at)
+    `,
+    prisma.$queryRaw`
+      SELECT 
+        DATE(started_at AT TIME ZONE 'UTC') as date,
+        COUNT(*)::bigint as count,
+        COALESCE(SUM(duration_minutes), 0)::bigint as total_duration
+      FROM app_sessions
+      WHERE started_at >= ${weekStart} AND started_at < ${weekEnd}
+      GROUP BY DATE(started_at AT TIME ZONE 'UTC')
+    `,
+    prisma.$queryRaw<Array<{ label: string; users: bigint }>>`
+      WITH months AS (
+        SELECT generate_series(
+          date_trunc('month', timezone('utc'::text, now())) - interval '11 months',
+          date_trunc('month', timezone('utc'::text, now())),
+          interval '1 month'
+        ) AS m
+      )
+      SELECT 
+        to_char(m, 'Mon YY') AS label,
+        (SELECT COUNT(*)::bigint FROM profiles p WHERE p.created_at < m + interval '1 month') AS users
+      FROM months
+      ORDER BY m
+    `,
+    prisma.$queryRaw<Array<{ label: string; users: bigint }>>`
+      SELECT 
+        to_char(date_trunc('week', timezone('utc'::text, created_at)), 'Mon DD') AS label,
+        COUNT(*)::bigint AS users
+      FROM profiles
+      WHERE created_at >= timezone('utc', now()) - interval '12 weeks'
+      GROUP BY date_trunc('week', timezone('utc'::text, created_at))
+      ORDER BY date_trunc('week', timezone('utc'::text, created_at))
+    `,
+    prisma.$queryRaw<Array<{ label: string; users: bigint }>>`
+      SELECT 
+        to_char(date_trunc('year', timezone('utc'::text, created_at)), 'YYYY') AS label,
+        COUNT(*)::bigint AS users
+      FROM profiles
+      WHERE created_at >= timezone('utc', now()) - interval '5 years'
+      GROUP BY date_trunc('year', timezone('utc'::text, created_at))
+      ORDER BY date_trunc('year', timezone('utc'::text, created_at))
+    `,
+    prisma.$queryRaw<Array<{ label: string; revenue: bigint }>>`
+      SELECT 
+        to_char(date_trunc('month', timezone('utc'::text, created_at)), 'Mon YY') AS label,
+        COALESCE(SUM(amount), 0)::bigint AS revenue
+      FROM payment_transactions
+      WHERE status = 'completed'
+        AND created_at >= timezone('utc', now()) - interval '12 months'
+      GROUP BY date_trunc('month', timezone('utc'::text, created_at))
+      ORDER BY date_trunc('month', timezone('utc'::text, created_at))
+    `,
+    prisma.$queryRaw<Array<{ label: string; revenue: bigint }>>`
+      SELECT 
+        to_char(date_trunc('week', timezone('utc'::text, created_at)), 'Mon DD') AS label,
+        COALESCE(SUM(amount), 0)::bigint AS revenue
+      FROM payment_transactions
+      WHERE status = 'completed'
+        AND created_at >= timezone('utc', now()) - interval '12 weeks'
+      GROUP BY date_trunc('week', timezone('utc'::text, created_at))
+      ORDER BY date_trunc('week', timezone('utc'::text, created_at))
+    `,
+    prisma.$queryRaw<Array<{ label: string; revenue: bigint }>>`
+      SELECT 
+        to_char(date_trunc('year', timezone('utc'::text, created_at)), 'YYYY') AS label,
+        COALESCE(SUM(amount), 0)::bigint AS revenue
+      FROM payment_transactions
+      WHERE status = 'completed'
+        AND created_at >= timezone('utc', now()) - interval '6 years'
+      GROUP BY date_trunc('year', timezone('utc'::text, created_at))
+      ORDER BY date_trunc('year', timezone('utc'::text, created_at))
     `
   ]);
 
@@ -112,21 +223,24 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const revenue = revenueResult._sum.amount?.toNumber() || 0;
 
   const sessionActivity = Array.from({ length: 7 }).map((_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    
-    // Find matching stat
-    const stat = (dailyStats as any[]).find((s: any) => {
-      const sDate = new Date(s.date);
-      return sDate.getDate() === d.getDate() && sDate.getMonth() === d.getMonth();
+    const d = addUtcDays(weekStart, i);
+    const ymd = d.toISOString().slice(0, 10);
+    const stat = (dailyStatsWeek as any[]).find((s: any) => {
+      const raw = s.date;
+      const key =
+        typeof raw === 'string'
+          ? raw.slice(0, 10)
+          : new Date(raw).toISOString().slice(0, 10);
+      return key === ymd;
     });
-    
-    const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
-    
+    const dayName = d.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
     return {
       day: dayName,
       sessions: stat ? Number(stat.count) : 0,
-      duration: stat && Number(stat.count) > 0 ? Math.round(Number(stat.total_duration) / Number(stat.count)) : 0
+      duration:
+        stat && Number(stat.count) > 0
+          ? Math.round(Number(stat.total_duration) / Number(stat.count))
+          : 0,
     };
   });
 
@@ -168,28 +282,81 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     { name: "CDN Performance", value: "98%", status: "excellent", color: "text-green-600", percentage: 98 },
   ];
 
-  // User Growth - Mocked trend but scaled to real total
-  // (Implementing real monthly aggregation requires raw SQL or complex grouping not easily done with simple Prisma findMany)
-  const userGrowth = [
-    { month: "Jan", users: Math.floor(totalUsers * 0.7), orgs: 0 },
-    { month: "Feb", users: Math.floor(totalUsers * 0.75), orgs: 0 },
-    { month: "Mar", users: Math.floor(totalUsers * 0.8), orgs: 0 },
-    { month: "Apr", users: Math.floor(totalUsers * 0.85), orgs: 0 },
-    { month: "May", users: Math.floor(totalUsers * 0.9), orgs: 0 },
-    { month: "Jun", users: Math.floor(totalUsers * 0.95), orgs: 0 },
-    { month: "Jul", users: totalUsers, orgs: 0 },
+  const ugMonth = (userGrowthMonthly as Array<{ label: string; users: bigint }>).map((r) => ({
+    month: r.label,
+    users: Number(r.users),
+    orgs: 0,
+  }));
+  const ugWeek = (userGrowthWeekly as Array<{ label: string; users: bigint }>).map((r) => ({
+    month: r.label,
+    users: Number(r.users),
+    orgs: 0,
+  }));
+  const ugYear = (userGrowthYearly as Array<{ label: string; users: bigint }>).map((r) => ({
+    month: r.label,
+    users: Number(r.users),
+    orgs: 0,
+  }));
+
+  const userGrowthFallback = [
+    { month: '—', users: totalUsers, orgs: 0 },
   ];
 
-  // Revenue Data - Mocked trend scaled to real revenue
-  const revenueData = [
-    { month: "Jan", revenue: Math.floor(revenue * 0.7) },
-    { month: "Feb", revenue: Math.floor(revenue * 0.75) },
-    { month: "Mar", revenue: Math.floor(revenue * 0.8) },
-    { month: "Apr", revenue: Math.floor(revenue * 0.85) },
-    { month: "May", revenue: Math.floor(revenue * 0.9) },
-    { month: "Jun", revenue: Math.floor(revenue * 0.95) },
-    { month: "Jul", revenue: revenue },
+  let userGrowth =
+    chartPeriod === 'week'
+      ? ugWeek.length
+        ? ugWeek
+        : userGrowthFallback
+      : chartPeriod === 'year'
+        ? ugYear.length
+          ? ugYear
+          : userGrowthFallback
+        : ugMonth.length
+          ? ugMonth
+          : userGrowthFallback;
+
+  const revFromTx = (
+    rows: Array<{ label: string; revenue: bigint }>
+  ): { month: string; revenue: number }[] =>
+    rows.map((r) => ({
+      month: r.label,
+      revenue: Math.max(0, Math.round(Number(r.revenue) / 100)),
+    }));
+
+  const revMonth = revFromTx(revenueMonthly as Array<{ label: string; revenue: bigint }>);
+  const revWeek = revFromTx(revenueWeekly as Array<{ label: string; revenue: bigint }>);
+  const revYear = revFromTx(revenueYearly as Array<{ label: string; revenue: bigint }>);
+
+  const revenueFallback = [
+    { month: 'Total', revenue: Math.round(revenue) },
   ];
+
+  let revenueData =
+    chartPeriod === 'week'
+      ? revWeek.length
+        ? revWeek
+        : revenueFallback
+      : chartPeriod === 'year'
+        ? revYear.length
+          ? revYear
+          : revenueFallback
+        : revMonth.length
+          ? revMonth
+          : revenueFallback;
+
+  const userGrowthIsMock =
+    chartPeriod === 'week'
+      ? ugWeek.length === 0
+      : chartPeriod === 'year'
+        ? ugYear.length === 0
+        : ugMonth.length === 0;
+
+  const revenueIsMock =
+    chartPeriod === 'week'
+      ? revWeek.length === 0
+      : chartPeriod === 'year'
+        ? revYear.length === 0
+        : revMonth.length === 0;
 
   const featureUsageRaw = [
     { feature: "AI Sessions", count: totalSessions },
@@ -216,6 +383,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     { name: "Desktop", value: 10, color: "#06b6d4" },
   ];
 
+  const mockedSections: string[] = ['systemHealth', 'platformDistribution'];
+  if (userGrowthIsMock) mockedSections.push('userGrowth');
+  if (revenueIsMock) mockedSections.push('revenueData');
+
   const result = {
     totalUsers,
     activeSessions,
@@ -230,10 +401,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     revenueData,
     platformDistribution,
     featureUsage,
-    mockedSections: ['systemHealth', 'userGrowth', 'revenueData', 'platformDistribution']
+    mockedSections,
+    chartPeriod,
+    sessionWeekOffset,
   };
 
-  statsCache = { data: result, timestamp: Date.now() };
+  statsCache.set(cacheKey, { data: result, timestamp: Date.now() });
   return result;
 }
 
@@ -423,6 +596,88 @@ export async function getUserById(id: string) {
   };
 }
 
+export async function createUserByAdmin(
+  input: {
+    email: string;
+    full_name: string;
+    status?: 'active' | 'suspended' | 'inactive';
+    subscription?: 'trial' | 'core' | 'pro';
+  },
+  webBaseUrl: string
+) {
+  const emailNorm = input.email.trim().toLowerCase();
+  if (!emailNorm) {
+    throw new Error('Email is required');
+  }
+
+  const dup = await prisma.profiles.findFirst({
+    where: { email: { equals: emailNorm, mode: 'insensitive' } },
+    select: { id: true },
+  });
+  if (dup) {
+    throw new Error('A profile with this email already exists');
+  }
+
+  const base = webBaseUrl.replace(/\/$/, '');
+  const redirectTo = `${base}/login`;
+
+  const { data: invited, error: inviteError } =
+    await supabaseAdmin.auth.admin.inviteUserByEmail(emailNorm, {
+      data: { full_name: input.full_name },
+      redirectTo,
+    });
+
+  if (inviteError) {
+    throw new Error(inviteError.message || 'Failed to send invite');
+  }
+  const userId = invited?.user?.id;
+  if (!userId) {
+    throw new Error('Invite did not return a user id');
+  }
+
+  await userService.createProfile(userId, emailNorm, input.full_name, 'trial');
+
+  const status = input.status ?? 'active';
+  const subscription = input.subscription ?? 'trial';
+
+  const role =
+    status === 'suspended'
+      ? 'suspended'
+      : 'user';
+
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: {
+      role,
+      account_status: status === 'inactive' ? 'inactive' : 'active',
+    },
+  });
+
+  if (subscription !== 'trial') {
+    const trialSub = await prisma.subscriptions.findFirst({
+      where: { user_id: userId, plan_type: 'trial' },
+      orderBy: { created_at: 'desc' },
+    });
+    if (trialSub) {
+      await prisma.subscriptions.update({
+        where: { id: trialSub.id },
+        data: {
+          plan_type: subscription,
+          status: 'active',
+        },
+      });
+    }
+  }
+
+  usersCache.clear();
+
+  const created = await getUserById(userId);
+  if (!created) {
+    throw new Error('User was created but could not be loaded');
+  }
+  return created;
+}
+
 export async function updateUser(id: string, data: { status?: string; role?: string }) {
   const existing = await prisma.profiles.findUnique({
     where: { id },
@@ -524,20 +779,623 @@ export async function getGlobalAuditLogs(page: number = 1, limit: number = 50) {
 // 1. User Segmentation
 export async function getUserSegments() {
   return prisma.user_segments.findMany({
-    orderBy: { created_at: 'desc' }
+    orderBy: { created_at: 'desc' },
   });
+}
+
+type SegmentRule = { type: string; operator: string; value: string };
+
+function extractSegmentRules(criteria: unknown): SegmentRule[] {
+  if (criteria && typeof criteria === 'object' && !Array.isArray(criteria) && 'rules' in criteria) {
+    const rules = (criteria as { rules?: unknown }).rules;
+    return Array.isArray(rules) ? (rules as SegmentRule[]) : [];
+  }
+  if (Array.isArray(criteria)) {
+    return criteria as SegmentRule[];
+  }
+  return [];
+}
+
+/** End-users only (exclude admin roles). */
+function endUserWhere(): Prisma.profilesWhereInput {
+  return {
+    OR: [
+      { role: null },
+      { role: { notIn: ['super_admin', 'org_admin', 'team_admin'] } },
+    ],
+  };
+}
+
+function buildProfileWhereFromRules(rules: SegmentRule[]): Prisma.profilesWhereInput {
+  if (!rules.length) {
+    return endUserWhere();
+  }
+  const parts: Prisma.profilesWhereInput[] = [];
+  for (const r of rules) {
+    if (!r?.type || !r?.operator) continue;
+    const v = String(r.value ?? '').trim();
+    if (!v) continue;
+    if (r.type === 'role' && r.operator === 'equals') {
+      parts.push({ role: v });
+    } else if (r.type === 'account_status' && r.operator === 'equals') {
+      parts.push({ account_status: v });
+    } else if (r.type === 'subscription' && r.operator === 'equals') {
+      parts.push({
+        subscriptions: {
+          some: { status: 'active', plan_type: v },
+        },
+      });
+    }
+  }
+  if (parts.length === 0) {
+    return endUserWhere();
+  }
+  return { AND: [endUserWhere(), ...parts] };
+}
+
+const SEGMENTATION_CACHE_TTL = 45 * 1000;
+let segmentationDashboardCache: { data: unknown; at: number } | null = null;
+
+export async function getUserSegmentationDashboard() {
+  const now = Date.now();
+  if (
+    segmentationDashboardCache &&
+    now - segmentationDashboardCache.at < SEGMENTATION_CACHE_TTL
+  ) {
+    return segmentationDashboardCache.data;
+  }
+
+  const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+
+  const segments = await prisma.user_segments.findMany({
+    orderBy: { created_at: 'desc' },
+  });
+
+  const [totalEndUsers, premiumUsers, sessionAgg, engagementBucketsRaw] = await Promise.all([
+    prisma.profiles.count({ where: endUserWhere() }),
+    prisma.profiles.count({
+      where: {
+        AND: [
+          endUserWhere(),
+          {
+            subscriptions: {
+              some: {
+                status: 'active',
+                plan_type: { not: 'trial' },
+              },
+            },
+          },
+        ],
+      },
+    }),
+    prisma.app_sessions.aggregate({
+      _avg: { duration_minutes: true },
+      where: {
+        profiles: endUserWhere(),
+        duration_minutes: { not: null },
+      },
+    }),
+    prisma.$queryRaw<Array<{ id: string; c: bigint }>>`
+      SELECT p.id, COUNT(s.id)::bigint AS c
+      FROM profiles p
+      LEFT JOIN app_sessions s ON s.user_id = p.id AND s.started_at >= ${thirtyDaysAgo}
+      WHERE COALESCE(p.role, 'user') NOT IN ('super_admin', 'org_admin', 'team_admin')
+      GROUP BY p.id
+    `,
+  ]);
+
+  const buckets = [0, 0, 0, 0, 0];
+  const labels = [
+    '0 sessions',
+    '1–2 sessions',
+    '3–5 sessions',
+    '6–10 sessions',
+    '11+ sessions',
+  ];
+  for (const row of engagementBucketsRaw) {
+    const n = Number(row.c);
+    if (n === 0) buckets[0]++;
+    else if (n <= 2) buckets[1]++;
+    else if (n <= 5) buckets[2]++;
+    else if (n <= 10) buckets[3]++;
+    else buckets[4]++;
+  }
+  const engagementDistribution = labels.map((range, i) => ({
+    range,
+    users: buckets[i],
+  }));
+
+  const usersWithSessions30d = buckets.slice(1).reduce((a, b) => a + b, 0);
+  const avgEngagementPct =
+    totalEndUsers > 0 ? Math.round((usersWithSessions30d / totalEndUsers) * 100) : 0;
+
+  const enrichedSegments = await Promise.all(
+    segments.map(async (seg) => {
+      const rules = extractSegmentRules(seg.criteria);
+      const where = buildProfileWhereFromRules(rules);
+
+      const [userCount, engagedInSegment, paidInSegment, avgDur] = await Promise.all([
+        prisma.profiles.count({ where }),
+        prisma.profiles.count({
+          where: {
+            AND: [
+              where,
+              {
+                app_sessions: {
+                  some: { started_at: { gte: thirtyDaysAgo } },
+                },
+              },
+            ],
+          },
+        }),
+        prisma.profiles.count({
+          where: {
+            AND: [
+              where,
+              {
+                subscriptions: {
+                  some: {
+                    status: 'active',
+                    plan_type: { not: 'trial' },
+                  },
+                },
+              },
+            ],
+          },
+        }),
+        prisma.app_sessions.aggregate({
+          _avg: { duration_minutes: true },
+          where: {
+            profiles: where,
+            duration_minutes: { not: null },
+          },
+        }),
+      ]);
+
+      const engagementPct =
+        userCount > 0 ? Math.round((engagedInSegment / userCount) * 100) : 0;
+      const conversionPct =
+        userCount > 0 ? Math.round((paidInSegment / userCount) * 100) : 0;
+
+      return {
+        ...seg,
+        user_count: userCount,
+        avg_session_minutes: Math.round(Number(avgDur._avg.duration_minutes ?? 0)),
+        engagement_pct: engagementPct,
+        conversion_pct: conversionPct,
+      };
+    })
+  );
+
+  const payload = {
+    segments: enrichedSegments,
+    platform: {
+      total_end_users: totalEndUsers,
+      total_segments: segments.length,
+      avg_engagement_pct: avgEngagementPct,
+      premium_users: premiumUsers,
+      avg_session_minutes_platform: Math.round(
+        Number(sessionAgg._avg.duration_minutes ?? 0)
+      ),
+      engagement_distribution: engagementDistribution,
+    },
+  };
+
+  segmentationDashboardCache = { data: payload, at: now };
+  return payload;
 }
 
 export async function createUserSegment(data: any) {
   return prisma.user_segments.create({
-    data
+    data,
   });
 }
 
 export async function deleteUserSegment(id: string) {
   return prisma.user_segments.delete({
-    where: { id }
+    where: { id },
   });
+}
+
+// --- Organization team (Team Management) — backed by `org_members` + `profiles.role` ---
+
+function permissionsForProfileRole(role: string | null | undefined): string[] {
+  const r = role ?? 'user';
+  if (r === 'super_admin') {
+    return ['full-access', 'system-settings', 'user-management', 'audit-logs'];
+  }
+  if (r === 'org_admin') {
+    return ['org-settings', 'user-management', 'team-management', 'analytics-view'];
+  }
+  if (r === 'team_admin') {
+    return ['session-access', 'user-view', 'support-access', 'analytics-view'];
+  }
+  return ['app-user'];
+}
+
+async function resolveOrgIdForTeamManagement(
+  callerId: string,
+  callerRole: string | undefined,
+  requestedOrgId: string | undefined
+): Promise<{ orgId: string | null; error?: string }> {
+  const cr = callerRole ?? '';
+  if (cr === 'super_admin') {
+    if (requestedOrgId) {
+      const exists = await prisma.organizations.findUnique({
+        where: { id: requestedOrgId },
+        select: { id: true },
+      });
+      if (!exists) return { orgId: null, error: 'Organization not found' };
+      return { orgId: requestedOrgId };
+    }
+    const first = await prisma.organizations.findFirst({ orderBy: { name: 'asc' } });
+    return { orgId: first?.id ?? null };
+  }
+  if (cr === 'org_admin') {
+    const m = await prisma.org_members.findFirst({
+      where: { user_id: callerId },
+      select: { org_id: true },
+    });
+    if (!m) return { orgId: null, error: 'No organization membership for your account' };
+    if (requestedOrgId && requestedOrgId !== m.org_id) {
+      return { orgId: null, error: 'Forbidden' };
+    }
+    return { orgId: m.org_id };
+  }
+  return { orgId: null, error: 'Forbidden' };
+}
+
+async function assertCallerCanManageOrg(
+  callerId: string,
+  callerRole: string | undefined,
+  orgId: string
+) {
+  const cr = callerRole ?? '';
+  if (cr === 'super_admin') return;
+  if (cr === 'org_admin') {
+    const m = await prisma.org_members.findFirst({
+      where: { user_id: callerId, org_id: orgId },
+      select: { org_id: true },
+    });
+    if (m) return;
+  }
+  throw new Error('Forbidden');
+}
+
+async function countOrgAdminsInOrg(orgId: string): Promise<number> {
+  const rows = await prisma.org_members.findMany({
+    where: { org_id: orgId },
+    include: { profiles: { select: { role: true } } },
+  });
+  return rows.filter((r) => r.profiles.role === 'org_admin').length;
+}
+
+export async function listOrganizationsForTeamAdmin() {
+  return prisma.organizations.findMany({
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, slug: true },
+  });
+}
+
+export type OrgTeamMemberRow = {
+  id: string;
+  org_id: string;
+  user_id: string;
+  org_role: string;
+  email: string;
+  full_name: string;
+  phone: string | null;
+  profile_role: string;
+  account_status: string | null;
+  created_at: string;
+  joined_org_at: string;
+  session_count: number;
+  last_active_at: string | null;
+  permissions: string[];
+  status: 'active' | 'inactive' | 'pending';
+};
+
+function mapOrgMemberRow(m: {
+  org_id: string;
+  user_id: string;
+  role: string | null;
+  created_at: Date;
+  profiles: {
+    id: string;
+    email: string | null;
+    full_name: string | null;
+    phone: string | null;
+    role: string | null;
+    account_status: string | null;
+    created_at: Date;
+    updated_at: Date;
+    _count: { app_sessions: number };
+    app_sessions: { started_at: Date | null }[];
+  };
+}): OrgTeamMemberRow {
+  const p = m.profiles;
+  const lastAt = p.app_sessions[0]?.started_at ?? p.updated_at;
+  const sessionCount = p._count.app_sessions;
+
+  let status: 'active' | 'inactive' | 'pending' = 'active';
+  if (p.account_status === 'suspended' || p.role === 'suspended') status = 'inactive';
+  else if (p.account_status === 'inactive') status = 'inactive';
+  else if (!p.email) status = 'pending';
+
+  return {
+    id: p.id,
+    org_id: m.org_id,
+    user_id: m.user_id,
+    org_role: m.role ?? 'member',
+    email: p.email ?? '',
+    full_name: p.full_name ?? '',
+    phone: p.phone,
+    profile_role: p.role ?? 'user',
+    account_status: p.account_status,
+    created_at: p.created_at.toISOString(),
+    joined_org_at: m.created_at.toISOString(),
+    session_count: sessionCount,
+    last_active_at: lastAt ? new Date(lastAt).toISOString() : null,
+    permissions: permissionsForProfileRole(p.role),
+    status,
+  };
+}
+
+export async function getOrgTeamMembers(
+  callerId: string,
+  callerRole: string | undefined,
+  requestedOrgId: string | undefined
+) {
+  const { orgId, error } = await resolveOrgIdForTeamManagement(callerId, callerRole, requestedOrgId);
+  const organizations = callerRole === 'super_admin' ? await listOrganizationsForTeamAdmin() : [];
+
+  if (!orgId) {
+    return {
+      org: null as { id: string; name: string; slug: string } | null,
+      organizations,
+      members: [] as OrgTeamMemberRow[],
+      message: error,
+    };
+  }
+
+  await assertCallerCanManageOrg(callerId, callerRole, orgId);
+
+  const org = await prisma.organizations.findUnique({ where: { id: orgId } });
+  const rows = await prisma.org_members.findMany({
+    where: { org_id: orgId },
+    include: {
+      profiles: {
+        select: {
+          id: true,
+          email: true,
+          full_name: true,
+          phone: true,
+          role: true,
+          account_status: true,
+          created_at: true,
+          updated_at: true,
+          _count: {
+            select: {
+              app_sessions: {
+                where: { ended_at: { not: null } },
+              },
+            },
+          },
+          app_sessions: {
+            orderBy: { started_at: 'desc' },
+            take: 1,
+            select: { started_at: true },
+          },
+        },
+      },
+    },
+    orderBy: { created_at: 'desc' },
+  });
+
+  return {
+    org: org ? { id: org.id, name: org.name, slug: org.slug } : null,
+    organizations,
+    members: rows.map(mapOrgMemberRow),
+    message: undefined as string | undefined,
+  };
+}
+
+export async function addOrgTeamMember(
+  callerId: string,
+  callerRole: string | undefined,
+  input: {
+    org_id?: string;
+    email: string;
+    full_name: string;
+    phone?: string;
+    profile_role: 'org_admin' | 'team_admin' | 'user';
+  },
+  webBaseUrl: string
+) {
+  const { orgId, error } = await resolveOrgIdForTeamManagement(callerId, callerRole, input.org_id);
+  if (!orgId) throw new Error(error || 'No organization');
+  await assertCallerCanManageOrg(callerId, callerRole, orgId);
+
+  if (input.profile_role === 'org_admin' && callerRole !== 'super_admin') {
+    throw new Error('Only a super admin can assign the organization admin role');
+  }
+
+  const emailNorm = input.email.trim().toLowerCase();
+  if (!emailNorm) throw new Error('Email is required');
+  const nameTrim = input.full_name.trim();
+  if (!nameTrim) throw new Error('Full name is required');
+
+  const existingProfile = await prisma.profiles.findFirst({
+    where: { email: { equals: emailNorm, mode: 'insensitive' } },
+    select: { id: true, role: true },
+  });
+
+  if (existingProfile) {
+    if (existingProfile.role === 'super_admin') {
+      throw new Error('This account is a super admin and cannot be managed as an org member here');
+    }
+    const dup = await prisma.org_members.findFirst({
+      where: { org_id: orgId, user_id: existingProfile.id },
+    });
+    if (dup) throw new Error('This user is already in the organization');
+
+    await prisma.org_members.create({
+      data: {
+        org_id: orgId,
+        user_id: existingProfile.id,
+        role: input.profile_role === 'team_admin' ? 'staff' : 'member',
+      },
+    });
+
+    await prisma.profiles.update({
+      where: { id: existingProfile.id },
+      data: {
+        ...(input.phone?.trim() ? { phone: input.phone.trim() } : {}),
+        full_name: nameTrim,
+        role: input.profile_role,
+      },
+    });
+
+    usersCache.clear();
+    return getOrgTeamMembers(callerId, callerRole, orgId);
+  }
+
+  const base = webBaseUrl.replace(/\/$/, '');
+  const redirectTo = `${base}/login`;
+
+  const { data: invited, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(emailNorm, {
+    data: { full_name: nameTrim },
+    redirectTo,
+  });
+
+  if (inviteError) throw new Error(inviteError.message || 'Failed to send invite');
+  const newId = invited?.user?.id;
+  if (!newId) throw new Error('Invite did not return a user id');
+
+  await userService.createProfile(newId, emailNorm, nameTrim, 'trial');
+  await prisma.profiles.update({
+    where: { id: newId },
+    data: {
+      role: input.profile_role,
+      ...(input.phone?.trim() ? { phone: input.phone.trim() } : {}),
+      account_status: 'active',
+    },
+  });
+
+  await prisma.org_members.create({
+    data: {
+      org_id: orgId,
+      user_id: newId,
+      role: input.profile_role === 'team_admin' ? 'staff' : 'member',
+    },
+  });
+
+  usersCache.clear();
+  return getOrgTeamMembers(callerId, callerRole, orgId);
+}
+
+export async function updateOrgTeamMember(
+  callerId: string,
+  callerRole: string | undefined,
+  orgIdParam: string | undefined,
+  targetUserId: string,
+  data: {
+    phone?: string;
+    profile_role?: 'org_admin' | 'team_admin' | 'user';
+    account_status?: string;
+    org_role?: string;
+  }
+) {
+  const { orgId, error } = await resolveOrgIdForTeamManagement(callerId, callerRole, orgIdParam);
+  if (!orgId) throw new Error(error || 'No organization');
+  await assertCallerCanManageOrg(callerId, callerRole, orgId);
+
+  const membership = await prisma.org_members.findFirst({
+    where: { org_id: orgId, user_id: targetUserId },
+    include: { profiles: { select: { role: true } } },
+  });
+  if (!membership) throw new Error('User is not in this organization');
+
+  if (data.profile_role === 'org_admin' && callerRole !== 'super_admin') {
+    throw new Error('Only a super admin can assign the organization admin role');
+  }
+
+  if (targetUserId === callerId && data.profile_role && data.profile_role !== (membership.profiles.role ?? '')) {
+    throw new Error('You cannot change your own role');
+  }
+
+  const currentRole = membership.profiles.role ?? '';
+  if (currentRole === 'super_admin') {
+    throw new Error('Cannot modify a super admin account here');
+  }
+
+  if (data.profile_role && data.profile_role !== 'org_admin' && currentRole === 'org_admin') {
+    const admins = await countOrgAdminsInOrg(orgId);
+    if (admins <= 1) {
+      throw new Error('Cannot change the last organization admin to a different role');
+    }
+  }
+
+  const updateProfile: Prisma.profilesUpdateInput = {};
+  if (data.phone !== undefined) updateProfile.phone = data.phone.trim() || null;
+  if (data.account_status !== undefined) updateProfile.account_status = data.account_status;
+  if (data.profile_role) updateProfile.role = data.profile_role;
+
+  if (Object.keys(updateProfile).length > 0) {
+    await prisma.profiles.update({
+      where: { id: targetUserId },
+      data: updateProfile,
+    });
+  }
+
+  if (data.org_role !== undefined) {
+    await prisma.org_members.updateMany({
+      where: { org_id: orgId, user_id: targetUserId },
+      data: { role: data.org_role.trim() || 'member' },
+    });
+  }
+
+  usersCache.clear();
+  return getOrgTeamMembers(callerId, callerRole, orgId);
+}
+
+export async function removeOrgTeamMember(
+  callerId: string,
+  callerRole: string | undefined,
+  orgIdParam: string | undefined,
+  targetUserId: string
+) {
+  const { orgId, error } = await resolveOrgIdForTeamManagement(callerId, callerRole, orgIdParam);
+  if (!orgId) throw new Error(error || 'No organization');
+  await assertCallerCanManageOrg(callerId, callerRole, orgId);
+
+  if (targetUserId === callerId) {
+    throw new Error('You cannot remove yourself from the organization');
+  }
+
+  const membership = await prisma.org_members.findFirst({
+    where: { org_id: orgId, user_id: targetUserId },
+    include: { profiles: { select: { role: true } } },
+  });
+  if (!membership) throw new Error('User is not in this organization');
+
+  if (membership.profiles.role === 'super_admin') {
+    throw new Error('Cannot remove a super admin');
+  }
+
+  if (membership.profiles.role === 'org_admin') {
+    const admins = await countOrgAdminsInOrg(orgId);
+    if (admins <= 1) {
+      throw new Error('Cannot remove the last organization admin');
+    }
+  }
+
+  await prisma.org_members.deleteMany({
+    where: { org_id: orgId, user_id: targetUserId },
+  });
+
+  usersCache.clear();
+  return getOrgTeamMembers(callerId, callerRole, orgId);
 }
 
 // 2. Notifications

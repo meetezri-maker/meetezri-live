@@ -27,6 +27,11 @@ import {
   Activity,
   Leaf,
   HeartPulse,
+  Shield,
+  Waves,
+  CloudRain,
+  HandHelping,
+  Timer,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
@@ -81,6 +86,11 @@ const EDITOR_ICON_NAMES = new Set([
   "Activity",
   "Leaf",
   "HeartPulse",
+  "Shield",
+  "Waves",
+  "CloudRain",
+  "HandHelping",
+  "Timer",
 ]);
 
 export function WellnessToolEditor() {
@@ -123,6 +133,11 @@ export function WellnessToolEditor() {
     { name: "Activity", icon: Activity, color: "#16a34a" },
     { name: "Leaf", icon: Leaf, color: "#0d9488" },
     { name: "HeartPulse", icon: HeartPulse, color: "#0284c7" },
+    { name: "Shield", icon: Shield, color: "#e11d48" },
+    { name: "Waves", icon: Waves, color: "#ea580c" },
+    { name: "CloudRain", icon: CloudRain, color: "#0891b2" },
+    { name: "HandHelping", icon: HandHelping, color: "#0284c7" },
+    { name: "Timer", icon: Timer, color: "#6366f1" },
   ];
 
   useEffect(() => {

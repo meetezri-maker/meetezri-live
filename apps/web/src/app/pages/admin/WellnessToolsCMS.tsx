@@ -29,6 +29,11 @@ import {
   Activity,
   Leaf,
   HeartPulse,
+  Shield,
+  Waves,
+  CloudRain,
+  HandHelping,
+  Timer,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
@@ -78,6 +83,11 @@ const iconMap: Record<string, any> = {
   Activity,
   Leaf,
   HeartPulse,
+  Shield,
+  Waves,
+  CloudRain,
+  HandHelping,
+  Timer,
 };
 
 function buildPlaceholderTool(category: WellnessToolCategory): WellnessTool {

@@ -1,7 +1,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { 
-  getDashboardStatsHandler, getUsersHandler, getUserHandler, updateUserHandler, deleteUserHandler, getUserAuditLogsHandler, getRecentActivityHandler,
+  getDashboardStatsHandler, getUsersHandler, createUserHandler, getUserHandler, updateUserHandler, deleteUserHandler, getUserAuditLogsHandler, getRecentActivityHandler,
   getUserSegmentsHandler, createUserSegmentHandler, deleteUserSegmentHandler,
   getManualNotificationsHandler, createManualNotificationHandler, getNotificationAudienceCountsHandler,
   getNudgesHandler, createNudgeHandler, updateNudgeHandler, deleteNudgeHandler,
@@ -11,9 +11,16 @@ import {
   getSupportTicketsHandler, updateSupportTicketHandler,
   getCommunityStatsHandler, getCommunityGroupsHandler,
   getLiveSessionsHandler, endLiveSessionHandler, flagSessionForReviewHandler, getActivityLogsHandler, getGlobalAuditLogsHandler, getSessionRecordingsHandler, getErrorLogsHandler, getSessionRecordingTranscriptHandler,
-  getCrisisEventsHandler, getCrisisEventHandler, updateCrisisEventStatusHandler
+  getCrisisEventsHandler, getCrisisEventHandler, updateCrisisEventStatusHandler,
+  getOrgTeamHandler, addOrgTeamMemberHandler, updateOrgTeamMemberHandler, removeOrgTeamMemberHandler,
 } from './admin.controller';
-import { dashboardStatsSchema, userListSchema, userSchema, updateUserSchema } from './admin.schema';
+import {
+  dashboardStatsSchema,
+  userListSchema,
+  userSchema,
+  updateUserSchema,
+  createAdminUserSchema,
+} from './admin.schema';
 import { z } from 'zod';
 
 export async function adminRoutes(fastify: FastifyInstance) {
@@ -51,6 +58,17 @@ export async function adminRoutes(fastify: FastifyInstance) {
       },
     },
     getUsersHandler
+  );
+
+  fastify.post(
+    '/users',
+    {
+      preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])],
+      schema: {
+        body: createAdminUserSchema,
+      },
+    },
+    createUserHandler
   );
 
   fastify.get(
@@ -94,6 +112,28 @@ export async function adminRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])],
     },
     getUserAuditLogsHandler
+  );
+
+  // Organization team (User Management → Team Management; super_admin + org_admin only)
+  fastify.get(
+    '/organization-team',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] },
+    getOrgTeamHandler
+  );
+  fastify.post(
+    '/organization-team',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] },
+    addOrgTeamMemberHandler
+  );
+  fastify.patch(
+    '/organization-team/:userId',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] },
+    updateOrgTeamMemberHandler
+  );
+  fastify.delete(
+    '/organization-team/:userId',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] },
+    removeOrgTeamMemberHandler
   );
 
   // User Segmentation

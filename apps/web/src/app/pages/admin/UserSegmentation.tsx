@@ -25,6 +25,73 @@ import { useState, useEffect } from "react";
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { api } from "../../../lib/api";
 
+const SEGMENT_COLOR_PALETTE = [
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#8b5cf6",
+  "#ec4899",
+] as const;
+
+function paletteIndexForId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (h << 5) - h + id.charCodeAt(i);
+  }
+  return Math.abs(h) % SEGMENT_COLOR_PALETTE.length;
+}
+
+function isHexColor(s: string): boolean {
+  return /^#[0-9A-Fa-f]{6}$/.test(s);
+}
+
+/** API stores `criteria` as JSON: either legacy array or `{ color, rules }`. */
+function normalizeCriteriaFromApi(
+  raw: unknown,
+  segmentId: string
+): {
+  color: string;
+  rules: { type: string; operator: string; value: string }[];
+} {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const o = raw as Record<string, unknown>;
+    const rawColor = o.color;
+    const color =
+      typeof rawColor === "string" && isHexColor(rawColor)
+        ? rawColor
+        : SEGMENT_COLOR_PALETTE[paletteIndexForId(segmentId)];
+    const rules = Array.isArray(o.rules) ? o.rules : [];
+    const safe = rules.filter(
+      (r): r is { type: string; operator: string; value: string } =>
+        r != null &&
+        typeof r === "object" &&
+        "type" in (r as object) &&
+        "operator" in (r as object) &&
+        "value" in (r as object)
+    );
+    return { color, rules: safe };
+  }
+  if (Array.isArray(raw)) {
+    const safe = raw.filter(
+      (r): r is { type: string; operator: string; value: string } =>
+        r != null &&
+        typeof r === "object" &&
+        "type" in (r as object) &&
+        "operator" in (r as object) &&
+        "value" in (r as object)
+    );
+    return {
+      color: SEGMENT_COLOR_PALETTE[paletteIndexForId(segmentId)],
+      rules: safe,
+    };
+  }
+  return {
+    color: SEGMENT_COLOR_PALETTE[paletteIndexForId(segmentId)],
+    rules: [],
+  };
+}
+
 interface Segment {
   id: string;
   name: string;
@@ -42,8 +109,27 @@ interface Segment {
   color: string;
 }
 
+type SegmentationPlatform = {
+  total_end_users: number;
+  total_segments: number;
+  avg_engagement_pct: number;
+  premium_users: number;
+  avg_session_minutes_platform: number;
+  engagement_distribution: { range: string; users: number }[];
+};
+
+const emptyPlatform: SegmentationPlatform = {
+  total_end_users: 0,
+  total_segments: 0,
+  avg_engagement_pct: 0,
+  premium_users: 0,
+  avg_session_minutes_platform: 0,
+  engagement_distribution: [],
+};
+
 export function UserSegmentation() {
   const [segments, setSegments] = useState<Segment[]>([]);
+  const [platform, setPlatform] = useState<SegmentationPlatform>(emptyPlatform);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
@@ -63,20 +149,33 @@ export function UserSegmentation() {
   const fetchSegments = async () => {
     try {
       setIsLoading(true);
-      const data = await api.admin.getUserSegments();
-      const mapped = data.map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        description: s.description || '',
-        userCount: s.user_count || Math.floor(Math.random() * 500), // Fallback to random if 0/null for demo feel
-        criteria: Array.isArray(s.criteria) ? s.criteria : [],
-        engagement: Math.floor(Math.random() * 100), // Placeholder stats
-        conversionRate: Math.floor(Math.random() * 80),
-        avgSessionLength: Math.floor(Math.random() * 60),
-        createdAt: new Date(s.created_at),
-        color: s.criteria?.color || s.color || ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"][Math.floor(Math.random() * 6)]
-      }));
+      const data = await api.admin.getUserSegments() as {
+        segments?: unknown[];
+        platform?: SegmentationPlatform;
+      };
+      const list = Array.isArray(data) ? data : data.segments ?? [];
+      const plat =
+        data && !Array.isArray(data) && data.platform
+          ? data.platform
+          : emptyPlatform;
+
+      const mapped = list.map((s: any) => {
+        const { color, rules } = normalizeCriteriaFromApi(s.criteria, s.id);
+        return {
+          id: s.id,
+          name: s.name,
+          description: s.description || "",
+          userCount: Number(s.user_count ?? 0),
+          criteria: rules,
+          engagement: Number(s.engagement_pct ?? 0),
+          conversionRate: Number(s.conversion_pct ?? 0),
+          avgSessionLength: Number(s.avg_session_minutes ?? 0),
+          createdAt: new Date(s.created_at),
+          color,
+        };
+      });
       setSegments(mapped);
+      setPlatform(plat);
     } catch (error) {
       console.error("Failed to fetch segments", error);
     } finally {
@@ -93,8 +192,11 @@ export function UserSegmentation() {
       await api.admin.createUserSegment({
         name: formData.name,
         description: formData.description,
-        criteria: formData.criteria, // Should include color in criteria JSON for now as schema doesn't have it
-        user_count: 0 
+        criteria: {
+          color: formData.color,
+          rules: formData.criteria,
+        },
+        user_count: 0,
       });
       setShowCreateModal(false);
       setFormData({ name: '', description: '', criteria: [], color: '#3b82f6' });
@@ -115,14 +217,10 @@ export function UserSegmentation() {
     }
   };
 
-  // Engagement distribution (Mock for now as backend doesn't aggregate this yet)
-  const engagementData = [
-    { range: "0-20%", users: Math.floor(segments.reduce((acc, s) => acc + s.userCount, 0) * 0.2) },
-    { range: "21-40%", users: Math.floor(segments.reduce((acc, s) => acc + s.userCount, 0) * 0.15) },
-    { range: "41-60%", users: Math.floor(segments.reduce((acc, s) => acc + s.userCount, 0) * 0.25) },
-    { range: "61-80%", users: Math.floor(segments.reduce((acc, s) => acc + s.userCount, 0) * 0.2) },
-    { range: "81-100%", users: Math.floor(segments.reduce((acc, s) => acc + s.userCount, 0) * 0.2) }
-  ];
+  const engagementData =
+    platform.engagement_distribution?.length > 0
+      ? platform.engagement_distribution
+      : [{ range: "—", users: 0 }];
 
   // Segment distribution for pie chart
   const segmentDistribution = segments.map(seg => ({
@@ -132,10 +230,10 @@ export function UserSegmentation() {
   }));
 
   const stats = {
-    totalUsers: segments.reduce((sum, s) => sum + s.userCount, 0), // Approximation
-    totalSegments: segments.length,
-    avgEngagement: 67,
-    highValueUsers: segments.find(s => s.name.toLowerCase().includes("premium"))?.userCount || 0
+    totalEndUsers: platform.total_end_users,
+    totalSegments: platform.total_segments || segments.length,
+    avgEngagement: platform.avg_engagement_pct,
+    premiumUsers: platform.premium_users,
   };
 
   if (isLoading) {
@@ -185,8 +283,8 @@ export function UserSegmentation() {
                 <Users className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Total Users (in segments)</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalUsers.toLocaleString()}</p>
+                <p className="text-gray-600 text-sm">Total end users</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.totalEndUsers.toLocaleString()}</p>
               </div>
             </div>
           </motion.div>
@@ -236,8 +334,8 @@ export function UserSegmentation() {
                 <DollarSign className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Premium Users</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.highValueUsers}</p>
+                <p className="text-gray-600 text-sm">Premium users</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.premiumUsers.toLocaleString()}</p>
               </div>
             </div>
           </motion.div>
@@ -495,11 +593,19 @@ export function UserSegmentation() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Segment Color</label>
                   <div className="flex gap-2">
-                    {["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"].map(color => (
+                    {SEGMENT_COLOR_PALETTE.map((color) => (
                       <button
                         key={color}
-                        onClick={() => setFormData({ ...formData, color })}
-                        className={`w-10 h-10 rounded-lg border-2 hover:border-gray-400 ${formData.color === color ? 'border-gray-800' : 'border-gray-200'}`}
+                        type="button"
+                        title={color}
+                        aria-label={`Color ${color}`}
+                        aria-pressed={formData.color === color}
+                        onClick={() => setFormData((prev) => ({ ...prev, color }))}
+                        className={`w-10 h-10 rounded-lg border-2 transition-all shrink-0 ${
+                          formData.color === color
+                            ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2 scale-105"
+                            : "border-gray-200 hover:border-gray-500"
+                        }`}
                         style={{ backgroundColor: color }}
                       />
                     ))}

@@ -58,6 +58,7 @@ import { SuperAdminDashboard } from '@/app/pages/admin/SuperAdminDashboard';
 import { OrgAdminDashboard } from '@/app/pages/admin/OrgAdminDashboard';
 import { TeamAdminDashboard } from '@/app/pages/admin/TeamAdminDashboard';
 import { UserManagement } from '@/app/pages/admin/UserManagement';
+import { UserDetailsEnhanced } from '@/app/pages/admin/UserDetailsEnhanced';
 import { UserSegmentation } from '@/app/pages/admin/UserSegmentation';
 import { TeamRoleManagement } from '@/app/pages/admin/TeamRoleManagement';
 import { CompanionManagement } from '@/app/pages/admin/CompanionManagement';
@@ -330,6 +331,10 @@ export default function App() {
 
             {/* User Management */}
             <Route path="/admin/user-management" element={<UserManagement />} />
+            <Route
+              path="/admin/user-details-enhanced/:userId"
+              element={<UserDetailsEnhanced />}
+            />
             <Route path="/admin/user-segmentation" element={<UserSegmentation />} />
             <Route path="/admin/team-role-management" element={<TeamRoleManagement />} />
             <Route path="/admin/companion-management" element={<CompanionManagement />} />
@@ -391,6 +396,10 @@ export default function App() {
             <Route path="/admin/error-tracking" element={<ErrorTracking />} />
 
             {/* System */}
+            <Route
+              path="/admin/system-settings"
+              element={<Navigate to="/admin/system-settings-enhanced" replace />}
+            />
             <Route path="/admin/system-settings-enhanced" element={<SystemSettingsEnhanced />} />
             <Route path="/admin/global-configuration" element={<GlobalConfiguration />} />
             <Route path="/admin/feature-flags" element={<FeatureFlags />} />

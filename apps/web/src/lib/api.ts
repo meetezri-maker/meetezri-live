@@ -17,6 +17,63 @@ async function getHeaders(accessToken?: string) {
   };
 }
 
+/** Turn Fastify/Zod validation payloads into a short user-facing string. */
+function formatApiErrorBody(
+  errorData: Record<string, unknown>,
+  defaultErrorMessage: string
+): string {
+  const issues = errorData.issues as { fieldErrors?: Record<string, string[]> } | undefined;
+  const fe = issues?.fieldErrors;
+  if (fe && typeof fe === 'object') {
+    const first = Object.entries(fe).find(([, v]) => Array.isArray(v) && v.length);
+    if (first && first[1][0]) {
+      const label =
+        first[0] === 'email'
+          ? 'Email'
+          : first[0] === 'full_name'
+            ? 'Name'
+            : first[0].replace(/_/g, ' ');
+      return `${label}: ${first[1][0]}`;
+    }
+  }
+
+  const raw = errorData.message;
+  if (typeof raw === 'string' && raw.trim().startsWith('[')) {
+    try {
+      const parsed = JSON.parse(raw) as Array<{
+        message?: string;
+        path?: (string | number)[];
+        validation?: string;
+      }>;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const e = parsed[0];
+        const lastPath = e.path?.length ? String(e.path[e.path.length - 1]) : '';
+        if (lastPath === 'email' || e.validation === 'email') {
+          return 'Please enter a valid email address (e.g. name@domain.com).';
+        }
+        if (e.message) {
+          return lastPath ? `${lastPath.replace(/_/g, ' ')}: ${e.message}` : e.message;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (typeof raw === 'string' && raw.length > 0 && !raw.trim().startsWith('[')) {
+    return raw;
+  }
+
+  const validation = errorData.validation as
+    | Array<{ message?: string; instancePath?: string }>
+    | undefined;
+  if (Array.isArray(validation) && validation[0]?.message) {
+    return validation[0].message;
+  }
+
+  return defaultErrorMessage;
+}
+
 async function handleResponse(res: Response, defaultErrorMessage: string) {
   if (res.status === 401) {
     // Session is invalid/expired on the server side
@@ -25,8 +82,8 @@ async function handleResponse(res: Response, defaultErrorMessage: string) {
   }
 
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.message || defaultErrorMessage);
+    const errorData = await res.json().catch(() => ({} as Record<string, unknown>));
+    throw new Error(formatApiErrorBody(errorData, defaultErrorMessage));
   }
 
   return res.json();
@@ -650,9 +707,15 @@ export const api = {
 
   // Admin API
   admin: {
-    async getStats() {
+    async getStats(params?: { chartPeriod?: 'week' | 'month' | 'year'; sessionWeekOffset?: number }) {
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/stats`, {
+      const search = new URLSearchParams();
+      if (params?.chartPeriod) search.set('chartPeriod', params.chartPeriod);
+      if (params?.sessionWeekOffset != null && params.sessionWeekOffset > 0) {
+        search.set('sessionWeekOffset', String(params.sessionWeekOffset));
+      }
+      const qs = search.toString();
+      const res = await fetch(`${API_URL}/admin/stats${qs ? `?${qs}` : ''}`, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -678,6 +741,21 @@ export const api = {
         cache: 'no-store',
       });
       return handleResponse(res, 'Failed to fetch users');
+    },
+
+    async createUser(body: {
+      email: string;
+      full_name: string;
+      status?: 'active' | 'suspended' | 'inactive';
+      subscription?: 'trial' | 'core' | 'pro';
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/users`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to create user');
     },
 
     async getUserProfile(userId: string) {
@@ -717,6 +795,63 @@ export const api = {
         cache: 'no-store',
       });
       return handleResponse(res, 'Failed to fetch user audit logs');
+    },
+
+    async getOrganizationTeam(orgId?: string) {
+      const headers = await getHeaders();
+      const q = orgId ? `?org_id=${encodeURIComponent(orgId)}` : '';
+      const res = await fetch(`${API_URL}/admin/organization-team${q}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch organization team');
+    },
+
+    async addOrganizationTeamMember(body: {
+      org_id?: string;
+      email: string;
+      full_name: string;
+      phone?: string;
+      profile_role: 'org_admin' | 'team_admin' | 'user';
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/organization-team`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to add team member');
+    },
+
+    async updateOrganizationTeamMember(
+      userId: string,
+      query: { org_id?: string },
+      body: {
+        phone?: string;
+        profile_role?: 'org_admin' | 'team_admin' | 'user';
+        account_status?: string;
+        org_role?: string;
+      }
+    ) {
+      const headers = await getHeaders();
+      const q = query.org_id ? `?org_id=${encodeURIComponent(query.org_id)}` : '';
+      const res = await fetch(`${API_URL}/admin/organization-team/${userId}${q}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to update team member');
+    },
+
+    async removeOrganizationTeamMember(userId: string, orgId?: string) {
+      const headers = await getHeaders();
+      const q = orgId ? `?org_id=${encodeURIComponent(orgId)}` : '';
+      const res = await fetch(`${API_URL}/admin/organization-team/${userId}${q}`, {
+        method: 'DELETE',
+        headers,
+      });
+      return handleResponse(res, 'Failed to remove team member');
     },
 
     async getUserSubscription(userId: string) {

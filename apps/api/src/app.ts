@@ -67,26 +67,26 @@ app.addHook('onResponse', (request, reply, done) => {
   done();
 });
 
-// Fix for Vercel Serverless: Handle pre-parsed body
+// Fix for Vercel Serverless: prefer parsing the raw JSON string when present.
+// (req.raw as any).body can be {} (truthy) and would skip real JSON, breaking POST bodies.)
 app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
-  // If the body is already parsed by the environment (e.g. Vercel), use it
-  if (req.raw && (req.raw as any).body) {
-    done(null, (req.raw as any).body);
-  } else {
-    // Empty or missing body (e.g. POST with no body) -> treat as {}
-    const raw = (body as string) ?? '';
-    if (raw.trim() === '') {
-      done(null, {});
-      return;
-    }
+  const raw = typeof body === 'string' ? body : String(body ?? '');
+  if (raw.trim() !== '') {
     try {
-      const json = JSON.parse(raw);
-      done(null, json);
+      done(null, JSON.parse(raw));
+      return;
     } catch (err: any) {
       err.statusCode = 400;
       done(err, undefined);
+      return;
     }
   }
+  const pre = req.raw && (req.raw as any).body;
+  if (pre != null && typeof pre === 'object' && !Buffer.isBuffer(pre)) {
+    done(null, pre);
+    return;
+  }
+  done(null, {});
 });
 
 // Register core plugins
@@ -254,7 +254,29 @@ app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) =
       : 500;
 
   const isServerError = statusCode >= 500;
-  const message = isServerError ? 'An unexpected error occurred' : (error?.message || 'Request failed');
+  let message = isServerError ? 'An unexpected error occurred' : (error?.message || 'Request failed');
+
+  // Friendly copy for Zod / schema validation (avoid raw JSON in message)
+  if (!isServerError && Array.isArray(error?.validation) && error.validation.length > 0) {
+    const v = error.validation[0] as { message?: string; instancePath?: string };
+    if (v?.message && typeof v.message === 'string') {
+      message = v.message;
+    }
+  }
+  if (
+    !isServerError &&
+    typeof message === 'string' &&
+    message.trim().startsWith('[')
+  ) {
+    try {
+      const parsed = JSON.parse(message) as Array<{ message?: string; path?: string[] }>;
+      if (Array.isArray(parsed) && parsed[0]?.message) {
+        message = parsed[0].message;
+      }
+    } catch {
+      /* keep */
+    }
+  }
   const errorName =
     typeof error?.name === 'string'
       ? error.name
