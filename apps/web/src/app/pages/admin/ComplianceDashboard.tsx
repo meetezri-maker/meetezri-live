@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
+import { api } from "@/lib/api";
+import { format } from "date-fns";
 import {
   Shield,
   CheckCircle,
@@ -26,211 +28,141 @@ import {
 } from "lucide-react";
 
 export function ComplianceDashboard() {
-  const [activeSection, setActiveSection] = useState<string>("overview");
   const [showAuditDetails, setShowAuditDetails] = useState(false);
   const [selectedAudit, setSelectedAudit] = useState<any>(null);
   const [showRunAuditModal, setShowRunAuditModal] = useState(false);
   const [showExportSuccess, setShowExportSuccess] = useState(false);
   const [showAuditStarted, setShowAuditStarted] = useState(false);
+  const [dash, setDash] = useState<{ totalUsers?: number } | null>(null);
+  const [auditSample, setAuditSample] = useState<any[]>([]);
+  const [openErrors, setOpenErrors] = useState(0);
+  const [crisisN, setCrisisN] = useState(0);
 
-  const handleExportReport = () => {
-    // Create comprehensive compliance report
-    const headers = ["Category", "Score", "Status", "Details"];
-    const csvContent = [
-      headers.join(","),
-      ["Overall Compliance", `${complianceMetrics.overall}%`, "Active", "All systems monitored"].join(","),
-      ["HIPAA Compliance", `${complianceMetrics.hipaa}%`, "Certified", "Valid until Dec 31, 2025"].join(","),
-      ["GDPR Compliance", `${complianceMetrics.gdpr}%`, "Certified", "Ongoing compliance"].join(","),
-      ["Data Retention", `${complianceMetrics.dataRetention}%`, "Active", "Policy enforced"].join(","),
-      ["Encryption", `${complianceMetrics.encryption}%`, "Active", "All data encrypted"].join(","),
-      "",
-      ["Recent Audits", "", "", ""],
-      ...recentAudits.map(audit => [
-        audit.type,
-        `${audit.score}%`,
-        audit.status,
-        `${audit.findings} findings - ${audit.date}`
-      ].join(","))
-    ].join("\n");
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [s, a, e, cr] = await Promise.all([
+          api.admin.getStats(),
+          api.admin.getAuditLogs({ limit: 20 }),
+          api.admin.getErrorLogs({ page: 1, limit: 200 }),
+          api.admin.getCrisisEvents({ status: "pending", limit: 100 }),
+        ]);
+        if (cancelled) return;
+        setDash(s ?? null);
+        setAuditSample(Array.isArray(a) ? a : []);
+        const errs = Array.isArray(e) ? e : [];
+        setOpenErrors(errs.filter((x: { status?: string }) => x.status === "open").length);
+        setCrisisN(Array.isArray(cr) ? cr.length : 0);
+      } catch (err) {
+        console.error(err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-    // Create and download file
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `compliance-report-${new Date().toISOString().split("T")[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+  const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
-    setShowExportSuccess(true);
-    setTimeout(() => setShowExportSuccess(false), 3000);
-  };
+  const complianceMetrics = useMemo(() => {
+    const totalUsers = dash?.totalUsers ?? 0;
+    const auditN = auditSample.length;
+    const penalty =
+      crisisN * 4 + openErrors * 2 + (auditN === 0 ? 12 : 0) + (totalUsers === 0 ? 8 : 0);
+    const overall = clamp(Math.round(100 - penalty), 35, 100);
+    const hipaa = clamp(
+      Math.round(100 - crisisN * 5 - openErrors * 3 - (auditN === 0 ? 15 : 0)),
+      35,
+      100
+    );
+    const gdpr = clamp(Math.round(100 - (auditN < 5 ? 15 : 0) - openErrors * 2), 35, 100);
+    const dataRetention = clamp(Math.round(100 - openErrors * 2), 35, 100);
+    const encryption: number | null = null;
+    return { overall, hipaa, gdpr, dataRetention, encryption };
+  }, [dash, auditSample, crisisN, openErrors]);
 
-  const handleViewAudit = (audit: any) => {
-    setSelectedAudit(audit);
-    setShowAuditDetails(true);
-  };
+  const recentAudits = useMemo(() => {
+    return auditSample.map((a, i) => {
+      const ts = a.created_at ? new Date(a.created_at) : null;
+      let detailsLine = "";
+      try {
+        const d = a.details;
+        if (d != null) {
+          detailsLine =
+            typeof d === "object" ? JSON.stringify(d).slice(0, 400) : String(d).slice(0, 400);
+        }
+      } catch {
+        detailsLine = "";
+      }
+      const actor = a.profiles?.full_name?.trim() || a.profiles?.email || "";
+      return {
+        id: a.id ?? i,
+        type: String(a.action || "audit_event"),
+        date: ts ? format(ts, "MMM d, yyyy") : "—",
+        status: "passed",
+        score: 100,
+        findings: 0,
+        detailsLine: detailsLine || actor,
+      };
+    });
+  }, [auditSample]);
 
-  const handleRunAudit = () => {
-    setShowRunAuditModal(true);
-  };
+  const certifications = useMemo(() => {
+    const last = auditSample[0]?.created_at;
+    return [
+      {
+        name: "External certifications (HIPAA, SOC 2, GDPR, ISO)",
+        status: "not_tracked",
+        validUntil: "Not stored in app",
+        lastAudit: last ? format(new Date(last), "MMM d, yyyy") : "—",
+      },
+    ];
+  }, [auditSample]);
 
-  const handleExportAudit = (audit: any) => {
-    // Create specific audit report
-    const csvContent = [
-      `Audit Report - ${audit.type}`,
-      "",
-      "Audit Details",
-      `Audit ID,${audit.id}`,
-      `Type,${audit.type}`,
-      `Date,${audit.date}`,
-      `Status,${audit.status}`,
-      `Score,${audit.score}%`,
-      `Findings,${audit.findings}`,
-      "",
-      "Detailed Findings",
-      audit.findings > 0 
-        ? "Issue,Description\nPassword policy enforcement,Some user accounts do not meet minimum password requirements\nSession timeout configuration,Session timeout values exceed recommended limits"
-        : "Issue,Description\nNo issues found,All compliance checks passed successfully",
-      "",
-      "Recommendations",
-      audit.status === 'action_required'
-        ? "1. Implement automated password policy enforcement\n2. Review and update session timeout configurations\n3. Schedule follow-up audit in 30 days"
-        : "1. Continue monitoring compliance metrics\n2. Schedule next audit in 90 days"
-    ].join("\n");
+  const dataPrivacyStats = useMemo(
+    () => ({
+      totalUsers: dash?.totalUsers ?? 0,
+      consentGiven: 0,
+      consentRate: null as number | null,
+      dataRequests: 0,
+      deletionRequests: 0,
+      exportRequests: 0,
+    }),
+    [dash]
+  );
 
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `audit-${audit.id}-${audit.type.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-
-    setShowAuditDetails(false);
-    setShowExportSuccess(true);
-    setTimeout(() => setShowExportSuccess(false), 3000);
-  };
-
-  const handleStartAudit = () => {
-    console.log("Starting compliance audit...");
-    setShowRunAuditModal(false);
-    setShowAuditStarted(true);
-    setTimeout(() => setShowAuditStarted(false), 3000);
-  };
-
-  const complianceMetrics = {
-    overall: 94,
-    hipaa: 98,
-    gdpr: 92,
-    dataRetention: 96,
-    encryption: 100,
-  };
-
-  const recentAudits = [
-    {
-      id: 1,
-      type: "HIPAA Security Audit",
-      date: "Dec 15, 2024",
-      status: "passed",
-      score: 98,
-      findings: 2,
-    },
-    {
-      id: 2,
-      type: "GDPR Compliance Review",
-      date: "Dec 1, 2024",
-      status: "passed",
-      score: 92,
-      findings: 5,
-    },
-    {
-      id: 3,
-      type: "Data Encryption Audit",
-      date: "Nov 20, 2024",
-      status: "passed",
-      score: 100,
-      findings: 0,
-    },
-    {
-      id: 4,
-      type: "Access Control Review",
-      date: "Nov 10, 2024",
-      status: "action_required",
-      score: 85,
-      findings: 8,
-    },
-  ];
-
-  const certifications = [
-    {
-      name: "HIPAA Compliance",
-      status: "certified",
-      validUntil: "Dec 31, 2025",
-      lastAudit: "Dec 15, 2024",
-    },
-    {
-      name: "SOC 2 Type II",
-      status: "certified",
-      validUntil: "Jun 30, 2025",
-      lastAudit: "Jun 30, 2024",
-    },
-    {
-      name: "GDPR Compliant",
-      status: "certified",
-      validUntil: "Ongoing",
-      lastAudit: "Dec 1, 2024",
-    },
-    {
-      name: "ISO 27001",
-      status: "in_progress",
-      validUntil: "Pending",
-      lastAudit: "N/A",
-    },
-  ];
-
-  const dataPrivacyStats = {
-    totalUsers: 8234,
-    consentGiven: 8102,
-    consentRate: 98.4,
-    dataRequests: 45,
-    deletionRequests: 12,
-    exportRequests: 33,
-  };
-
-  const securityControls = [
-    {
-      category: "Access Control",
-      controls: [
-        { name: "Multi-Factor Authentication", status: "implemented", coverage: 100 },
-        { name: "Role-Based Access Control", status: "implemented", coverage: 100 },
-        { name: "Session Timeout", status: "implemented", coverage: 100 },
-        { name: "IP Whitelisting", status: "partial", coverage: 75 },
-      ],
-    },
-    {
-      category: "Data Protection",
-      controls: [
-        { name: "End-to-End Encryption", status: "implemented", coverage: 100 },
-        { name: "Database Encryption at Rest", status: "implemented", coverage: 100 },
-        { name: "Encrypted Backups", status: "implemented", coverage: 100 },
-        { name: "Data Masking", status: "implemented", coverage: 95 },
-      ],
-    },
-    {
-      category: "Audit & Logging",
-      controls: [
-        { name: "Comprehensive Audit Trails", status: "implemented", coverage: 100 },
-        { name: "Access Logging", status: "implemented", coverage: 100 },
-        { name: "Change Tracking", status: "implemented", coverage: 100 },
-        { name: "Security Event Monitoring", status: "implemented", coverage: 100 },
-      ],
-    },
-  ];
+  const securityControls = useMemo(() => {
+    const auditN = auditSample.length;
+    const tu = dash?.totalUsers ?? 0;
+    return [
+      {
+        category: "Signals from application data",
+        controls: [
+          {
+            name: "Registered users",
+            status: tu > 0 ? "implemented" : "partial",
+            coverage: tu > 0 ? 100 : 0,
+          },
+          {
+            name: "Audit events loaded (sample)",
+            status: auditN > 0 ? "implemented" : "partial",
+            coverage: clamp(Math.min(100, auditN * 5), 0, 100),
+          },
+          {
+            name: "Pending crisis events",
+            status: crisisN === 0 ? "implemented" : "partial",
+            coverage: crisisN === 0 ? 100 : 50,
+          },
+          {
+            name: "Open application errors",
+            status: openErrors === 0 ? "implemented" : "partial",
+            coverage: openErrors === 0 ? 100 : clamp(100 - openErrors * 5, 0, 100),
+          },
+        ],
+      },
+    ];
+  }, [auditSample.length, dash, crisisN, openErrors]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -245,6 +177,8 @@ export function ComplianceDashboard() {
         return "text-blue-600 bg-blue-100 border-blue-300";
       case "failed":
         return "text-red-600 bg-red-100 border-red-300";
+      case "not_tracked":
+        return "text-gray-600 bg-gray-100 border-gray-300";
       default:
         return "text-gray-600 bg-gray-100 border-gray-300";
     }
@@ -263,9 +197,112 @@ export function ComplianceDashboard() {
         return Clock;
       case "failed":
         return XCircle;
+      case "not_tracked":
+        return AlertCircle;
       default:
         return AlertCircle;
     }
+  };
+
+  const handleExportReport = () => {
+    const headers = ["Category", "Score", "Status", "Details"];
+    const enc =
+      complianceMetrics.encryption == null
+        ? "Not measured"
+        : `${complianceMetrics.encryption}%`;
+    const csvContent = [
+      headers.join(","),
+      [
+        "Overall (derived from users, audits, crises, errors)",
+        `${complianceMetrics.overall}%`,
+        "derived",
+        "Not a legal certification",
+      ].join(","),
+      [
+        "HIPAA-oriented score (derived)",
+        `${complianceMetrics.hipaa}%`,
+        "derived",
+        "Based on crisis + audit + error signals",
+      ].join(","),
+      [
+        "GDPR-oriented score (derived)",
+        `${complianceMetrics.gdpr}%`,
+        "derived",
+        "Based on audit volume + errors",
+      ].join(","),
+      [
+        "Data retention oriented (derived)",
+        `${complianceMetrics.dataRetention}%`,
+        "derived",
+        "Based on error volume",
+      ].join(","),
+      [
+        "Encryption",
+        enc,
+        complianceMetrics.encryption == null ? "n/a" : "derived",
+        "Infrastructure not measured in app",
+      ].join(","),
+      "",
+      ["Recent audit log events", "", "", ""],
+      ...recentAudits.map((audit) =>
+        [audit.type, `${audit.score}%`, audit.status, `${audit.date}`.replace(/,/g, ";")].join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `compliance-report-${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+
+    setShowExportSuccess(true);
+    setTimeout(() => setShowExportSuccess(false), 3000);
+  };
+
+  const handleViewAudit = (audit: (typeof recentAudits)[number]) => {
+    setSelectedAudit(audit);
+    setShowAuditDetails(true);
+  };
+
+  const handleRunAudit = () => {
+    setShowRunAuditModal(true);
+  };
+
+  const handleExportAudit = (audit: (typeof recentAudits)[number]) => {
+    const csvContent = [
+      `Audit log event — ${audit.type}`,
+      "",
+      "Details",
+      `ID,${audit.id}`,
+      `Action,${audit.type}`,
+      `Date,${audit.date}`,
+      `Status,${audit.status}`,
+      `Details (preview),${String(audit.detailsLine || "").replace(/\n/g, " ")}`,
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `audit-event-${audit.id}-${String(audit.type).replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+
+    setShowAuditDetails(false);
+    setShowExportSuccess(true);
+    setTimeout(() => setShowExportSuccess(false), 3000);
+  };
+
+  const handleStartAudit = () => {
+    setShowRunAuditModal(false);
+    setShowAuditStarted(true);
+    setTimeout(() => setShowAuditStarted(false), 3000);
   };
 
   return (
@@ -328,7 +365,7 @@ export function ComplianceDashboard() {
                     strokeWidth="8"
                     fill="none"
                     strokeDasharray={`${2 * Math.PI * 56}`}
-                    strokeDashoffset={`${2 * Math.PI * 56 * (1 - complianceMetrics.overall / 100)}`}
+                    strokeDashoffset={`${2 * Math.PI * 56 * (1 - (complianceMetrics.overall ?? 0) / 100)}`}
                     strokeLinecap="round"
                   />
                 </svg>
@@ -338,7 +375,9 @@ export function ComplianceDashboard() {
                   </div>
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground mt-2">Last updated: Dec 29, 2024</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Derived from live stats — {format(new Date(), "MMM d, yyyy")}
+              </p>
             </div>
           </Card>
         </motion.div>
@@ -432,14 +471,26 @@ export function ComplianceDashboard() {
               </div>
               <div className="mb-2">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold">{complianceMetrics.encryption}%</span>
-                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <span className="text-3xl font-bold">
+                    {complianceMetrics.encryption == null ? "—" : `${complianceMetrics.encryption}%`}
+                  </span>
+                  {complianceMetrics.encryption != null && (
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                  )}
                 </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Encryption at rest / in transit is not measured in this app; confirm with your host.
+                </p>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-orange-600 h-2 rounded-full"
-                  style={{ width: `${complianceMetrics.encryption}%` }}
+                  style={{
+                    width:
+                      complianceMetrics.encryption == null
+                        ? "0%"
+                        : `${complianceMetrics.encryption}%`,
+                  }}
                 />
               </div>
             </Card>
@@ -453,8 +504,13 @@ export function ComplianceDashboard() {
           transition={{ delay: 0.4 }}
         >
           <Card className="p-6">
-            <h3 className="font-bold text-lg mb-4">Recent Audits</h3>
+            <h3 className="font-bold text-lg mb-4">Recent audit log events</h3>
             <div className="space-y-3">
+              {recentAudits.length === 0 && (
+                <p className="text-sm text-muted-foreground py-4">
+                  No audit log rows returned yet. Actions on protected resources will appear here.
+                </p>
+              )}
               {recentAudits.map((audit, index) => {
                 const StatusIcon = getStatusIcon(audit.status);
                 return (
@@ -512,7 +568,15 @@ export function ComplianceDashboard() {
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <StatusIcon className={`w-5 h-5 ${cert.status === 'certified' ? 'text-green-600' : 'text-blue-600'}`} />
+                        <StatusIcon
+                          className={`w-5 h-5 ${
+                            cert.status === "certified"
+                              ? "text-green-600"
+                              : cert.status === "not_tracked"
+                                ? "text-gray-600"
+                                : "text-blue-600"
+                          }`}
+                        />
                         <h4 className="font-bold">{cert.name}</h4>
                       </div>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(cert.status)}`}>
@@ -547,23 +611,25 @@ export function ComplianceDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="text-center p-4 bg-green-50 rounded-lg">
                 <Users className="w-8 h-8 text-green-600 mx-auto mb-2" />
-                <p className="text-3xl font-bold text-green-600">{dataPrivacyStats.consentRate}%</p>
-                <p className="text-sm text-muted-foreground">Consent Rate</p>
+                <p className="text-3xl font-bold text-green-600">
+                  {dataPrivacyStats.consentRate == null ? "—" : `${dataPrivacyStats.consentRate}%`}
+                </p>
+                <p className="text-sm text-muted-foreground">Consent rate</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {dataPrivacyStats.consentGiven.toLocaleString()} of {dataPrivacyStats.totalUsers.toLocaleString()} users
+                  Not stored in app — {dataPrivacyStats.totalUsers.toLocaleString()} registered users
                 </p>
               </div>
               <div className="text-center p-4 bg-blue-50 rounded-lg">
                 <Download className="w-8 h-8 text-blue-600 mx-auto mb-2" />
                 <p className="text-3xl font-bold text-blue-600">{dataPrivacyStats.exportRequests}</p>
-                <p className="text-sm text-muted-foreground">Data Export Requests</p>
-                <p className="text-xs text-muted-foreground mt-1">Last 30 days</p>
+                <p className="text-sm text-muted-foreground">Data export requests</p>
+                <p className="text-xs text-muted-foreground mt-1">Not tracked in database</p>
               </div>
               <div className="text-center p-4 bg-purple-50 rounded-lg">
                 <XCircle className="w-8 h-8 text-purple-600 mx-auto mb-2" />
                 <p className="text-3xl font-bold text-purple-600">{dataPrivacyStats.deletionRequests}</p>
-                <p className="text-sm text-muted-foreground">Deletion Requests</p>
-                <p className="text-xs text-muted-foreground mt-1">Last 30 days</p>
+                <p className="text-sm text-muted-foreground">Deletion requests</p>
+                <p className="text-xs text-muted-foreground mt-1">Not tracked in database</p>
               </div>
             </div>
           </Card>
@@ -697,79 +763,26 @@ export function ComplianceDashboard() {
                 </span>
               </div>
 
-              {/* Findings Details */}
+              {/* Event payload */}
               <div>
-                <h3 className="font-bold mb-3">Detailed Findings</h3>
-                <div className="space-y-2">
-                  {selectedAudit.findings > 0 ? (
-                    <>
-                      <div className="p-3 border rounded-lg bg-yellow-50 border-yellow-200">
-                        <div className="flex items-start gap-2">
-                          <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
-                          <div>
-                            <p className="font-medium text-yellow-900">Password policy enforcement</p>
-                            <p className="text-sm text-yellow-700">Some user accounts do not meet minimum password requirements</p>
-                          </div>
-                        </div>
-                      </div>
-                      {selectedAudit.findings > 1 && (
-                        <div className="p-3 border rounded-lg bg-blue-50 border-blue-200">
-                          <div className="flex items-start gap-2">
-                            <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
-                            <div>
-                              <p className="font-medium text-blue-900">Session timeout configuration</p>
-                              <p className="text-sm text-blue-700">Session timeout values exceed recommended limits for {selectedAudit.findings - 1} user groups</p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="p-3 border rounded-lg bg-green-50 border-green-200">
-                      <div className="flex items-start gap-2">
-                        <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-                        <div>
-                          <p className="font-medium text-green-900">No issues found</p>
-                          <p className="text-sm text-green-700">All compliance checks passed successfully</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <h3 className="font-bold mb-3">Event details</h3>
+                {selectedAudit.detailsLine ? (
+                  <pre className="text-sm whitespace-pre-wrap break-words p-3 border rounded-lg bg-muted/50 max-h-48 overflow-y-auto">
+                    {selectedAudit.detailsLine}
+                  </pre>
+                ) : (
+                  <div className="p-3 border rounded-lg bg-muted/30 text-sm text-muted-foreground">
+                    No extra JSON payload stored for this audit row (or action only).
+                  </div>
+                )}
               </div>
 
-              {/* Recommendations */}
               <div>
-                <h3 className="font-bold mb-3">Recommendations</h3>
-                <ul className="space-y-2 text-sm">
-                  {selectedAudit.status === 'action_required' ? (
-                    <>
-                      <li className="flex items-start gap-2">
-                        <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
-                        <span>Implement automated password policy enforcement</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
-                        <span>Review and update session timeout configurations</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
-                        <span>Schedule follow-up audit in 30 days</span>
-                      </li>
-                    </>
-                  ) : (
-                    <>
-                      <li className="flex items-start gap-2">
-                        <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
-                        <span>Continue monitoring compliance metrics</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
-                        <span>Schedule next audit in 90 days</span>
-                      </li>
-                    </>
-                  )}
-                </ul>
+                <h3 className="font-bold mb-3">Note</h3>
+                <p className="text-sm text-muted-foreground">
+                  Scores on this page are derived from user counts, audit log sample size, pending crisis
+                  events, and open application errors — not from an external compliance audit.
+                </p>
               </div>
 
               {/* Action Buttons */}

@@ -23,7 +23,10 @@ import {
   Bell,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { formatDistanceToNow } from "date-fns";
+import { api } from "../../../lib/api";
+import { useAuth } from "@/app/contexts/AuthContext";
 import {
   LineChart,
   Line,
@@ -42,116 +45,161 @@ import {
   Cell,
 } from "recharts";
 
+const FEATURE_PIE_COLORS = ["#10b981", "#06b6d4", "#f59e0b", "#8b5cf6"];
+
 export function OrgAdminDashboard() {
-  const [activeUsers, setActiveUsers] = useState(2156);
-  const [todaySessions, setTodaySessions] = useState(342);
+  const { profile } = useAuth();
+  const [stats, setStats] = useState<any>(null);
+  const [recent, setRecent] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Simulate real-time updates
   useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveUsers(prev => prev + Math.floor(Math.random() * 3));
-      setTodaySessions(prev => prev + Math.floor(Math.random() * 2));
-    }, 4000);
+    let cancelled = false;
 
-    return () => clearInterval(interval);
+    const load = async () => {
+      try {
+        const [s, r] = await Promise.all([
+          api.admin.getStats(),
+          api.admin.getRecentActivity(),
+        ]);
+        if (!cancelled) {
+          setStats(s);
+          setRecent(r);
+        }
+      } catch (e) {
+        console.error("Org admin dashboard load failed", e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    const interval = setInterval(load, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
-  const orgInfo = {
-    name: "HealthCare Corp",
-    plan: "Pro",
-    users: 2847,
-    activeUsers: 2156,
-    teams: 12,
-    adminSince: "Jan 2024",
-  };
+  const orgLabel = profile?.full_name || profile?.email || "Organization";
 
-  const engagementData = [
-    { day: "Mon", active: 2234, sessions: 312 },
-    { day: "Tue", active: 2456, sessions: 348 },
-    { day: "Wed", active: 2189, sessions: 289 },
-    { day: "Thu", active: 2567, sessions: 398 },
-    { day: "Fri", active: 2398, sessions: 356 },
-    { day: "Sat", active: 1834, sessions: 234 },
-    { day: "Sun", active: 1678, sessions: 198 },
-  ];
+  const sessionActivity = (stats?.sessionActivity || []) as {
+    day: string;
+    sessions: number;
+    duration: number;
+  }[];
 
-  const teamPerformance = [
-    { team: "Clinical", score: 92 },
-    { team: "Wellness", score: 88 },
-    { team: "Crisis", score: 95 },
-    { team: "Admin", score: 85 },
-    { team: "Support", score: 90 },
-  ];
+  const engagementData = useMemo(
+    () =>
+      sessionActivity.map((d) => ({
+        day: d.day,
+        sessions: d.sessions,
+        avgDuration: d.duration,
+      })),
+    [sessionActivity]
+  );
 
-  const wellnessMetrics = [
-    { name: "Improved", value: 62, color: "#10b981" },
-    { name: "Stable", value: 28, color: "#06b6d4" },
-    { name: "Needs Support", value: 10, color: "#f59e0b" },
-  ];
+  const featureUsage = (stats?.featureUsage || []) as { feature: string; usage: number }[];
+  const wellnessMetrics = useMemo(() => {
+    const slice = featureUsage.slice(0, 4);
+    if (slice.length === 0) {
+      return [{ name: "No data yet", value: 100, color: "#e5e7eb" }];
+    }
+    return slice.map((f, i) => ({
+      name: f.feature,
+      value: f.usage,
+      color: FEATURE_PIE_COLORS[i % FEATURE_PIE_COLORS.length],
+    }));
+  }, [featureUsage]);
 
-  const teamActivity = [
-    {
-      team: "Clinical Support Team",
-      members: 45,
-      activeToday: 38,
-      sessions: 342,
-      growth: "+12%",
-      engagement: 85,
-    },
-    {
-      team: "Wellness Coaching",
-      members: 32,
-      activeToday: 28,
-      sessions: 256,
-      growth: "+8%",
-      engagement: 78,
-    },
-    {
-      team: "Crisis Response",
-      members: 18,
-      activeToday: 15,
-      sessions: 189,
-      growth: "+15%",
-      engagement: 92,
-    },
-    {
-      team: "HR Support",
-      members: 28,
-      activeToday: 22,
-      sessions: 198,
-      growth: "+5%",
-      engagement: 73,
-    },
-  ];
+  const teamPerformance = useMemo(
+    () => featureUsage.slice(0, 6).map((f) => ({ team: f.feature, score: f.usage })),
+    [featureUsage]
+  );
 
-  const recentAlerts = [
-    {
-      id: 1,
-      type: "info",
-      message: "28 users completed wellness assessment",
-      time: "2 hours ago",
-    },
-    {
-      id: 2,
-      type: "warning",
-      message: "3 users require follow-up check-in",
-      time: "4 hours ago",
-    },
-    {
-      id: 3,
-      type: "success",
-      message: "Monthly engagement target achieved",
-      time: "1 day ago",
-    },
-  ];
+  const teamActivity = useMemo(
+    () =>
+      featureUsage.slice(0, 4).map((f) => ({
+        team: f.feature,
+        members: stats?.totalUsers ?? 0,
+        activeToday: stats?.activeSessions ?? 0,
+        sessions: stats?.totalSessions ?? 0,
+        growth: "—",
+        engagement: f.usage,
+      })),
+    [featureUsage, stats]
+  );
 
-  const recentActivity = [
-    { user: "Sarah Johnson", action: "Completed session", team: "Clinical", time: "2m ago" },
-    { user: "Mike Chen", action: "Mood check-in", team: "Wellness", time: "5m ago" },
-    { user: "Emma Wilson", action: "Journal entry", team: "Support", time: "8m ago" },
-    { user: "David Brown", action: "Started session", team: "Clinical", time: "12m ago" },
-    { user: "Lisa Anderson", action: "Crisis alert resolved", team: "Crisis", time: "15m ago" },
-  ];
+  const recentActivity = useMemo(() => {
+    const rows: {
+      id: string;
+      user: string;
+      action: string;
+      team: string;
+      time: string;
+      ts: number;
+    }[] = [];
+    for (const s of recent?.sessions ?? []) {
+      const ts = s.started_at ? new Date(s.started_at).getTime() : 0;
+      rows.push({
+        id: `s-${s.id}`,
+        user: s.profiles?.full_name || s.profiles?.email || "User",
+        action: "AI session",
+        team: "Session",
+        time: s.started_at
+          ? formatDistanceToNow(new Date(s.started_at), { addSuffix: true })
+          : "",
+        ts,
+      });
+    }
+    for (const m of recent?.moodEntries ?? []) {
+      const ts = m.created_at ? new Date(m.created_at).getTime() : 0;
+      rows.push({
+        id: `m-${m.id}`,
+        user: m.profiles?.full_name || "User",
+        action: m.mood ? `Mood check-in (${m.mood})` : "Mood check-in",
+        team: "Mood",
+        time: m.created_at
+          ? formatDistanceToNow(new Date(m.created_at), { addSuffix: true })
+          : "",
+        ts,
+      });
+    }
+    rows.sort((a, b) => b.ts - a.ts);
+    return rows.slice(0, 8);
+  }, [recent]);
+
+  const crisisPreview = useMemo(() => {
+    return (recent?.alerts ?? []).slice(0, 3).map((a: any) => ({
+      id: a.id,
+      type: a.risk_level === "high" || a.risk_level === "critical" ? "warning" : "info",
+      message: `${a.risk_level || "Unknown"} risk — ${a.event_type || "Crisis event"}`,
+      time: a.created_at
+        ? formatDistanceToNow(new Date(a.created_at), { addSuffix: true })
+        : "",
+    }));
+  }, [recent]);
+
+  const totalUsers = stats?.totalUsers ?? 0;
+  const activeSessions = stats?.activeSessions ?? 0;
+  const todaySessions =
+    sessionActivity.length > 0 ? sessionActivity[sessionActivity.length - 1].sessions : 0;
+  const avgSession = stats?.avgSessionLength ?? 0;
+  const crisisCount = stats?.crisisAlerts ?? 0;
+  const engagementPct =
+    totalUsers > 0 ? Math.min(100, Math.round((activeSessions / totalUsers) * 100)) : 0;
+
+  const mockedSections: string[] = stats?.mockedSections || [];
+
+  if (loading && !stats) {
+    return (
+      <AdminLayoutNew>
+        <div className="flex items-center justify-center h-[60vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+        </div>
+      </AdminLayoutNew>
+    );
+  }
 
   return (
     <AdminLayoutNew>
@@ -169,7 +217,7 @@ export function OrgAdminDashboard() {
               <div>
                 <h1 className="text-3xl font-bold">Organization Dashboard</h1>
                 <p className="text-muted-foreground">
-                  {orgInfo.name} • {orgInfo.plan} Plan • {orgInfo.teams} Teams
+                  {orgLabel} • Live app metrics (platform-wide)
                 </p>
               </div>
             </div>
@@ -190,6 +238,13 @@ export function OrgAdminDashboard() {
           </div>
         </motion.div>
 
+        {mockedSections.length > 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Some metrics are estimated or infrastructure placeholders: {mockedSections.join(", ")}.
+            Charts and totals below reflect real app usage from the database.
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <motion.div
@@ -209,10 +264,10 @@ export function OrgAdminDashboard() {
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground mb-1">Total Users</p>
-                <div className="text-3xl font-bold">{orgInfo.users.toLocaleString()}</div>
+                <div className="text-3xl font-bold">{totalUsers.toLocaleString()}</div>
                 <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <Target className="w-3 h-3 text-blue-600" />
-                  <span>Across {orgInfo.teams} teams</span>
+                  <span>Registered profiles</span>
                 </div>
               </div>
             </Card>
@@ -235,18 +290,20 @@ export function OrgAdminDashboard() {
                     <span className="text-xs text-green-600 font-semibold">Live</span>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Active Users</p>
+                <p className="text-sm text-muted-foreground mb-1">Live AI sessions</p>
                 <motion.div
-                  key={activeUsers}
+                  key={activeSessions}
                   initial={{ scale: 1.1 }}
                   animate={{ scale: 1 }}
                   className="text-3xl font-bold"
                 >
-                  {activeUsers.toLocaleString()}
+                  {activeSessions.toLocaleString()}
                 </motion.div>
                 <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <Eye className="w-3 h-3 text-green-600" />
-                  <span>76% engagement rate</span>
+                  <span>
+                    {totalUsers > 0 ? `${engagementPct}% of users in session` : "No users yet"}
+                  </span>
                 </div>
               </div>
             </Card>
@@ -265,10 +322,10 @@ export function OrgAdminDashboard() {
                     <MessageSquare className="w-6 h-6 text-white" />
                   </div>
                   <div className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
-                    +15%
+                    7d
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Today's Sessions</p>
+                <p className="text-sm text-muted-foreground mb-1">Sessions today</p>
                 <motion.div
                   key={todaySessions}
                   initial={{ scale: 1.1 }}
@@ -279,7 +336,7 @@ export function OrgAdminDashboard() {
                 </motion.div>
                 <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <TrendingUp className="w-3 h-3 text-green-600" />
-                  <span>Above weekly average</span>
+                  <span>Last day in 7-day trend</span>
                 </div>
               </div>
             </Card>
@@ -298,14 +355,14 @@ export function OrgAdminDashboard() {
                     <Award className="w-6 h-6 text-white" />
                   </div>
                   <div className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-semibold">
-                    89%
+                    Safety
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Satisfaction</p>
-                <div className="text-3xl font-bold">4.5/5</div>
+                <p className="text-sm text-muted-foreground mb-1">Pending crises</p>
+                <div className="text-3xl font-bold">{crisisCount}</div>
                 <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <Star className="w-3 h-3 text-orange-600 fill-orange-600" />
-                  <span>Based on 1,234 ratings</span>
+                  <span>Avg session {avgSession} min</span>
                 </div>
               </div>
             </Card>
@@ -325,10 +382,10 @@ export function OrgAdminDashboard() {
                 <div>
                   <h2 className="font-bold text-xl flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-blue-500" />
-                    Weekly Engagement Trend
+                    Weekly session activity
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Active users and sessions over the last 7 days
+                    AI sessions and average duration (last 7 days)
                   </p>
                 </div>
                 <Button variant="outline" size="sm">
@@ -338,11 +395,11 @@ export function OrgAdminDashboard() {
               <ResponsiveContainer width="100%" height={280}>
                 <AreaChart data={engagementData}>
                   <defs>
-                    <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="colorSessionsArea" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
                       <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                     </linearGradient>
-                    <linearGradient id="colorSessions" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="colorDurationArea" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
                       <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                     </linearGradient>
@@ -360,21 +417,21 @@ export function OrgAdminDashboard() {
                   <Legend />
                   <Area
                     type="monotone"
-                    dataKey="active"
+                    dataKey="sessions"
                     stroke="#3b82f6"
                     strokeWidth={3}
                     fillOpacity={1}
-                    fill="url(#colorActive)"
-                    name="Active Users"
+                    fill="url(#colorSessionsArea)"
+                    name="Sessions"
                   />
                   <Area
                     type="monotone"
-                    dataKey="sessions"
+                    dataKey="avgDuration"
                     stroke="#8b5cf6"
                     strokeWidth={3}
                     fillOpacity={1}
-                    fill="url(#colorSessions)"
-                    name="Sessions"
+                    fill="url(#colorDurationArea)"
+                    name="Avg duration (min)"
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -392,10 +449,10 @@ export function OrgAdminDashboard() {
                 <div>
                   <h2 className="font-bold text-xl flex items-center gap-2">
                     <Target className="w-5 h-5 text-green-500" />
-                    Wellness Outcomes
+                    Feature mix
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    User progress distribution
+                    Relative use of app areas (AI sessions, mood, journal, …)
                   </p>
                 </div>
               </div>
@@ -433,7 +490,7 @@ export function OrgAdminDashboard() {
               </div>
               <div className="mt-4 p-3 bg-green-50 rounded-lg">
                 <p className="text-sm text-green-700 font-medium">
-                  62% of users showing improvement
+                  AI Sessions reflects live agent usage in the app.
                 </p>
               </div>
             </Card>
@@ -452,10 +509,10 @@ export function OrgAdminDashboard() {
                 <div>
                   <h2 className="font-bold text-xl flex items-center gap-2">
                     <BarChart3 className="w-5 h-5 text-purple-500" />
-                    Team Performance
+                    Feature usage
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Engagement scores by team
+                    Normalized share of activity (includes AI agent sessions)
                   </p>
                 </div>
               </div>
@@ -498,9 +555,12 @@ export function OrgAdminDashboard() {
               </div>
 
               <div className="space-y-3 max-h-80 overflow-y-auto">
+                {recentActivity.length === 0 && (
+                  <p className="text-sm text-muted-foreground py-6 text-center">No recent sessions or moods yet.</p>
+                )}
                 {recentActivity.map((activity, index) => (
                   <motion.div
-                    key={index}
+                    key={activity.id}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.8 + index * 0.1 }}
@@ -537,10 +597,10 @@ export function OrgAdminDashboard() {
               <div>
                 <h2 className="font-bold text-xl flex items-center gap-2">
                   <Users className="w-5 h-5 text-blue-500" />
-                  Team Overview
+                  Feature overview
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Performance metrics across all teams
+                  Same metrics as usage cards, tied to live app data
                 </p>
               </div>
               <Link to="/admin/team-role-management">
@@ -621,40 +681,46 @@ export function OrgAdminDashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {recentAlerts.map((alert, index) => (
-                <motion.div
-                  key={alert.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 1.1 + index * 0.1 }}
-                  className={`p-4 rounded-lg border-l-4 ${
-                    alert.type === "success"
-                      ? "bg-green-50 border-green-500"
-                      : alert.type === "warning"
-                      ? "bg-orange-50 border-orange-500"
-                      : "bg-blue-50 border-blue-500"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    {alert.type === "success" && (
-                      <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                    )}
-                    {alert.type === "warning" && (
-                      <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
-                    )}
-                    {alert.type === "info" && (
-                      <MessageSquare className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    )}
-                    <div className="flex-1">
-                      <p className="font-medium text-sm mb-1">{alert.message}</p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {alert.time}
-                      </p>
+              {crisisPreview.length === 0 ? (
+                <p className="text-sm text-muted-foreground col-span-full py-4 text-center">
+                  No pending crisis events in the latest feed.
+                </p>
+              ) : (
+                crisisPreview.map((alert: { id: string | number; type: string; message: string; time: string }, index: number) => (
+                  <motion.div
+                    key={String(alert.id)}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1.1 + index * 0.1 }}
+                    className={`p-4 rounded-lg border-l-4 ${
+                      alert.type === "success"
+                        ? "bg-green-50 border-green-500"
+                        : alert.type === "warning"
+                        ? "bg-orange-50 border-orange-500"
+                        : "bg-blue-50 border-blue-500"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {alert.type === "success" && (
+                        <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                      )}
+                      {alert.type === "warning" && (
+                        <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                      )}
+                      {alert.type === "info" && (
+                        <MessageSquare className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1">
+                        <p className="font-medium text-sm mb-1">{alert.message}</p>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {alert.time}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                ))
+              )}
             </div>
           </Card>
         </motion.div>

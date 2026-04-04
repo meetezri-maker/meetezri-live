@@ -17,7 +17,8 @@ import {
   Save,
   X
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
 
 interface SecurityLog {
   id: string;
@@ -54,54 +55,69 @@ export function SecuritySettings() {
     setShowLogDetails(true);
   };
 
-  // Mock security logs
-  const securityLogs: SecurityLog[] = [
-    {
-      id: "log001",
-      event: "Failed login attempt",
-      severity: "medium",
-      user: "unknown",
-      timestamp: new Date(Date.now() - 15 * 60 * 1000),
-      ipAddress: "192.168.1.45",
-      action: "Account locked after 5 attempts"
-    },
-    {
-      id: "log002",
-      event: "Password changed",
-      severity: "low",
-      user: "admin@ezri.com",
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      ipAddress: "192.168.1.12",
-      action: "Password updated successfully"
-    },
-    {
-      id: "log003",
-      event: "Suspicious activity detected",
-      severity: "high",
-      user: "user@example.com",
-      timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000),
-      ipAddress: "45.123.67.89",
-      action: "Multiple location login attempts"
-    },
-    {
-      id: "log004",
-      event: "2FA enabled",
-      severity: "low",
-      user: "sarah@ezri.com",
-      timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
-      ipAddress: "192.168.1.23",
-      action: "Two-factor authentication activated"
-    },
-    {
-      id: "log005",
-      event: "API key regenerated",
-      severity: "medium",
-      user: "admin@ezri.com",
-      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000),
-      ipAddress: "192.168.1.12",
-      action: "Production API key rotated"
-    }
-  ];
+  const [securityLogs, setSecurityLogs] = useState<SecurityLog[]>([]);
+  const [dashStats, setDashStats] = useState<{
+    totalUsers: number;
+    activeSessions: number;
+    openErrors: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [stats, errs, audits] = await Promise.all([
+          api.admin.getStats(),
+          api.admin.getErrorLogs({ page: 1, limit: 40 }),
+          api.admin.getAuditLogs({ page: 1, limit: 25 }),
+        ]);
+        if (cancelled) return;
+        const errList = Array.isArray(errs) ? errs : [];
+        const auditList = Array.isArray(audits) ? audits : [];
+        setDashStats({
+          totalUsers: stats?.totalUsers ?? 0,
+          activeSessions: stats?.activeSessions ?? 0,
+          openErrors: errList.filter((e: any) => e.status === "open").length,
+        });
+        const fromErrors: SecurityLog[] = errList.slice(0, 12).map((e: any) => {
+          const sev = String(e.severity || "").toLowerCase();
+          const severity: SecurityLog["severity"] =
+            sev === "error" || sev === "fatal" ? "high" : sev === "warn" || sev === "warning" ? "medium" : "low";
+          return {
+            id: `err-${e.id}`,
+            event: e.message || "Error",
+            severity,
+            user: "system",
+            timestamp: e.created_at ? new Date(e.created_at) : new Date(),
+            ipAddress: "—",
+            action: `status: ${e.status || "open"}`,
+          };
+        });
+        const fromAudit: SecurityLog[] = auditList.slice(0, 12).map((a: any) => {
+          const actor = a.profiles;
+          return {
+            id: `audit-${a.id}`,
+            event: a.action || "Audit event",
+            severity: "low",
+            user: actor?.email || actor?.full_name || "actor",
+            timestamp: a.created_at ? new Date(a.created_at) : new Date(),
+            ipAddress: "—",
+            action: "Audit log",
+          };
+        });
+        const merged = [...fromErrors, ...fromAudit].sort(
+          (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+        );
+        setSecurityLogs(merged.slice(0, 20));
+      } catch (e) {
+        console.error(e);
+        setSecurityLogs([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const getSeverityColor = (severity: string) => {
     switch(severity) {
@@ -114,10 +130,10 @@ export function SecuritySettings() {
   };
 
   const stats = {
-    totalUsers: 1205,
-    twoFactorEnabled: 892,
-    activeSession: 234,
-    failedLogins: 12
+    totalUsers: dashStats?.totalUsers ?? 0,
+    twoFactorEnabled: "—" as const,
+    activeSession: dashStats?.activeSessions ?? 0,
+    failedLogins: dashStats?.openErrors ?? 0,
   };
 
   return (
@@ -174,8 +190,9 @@ export function SecuritySettings() {
                 <Shield className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">2FA Enabled</p>
+                <p className="text-gray-600 text-sm">2FA enrollment</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.twoFactorEnabled}</p>
+                <p className="text-xs text-gray-500 mt-1">Not stored in app DB</p>
               </div>
             </div>
           </motion.div>
@@ -208,7 +225,7 @@ export function SecuritySettings() {
                 <AlertTriangle className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Failed Logins (24h)</p>
+                <p className="text-gray-600 text-sm">Open error logs</p>
                 <p className="text-2xl font-bold text-red-600">{stats.failedLogins}</p>
               </div>
             </div>

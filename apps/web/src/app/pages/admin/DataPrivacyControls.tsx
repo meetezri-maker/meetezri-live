@@ -15,96 +15,93 @@ import {
   Database,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { api } from "@/lib/api";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { toast } from "sonner";
 
+type DataRequestRow = {
+  id: string;
+  type: string;
+  user: string;
+  status: string;
+  requestedAt: string;
+  deadline?: string;
+  reason?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  completedAt?: string;
+};
+
+type ConsentRecordRow = {
+  userId: string;
+  email: string;
+  marketing: boolean;
+  analytics: boolean;
+  thirdParty: boolean;
+  lastUpdated: string;
+};
+
 export function DataPrivacyControls() {
   const [showSensitiveData, setShowSensitiveData] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
+  const [totalUsers, setTotalUsers] = useState<number | null>(null);
+  const [auditCount, setAuditCount] = useState(0);
 
-  const dataRequests = [
-    {
-      id: "1",
-      type: "Data Export",
-      user: "john.doe@example.com",
-      status: "pending",
-      requestedAt: "2 hours ago",
-      deadline: "5 days",
-      reason: "User requested a copy of all personal data for records",
-      ipAddress: "192.168.1.1",
-      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-    },
-    {
-      id: "2",
-      type: "Data Deletion",
-      user: "jane.smith@example.com",
-      status: "processing",
-      requestedAt: "1 day ago",
-      deadline: "2 days",
-      reason: "Account closure - user requested all data to be deleted",
-      ipAddress: "192.168.1.2",
-      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-    },
-    {
-      id: "3",
-      type: "Data Access",
-      user: "bob.wilson@example.com",
-      status: "completed",
-      requestedAt: "3 days ago",
-      completedAt: "2 days ago",
-      reason: "User wanted to review what data is being collected",
-      ipAddress: "192.168.1.3",
-      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X)",
-    },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [dash, audits] = await Promise.all([
+          api.admin.getStats(),
+          api.admin.getAuditLogs({ limit: 100 }),
+        ]);
+        if (cancelled) return;
+        setTotalUsers(dash?.totalUsers ?? 0);
+        setAuditCount(Array.isArray(audits) ? audits.length : 0);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const consentRecords = [
-    {
-      userId: "user_1234",
-      email: "user1@example.com",
-      marketing: true,
-      analytics: true,
-      thirdParty: false,
-      lastUpdated: "2024-01-15",
-    },
-    {
-      userId: "user_5678",
-      email: "user2@example.com",
-      marketing: false,
-      analytics: true,
-      thirdParty: false,
-      lastUpdated: "2024-01-18",
-    },
-  ];
+  const dataRequests: DataRequestRow[] = [];
 
-  const stats = [
-    {
-      label: "Pending Requests",
-      value: "12",
-      icon: Clock,
-      color: "from-yellow-500 to-orange-600",
-    },
-    {
-      label: "Processed (30d)",
-      value: "234",
-      icon: CheckCircle2,
-      color: "from-green-500 to-emerald-600",
-    },
-    {
-      label: "Data Subjects",
-      value: "1,234",
-      icon: Users,
-      color: "from-blue-500 to-cyan-600",
-    },
-    {
-      label: "Consent Rate",
-      value: "87%",
-      icon: Shield,
-      color: "from-purple-500 to-pink-600",
-    },
-  ];
+  const consentRecords: ConsentRecordRow[] = [];
+
+  const stats = useMemo(
+    () => [
+      {
+        label: "DSAR queue",
+        value: "0",
+        icon: Clock,
+        color: "from-yellow-500 to-orange-600",
+      },
+      {
+        label: "Audit events (loaded)",
+        value: String(auditCount),
+        icon: CheckCircle2,
+        color: "from-green-500 to-emerald-600",
+      },
+      {
+        label: "Data subjects (users)",
+        value: totalUsers == null ? "—" : totalUsers.toLocaleString(),
+        icon: Users,
+        color: "from-blue-500 to-cyan-600",
+      },
+      {
+        label: "Consent records",
+        value: consentRecords.length ? String(consentRecords.length) : "—",
+        icon: Shield,
+        color: "from-purple-500 to-pink-600",
+      },
+    ],
+    [totalUsers, auditCount]
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -192,6 +189,12 @@ export function DataPrivacyControls() {
             </div>
 
             <div className="space-y-3">
+              {dataRequests.length === 0 && (
+                <p className="text-sm text-gray-500 py-6 text-center">
+                  No DSAR or privacy requests are stored in the database. Configure a workflow or API to
+                  track these requests if needed.
+                </p>
+              )}
               {dataRequests.map((request) => (
                 <div
                   key={request.id}
@@ -281,6 +284,11 @@ export function DataPrivacyControls() {
               </div>
 
               <div className="space-y-3">
+                {consentRecords.length === 0 && (
+                  <p className="text-sm text-gray-500 py-4">
+                    Per-user marketing or analytics consent is not stored in this application database.
+                  </p>
+                )}
                 {consentRecords.map((record) => (
                   <div
                     key={record.userId}

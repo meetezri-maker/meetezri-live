@@ -16,7 +16,7 @@ import {
   Tag,
   Flag,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -29,8 +29,21 @@ interface Ticket {
   category: string;
   created: string;
   lastUpdate: string;
+  /** ISO timestamp for stats (resolved today, etc.) */
+  updatedAtIso: string;
   description?: string;
   messages?: { from: string; message: string; time: string }[];
+}
+
+function mapApiStatus(raw: string | null | undefined): Ticket["status"] {
+  if (raw === "in_progress") return "in-progress";
+  if (raw === "open" || raw === "resolved" || raw === "closed") return raw;
+  return "open";
+}
+
+function mapApiPriority(raw: string | null | undefined): Ticket["priority"] {
+  if (raw === "low" || raw === "medium" || raw === "high" || raw === "urgent") return raw;
+  return "medium";
 }
 
 export function SupportTickets() {
@@ -44,6 +57,7 @@ export function SupportTickets() {
   const [selectedAgent, setSelectedAgent] = useState("");
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const itemsPerPage = 5;
 
   useEffect(() => {
@@ -53,23 +67,30 @@ export function SupportTickets() {
   const fetchTickets = async () => {
     try {
       setIsLoading(true);
-      const data = await api.admin.getSupportTickets();
-      setTickets(data.map((t: any) => ({
-        id: t.id,
-        subject: t.subject,
-        user: t.user?.email || 'Unknown User',
-        status: t.status,
-        priority: t.priority,
-        category: t.category,
-        created: new Date(t.created_at).toLocaleString(),
-        lastUpdate: new Date(t.updated_at).toLocaleString(),
-        description: t.description,
-        messages: t.messages?.map((m: any) => ({
-          from: m.sender_type === 'admin' ? 'Support Team' : (t.user?.email || 'User'),
-          message: m.message,
-          time: new Date(m.created_at).toLocaleString()
-        })) || []
-      })));
+      const data = await api.admin.getSupportTickets({ page: 1, limit: 200 });
+      const list = Array.isArray(data) ? data : [];
+      setTickets(
+        list.map((t: any) => {
+          const profile = t.profiles_support_tickets_user_idToprofiles;
+          const userLabel =
+            profile?.full_name?.trim() || profile?.email || "Unknown user";
+          const createdAt = t.created_at ? new Date(t.created_at) : new Date();
+          const updatedAt = t.updated_at ? new Date(t.updated_at) : createdAt;
+          return {
+            id: String(t.id),
+            subject: t.subject || "(No subject)",
+            user: userLabel,
+            status: mapApiStatus(t.status),
+            priority: mapApiPriority(t.priority),
+            category: typeof t.category === "string" && t.category ? t.category : "Support",
+            created: createdAt.toLocaleString(),
+            lastUpdate: updatedAt.toLocaleString(),
+            updatedAtIso: updatedAt.toISOString(),
+            description: t.description ?? "",
+            messages: [],
+          };
+        })
+      );
     } catch (error) {
       console.error("Failed to fetch tickets:", error);
       toast.error("Failed to load support tickets");
@@ -78,10 +99,43 @@ export function SupportTickets() {
     }
   };
 
-  const totalPages = Math.ceil(tickets.length / itemsPerPage);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  const filteredTickets = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return tickets;
+    return tickets.filter(
+      (t) =>
+        t.subject.toLowerCase().includes(q) ||
+        t.user.toLowerCase().includes(q) ||
+        t.id.toLowerCase().includes(q)
+    );
+  }, [tickets, searchQuery]);
+
+  const stats = useMemo(() => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    let open = 0;
+    let inProgress = 0;
+    let resolvedToday = 0;
+    let urgent = 0;
+    for (const t of tickets) {
+      if (t.priority === "urgent") urgent += 1;
+      if (t.status === "open") open += 1;
+      else if (t.status === "in-progress") inProgress += 1;
+      else if (t.status === "resolved") {
+        if (new Date(t.updatedAtIso) >= startOfToday) resolvedToday += 1;
+      }
+    }
+    return { open, inProgress, resolvedToday, urgent, total: tickets.length };
+  }, [tickets]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTickets.length / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentTickets = tickets.slice(startIndex, endIndex);
+  const currentTickets = filteredTickets.slice(startIndex, endIndex);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -169,7 +223,7 @@ export function SupportTickets() {
           </p>
         </motion.div>
 
-        {/* Stats */}
+        {/* Stats — derived from loaded tickets (up to 200) */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -179,8 +233,10 @@ export function SupportTickets() {
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Open Tickets</p>
-                  <p className="text-2xl font-bold">24</p>
+                  <p className="text-sm text-muted-foreground mb-1">Open</p>
+                  <p className="text-2xl font-bold">
+                    {isLoading ? "—" : stats.open}
+                  </p>
                 </div>
                 <AlertCircle className="w-8 h-8 text-yellow-500" />
               </div>
@@ -194,8 +250,10 @@ export function SupportTickets() {
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">In Progress</p>
-                  <p className="text-2xl font-bold">12</p>
+                  <p className="text-sm text-muted-foreground mb-1">In progress</p>
+                  <p className="text-2xl font-bold">
+                    {isLoading ? "—" : stats.inProgress}
+                  </p>
                 </div>
                 <Clock className="w-8 h-8 text-blue-500" />
               </div>
@@ -209,8 +267,10 @@ export function SupportTickets() {
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Resolved Today</p>
-                  <p className="text-2xl font-bold text-green-600">18</p>
+                  <p className="text-sm text-muted-foreground mb-1">Resolved today</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {isLoading ? "—" : stats.resolvedToday}
+                  </p>
                 </div>
                 <CheckCircle className="w-8 h-8 text-green-500" />
               </div>
@@ -224,8 +284,10 @@ export function SupportTickets() {
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Avg Response</p>
-                  <p className="text-2xl font-bold">2.4h</p>
+                  <p className="text-sm text-muted-foreground mb-1">Urgent / Total</p>
+                  <p className="text-2xl font-bold">
+                    {isLoading ? "—" : `${stats.urgent} / ${stats.total}`}
+                  </p>
                 </div>
                 <MessageSquare className="w-8 h-8 text-primary" />
               </div>
@@ -243,7 +305,12 @@ export function SupportTickets() {
             <div className="flex gap-4">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input placeholder="Search tickets..." className="pl-10" />
+                <Input
+                  placeholder="Search by subject, user, or ticket id..."
+                  className="pl-10"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
               </div>
               <Button variant="outline" className="gap-2">
                 <Filter className="w-4 h-4" />
@@ -291,14 +358,25 @@ export function SupportTickets() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {currentTickets.map((ticket, index) => (
-                    <motion.tr
-                      key={ticket.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.7 + index * 0.05 }}
-                      className="hover:bg-gray-50"
-                    >
+                  {isLoading && (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-12 text-center text-muted-foreground">
+                        Loading tickets…
+                      </td>
+                    </tr>
+                  )}
+                  {!isLoading && filteredTickets.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-12 text-center text-muted-foreground">
+                        {tickets.length === 0
+                          ? "No support tickets yet."
+                          : "No tickets match your search."}
+                      </td>
+                    </tr>
+                  )}
+                  {!isLoading &&
+                    currentTickets.map((ticket) => (
+                    <tr key={ticket.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap font-mono text-sm font-medium">
                         #{ticket.id}
                       </td>
@@ -341,7 +419,7 @@ export function SupportTickets() {
                           View
                         </Button>
                       </td>
-                    </motion.tr>
+                    </tr>
                   ))}
                 </tbody>
               </table>
@@ -349,7 +427,13 @@ export function SupportTickets() {
 
             <div className="px-6 py-4 border-t flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Showing {startIndex + 1}-{Math.min(endIndex, allTickets.length)} of {allTickets.length} tickets
+                {isLoading
+                  ? "Loading…"
+                  : filteredTickets.length === 0
+                  ? "No tickets to show"
+                  : `Showing ${startIndex + 1}-${Math.min(endIndex, filteredTickets.length)} of ${filteredTickets.length}${
+                      searchQuery.trim() ? ` (filtered from ${tickets.length})` : ""
+                    }`}
               </p>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground mr-2">
@@ -379,25 +463,25 @@ export function SupportTickets() {
         {/* View Ticket Modal */}
         <AnimatePresence>
           {viewingTicket && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+            <motion.div
+              key="support-view-modal"
+              role="dialog"
+              aria-modal="true"
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                 onClick={() => setViewingTicket(null)}
+                aria-hidden
               />
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="fixed inset-0 z-50 flex items-center justify-center p-4"
-                onClick={() => setViewingTicket(null)}
+              <div
+                className="relative z-10 bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
               >
-                <div
-                  className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
-                  onClick={(e) => e.stopPropagation()}
-                >
                   {/* Modal Header */}
                   <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
                     <div>
@@ -512,33 +596,32 @@ export function SupportTickets() {
                     </div>
                   </div>
                 </div>
-              </motion.div>
-            </>
+            </motion.div>
           )}
         </AnimatePresence>
 
         {/* Reply Modal */}
         <AnimatePresence>
           {showReplyModal && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+            <motion.div
+              key="support-reply-modal"
+              role="dialog"
+              aria-modal="true"
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                 onClick={() => setShowReplyModal(false)}
+                aria-hidden
               />
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="fixed inset-0 z-50 flex items-center justify-center p-4"
-                onClick={() => setShowReplyModal(false)}
+              <div
+                className="relative z-10 bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
               >
-                <div
-                  className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
-                  onClick={(e) => e.stopPropagation()}
-                >
                   {/* Modal Header */}
                   <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
                     <div>
@@ -663,33 +746,32 @@ export function SupportTickets() {
                     </div>
                   </div>
                 </div>
-              </motion.div>
-            </>
+            </motion.div>
           )}
         </AnimatePresence>
 
         {/* Status Modal */}
         <AnimatePresence>
           {showStatusModal && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+            <motion.div
+              key="support-status-modal"
+              role="dialog"
+              aria-modal="true"
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                 onClick={() => setShowStatusModal(false)}
+                aria-hidden
               />
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="fixed inset-0 z-50 flex items-center justify-center p-4"
-                onClick={() => setShowStatusModal(false)}
+              <div
+                className="relative z-10 bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
               >
-                <div
-                  className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
-                  onClick={(e) => e.stopPropagation()}
-                >
                   {/* Modal Header */}
                   <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
                     <div>
@@ -818,33 +900,32 @@ export function SupportTickets() {
                     </div>
                   </div>
                 </div>
-              </motion.div>
-            </>
+            </motion.div>
           )}
         </AnimatePresence>
 
         {/* Assign Modal */}
         <AnimatePresence>
           {showAssignModal && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+            <motion.div
+              key="support-assign-modal"
+              role="dialog"
+              aria-modal="true"
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
                 onClick={() => setShowAssignModal(false)}
+                aria-hidden
               />
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="fixed inset-0 z-50 flex items-center justify-center p-4"
-                onClick={() => setShowAssignModal(false)}
+              <div
+                className="relative z-10 bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
               >
-                <div
-                  className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
-                  onClick={(e) => e.stopPropagation()}
-                >
                   {/* Modal Header */}
                   <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
                     <div>
@@ -969,8 +1050,7 @@ export function SupportTickets() {
                     </div>
                   </div>
                 </div>
-              </motion.div>
-            </>
+            </motion.div>
           )}
         </AnimatePresence>
       </div>

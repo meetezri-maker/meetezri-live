@@ -140,6 +140,7 @@ import { TwoFactorAuth } from '@/app/pages/admin/TwoFactorAuth';
 import { MoodHistory } from './pages/app/MoodHistory';
 import { Journal } from './pages/app/Journal';
 import { WellnessTools } from './pages/app/WellnessTools';
+import { SecuritySettings } from './pages/admin/SecuritySettings';
 
 function NetworkWatcher() {
   const navigate = useNavigate();
@@ -405,6 +406,7 @@ export default function App() {
             <Route path="/admin/payg-transactions" element={<PayAsYouGoManager />} />
 
             {/* Security & Compliance */}
+            <Route path="/admin/security-settings" element={<SecuritySettings />} />
             <Route path="/admin/compliance-dashboard" element={<ComplianceDashboard />} />
             <Route path="/admin/hipaa-compliance" element={<HIPAACompliance />} />
             <Route path="/admin/data-privacy-controls" element={<DataPrivacyControls />} />

@@ -24,7 +24,10 @@ import {
   Bell,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { formatDistanceToNow } from "date-fns";
+import { api } from "../../../lib/api";
+import { useAuth } from "@/app/contexts/AuthContext";
 import {
   LineChart,
   Line,
@@ -46,86 +49,148 @@ import {
 } from "recharts";
 
 export function TeamAdminDashboard() {
-  const [activeMembers, setActiveMembers] = useState(38);
-  const [todaySessions, setTodaySessions] = useState(28);
+  const { profile } = useAuth();
+  const [stats, setStats] = useState<any>(null);
+  const [recent, setRecent] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Simulate real-time updates
   useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveMembers(prev => Math.min(45, prev + (Math.random() > 0.5 ? 1 : 0)));
-      setTodaySessions(prev => prev + (Math.random() > 0.6 ? 1 : 0));
-    }, 5000);
+    let cancelled = false;
 
-    return () => clearInterval(interval);
+    const load = async () => {
+      try {
+        const [s, r, u] = await Promise.all([
+          api.admin.getStats(),
+          api.admin.getRecentActivity(),
+          api.admin.getUsers(),
+        ]);
+        if (!cancelled) {
+          setStats(s);
+          setRecent(r);
+          setUsers(Array.isArray(u) ? u.slice(0, 5) : []);
+        }
+      } catch (e) {
+        console.error("Team admin dashboard load failed", e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    const interval = setInterval(load, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
+  const sessionActivity = (stats?.sessionActivity || []) as {
+    day: string;
+    sessions: number;
+    duration: number;
+  }[];
+
+  const weeklyActivity = useMemo(
+    () =>
+      sessionActivity.map((d) => ({
+        day: d.day,
+        sessions: d.sessions,
+        avgDuration: d.duration,
+      })),
+    [sessionActivity]
+  );
+
+  const featureUsage = (stats?.featureUsage || []) as { feature: string; usage: number }[];
+
+  const wellnessScores = useMemo(
+    () => featureUsage.slice(0, 6).map((f) => ({ category: f.feature, score: f.usage })),
+    [featureUsage]
+  );
+
+  const teamMembers = useMemo(() => {
+    return users.map((u) => ({
+      id: u.id as string,
+      name: u.full_name || u.email || "User",
+      status: u.status === "active" ? "active" : "away",
+      sessions: u.session_count ?? 0,
+      lastActive: u.last_active
+        ? formatDistanceToNow(new Date(u.last_active), { addSuffix: true })
+        : "—",
+      progress: u.risk_level === "high" ? 60 : u.risk_level === "medium" ? 75 : 85,
+    }));
+  }, [users]);
+
+  const recentAlerts = useMemo(() => {
+    const fromCrisis = (recent?.alerts ?? []).slice(0, 4).map((a: any) => ({
+      id: a.id,
+      type: a.risk_level === "high" ? "warning" : "info",
+      message: `${a.risk_level || "Risk"} — ${a.event_type || "Crisis"}`,
+      time: a.created_at
+        ? formatDistanceToNow(new Date(a.created_at), { addSuffix: true })
+        : "",
+    }));
+    if (fromCrisis.length > 0) return fromCrisis;
+    return [
+      {
+        id: "m1",
+        type: "info",
+        message: `Total AI sessions (app): ${stats?.totalSessions ?? 0}`,
+        time: "Live stats",
+      },
+    ];
+  }, [recent, stats]);
+
+  const milestones = useMemo(() => {
+    const ts = stats?.totalSessions ?? 0;
+    const live = stats?.activeSessions ?? 0;
+    const crisis = stats?.crisisAlerts ?? 0;
+    return [
+      {
+        title: `${ts.toLocaleString()} total AI sessions (platform)`,
+        achieved: ts > 0,
+        date: "App data",
+        progress: ts > 0 ? 100 : 0,
+      },
+      {
+        title: `${live} live AI sessions now`,
+        achieved: live > 0,
+        date: "Live",
+        progress: live > 0 ? 100 : 0,
+      },
+      {
+        title: crisis === 0 ? "No pending crisis events" : `${crisis} crisis event(s) pending`,
+        achieved: crisis === 0,
+        date: crisis === 0 ? "Clear" : "Needs review",
+        progress: Math.min(100, crisis * 10),
+      },
+    ];
+  }, [stats]);
+
+  const totalUsers = stats?.totalUsers ?? 0;
+  const activeSessions = stats?.activeSessions ?? 0;
+  const todaySessions =
+    sessionActivity.length > 0 ? sessionActivity[sessionActivity.length - 1].sessions : 0;
+  const mockedSections: string[] = stats?.mockedSections || [];
+
   const teamInfo = {
-    name: "Clinical Support Team",
-    organization: "HealthCare Corp",
-    members: 45,
-    activeMembers: 38,
+    name: "Team",
+    organization: profile?.full_name || profile?.email || "Team admin",
+    members: totalUsers,
+    activeMembers: activeSessions,
     role: "Team Admin",
-    since: "Mar 2024",
+    since: "Live",
   };
 
-  const weeklyActivity = [
-    { day: "Mon", sessions: 32, checkins: 28, journals: 15 },
-    { day: "Tue", sessions: 38, checkins: 34, journals: 18 },
-    { day: "Wed", sessions: 29, checkins: 26, journals: 12 },
-    { day: "Thu", sessions: 42, checkins: 38, journals: 22 },
-    { day: "Fri", sessions: 36, checkins: 32, journals: 19 },
-    { day: "Sat", sessions: 24, checkins: 20, journals: 10 },
-    { day: "Sun", sessions: 21, checkins: 18, journals: 8 },
-  ];
-
-  const memberEngagement = [
-    { name: "Active Daily", value: 24 },
-    { name: "Active Weekly", value: 14 },
-    { name: "Inactive", value: 7 },
-  ];
-
-  const wellnessScores = [
-    { category: "Mood", score: 85 },
-    { category: "Engagement", score: 92 },
-    { category: "Consistency", score: 78 },
-    { category: "Progress", score: 88 },
-    { category: "Satisfaction", score: 90 },
-  ];
-
-  const teamMembers = [
-    { name: "Sarah Johnson", status: "active", sessions: 12, lastActive: "2m ago", progress: 85 },
-    { name: "Mike Chen", status: "active", sessions: 15, lastActive: "15m ago", progress: 92 },
-    { name: "Emma Wilson", status: "active", sessions: 8, lastActive: "1h ago", progress: 78 },
-    { name: "David Brown", status: "away", sessions: 10, lastActive: "4h ago", progress: 82 },
-    { name: "Lisa Anderson", status: "active", sessions: 14, lastActive: "30m ago", progress: 88 },
-  ];
-
-  const recentAlerts = [
-    {
-      id: 1,
-      type: "success",
-      message: "5 members completed weekly check-in",
-      time: "1 hour ago",
-    },
-    {
-      id: 2,
-      type: "info",
-      message: "Team engagement up 12% this week",
-      time: "3 hours ago",
-    },
-    {
-      id: 3,
-      type: "warning",
-      message: "2 members need follow-up",
-      time: "5 hours ago",
-    },
-  ];
-
-  const milestones = [
-    { title: "100 Sessions Completed", achieved: true, date: "Yesterday" },
-    { title: "90% Weekly Engagement", achieved: true, date: "3 days ago" },
-    { title: "Team Wellness Goal", achieved: false, progress: 85 },
-  ];
+  if (loading && !stats) {
+    return (
+      <AdminLayoutNew>
+        <div className="flex items-center justify-center h-[60vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+        </div>
+      </AdminLayoutNew>
+    );
+  }
 
   return (
     <AdminLayoutNew>
@@ -143,7 +208,7 @@ export function TeamAdminDashboard() {
               <div>
                 <h1 className="text-3xl font-bold">Team Dashboard</h1>
                 <p className="text-muted-foreground">
-                  {teamInfo.name} • {teamInfo.organization} • {teamInfo.members} Members
+                  {teamInfo.organization} • Live app metrics (platform-wide)
                 </p>
               </div>
             </div>
@@ -164,6 +229,12 @@ export function TeamAdminDashboard() {
           </div>
         </motion.div>
 
+        {mockedSections.length > 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Some metrics are estimated: {mockedSections.join(", ")}. Session and user counts are from live data.
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <motion.div
@@ -182,11 +253,11 @@ export function TeamAdminDashboard() {
                     Total
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Team Members</p>
-                <div className="text-3xl font-bold">{teamInfo.members}</div>
+                <p className="text-sm text-muted-foreground mb-1">Total users</p>
+                <div className="text-3xl font-bold">{teamInfo.members.toLocaleString()}</div>
                 <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <UserCheck className="w-3 h-3 text-cyan-600" />
-                  <span>Full team strength</span>
+                  <span>Profiles in app</span>
                 </div>
               </div>
             </Card>
@@ -209,18 +280,18 @@ export function TeamAdminDashboard() {
                     <span className="text-xs text-green-600 font-semibold">Live</span>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Active Now</p>
+                <p className="text-sm text-muted-foreground mb-1">Live AI sessions</p>
                 <motion.div
-                  key={activeMembers}
+                  key={activeSessions}
                   initial={{ scale: 1.1 }}
                   animate={{ scale: 1 }}
                   className="text-3xl font-bold"
                 >
-                  {activeMembers}
+                  {activeSessions}
                 </motion.div>
                 <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <Eye className="w-3 h-3 text-green-600" />
-                  <span>84% engagement rate</span>
+                  <span>Active agent conversations</span>
                 </div>
               </div>
             </Card>
@@ -239,10 +310,10 @@ export function TeamAdminDashboard() {
                     <MessageSquare className="w-6 h-6 text-white" />
                   </div>
                   <div className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
-                    +18%
+                    7d
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Today's Sessions</p>
+                <p className="text-sm text-muted-foreground mb-1">Sessions today</p>
                 <motion.div
                   key={todaySessions}
                   initial={{ scale: 1.1 }}
@@ -253,7 +324,7 @@ export function TeamAdminDashboard() {
                 </motion.div>
                 <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <TrendingUp className="w-3 h-3 text-green-600" />
-                  <span>Above target</span>
+                  <span>Last day in 7-day trend</span>
                 </div>
               </div>
             </Card>
@@ -272,14 +343,14 @@ export function TeamAdminDashboard() {
                     <Heart className="w-6 h-6 text-white" />
                   </div>
                   <div className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-semibold">
-                    Excellent
+                    Avg
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Team Wellness</p>
-                <div className="text-3xl font-bold">87%</div>
+                <p className="text-sm text-muted-foreground mb-1">Avg session length</p>
+                <div className="text-3xl font-bold">{stats?.avgSessionLength ?? 0} min</div>
                 <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <Star className="w-3 h-3 text-orange-600 fill-orange-600" />
-                  <span>Up from 82% last week</span>
+                  <span>{stats?.crisisAlerts ?? 0} pending crises</span>
                 </div>
               </div>
             </Card>
@@ -302,7 +373,7 @@ export function TeamAdminDashboard() {
                     Weekly Activity Breakdown
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Sessions, check-ins, and journal entries
+                    AI sessions and average duration (last 7 days)
                   </p>
                 </div>
                 <Button variant="outline" size="sm">
@@ -323,8 +394,7 @@ export function TeamAdminDashboard() {
                   />
                   <Legend />
                   <Bar dataKey="sessions" fill="#06b6d4" radius={[4, 4, 0, 0]} name="Sessions" />
-                  <Bar dataKey="checkins" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Check-ins" />
-                  <Bar dataKey="journals" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Journals" />
+                  <Bar dataKey="avgDuration" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Avg duration (min)" />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -341,15 +411,15 @@ export function TeamAdminDashboard() {
                 <div>
                   <h2 className="font-bold text-xl flex items-center gap-2">
                     <Target className="w-5 h-5 text-purple-500" />
-                    Wellness Scores
+                    App feature mix
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Team performance metrics
+                    Includes AI agent sessions vs other features
                   </p>
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={240}>
-                <RadarChart data={wellnessScores}>
+                <RadarChart data={wellnessScores.length ? wellnessScores : [{ category: "No data", score: 0 }]}>
                   <PolarGrid stroke="#e5e7eb" />
                   <PolarAngleAxis dataKey="category" stroke="#6b7280" />
                   <PolarRadiusAxis stroke="#6b7280" />
@@ -392,9 +462,14 @@ export function TeamAdminDashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              {teamMembers.length === 0 && (
+                <p className="text-sm text-muted-foreground col-span-full py-6 text-center">
+                  No users returned yet — open User Management to browse the full directory.
+                </p>
+              )}
               {teamMembers.map((member, index) => (
                 <motion.div
-                  key={member.name}
+                  key={member.id}
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.7 + index * 0.1 }}
@@ -403,7 +478,13 @@ export function TeamAdminDashboard() {
                   <div className="flex items-center gap-3 mb-3">
                     <div className="relative">
                       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white font-bold">
-                        {member.name.split(" ").map(n => n[0]).join("")}
+                        {(member.name || "U")
+                          .split(/\s+/)
+                          .filter(Boolean)
+                          .map((n: string) => n[0])
+                          .join("")
+                          .slice(0, 2)
+                          .toUpperCase()}
                       </div>
                       <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
                         member.status === "active" ? "bg-green-500" : "bg-gray-400"
@@ -525,7 +606,7 @@ export function TeamAdminDashboard() {
               </div>
 
               <div className="space-y-3">
-                {recentAlerts.map((alert, index) => (
+                {recentAlerts.map((alert: { id: string | number; type: string; message: string; time: string }, index: number) => (
                   <motion.div
                     key={alert.id}
                     initial={{ opacity: 0, x: -20 }}

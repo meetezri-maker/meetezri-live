@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import {
@@ -31,157 +33,102 @@ interface LogEntry {
   requestId?: string;
 }
 
+function mapErrorToLogEntry(row: any): LogEntry {
+  const sev = String(row.severity || "info").toLowerCase();
+  let level: LogEntry["level"] = "info";
+  if (sev === "error" || sev === "fatal") level = "error";
+  else if (sev === "warn" || sev === "warning") level = "warning";
+  else if (sev === "debug") level = "debug";
+  else if (sev === "success") level = "success";
+
+  const ctx = row.context && typeof row.context === "object" ? (row.context as Record<string, unknown>) : {};
+  const catRaw = typeof ctx.category === "string" ? ctx.category : "system";
+  const category = (
+    ["auth", "api", "database", "security", "system", "user"].includes(catRaw) ? catRaw : "system"
+  ) as LogEntry["category"];
+
+  const created = row.created_at ? new Date(row.created_at) : new Date();
+  const details =
+    row.stack_trace ||
+    (() => {
+      try {
+        return row.context ? JSON.stringify(row.context) : undefined;
+      } catch {
+        return undefined;
+      }
+    })();
+
+  return {
+    id: String(row.id),
+    timestamp: created,
+    level,
+    category,
+    message: row.message || "Error",
+    source: typeof ctx.path === "string" ? ctx.path : "error_logs",
+    userId: typeof ctx.userId === "string" ? ctx.userId : undefined,
+    ipAddress: typeof ctx.ip === "string" ? ctx.ip : undefined,
+    details,
+    requestId: typeof ctx.requestId === "string" ? ctx.requestId : undefined,
+  };
+}
+
 export function SystemLogs() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterLevel, setFilterLevel] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
-  const [dateFilter, setDateFilter] = useState("today");
+  const [dateFilter, setDateFilter] = useState("all");
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock log entries
-  const logs: LogEntry[] = [
-    {
-      id: "log001",
-      timestamp: new Date(Date.now() - 5 * 60 * 1000),
-      level: "error",
-      category: "api",
-      message: "Payment API timeout",
-      source: "/api/payments/process",
-      userId: "u456",
-      ipAddress: "192.168.1.45",
-      details: "Request to Stripe API timed out after 30 seconds",
-      requestId: "req_abc123"
-    },
-    {
-      id: "log002",
-      timestamp: new Date(Date.now() - 15 * 60 * 1000),
-      level: "warning",
-      category: "security",
-      message: "Multiple failed login attempts",
-      source: "/auth/login",
-      userId: "unknown",
-      ipAddress: "45.123.67.89",
-      details: "5 failed login attempts for user@example.com in 2 minutes",
-      requestId: "req_def456"
-    },
-    {
-      id: "log003",
-      timestamp: new Date(Date.now() - 30 * 60 * 1000),
-      level: "success",
-      category: "auth",
-      message: "User login successful",
-      source: "/auth/login",
-      userId: "u789",
-      ipAddress: "192.168.1.12",
-      details: "2FA verification passed",
-      requestId: "req_ghi789"
-    },
-    {
-      id: "log004",
-      timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000),
-      level: "info",
-      category: "database",
-      message: "Database backup completed",
-      source: "/system/backup",
-      details: "Backup size: 2.4 GB, Duration: 8 minutes",
-      requestId: "req_jkl012"
-    },
-    {
-      id: "log005",
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      level: "error",
-      category: "database",
-      message: "Connection pool exhausted",
-      source: "/database/pool",
-      details: "All 100 connections in use, new connections queued",
-      requestId: "req_mno345"
-    },
-    {
-      id: "log006",
-      timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000),
-      level: "warning",
-      category: "system",
-      message: "High memory usage detected",
-      source: "/system/monitor",
-      details: "Memory usage at 87%, threshold is 80%",
-      requestId: "req_pqr678"
-    },
-    {
-      id: "log007",
-      timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000),
-      level: "info",
-      category: "user",
-      message: "New user registration",
-      source: "/users/register",
-      userId: "u901",
-      ipAddress: "192.168.1.23",
-      details: "Email verification sent",
-      requestId: "req_stu901"
-    },
-    {
-      id: "log008",
-      timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
-      level: "debug",
-      category: "api",
-      message: "AI session initiated",
-      source: "/api/ai/session/start",
-      userId: "u234",
-      ipAddress: "192.168.1.56",
-      details: "Model: GPT-4, Session ID: sess_xyz789",
-      requestId: "req_vwx234"
-    },
-    {
-      id: "log009",
-      timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000),
-      level: "success",
-      category: "security",
-      message: "Security scan completed",
-      source: "/security/scan",
-      details: "No vulnerabilities detected, 1,245 files scanned",
-      requestId: "req_yza567"
-    },
-    {
-      id: "log010",
-      timestamp: new Date(Date.now() - 7 * 60 * 60 * 1000),
-      level: "error",
-      category: "api",
-      message: "Rate limit exceeded",
-      source: "/api/rate-limiter",
-      userId: "u567",
-      ipAddress: "98.76.54.32",
-      details: "User exceeded 100 requests per minute limit",
-      requestId: "req_bcd890"
-    },
-    {
-      id: "log011",
-      timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000),
-      level: "info",
-      category: "system",
-      message: "Server restart completed",
-      source: "/system/restart",
-      details: "Restart duration: 45 seconds, All services healthy",
-      requestId: "req_efg123"
-    },
-    {
-      id: "log012",
-      timestamp: new Date(Date.now() - 9 * 60 * 60 * 1000),
-      level: "warning",
-      category: "database",
-      message: "Slow query detected",
-      source: "/database/query",
-      details: "Query execution time: 3.2 seconds (threshold: 1 second)",
-      requestId: "req_hij456"
-    }
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setIsLoading(true);
+        const data = await api.admin.getErrorLogs({ page: 1, limit: 100 });
+        const list = Array.isArray(data) ? data : [];
+        if (!cancelled) setLogs(list.map(mapErrorToLogEntry));
+      } catch (e) {
+        console.error(e);
+        toast.error("Failed to load system error logs");
+        if (!cancelled) setLogs([]);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const filteredLogs = logs.filter(log => {
-    const matchesSearch = log.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         log.source.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         log.details?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesLevel = filterLevel === "all" || log.level === filterLevel;
-    const matchesCategory = filterCategory === "all" || log.category === filterCategory;
-    return matchesSearch && matchesLevel && matchesCategory;
-  });
+  const filteredLogs = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+    const now = Date.now();
+    const hourAgo = now - 60 * 60 * 1000;
+
+    return logs.filter((log) => {
+      const matchesSearch =
+        !q ||
+        log.message.toLowerCase().includes(q) ||
+        log.source.toLowerCase().includes(q) ||
+        (log.details && log.details.toLowerCase().includes(q));
+      const matchesLevel = filterLevel === "all" || log.level === filterLevel;
+      const matchesCategory = filterCategory === "all" || log.category === filterCategory;
+      const t = log.timestamp.getTime();
+      let matchesDate = true;
+      if (dateFilter === "today") matchesDate = log.timestamp >= startOfToday;
+      else if (dateFilter === "yesterday")
+        matchesDate = log.timestamp >= startOfYesterday && log.timestamp < startOfToday;
+      else if (dateFilter === "7d") matchesDate = t >= now - 7 * 24 * 60 * 60 * 1000;
+      else if (dateFilter === "30d") matchesDate = t >= now - 30 * 24 * 60 * 60 * 1000;
+      return matchesSearch && matchesLevel && matchesCategory && matchesDate;
+    });
+  }, [logs, searchQuery, filterLevel, filterCategory, dateFilter]);
 
   const getLevelColor = (level: string) => {
     switch(level) {
@@ -217,12 +164,15 @@ export function SystemLogs() {
     }
   };
 
-  const stats = {
-    totalLogs: logs.length,
-    errors: logs.filter(l => l.level === "error").length,
-    warnings: logs.filter(l => l.level === "warning").length,
-    lastHour: logs.filter(l => Date.now() - l.timestamp.getTime() < 60 * 60 * 1000).length
-  };
+  const stats = useMemo(() => {
+    const hourAgo = Date.now() - 60 * 60 * 1000;
+    return {
+      totalLogs: logs.length,
+      errors: logs.filter((l) => l.level === "error").length,
+      warnings: logs.filter((l) => l.level === "warning").length,
+      lastHour: logs.filter((l) => l.timestamp.getTime() >= hourAgo).length,
+    };
+  }, [logs]);
 
   return (
     <AdminLayoutNew>

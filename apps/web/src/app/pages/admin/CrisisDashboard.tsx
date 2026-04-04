@@ -129,7 +129,9 @@ export function CrisisDashboard() {
       setEvents(items.map(mapApiCrisisEvent));
     } catch (err) {
       console.error("Failed to fetch crisis events", err);
-      setError("Failed to load crisis events");
+      const msg =
+        err instanceof Error ? err.message : "Failed to load crisis events";
+      setError(msg || "Failed to load crisis events");
     } finally {
       setIsLoading(false);
     }

@@ -10,7 +10,7 @@ import {
   getPushCampaigns, createPushCampaign, updatePushCampaign, deletePushCampaign,
   getSupportTickets, updateSupportTicket,
   getCommunityStats, getCommunityGroups,
-  getLiveSessions, getActivityLogs, getSessionRecordings, getErrorLogs, getSessionRecordingTranscript,
+  getLiveSessions, getActivityLogs, getGlobalAuditLogs, getSessionRecordings, getErrorLogs, getSessionRecordingTranscript,
   getCrisisEvents, getCrisisEvent, updateCrisisEventStatus,
   endLiveSessionByAdmin, flagSessionForReview
 } from './admin.service';
@@ -526,6 +526,19 @@ export async function getActivityLogsHandler(request: FastifyRequest, reply: Fas
   } catch (error) {
     request.log.error(error);
     return reply.code(500).send({ message: 'Failed to fetch activity logs' });
+  }
+}
+
+export async function getGlobalAuditLogsHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const query = (request.query || {}) as any;
+    const page = query.page && !isNaN(parseInt(query.page, 10)) ? parseInt(query.page, 10) : 1;
+    const limit = query.limit && !isNaN(parseInt(query.limit, 10)) ? parseInt(query.limit, 10) : 50;
+    const logs = await getGlobalAuditLogs(page, limit);
+    return reply.code(200).send(logs);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to fetch audit logs' });
   }
 }
 

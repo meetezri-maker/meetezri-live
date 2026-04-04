@@ -908,6 +908,18 @@ export const api = {
       const res = await fetch(`${API_URL}/admin/activity-logs${query}`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch activity logs');
     },
+    async getAuditLogs(params?: { page?: number; limit?: number }) {
+      const headers = await getHeaders();
+      const query = params
+        ? `?${new URLSearchParams(
+            Object.entries(params)
+              .filter(([, value]) => value !== undefined && value !== null)
+              .reduce((acc, [key, value]) => ({ ...acc, [key]: String(value) }), {} as Record<string, string>)
+          ).toString()}`
+        : '';
+      const res = await fetch(`${API_URL}/admin/audit-logs${query}`, { method: 'GET', headers, cache: 'no-store' });
+      return handleResponse(res, 'Failed to fetch audit logs');
+    },
     async getSessionRecordings(params?: { page?: number; limit?: number }) {
       const headers = await getHeaders();
       const query = params

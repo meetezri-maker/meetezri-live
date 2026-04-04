@@ -1,6 +1,8 @@
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
+import { api } from "@/lib/api";
+import { format } from "date-fns";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -31,8 +33,19 @@ type Policy = {
   retention: string;
   autoDelete: boolean;
   lastReview: string;
-  itemsAffected: number;
+  itemsAffected: number | null;
+  itemsNote?: string;
   status: string;
+};
+
+type PrivacyReq = {
+  id: number;
+  type: string;
+  user: string;
+  email: string;
+  requestDate: string;
+  status: string;
+  completedDate: string | null;
 };
 
 export function DataRetentionPrivacy() {
@@ -42,120 +55,81 @@ export function DataRetentionPrivacy() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showConfigureModal, setShowConfigureModal] = useState(false);
   const [selectedPolicy, setSelectedPolicy] = useState<Policy | null>(null);
+  const [dash, setDash] = useState<{ totalUsers?: number; totalSessions?: number } | null>(null);
+  const [auditLoaded, setAuditLoaded] = useState(0);
 
-  const retentionPolicies: Policy[] = [
-    {
-      dataType: "User Personal Information",
-      retention: "Account lifetime + 7 years",
-      autoDelete: false,
-      lastReview: "Dec 15, 2024",
-      itemsAffected: 8234,
-      status: "active",
-    },
-    {
-      dataType: "Session Transcripts",
-      retention: "7 years (HIPAA requirement)",
-      autoDelete: false,
-      lastReview: "Dec 15, 2024",
-      itemsAffected: 45678,
-      status: "active",
-    },
-    {
-      dataType: "Mood Check-in Data",
-      retention: "5 years",
-      autoDelete: true,
-      lastReview: "Dec 1, 2024",
-      itemsAffected: 123456,
-      status: "active",
-    },
-    {
-      dataType: "Journal Entries",
-      retention: "User-controlled (default: account lifetime)",
-      autoDelete: false,
-      lastReview: "Nov 20, 2024",
-      itemsAffected: 34567,
-      status: "active",
-    },
-    {
-      dataType: "Audit Logs",
-      retention: "7 years",
-      autoDelete: true,
-      lastReview: "Dec 15, 2024",
-      itemsAffected: 987654,
-      status: "active",
-    },
-    {
-      dataType: "Temporary Session Data",
-      retention: "24 hours",
-      autoDelete: true,
-      lastReview: "Dec 29, 2024",
-      itemsAffected: 1234,
-      status: "active",
-    },
-    {
-      dataType: "Marketing Communications Data",
-      retention: "2 years after last contact",
-      autoDelete: true,
-      lastReview: "Dec 1, 2024",
-      itemsAffected: 5432,
-      status: "active",
-    },
-  ];
+  useEffect(() => {
+    let c = false;
+    (async () => {
+      try {
+        const [s, audits] = await Promise.all([
+          api.admin.getStats(),
+          api.admin.getAuditLogs({ page: 1, limit: 100 }),
+        ]);
+        if (c) return;
+        setDash(s ?? null);
+        setAuditLoaded(Array.isArray(audits) ? audits.length : 0);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    return () => {
+      c = true;
+    };
+  }, []);
 
-  const privacyRequests = [
-    {
-      id: 1,
-      type: "Data Export",
-      user: "Sarah Johnson",
-      email: "sarah.j@example.com",
-      requestDate: "Dec 28, 2024",
-      status: "completed",
-      completedDate: "Dec 28, 2024",
-    },
-    {
-      id: 2,
-      type: "Account Deletion",
-      user: "Michael Chen",
-      email: "michael.c@example.com",
-      requestDate: "Dec 27, 2024",
-      status: "in_progress",
-      completedDate: null,
-    },
-    {
-      id: 3,
-      type: "Data Export",
-      user: "Emily Davis",
-      email: "emily.d@example.com",
-      requestDate: "Dec 26, 2024",
-      status: "completed",
-      completedDate: "Dec 26, 2024",
-    },
-    {
-      id: 4,
-      type: "Data Correction",
-      user: "James Wilson",
-      email: "james.w@example.com",
-      requestDate: "Dec 25, 2024",
-      status: "pending",
-      completedDate: null,
-    },
-    {
-      id: 5,
-      type: "Data Export",
-      user: "Lisa Anderson",
-      email: "lisa.a@example.com",
-      requestDate: "Dec 24, 2024",
-      status: "completed",
-      completedDate: "Dec 24, 2024",
-    },
-  ];
+  const retentionPolicies: Policy[] = useMemo(() => {
+    const review = format(new Date(), "MMM d, yyyy");
+    const tu = dash?.totalUsers ?? 0;
+    const ts = dash?.totalSessions ?? 0;
+    return [
+      {
+        dataType: "User profiles",
+        retention: "Defined by your organization and applicable law (review with counsel).",
+        autoDelete: false,
+        lastReview: review,
+        itemsAffected: tu,
+        status: "active",
+      },
+      {
+        dataType: "App sessions (historical)",
+        retention: "Defined by your organization; align with clinical / retention policy.",
+        autoDelete: false,
+        lastReview: review,
+        itemsAffected: ts,
+        status: "active",
+      },
+      {
+        dataType: "Audit log rows (admin sample)",
+        retention: "Typically multi-year; confirm with legal.",
+        autoDelete: false,
+        lastReview: review,
+        itemsAffected: auditLoaded,
+        itemsNote: "Rows loaded in this view (max 100)",
+        status: "active",
+      },
+      {
+        dataType: "Journal, mood, sleep, habits (user-generated)",
+        retention: "User-controlled or policy-driven — row counts not summarized in admin stats yet.",
+        autoDelete: false,
+        lastReview: "—",
+        itemsAffected: null,
+        status: "reference",
+      },
+    ];
+  }, [dash, auditLoaded]);
 
-  const stats = {
-    totalPolicies: retentionPolicies.length,
-    activePolicies: retentionPolicies.filter(p => p.status === "active").length,
-    totalRequests: privacyRequests.length,
-    pendingRequests: privacyRequests.filter(r => r.status === "pending" || r.status === "in_progress").length,
-  };
+  const privacyRequests: PrivacyReq[] = [];
+
+  const stats = useMemo(
+    () => ({
+      totalPolicies: retentionPolicies.length,
+      activePolicies: retentionPolicies.filter((p) => p.status === "active").length,
+      totalRequests: privacyRequests.length,
+      pendingRequests: privacyRequests.filter((r) => r.status === "pending" || r.status === "in_progress").length,
+    }),
+    [retentionPolicies, privacyRequests]
+  );
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -168,6 +142,8 @@ export function DataRetentionPrivacy() {
         return "bg-yellow-100 text-yellow-700 border-yellow-300";
       case "inactive":
         return "bg-gray-100 text-gray-700 border-gray-300";
+      case "reference":
+        return "bg-slate-100 text-slate-700 border-slate-300";
       default:
         return "bg-gray-100 text-gray-700";
     }
@@ -395,7 +371,12 @@ export function DataRetentionPrivacy() {
                         </div>
                         <div>
                           <p className="text-muted-foreground mb-1">Items Affected</p>
-                          <p className="font-medium">{policy.itemsAffected.toLocaleString()}</p>
+                          <p className="font-medium">
+                            {policy.itemsAffected == null ? "—" : policy.itemsAffected.toLocaleString()}
+                          </p>
+                          {policy.itemsNote && (
+                            <p className="text-xs text-muted-foreground mt-0.5">{policy.itemsNote}</p>
+                          )}
                         </div>
                         <div>
                           <p className="text-muted-foreground mb-1">Last Review</p>
@@ -559,6 +540,13 @@ export function DataRetentionPrivacy() {
                     </tr>
                   </thead>
                   <tbody>
+                    {privacyRequests.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                          No privacy or DSAR requests are stored in the database.
+                        </td>
+                      </tr>
+                    )}
                     {privacyRequests.map((request, index) => {
                       const Icon = getRequestTypeIcon(request.type);
                       return (
@@ -780,7 +768,14 @@ export function DataRetentionPrivacy() {
                   </div>
                   <div>
                     <Label className="text-sm font-medium text-gray-500">Items Affected</Label>
-                    <p className="mt-1 text-gray-900">{selectedPolicy.itemsAffected.toLocaleString()}</p>
+                    <p className="mt-1 text-gray-900">
+                      {selectedPolicy.itemsAffected == null
+                        ? "—"
+                        : selectedPolicy.itemsAffected.toLocaleString()}
+                    </p>
+                    {selectedPolicy.itemsNote && (
+                      <p className="text-xs text-muted-foreground mt-1">{selectedPolicy.itemsNote}</p>
+                    )}
                   </div>
                   <div>
                     <Label className="text-sm font-medium text-gray-500">Last Review</Label>

@@ -10,7 +10,7 @@ import {
   getPushCampaignsHandler, createPushCampaignHandler, updatePushCampaignHandler, deletePushCampaignHandler,
   getSupportTicketsHandler, updateSupportTicketHandler,
   getCommunityStatsHandler, getCommunityGroupsHandler,
-  getLiveSessionsHandler, endLiveSessionHandler, flagSessionForReviewHandler, getActivityLogsHandler, getSessionRecordingsHandler, getErrorLogsHandler, getSessionRecordingTranscriptHandler,
+  getLiveSessionsHandler, endLiveSessionHandler, flagSessionForReviewHandler, getActivityLogsHandler, getGlobalAuditLogsHandler, getSessionRecordingsHandler, getErrorLogsHandler, getSessionRecordingTranscriptHandler,
   getCrisisEventsHandler, getCrisisEventHandler, updateCrisisEventStatusHandler
 } from './admin.controller';
 import { dashboardStatsSchema, userListSchema, userSchema, updateUserSchema } from './admin.schema';
@@ -143,6 +143,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.post('/live-sessions/:id/end', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, endLiveSessionHandler);
   fastify.post('/live-sessions/:id/flag', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, flagSessionForReviewHandler);
   fastify.get('/activity-logs', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getActivityLogsHandler);
+  fastify.get('/audit-logs', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getGlobalAuditLogsHandler);
   fastify.get('/session-recordings', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getSessionRecordingsHandler);
   fastify.get('/session-recordings/:id/transcript', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getSessionRecordingTranscriptHandler);
   fastify.get('/error-logs', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getErrorLogsHandler);

@@ -21,14 +21,17 @@ import {
   Heart,
   Pause,
   Play,
-  Loader2
+  Loader2,
+  GripHorizontal,
 } from "lucide-react";
 import {
   useState,
   useEffect,
   useRef,
   useMemo,
+  useCallback,
   type MutableRefObject,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
@@ -253,15 +256,15 @@ function isCheekBoneName(name: string): boolean {
   );
 }
 
-/** T1 / MetaHuman: animate a small set of cheek movers; skip dense IPV helpers (noise + cancel). */
+/** T1 / MetaHuman: cheek movers — skip 12IPV chains; include all CheekLower* (not only 1–2). */
 function isPrimaryCheekBoneName(name: string): boolean {
   const n = name.toLowerCase();
   if (n.includes("12ipv")) return false;
   if (n.includes("cheekinner")) return true;
-  if (n.includes("cheeklower") && !/cheeklower[0-9]/.test(n)) return true;
-  if (n.includes("cheeklower1") || n.includes("cheeklower2")) return true;
+  if (n.includes("cheeklower")) return true;
   if (n.includes("nasolabialbulge")) return true;
   if (n.includes("masseter")) return true;
+  if (n.includes("zygomatic")) return true;
   return false;
 }
 
@@ -859,8 +862,8 @@ function ThreeAvatar({
 
       const ampNorm = THREE.MathUtils.clamp(audioLevelNow / 420, 0, 1);
       const cheekDriver = THREE.MathUtils.lerp(
-        0.08,
-        0.38,
+        0.1,
+        0.55,
         THREE.MathUtils.clamp(
           Math.pow(THREE.MathUtils.clamp(jawOpen, 0, 1), 1.05) * 0.55 +
             ampNorm * 0.45,
@@ -888,16 +891,25 @@ function ThreeAvatar({
         );
       }
 
-      // Cheeks: X-only — Y/Z on nested face bones read as whole head/body bobbing on screen.
+      // Cheeks: strong enough pitch to read on camera; small lateral Y/Z for puff (kept < ~0.12 rad).
       cheekBonesRef.current.forEach((bone) => {
         if (!isPrimaryCheekBoneName(bone.name)) return;
         const d = faceBoneDefaultsRef.current.get(bone.uuid);
         if (!d) return;
         const c = cheekDriver;
-        const pitch = c * 0.08;
+        const bn = (bone.name || "").toLowerCase();
+        const pitch = c * 0.26;
+        const side =
+          /facial_l_|_l_|^l_|left/.test(bn) && !/facial_r_|_r_|right/.test(bn)
+            ? 1
+            : /facial_r_|_r_|^r_|right/.test(bn)
+              ? -1
+              : 0;
+        const yawIn = side !== 0 ? side * c * 0.1 : c * 0.04;
+        const roll = side !== 0 ? side * c * 0.07 : 0;
         bone.rotation.x = d.x + pitch;
-        bone.rotation.y = d.y;
-        bone.rotation.z = d.z;
+        bone.rotation.y = d.y + yawIn;
+        bone.rotation.z = d.z + roll;
       });
 
       // Bone-driven mouth (T1.glb: no morphs — bones only)
@@ -1266,6 +1278,62 @@ export function ActiveSession() {
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  /** User PiP position (px from right / bottom); default matches previous Tailwind right-10 bottom-28. */
+  const [pipPos, setPipPos] = useState({ right: 40, bottom: 112 });
+  const pipDragRef = useRef<{
+    id: number;
+    sx: number;
+    sy: number;
+    sr: number;
+    sb: number;
+  } | null>(null);
+  const PIP_W = 256;
+  const pipClamp = (n: number, lo: number, hi: number) =>
+    Math.min(hi, Math.max(lo, n));
+  const handlePipPointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      pipDragRef.current = {
+        id: e.pointerId,
+        sx: e.clientX,
+        sy: e.clientY,
+        sr: pipPos.right,
+        sb: pipPos.bottom,
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+    },
+    [pipPos.right, pipPos.bottom]
+  );
+  const handlePipPointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      const d = pipDragRef.current;
+      if (!d || e.pointerId !== d.id) return;
+      const margin = 8;
+      const reserveBottom = 120;
+      const maxRight = window.innerWidth - PIP_W - margin;
+      const maxBottom = window.innerHeight - reserveBottom - margin;
+      const deltaX = e.clientX - d.sx;
+      const deltaY = e.clientY - d.sy;
+      setPipPos({
+        right: pipClamp(d.sr - deltaX, margin, maxRight),
+        bottom: pipClamp(d.sb - deltaY, margin, maxBottom),
+      });
+    },
+    []
+  );
+  const handlePipPointerUp = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      const d = pipDragRef.current;
+      if (!d || e.pointerId !== d.id) return;
+      pipDragRef.current = null;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    },
+    []
+  );
   const sessionContainerRef = useRef<HTMLDivElement>(null);
   const [showPermissionRequest, setShowPermissionRequest] = useState(false);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
@@ -1282,6 +1350,9 @@ export function ActiveSession() {
   const isEzriSpeakingRef = useRef(false);
   /** Single source for ThreeAvatar RMS: updated every RAF (TTS tap or mic), never React state. */
   const mouthAudioLevelRef = useRef(0);
+  /** WS TTS queue (declared early for sound-off / stop handlers). */
+  const wsAudioQueueRef = useRef<{ subtitle: string; audio: unknown }[]>([]);
+  const wsIsPlaybackActiveRef = useRef(false);
   const transcriptRef = useRef<
     { role: string; content: string; timestamp: number }[]
   >([]);
@@ -1413,6 +1484,7 @@ export function ActiveSession() {
     if (isSoundOffRef.current) {
       // Respect “sound off”: don’t start playback, but keep subtitle for accessibility.
       setCurrentSubtitle(text);
+      opts?.onDone?.();
       return;
     }
 
@@ -1677,11 +1749,6 @@ export function ActiveSession() {
   useEffect(() => {
     isMutedRef.current = isMuted;
   }, [isMuted]);
-
-  useEffect(() => {
-    isSoundOffRef.current = isSoundOff;
-    if (isSoundOff) stopAudioAndSpeechDriver();
-  }, [isSoundOff]);
 
   useEffect(() => {
     if (permissionStateInitialized) return;
@@ -2029,13 +2096,24 @@ export function ActiveSession() {
   const wsClientRef = useRef<EzriRealtimeClient | null>(null);
   const wsAssistantBufferRef = useRef<string>("");
   const wsLastFinalTextRef = useRef<string>("");
-  const wsAudioQueueRef = useRef<{ subtitle: string; audio: any }[]>([]);
-  const wsIsPlaybackActiveRef = useRef(false);
   const wsTtsDoneReceivedRef = useRef(false);
   const wsActiveTurnRef = useRef(0);
   const wsAudioSeenTurnRef = useRef(0);
   const wsSpeakFallbackTimerRef = useRef<number | null>(null);
   const wsPendingFallbackTextRef = useRef<string>("");
+
+  useEffect(() => {
+    isSoundOffRef.current = isSoundOff;
+    if (!isSoundOff) return;
+    wsAudioQueueRef.current = [];
+    wsIsPlaybackActiveRef.current = false;
+    try {
+      wsClientRef.current?.sendPlaybackDone();
+    } catch {
+      /* ignore */
+    }
+    stopAudioAndSpeechDriver();
+  }, [isSoundOff]);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRevokeRef = useRef<(() => void) | null>(null);
@@ -2749,13 +2827,24 @@ export function ActiveSession() {
           )}
         </AnimatePresence>
 
-        {/* User PiP camera */}
+        {/* User PiP camera — draggable */}
         <motion.div
           initial={{ opacity: 0, x: 100 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.3 }}
-          className="absolute bottom-28 right-10 w-64 h-48 rounded-2xl overflow-hidden bg-gradient-to-br from-slate-700 to-slate-900 border-2 border-white/20 shadow-2xl"
+          className="absolute w-64 h-48 rounded-2xl overflow-hidden bg-gradient-to-br from-slate-700 to-slate-900 border-2 border-white/20 shadow-2xl z-30 touch-none select-none cursor-grab active:cursor-grabbing"
+          style={{ right: pipPos.right, bottom: pipPos.bottom }}
+          onPointerDown={handlePipPointerDown}
+          onPointerMove={handlePipPointerMove}
+          onPointerUp={handlePipPointerUp}
+          onPointerCancel={handlePipPointerUp}
         >
+          <div
+            className="absolute top-0 left-0 right-0 h-7 z-10 flex items-center justify-center bg-black/35 rounded-t-[0.9rem] pointer-events-none"
+            aria-hidden
+          >
+            <GripHorizontal className="w-5 h-5 text-white/70" />
+          </div>
           <video
             ref={videoRef}
             autoPlay

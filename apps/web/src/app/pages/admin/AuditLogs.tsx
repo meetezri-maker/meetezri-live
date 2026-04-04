@@ -3,146 +3,130 @@ import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { motion } from "motion/react";
-import { Search, Filter, Download, Shield, User, Settings as SettingsIcon } from "lucide-react";
-import { useState } from "react";
+import { Search, Download, Shield, User, Settings as SettingsIcon } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+
+type Row = {
+  id: string;
+  action: string;
+  admin: string;
+  target: string;
+  timestamp: string;
+  type: string;
+  ip: string;
+};
+
+function classifyType(action: string): string {
+  const a = action.toLowerCase();
+  if (a.includes("crisis")) return "crisis";
+  if (a.includes("user") || a.includes("profile") || a.includes("role")) return "user_action";
+  if (a.includes("content") || a.includes("wellness")) return "content";
+  return "system";
+}
+
+function targetFromDetails(details: unknown): string {
+  if (details == null || details === undefined) return "—";
+  if (typeof details === "object" && details !== null) {
+    const d = details as Record<string, unknown>;
+    if (typeof d.target === "string") return d.target;
+    if (typeof d.resource === "string") return d.resource;
+  }
+  try {
+    const s = JSON.stringify(details);
+    return s.length > 140 ? `${s.slice(0, 137)}…` : s;
+  } catch {
+    return "—";
+  }
+}
+
+function ipFromDetails(details: unknown): string {
+  if (details == null || typeof details !== "object") return "—";
+  const d = details as Record<string, unknown>;
+  if (typeof d.ip === "string") return d.ip;
+  if (typeof d.ip_address === "string") return d.ip_address;
+  return "—";
+}
 
 export function AuditLogs() {
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 6;
+  const [searchQuery, setSearchQuery] = useState("");
+  const [rows, setRows] = useState<Row[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const itemsPerPage = 8;
 
-  const logs = [
-    {
-      id: 1,
-      action: "User suspended",
-      admin: "Admin User",
-      target: "michael.c@example.com",
-      timestamp: "2024-12-29 14:23:45",
-      type: "user_action",
-      ip: "192.168.1.100",
-    },
-    {
-      id: 2,
-      action: "Settings updated",
-      admin: "Admin User",
-      target: "General Settings",
-      timestamp: "2024-12-29 13:15:22",
-      type: "system",
-      ip: "192.168.1.100",
-    },
-    {
-      id: 3,
-      action: "Crisis event resolved",
-      admin: "Support Team",
-      target: "Crisis ID #1847",
-      timestamp: "2024-12-29 12:45:10",
-      type: "crisis",
-      ip: "192.168.1.105",
-    },
-    {
-      id: 4,
-      action: "Content added",
-      admin: "Content Manager",
-      target: "New breathing exercise",
-      timestamp: "2024-12-29 11:30:00",
-      type: "content",
-      ip: "192.168.1.110",
-    },
-    {
-      id: 5,
-      action: "Report exported",
-      admin: "Admin User",
-      target: "User Activity Report",
-      timestamp: "2024-12-29 10:15:33",
-      type: "system",
-      ip: "192.168.1.100",
-    },
-    {
-      id: 6,
-      action: "User details viewed",
-      admin: "Support Team",
-      target: "sarah.m@example.com",
-      timestamp: "2024-12-29 09:20:15",
-      type: "user_action",
-      ip: "192.168.1.105",
-    },
-    {
-      id: 7,
-      action: "Password changed",
-      admin: "Admin User",
-      target: "john.d@example.com",
-      timestamp: "2024-12-29 08:45:30",
-      type: "user_action",
-      ip: "192.168.1.100",
-    },
-    {
-      id: 8,
-      action: "Feature flag toggled",
-      admin: "Admin User",
-      target: "Dark Mode Feature",
-      timestamp: "2024-12-29 07:30:15",
-      type: "system",
-      ip: "192.168.1.100",
-    },
-    {
-      id: 9,
-      action: "User role updated",
-      admin: "Super Admin",
-      target: "jane.s@example.com",
-      timestamp: "2024-12-28 16:20:45",
-      type: "user_action",
-      ip: "192.168.1.120",
-    },
-    {
-      id: 10,
-      action: "Database backup initiated",
-      admin: "System",
-      target: "Automated Backup",
-      timestamp: "2024-12-28 15:00:00",
-      type: "system",
-      ip: "192.168.1.1",
-    },
-    {
-      id: 11,
-      action: "Crisis alert triggered",
-      admin: "Monitoring System",
-      target: "Crisis ID #1850",
-      timestamp: "2024-12-28 14:15:20",
-      type: "crisis",
-      ip: "192.168.1.1",
-    },
-    {
-      id: 12,
-      action: "Content updated",
-      admin: "Content Manager",
-      target: "Meditation guide #42",
-      timestamp: "2024-12-28 13:00:00",
-      type: "content",
-      ip: "192.168.1.110",
-    },
-  ];
+  const load = async () => {
+    try {
+      setIsLoading(true);
+      const data = await api.admin.getAuditLogs({ page: 1, limit: 100 });
+      const list = Array.isArray(data) ? data : [];
+      setRows(
+        list.map((log: any) => {
+          const actor = log.profiles;
+          const admin = actor?.full_name?.trim() || actor?.email || "System";
+          const created = log.created_at ? new Date(log.created_at) : new Date();
+          return {
+            id: String(log.id),
+            action: log.action || "—",
+            admin,
+            target: targetFromDetails(log.details),
+            timestamp: created.toLocaleString(),
+            type: classifyType(log.action || ""),
+            ip: ipFromDetails(log.details),
+          };
+        })
+      );
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to load audit logs");
+      setRows([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const totalPages = Math.ceil(logs.length / itemsPerPage);
+  useEffect(() => {
+    load();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        r.action.toLowerCase().includes(q) ||
+        r.admin.toLowerCase().includes(q) ||
+        r.target.toLowerCase().includes(q) ||
+        r.type.toLowerCase().includes(q)
+    );
+  }, [rows, searchQuery]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentLogs = logs.slice(startIndex, endIndex);
+  const currentLogs = filtered.slice(startIndex, endIndex);
 
   const handleExport = () => {
-    // Create CSV content
     const headers = ["ID", "Type", "Action", "Admin", "Target", "IP Address", "Timestamp"];
     const csvContent = [
       headers.join(","),
-      ...logs.map(log => [
-        log.id,
-        log.type,
-        `"${log.action}"`,
-        `"${log.admin}"`,
-        `"${log.target}"`,
-        log.ip,
-        log.timestamp
-      ].join(","))
+      ...filtered.map((log) =>
+        [
+          log.id,
+          log.type,
+          `"${String(log.action).replace(/"/g, '""')}"`,
+          `"${String(log.admin).replace(/"/g, '""')}"`,
+          `"${String(log.target).replace(/"/g, '""')}"`,
+          log.ip,
+          log.timestamp,
+        ].join(",")
+      ),
     ].join("\n");
-
-    // Create and download file
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -152,20 +136,15 @@ export function AuditLogs() {
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
-
-    alert(`✅ Exported ${logs.length} audit log entries to CSV file`);
+    toast.success(`Exported ${filtered.length} rows`);
   };
 
   const handlePrevious = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
-    }
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
   };
 
   const handleNext = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
-    }
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
   };
 
   const getActionIcon = (type: string) => {
@@ -198,7 +177,7 @@ export function AuditLogs() {
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="text-3xl font-bold mb-2">Audit Logs</h1>
           <p className="text-muted-foreground">
-            Track all administrative actions and system events
+            Administrative actions from the database (latest 100 records)
           </p>
         </motion.div>
 
@@ -211,14 +190,18 @@ export function AuditLogs() {
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input placeholder="Search logs..." className="pl-10" />
+                <Input
+                  placeholder="Search action, actor, target…"
+                  className="pl-10"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="gap-2">
-                  <Filter className="w-4 h-4" />
-                  Filter
+                <Button variant="outline" className="gap-2" onClick={() => load()} disabled={isLoading}>
+                  Refresh
                 </Button>
-                <Button variant="outline" className="gap-2" onClick={handleExport}>
+                <Button variant="outline" className="gap-2" onClick={handleExport} disabled={filtered.length === 0}>
                   <Download className="w-4 h-4" />
                   Export
                 </Button>
@@ -244,13 +227,13 @@ export function AuditLogs() {
                       Action
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Admin
+                      Actor
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Target
+                      Target / details
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      IP Address
+                      IP (if logged)
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Timestamp
@@ -258,63 +241,65 @@ export function AuditLogs() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {currentLogs.map((log, index) => (
-                    <motion.tr
-                      key={log.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.3 + index * 0.05 }}
-                      className="hover:bg-gray-50"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${getActionColor(
-                            log.type
-                          )}`}
-                        >
-                          {getActionIcon(log.type)}
-                          {log.type.replace("_", " ")}
-                        </span>
+                  {isLoading && (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
+                        Loading audit logs…
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap font-medium text-sm">
-                        {log.action}
+                    </tr>
+                  )}
+                  {!isLoading && filtered.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
+                        No audit log entries yet, or nothing matches your search.
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {log.admin}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {log.target}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">
-                        {log.ip}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {log.timestamp}
-                      </td>
-                    </motion.tr>
-                  ))}
+                    </tr>
+                  )}
+                  {!isLoading &&
+                    currentLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${getActionColor(
+                              log.type
+                            )}`}
+                          >
+                            {getActionIcon(log.type)}
+                            {log.type.replace("_", " ")}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap font-medium text-sm max-w-[200px] truncate" title={log.action}>
+                          {log.action}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">{log.admin}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate" title={log.target}>
+                          {log.target}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">{log.ip}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{log.timestamp}</td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
 
             <div className="px-6 py-4 border-t flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Showing {startIndex + 1}-{Math.min(endIndex, logs.length)} of {logs.length} entries (Page {currentPage} of {totalPages})
+                {isLoading
+                  ? "…"
+                  : filtered.length === 0
+                  ? "0 entries"
+                  : `Showing ${startIndex + 1}-${Math.min(endIndex, filtered.length)} of ${filtered.length} entries (Page ${currentPage} of ${totalPages})`}
               </p>
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handlePrevious}
-                  disabled={currentPage === 1}
-                >
+                <Button variant="outline" size="sm" onClick={handlePrevious} disabled={currentPage === 1 || isLoading}>
                   Previous
                 </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleNext}
-                  disabled={currentPage === totalPages}
+                  disabled={currentPage === totalPages || isLoading}
                 >
                   Next
                 </Button>
@@ -332,10 +317,10 @@ export function AuditLogs() {
             <div className="flex items-start gap-3">
               <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-bold mb-1">Security Notice</h3>
+                <h3 className="font-bold mb-1">Security notice</h3>
                 <p className="text-sm text-gray-700">
-                  All administrative actions are logged and stored securely for compliance and
-                  security purposes. Logs are retained for 90 days.
+                  Entries come from the <code className="text-xs bg-white/80 px-1 rounded">audit_logs</code> table.
+                  Retention follows your organization&apos;s policy.
                 </p>
               </div>
             </div>

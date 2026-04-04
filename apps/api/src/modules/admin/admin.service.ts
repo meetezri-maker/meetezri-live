@@ -503,6 +503,22 @@ export async function getUserAuditLogs(userId: string) {
   });
 }
 
+/** Paginated audit trail for admin UI (all actors). */
+export async function getGlobalAuditLogs(page: number = 1, limit: number = 50) {
+  const skip = Math.max(0, (page - 1) * limit);
+  const take = Math.min(Math.max(limit, 1), 100);
+  return prisma.audit_logs.findMany({
+    skip,
+    take,
+    orderBy: { created_at: 'desc' },
+    include: {
+      profiles: {
+        select: { full_name: true, email: true },
+      },
+    },
+  });
+}
+
 // --- New Admin Features ---
 
 // 1. User Segmentation

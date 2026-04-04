@@ -13,7 +13,7 @@ import {
   History,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { toast } from "sonner";
@@ -24,8 +24,8 @@ type Document = {
   version: string;
   lastUpdated: string;
   status: string;
-  views: number;
-  acceptances: number;
+  views: number | null;
+  acceptances: number | null;
 };
 
 export function LegalDocumentation() {
@@ -33,110 +33,98 @@ export function LegalDocumentation() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewingDoc, setViewingDoc] = useState<Document | null>(null);
 
-  const documents: Document[] = [
-    {
-      id: "tos",
-      title: "Terms of Service",
-      version: "3.2",
-      lastUpdated: "2024-01-15",
-      status: "active",
-      views: 12456,
-      acceptances: 11234,
-    },
-    {
-      id: "privacy",
-      title: "Privacy Policy",
-      version: "2.8",
-      lastUpdated: "2024-01-10",
-      status: "active",
-      views: 13567,
-      acceptances: 12345,
-    },
-    {
-      id: "consent",
-      title: "Consent Form",
-      version: "1.5",
-      lastUpdated: "2023-12-20",
-      status: "active",
-      views: 8901,
-      acceptances: 8234,
-    },
-    {
-      id: "hipaa",
-      title: "HIPAA Notice",
-      version: "1.2",
-      lastUpdated: "2023-11-15",
-      status: "active",
-      views: 5432,
-      acceptances: 4987,
-    },
-    {
-      id: "cookies",
-      title: "Cookie Policy",
-      version: "2.0",
-      lastUpdated: "2024-01-05",
-      status: "active",
-      views: 6789,
-      acceptances: 6234,
-    },
-    {
-      id: "disclaimer",
-      title: "Medical Disclaimer",
-      version: "1.0",
-      lastUpdated: "2023-10-01",
-      status: "review",
-      views: 3456,
-      acceptances: 3123,
-    },
-  ];
+  /** In-app catalog only — views/acceptances are not recorded in the database. */
+  const documents: Document[] = useMemo(
+    () => [
+      {
+        id: "tos",
+        title: "Terms of Service",
+        version: "live",
+        lastUpdated: "—",
+        status: "active",
+        views: null,
+        acceptances: null,
+      },
+      {
+        id: "privacy",
+        title: "Privacy Policy",
+        version: "live",
+        lastUpdated: "—",
+        status: "active",
+        views: null,
+        acceptances: null,
+      },
+      {
+        id: "consent",
+        title: "Consent & disclosures",
+        version: "live",
+        lastUpdated: "—",
+        status: "active",
+        views: null,
+        acceptances: null,
+      },
+      {
+        id: "hipaa",
+        title: "HIPAA / health information notice",
+        version: "live",
+        lastUpdated: "—",
+        status: "active",
+        views: null,
+        acceptances: null,
+      },
+      {
+        id: "cookies",
+        title: "Cookie policy",
+        version: "live",
+        lastUpdated: "—",
+        status: "active",
+        views: null,
+        acceptances: null,
+      },
+      {
+        id: "disclaimer",
+        title: "Medical / wellness disclaimer",
+        version: "live",
+        lastUpdated: "—",
+        status: "review",
+        views: null,
+        acceptances: null,
+      },
+    ],
+    []
+  );
 
-  const versionHistory = [
-    {
-      version: "3.2",
-      date: "2024-01-15",
-      author: "Legal Team",
-      changes: "Updated liability clauses and payment terms",
-    },
-    {
-      version: "3.1",
-      date: "2023-12-01",
-      author: "Sarah Chen",
-      changes: "Added new AI therapy disclosure section",
-    },
-    {
-      version: "3.0",
-      date: "2023-10-15",
-      author: "Legal Team",
-      changes: "Major revision for GDPR compliance",
-    },
-  ];
+  const versionHistory: { version: string; date: string; author: string; changes: string }[] = [];
 
-  const stats = [
-    {
-      label: "Active Documents",
-      value: "5",
-      icon: FileText,
-      color: "from-blue-500 to-cyan-600",
-    },
-    {
-      label: "Pending Review",
-      value: "1",
-      icon: AlertTriangle,
-      color: "from-yellow-500 to-orange-600",
-    },
-    {
-      label: "Total Acceptances",
-      value: "46.1K",
-      icon: CheckCircle2,
-      color: "from-green-500 to-emerald-600",
-    },
-    {
-      label: "Compliance Rate",
-      value: "94%",
-      icon: CheckCircle2,
-      color: "from-purple-500 to-pink-600",
-    },
-  ];
+  const stats = useMemo(
+    () => [
+      {
+        label: "Catalog entries",
+        value: String(documents.length),
+        icon: FileText,
+        color: "from-blue-500 to-cyan-600",
+      },
+      {
+        label: "Pending review",
+        value: String(documents.filter((d) => d.status === "review").length),
+        icon: AlertTriangle,
+        color: "from-yellow-500 to-orange-600",
+      },
+      {
+        label: "Acceptances tracked",
+        value: "—",
+        icon: CheckCircle2,
+        color: "from-green-500 to-emerald-600",
+      },
+      {
+        label: "Views tracked",
+        value: "—",
+        icon: CheckCircle2,
+        color: "from-purple-500 to-pink-600",
+      },
+    ],
+    [documents]
+  );
 
   const handleViewDoc = (doc: Document) => {
     setViewingDoc(doc);
@@ -270,13 +258,13 @@ export function LegalDocumentation() {
                       <div>
                         <p className="text-gray-500">Views</p>
                         <p className="text-gray-900 font-medium">
-                          {doc.views.toLocaleString()}
+                          {doc.views == null ? "—" : doc.views.toLocaleString()}
                         </p>
                       </div>
                       <div>
                         <p className="text-gray-500">Acceptances</p>
                         <p className="text-gray-900 font-medium">
-                          {doc.acceptances.toLocaleString()}
+                          {doc.acceptances == null ? "—" : doc.acceptances.toLocaleString()}
                         </p>
                       </div>
                     </div>
@@ -354,6 +342,12 @@ export function LegalDocumentation() {
               </div>
 
               <div className="space-y-4">
+                {versionHistory.length === 0 && (
+                  <p className="text-sm text-gray-500">
+                    Version history is not stored in the application database. Track releases in your CMS or
+                    repository.
+                  </p>
+                )}
                 {versionHistory.map((version, index) => (
                   <div key={version.version} className="relative">
                     {index !== versionHistory.length - 1 && (
@@ -515,13 +509,13 @@ export function LegalDocumentation() {
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <p className="text-sm text-gray-500 mb-1">Views</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {viewingDoc.views.toLocaleString()}
+                    {viewingDoc.views == null ? "—" : viewingDoc.views.toLocaleString()}
                   </p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <p className="text-sm text-gray-500 mb-1">Acceptances</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {viewingDoc.acceptances.toLocaleString()}
+                    {viewingDoc.acceptances == null ? "—" : viewingDoc.acceptances.toLocaleString()}
                   </p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg">

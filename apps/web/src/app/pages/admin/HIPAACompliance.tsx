@@ -17,133 +17,147 @@ import {
 } from "lucide-react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { api } from "@/lib/api";
+import { formatDistanceToNow } from "date-fns";
+
+function detailPreview(details: unknown): string {
+  if (details == null) return "—";
+  if (typeof details === "object" && details !== null) {
+    const d = details as Record<string, unknown>;
+    if (typeof d.target === "string") return d.target;
+  }
+  try {
+    const s = JSON.stringify(details);
+    return s.length > 80 ? `${s.slice(0, 77)}…` : s;
+  } catch {
+    return "—";
+  }
+}
 
 export function HIPAACompliance() {
   const [showAllAudits, setShowAllAudits] = useState(false);
+  const [auditRows, setAuditRows] = useState<any[]>([]);
+  const [crisisPending, setCrisisPending] = useState(0);
+  const [openErrors, setOpenErrors] = useState(0);
+  const [totalUsers, setTotalUsers] = useState(0);
 
-  const complianceChecks = [
-    { category: "Access Controls", passed: 12, failed: 0, total: 12, score: 100 },
-    { category: "Audit Controls", passed: 8, failed: 0, total: 8, score: 100 },
-    { category: "Data Integrity", passed: 10, failed: 1, total: 11, score: 91 },
-    { category: "Encryption", passed: 15, failed: 0, total: 15, score: 100 },
-    { category: "Transmission Security", passed: 7, failed: 0, total: 7, score: 100 },
-    { category: "Person/Entity Auth", passed: 9, failed: 0, total: 9, score: 100 },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [audits, crises, errs, dash] = await Promise.all([
+          api.admin.getAuditLogs({ page: 1, limit: 50 }),
+          api.admin.getCrisisEvents({ status: "pending", page: 1, limit: 100 }),
+          api.admin.getErrorLogs({ page: 1, limit: 100 }),
+          api.admin.getStats(),
+        ]);
+        if (cancelled) return;
+        setAuditRows(Array.isArray(audits) ? audits : []);
+        setCrisisPending(Array.isArray(crises) ? crises.length : 0);
+        setOpenErrors(Array.isArray(errs) ? errs.filter((e: any) => e.status === "open").length : 0);
+        setTotalUsers(dash?.totalUsers ?? 0);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const auditTrail = [
-    {
-      id: "1",
-      action: "PHI Access",
-      user: "Dr. Sarah Chen",
-      resource: "Patient Record #1234",
-      timestamp: "2 minutes ago",
-      status: "success",
-    },
-    {
-      id: "2",
-      action: "Data Export",
-      user: "Admin User",
-      resource: "Session Analytics",
-      timestamp: "15 minutes ago",
-      status: "success",
-    },
-    {
-      id: "3",
-      action: "PHI Modification",
-      user: "Dr. Michael Ross",
-      resource: "Patient Record #5678",
-      timestamp: "1 hour ago",
-      status: "success",
-    },
-    {
-      id: "4",
-      action: "Unauthorized Access Attempt",
-      user: "Unknown",
-      resource: "Patient Database",
-      timestamp: "3 hours ago",
-      status: "blocked",
-    },
-  ];
+  const complianceChecks = useMemo(() => {
+    const n = auditRows.length;
+    const crisisOk = crisisPending === 0 ? 1 : 0;
+    const errOk = openErrors === 0 ? 1 : 0;
+    return [
+      {
+        category: "Audit events recorded",
+        passed: Math.min(n, 999),
+        failed: n === 0 ? 1 : 0,
+        total: Math.max(1, n),
+        score: n > 0 ? 100 : 40,
+      },
+      {
+        category: "Crisis queue (pending)",
+        passed: crisisOk,
+        failed: 1 - crisisOk,
+        total: 1,
+        score: crisisOk ? 100 : 40,
+      },
+      {
+        category: "Open application errors",
+        passed: errOk,
+        failed: 1 - errOk,
+        total: 1,
+        score: errOk ? 100 : 60,
+      },
+      {
+        category: "User profiles (data subjects)",
+        passed: totalUsers > 0 ? 1 : 0,
+        failed: totalUsers > 0 ? 0 : 1,
+        total: 1,
+        score: totalUsers > 0 ? 100 : 50,
+      },
+    ];
+  }, [auditRows.length, crisisPending, openErrors, totalUsers]);
 
-  const allAuditTrail = [
-    ...auditTrail,
-    {
-      id: "5",
-      action: "Session Data Access",
-      user: "Dr. Emily Johnson",
-      resource: "User Session #9012",
-      timestamp: "4 hours ago",
-      status: "success",
-    },
-    {
-      id: "6",
-      action: "User Authentication",
-      user: "System Admin",
-      resource: "Admin Panel Login",
-      timestamp: "5 hours ago",
-      status: "success",
-    },
-    {
-      id: "7",
-      action: "PHI Access",
-      user: "Dr. James Wilson",
-      resource: "Patient Record #3456",
-      timestamp: "6 hours ago",
-      status: "success",
-    },
-    {
-      id: "8",
-      action: "Data Backup",
-      user: "Automated System",
-      resource: "Full Database Backup",
-      timestamp: "8 hours ago",
-      status: "success",
-    },
-    {
-      id: "9",
-      action: "Failed Login Attempt",
-      user: "Unknown",
-      resource: "Admin Panel",
-      timestamp: "9 hours ago",
-      status: "blocked",
-    },
-    {
-      id: "10",
-      action: "PHI Export",
-      user: "Dr. Sarah Chen",
-      resource: "Patient Records Batch #001",
-      timestamp: "12 hours ago",
-      status: "success",
-    },
-  ];
+  const auditTrail = useMemo(() => {
+    return auditRows.map((a) => {
+      const actor = a.profiles;
+      const ts = a.created_at ? new Date(a.created_at) : new Date();
+      return {
+        id: String(a.id),
+        action: a.action || "—",
+        user: actor?.full_name?.trim() || actor?.email || "System",
+        resource: detailPreview(a.details),
+        timestamp: formatDistanceToNow(ts, { addSuffix: true }),
+        status: "success" as const,
+      };
+    });
+  }, [auditRows]);
 
-  const stats = [
-    {
-      label: "Compliance Score",
-      value: "98%",
-      icon: Shield,
-      color: "from-green-500 to-emerald-600",
-    },
-    {
-      label: "Passed Checks",
-      value: "61/63",
-      icon: CheckCircle2,
-      color: "from-blue-500 to-cyan-600",
-    },
-    {
-      label: "Audit Trail",
-      value: "100%",
-      icon: FileText,
-      color: "from-purple-500 to-pink-600",
-    },
-    {
-      label: "Encryption",
-      value: "AES-256",
-      icon: Lock,
-      color: "from-orange-500 to-amber-600",
-    },
-  ];
+  const displayAudits = useMemo(
+    () => (showAllAudits ? auditTrail : auditTrail.slice(0, 4)),
+    [auditTrail, showAllAudits]
+  );
+
+  const stats = useMemo(() => {
+    const avgScore =
+      complianceChecks.length > 0
+        ? Math.round(
+            complianceChecks.reduce((s, c) => s + c.score, 0) / complianceChecks.length
+          )
+        : 0;
+    const passedSum = complianceChecks.reduce((s, c) => s + c.passed, 0);
+    const totalSum = complianceChecks.reduce((s, c) => s + c.total, 0);
+    return [
+      {
+        label: "Operational score (derived)",
+        value: `${avgScore}%`,
+        icon: Shield,
+        color: "from-green-500 to-emerald-600",
+      },
+      {
+        label: "Checks (passed / rows)",
+        value: `${passedSum}/${totalSum}`,
+        icon: CheckCircle2,
+        color: "from-blue-500 to-cyan-600",
+      },
+      {
+        label: "Audit log rows (loaded)",
+        value: String(auditRows.length),
+        icon: FileText,
+        color: "from-purple-500 to-pink-600",
+      },
+      {
+        label: "Transport",
+        value: "HTTPS",
+        icon: Lock,
+        color: "from-orange-500 to-amber-600",
+      },
+    ];
+  }, [complianceChecks, auditRows.length]);
 
   return (
     <AdminLayoutNew>
@@ -240,7 +254,7 @@ export function HIPAACompliance() {
               </Button>
             </div>
             <div className="space-y-3">
-              {(showAllAudits ? allAuditTrail : auditTrail).map((entry) => (
+              {displayAudits.map((entry) => (
                 <div
                   key={entry.id}
                   className="p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all"
