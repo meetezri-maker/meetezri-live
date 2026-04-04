@@ -1,6 +1,7 @@
 import prisma from '../../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { CreateNotificationInput } from './notifications.schema';
+import { emailService } from '../email/email.service';
 
 type StreakReminderType = 'mood' | 'journal';
 
@@ -70,12 +71,60 @@ function getStartOfDay(date: Date) {
   return normalized;
 }
 
-function getDayDifference(laterDate: Date, earlierDate: Date) {
-  const millisecondsPerDay = 24 * 60 * 60 * 1000;
-  return Math.round(
-    (getStartOfDay(laterDate).getTime() - getStartOfDay(earlierDate).getTime()) /
-      millisecondsPerDay
+const MS_24_HOURS = 24 * 60 * 60 * 1000;
+
+function getAppBaseUrl() {
+  return (
+    process.env.WEB_APP_URL ||
+    process.env.PUBLIC_APP_URL ||
+    process.env.VITE_APP_URL ||
+    'https://meetezri-live-web.vercel.app'
   );
+}
+
+async function sendStreakReminderEmail(
+  userId: string,
+  type: StreakReminderType,
+  title: string,
+  bodyMessage: string
+) {
+  const profile = await prisma.profiles.findUnique({
+    where: { id: userId },
+    select: {
+      email: true,
+      full_name: true,
+      notification_preferences: true,
+    },
+  });
+
+  if (!profile?.email) {
+    return;
+  }
+
+  const preferences = profile.notification_preferences as Record<string, any> | null;
+  if (preferences?.emailEnabled === false) {
+    return;
+  }
+
+  const prefKey = STREAK_REMINDER_CONFIG[type].preferenceKey;
+  if (preferences?.[prefKey] === false) {
+    return;
+  }
+
+  const firstName = (profile.full_name || 'there').split(/\s+/)[0] || 'there';
+  const payload = emailService.buildStreakReminderEmail({
+    firstName,
+    title,
+    message: bodyMessage,
+    streakType: type,
+    appBaseUrl: getAppBaseUrl(),
+  });
+
+  try {
+    await emailService.sendEmail(profile.email, payload.subject, payload.html, payload.text);
+  } catch (err) {
+    console.warn('[streak reminder email]', userId, err);
+  }
 }
 
 export const notificationsService = {
@@ -151,8 +200,8 @@ export const notificationsService = {
       return null;
     }
 
-    const daysSinceLatestEntry = getDayDifference(today, latestEntry.created_at);
-    if (daysSinceLatestEntry !== 1) {
+    const msSinceLast = today.getTime() - latestEntry.created_at.getTime();
+    if (msSinceLast < MS_24_HOURS) {
       return null;
     }
 
@@ -179,7 +228,7 @@ export const notificationsService = {
 
     const title = pickRandomStreakReminderTitle(type);
 
-    return this.create({
+    const created = await this.create({
       user_id: userId,
       type: 'reminder',
       title,
@@ -190,6 +239,59 @@ export const notificationsService = {
         lastActivityAt: latestEntry.created_at.toISOString(),
       },
     });
+
+    await sendStreakReminderEmail(userId, type, title, config.message);
+
+    return created;
+  },
+
+  /**
+   * Called by a scheduled job (e.g. Vercel cron) so users who do not open the app
+   * still receive streak reminders after 24h without activity.
+   */
+  async processStreakReminderCronJob(options?: { batchSize?: number }) {
+    const batchSize = Math.min(Math.max(options?.batchSize ?? 40, 1), 200);
+    const cutoff = new Date(Date.now() - MS_24_HOURS);
+
+    const moodRows = await prisma.$queryRaw<{ user_id: string }[]>(
+      Prisma.sql`
+        SELECT user_id::text AS user_id
+        FROM mood_entries
+        GROUP BY user_id
+        HAVING MAX(created_at) < ${cutoff}
+        LIMIT ${batchSize}
+      `
+    );
+
+    const journalRows = await prisma.$queryRaw<{ user_id: string }[]>(
+      Prisma.sql`
+        SELECT user_id::text AS user_id
+        FROM journal_entries
+        GROUP BY user_id
+        HAVING MAX(created_at) < ${cutoff}
+        LIMIT ${batchSize}
+      `
+    );
+
+    let moodReminders = 0;
+    let journalReminders = 0;
+
+    for (const row of moodRows) {
+      const r = await this.ensureStreakRiskReminder(row.user_id, 'mood');
+      if (r) moodReminders++;
+    }
+
+    for (const row of journalRows) {
+      const r = await this.ensureStreakRiskReminder(row.user_id, 'journal');
+      if (r) journalReminders++;
+    }
+
+    return {
+      processedMoodUsers: moodRows.length,
+      processedJournalUsers: journalRows.length,
+      moodRemindersCreated: moodReminders,
+      journalRemindersCreated: journalReminders,
+    };
   },
 
   async broadcast(input: Omit<CreateNotificationInput, 'user_id'>) {

@@ -20,6 +20,7 @@ import { sleepRoutes } from './modules/sleep/sleep.routes';
 import { habitsRoutes } from './modules/habits/habits.routes';
 import { emergencyContactRoutes } from './modules/users/emergency-contacts.routes';
 import { notificationRoutes } from './modules/notifications/notifications.routes';
+import { notificationsService } from './modules/notifications/notifications.service';
 import { aiAvatarsRoutes } from './modules/ai-avatars/ai-avatars.routes';
 import jwkToPem from 'jwk-to-pem';
 const jwtLib = require('jsonwebtoken');
@@ -277,6 +278,37 @@ app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) =
 app.get('/health', async () => ({ ok: true }));
 app.get('/api/health', async () => ({ ok: true }));
 app.get('/', async () => ({ message: 'MeetEzri API' }));
+
+// Secured cron: streak reminders (configure CRON_SECRET + Vercel cron hitting this URL).
+// Register both paths: some Vercel/serverless setups pass `req.url` with or without the `/api` prefix.
+async function streakRemindersCronHandler(request: FastifyRequest, reply: FastifyReply) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    return reply.code(503).send({ ok: false, message: 'CRON_SECRET is not configured' });
+  }
+  const authHeader = request.headers.authorization;
+  const bearer =
+    typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : undefined;
+  const headerSecret = request.headers['x-cron-secret'];
+  const token =
+    bearer || (typeof headerSecret === 'string' ? headerSecret : undefined);
+  if (token !== secret) {
+    return reply.code(401).send({ ok: false, message: 'Unauthorized' });
+  }
+  try {
+    const result = await notificationsService.processStreakReminderCronJob();
+    return reply.send({ ok: true, ...result });
+  } catch (err: unknown) {
+    request.log.error(err);
+    const message = err instanceof Error ? err.message : 'Cron failed';
+    return reply.code(500).send({ ok: false, message });
+  }
+}
+
+app.get('/api/cron/streak-reminders', streakRemindersCronHandler);
+app.get('/cron/streak-reminders', streakRemindersCronHandler);
 
 export default app;
 

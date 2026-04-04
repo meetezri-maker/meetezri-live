@@ -622,6 +622,65 @@ export class EmailService {
     };
   }
 
+  buildStreakReminderEmail({
+    firstName,
+    title,
+    message,
+    streakType,
+    appBaseUrl,
+  }: {
+    firstName: string;
+    title: string;
+    message: string;
+    streakType: 'mood' | 'journal';
+    appBaseUrl: string;
+  }): EmailTemplatePayload {
+    const base = appBaseUrl.replace(/\/$/, '');
+    const path = streakType === 'mood' ? '/app/mood-checkin' : '/app/journal';
+    const ctaUrl = `${base}${path}`;
+    const subject =
+      streakType === 'mood'
+        ? 'Reminder: Your mood check-in is waiting'
+        : 'Reminder: Your journal streak needs you';
+    return {
+      subject,
+      html: this.renderTemplate({
+        preheader: message,
+        eyebrow: 'Streak reminder',
+        title,
+        greeting: `Hi ${firstName.trim() || 'there'},`,
+        intro: message,
+        audience: 'trial',
+        spotlight:
+          streakType === 'mood'
+            ? 'A quick mood check-in keeps your streak and insights on track.'
+            : 'A short journal entry helps you stay consistent with your wellness goals.',
+        highlights: [
+          'It only takes a minute to keep your progress going',
+          'Open MeetEzri on web or your device to continue',
+        ],
+        ctaLabel: streakType === 'mood' ? 'Mood check-in' : 'Open journal',
+        ctaUrl,
+        ctaHint: 'If the button does not work, copy the link into your browser.',
+        supportingText:
+          'You are receiving this because streak reminders are enabled in your notification settings.',
+        footerNote:
+          'Manage email and push preferences anytime in MeetEzri notification settings.',
+      }),
+      text: [
+        `Hi ${firstName.trim() || 'there'},`,
+        '',
+        title,
+        '',
+        message,
+        '',
+        `Open MeetEzri: ${ctaUrl}`,
+        '',
+        'You can change reminder settings in the app under Notification settings.',
+      ].join('\n'),
+    };
+  }
+
   getDefaultTemplateRecords(): DefaultTemplateRecord[] {
     return [
       {
