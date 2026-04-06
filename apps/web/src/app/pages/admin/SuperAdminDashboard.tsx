@@ -26,14 +26,14 @@ import {
   Smile,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
+import { Skeleton } from "../../components/ui/skeleton";
 import {
-  LineChart,
   Line,
-  AreaChart,
   Area,
   BarChart,
   Bar,
@@ -46,6 +46,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
+  ComposedChart,
 } from "recharts";
 
 function formatTimeAgo(iso: string) {
@@ -72,6 +73,73 @@ function formatPctSigned(n: number) {
   return `${sign}${n.toFixed(1)}%`;
 }
 
+const CHART_TOOLTIP_STYLE = {
+  backgroundColor: "rgba(255, 255, 255, 0.97)",
+  border: "1px solid #e5e7eb",
+  borderRadius: "12px",
+  boxShadow: "0 10px 40px rgba(15, 23, 42, 0.08)",
+};
+
+function buildActivityFeedFromRecent(recent: any) {
+  const feed: {
+    action: string;
+    user: string;
+    time: string;
+    type: string;
+    at: number;
+  }[] = [];
+
+  for (const s of recent.sessions || []) {
+    feed.push({
+      action: "Session activity",
+      user: s.profiles?.full_name || s.profiles?.email || "User",
+      time: formatTimeAgo(s.started_at),
+      type: "session",
+      at: new Date(s.started_at).getTime(),
+    });
+  }
+  for (const m of recent.moodEntries || []) {
+    feed.push({
+      action: "Mood check-in",
+      user: m.profiles?.full_name || m.profiles?.email || "User",
+      time: formatTimeAgo(m.created_at),
+      type: "journal",
+      at: new Date(m.created_at).getTime(),
+    });
+  }
+  for (const a of recent.alerts || []) {
+    feed.push({
+      action: "Crisis alert",
+      user: a.profiles?.full_name || a.profiles?.email || "User",
+      time: formatTimeAgo(a.created_at),
+      type: "crisis",
+      at: new Date(a.created_at).getTime(),
+    });
+  }
+
+  feed.sort((x, y) => y.at - x.at);
+  return feed.slice(0, 12).map(({ at: _a, ...rest }) => rest);
+}
+
+function mapCrisisAlertsFromRecent(recent: any) {
+  return (recent.alerts || []).map((a: any) => ({
+    id: a.id,
+    type:
+      a.risk_level === "critical" || a.risk_level === "high"
+        ? "critical"
+        : "warning",
+    message: `Crisis (${a.risk_level}): ${a.event_type || "Pending review"}`,
+    time: formatTimeAgo(a.created_at),
+    status: "pending",
+  }));
+}
+
+function filterTodaysMoods(moods: any[]) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  return (moods || []).filter((m: any) => new Date(m.created_at) >= start);
+}
+
 export function SuperAdminDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [recentMoods, setRecentMoods] = useState<any[]>([]);
@@ -82,96 +150,80 @@ export function SuperAdminDashboard() {
     { id: string; type: string; message: string; time: string; status: string }[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [chartsLoading, setChartsLoading] = useState(false);
+  const [canPoll, setCanPoll] = useState(false);
   const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
   const [sessionWeekOffset, setSessionWeekOffset] = useState(0);
+  const isFirstDashboardLoad = useRef(true);
 
   useEffect(() => {
     let cancelled = false;
+    const isFirstLoad = isFirstDashboardLoad.current;
 
-    const fetchStats = async () => {
+    (async () => {
+      if (isFirstLoad) {
+        setLoading(true);
+      } else {
+        setChartsLoading(true);
+      }
+
       try {
-        const [data, moods, recent] = await Promise.all([
-          api.admin.getStats({ chartPeriod, sessionWeekOffset }),
-          api.moods.getAllMoods(),
-          api.admin.getRecentActivity(),
-        ]);
+        const data = await api.admin.getStats({
+          chartPeriod,
+          sessionWeekOffset,
+          refresh: true,
+        });
         if (cancelled) return;
-
         setStats(data);
 
-        const start = new Date();
-        start.setHours(0, 0, 0, 0);
-        const todays = (moods || []).filter(
-          (m: any) => new Date(m.created_at) >= start
-        );
-        setRecentMoods(todays);
-
-        const feed: {
-          action: string;
-          user: string;
-          time: string;
-          type: string;
-          at: number;
-        }[] = [];
-
-        for (const s of recent.sessions || []) {
-          feed.push({
-            action: "Session activity",
-            user: s.profiles?.full_name || s.profiles?.email || "User",
-            time: formatTimeAgo(s.started_at),
-            type: "session",
-            at: new Date(s.started_at).getTime(),
-          });
+        if (isFirstLoad) {
+          const [moods, recent] = await Promise.all([
+            api.moods.getAllMoods(),
+            api.admin.getRecentActivity(),
+          ]);
+          if (cancelled) return;
+          setRecentMoods(filterTodaysMoods(moods));
+          setActivityFeed(buildActivityFeedFromRecent(recent));
+          setCrisisAlerts(mapCrisisAlertsFromRecent(recent));
+          isFirstDashboardLoad.current = false;
+          setCanPoll(true);
         }
-        for (const m of recent.moodEntries || []) {
-          feed.push({
-            action: "Mood check-in",
-            user: m.profiles?.full_name || m.profiles?.email || "User",
-            time: formatTimeAgo(m.created_at),
-            type: "journal",
-            at: new Date(m.created_at).getTime(),
-          });
-        }
-        for (const a of recent.alerts || []) {
-          feed.push({
-            action: "Crisis alert",
-            user: a.profiles?.full_name || a.profiles?.email || "User",
-            time: formatTimeAgo(a.created_at),
-            type: "crisis",
-            at: new Date(a.created_at).getTime(),
-          });
-        }
-
-        feed.sort((x, y) => y.at - x.at);
-        setActivityFeed(feed.slice(0, 12).map(({ at: _a, ...rest }) => rest));
-
-        setCrisisAlerts(
-          (recent.alerts || []).map((a: any) => ({
-            id: a.id,
-            type:
-              a.risk_level === "critical" || a.risk_level === "high"
-                ? "critical"
-                : "warning",
-            message: `Crisis (${a.risk_level}): ${a.event_type || "Pending review"}`,
-            time: formatTimeAgo(a.created_at),
-            status: "pending",
-          }))
-        );
       } catch (error) {
         console.error("Failed to fetch admin stats", error);
         toast.error("Could not load dashboard data.");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setChartsLoading(false);
+        }
       }
-    };
+    })();
 
-    fetchStats();
-    const interval = setInterval(fetchStats, 30000);
     return () => {
       cancelled = true;
-      clearInterval(interval);
     };
   }, [chartPeriod, sessionWeekOffset]);
+
+  useEffect(() => {
+    if (!canPoll) return;
+
+    const id = setInterval(async () => {
+      try {
+        const data = await api.admin.getStats({
+          chartPeriod,
+          sessionWeekOffset,
+        });
+        setStats(data);
+        const recent = await api.admin.getRecentActivity();
+        setActivityFeed(buildActivityFeedFromRecent(recent));
+        setCrisisAlerts(mapCrisisAlertsFromRecent(recent));
+      } catch {
+        /* background refresh — ignore */
+      }
+    }, 30000);
+
+    return () => clearInterval(id);
+  }, [canPoll, chartPeriod, sessionWeekOffset]);
 
   const exportReport = () => {
     try {
@@ -429,12 +481,16 @@ export function SuperAdminDashboard() {
                   <p className="text-sm text-muted-foreground mt-1">{trendSubtitle}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  {chartsLoading && (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden />
+                  )}
                   {(["week", "month", "year"] as const).map((p) => (
                     <Button
                       key={p}
                       variant={chartPeriod === p ? "default" : "outline"}
                       size="sm"
                       type="button"
+                      disabled={chartsLoading}
                       onClick={() => setChartPeriod(p)}
                     >
                       {p === "week" ? "Week" : p === "month" ? "Month" : "Year"}
@@ -442,38 +498,68 @@ export function SuperAdminDashboard() {
                   ))}
                 </div>
               </div>
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={userGrowthData}>
-                  <defs>
-                    <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                    </linearGradient>
-
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="month" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                    }}
-                  />
-                  <Legend />
-                  <Area
-                    type="monotone"
-                    dataKey="users"
-                    stroke="#8b5cf6"
-                    strokeWidth={3}
-                    fillOpacity={1}
-                    fill="url(#colorUsers)"
-                    name="Total Users"
-                  />
-
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="relative min-h-[300px]">
+                <div
+                  className={
+                    chartsLoading ? "pointer-events-none opacity-[0.35] transition-opacity" : ""
+                  }
+                >
+                  <ResponsiveContainer width="100%" height={300}>
+                    <ComposedChart data={userGrowthData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.45} />
+                          <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="4 8" stroke="#e8e8ed" vertical={false} />
+                      <XAxis
+                        dataKey="month"
+                        tick={{ fill: "#64748b", fontSize: 12 }}
+                        tickLine={false}
+                        axisLine={{ stroke: "#e2e8f0" }}
+                      />
+                      <YAxis
+                        tick={{ fill: "#64748b", fontSize: 12 }}
+                        tickLine={false}
+                        axisLine={{ stroke: "#e2e8f0" }}
+                        width={44}
+                      />
+                      <Tooltip
+                        contentStyle={CHART_TOOLTIP_STYLE}
+                        formatter={(v: number) => [Number(v).toLocaleString(), "Users"]}
+                        labelStyle={{ fontWeight: 600 }}
+                      />
+                      <Legend wrapperStyle={{ paddingTop: 12 }} />
+                      <Area
+                        type="monotone"
+                        dataKey="users"
+                        stroke="none"
+                        fill="url(#colorUsers)"
+                        legendType="none"
+                        isAnimationActive={!chartsLoading}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="users"
+                        stroke="#7c3aed"
+                        strokeWidth={2.5}
+                        dot={{ fill: "#7c3aed", strokeWidth: 2, stroke: "#fff", r: 4 }}
+                        activeDot={{ r: 6 }}
+                        name="Total Users"
+                        isAnimationActive={!chartsLoading}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+                {chartsLoading && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-xl border border-border/40 bg-background/75 backdrop-blur-[2px]">
+                    <Loader2 className="h-9 w-9 animate-spin text-primary" aria-hidden />
+                    <Skeleton className="h-3 w-36 rounded-full" />
+                    <span className="text-xs text-muted-foreground">Updating chart…</span>
+                  </div>
+                )}
+              </div>
             </Card>
           </motion.div>
 
@@ -597,11 +683,15 @@ export function SuperAdminDashboard() {
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
+                  {chartsLoading && (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" aria-hidden />
+                  )}
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
                     className="h-8 w-8"
+                    disabled={chartsLoading}
                     onClick={() => setSessionWeekOffset((o) => Math.min(52, o + 1))}
                     aria-label="Previous week"
                   >
@@ -611,6 +701,7 @@ export function SuperAdminDashboard() {
                     type="button"
                     variant="outline"
                     size="sm"
+                    disabled={chartsLoading}
                     onClick={() => setSessionWeekOffset(0)}
                   >
                     This week
@@ -620,29 +711,64 @@ export function SuperAdminDashboard() {
                     variant="outline"
                     size="icon"
                     className="h-8 w-8"
+                    disabled={chartsLoading || sessionWeekOffset <= 0}
                     onClick={() => setSessionWeekOffset((o) => Math.max(0, o - 1))}
-                    disabled={sessionWeekOffset <= 0}
                     aria-label="Next week"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={sessionData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="day" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                    }}
-                  />
-                  <Bar dataKey="sessions" fill="#06b6d4" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="relative min-h-[280px]">
+                <div
+                  className={
+                    chartsLoading ? "pointer-events-none opacity-[0.35] transition-opacity" : ""
+                  }
+                >
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={sessionData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="barSessions" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#22d3ee" stopOpacity={1} />
+                          <stop offset="100%" stopColor="#0891b2" stopOpacity={0.95} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="4 8" stroke="#e8e8ed" vertical={false} />
+                      <XAxis
+                        dataKey="day"
+                        tick={{ fill: "#64748b", fontSize: 12 }}
+                        tickLine={false}
+                        axisLine={{ stroke: "#e2e8f0" }}
+                      />
+                      <YAxis
+                        tick={{ fill: "#64748b", fontSize: 12 }}
+                        tickLine={false}
+                        axisLine={{ stroke: "#e2e8f0" }}
+                        width={36}
+                        allowDecimals={false}
+                      />
+                      <Tooltip
+                        contentStyle={CHART_TOOLTIP_STYLE}
+                        formatter={(v: number) => [v, "Sessions"]}
+                      />
+                      <Bar
+                        dataKey="sessions"
+                        fill="url(#barSessions)"
+                        radius={[10, 10, 0, 0]}
+                        maxBarSize={48}
+                        isAnimationActive={!chartsLoading}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                {chartsLoading && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-xl border border-border/40 bg-background/75 backdrop-blur-[2px]">
+                    <Loader2 className="h-9 w-9 animate-spin text-primary" aria-hidden />
+                    <Skeleton className="h-3 w-36 rounded-full" />
+                    <span className="text-xs text-muted-foreground">Loading week…</span>
+                  </div>
+                )}
+              </div>
             </Card>
           </motion.div>
 
@@ -662,28 +788,69 @@ export function SuperAdminDashboard() {
                   <p className="text-sm text-muted-foreground mt-1">{revenueSubtitle}</p>
                 </div>
               </div>
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={revenueData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="month" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="#10b981"
-                    strokeWidth={3}
-                    dot={{ fill: "#10b981", r: 5 }}
-                    activeDot={{ r: 7 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="relative min-h-[280px]">
+                <div
+                  className={
+                    chartsLoading ? "pointer-events-none opacity-[0.35] transition-opacity" : ""
+                  }
+                >
+                  <ResponsiveContainer width="100%" height={280}>
+                    <ComposedChart data={revenueData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="4 8" stroke="#e8e8ed" vertical={false} />
+                      <XAxis
+                        dataKey="month"
+                        tick={{ fill: "#64748b", fontSize: 12 }}
+                        tickLine={false}
+                        axisLine={{ stroke: "#e2e8f0" }}
+                      />
+                      <YAxis
+                        tick={{ fill: "#64748b", fontSize: 12 }}
+                        tickLine={false}
+                        axisLine={{ stroke: "#e2e8f0" }}
+                        width={44}
+                        tickFormatter={(v) => `$${v}`}
+                      />
+                      <Tooltip
+                        contentStyle={CHART_TOOLTIP_STYLE}
+                        formatter={(v: number) => [formatUsd(Number(v)), "Revenue"]}
+                        labelStyle={{ fontWeight: 600 }}
+                      />
+                      <Legend />
+                      <Area
+                        type="monotone"
+                        dataKey="revenue"
+                        stroke="none"
+                        fill="url(#colorRevenue)"
+                        legendType="none"
+                        isAnimationActive={!chartsLoading}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="revenue"
+                        stroke="#059669"
+                        strokeWidth={2.5}
+                        dot={{ fill: "#059669", strokeWidth: 2, stroke: "#fff", r: 4 }}
+                        activeDot={{ r: 6 }}
+                        name="Revenue"
+                        isAnimationActive={!chartsLoading}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+                {chartsLoading && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-xl border border-border/40 bg-background/75 backdrop-blur-[2px]">
+                    <Loader2 className="h-9 w-9 animate-spin text-primary" aria-hidden />
+                    <Skeleton className="h-3 w-36 rounded-full" />
+                    <span className="text-xs text-muted-foreground">Updating revenue…</span>
+                  </div>
+                )}
+              </div>
             </Card>
           </motion.div>
         </div>

@@ -51,6 +51,11 @@ function isAdminRole(role?: string | null) {
   return !!role && ADMIN_ROLES.includes(role as (typeof ADMIN_ROLES)[number]);
 }
 
+/** Org/super/team admins use the admin console without completing the end-user onboarding wizard. */
+function adminBypassesUserOnboarding(role?: string | null) {
+  return isAdminRole(normalizeAppRole(role));
+}
+
 function isPrivilegedApi(path: string) {
   return PRIVILEGED_API_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
@@ -191,7 +196,8 @@ export default fp(async (fastify: FastifyInstance) => {
             if (
               isAppApi &&
               !cached.onboardingCompleted &&
-              cached.signupType !== 'trial'
+              cached.signupType !== 'trial' &&
+              !adminBypassesUserOnboarding(cached.role)
             ) {
               reply.code(403).send({
                 statusCode: 403,
@@ -367,7 +373,8 @@ export default fp(async (fastify: FastifyInstance) => {
             if (
               isAppApi &&
               !onboardingCompletedResolved &&
-              signupTypeResolved !== 'trial'
+              signupTypeResolved !== 'trial' &&
+              !adminBypassesUserOnboarding(resolvedAppRole)
             ) {
               reply.code(403).send({
                 statusCode: 403,
@@ -389,7 +396,26 @@ export default fp(async (fastify: FastifyInstance) => {
               return;
             }
 
+            let appApiAllowedWithoutProfile = false;
             if (isAppApi) {
+              try {
+                const authUser = await prisma.users.findUnique({
+                  where: { id: user.sub },
+                  select: {
+                    is_super_admin: true,
+                    raw_app_meta_data: true,
+                    raw_user_meta_data: true,
+                  },
+                });
+                appApiAllowedWithoutProfile = adminBypassesUserOnboarding(
+                  inferAdminRoleFromAuthUser(authUser)
+                );
+              } catch {
+                appApiAllowedWithoutProfile = false;
+              }
+            }
+
+            if (isAppApi && !appApiAllowedWithoutProfile) {
               reply.code(403).send({
                 statusCode: 403,
                 error: 'Forbidden',
