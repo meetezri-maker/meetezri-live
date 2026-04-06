@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { createWellnessTool, createWellnessChallenge, deleteWellnessTool, getWellnessToolById, getWellnessTools, updateWellnessTool, trackWellnessProgress, getUserWellnessProgress, startWellnessSession, completeWellnessSession, getWellnessStats, getWellnessChallengesWithStats, toggleWellnessToolFavorite } from './wellness.service';
+import { createWellnessTool, createWellnessChallenge, deleteWellnessTool, getWellnessToolById, getWellnessTools, updateWellnessTool, trackWellnessProgress, getUserWellnessProgress, startWellnessSession, completeWellnessSession, getWellnessStats, getWellnessChallengesWithStats, getWellnessChallengesForUserDashboard, toggleWellnessToolFavorite } from './wellness.service';
 import { CreateWellnessToolInput, UpdateWellnessToolInput, TrackProgressInput, createWellnessChallengeSchema } from './wellness.schema';
 
 export async function createWellnessToolHandler(
@@ -160,6 +160,19 @@ export async function getWellnessChallengesHandler(
     return reply.send(challenges);
   } catch (error) {
     return reply.code(500).send({ message: 'Failed to fetch wellness challenges' });
+  }
+}
+
+export async function getWellnessChallengesMeHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  try {
+    const userId = (request.user as { sub: string }).sub;
+    const data = await getWellnessChallengesForUserDashboard(userId);
+    return reply.send(data);
+  } catch (error) {
+    return reply.code(500).send({ message: 'Failed to fetch your wellness challenges' });
   }
 }
 

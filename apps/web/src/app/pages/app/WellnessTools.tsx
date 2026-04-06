@@ -14,9 +14,11 @@ import {
   Sparkles,
   Lock,
   LayoutGrid,
+  CheckCircle2,
   type LucideIcon,
 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
+import { toast } from "sonner";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -198,6 +200,15 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
   }));
 }
 
+/** Seconds for timed sessions; Infinity for open-ended tools (no auto-complete). */
+function parseWellnessDurationSeconds(durationLabel: string): number {
+  const d = durationLabel.trim();
+  if (d === "∞" || d.toLowerCase() === "infinity") return Number.POSITIVE_INFINITY;
+  const n = parseInt(d.replace(/\s*min\s*/i, "").trim(), 10);
+  if (!Number.isFinite(n) || n <= 0) return Number.POSITIVE_INFINITY;
+  return n * 60;
+}
+
 /** Built-ins first; API tools appended. Skip API rows that duplicate a built-in title (case-insensitive). */
 function mergeBuiltinAndApi(
   builtins: WellnessExerciseItem[],
@@ -248,6 +259,9 @@ export function WellnessTools() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   /** Tracks whether the active exercise is built-in (no backend UUID session/progress). */
   const activeExerciseSourceRef = useRef<"builtin" | "api">("api");
+  /** True after planned duration elapses (standard player); reset when starting a session. */
+  const [sessionTimeComplete, setSessionTimeComplete] = useState(false);
+  const timedSessionEndFiredRef = useRef(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -348,6 +362,8 @@ export function WellnessTools() {
   ];
 
   const handleStartExercise = async (exerciseId: string) => {
+    setSessionTimeComplete(false);
+    timedSessionEndFiredRef.current = false;
     setActiveExercise(exerciseId);
     setIsPlaying(true);
     setTimer(0);
@@ -402,6 +418,8 @@ export function WellnessTools() {
 
     setActiveExercise(null);
     setIsPlaying(false);
+    setSessionTimeComplete(false);
+    timedSessionEndFiredRef.current = false;
     setTimer(0);
     setBreathPhase("inhale");
     setPhaseTimer(0);
@@ -453,76 +471,88 @@ export function WellnessTools() {
     : undefined;
 
   useEffect(() => {
-    if (isPlaying && activeExerciseData) {
-      const interval = setInterval(() => {
-        setTimer((prevTimer) => prevTimer + 1);
-        setPhaseTimer((prevPhaseTimer) => prevPhaseTimer + 1);
+    if (!isPlaying || !activeExerciseData) return;
 
-        const durLabel = activeExerciseData.duration.trim();
-        const durationSec =
-          durLabel === "∞" || durLabel.toLowerCase() === "infinity"
-            ? Number.POSITIVE_INFINITY
-            : parseInt(durLabel.replace(/\s*min\s*/i, "").trim(), 10) * 60;
+    const durationSec = parseWellnessDurationSeconds(activeExerciseData.duration);
 
-        if (Number.isFinite(durationSec) && timer >= durationSec) {
-          setIsPlaying(false);
-          setTimer(0);
-          setBreathPhase("inhale");
-          setPhaseTimer(0);
+    const interval = setInterval(() => {
+      setTimer((prevTimer) => {
+        if (Number.isFinite(durationSec) && prevTimer >= durationSec) {
+          return prevTimer;
+        }
 
-          if (activeExercise && activeExerciseSourceRef.current === "api") {
-            const promise = currentSessionId
-              ? api.wellness.completeSession(currentSessionId, { duration_spent: durationSec })
-              : api.wellness.trackProgress(activeExercise, { duration_spent: durationSec });
+        const next = prevTimer + 1;
 
-            promise
-              .then(() => {
-                setCurrentSessionId(null);
-                return api.wellness.getProgress();
-              })
-              .then((apiProg) => {
-                const arr = Array.isArray(apiProg) ? apiProg : [];
-                setProgress(
-                  user?.id
-                    ? mergeWellnessProgressWithLocal(arr as WellnessProgressRow[], loadLocalProgress(user.id))
-                    : arr
-                );
-              })
-              .catch((err) => console.error("Failed to track progress:", err));
-          } else {
-            setCurrentSessionId(null);
-            if (activeExercise && user?.id && activeExerciseData && activeExerciseSourceRef.current === "builtin") {
-              recordBuiltinSession(user.id, activeExercise, activeExerciseData.title, durationSec);
-              void api.wellness
-                .getProgress()
+        if (Number.isFinite(durationSec) && next >= durationSec && !timedSessionEndFiredRef.current) {
+          timedSessionEndFiredRef.current = true;
+          queueMicrotask(() => {
+            setSessionTimeComplete(true);
+            setIsPlaying(false);
+            setBreathPhase("inhale");
+            setPhaseTimer(0);
+            toast.success("Time's up", {
+              description: `You've reached the end of your ${activeExerciseData.title} session.`,
+            });
+
+            if (activeExercise && activeExerciseSourceRef.current === "api") {
+              const promise = currentSessionId
+                ? api.wellness.completeSession(currentSessionId, { duration_spent: durationSec })
+                : api.wellness.trackProgress(activeExercise, { duration_spent: durationSec });
+
+              promise
+                .then(() => {
+                  setCurrentSessionId(null);
+                  return api.wellness.getProgress();
+                })
                 .then((apiProg) => {
                   const arr = Array.isArray(apiProg) ? apiProg : [];
                   setProgress(
-                    mergeWellnessProgressWithLocal(arr as WellnessProgressRow[], loadLocalProgress(user.id))
+                    user?.id
+                      ? mergeWellnessProgressWithLocal(arr as WellnessProgressRow[], loadLocalProgress(user.id))
+                      : arr
                   );
                 })
-                .catch((err) => console.error("Failed to refresh progress after built-in timer:", err));
+                .catch((err) => console.error("Failed to track progress:", err));
+            } else {
+              setCurrentSessionId(null);
+              if (activeExercise && user?.id && activeExerciseSourceRef.current === "builtin") {
+                recordBuiltinSession(user.id, activeExercise, activeExerciseData.title, durationSec);
+                void api.wellness
+                  .getProgress()
+                  .then((apiProg) => {
+                    const arr = Array.isArray(apiProg) ? apiProg : [];
+                    setProgress(
+                      mergeWellnessProgressWithLocal(arr as WellnessProgressRow[], loadLocalProgress(user.id))
+                    );
+                  })
+                  .catch((err) => console.error("Failed to refresh progress after built-in timer:", err));
+              }
             }
-          }
+          });
+          return durationSec;
         }
 
-        if (breathPhase === "inhale" && phaseTimer >= 4) {
-          setBreathPhase("hold");
-          setPhaseTimer(0);
-        } else if (breathPhase === "hold" && phaseTimer >= 4) {
-          setBreathPhase("exhale");
-          setPhaseTimer(0);
-        } else if (breathPhase === "exhale" && phaseTimer >= 4) {
-          setBreathPhase("hold2");
-          setPhaseTimer(0);
-        } else if (breathPhase === "hold2" && phaseTimer >= 4) {
-          setBreathPhase("inhale");
-          setPhaseTimer(0);
-        }
-      }, 1000);
+        return next;
+      });
 
-      return () => clearInterval(interval);
-    }
+      setPhaseTimer((prevPhaseTimer) => prevPhaseTimer + 1);
+
+      if (breathPhase === "inhale" && phaseTimer >= 4) {
+        setBreathPhase("hold");
+        setPhaseTimer(0);
+      } else if (breathPhase === "hold" && phaseTimer >= 4) {
+        setBreathPhase("exhale");
+        setPhaseTimer(0);
+      } else if (breathPhase === "exhale" && phaseTimer >= 4) {
+        setBreathPhase("hold2");
+        setPhaseTimer(0);
+      } else if (breathPhase === "hold2" && phaseTimer >= 4) {
+        setBreathPhase("inhale");
+        setPhaseTimer(0);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, [
     isPlaying,
     activeExerciseData,
@@ -736,7 +766,7 @@ export function WellnessTools() {
               )}
             </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
             {displayExercises.length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
                 {showOnlyFavorites
@@ -756,9 +786,9 @@ export function WellnessTools() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.15 + index * 0.04 }}
                   whileHover={{ y: -5 }}
-                  className="scroll-mt-28"
+                  className="scroll-mt-28 h-full"
                 >
-                  <Card className="p-5 shadow-lg hover:shadow-xl transition-all group cursor-pointer border border-slate-100">
+                  <Card className="p-5 shadow-lg hover:shadow-xl transition-all group cursor-pointer border border-slate-100 h-full min-h-[300px] flex flex-col">
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="flex items-start gap-3 min-w-0 flex-1">
                         <motion.div
@@ -785,10 +815,10 @@ export function WellnessTools() {
                         <Heart className={`w-5 h-5 ${exercise.favorite ? "text-red-500 fill-red-500" : "text-gray-300"}`} />
                       </motion.button>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                    <p className="text-sm text-muted-foreground mb-4 line-clamp-3 min-h-[4.125rem] flex-1">
                       {exercise.description}
                     </p>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-4">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-4 mt-auto">
                       <div className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         {exercise.duration}
@@ -844,6 +874,35 @@ export function WellnessTools() {
                 <Card
                   className={`p-8 shadow-2xl bg-gradient-to-br ${activeExerciseData.color} text-white relative overflow-hidden`}
                 >
+                  {sessionTimeComplete && (
+                    <motion.div
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="wellness-time-complete-title"
+                      initial={{ opacity: 0, scale: 0.96 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-2xl bg-black/55 px-6 py-10 text-center backdrop-blur-md"
+                    >
+                      <CheckCircle2 className="mb-4 h-16 w-16 text-emerald-300 drop-shadow-lg" aria-hidden />
+                      <h3
+                        id="wellness-time-complete-title"
+                        className="mb-2 text-2xl font-bold tracking-tight text-white"
+                      >
+                        Time&apos;s up
+                      </h3>
+                      <p className="mb-8 max-w-sm text-base leading-relaxed text-white/90">
+                        Your session time has ended. Progress has been saved when applicable.
+                      </p>
+                      <Button
+                        type="button"
+                        size="lg"
+                        className="bg-white text-slate-900 hover:bg-white/95"
+                        onClick={handleCloseExercise}
+                      >
+                        Close
+                      </Button>
+                    </motion.div>
+                  )}
                   {/* Animated Background */}
                   <motion.div
                     animate={{
@@ -940,16 +999,22 @@ export function WellnessTools() {
 
                     {/* Timer */}
                     <div className="text-center mb-6">
-                      <div className="text-4xl font-bold mb-2">
+                      <div className="text-4xl font-bold mb-2 tabular-nums">
                         {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, "0")}
                       </div>
                       <p className="text-white/80 text-sm">
-                        {isPlaying ? "Stay focused on your breath" : "Ready to begin"}
+                        {sessionTimeComplete
+                          ? "Session time finished"
+                          : isPlaying
+                            ? "Stay focused on your breath"
+                            : "Ready to begin"}
                       </p>
                     </div>
 
                     {/* Controls */}
-                    <div className="flex items-center justify-center gap-4">
+                    <div
+                      className={`flex items-center justify-center gap-4 ${sessionTimeComplete ? "pointer-events-none opacity-40" : ""}`}
+                    >
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}

@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "motion/react";
 import { X, Volume2, VolumeX, Sparkles, Heart, CheckCircle2, Star, MessageCircle, Mic } from "lucide-react";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 
 interface EzriGuidedModeProps {
   isOpen: boolean;
@@ -41,42 +42,53 @@ export function EzriGuidedMode({
     "Excellent work! When you're ready, slowly open your eyes."
   ];
 
-  const durationMinutes = parseInt(duration.replace(" min", "")) || 5;
-  const totalSeconds = durationMinutes * 60;
+  const dTrim = duration.trim();
+  const isOpenEnded =
+    dTrim === "∞" ||
+    dTrim.toLowerCase() === "infinity" ||
+    !Number.isFinite(parseInt(dTrim.replace(/\s*min\s*/i, "").trim(), 10));
+  const durationMinutes = isOpenEnded
+    ? Number.POSITIVE_INFINITY
+    : Math.max(1, parseInt(dTrim.replace(/\s*min\s*/i, "").trim(), 10) || 5);
+  const totalSeconds =
+    durationMinutes === Number.POSITIVE_INFINITY
+      ? Number.POSITIVE_INFINITY
+      : durationMinutes * 60;
 
   useEffect(() => {
-    if (stage === "active") {
+    if (stage === "active" && Number.isFinite(totalSeconds)) {
       const interval = setInterval(() => {
-        setTimer(prev => {
+        setTimer((prev) => {
           const newTime = prev + 1;
           setProgress((newTime / totalSeconds) * 100);
-          
-          // Trigger guidance messages at intervals
+
           const messageInterval = totalSeconds / guidanceMessages.length;
           const messageIndex = Math.floor(newTime / messageInterval);
-          
+
           if (newTime % messageInterval === 0 && messageIndex < guidanceMessages.length) {
             setIsEzriSpeaking(true);
             setCurrentGuidance(guidanceMessages[messageIndex]);
-            
+
             setTimeout(() => {
               setIsEzriSpeaking(false);
             }, 4000);
           }
-          
-          // Complete exercise
+
           if (newTime >= totalSeconds) {
+            toast.success("Time's up", {
+              description: "You've completed your guided session.",
+            });
             setStage("complete");
             return newTime;
           }
-          
+
           return newTime;
         });
       }, 1000);
-      
+
       return () => clearInterval(interval);
     }
-  }, [stage, totalSeconds]);
+  }, [stage, totalSeconds, guidanceMessages.length]);
 
   const handleStart = () => {
     setStage("active");

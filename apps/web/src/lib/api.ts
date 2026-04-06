@@ -568,6 +568,17 @@ export const api = {
       return handleResponse(res, 'Failed to fetch wellness challenges');
     },
 
+    /** Per-user progress for dashboard (active challenges + level summary). */
+    async getChallengesForMe() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/wellness/challenges/me`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch your wellness challenges');
+    },
+
     async createChallenge(data: {
       title: string;
       description?: string | null;

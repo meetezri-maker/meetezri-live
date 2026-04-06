@@ -122,6 +122,255 @@ export async function getWellnessChallengesWithStats() {
   });
 }
 
+/** Mirrors user.service streak logic for dashboard challenge progress. */
+function calculateMoodStreakDays(
+  moodEntries: { created_at: Date }[]
+): number {
+  if (!moodEntries || moodEntries.length === 0) return 0;
+  const sorted = [...moodEntries].sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const lastEntryDate = new Date(sorted[0].created_at);
+  lastEntryDate.setHours(0, 0, 0, 0);
+  const diffTime = Math.abs(today.getTime() - lastEntryDate.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  if (diffDays > 1) return 0;
+
+  let streak = 1;
+  let currentDate = lastEntryDate;
+  for (let i = 1; i < sorted.length; i++) {
+    const entryDate = new Date(sorted[i].created_at);
+    entryDate.setHours(0, 0, 0, 0);
+    const diff = Math.abs(currentDate.getTime() - entryDate.getTime());
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    if (days === 0) continue;
+    if (days === 1) {
+      streak++;
+      currentDate = entryDate;
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+function getChallengeTargetFromCriteria(goalCriteria: unknown): number {
+  const gc =
+    goalCriteria && typeof goalCriteria === 'object'
+      ? (goalCriteria as Record<string, unknown>)
+      : {};
+  const t = gc.target ?? gc.targetCount;
+  if (typeof t === 'number' && t > 0) return Math.min(9999, Math.floor(t));
+  const tasks = gc.dailyTasks;
+  if (Array.isArray(tasks) && tasks.length > 0) return tasks.length;
+  return 7;
+}
+
+function mapDifficultyLabel(goalCriteria: unknown): 'Easy' | 'Medium' | 'Hard' {
+  const gc =
+    goalCriteria && typeof goalCriteria === 'object'
+      ? (goalCriteria as Record<string, unknown>)
+      : {};
+  const d = String(gc.difficulty || 'easy').toLowerCase();
+  if (d === 'medium') return 'Medium';
+  if (d === 'hard') return 'Hard';
+  return 'Easy';
+}
+
+async function computeChallengeProgressForUser(
+  userId: string,
+  challenge: {
+    id: string;
+    title: string;
+    category: string | null;
+    start_date: Date;
+    end_date: Date;
+    goal_criteria: unknown;
+  },
+  participation: { progress: number | null; is_completed: boolean | null } | null,
+  profileStreakDays: number
+): Promise<number> {
+  const target = getChallengeTargetFromCriteria(challenge.goal_criteria);
+  if (participation?.is_completed) {
+    return target;
+  }
+  if (
+    typeof participation?.progress === 'number' &&
+    participation.progress > 0
+  ) {
+    return Math.min(participation.progress, target);
+  }
+
+  const gc = (challenge.goal_criteria || {}) as Record<string, unknown>;
+  const metric = typeof gc.metric === 'string' ? gc.metric : '';
+  const title = (challenge.title || '').toLowerCase();
+  const cat = (challenge.category || '').toLowerCase();
+  const start = challenge.start_date;
+  const end = challenge.end_date;
+
+  let raw = 0;
+
+  if (
+    metric === 'mood_streak' ||
+    title.includes('check-in') ||
+    title.includes('check in') ||
+    title.includes('daily check')
+  ) {
+    raw = Math.min(profileStreakDays, target);
+  } else if (metric === 'meditation_sessions' || title.includes('meditation')) {
+    raw = await prisma.user_wellness_progress.count({
+      where: {
+        user_id: userId,
+        completed_at: { gte: start, lte: end, not: null },
+        wellness_tools: { category: 'Meditation' },
+      },
+    });
+  } else if (
+    metric === 'journal_entries' ||
+    cat === 'journaling' ||
+    title.includes('journal')
+  ) {
+    raw = await prisma.journal_entries.count({
+      where: { user_id: userId, created_at: { gte: start, lte: end } },
+    });
+  } else if (metric === 'breathing' || title.includes('breath')) {
+    raw = await prisma.user_wellness_progress.count({
+      where: {
+        user_id: userId,
+        completed_at: { gte: start, lte: end, not: null },
+        wellness_tools: { category: 'Relaxation' },
+      },
+    });
+  } else if (metric === 'wellness_sessions' || title.includes('wellness warrior')) {
+    raw = await prisma.user_wellness_progress.count({
+      where: {
+        user_id: userId,
+        completed_at: { gte: start, lte: end, not: null },
+      },
+    });
+  } else if (metric === 'sleep_nights' || title.includes('sleep')) {
+    raw = await prisma.sleep_entries.count({
+      where: { user_id: userId, created_at: { gte: start, lte: end } },
+    });
+  } else if (metric === 'mood_entries' || title.includes('mood')) {
+    raw = await prisma.mood_entries.count({
+      where: { user_id: userId, created_at: { gte: start, lte: end } },
+    });
+  } else {
+    raw = typeof participation?.progress === 'number' ? participation.progress : 0;
+  }
+
+  return Math.min(Math.max(0, raw), target);
+}
+
+/**
+ * Active challenges with per-user progress for dashboard / app UI.
+ */
+export async function getWellnessChallengesForUserDashboard(userId: string) {
+  const now = new Date();
+
+  const [challenges, recentMoods] = await Promise.all([
+    prisma.wellness_challenges.findMany({
+      where: {
+        start_date: { lte: now },
+        end_date: { gte: now },
+      },
+      orderBy: { end_date: 'asc' },
+      take: 12,
+    }),
+    prisma.mood_entries.findMany({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+      take: 60,
+      select: { created_at: true },
+    }),
+  ]);
+
+  const streakDays = calculateMoodStreakDays(recentMoods);
+
+  if (challenges.length === 0) {
+    return {
+      totalPoints: 0,
+      currentLevel: 1,
+      pointsToNextLevel: 250,
+      levelProgressPercent: 0,
+      challenges: [] as Array<Record<string, unknown>>,
+    };
+  }
+
+  const participationRows = await prisma.user_challenge_participation.findMany({
+    where: {
+      user_id: userId,
+      challenge_id: { in: challenges.map((c) => c.id) },
+    },
+  });
+  const partMap = new Map(participationRows.map((p) => [p.challenge_id, p]));
+
+  const completedForPoints = await prisma.user_challenge_participation.findMany({
+    where: { user_id: userId, is_completed: true },
+    include: {
+      wellness_challenges: { select: { reward_points: true } },
+    },
+  });
+  const totalPoints = completedForPoints.reduce(
+    (sum, row) => sum + (row.wellness_challenges.reward_points ?? 0),
+    0
+  );
+
+  const withinThousand = totalPoints % 1000;
+  const pointsToNextLevel =
+    totalPoints === 0 ? 250 : withinThousand === 0 ? 1000 : 1000 - withinThousand;
+  const levelProgressPercent =
+    totalPoints === 0 ? 0 : Math.min(100, (withinThousand / 1000) * 100);
+  const currentLevel = Math.max(
+    1,
+    Math.min(99, Math.floor(totalPoints / 200) + 1)
+  );
+
+  const mapped = [];
+  for (const c of challenges) {
+    const part = partMap.get(c.id) ?? null;
+    const target = Math.max(1, getChallengeTargetFromCriteria(c.goal_criteria));
+    const progress = await computeChallengeProgressForUser(
+      userId,
+      c,
+      part,
+      streakDays
+    );
+    const isCompleted = part?.is_completed === true || progress >= target;
+    const gc = (c.goal_criteria || {}) as Record<string, unknown>;
+    const isLocked = gc.locked === true;
+
+    mapped.push({
+      id: c.id,
+      title: c.title,
+      description: c.description ?? '',
+      progress,
+      target,
+      reward: c.reward_points ?? 0,
+      difficulty: mapDifficultyLabel(c.goal_criteria),
+      isCompleted,
+      isLocked,
+      category: c.category,
+      endDate: c.end_date.toISOString(),
+    });
+  }
+
+  return {
+    totalPoints,
+    currentLevel,
+    pointsToNextLevel:
+      totalPoints === 0 ? 250 : Math.min(1000, Math.max(0, pointsToNextLevel)),
+    levelProgressPercent: Number.isFinite(levelProgressPercent)
+      ? levelProgressPercent
+      : 0,
+    challenges: mapped,
+  };
+}
+
 export async function getWellnessTools(userId: string, category?: string) {
   const now = Date.now();
   const cacheKey = `${userId}_${category || 'all'}`;
