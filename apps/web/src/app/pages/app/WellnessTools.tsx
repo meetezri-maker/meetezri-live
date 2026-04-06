@@ -48,6 +48,31 @@ import {
 } from "../../../lib/wellnessLocalProgress";
 import { getWellnessToolLucideIcon } from "../../../lib/wellnessToolIcons";
 
+/** Default built-in to scroll to per category (admin-aligned names). Fallback: first exercise in that category. */
+const ALL_CATEGORY_TAB_SCROLL: Record<WellnessToolCategory, string> = {
+  "Anxiety Management": "grounding-54321",
+  "Stress Management": "stress-release-waves",
+  Meditation: "body-scan",
+  "Sleep Health": "sleep-meditation",
+  Exercise: "gentle-movement",
+  "Self-Care": "gratitude",
+  Relaxation: "box-breathing",
+  "Depression Support": "compassion-pause",
+  Mindfulness: "mindful-anchor",
+};
+
+const CATEGORY_TAB_ICONS: Record<WellnessToolCategory, LucideIcon> = {
+  "Anxiety Management": Heart,
+  "Stress Management": Wind,
+  Meditation: Brain,
+  "Sleep Health": Moon,
+  Exercise: Activity,
+  "Self-Care": Sparkles,
+  Relaxation: Music,
+  "Depression Support": HeartPulse,
+  Mindfulness: Leaf,
+};
+
 const BUILTIN_FAVORITES_KEY = "wellness-builtin-favorites";
 
 function loadBuiltinFavoriteMap(): Record<string, boolean> {
@@ -206,21 +231,6 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
   }));
 }
 
-/** First exercise in list order for each canonical category (built-ins are ordered by category). */
-function pickOneExercisePerCategory(list: WellnessExerciseItem[]): WellnessExerciseItem[] {
-  const out: WellnessExerciseItem[] = [];
-  for (const cat of WELLNESS_TOOL_CATEGORIES) {
-    const found = list.find((e) => e.category === cat);
-    if (found) out.push(found);
-  }
-  return out;
-}
-
-/** DOM id for the spotlight card for a category (used with scrollIntoView). */
-function wellnessSpotlightElementId(category: WellnessToolCategory): string {
-  return `wellness-spotlight-${category.toLowerCase().replace(/\s+/g, "-")}`;
-}
-
 /** Built-ins first; API tools appended. Skip API rows that duplicate a built-in title (case-insensitive). */
 function mergeBuiltinAndApi(
   builtins: WellnessExerciseItem[],
@@ -264,30 +274,12 @@ export function WellnessTools() {
   const [phaseTimer, setPhaseTimer] = useState(0);
   const [guidedExercise, setGuidedExercise] = useState<string | null>(null);
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState<WellnessToolCategory | "all">("all");
   const [exercises, setExercises] = useState<WellnessExerciseItem[]>([]);
   const [progress, setProgress] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   /** Tracks whether the active exercise is built-in (no backend UUID session/progress). */
   const activeExerciseSourceRef = useRef<"builtin" | "api">("api");
-
-  const categoryIcons: Record<WellnessToolCategory, LucideIcon> = {
-    "Anxiety Management": Heart,
-    "Stress Management": Wind,
-    Meditation: Brain,
-    "Sleep Health": Moon,
-    Exercise: Activity,
-    "Self-Care": Sparkles,
-    Relaxation: Music,
-    "Depression Support": HeartPulse,
-    Mindfulness: Leaf,
-  };
-  const categories = WELLNESS_TOOL_CATEGORIES.map((label) => ({
-    icon: categoryIcons[label],
-    label,
-    color: WELLNESS_CATEGORY_GRADIENT[label],
-  }));
 
   useEffect(() => {
     const fetchData = async () => {
@@ -347,34 +339,33 @@ export function WellnessTools() {
     0
   );
 
-  const onePerCategory = useMemo(() => pickOneExercisePerCategory(exercises), [exercises]);
+  /** Single list: canonical category order, then title (no duplicate “spotlight” section). */
+  const exercisesSorted = useMemo(() => {
+    const rank = new Map(WELLNESS_TOOL_CATEGORIES.map((c, i) => [c, i]));
+    return [...exercises].sort((a, b) => {
+      const ra = rank.get(a.category as WellnessToolCategory) ?? 99;
+      const rb = rank.get(b.category as WellnessToolCategory) ?? 99;
+      if (ra !== rb) return ra - rb;
+      return a.title.localeCompare(b.title);
+    });
+  }, [exercises]);
 
   const displayExercises = useMemo(() => {
-    let base = showOnlyFavorites ? exercises.filter((ex) => ex.favorite) : exercises;
-    if (categoryFilter !== "all") {
-      base = base.filter((e) => e.category === categoryFilter);
-    }
-    return base;
-  }, [exercises, showOnlyFavorites, categoryFilter]);
+    return showOnlyFavorites ? exercisesSorted.filter((ex) => ex.favorite) : exercisesSorted;
+  }, [exercisesSorted, showOnlyFavorites]);
 
-  const goToCategory = useCallback((cat: WellnessToolCategory | "all") => {
-    if (cat === "all") {
-      setCategoryFilter("all");
-      window.setTimeout(() => {
-        document.getElementById("wellness-all-exercises-section")?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 0);
-      return;
-    }
-    setCategoryFilter(cat);
+  const scrollToCategoryTool = useCallback((cat: WellnessToolCategory) => {
+    setShowOnlyFavorites(false);
+    const preferredId = ALL_CATEGORY_TAB_SCROLL[cat];
     window.setTimeout(() => {
-      document
-        .getElementById(wellnessSpotlightElementId(cat))
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      let el = document.getElementById(`wellness-exercise-card-${preferredId}`);
+      if (!el) {
+        const first = exercises.find((e) => e.category === cat);
+        if (first) el = document.getElementById(`wellness-exercise-card-${first.id}`);
+      }
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 50);
-  }, []);
+  }, [exercises]);
 
   const stats = [
     { 
@@ -695,7 +686,7 @@ export function WellnessTools() {
           </div>
         </motion.div>
 
-        {/* Category tabs — jump to that category’s starter exercise below */}
+        {/* All nine category tabs — same style as before; scroll to that category’s tool */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -704,148 +695,39 @@ export function WellnessTools() {
         >
           <h2 className="text-xl font-bold mb-4">Categories</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {categories.map((category, index) => {
-              const Icon = category.icon;
-              const active = categoryFilter === category.label;
+            {WELLNESS_TOOL_CATEGORIES.map((cat, index) => {
+              const Icon = CATEGORY_TAB_ICONS[cat];
               return (
                 <motion.button
-                  key={category.label}
+                  key={cat}
                   type="button"
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.2 + index * 0.04 }}
-                  whileHover={{ scale: 1.04, y: -4 }}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.18 + index * 0.03 }}
+                  whileHover={{ scale: 1.03, y: -3 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => goToCategory(category.label)}
-                  className={`p-5 rounded-xl bg-gradient-to-br ${category.color} text-white shadow-lg text-center transition-[box-shadow] ${
-                    active ? "ring-4 ring-white/80 ring-offset-2 ring-offset-slate-100" : ""
-                  }`}
+                  onClick={() => scrollToCategoryTool(cat)}
+                  className={`flex min-h-[112px] flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-br ${WELLNESS_CATEGORY_GRADIENT[cat]} p-4 text-center text-white shadow-lg sm:min-h-[120px] sm:p-5`}
                 >
-                  <Icon className="w-8 h-8 mb-2 mx-auto" />
-                  <p className="font-bold text-sm leading-tight">{category.label}</p>
+                  <Icon className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" aria-hidden />
+                  <span className="text-xs font-bold leading-tight sm:text-sm">{cat}</span>
                 </motion.button>
               );
             })}
           </div>
         </motion.div>
 
-        {/* One tool per category (same nine categories as admin CMS) */}
+        {/* Single exercises grid (same card layout for every tool) */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="mb-8"
-        >
-          <h2 className="text-xl font-bold mb-1">One exercise per category</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Nine categories — one starter exercise each. Every tool has its own icon.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {onePerCategory.map((exercise, index) => {
-              const Icon = exercise.icon;
-              return (
-                <motion.div
-                  key={`spotlight-${exercise.id}`}
-                  id={wellnessSpotlightElementId(exercise.category as WellnessToolCategory)}
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.22 + index * 0.04 }}
-                  whileHover={{ y: -4 }}
-                  className="scroll-mt-28"
-                >
-                  <Card className="p-5 shadow-lg hover:shadow-xl transition-all border border-slate-100">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                          {exercise.category}
-                        </p>
-                        <h3 className="font-bold text-lg leading-snug">{exercise.title}</h3>
-                      </div>
-                      <div
-                        className={`p-3 rounded-xl bg-gradient-to-br ${exercise.color} text-white shrink-0`}
-                      >
-                        <Icon className="w-6 h-6" />
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{exercise.description}</p>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => setGuidedExercise(exercise.id)}
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 border-purple-200 hover:bg-purple-50"
-                      >
-                        <Sparkles className="w-4 h-4 mr-1 text-purple-600" />
-                        Ezri
-                      </Button>
-                      <Button onClick={() => handleStartExercise(exercise.id)} size="sm" className="flex-1">
-                        <Play className="w-4 h-4 mr-1" />
-                        Start
-                      </Button>
-                    </div>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </div>
-        </motion.div>
-
-        {/* Category filters (admin-aligned names) */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="mb-6"
-        >
-          <h2 className="text-lg font-semibold mb-3">Filter by category</h2>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => goToCategory("all")}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium border transition-colors ${
-                categoryFilter === "all"
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
-              }`}
-            >
-              All
-            </button>
-            {categories.map(({ label, icon: CatIcon, color }) => {
-              const active = categoryFilter === label;
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => goToCategory(label)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium border transition-colors ${
-                    active
-                      ? `bg-gradient-to-r ${color} text-white border-transparent shadow-md`
-                      : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
-                  }`}
-                >
-                  <CatIcon className="w-3.5 h-3.5 shrink-0 opacity-90" />
-                  <span className="max-w-[10rem] sm:max-w-none truncate">{label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </motion.div>
-
-        {/* Exercises Grid */}
-        <motion.div
-          id="wellness-all-exercises-section"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="scroll-mt-24"
         >
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold">
               {showOnlyFavorites
                 ? `Favorite exercises (${favoriteCount})`
-                : categoryFilter === "all"
-                  ? "All exercises"
-                  : `${categoryFilter}`}
+                : "Exercises"}
             </h2>
             <button 
               onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
@@ -867,39 +749,50 @@ export function WellnessTools() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {displayExercises.length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
-                No exercises match this filter. Try another category or show all.
+                {showOnlyFavorites
+                  ? "No favorites yet. Tap the heart on an exercise to save it here."
+                  : "No exercises available."}
               </p>
             ) : (
             displayExercises.map((exercise, index) => {
               const Icon = exercise.icon;
               return (
                 <motion.div
+                  id={`wellness-exercise-card-${exercise.id}`}
                   key={exercise.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 + index * 0.05 }}
+                  transition={{ delay: 0.15 + index * 0.04 }}
                   whileHover={{ y: -5 }}
+                  className="scroll-mt-28"
                 >
-                  <Card className="p-5 shadow-lg hover:shadow-xl transition-all group cursor-pointer">
-                    <div className="flex items-start justify-between mb-3">
-                      <motion.div
-                        whileHover={{ rotate: 10, scale: 1.1 }}
-                        className={`p-3 rounded-xl bg-gradient-to-br ${exercise.color} text-white`}
-                      >
-                        <Icon className="w-6 h-6" />
-                      </motion.div>
+                  <Card className="p-5 shadow-lg hover:shadow-xl transition-all group cursor-pointer border border-slate-100">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <motion.div
+                          whileHover={{ rotate: 10, scale: 1.1 }}
+                          className={`p-3 rounded-xl bg-gradient-to-br ${exercise.color} text-white shrink-0`}
+                        >
+                          <Icon className="w-6 h-6" />
+                        </motion.div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                            {exercise.category}
+                          </p>
+                          <h3 className="font-bold text-lg leading-snug group-hover:text-primary transition-colors">
+                            {exercise.title}
+                          </h3>
+                        </div>
+                      </div>
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={(e) => handleToggleFavorite(exercise.id, e)}
-                        className="p-2 hover:bg-gray-100 rounded-full transition-colors z-10"
+                        className="p-2 hover:bg-gray-100 rounded-full transition-colors z-10 shrink-0"
                       >
                         <Heart className={`w-5 h-5 ${exercise.favorite ? "text-red-500 fill-red-500" : "text-gray-300"}`} />
                       </motion.button>
                     </div>
-                    <h3 className="font-bold mb-2 group-hover:text-primary transition-colors">
-                      {exercise.title}
-                    </h3>
                     <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
                       {exercise.description}
                     </p>
