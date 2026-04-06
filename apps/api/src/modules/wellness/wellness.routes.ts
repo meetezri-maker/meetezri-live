@@ -32,9 +32,10 @@ export async function wellnessRoutes(app: FastifyInstance) {
     '/challenges',
     {
       schema: {
-        response: {
-          200: z.array(wellnessChallengeResponseSchema),
-        },
+        querystring: z.object({
+          scope: z.enum(['dashboard']).optional(),
+        }),
+        // Omit 200 response schema: default list vs scope=dashboard object differ.
       },
       preHandler: [app.authenticate],
     },

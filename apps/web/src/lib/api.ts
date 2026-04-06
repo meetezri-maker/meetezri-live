@@ -568,14 +568,23 @@ export const api = {
       return handleResponse(res, 'Failed to fetch wellness challenges');
     },
 
-    /** Per-user progress for dashboard (active challenges + level summary). */
+    /** Per-user progress for dashboard (active challenges + level summary). Uses ?scope=dashboard on GET /challenges so older API deploys without /challenges/me still work. */
     async getChallengesForMe() {
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/wellness/challenges/me`, {
+      const url = `${API_URL}/wellness/challenges?scope=dashboard`;
+      let res = await fetch(url, {
         method: 'GET',
         headers,
         cache: 'no-store',
       });
+      // Fallback if production API predates scope=dashboard (should not happen).
+      if (res.status === 404) {
+        res = await fetch(`${API_URL}/wellness/challenges/me`, {
+          method: 'GET',
+          headers,
+          cache: 'no-store',
+        });
+      }
       return handleResponse(res, 'Failed to fetch your wellness challenges');
     },
 

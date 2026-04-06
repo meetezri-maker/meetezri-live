@@ -152,10 +152,15 @@ export async function getWellnessStatsHandler(
 }
 
 export async function getWellnessChallengesHandler(
-  request: FastifyRequest,
+  request: FastifyRequest<{ Querystring: { scope?: string } }>,
   reply: FastifyReply
 ) {
   try {
+    if (request.query?.scope === 'dashboard') {
+      const userId = (request.user as { sub: string }).sub;
+      const data = await getWellnessChallengesForUserDashboard(userId);
+      return reply.send(data);
+    }
     const challenges = await getWellnessChallengesWithStats();
     return reply.send(challenges);
   } catch (error) {
