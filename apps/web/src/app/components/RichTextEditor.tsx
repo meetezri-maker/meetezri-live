@@ -18,6 +18,7 @@ import {
   AlignRight
 } from "lucide-react";
 import { cn } from "./ui/utils";
+import { htmlToPlainText } from "../../lib/htmlPlainText";
 
 interface RichTextEditorProps {
   value: string;
@@ -182,8 +183,10 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
       {/* Footer Stats */}
       <div className="bg-gray-50 dark:bg-gray-900 border-t border-gray-300 dark:border-gray-700 px-4 py-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
         <div className="flex items-center gap-4">
-          <span>{value ? value.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length : 0} words</span>
-          <span>{value ? value.replace(/<[^>]*>/g, '').length : 0} characters</span>
+          <span>
+            {value ? htmlToPlainText(value).split(/\s+/).filter(Boolean).length : 0} words
+          </span>
+          <span>{value ? htmlToPlainText(value).length : 0} characters</span>
         </div>
         {!hideMoodSelector && selectedMood && (
           <div className="flex items-center gap-2">

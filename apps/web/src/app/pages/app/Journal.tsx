@@ -22,6 +22,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { api } from "../../../lib/api";
+import { htmlToPlainText, truncatePreview } from "../../../lib/htmlPlainText";
 import { useAuth } from "../../contexts/AuthContext";
 import { Skeleton } from "../../components/ui/skeleton";
 
@@ -121,7 +122,9 @@ export function Journal() {
             dateStyle: 'long',
             timeStyle: 'medium'
           }),
-          preview: entry.content ? entry.content.replace(/<[^>]*>/g, '').substring(0, 100) + '...' : '',
+          preview: entry.content
+            ? truncatePreview(htmlToPlainText(entry.content), 100)
+            : "",
           mood: moodDisplay,
           favorite: entry.is_favorite || false
         };

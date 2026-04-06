@@ -41,6 +41,11 @@ import {
   getWellnessCategoryIcon,
   WELLNESS_CATEGORY_ICONS,
 } from "../../../lib/wellnessCategoryIcons";
+import {
+  ambientKindForExerciseId,
+  startWellnessAmbient,
+  stopWellnessAmbient,
+} from "../../../lib/wellnessAmbientAudio";
 
 const BUILTIN_FAVORITES_KEY = "wellness-builtin-favorites";
 
@@ -428,6 +433,8 @@ export function WellnessTools() {
 
     if (!exerciseId) return;
 
+    stopWellnessAmbient();
+
     // Built-in tools have no API tool id — persist progress locally and merge into the dashboard.
     if (source === "builtin" && user?.id && timeSpent >= BUILTIN_MIN_SECONDS) {
       const ex = exercises.find((x) => x.id === exerciseId);
@@ -565,6 +572,28 @@ export function WellnessTools() {
   ]);
 
   const favoriteCount = exercises.filter((ex) => ex.favorite).length;
+
+  useEffect(() => {
+    const kind = activeExercise ? ambientKindForExerciseId(activeExercise) : null;
+    if (!isPlaying || !kind || sessionTimeComplete) {
+      stopWellnessAmbient();
+      return;
+    }
+    void startWellnessAmbient(kind).catch((err) =>
+      console.error("Wellness ambient audio failed:", err)
+    );
+    return () => {
+      stopWellnessAmbient();
+    };
+  }, [isPlaying, activeExercise, sessionTimeComplete]);
+
+  const nearEndNudge = useMemo(() => {
+    if (!activeExerciseData || !isPlaying || sessionTimeComplete) return false;
+    const total = parseWellnessDurationSeconds(activeExerciseData.duration);
+    if (!Number.isFinite(total)) return false;
+    const remaining = total - timer;
+    return remaining > 0 && remaining <= 60;
+  }, [activeExerciseData, isPlaying, sessionTimeComplete, timer]);
 
   if (isLoading) {
     return (
@@ -903,39 +932,41 @@ export function WellnessTools() {
                       </Button>
                     </motion.div>
                   )}
-                  {/* Animated Background */}
+                  {/* Decorative glows — behind all copy (z-0); scaled breathing uses z-10 so it stays under text rows */}
                   <motion.div
+                    aria-hidden
                     animate={{
                       scale: [1, 1.2, 1],
                       opacity: [0.3, 0.5, 0.3]
                     }}
                     transition={{ duration: 4, repeat: Infinity }}
-                    className="absolute -top-20 -right-20 w-60 h-60 bg-white/20 rounded-full blur-3xl"
+                    className="pointer-events-none absolute -top-20 -right-20 z-0 h-60 w-60 rounded-full bg-white/20 blur-3xl"
                   />
                   <motion.div
+                    aria-hidden
                     animate={{
                       scale: [1, 1.3, 1],
                       opacity: [0.2, 0.4, 0.2]
                     }}
                     transition={{ duration: 5, repeat: Infinity }}
-                    className="absolute -bottom-20 -left-20 w-60 h-60 bg-white/20 rounded-full blur-3xl"
+                    className="pointer-events-none absolute -bottom-20 -left-20 z-0 h-60 w-60 rounded-full bg-white/20 blur-3xl"
                   />
 
-                  <div className="relative z-10">
+                  <div className="relative isolate z-10">
                     <motion.button
                       whileHover={{ scale: 1.1, rotate: 90 }}
                       whileTap={{ scale: 0.9 }}
                       onClick={handleCloseExercise}
-                      className="absolute top-0 right-0 p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+                      className="absolute right-0 top-0 z-30 rounded-full bg-white/20 p-2 transition-colors hover:bg-white/30"
                     >
                       <X className="w-5 h-5" />
                     </motion.button>
 
-                    <div className="text-center mb-8">
+                    <div className="relative z-20 text-center mb-8">
                       <motion.div
                         animate={{ scale: [1, 1.1, 1] }}
                         transition={{ duration: 2, repeat: Infinity }}
-                        className="w-24 h-24 mx-auto mb-4 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm"
+                        className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm"
                       >
                         {ActiveExerciseIcon ? <ActiveExerciseIcon className="w-12 h-12" /> : null}
                       </motion.div>
@@ -943,8 +974,24 @@ export function WellnessTools() {
                       <p className="text-white/90">{activeExerciseData.description}</p>
                     </div>
 
-                    {/* Breathing Animation */}
-                    <div className="flex flex-col items-center justify-center mb-8">
+                    {nearEndNudge && (
+                      <motion.div
+                        role="status"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="relative z-20 mb-6 rounded-2xl border border-white/25 bg-white/15 px-4 py-3 text-center shadow-lg backdrop-blur-md"
+                      >
+                        <p className="text-sm font-medium text-white">
+                          We hope you&apos;re enjoying this moment.
+                        </p>
+                        <p className="mt-1 text-sm text-white/90">
+                          How are you feeling right now?
+                        </p>
+                      </motion.div>
+                    )}
+
+                    {/* Breathing Animation — lower z so scale transform does not paint over headings */}
+                    <div className="relative z-10 mb-8 flex flex-col items-center justify-center">
                       <motion.div
                         animate={{
                           scale: breathPhase === "inhale" || breathPhase === "hold" ? 1.8 : 1,
@@ -998,7 +1045,7 @@ export function WellnessTools() {
                     </div>
 
                     {/* Timer */}
-                    <div className="text-center mb-6">
+                    <div className="relative z-20 text-center mb-6">
                       <div className="text-4xl font-bold mb-2 tabular-nums">
                         {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, "0")}
                       </div>
@@ -1013,7 +1060,7 @@ export function WellnessTools() {
 
                     {/* Controls */}
                     <div
-                      className={`flex items-center justify-center gap-4 ${sessionTimeComplete ? "pointer-events-none opacity-40" : ""}`}
+                      className={`relative z-20 flex items-center justify-center gap-4 ${sessionTimeComplete ? "pointer-events-none opacity-40" : ""}`}
                     >
                       <motion.button
                         whileHover={{ scale: 1.1 }}
@@ -1059,6 +1106,7 @@ export function WellnessTools() {
         <EzriGuidedMode
           isOpen={!!guidedExercise}
           onClose={() => setGuidedExercise(null)}
+          exerciseId={guidedExercise}
           exerciseTitle={exercises.find(ex => ex.id === guidedExercise)!.title}
           exerciseDescription={exercises.find(ex => ex.id === guidedExercise)!.description}
           exerciseColor={exercises.find(ex => ex.id === guidedExercise)!.color}
