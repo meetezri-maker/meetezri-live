@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -114,6 +114,14 @@ export function NudgeManagement() {
   const [editSchedule, setEditSchedule] = useState("");
   const [editTargetAudience, setEditTargetAudience] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templateDesc, setTemplateDesc] = useState("");
+  const [templateMessage, setTemplateMessage] = useState("");
+  const [templateCategory, setTemplateCategory] = useState("Engagement");
+  const [templateScheduleDefault, setTemplateScheduleDefault] = useState("Daily");
+  const [isTemplateSaving, setIsTemplateSaving] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const loadNudges = async () => {
@@ -283,6 +291,89 @@ export function NudgeManagement() {
     } catch (error: any) {
       console.error("Failed to delete nudge", error);
       toast.error(error.message || "Failed to delete nudge");
+    }
+  };
+
+  const handleSaveNudgeTemplate = async () => {
+    if (!templateName.trim() || !templateMessage.trim()) {
+      toast.error("Template name and message are required");
+      return;
+    }
+    setIsTemplateSaving(true);
+    try {
+      await api.admin.createNudgeTemplate({
+        name: templateName.trim(),
+        category: templateCategory,
+        type: "push",
+        title: templateName.trim(),
+        message: templateDesc.trim()
+          ? `${templateDesc.trim()}\n\n${templateMessage.trim()}`
+          : templateMessage.trim(),
+        variables: [],
+        status: "draft",
+      });
+      toast.success("Template created");
+      setShowCreateTemplateModal(false);
+      setTemplateName("");
+      setTemplateDesc("");
+      setTemplateMessage("");
+      setTemplateCategory("Engagement");
+      setTemplateScheduleDefault("Daily");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to create template");
+    } finally {
+      setIsTemplateSaving(false);
+    }
+  };
+
+  const handleImportFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setIsImporting(true);
+    try {
+      const text = await file.text();
+      if (!file.name.toLowerCase().endsWith(".json")) {
+        toast.error("Please use a JSON file (array of nudge objects with title and message)");
+        return;
+      }
+      const parsed = JSON.parse(text);
+      const items: any[] = Array.isArray(parsed)
+        ? parsed
+        : parsed && Array.isArray(parsed.nudges)
+          ? parsed.nudges
+          : [parsed];
+      let created = 0;
+      for (const item of items) {
+        const title = String(item.title || "").trim();
+        const message = String(item.message || "").trim();
+        if (!title || !message) continue;
+        const type = (item.type || "motivational") as Nudge["type"];
+        const targetAudienceMeta = {
+          label: String(item.targetAudience || item.target_audience?.label || "All active users"),
+          trigger: String(item.trigger || "Imported"),
+          schedule: String(item.schedule || "Daily"),
+        };
+        const apiNudge = await api.admin.createNudge({
+          title,
+          message,
+          type,
+          status: "draft",
+          target_audience: targetAudienceMeta,
+        });
+        setNudges((prev) => [mapApiNudge(apiNudge), ...prev]);
+        created++;
+      }
+      if (created > 0) {
+        toast.success(`Imported ${created} nudge(s)`);
+        setShowImportModal(false);
+      } else {
+        toast.error("No valid nudges found (need title and message on each item)");
+      }
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to import file");
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -690,6 +781,7 @@ export function NudgeManagement() {
                   )}
                   {nudge.status === "draft" && (
                     <Button
+                      type="button"
                       size="sm"
                       className="flex-1 gap-2"
                       onClick={() => sendNudgeToUsers(nudge)}
@@ -698,11 +790,22 @@ export function NudgeManagement() {
                       Publish & Send
                     </Button>
                   )}
-                  <Button variant="outline" size="sm" className="flex-1 gap-2" onClick={() => setAnalyticsModalNudge(nudge)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 gap-2"
+                    onClick={() => setAnalyticsModalNudge(nudge)}
+                  >
                     <BarChart3 className="w-4 h-4" />
                     Analytics
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => setDeleteModalNudge(nudge)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeleteModalNudge(nudge)}
+                  >
                     <Trash2 className="w-4 h-4 text-red-600" />
                   </Button>
                 </div>
@@ -737,7 +840,7 @@ export function NudgeManagement() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setShowCreateModal(false)}
             >
               <motion.div
@@ -848,7 +951,7 @@ export function NudgeManagement() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setViewModalNudge(null)}
             >
               <motion.div
@@ -965,7 +1068,7 @@ export function NudgeManagement() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setEditModalNudge(null)}
             >
               <motion.div
@@ -1086,7 +1189,7 @@ export function NudgeManagement() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setAnalyticsModalNudge(null)}
             >
               <motion.div
@@ -1192,7 +1295,7 @@ export function NudgeManagement() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setDeleteModalNudge(null)}
             >
               <motion.div
@@ -1271,7 +1374,7 @@ export function NudgeManagement() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setShowImportModal(false)}
             >
               <motion.div
@@ -1296,16 +1399,21 @@ export function NudgeManagement() {
                       Drag and drop your CSV or JSON file here, or click to browse
                     </p>
                     <input
+                      ref={importFileRef}
                       type="file"
-                      accept=".csv,.json"
+                      accept=".json"
                       className="hidden"
                       id="file-upload"
+                      onChange={handleImportFileChange}
                     />
-                    <label htmlFor="file-upload">
-                      <Button variant="outline" className="cursor-pointer" asChild>
-                        <span>Browse Files</span>
-                      </Button>
-                    </label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="cursor-pointer"
+                      onClick={() => importFileRef.current?.click()}
+                    >
+                      Browse Files
+                    </Button>
                   </div>
                   
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -1328,13 +1436,12 @@ export function NudgeManagement() {
                     </Button>
                     <Button
                       className="flex-1"
-                      onClick={() => {
-                        toast.success("Nudges imported successfully");
-                        setShowImportModal(false);
-                      }}
+                      type="button"
+                      disabled={isImporting}
+                      onClick={() => importFileRef.current?.click()}
                     >
                       <Upload className="w-4 h-4 mr-2" />
-                      Import Nudges
+                      {isImporting ? "Importing…" : "Import Nudges"}
                     </Button>
                   </div>
                 </div>
@@ -1350,7 +1457,7 @@ export function NudgeManagement() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setShowCreateTemplateModal(false)}
             >
               <motion.div
@@ -1370,7 +1477,11 @@ export function NudgeManagement() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-2">Template Name</label>
-                    <Input placeholder="e.g., Morning Check-in Template" />
+                    <Input
+                      placeholder="e.g., Morning Check-in Template"
+                      value={templateName}
+                      onChange={(e) => setTemplateName(e.target.value)}
+                    />
                   </div>
                   
                   <div>
@@ -1379,6 +1490,8 @@ export function NudgeManagement() {
                       className="w-full p-3 border rounded-lg"
                       rows={2}
                       placeholder="Brief description of this template..."
+                      value={templateDesc}
+                      onChange={(e) => setTemplateDesc(e.target.value)}
                     />
                   </div>
                   
@@ -1388,23 +1501,33 @@ export function NudgeManagement() {
                       className="w-full p-3 border rounded-lg font-mono text-sm"
                       rows={4}
                       placeholder="Use variables like {{user_name}}, {{date}}, {{time}}..."
+                      value={templateMessage}
+                      onChange={(e) => setTemplateMessage(e.target.value)}
                     />
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Category</label>
-                      <select className="w-full px-3 py-2 border rounded-lg">
-                        <option>Motivational</option>
-                        <option>Reminder</option>
-                        <option>Milestone</option>
-                        <option>Wellness Tip</option>
-                        <option>Check-in</option>
+                      <select
+                        className="w-full px-3 py-2 border rounded-lg"
+                        value={templateCategory}
+                        onChange={(e) => setTemplateCategory(e.target.value)}
+                      >
+                        <option value="Engagement">Engagement</option>
+                        <option value="Wellness">Wellness</option>
+                        <option value="Progress">Progress</option>
+                        <option value="Achievement">Achievement</option>
+                        <option value="Retention">Retention</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">Default Schedule</label>
-                      <select className="w-full px-3 py-2 border rounded-lg">
+                      <select
+                        className="w-full px-3 py-2 border rounded-lg"
+                        value={templateScheduleDefault}
+                        onChange={(e) => setTemplateScheduleDefault(e.target.value)}
+                      >
                         <option>Daily</option>
                         <option>Weekly</option>
                         <option>Triggered</option>
@@ -1448,13 +1571,12 @@ export function NudgeManagement() {
                     </Button>
                     <Button
                       className="flex-1"
-                      onClick={() => {
-                        toast.success("Template created successfully");
-                        setShowCreateTemplateModal(false);
-                      }}
+                      type="button"
+                      disabled={isTemplateSaving}
+                      onClick={handleSaveNudgeTemplate}
                     >
                       <FileText className="w-4 h-4 mr-2" />
-                      Create Template
+                      {isTemplateSaving ? "Saving…" : "Create Template"}
                     </Button>
                   </div>
                 </div>

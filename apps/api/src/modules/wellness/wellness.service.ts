@@ -46,6 +46,41 @@ export async function createWellnessTool(data: CreateWellnessToolInput & { creat
   return created;
 }
 
+export async function createWellnessChallenge(data: {
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  start_date: string;
+  end_date: string;
+  reward_points?: number | null;
+  goal_criteria?: unknown | null;
+}) {
+  const start = new Date(data.start_date);
+  const end = new Date(data.end_date);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    throw new Error('Invalid start or end date');
+  }
+  const created = await prisma.wellness_challenges.create({
+    data: {
+      title: data.title,
+      description: data.description ?? null,
+      category: data.category ?? null,
+      start_date: start,
+      end_date: end,
+      reward_points: data.reward_points ?? 0,
+      goal_criteria:
+        data.goal_criteria === undefined || data.goal_criteria === null
+          ? undefined
+          : (data.goal_criteria as object),
+    },
+  });
+  return {
+    ...created,
+    participants: 0,
+    completionRate: 0,
+  };
+}
+
 export async function getWellnessChallengesWithStats() {
   const [challenges, participation, completions] = await Promise.all([
     prisma.wellness_challenges.findMany({

@@ -9,8 +9,6 @@ import {
   Zap,
   Clock,
   Calendar,
-  Download,
-  RefreshCw,
   Users,
   Activity,
   BookOpen,
@@ -36,44 +34,51 @@ import {
   Area,
   LabelList,
 } from "recharts";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../lib/api";
 import { Card } from "@/app/components/ui/card";
-import { Button } from "@/app/components/ui/button";
+import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
+import { buildStatsQuery, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
 
 export function EngagementMetrics() {
-  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
+  const [rangePreset, setRangePreset] = useState<DashboardTimePreset>("30d");
+  const [useCustomRange, setUseCustomRange] = useState(false);
+  const [dateFrom, setDateFrom] = useState(() => {
+    const x = new Date();
+    x.setUTCDate(x.getUTCDate() - 29);
+    return x.toISOString().slice(0, 10);
+  });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+
   const [statsData, setStatsData] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadStats = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const q = buildStatsQuery({
+        chartPeriod,
+        rangePreset,
+        useCustomRange,
+        dateFrom,
+        dateTo,
+      });
+      const data = await api.admin.getStats(q);
+      setStatsData(data);
+    } catch (err: any) {
+      console.error("Failed to fetch engagement metrics", err);
+      setError(err.message || "Failed to load engagement metrics");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [chartPeriod, rangePreset, useCustomRange, dateFrom, dateTo]);
+
   useEffect(() => {
-    let isMounted = true;
-
-    const fetchStats = async () => {
-      try {
-        const data = await api.admin.getStats();
-        if (isMounted) {
-          setStatsData(data);
-        }
-      } catch (err: any) {
-        console.error("Failed to fetch engagement metrics", err);
-        if (isMounted) {
-          setError(err.message || "Failed to load engagement metrics");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    fetchStats();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    void loadStats();
+  }, [loadStats]);
 
   const sessionActivity = (statsData?.sessionActivity || []) as any[];
   const hourlyActivity = (statsData?.hourlyActivity || []) as any[];
@@ -135,8 +140,15 @@ export function EngagementMetrics() {
 
   const timeOfDaySessions = timeOfDayBuckets.map((bucket) => {
     let sessions = 0;
-    hourlyActivity.forEach((item, index) => {
-      if (bucket.match(index)) {
+    hourlyActivity.forEach((item: { hourNum?: number; sessions?: number; hour?: string }) => {
+      const hourNum =
+        typeof item.hourNum === "number"
+          ? item.hourNum
+          : typeof item.hour === "string"
+            ? parseInt(item.hour, 10)
+            : NaN;
+      const h = Number.isFinite(hourNum) ? hourNum : -1;
+      if (h >= 0 && bucket.match(h)) {
         sessions += item.sessions || 0;
       }
     });
@@ -298,36 +310,30 @@ export function EngagementMetrics() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Time Range Selector */}
-            <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1 border border-gray-200">
-              {(["7d", "30d", "90d"] as const).map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    timeRange === range
-                      ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-                      : "text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  {range === "7d" ? "7 Days" : range === "30d" ? "30 Days" : "90 Days"}
-                </button>
-              ))}
-            </div>
-
-            <Button className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-
-            <Button
-              variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-          </div>
+          <AdminAnalyticsToolbar
+            chartPeriod={chartPeriod}
+            onChartPeriodChange={setChartPeriod}
+            rangePreset={rangePreset}
+            onRangePresetChange={setRangePreset}
+            useCustomRange={useCustomRange}
+            onUseCustomRangeChange={setUseCustomRange}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            onRefresh={() => void loadStats()}
+            isLoading={isLoading}
+            onExport={() => {
+              if (!statsData) return;
+              const rows: Record<string, unknown>[] = (statsData.sessionActivity || []).map((r: any, i: number) => ({
+                i,
+                day: r.day,
+                sessions: r.sessions,
+                avgDuration: r.duration,
+              }));
+              downloadCsv(`engagement-metrics-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+            }}
+          />
         </motion.div>
 
         {/* Stats Grid */}
@@ -344,7 +350,7 @@ export function EngagementMetrics() {
                   <div
                     className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-lg`}
                   >
-                    <stat.icon className="w-6 h-6 text-white" />
+                    <stat.icon className="w-6 h-6 text-black" />
                   </div>
                   <div
                     className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
@@ -378,7 +384,7 @@ export function EngagementMetrics() {
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-xl font-bold text-white mb-1">
+                <h3 className="text-xl font-bold text-black mb-1">
                   Engagement Score Trend
                 </h3>
                 <p className="text-sm text-gray-400">
@@ -442,10 +448,10 @@ export function EngagementMetrics() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
+                  <h3 className="text-xl font-bold text-black mb-1">
                     Session Frequency Analysis
                   </h3>
-                  <p className="text-sm text-gray-400">Users by sessions per week</p>
+                  <p className="text-sm text-gray-800">Users by sessions per week</p>
                 </div>
                 <Activity className="w-5 h-5 text-purple-400" />
               </div>
@@ -468,7 +474,9 @@ export function EngagementMetrics() {
                       dataKey="percentage"
                       position="right"
                       fill="#e5e7eb"
-                      formatter={(v: number) => `${v}%`}
+                      formatter={(v: unknown) =>
+                        v != null && v !== "" ? `${Number(v)}%` : ""
+                      }
                     />
                   </Bar>
                 </BarChart>
@@ -485,7 +493,7 @@ export function EngagementMetrics() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
+                  <h3 className="text-xl font-bold text-black mb-1">
                     Feature Engagement
                   </h3>
                   <p className="text-sm text-gray-400">Usage % and satisfaction</p>
@@ -497,25 +505,23 @@ export function EngagementMetrics() {
                 {featureEngagementData.map((feature, index) => (
                   <div key={feature.feature} className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-white font-medium">{feature.feature}</span>
+                      <span className="text-black font-medium">{feature.feature}</span>
                       <div className="flex items-center gap-3">
                         <span className="text-sm text-gray-400">
                           {feature.usage}% usage
                         </span>
                         <div className="flex items-center gap-1">
                           <Smile className="w-4 h-4 text-yellow-400" />
-                          <span className="text-sm text-white font-medium">
+                          <span className="text-sm text-black font-medium">
                             {feature.satisfaction}
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${feature.usage}%` }}
-                        transition={{ duration: 1, delay: index * 0.1 }}
-                        className="h-full bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full"
+                      <div
+                        className="h-full bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full transition-all duration-500"
+                        style={{ width: `${feature.usage}%` }}
                       />
                     </div>
                   </div>
@@ -536,7 +542,7 @@ export function EngagementMetrics() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
+                  <h3 className="text-xl font-bold text-black mb-1">
                     User Journey Engagement
                   </h3>
                   <p className="text-sm text-gray-400">Completion and drop-off rates</p>
@@ -574,7 +580,7 @@ export function EngagementMetrics() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">Return Rate Trend</h3>
+                  <h3 className="text-xl font-bold text-black mb-1">Return Rate Trend</h3>
                   <p className="text-sm text-gray-400">
                     % of users returning over time
                   </p>
@@ -618,7 +624,7 @@ export function EngagementMetrics() {
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-xl font-bold text-white mb-1">
+                <h3 className="text-xl font-bold text-black mb-1">
                   Engagement by Time of Day
                 </h3>
                 <p className="text-sm text-gray-400">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
@@ -10,9 +10,6 @@ import {
   Clock,
   MessageSquare,
   Heart,
-  Calendar,
-  Download,
-  Filter,
   BarChart3,
   PieChart,
   LineChart,
@@ -37,49 +34,58 @@ import {
   AreaChart,
 } from "recharts";
 import { api } from "../../../lib/api";
+import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
+import { buildStatsQuery, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
 
 export function UsageAnalytics() {
-  const [timeRange, setTimeRange] = useState("7d");
-  const [selectedMetric, setSelectedMetric] = useState("sessions");
+  const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
+  const [rangePreset, setRangePreset] = useState<DashboardTimePreset>("30d");
+  const [useCustomRange, setUseCustomRange] = useState(false);
+  const [dateFrom, setDateFrom] = useState(() => {
+    const x = new Date();
+    x.setUTCDate(x.getUTCDate() - 29);
+    return x.toISOString().slice(0, 10);
+  });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+
+  const [selectedMetric, setSelectedMetric] = useState<"sessions" | "users" | "avgDuration">("sessions");
   const [statsData, setStatsData] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadStats = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const q = buildStatsQuery({
+        chartPeriod,
+        rangePreset,
+        useCustomRange,
+        dateFrom,
+        dateTo,
+      });
+      const data = await api.admin.getStats(q);
+      setStatsData(data);
+    } catch (err: any) {
+      console.error("Failed to fetch usage analytics", err);
+      setError(err.message || "Failed to load usage analytics");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [chartPeriod, rangePreset, useCustomRange, dateFrom, dateTo]);
+
   useEffect(() => {
-    let isMounted = true;
+    void loadStats();
+  }, [loadStats]);
 
-    const fetchStats = async () => {
-      try {
-        const data = await api.admin.getStats();
-        if (isMounted) {
-          setStatsData(data);
-        }
-      } catch (err: any) {
-        console.error("Failed to fetch usage analytics", err);
-        if (isMounted) {
-          setError(err.message || "Failed to load usage analytics");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
+  const sessionData = (statsData?.sessionActivity || []).map((item: any) => ({
+    date: item.day,
+    sessions: item.sessions,
+    users: item.sessions,
+    avgDuration: item.duration,
+  }));
 
-    fetchStats();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const sessionData =
-    (statsData?.sessionActivity || []).map((item: any) => ({
-      date: item.day,
-      sessions: item.sessions,
-      users: Math.max(item.sessions, 0),
-      avgDuration: item.duration,
-    }));
+  const trendKey = selectedMetric;
 
   const totalSessions = statsData?.totalSessions || 0;
   const featureUsage = statsData?.featureUsage || [];
@@ -245,22 +251,25 @@ export function UsageAnalytics() {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
-              <select
-                className="px-3 py-2 border rounded-lg"
-                value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value)}
-              >
-                <option value="7d">Last 7 Days</option>
-                <option value="30d">Last 30 Days</option>
-                <option value="90d">Last 90 Days</option>
-                <option value="1y">Last Year</option>
-              </select>
-              <Button variant="outline" className="gap-2">
-                <Download className="w-4 h-4" />
-                Export
-              </Button>
-            </div>
+            <AdminAnalyticsToolbar
+              chartPeriod={chartPeriod}
+              onChartPeriodChange={setChartPeriod}
+              rangePreset={rangePreset}
+              onRangePresetChange={setRangePreset}
+              useCustomRange={useCustomRange}
+              onUseCustomRangeChange={setUseCustomRange}
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              onDateFromChange={setDateFrom}
+              onDateToChange={setDateTo}
+              onRefresh={() => void loadStats()}
+              isLoading={isLoading}
+              onExport={() => {
+                if (!statsData) return;
+                const rows = sessionData.map((r) => ({ ...r }));
+                downloadCsv(`usage-analytics-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+              }}
+            />
           </div>
         </motion.div>
 
@@ -320,9 +329,9 @@ export function UsageAnalytics() {
                   Users
                 </Button>
                 <Button
-                  variant={selectedMetric === "duration" ? "default" : "outline"}
+                  variant={selectedMetric === "avgDuration" ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setSelectedMetric("duration")}
+                  onClick={() => setSelectedMetric("avgDuration")}
                 >
                   Duration
                 </Button>
@@ -343,7 +352,14 @@ export function UsageAnalytics() {
                 <Legend />
                 <Area
                   type="monotone"
-                  dataKey={selectedMetric}
+                  dataKey={trendKey}
+                  name={
+                    selectedMetric === "avgDuration"
+                      ? "Avg duration (min)"
+                      : selectedMetric === "users"
+                        ? "Sessions (volume)"
+                        : "Sessions"
+                  }
                   stroke="#3B82F6"
                   fillOpacity={1}
                   fill="url(#colorSessions)"

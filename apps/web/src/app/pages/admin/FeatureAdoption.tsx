@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import {
@@ -12,12 +13,11 @@ import {
   Heart,
   Brain,
   Target,
-  Download,
-  RefreshCw,
   Calendar,
   CheckCircle2,
   XCircle,
   Clock,
+  AlertCircle,
 } from "lucide-react";
 import {
   BarChart,
@@ -41,64 +41,65 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
-import { useState } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
+import { api } from "../../../lib/api";
+import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
+import { buildStatsQuery, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
+
+const ICON_MAP: Record<string, typeof Brain> = {
+  "AI Sessions": Brain,
+  "Mood Tracking": Smile,
+  Journal: BookOpen,
+  "Wellness Tools": Heart,
+  "Sleep Tracker": Activity,
+  "Habit Tracker": Activity,
+  "Crisis Resources": AlertCircle,
+};
 
 export function FeatureAdoption() {
-  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
+  const [rangePreset, setRangePreset] = useState<DashboardTimePreset>("30d");
+  const [useCustomRange, setUseCustomRange] = useState(false);
+  const [dateFrom, setDateFrom] = useState(() => {
+    const x = new Date();
+    x.setUTCDate(x.getUTCDate() - 29);
+    return x.toISOString().slice(0, 10);
+  });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dash, setDash] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Overall Feature Adoption
-  const featureAdoptionData = [
-    {
-      feature: "AI Therapy Sessions",
-      adoption: 95,
-      users: 4750,
-      growth: 12.5,
-      icon: Brain,
-      color: "#8b5cf6",
-    },
-    {
-      feature: "Mood Tracking",
-      adoption: 89,
-      users: 4450,
-      growth: 8.3,
-      icon: Smile,
-      color: "#ec4899",
-    },
-    {
-      feature: "Journaling",
-      adoption: 72,
-      users: 3600,
-      growth: 15.7,
-      icon: BookOpen,
-      color: "#3b82f6",
-    },
-    {
-      feature: "Wellness Tools",
-      adoption: 68,
-      users: 3400,
-      growth: 11.2,
-      icon: Heart,
-      color: "#10b981",
-    },
-    {
-      feature: "Progress Reports",
-      adoption: 54,
-      users: 2700,
-      growth: 5.8,
-      icon: Target,
-      color: "#f59e0b",
-    },
-    {
-      feature: "Avatar Customization",
-      adoption: 82,
-      users: 4100,
-      growth: -2.1,
-      icon: Users,
-      color: "#06b6d4",
-    },
-  ];
+  const loadStats = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const q = buildStatsQuery({
+        chartPeriod,
+        rangePreset,
+        useCustomRange,
+        dateFrom,
+        dateTo,
+      });
+      setDash(await api.admin.getStats(q));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [chartPeriod, rangePreset, useCustomRange, dateFrom, dateTo]);
+
+  useEffect(() => {
+    void loadStats();
+  }, [loadStats]);
+
+  const totalUsers = dash?.totalUsers ?? 0;
+  const featureUsage = (dash?.featureUsage || []) as { feature: string; usage: number }[];
+  const featureAdoptionData = featureUsage.map((f, i) => ({
+    feature: f.feature,
+    adoption: f.usage,
+    users: totalUsers > 0 ? Math.round((totalUsers * f.usage) / 100) : 0,
+    growth: 0,
+    icon: ICON_MAP[f.feature] ?? Brain,
+    color: ["#8b5cf6", "#ec4899", "#3b82f6", "#10b981", "#f59e0b", "#06b6d4", "#a855f7"][i % 7],
+  }));
 
   // Adoption Trend Over Time
   const adoptionTrendData = [
@@ -182,42 +183,50 @@ export function FeatureAdoption() {
     { feature: "Progress Reports", avgDays: 12.5 },
   ];
 
-  const stats = [
+  const avgAdopt =
+    featureUsage.length > 0
+      ? Math.round(featureUsage.reduce((s, x) => s + x.usage, 0) / featureUsage.length)
+      : 0;
+  const topFeat = featureUsage.reduce(
+    (a, b) => (a.usage >= b.usage ? a : b),
+    { feature: "—", usage: 0 }
+  );
+  const topStats = [
     {
-      label: "Overall Adoption Rate",
-      value: "76%",
-      change: "+8.7%",
+      label: "Avg relative usage",
+      value: `${avgAdopt}%`,
+      change: "—",
       trend: "up" as const,
       icon: Zap,
       color: "from-purple-500 to-indigo-600",
-      description: "of all features",
+      description: "across tracked features",
     },
     {
-      label: "Most Adopted Feature",
-      value: "AI Sessions",
-      change: "95%",
+      label: "Highest feature",
+      value: topFeat.feature,
+      change: `${topFeat.usage}%`,
       trend: "up" as const,
       icon: Brain,
       color: "from-pink-500 to-rose-600",
-      description: "adoption rate",
+      description: "relative share",
     },
     {
-      label: "Fastest Growing",
-      value: "Journaling",
-      change: "+15.7%",
+      label: "Total sessions (all time)",
+      value: (dash?.totalSessions ?? 0).toLocaleString(),
+      change: "—",
       trend: "up" as const,
       icon: BookOpen,
       color: "from-cyan-500 to-blue-600",
-      description: "this month",
+      description: "platform total",
     },
     {
-      label: "Avg Time to Adopt",
-      value: "5.4 days",
-      change: "-1.2 days",
+      label: "Onboarding completion",
+      value: `${dash?.onboardingStats?.completionRatePercent ?? 0}%`,
+      change: "—",
       trend: "up" as const,
       icon: Clock,
       color: "from-green-500 to-emerald-600",
-      description: "from signup",
+      description: "selected date range",
     },
   ];
 
@@ -237,41 +246,31 @@ export function FeatureAdoption() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Time Range Selector */}
-            <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1 border border-gray-200">
-              {(["7d", "30d", "90d"] as const).map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    timeRange === range
-                      ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-                      : "text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  {range === "7d" ? "7 Days" : range === "30d" ? "30 Days" : "90 Days"}
-                </button>
-              ))}
-            </div>
-
-            <Button className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-
-            <Button
-              variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-          </div>
+          <AdminAnalyticsToolbar
+            chartPeriod={chartPeriod}
+            onChartPeriodChange={setChartPeriod}
+            rangePreset={rangePreset}
+            onRangePresetChange={setRangePreset}
+            useCustomRange={useCustomRange}
+            onUseCustomRangeChange={setUseCustomRange}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            onRefresh={() => void loadStats()}
+            isLoading={isLoading}
+            onExport={() => {
+              if (!dash) return;
+              downloadCsv(`feature-adoption-${new Date().toISOString().slice(0, 10)}.csv`, [
+                ...featureUsage.map((f) => ({ feature: f.feature, usagePercent: f.usage })),
+              ]);
+            }}
+          />
         </motion.div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, index) => (
+          {topStats.map((stat, index) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, scale: 0.9 }}

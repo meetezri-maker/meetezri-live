@@ -178,6 +178,18 @@ export function WellnessChallenges() {
   const [editModal, setEditModal] = useState<Challenge | null>(null);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createDesc, setCreateDesc] = useState("");
+  const [createCategory, setCreateCategory] = useState<Challenge["category"]>("mindfulness");
+  const [createDifficulty, setCreateDifficulty] = useState<Challenge["difficulty"]>("easy");
+  const [createStatus, setCreateStatus] = useState<Challenge["status"]>("draft");
+  const [createStart, setCreateStart] = useState("");
+  const [createEnd, setCreateEnd] = useState("");
+  const [createRewardPoints, setCreateRewardPoints] = useState(100);
+  const [createBadgeName, setCreateBadgeName] = useState("");
+  const [createGoal, setCreateGoal] = useState("");
+  const [createDailyTasks, setCreateDailyTasks] = useState("");
+  const [isCreatingChallenge, setIsCreatingChallenge] = useState(false);
 
   useEffect(() => {
     const fetchChallenges = async () => {
@@ -200,6 +212,70 @@ export function WellnessChallenges() {
 
     fetchChallenges();
   }, []);
+
+  const resetCreateForm = () => {
+    const today = new Date();
+    const inTwoWeeks = new Date(today);
+    inTwoWeeks.setDate(inTwoWeeks.getDate() + 14);
+    setCreateName("");
+    setCreateDesc("");
+    setCreateCategory("mindfulness");
+    setCreateDifficulty("easy");
+    setCreateStatus("draft");
+    setCreateStart(today.toISOString().slice(0, 10));
+    setCreateEnd(inTwoWeeks.toISOString().slice(0, 10));
+    setCreateRewardPoints(100);
+    setCreateBadgeName("");
+    setCreateGoal("");
+    setCreateDailyTasks("");
+  };
+
+  const handleCreateChallenge = async () => {
+    if (!createName.trim()) {
+      toast.error("Challenge name is required");
+      return;
+    }
+    if (!createStart || !createEnd) {
+      toast.error("Start and end dates are required");
+      return;
+    }
+    const start = new Date(createStart);
+    const end = new Date(createEnd);
+    if (end < start) {
+      toast.error("End date must be on or after start date");
+      return;
+    }
+    setIsCreatingChallenge(true);
+    try {
+      const dailyTasks = createDailyTasks
+        .split("\n")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const created = await api.wellness.createChallenge({
+        title: createName.trim(),
+        description: createDesc.trim() || null,
+        category: createCategory,
+        start_date: start.toISOString(),
+        end_date: end.toISOString(),
+        reward_points: createRewardPoints,
+        goal_criteria: {
+          status: createStatus,
+          difficulty: createDifficulty,
+          goal: createGoal.trim(),
+          dailyTasks,
+          badge: createBadgeName.trim() || undefined,
+        },
+      });
+      setChallenges((prev) => [mapApiChallenge(created), ...prev]);
+      toast.success("Challenge created");
+      setShowCreateModal(false);
+      resetCreateForm();
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to create challenge");
+    } finally {
+      setIsCreatingChallenge(false);
+    }
+  };
 
   const stats = {
     activeChallenges: challenges.filter((c) => c.status === "active").length,
@@ -271,9 +347,13 @@ export function WellnessChallenges() {
           </div>
 
           <motion.button
+            type="button"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => {
+              resetCreateForm();
+              setShowCreateModal(true);
+            }}
             className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg"
           >
             <Plus className="w-4 h-4" />
@@ -610,7 +690,7 @@ export function WellnessChallenges() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
             onClick={() => setShowCreateModal(false)}
           >
             <motion.div
@@ -628,6 +708,8 @@ export function WellnessChallenges() {
                     type="text"
                     placeholder="e.g., 21-Day Fitness Challenge"
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={createName}
+                    onChange={(e) => setCreateName(e.target.value)}
                   />
                 </div>
 
@@ -637,30 +719,83 @@ export function WellnessChallenges() {
                     placeholder="What will participants do in this challenge?"
                     rows={3}
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={createDesc}
+                    onChange={(e) => setCreateDesc(e.target.value)}
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                    <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
-                      <option>Mindfulness</option>
-                      <option>Exercise</option>
-                      <option>Sleep</option>
-                      <option>Journaling</option>
-                      <option>Social</option>
-                      <option>Habits</option>
+                    <select
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={createCategory}
+                      onChange={(e) =>
+                        setCreateCategory(e.target.value as Challenge["category"])
+                      }
+                    >
+                      <option value="mindfulness">Mindfulness</option>
+                      <option value="exercise">Exercise</option>
+                      <option value="sleep">Sleep</option>
+                      <option value="journaling">Journaling</option>
+                      <option value="social">Social</option>
+                      <option value="habits">Habits</option>
                     </select>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
-                    <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
-                      <option>Easy</option>
-                      <option>Medium</option>
-                      <option>Hard</option>
+                    <select
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={createDifficulty}
+                      onChange={(e) =>
+                        setCreateDifficulty(e.target.value as Challenge["difficulty"])
+                      }
+                    >
+                      <option value="easy">Easy</option>
+                      <option value="medium">Medium</option>
+                      <option value="hard">Hard</option>
                     </select>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <select
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={createStatus}
+                      onChange={(e) =>
+                        setCreateStatus(e.target.value as Challenge["status"])
+                      }
+                    >
+                      <option value="draft">Draft</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="active">Active</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Goal summary</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Complete 7 sessions"
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={createGoal}
+                      onChange={(e) => setCreateGoal(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Daily tasks (one per line)</label>
+                  <textarea
+                    placeholder="Meditate 5 min&#10;Journal one page"
+                    rows={3}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                    value={createDailyTasks}
+                    onChange={(e) => setCreateDailyTasks(e.target.value)}
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -669,6 +804,8 @@ export function WellnessChallenges() {
                     <input
                       type="date"
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={createStart}
+                      onChange={(e) => setCreateStart(e.target.value)}
                     />
                   </div>
 
@@ -677,6 +814,8 @@ export function WellnessChallenges() {
                     <input
                       type="date"
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={createEnd}
+                      onChange={(e) => setCreateEnd(e.target.value)}
                     />
                   </div>
                 </div>
@@ -686,8 +825,11 @@ export function WellnessChallenges() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Reward Points</label>
                     <input
                       type="number"
+                      min={0}
                       placeholder="100"
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={createRewardPoints}
+                      onChange={(e) => setCreateRewardPoints(Number(e.target.value) || 0)}
                     />
                   </div>
 
@@ -697,6 +839,8 @@ export function WellnessChallenges() {
                       type="text"
                       placeholder="Challenge Master"
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={createBadgeName}
+                      onChange={(e) => setCreateBadgeName(e.target.value)}
                     />
                   </div>
                 </div>
@@ -704,6 +848,7 @@ export function WellnessChallenges() {
 
               <div className="flex gap-3 mt-6">
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setShowCreateModal(false)}
@@ -713,12 +858,14 @@ export function WellnessChallenges() {
                 </motion.button>
 
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
+                  disabled={isCreatingChallenge}
+                  onClick={handleCreateChallenge}
+                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium disabled:opacity-60"
                 >
-                  Create Challenge
+                  {isCreatingChallenge ? "Creating…" : "Create Challenge"}
                 </motion.button>
               </div>
             </motion.div>
@@ -732,7 +879,7 @@ export function WellnessChallenges() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
               onClick={() => setViewStatsModal(null)}
             >
               <motion.div
@@ -803,7 +950,7 @@ export function WellnessChallenges() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
               onClick={() => setEditModal(null)}
             >
               <motion.div

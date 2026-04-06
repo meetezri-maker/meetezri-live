@@ -15,12 +15,22 @@ const statsCache = new Map<string, { data: DashboardStats; timestamp: number }>(
 export type DashboardStatsQuery = {
   chartPeriod?: 'week' | 'month' | 'year';
   sessionWeekOffset?: number;
+  /** Inclusive number of days for session/hourly charts (default 7, max 366) */
+  rangeDays?: number;
+  /** Custom UTC date range (YYYY-MM-DD); when both set, rangeDays is ignored */
+  dateFrom?: string;
+  dateTo?: string;
+  /** Skip in-memory stats cache (e.g. explicit refresh) */
+  skipCache?: boolean;
 };
 
 function statsCacheKey(opts: DashboardStatsQuery): string {
   return JSON.stringify({
     chartPeriod: opts.chartPeriod ?? 'month',
     sessionWeekOffset: opts.sessionWeekOffset ?? 0,
+    rangeDays: opts.rangeDays ?? 7,
+    dateFrom: opts.dateFrom ?? null,
+    dateTo: opts.dateTo ?? null,
   });
 }
 
@@ -38,6 +48,40 @@ function addUtcDays(d: Date, n: number): Date {
   x.setUTCDate(x.getUTCDate() + n);
   return x;
 }
+
+function utcDayStart(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
+}
+
+/** Parse dashboard date range: custom dates, or rolling window ending (today UTC − week offset). */
+function parseDashboardRange(
+  opts: DashboardStatsQuery,
+  nowMs: number
+): { start: Date; end: Date } {
+  if (opts.dateFrom && opts.dateTo) {
+    const start = new Date(`${opts.dateFrom}T00:00:00.000Z`);
+    const end = new Date(`${opts.dateTo}T23:59:59.999Z`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return parseDashboardRange({ ...opts, dateFrom: undefined, dateTo: undefined }, nowMs);
+    }
+    if (start > end) {
+      return { start: end, end: start };
+    }
+    return { start, end };
+  }
+  const rangeDays = Math.min(366, Math.max(1, opts.rangeDays ?? 7));
+  const weekOff = Math.min(52, Math.max(0, opts.sessionWeekOffset ?? 0));
+  const now = new Date(nowMs);
+  const end = utcDayStart(now);
+  end.setUTCDate(end.getUTCDate() - weekOff * 7);
+  end.setUTCHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - (rangeDays - 1));
+  start.setUTCHours(0, 0, 0, 0);
+  return { start, end };
+}
+
+const AVATAR_COLORS = ['#8b5cf6', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#06b6d4', '#a855f7', '#64748b'];
 
 // Simple in-memory cache for users list
 const USERS_CACHE_TTL = 30 * 1000; // 30 seconds
@@ -78,32 +122,87 @@ function invalidateErrorLogsCache() {
   errorLogsCache.clear();
 }
 
+/** Cumulative user totals at each bucket end, aligned to the selected dashboard range. */
+async function queryUserGrowthSeries(
+  chartPeriod: 'week' | 'month' | 'year',
+  rangeStart: Date,
+  rangeEnd: Date
+): Promise<Array<{ label: string; users: bigint }>> {
+  const rs = rangeStart;
+  const re = rangeEnd;
+  if (chartPeriod === 'week') {
+    return prisma.$queryRaw<Array<{ label: string; users: bigint }>>`
+      WITH buckets AS (
+        SELECT generate_series(
+          date_trunc('week', ${rs}::timestamptz),
+          date_trunc('week', ${re}::timestamptz),
+          interval '1 week'
+        ) AS w
+      )
+      SELECT
+        to_char(w, 'Mon DD') AS label,
+        (SELECT COUNT(*)::bigint FROM profiles p WHERE p.created_at < w + interval '1 week') AS users
+      FROM buckets
+      ORDER BY w
+    `;
+  }
+  if (chartPeriod === 'year') {
+    return prisma.$queryRaw<Array<{ label: string; users: bigint }>>`
+      WITH buckets AS (
+        SELECT generate_series(
+          date_trunc('year', ${rs}::timestamptz),
+          date_trunc('year', ${re}::timestamptz),
+          interval '1 year'
+        ) AS y
+      )
+      SELECT
+        to_char(y, 'YYYY') AS label,
+        (SELECT COUNT(*)::bigint FROM profiles p WHERE p.created_at < y + interval '1 year') AS users
+      FROM buckets
+      ORDER BY y
+    `;
+  }
+  return prisma.$queryRaw<Array<{ label: string; users: bigint }>>`
+    WITH buckets AS (
+      SELECT generate_series(
+        date_trunc('month', ${rs}::timestamptz),
+        date_trunc('month', ${re}::timestamptz),
+        interval '1 month'
+      ) AS m
+    )
+    SELECT
+      to_char(m, 'Mon YY') AS label,
+      (SELECT COUNT(*)::bigint FROM profiles p WHERE p.created_at < m + interval '1 month') AS users
+    FROM buckets
+    ORDER BY m
+  `;
+}
+
 export async function getDashboardStats(
   opts: DashboardStatsQuery = {}
 ): Promise<DashboardStats> {
   const now = Date.now();
   const cacheKey = statsCacheKey(opts);
-  const cached = statsCache.get(cacheKey);
-  if (cached && now - cached.timestamp < STATS_CACHE_TTL) {
-    return cached.data;
+  if (!opts.skipCache) {
+    const cached = statsCache.get(cacheKey);
+    if (cached && now - cached.timestamp < STATS_CACHE_TTL) {
+      return cached.data;
+    }
   }
 
   const chartPeriod = opts.chartPeriod ?? 'month';
   const sessionWeekOffset = Math.min(52, Math.max(0, opts.sessionWeekOffset ?? 0));
 
-  const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
-
-  const weekStart = addUtcDays(utcMonday(new Date(now)), -sessionWeekOffset * 7);
-  const weekEnd = addUtcDays(weekStart, 7);
+  const { start: rangeStart, end: rangeEnd } = parseDashboardRange(opts, now);
 
   const [
     countsResult,
     revenueResult,
     hourlyStats,
-    dailyStatsWeek,
-    userGrowthMonthly,
-    userGrowthWeekly,
-    userGrowthYearly,
+    dailyStatsRange,
+    avatarRows,
+    onboardingDailyRows,
+    inactiveBuckets,
     revenueMonthly,
     revenueWeekly,
     revenueYearly,
@@ -128,13 +227,13 @@ export async function getDashboardStats(
       _sum: { amount: true },
       where: { status: 'active' }
     }),
-    // 3. Hourly stats for last 7 days - Optimized
+    // 3. Hourly distribution across the selected date range
     prisma.$queryRaw`
       SELECT 
         EXTRACT(HOUR FROM started_at) as hour,
-        COUNT(*) as count
+        COUNT(*)::bigint as count
       FROM app_sessions
-      WHERE started_at >= ${sevenDaysAgo}
+      WHERE started_at >= ${rangeStart} AND started_at <= ${rangeEnd}
       GROUP BY EXTRACT(HOUR FROM started_at)
     `,
     prisma.$queryRaw`
@@ -143,40 +242,38 @@ export async function getDashboardStats(
         COUNT(*)::bigint as count,
         COALESCE(SUM(duration_minutes), 0)::bigint as total_duration
       FROM app_sessions
-      WHERE started_at >= ${weekStart} AND started_at < ${weekEnd}
+      WHERE started_at >= ${rangeStart} AND started_at <= ${rangeEnd}
       GROUP BY DATE(started_at AT TIME ZONE 'UTC')
     `,
-    prisma.$queryRaw<Array<{ label: string; users: bigint }>>`
-      WITH months AS (
-        SELECT generate_series(
-          date_trunc('month', timezone('utc'::text, now())) - interval '11 months',
-          date_trunc('month', timezone('utc'::text, now())),
-          interval '1 month'
-        ) AS m
-      )
-      SELECT 
-        to_char(m, 'Mon YY') AS label,
-        (SELECT COUNT(*)::bigint FROM profiles p WHERE p.created_at < m + interval '1 month') AS users
-      FROM months
-      ORDER BY m
-    `,
-    prisma.$queryRaw<Array<{ label: string; users: bigint }>>`
-      SELECT 
-        to_char(date_trunc('week', timezone('utc'::text, created_at)), 'Mon DD') AS label,
-        COUNT(*)::bigint AS users
+    prisma.$queryRaw<Array<{ name: string; c: bigint }>>`
+      SELECT COALESCE(NULLIF(TRIM(selected_avatar), ''), 'Not set') AS name, COUNT(*)::bigint AS c
       FROM profiles
-      WHERE created_at >= timezone('utc', now()) - interval '12 weeks'
-      GROUP BY date_trunc('week', timezone('utc'::text, created_at))
-      ORDER BY date_trunc('week', timezone('utc'::text, created_at))
+      GROUP BY 1
+      ORDER BY c DESC
+      LIMIT 12
     `,
-    prisma.$queryRaw<Array<{ label: string; users: bigint }>>`
+    prisma.$queryRaw<Array<{ d: Date; signups: bigint; completions: bigint }>>`
       SELECT 
-        to_char(date_trunc('year', timezone('utc'::text, created_at)), 'YYYY') AS label,
-        COUNT(*)::bigint AS users
+        DATE(created_at AT TIME ZONE 'UTC') AS d,
+        COUNT(*)::bigint AS signups,
+        COUNT(*) FILTER (WHERE onboarding_completed = true)::bigint AS completions
       FROM profiles
-      WHERE created_at >= timezone('utc', now()) - interval '5 years'
-      GROUP BY date_trunc('year', timezone('utc'::text, created_at))
-      ORDER BY date_trunc('year', timezone('utc'::text, created_at))
+      WHERE created_at >= ${rangeStart} AND created_at <= ${rangeEnd}
+      GROUP BY DATE(created_at AT TIME ZONE 'UTC')
+      ORDER BY d
+    `,
+    prisma.$queryRaw<Array<{ d30: bigint; d60: bigint; d90: bigint }>>`
+      SELECT 
+        COUNT(*) FILTER (
+          WHERE updated_at < timezone('utc', now()) - interval '30 days'
+            AND updated_at >= timezone('utc', now()) - interval '60 days'
+        )::bigint AS d30,
+        COUNT(*) FILTER (
+          WHERE updated_at < timezone('utc', now()) - interval '60 days'
+            AND updated_at >= timezone('utc', now()) - interval '90 days'
+        )::bigint AS d60,
+        COUNT(*) FILTER (WHERE updated_at < timezone('utc', now()) - interval '90 days')::bigint AS d90
+      FROM profiles
     `,
     prisma.$queryRaw<Array<{ label: string; revenue: bigint }>>`
       SELECT 
@@ -226,10 +323,17 @@ export async function getDashboardStats(
 
   const revenue = revenueResult._sum.amount?.toNumber() || 0;
 
-  const sessionActivity = Array.from({ length: 7 }).map((_, i) => {
-    const d = addUtcDays(weekStart, i);
+  const startDay = utcDayStart(rangeStart);
+  const endDay = utcDayStart(rangeEnd);
+  const dayCount = Math.max(
+    1,
+    Math.round((endDay.getTime() - startDay.getTime()) / (24 * 60 * 60 * 1000)) + 1
+  );
+
+  const sessionActivity = Array.from({ length: dayCount }).map((_, i) => {
+    const d = addUtcDays(startDay, i);
     const ymd = d.toISOString().slice(0, 10);
-    const stat = (dailyStatsWeek as any[]).find((s: any) => {
+    const stat = (dailyStatsRange as any[]).find((s: any) => {
       const raw = s.date;
       const key =
         typeof raw === 'string'
@@ -237,9 +341,12 @@ export async function getDashboardStats(
           : new Date(raw).toISOString().slice(0, 10);
       return key === ymd;
     });
-    const dayName = d.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+    const dayLabel =
+      dayCount > 14
+        ? `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
+        : d.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
     return {
-      day: dayName,
+      day: dayLabel,
       sessions: stat ? Number(stat.count) : 0,
       duration:
         stat && Number(stat.count) > 0
@@ -274,9 +381,55 @@ export async function getDashboardStats(
     }
     return {
       hour: label,
+      hourNum: hour,
       sessions: bucket.sessions
     };
   });
+
+  const avatarTotal = (avatarRows as Array<{ name: string; c: bigint }>).reduce(
+    (s, r) => s + Number(r.c),
+    0
+  );
+  const avatarDistribution = (avatarRows as Array<{ name: string; c: bigint }>).map((r, i) => ({
+    name: r.name,
+    value: avatarTotal > 0 ? Math.round((Number(r.c) / avatarTotal) * 100) : 0,
+    count: Number(r.c),
+    color: AVATAR_COLORS[i % AVATAR_COLORS.length],
+  }));
+
+  const inactiveRow = (inactiveBuckets as any[])[0] || { d30: 0, d60: 0, d90: 0 };
+  const winbackStats = {
+    atRisk30: Number(inactiveRow.d30 || 0),
+    dormant60: Number(inactiveRow.d60 || 0),
+    lost90: Number(inactiveRow.d90 || 0),
+  };
+
+  const onboardingByDayMap = new Map<string, { signups: number; completions: number }>();
+  for (const row of onboardingDailyRows as Array<{ d: Date; signups: bigint; completions: bigint }>) {
+    const key =
+      typeof row.d === 'string'
+        ? (row.d as string).slice(0, 10)
+        : new Date(row.d).toISOString().slice(0, 10);
+    onboardingByDayMap.set(key, {
+      signups: Number(row.signups),
+      completions: Number(row.completions),
+    });
+  }
+
+  const onboardingDaily: Array<{ date: string; signups: number; completions: number }> = [];
+  for (let i = 0; i < dayCount; i++) {
+    const d = addUtcDays(startDay, i);
+    const key = d.toISOString().slice(0, 10);
+    const o = onboardingByDayMap.get(key);
+    onboardingDaily.push({
+      date: key,
+      signups: o?.signups ?? 0,
+      completions: o?.completions ?? 0,
+    });
+  }
+
+  const onboardingSignupsInRange = onboardingDaily.reduce((s, x) => s + x.signups, 0);
+  const onboardingCompletedInRange = onboardingDaily.reduce((s, x) => s + x.completions, 0);
 
   // System Health - Still hard to get real metrics without infra access
   const systemHealth = [
@@ -286,17 +439,7 @@ export async function getDashboardStats(
     { name: "CDN Performance", value: "98%", status: "excellent", color: "text-green-600", percentage: 98 },
   ];
 
-  const ugMonth = (userGrowthMonthly as Array<{ label: string; users: bigint }>).map((r) => ({
-    month: r.label,
-    users: Number(r.users),
-    orgs: 0,
-  }));
-  const ugWeek = (userGrowthWeekly as Array<{ label: string; users: bigint }>).map((r) => ({
-    month: r.label,
-    users: Number(r.users),
-    orgs: 0,
-  }));
-  const ugYear = (userGrowthYearly as Array<{ label: string; users: bigint }>).map((r) => ({
+  const ugFromSeries = (userGrowthSeries as Array<{ label: string; users: bigint }>).map((r) => ({
     month: r.label,
     users: Number(r.users),
     orgs: 0,
@@ -306,18 +449,7 @@ export async function getDashboardStats(
     { month: '—', users: totalUsers, orgs: 0 },
   ];
 
-  let userGrowth =
-    chartPeriod === 'week'
-      ? ugWeek.length
-        ? ugWeek
-        : userGrowthFallback
-      : chartPeriod === 'year'
-        ? ugYear.length
-          ? ugYear
-          : userGrowthFallback
-        : ugMonth.length
-          ? ugMonth
-          : userGrowthFallback;
+  let userGrowth = ugFromSeries.length ? ugFromSeries : userGrowthFallback;
 
   const revFromTx = (
     rows: Array<{ label: string; revenue: bigint }>
@@ -348,12 +480,7 @@ export async function getDashboardStats(
           ? revMonth
           : revenueFallback;
 
-  const userGrowthIsMock =
-    chartPeriod === 'week'
-      ? ugWeek.length === 0
-      : chartPeriod === 'year'
-        ? ugYear.length === 0
-        : ugMonth.length === 0;
+  const userGrowthIsMock = ugFromSeries.length === 0;
 
   const revenueIsMock =
     chartPeriod === 'week'
@@ -408,9 +535,25 @@ export async function getDashboardStats(
     mockedSections,
     chartPeriod,
     sessionWeekOffset,
+    rangeDays: dayCount,
+    rangeStart: rangeStart.toISOString(),
+    rangeEnd: rangeEnd.toISOString(),
+    avatarDistribution,
+    onboardingStats: {
+      signupsInRange: onboardingSignupsInRange,
+      completionsInRange: onboardingCompletedInRange,
+      completionRatePercent:
+        onboardingSignupsInRange > 0
+          ? Math.round((onboardingCompletedInRange / onboardingSignupsInRange) * 1000) / 10
+          : 0,
+      daily: onboardingDaily,
+    },
+    winbackStats,
   };
 
-  statsCache.set(cacheKey, { data: result, timestamp: Date.now() });
+  if (!opts.skipCache) {
+    statsCache.set(cacheKey, { data: result, timestamp: Date.now() });
+  }
   return result;
 }
 

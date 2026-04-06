@@ -26,6 +26,7 @@ export const dashboardStatsSchema = z.object({
   })),
   hourlyActivity: z.array(z.object({
     hour: z.string(),
+    hourNum: z.number().optional(),
     sessions: z.number()
   })),
   revenueData: z.array(z.object({
@@ -44,6 +45,40 @@ export const dashboardStatsSchema = z.object({
   mockedSections: z.array(z.string()).optional(),
   chartPeriod: z.enum(['week', 'month', 'year']).optional(),
   sessionWeekOffset: z.number().optional(),
+  rangeDays: z.number().optional(),
+  rangeStart: z.string().optional(),
+  rangeEnd: z.string().optional(),
+  avatarDistribution: z
+    .array(
+      z.object({
+        name: z.string(),
+        value: z.number(),
+        count: z.number().optional(),
+        color: z.string(),
+      })
+    )
+    .optional(),
+  onboardingStats: z
+    .object({
+      signupsInRange: z.number(),
+      completionsInRange: z.number(),
+      completionRatePercent: z.number(),
+      daily: z.array(
+        z.object({
+          date: z.string(),
+          signups: z.number(),
+          completions: z.number(),
+        })
+      ),
+    })
+    .optional(),
+  winbackStats: z
+    .object({
+      atRisk30: z.number(),
+      dormant60: z.number(),
+      lost90: z.number(),
+    })
+    .optional(),
 });
 
 export type DashboardStats = z.infer<typeof dashboardStatsSchema>;

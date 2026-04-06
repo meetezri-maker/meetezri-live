@@ -25,7 +25,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { api } from "@/lib/api";
@@ -66,85 +66,109 @@ interface NudgeCampaignAggregate {
   createdAt: Date;
 }
 
+function csvEscapeCell(value: string) {
+  if (/[",\r\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
 export function NudgePerformance() {
-  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [periodMode, setPeriodMode] = useState<"month" | "custom">("month");
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [customStart, setCustomStart] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  });
+  const [customEnd, setCustomEnd] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
   const [notifications, setNotifications] = useState<NudgeNotification[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        const data = await api.admin.getManualNotifications();
-        const mapped: NudgeNotification[] = Array.isArray(data)
-          ? data.map((n: any) => {
-              const metadata = n.metadata || {};
-              const channelRaw = metadata.channel as string | undefined;
-              const channel: NudgeNotification["channel"] =
-                channelRaw === "push" ||
-                channelRaw === "email" ||
-                channelRaw === "in-app" ||
-                channelRaw === "sms"
-                  ? channelRaw
-                  : "push";
-              const count =
-                typeof metadata.target_count === "number"
-                  ? metadata.target_count
-                  : 1;
-              const createdAt = new Date(n.sent_at || n.created_at);
-              const audienceRaw = metadata.target_audience as string | undefined;
-              let audience = "Targeted";
-              if (audienceRaw === "all") {
-                audience = "All Users";
-              } else if (audienceRaw) {
-                audience =
-                  audienceRaw.charAt(0).toUpperCase() +
-                  audienceRaw.slice(1) +
-                  " Users";
-              }
-              const campaignKey = [
-                n.title || "",
-                metadata.target_audience || "",
-                metadata.schedule_type || "",
-                createdAt.toISOString().slice(0, 16),
-              ].join("|");
-              return {
-                id: n.id,
-                title: n.title || "Untitled nudge",
-                channel,
-                audience,
-                sentCount: count,
-                createdAt,
-                campaignKey,
-              };
-            })
-          : [];
-        setNotifications(mapped);
-      } catch (error: any) {
-        console.error("Failed to load nudge performance data", error);
-        toast.error(error?.message || "Failed to load nudge performance data");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadData();
+  const loadNotifications = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const data = await api.admin.getManualNotifications();
+      const mapped: NudgeNotification[] = Array.isArray(data)
+        ? data.map((n: any) => {
+            const metadata = n.metadata || {};
+            const channelRaw = metadata.channel as string | undefined;
+            const channel: NudgeNotification["channel"] =
+              channelRaw === "push" ||
+              channelRaw === "email" ||
+              channelRaw === "in-app" ||
+              channelRaw === "sms"
+                ? channelRaw
+                : "push";
+            const count =
+              typeof metadata.target_count === "number"
+                ? metadata.target_count
+                : 1;
+            const createdAt = new Date(n.sent_at || n.created_at);
+            const audienceRaw = metadata.target_audience as string | undefined;
+            let audience = "Targeted";
+            if (audienceRaw === "all") {
+              audience = "All Users";
+            } else if (audienceRaw) {
+              audience =
+                audienceRaw.charAt(0).toUpperCase() +
+                audienceRaw.slice(1) +
+                " Users";
+            }
+            const campaignKey = [
+              n.title || "",
+              metadata.target_audience || "",
+              metadata.schedule_type || "",
+              createdAt.toISOString().slice(0, 16),
+            ].join("|");
+            return {
+              id: n.id,
+              title: n.title || "Untitled nudge",
+              channel,
+              audience,
+              sentCount: count,
+              createdAt,
+              campaignKey,
+            };
+          })
+        : [];
+      setNotifications(mapped);
+    } catch (error: any) {
+      console.error("Failed to load nudge performance data", error);
+      toast.error(error?.message || "Failed to load nudge performance data");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const rangeStart = useMemo(() => {
-    const d = new Date();
-    if (timeRange === "7d") {
-      d.setDate(d.getDate() - 7);
-    } else if (timeRange === "30d") {
-      d.setDate(d.getDate() - 30);
-    } else {
-      d.setDate(d.getDate() - 90);
+  useEffect(() => {
+    loadNotifications();
+  }, [refreshKey, loadNotifications]);
+
+  const { rangeStart, rangeEnd } = useMemo(() => {
+    if (periodMode === "custom") {
+      const start = new Date(customStart);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(customEnd);
+      end.setHours(23, 59, 59, 999);
+      return { rangeStart: start, rangeEnd: end };
     }
-    return d;
-  }, [timeRange]);
+    const start = new Date(selectedYear, selectedMonth - 1, 1);
+    const end = new Date(selectedYear, selectedMonth, 0, 23, 59, 59, 999);
+    return { rangeStart: start, rangeEnd: end };
+  }, [periodMode, selectedYear, selectedMonth, customStart, customEnd]);
 
   const filteredNotifications = useMemo(
-    () => notifications.filter((n) => n.createdAt >= rangeStart),
-    [notifications, rangeStart]
+    () =>
+      notifications.filter(
+        (n) => n.createdAt >= rangeStart && n.createdAt <= rangeEnd
+      ),
+    [notifications, rangeStart, rangeEnd]
   );
 
   const campaignAggregates = useMemo(() => {
@@ -261,7 +285,7 @@ export function NudgePerformance() {
       ...c,
       value: total ? Math.round((c.count / total) * 100) : 0,
     }));
-  }, [filteredNotifications]);
+  }, [campaignAggregates]);
 
   const topTemplates = useMemo(
     () =>
@@ -329,52 +353,98 @@ export function NudgePerformance() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Time Range Selector */}
-            <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1 border border-gray-200">
-              {(["7d", "30d", "90d"] as const).map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    timeRange === range
-                      ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-                      : "text-gray-600 hover:bg-gray-200"
-                  }`}
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900"
+              value={periodMode}
+              onChange={(e) =>
+                setPeriodMode(e.target.value as "month" | "custom")
+              }
+            >
+              <option value="month">Month / Year</option>
+              <option value="custom">Custom range</option>
+            </select>
+
+            {periodMode === "month" ? (
+              <>
+                <select
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
                 >
-                  {range === "7d" ? "7 Days" : range === "30d" ? "30 Days" : "90 Days"}
-                </button>
-              ))}
-            </div>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>
+                      {new Date(2000, m - 1, 1).toLocaleString("default", {
+                        month: "long",
+                      })}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                >
+                  {Array.from({ length: 8 }, (_, i) => now.getFullYear() - i).map(
+                    (y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    )
+                  )}
+                </select>
+              </>
+            ) : (
+              <>
+                <input
+                  type="date"
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm"
+                  value={customStart}
+                  onChange={(e) => setCustomStart(e.target.value)}
+                />
+                <span className="text-sm text-gray-500">to</span>
+                <input
+                  type="date"
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm"
+                  value={customEnd}
+                  onChange={(e) => setCustomEnd(e.target.value)}
+                />
+              </>
+            )}
 
             <Button
+              type="button"
               className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white"
+              disabled={isLoading}
               onClick={() => {
-                const csvContent = [
+                const rows: string[][] = [
                   ["Metric", "Value"],
                   ["Total Nudges Sent", totalSent.toString()],
                   ["Nudge Campaigns", distinctCampaigns.toString()],
                   ["Channels Used", distinctChannels.toString()],
                   ["Avg Recipients per Nudge", avgRecipients.toFixed(1)],
-                  [""],
+                  ["Period", `${rangeStart.toISOString().slice(0, 10)} – ${rangeEnd.toISOString().slice(0, 10)}`],
+                  [],
                   ["Campaign Performance"],
                   ["Campaign", "Sent"],
-                  ...campaignPerformance.map(c => [
-                    c.name,
+                  ...campaignPerformance.map((c) => [
+                    csvEscapeCell(c.name),
                     c.sent.toString(),
-                  ])
-                ].map(row => row.join(",")).join("\n");
-
-                // Create download link
-                const blob = new Blob([csvContent], { type: "text/csv" });
+                  ]),
+                ];
+                const csvContent = rows.map((row) => row.join(",")).join("\r\n");
+                const blob = new Blob(["\uFEFF" + csvContent], {
+                  type: "text/csv;charset=utf-8",
+                });
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
-                a.download = `nudge-performance-report-${new Date().toISOString().split('T')[0]}.csv`;
+                a.download = `nudge-performance-report-${new Date().toISOString().split("T")[0]}.csv`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(url);
+                toast.success("Report exported");
               }}
             >
               <Download className="w-4 h-4 mr-2" />
@@ -382,11 +452,15 @@ export function NudgePerformance() {
             </Button>
 
             <Button
+              type="button"
               variant="outline"
               className="border-gray-300 text-gray-700 hover:bg-gray-100"
-              onClick={() => window.location.reload()}
+              disabled={isLoading}
+              onClick={() => setRefreshKey((k) => k + 1)}
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw
+                className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`}
+              />
             </Button>
           </div>
         </motion.div>

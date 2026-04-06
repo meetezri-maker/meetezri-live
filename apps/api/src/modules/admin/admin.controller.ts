@@ -56,7 +56,20 @@ export async function getDashboardStatsHandler(
       52,
       Math.max(0, parseInt(q.sessionWeekOffset || '0', 10) || 0)
     );
-    const stats = await getDashboardStats({ chartPeriod, sessionWeekOffset });
+    const rangeDaysRaw = parseInt(q.rangeDays || '', 10);
+    const rangeDays =
+      Number.isFinite(rangeDaysRaw) && rangeDaysRaw > 0
+        ? Math.min(366, Math.max(1, rangeDaysRaw))
+        : undefined;
+    const dateFrom = q.dateFrom?.trim() || undefined;
+    const dateTo = q.dateTo?.trim() || undefined;
+    const stats = await getDashboardStats({
+      chartPeriod,
+      sessionWeekOffset,
+      rangeDays,
+      dateFrom,
+      dateTo,
+    });
     return reply.code(200).send(stats);
   } catch (error) {
     request.log.error(error);

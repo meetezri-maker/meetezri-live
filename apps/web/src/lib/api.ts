@@ -568,6 +568,24 @@ export const api = {
       return handleResponse(res, 'Failed to fetch wellness challenges');
     },
 
+    async createChallenge(data: {
+      title: string;
+      description?: string | null;
+      category?: string | null;
+      start_date: string;
+      end_date: string;
+      reward_points?: number | null;
+      goal_criteria?: unknown | null;
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/wellness/challenges`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to create wellness challenge');
+    },
+
     async create(data: any) {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/wellness`, {
@@ -837,13 +855,24 @@ export const api = {
 
   // Admin API
   admin: {
-    async getStats(params?: { chartPeriod?: 'week' | 'month' | 'year'; sessionWeekOffset?: number }) {
+    async getStats(params?: {
+      chartPeriod?: 'week' | 'month' | 'year';
+      sessionWeekOffset?: number;
+      rangeDays?: number;
+      dateFrom?: string;
+      dateTo?: string;
+    }) {
       const headers = await getHeaders();
       const search = new URLSearchParams();
       if (params?.chartPeriod) search.set('chartPeriod', params.chartPeriod);
       if (params?.sessionWeekOffset != null && params.sessionWeekOffset > 0) {
         search.set('sessionWeekOffset', String(params.sessionWeekOffset));
       }
+      if (params?.rangeDays != null && params.rangeDays > 0) {
+        search.set('rangeDays', String(params.rangeDays));
+      }
+      if (params?.dateFrom) search.set('dateFrom', params.dateFrom);
+      if (params?.dateTo) search.set('dateTo', params.dateTo);
       const qs = search.toString();
       const res = await fetch(`${API_URL}/admin/stats${qs ? `?${qs}` : ''}`, {
         method: 'GET',

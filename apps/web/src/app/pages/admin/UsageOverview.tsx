@@ -7,8 +7,6 @@ import {
   TrendingUp,
   TrendingDown,
   Calendar,
-  Download,
-  RefreshCw,
   BarChart3,
   PieChart,
   Zap,
@@ -31,53 +29,67 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card } from "@/app/components/ui/card";
-import { Button } from "@/app/components/ui/button";
 import { api } from "../../../lib/api";
+import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
+import { buildStatsQuery, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
+
+function rollingSum(sessions: number[], windowSize: number, i: number): number {
+  let s = 0;
+  const start = Math.max(0, i - windowSize + 1);
+  for (let j = start; j <= i; j++) s += sessions[j] || 0;
+  return s;
+}
 
 export function UsageOverview() {
-  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("30d");
-  const [viewMode, setViewMode] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
+  const [rangePreset, setRangePreset] = useState<DashboardTimePreset>("30d");
+  const [useCustomRange, setUseCustomRange] = useState(false);
+  const [dateFrom, setDateFrom] = useState(() => {
+    const x = new Date();
+    x.setUTCDate(x.getUTCDate() - 29);
+    return x.toISOString().slice(0, 10);
+  });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+
   const [statsData, setStatsData] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadStats = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const q = buildStatsQuery({
+        chartPeriod,
+        rangePreset,
+        useCustomRange,
+        dateFrom,
+        dateTo,
+      });
+      const data = await api.admin.getStats(q);
+      setStatsData(data);
+    } catch (err: any) {
+      console.error("Failed to fetch usage overview stats", err);
+      setError(err.message || "Failed to load usage overview");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [chartPeriod, rangePreset, useCustomRange, dateFrom, dateTo]);
+
   useEffect(() => {
-    let isMounted = true;
-
-    const fetchStats = async () => {
-      try {
-        const data = await api.admin.getStats();
-        if (isMounted) {
-          setStatsData(data);
-        }
-      } catch (err: any) {
-        console.error("Failed to fetch usage overview stats", err);
-        if (isMounted) {
-          setError(err.message || "Failed to load usage overview");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    fetchStats();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    void loadStats();
+  }, [loadStats]);
 
   const sessionActivity = (statsData?.sessionActivity || []) as any[];
+  const sessionCounts = sessionActivity.map((item: any) => Number(item.sessions) || 0);
 
-  const dailyActiveUsersData = sessionActivity.map((item: any) => ({
+  const dailyActiveUsersData = sessionActivity.map((item: any, i: number) => ({
     date: item.day,
     dau: item.sessions,
-    wau: item.sessions,
-    mau: item.sessions,
+    wau: rollingSum(sessionCounts, 7, i),
+    mau: rollingSum(sessionCounts, 30, i),
   }));
 
   const sessionData = sessionActivity.map((item: any) => ({
@@ -111,13 +123,22 @@ export function UsageOverview() {
     { name: "Inactive (no sessions this week)", value: inactiveUsers, color: "#6b7280" },
   ];
 
-  const latestDay = sessionActivity.length > 0 ? sessionActivity[sessionActivity.length - 1] : null;
-  const previousDay = sessionActivity.length > 1 ? sessionActivity[sessionActivity.length - 2] : null;
+  /** KPIs summarize the full selected date range (charts use the same series). The last day alone is often “today” with 0 sessions while history has activity — that made cards show 0. */
+  const daysInRange = sessionActivity.length;
+  const totalSessionsInRange = sessionCounts.reduce((a, b) => a + b, 0);
+  const totalMinutesInRange = sessionData.reduce((a, b) => a + (Number(b.totalMinutes) || 0), 0);
+  const avgSessionsPerDay =
+    daysInRange > 0 ? Math.round((totalSessionsInRange / daysInRange) * 10) / 10 : 0;
+  const avgSessionDurationInRange =
+    totalSessionsInRange > 0
+      ? Math.round((totalMinutesInRange / totalSessionsInRange) * 10) / 10
+      : statsData?.avgSessionLength || 0;
 
-  const dailyActiveUsers = latestDay ? latestDay.sessions : 0;
-  const totalSessionsToday = latestDay ? latestDay.sessions : 0;
-  const totalMinutesToday = latestDay ? latestDay.sessions * latestDay.duration : 0;
-  const avgSessionDurationToday = latestDay ? latestDay.duration : statsData?.avgSessionLength || 0;
+  const half = Math.floor(daysInRange / 2);
+  const sumSessions = (from: number, to: number) =>
+    sessionCounts.slice(from, to).reduce((a, b) => a + b, 0);
+  const sumMinutes = (from: number, to: number) =>
+    sessionData.slice(from, to).reduce((a, b) => a + (Number(b.totalMinutes) || 0), 0);
 
   const getPercentChange = (current: number, previous: number | null) => {
     if (previous === null || previous === 0) {
@@ -131,62 +152,80 @@ export function UsageOverview() {
     return `${value >= 0 ? "+" : ""}${fixed}%`;
   };
 
-  const dailyActiveUsersChange = getPercentChange(
-    dailyActiveUsers,
-    previousDay ? previousDay.sessions : null
-  );
+  let compareLabel = "2nd half vs 1st half of range";
+  let sessionsPrev: number | null = null;
+  let minutesPrev: number | null = null;
+  let avgDurFirst: number | null = null;
+  let avgDurSecond: number | null = null;
+  let avgSessionsPerDayFirst = 0;
+  let avgSessionsPerDaySecond = 0;
 
-  const sessionsChange = getPercentChange(
-    totalSessionsToday,
-    previousDay ? previousDay.sessions : null
-  );
+  if (daysInRange >= 2 && half >= 1) {
+    const firstHalfSessions = sumSessions(0, half);
+    const secondHalfSessions = sumSessions(half, daysInRange);
+    const firstHalfMinutes = sumMinutes(0, half);
+    const secondHalfMinutes = sumMinutes(half, daysInRange);
+    sessionsPrev = firstHalfSessions;
+    minutesPrev = firstHalfMinutes;
+    avgDurFirst = firstHalfSessions > 0 ? firstHalfMinutes / firstHalfSessions : null;
+    avgDurSecond = secondHalfSessions > 0 ? secondHalfMinutes / secondHalfSessions : null;
+    avgSessionsPerDayFirst = firstHalfSessions / half;
+    avgSessionsPerDaySecond = secondHalfSessions / (daysInRange - half);
+  }
 
-  const minutesChange = getPercentChange(
-    totalMinutesToday,
-    previousDay ? previousDay.sessions * previousDay.duration : null
-  );
-
-  const durationChange = getPercentChange(
-    avgSessionDurationToday,
-    previousDay ? previousDay.duration : null
-  );
+  const dailyActiveUsersChange =
+    avgSessionsPerDayFirst > 0
+      ? getPercentChange(avgSessionsPerDaySecond, avgSessionsPerDayFirst)
+      : 0;
+  const sessionsChange =
+    sessionsPrev != null && half >= 1
+      ? getPercentChange(sumSessions(half, daysInRange), sessionsPrev)
+      : 0;
+  const minutesChange =
+    minutesPrev != null && half >= 1
+      ? getPercentChange(sumMinutes(half, daysInRange), minutesPrev)
+      : 0;
+  const durationChange =
+    avgDurFirst != null && avgDurSecond != null && avgDurFirst > 0
+      ? getPercentChange(avgDurSecond, avgDurFirst)
+      : 0;
 
   const stats = [
     {
-      label: "Daily Active Users",
-      value: dailyActiveUsers.toLocaleString(),
+      label: "Avg sessions / day",
+      value: avgSessionsPerDay.toLocaleString(),
       change: formatChange(dailyActiveUsersChange),
       trend: (dailyActiveUsersChange >= 0 ? "up" : "down") as "up" | "down",
       icon: Users,
       color: "from-blue-500 to-cyan-600",
-      description: "vs previous period",
+      description: compareLabel,
     },
     {
-      label: "Total Sessions Today",
-      value: totalSessionsToday.toLocaleString(),
+      label: "Total sessions",
+      value: totalSessionsInRange.toLocaleString(),
       change: formatChange(sessionsChange),
       trend: (sessionsChange >= 0 ? "up" : "down") as "up" | "down",
       icon: Activity,
       color: "from-purple-500 to-pink-600",
-      description: "sessions started",
+      description: "in selected range",
     },
     {
-      label: "Total Minutes Consumed",
-      value: totalMinutesToday.toLocaleString(),
+      label: "Total minutes",
+      value: Math.round(totalMinutesInRange).toLocaleString(),
       change: formatChange(minutesChange),
       trend: (minutesChange >= 0 ? "up" : "down") as "up" | "down",
       icon: Clock,
       color: "from-green-500 to-emerald-600",
-      description: "therapy minutes",
+      description: "therapy minutes in range",
     },
     {
-      label: "Avg Session Duration",
-      value: `${avgSessionDurationToday.toFixed(1)} min`,
+      label: "Avg session duration",
+      value: `${avgSessionDurationInRange.toFixed(1)} min`,
       change: formatChange(durationChange),
       trend: (durationChange >= 0 ? "up" : "down") as "up" | "down",
       icon: Target,
       color: "from-orange-500 to-red-600",
-      description: "per session",
+      description: "weighted across range",
     },
   ];
 
@@ -231,38 +270,34 @@ export function UsageOverview() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Time Range Selector */}
-            <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1 border border-gray-200">
-              {(["7d", "30d", "90d"] as const).map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    timeRange === range
-                      ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-                      : "text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {range === "7d" ? "7 Days" : range === "30d" ? "30 Days" : "90 Days"}
-                </button>
-              ))}
-            </div>
-
-            {/* Export Button */}
-            <Button className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white">
-              <Download className="w-4 h-4 mr-2" />
-              Export Report
-            </Button>
-
-            {/* Refresh Button */}
-            <Button
-              variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-          </div>
+          <AdminAnalyticsToolbar
+            chartPeriod={chartPeriod}
+            onChartPeriodChange={setChartPeriod}
+            rangePreset={rangePreset}
+            onRangePresetChange={setRangePreset}
+            useCustomRange={useCustomRange}
+            onUseCustomRangeChange={setUseCustomRange}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            onRefresh={() => void loadStats()}
+            isLoading={isLoading}
+            exportLabel="Export report"
+            onExport={() => {
+              if (!statsData) return;
+              const rows: Record<string, unknown>[] = (statsData.sessionActivity || []).map((r: any, i: number) => ({
+                i,
+                day: r.day,
+                sessions: r.sessions,
+                avgDuration: r.duration,
+                dau_proxy: r.sessions,
+                wau_rolling7: rollingSum(sessionCounts, 7, i),
+                mau_rolling30: rollingSum(sessionCounts, 30, i),
+              }));
+              downloadCsv(`usage-overview-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+            }}
+          />
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -316,7 +351,7 @@ export function UsageOverview() {
                   Active Users Trend
                 </h3>
                 <p className="text-sm !text-gray-600">
-                  Daily, Weekly, and Monthly Active Users
+                  DAU = sessions that day; WAU/MAU = rolling 7 / 30‑day session totals (volume proxy)
                 </p>
               </div>
               <div className="flex items-center gap-2">

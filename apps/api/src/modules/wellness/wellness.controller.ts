@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { createWellnessTool, deleteWellnessTool, getWellnessToolById, getWellnessTools, updateWellnessTool, trackWellnessProgress, getUserWellnessProgress, startWellnessSession, completeWellnessSession, getWellnessStats, getWellnessChallengesWithStats, toggleWellnessToolFavorite } from './wellness.service';
-import { CreateWellnessToolInput, UpdateWellnessToolInput, TrackProgressInput } from './wellness.schema';
+import { createWellnessTool, createWellnessChallenge, deleteWellnessTool, getWellnessToolById, getWellnessTools, updateWellnessTool, trackWellnessProgress, getUserWellnessProgress, startWellnessSession, completeWellnessSession, getWellnessStats, getWellnessChallengesWithStats, toggleWellnessToolFavorite } from './wellness.service';
+import { CreateWellnessToolInput, UpdateWellnessToolInput, TrackProgressInput, createWellnessChallengeSchema } from './wellness.schema';
 
 export async function createWellnessToolHandler(
   request: FastifyRequest<{ Body: CreateWellnessToolInput }>,
@@ -160,5 +160,22 @@ export async function getWellnessChallengesHandler(
     return reply.send(challenges);
   } catch (error) {
     return reply.code(500).send({ message: 'Failed to fetch wellness challenges' });
+  }
+}
+
+export async function createWellnessChallengeHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  try {
+    const body = createWellnessChallengeSchema.parse(request.body);
+    const created = await createWellnessChallenge(body);
+    return reply.code(201).send(created);
+  } catch (error: any) {
+    const message =
+      error?.name === 'ZodError'
+        ? 'Invalid challenge payload'
+        : error?.message || 'Failed to create wellness challenge';
+    return reply.code(400).send({ message });
   }
 }

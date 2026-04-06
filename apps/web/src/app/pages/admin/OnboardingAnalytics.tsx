@@ -1,6 +1,9 @@
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
-import { useState } from "react";
+import { api } from "../../../lib/api";
+import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
+import { buildStatsQuery, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import {
   Users,
@@ -36,7 +39,37 @@ interface FunnelStep {
 }
 
 export function OnboardingAnalytics() {
-  const [timeRange, setTimeRange] = useState("7d");
+  const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
+  const [rangePreset, setRangePreset] = useState<DashboardTimePreset>("30d");
+  const [useCustomRange, setUseCustomRange] = useState(false);
+  const [dateFrom, setDateFrom] = useState(() => {
+    const x = new Date();
+    x.setUTCDate(x.getUTCDate() - 29);
+    return x.toISOString().slice(0, 10);
+  });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dash, setDash] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadStats = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const q = buildStatsQuery({
+        chartPeriod,
+        rangePreset,
+        useCustomRange,
+        dateFrom,
+        dateTo,
+      });
+      setDash(await api.admin.getStats(q));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [chartPeriod, rangePreset, useCustomRange, dateFrom, dateTo]);
+
+  useEffect(() => {
+    void loadStats();
+  }, [loadStats]);
 
   // Funnel steps
   const funnelSteps: FunnelStep[] = [
@@ -130,23 +163,12 @@ export function OnboardingAnalytics() {
     }
   ];
 
-  // Overall completion rate over time
-  const completionTrend = [
-    { date: "Jun 15", rate: 58 },
-    { date: "Jun 16", rate: 61 },
-    { date: "Jun 17", rate: 59 },
-    { date: "Jun 18", rate: 63 },
-    { date: "Jun 19", rate: 65 },
-    { date: "Jun 20", rate: 62 },
-    { date: "Jun 21", rate: 64 },
-    { date: "Jun 22", rate: 67 },
-    { date: "Jun 23", rate: 69 },
-    { date: "Jun 24", rate: 68 },
-    { date: "Jun 25", rate: 71 },
-    { date: "Jun 26", rate: 73 },
-    { date: "Jun 27", rate: 72 },
-    { date: "Jun 28", rate: 75 }
-  ];
+  const onboard = dash?.onboardingStats;
+  const completionTrendRaw = (onboard?.daily || []).map((d: { date: string; signups: number; completions: number }) => ({
+    date: d.date,
+    rate: d.signups > 0 ? Math.round((d.completions / d.signups) * 1000) / 10 : 0,
+  }));
+  const completionTrend = completionTrendRaw.length ? completionTrendRaw : [{ date: "—", rate: 0 }];
 
   // Drop-off by step
   const dropOffData = funnelSteps.map(step => ({
@@ -162,11 +184,11 @@ export function OnboardingAnalytics() {
   }));
 
   const overallStats = {
-    totalStarted: funnelSteps[0].entered,
-    totalCompleted: funnelSteps[funnelSteps.length - 1].completed,
-    overallCompletionRate: ((funnelSteps[funnelSteps.length - 1].completed / funnelSteps[0].entered) * 100).toFixed(1),
+    totalStarted: onboard?.signupsInRange ?? 0,
+    totalCompleted: onboard?.completionsInRange ?? 0,
+    overallCompletionRate: String(onboard?.completionRatePercent ?? 0),
     avgTimeToComplete: funnelSteps.reduce((sum, step) => sum + step.avgTimeSpent, 0),
-    totalDropped: funnelSteps[0].entered - funnelSteps[funnelSteps.length - 1].completed
+    totalDropped: Math.max(0, (onboard?.signupsInRange ?? 0) - (onboard?.completionsInRange ?? 0)),
   };
 
   const getStepColor = (completionRate: number) => {
@@ -175,6 +197,16 @@ export function OnboardingAnalytics() {
     if (completionRate >= 85) return "from-yellow-500 to-orange-600";
     return "from-red-500 to-rose-600";
   };
+
+  if (isLoading && !dash) {
+    return (
+      <AdminLayoutNew>
+        <div className="flex items-center justify-center h-[60vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary" />
+        </div>
+      </AdminLayoutNew>
+    );
+  }
 
   return (
     <AdminLayoutNew>
@@ -190,17 +222,29 @@ export function OnboardingAnalytics() {
             <p className="text-gray-600 mt-1">Track user journey through onboarding funnel</p>
           </div>
 
-          <select
-            value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value)}
-            className="px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-          >
-            <option value="7d">Last 7 days</option>
-            <option value="14d">Last 14 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="90d">Last 90 days</option>
-          </select>
+          <AdminAnalyticsToolbar
+            chartPeriod={chartPeriod}
+            onChartPeriodChange={setChartPeriod}
+            rangePreset={rangePreset}
+            onRangePresetChange={setRangePreset}
+            useCustomRange={useCustomRange}
+            onUseCustomRangeChange={setUseCustomRange}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            onRefresh={() => void loadStats()}
+            isLoading={isLoading}
+            onExport={() => {
+              if (!dash?.onboardingStats?.daily) return;
+              downloadCsv(`onboarding-analytics-${new Date().toISOString().slice(0, 10)}.csv`, dash.onboardingStats.daily);
+            }}
+          />
         </motion.div>
+
+        <p className="text-sm text-gray-500 -mt-2 mb-2">
+          KPIs use profile signups and <span className="font-medium">onboarding_completed</span> in the selected range. Funnel steps below are illustrative until step-level analytics exist.
+        </p>
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">

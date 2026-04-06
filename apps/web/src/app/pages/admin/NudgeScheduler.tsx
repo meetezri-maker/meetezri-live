@@ -24,6 +24,8 @@ import {
   Send,
   Eye,
   Copy,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Card } from "@/app/components/ui/card";
@@ -89,6 +91,8 @@ export function NudgeScheduler() {
   const [startDate, setStartDate] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const [editDraft, setEditDraft] = useState<NudgeCampaign | null>(null);
 
   const mapApiCampaign = (c: any): NudgeCampaign => {
     const metrics = c.metrics || {};
@@ -167,6 +171,14 @@ export function NudgeScheduler() {
 
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (editModalCampaign) {
+      setEditDraft(editModalCampaign);
+    } else {
+      setEditDraft(null);
+    }
+  }, [editModalCampaign]);
 
   const handleCreateCampaign = async () => {
     try {
@@ -249,6 +261,35 @@ export function NudgeScheduler() {
     } catch (error: any) {
       console.error("Failed to delete campaign", error);
       toast.error(error?.message || "Failed to delete campaign");
+    }
+  };
+
+  const handleSaveCampaignEdit = async () => {
+    if (!editModalCampaign || !editDraft) return;
+    try {
+      const metrics = {
+        name: editDraft.name,
+        template: editDraft.template,
+        type: editDraft.type,
+        audience: editDraft.audience,
+        trigger: editDraft.trigger,
+        schedule: editDraft.schedule,
+        performance: editModalCampaign.performance,
+        abTest: editModalCampaign.abTest,
+        createdBy: editModalCampaign.createdBy,
+        lastRun: editModalCampaign.lastRun,
+      };
+      const updated = await api.admin.updatePushCampaign(editModalCampaign.id, {
+        title: editDraft.name,
+        status: editDraft.status,
+        metrics,
+      });
+      const mapped = mapApiCampaign(updated);
+      setCampaigns((prev) => prev.map((c) => (c.id === editModalCampaign.id ? mapped : c)));
+      setEditModalCampaign(null);
+      toast.success("Campaign updated");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to save campaign");
     }
   };
 
@@ -361,6 +402,7 @@ export function NudgeScheduler() {
             {/* View Mode Toggle */}
             <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1 border border-gray-200">
               <button
+                type="button"
                 onClick={() => setViewMode("list")}
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   viewMode === "list"
@@ -371,6 +413,7 @@ export function NudgeScheduler() {
                 List
               </button>
               <button
+                type="button"
                 onClick={() => setViewMode("calendar")}
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                   viewMode === "calendar"
@@ -461,7 +504,100 @@ export function NudgeScheduler() {
           </Card>
         </motion.div>
 
+        {viewMode === "calendar" && (
+          <Card className="bg-white border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))
+                }
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <h3 className="text-lg font-semibold text-gray-900">
+                {calendarMonth.toLocaleString("default", { month: "long", year: "numeric" })}
+              </h3>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))
+                }
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-gray-500 mb-2">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+                <div key={d} className="py-2">
+                  {d}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {(() => {
+                const y = calendarMonth.getFullYear();
+                const m = calendarMonth.getMonth();
+                const first = new Date(y, m, 1).getDay();
+                const days = new Date(y, m + 1, 0).getDate();
+                const cells: (number | null)[] = [];
+                for (let i = 0; i < first; i++) cells.push(null);
+                for (let d = 1; d <= days; d++) cells.push(d);
+                const byDay = new Map<number, NudgeCampaign[]>();
+                filteredCampaigns.forEach((c) => {
+                  const sd = c.schedule.startDate?.slice(0, 10);
+                  if (!sd) return;
+                  const parts = sd.split("-").map((x) => parseInt(x, 10));
+                  if (parts.length !== 3) return;
+                  const [yy, mm, dd] = parts;
+                  if (yy === y && mm - 1 === m) {
+                    const arr = byDay.get(dd) || [];
+                    arr.push(c);
+                    byDay.set(dd, arr);
+                  }
+                });
+                return cells.map((day, idx) => (
+                  <div
+                    key={idx}
+                    className={`min-h-[88px] rounded-lg border p-1 text-left ${
+                      day ? "bg-gray-50 border-gray-200" : "border-transparent"
+                    }`}
+                  >
+                    {day ? (
+                      <>
+                        <div className="text-xs font-semibold text-gray-700 mb-1">{day}</div>
+                        <div className="space-y-1">
+                          {(byDay.get(day) || []).slice(0, 3).map((c) => (
+                            <button
+                              type="button"
+                              key={c.id}
+                              onClick={() => setViewModalCampaign(c)}
+                              className="w-full truncate rounded bg-purple-100 px-1 py-0.5 text-left text-[10px] text-purple-900 hover:bg-purple-200"
+                            >
+                              {c.name}
+                            </button>
+                          ))}
+                          {(byDay.get(day) || []).length > 3 && (
+                            <p className="text-[10px] text-gray-500">
+                              +{(byDay.get(day) || []).length - 3} more
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                ));
+              })()}
+            </div>
+          </Card>
+        )}
+
         {/* Campaigns List */}
+        {viewMode === "list" && (
         <div className="space-y-4">
           {filteredCampaigns.map((campaign, index) => {
             const TypeIcon = getTypeIcon(campaign.type);
@@ -711,9 +847,10 @@ export function NudgeScheduler() {
             );
           })}
         </div>
+        )}
 
         {/* Empty State */}
-        {filteredCampaigns.length === 0 && (
+        {filteredCampaigns.length === 0 && viewMode === "list" && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -742,7 +879,7 @@ export function NudgeScheduler() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setViewModalCampaign(null)}
             >
               <motion.div
@@ -867,12 +1004,12 @@ export function NudgeScheduler() {
 
         {/* Edit Modal */}
         <AnimatePresence>
-          {editModalCampaign && (
+          {editModalCampaign && editDraft && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setEditModalCampaign(null)}
             >
               <motion.div
@@ -892,13 +1029,25 @@ export function NudgeScheduler() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-2">Campaign Name</label>
-                    <Input defaultValue={editModalCampaign.name} />
+                    <Input
+                      value={editDraft.name}
+                      onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Type</label>
-                      <select className="w-full px-3 py-2 border rounded-lg" defaultValue={editModalCampaign.type}>
+                      <select
+                        className="w-full px-3 py-2 border rounded-lg"
+                        value={editDraft.type}
+                        onChange={(e) =>
+                          setEditDraft({
+                            ...editDraft,
+                            type: e.target.value as NudgeCampaign["type"],
+                          })
+                        }
+                      >
                         <option value="time-based">Time-based</option>
                         <option value="event-based">Event-based</option>
                         <option value="behavior-based">Behavior-based</option>
@@ -906,7 +1055,16 @@ export function NudgeScheduler() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">Status</label>
-                      <select className="w-full px-3 py-2 border rounded-lg" defaultValue={editModalCampaign.status}>
+                      <select
+                        className="w-full px-3 py-2 border rounded-lg"
+                        value={editDraft.status}
+                        onChange={(e) =>
+                          setEditDraft({
+                            ...editDraft,
+                            status: e.target.value as NudgeCampaign["status"],
+                          })
+                        }
+                      >
                         <option value="active">Active</option>
                         <option value="paused">Paused</option>
                         <option value="scheduled">Scheduled</option>
@@ -917,44 +1075,85 @@ export function NudgeScheduler() {
 
                   <div>
                     <label className="block text-sm font-medium mb-2">Template</label>
-                    <Input defaultValue={editModalCampaign.template} />
+                    <Input
+                      value={editDraft.template}
+                      onChange={(e) => setEditDraft({ ...editDraft, template: e.target.value })}
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Trigger Type</label>
-                      <Input defaultValue={editModalCampaign.trigger.type} />
+                      <Input
+                        value={editDraft.trigger.type}
+                        onChange={(e) =>
+                          setEditDraft({
+                            ...editDraft,
+                            trigger: { ...editDraft.trigger, type: e.target.value },
+                          })
+                        }
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">Trigger Value</label>
-                      <Input defaultValue={editModalCampaign.trigger.value} />
+                      <Input
+                        value={editDraft.trigger.value}
+                        onChange={(e) =>
+                          setEditDraft({
+                            ...editDraft,
+                            trigger: { ...editDraft.trigger, value: e.target.value },
+                          })
+                        }
+                      />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Frequency</label>
-                      <Input defaultValue={editModalCampaign.schedule.frequency} />
+                      <Input
+                        value={editDraft.schedule.frequency}
+                        onChange={(e) =>
+                          setEditDraft({
+                            ...editDraft,
+                            schedule: { ...editDraft.schedule, frequency: e.target.value },
+                          })
+                        }
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">Start Date</label>
-                      <Input type="date" defaultValue={editModalCampaign.schedule.startDate} />
+                      <Input
+                        type="date"
+                        value={editDraft.schedule.startDate}
+                        onChange={(e) =>
+                          setEditDraft({
+                            ...editDraft,
+                            schedule: { ...editDraft.schedule, startDate: e.target.value },
+                          })
+                        }
+                      />
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium mb-2">Target Audience</label>
-                    <Input defaultValue={editModalCampaign.audience.segment} />
+                    <Input
+                      value={editDraft.audience.segment}
+                      onChange={(e) =>
+                        setEditDraft({
+                          ...editDraft,
+                          audience: { ...editDraft.audience, segment: e.target.value },
+                        })
+                      }
+                    />
                   </div>
 
                   <div className="flex gap-2 pt-4">
                     <Button variant="outline" className="flex-1" onClick={() => setEditModalCampaign(null)}>
                       Cancel
                     </Button>
-                    <Button className="flex-1" onClick={() => {
-                      alert(`Saved changes to: ${editModalCampaign.name}`);
-                      setEditModalCampaign(null);
-                    }}>
+                    <Button className="flex-1" type="button" onClick={handleSaveCampaignEdit}>
                       <Save className="w-4 h-4 mr-2" />
                       Save Changes
                     </Button>
@@ -972,7 +1171,7 @@ export function NudgeScheduler() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setAnalyticsModalCampaign(null)}
             >
               <motion.div
@@ -1094,7 +1293,7 @@ export function NudgeScheduler() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setDeleteModalCampaign(null)}
             >
               <motion.div
@@ -1169,7 +1368,7 @@ export function NudgeScheduler() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setShowCreateCampaignModal(false)}
             >
               <motion.div

@@ -93,6 +93,16 @@ export const wellnessChallengeResponseSchema = z.object({
   completionRate: z.number().optional(),
 });
 
+export const createWellnessChallengeSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  start_date: z.string().min(1),
+  end_date: z.string().min(1),
+  reward_points: z.number().int().min(0).optional().nullable(),
+  goal_criteria: z.any().optional().nullable(),
+});
+
 export type CreateWellnessToolInput = z.infer<typeof createWellnessToolSchema>;
 export type UpdateWellnessToolInput = z.infer<typeof updateWellnessToolSchema>;
 export type TrackProgressInput = z.infer<typeof trackProgressSchema>;

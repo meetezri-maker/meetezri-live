@@ -24,11 +24,11 @@ import {
   Send,
   AlertCircle,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
-import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 
 interface NudgeTemplate {
@@ -49,7 +49,6 @@ interface NudgeTemplate {
 }
 
 export function NudgeTemplates() {
-  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
@@ -62,6 +61,9 @@ export function NudgeTemplates() {
   const [analyticsModalTemplate, setAnalyticsModalTemplate] = useState<NudgeTemplate | null>(null);
   const [templates, setTemplates] = useState<NudgeTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const mapApiTemplate = (t: any): NudgeTemplate => {
     const baseIcon = (() => {
@@ -134,6 +136,71 @@ export function NudgeTemplates() {
 
     loadTemplates();
   }, []);
+
+  const createNewTemplate = async () => {
+    if (isCreating) return;
+    setIsCreating(true);
+    try {
+      const base = {
+        name: "New Template",
+        category: "Engagement",
+        type: "push" as const,
+        title: "New nudge title",
+        message: "Write your message here...",
+        variables: [] as string[],
+        status: "draft" as const,
+      };
+      const created = await api.admin.createNudgeTemplate(base);
+      setTemplates((prev) => [mapApiTemplate(created), ...prev]);
+      toast.success("Template created");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to create template");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleImportTemplates = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setIsImporting(true);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const items: any[] = Array.isArray(parsed)
+        ? parsed
+        : parsed && Array.isArray(parsed.templates)
+          ? parsed.templates
+          : [parsed];
+      let count = 0;
+      for (const item of items) {
+        const name = String(item.name || item.title || "").trim();
+        const message = String(item.message || "").trim();
+        if (!name || !message) continue;
+        const created = await api.admin.createNudgeTemplate({
+          name,
+          category: String(item.category || "Engagement"),
+          type: (item.type as NudgeTemplate["type"]) || "push",
+          title: String(item.title || name),
+          message,
+          variables: Array.isArray(item.variables) ? item.variables : [],
+          status: (item.status as NudgeTemplate["status"]) || "draft",
+        });
+        setTemplates((prev) => [mapApiTemplate(created), ...prev]);
+        count++;
+      }
+      if (count > 0) {
+        toast.success(`Imported ${count} template(s)`);
+      } else {
+        toast.error("No valid templates in file (need name/title and message)");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Import failed");
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const filteredTemplates = templates.filter((template) => {
     const matchesSearch =
@@ -214,34 +281,31 @@ export function NudgeTemplates() {
           </div>
 
           <div className="flex items-center gap-3">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleImportTemplates}
+            />
             <Button
+              type="button"
               variant="outline"
               className="border-gray-300 text-gray-700 hover:bg-gray-100"
+              disabled={isImporting}
+              onClick={() => importInputRef.current?.click()}
             >
               <Filter className="w-4 h-4 mr-2" />
-              Import
+              {isImporting ? "Importing…" : "Import"}
             </Button>
             <Button
+              type="button"
               className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white"
-              onClick={() => {
-                const base = {
-                  name: "New Template",
-                  category: "Engagement",
-                  type: "push" as const,
-                  title: "New nudge title",
-                  message: "Write your message here...",
-                  variables: [] as string[],
-                  status: "draft",
-                };
-                api.admin
-                  .createNudgeTemplate(base)
-                  .then((created: any) => {
-                    setTemplates((prev) => [mapApiTemplate(created), ...prev]);
-                  });
-              }}
+              disabled={isCreating}
+              onClick={createNewTemplate}
             >
               <Plus className="w-4 h-4 mr-2" />
-              Create Template
+              {isCreating ? "Creating…" : "Create Template"}
             </Button>
           </div>
         </motion.div>
@@ -503,9 +567,14 @@ export function NudgeTemplates() {
               <p className="text-gray-600 mb-6">
                 Try adjusting your filters or create a new template
               </p>
-              <Button className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white">
+              <Button
+                type="button"
+                className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white"
+                disabled={isCreating}
+                onClick={createNewTemplate}
+              >
                 <Plus className="w-4 h-4 mr-2" />
-                Create Template
+                {isCreating ? "Creating…" : "Create Template"}
               </Button>
             </Card>
           </motion.div>
@@ -518,7 +587,7 @@ export function NudgeTemplates() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setViewModalTemplate(null)}
             >
               <motion.div
@@ -653,7 +722,7 @@ export function NudgeTemplates() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setEditModalTemplate(null)}
             >
               <motion.div
@@ -838,7 +907,7 @@ export function NudgeTemplates() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setAnalyticsModalTemplate(null)}
             >
               <motion.div
@@ -944,7 +1013,7 @@ export function NudgeTemplates() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setDeleteModalTemplate(null)}
             >
               <motion.div

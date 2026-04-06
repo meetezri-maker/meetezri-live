@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import {
@@ -65,8 +66,18 @@ export function BadgeManager() {
   const [editBadgeModal, setEditBadgeModal] = useState<Badge | null>(null);
   const [viewStatsModal, setViewStatsModal] = useState<Badge | null>(null);
 
-  // Mock badges
-  const badges: Badge[] = [
+  const [newItemName, setNewItemName] = useState("");
+  const [newItemDesc, setNewItemDesc] = useState("");
+  const [newBadgeCategory, setNewBadgeCategory] = useState<Badge["category"]>("achievement");
+  const [newBadgeRarity, setNewBadgeRarity] = useState<Badge["rarity"]>("common");
+  const [newBadgePoints, setNewBadgePoints] = useState(50);
+  const [newBadgeIcon, setNewBadgeIcon] = useState("🏅");
+  const [newBadgeRequirement, setNewBadgeRequirement] = useState("");
+  const [newAchCategory, setNewAchCategory] = useState<Achievement["category"]>("sessions");
+  const [newAchPoints, setNewAchPoints] = useState(100);
+  const [newAchRequirement, setNewAchRequirement] = useState(10);
+
+  const [badges, setBadges] = useState<Badge[]>([
     {
       id: "badge001",
       name: "First Steps",
@@ -165,10 +176,9 @@ export function BadgeManager() {
       isActive: false,
       createdAt: new Date("2024-01-01")
     }
-  ];
+  ]);
 
-  // Mock achievements
-  const achievements: Achievement[] = [
+  const [achievements, setAchievements] = useState<Achievement[]>([
     {
       id: "ach001",
       name: "Session Streaker",
@@ -247,7 +257,63 @@ export function BadgeManager() {
       unlocked: 523,
       totalUsers: 1205
     }
-  ];
+  ]);
+
+  const resetCreateForm = () => {
+    setNewItemName("");
+    setNewItemDesc("");
+    setNewBadgeCategory("achievement");
+    setNewBadgeRarity("common");
+    setNewBadgePoints(50);
+    setNewBadgeIcon("🏅");
+    setNewBadgeRequirement("");
+    setNewAchCategory("sessions");
+    setNewAchPoints(100);
+    setNewAchRequirement(10);
+  };
+
+  const handleSubmitCreate = () => {
+    if (!newItemName.trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    if (activeTab === "badges") {
+      const b: Badge = {
+        id: `badge_${crypto.randomUUID()}`,
+        name: newItemName.trim(),
+        description: newItemDesc.trim() || "—",
+        category: newBadgeCategory,
+        icon: newBadgeIcon.trim() || "🏅",
+        color: "from-slate-500 to-slate-700",
+        requirement: newBadgeRequirement.trim() || "—",
+        totalEarned: 0,
+        rarity: newBadgeRarity,
+        points: newBadgePoints,
+        isActive: true,
+        createdAt: new Date(),
+      };
+      setBadges((prev) => [b, ...prev]);
+      toast.success("Badge created");
+    } else {
+      const a: Achievement = {
+        id: `ach_${crypto.randomUUID()}`,
+        name: newItemName.trim(),
+        description: newItemDesc.trim() || "—",
+        category: newAchCategory,
+        level: 1,
+        maxLevel: 5,
+        progress: 0,
+        requirement: newAchRequirement,
+        reward: { points: newAchPoints },
+        unlocked: 0,
+        totalUsers: 1,
+      };
+      setAchievements((prev) => [a, ...prev]);
+      toast.success("Achievement created");
+    }
+    setShowCreateModal(false);
+    resetCreateForm();
+  };
 
   const getRarityColor = (rarity: string) => {
     switch(rarity) {
@@ -292,9 +358,13 @@ export function BadgeManager() {
           </div>
 
           <motion.button
+            type="button"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => {
+              resetCreateForm();
+              setShowCreateModal(true);
+            }}
             className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg"
           >
             <Plus className="w-4 h-4" />
@@ -617,7 +687,7 @@ export function BadgeManager() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
             onClick={() => setShowCreateModal(false)}
           >
             <motion.div
@@ -637,6 +707,8 @@ export function BadgeManager() {
                     type="text"
                     placeholder={activeTab === "badges" ? "e.g., Master Meditator" : "e.g., Session Champion"}
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={newItemName}
+                    onChange={(e) => setNewItemName(e.target.value)}
                   />
                 </div>
 
@@ -646,28 +718,38 @@ export function BadgeManager() {
                     placeholder="Describe the badge or achievement..."
                     rows={3}
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={newItemDesc}
+                    onChange={(e) => setNewItemDesc(e.target.value)}
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                    <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                    <select
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={activeTab === "badges" ? newBadgeCategory : newAchCategory}
+                      onChange={(e) =>
+                        activeTab === "badges"
+                          ? setNewBadgeCategory(e.target.value as Badge["category"])
+                          : setNewAchCategory(e.target.value as Achievement["category"])
+                      }
+                    >
                       {activeTab === "badges" ? (
                         <>
-                          <option>Achievement</option>
-                          <option>Milestone</option>
-                          <option>Special</option>
-                          <option>Streak</option>
-                          <option>Challenge</option>
+                          <option value="achievement">Achievement</option>
+                          <option value="milestone">Milestone</option>
+                          <option value="special">Special</option>
+                          <option value="streak">Streak</option>
+                          <option value="challenge">Challenge</option>
                         </>
                       ) : (
                         <>
-                          <option>Sessions</option>
-                          <option>Mood</option>
-                          <option>Journal</option>
-                          <option>Social</option>
-                          <option>Wellness</option>
+                          <option value="sessions">Sessions</option>
+                          <option value="mood">Mood</option>
+                          <option value="journal">Journal</option>
+                          <option value="social">Social</option>
+                          <option value="wellness">Wellness</option>
                         </>
                       )}
                     </select>
@@ -676,11 +758,17 @@ export function BadgeManager() {
                   {activeTab === "badges" && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Rarity</label>
-                      <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
-                        <option>Common</option>
-                        <option>Rare</option>
-                        <option>Epic</option>
-                        <option>Legendary</option>
+                      <select
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={newBadgeRarity}
+                        onChange={(e) =>
+                          setNewBadgeRarity(e.target.value as Badge["rarity"])
+                        }
+                      >
+                        <option value="common">Common</option>
+                        <option value="rare">Rare</option>
+                        <option value="epic">Epic</option>
+                        <option value="legendary">Legendary</option>
                       </select>
                     </div>
                   )}
@@ -691,35 +779,60 @@ export function BadgeManager() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Points Reward</label>
                     <input
                       type="number"
+                      min={0}
                       placeholder="100"
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={activeTab === "badges" ? newBadgePoints : newAchPoints}
+                      onChange={(e) =>
+                        activeTab === "badges"
+                          ? setNewBadgePoints(Number(e.target.value) || 0)
+                          : setNewAchPoints(Number(e.target.value) || 0)
+                      }
                     />
                   </div>
 
-                  {activeTab === "badges" && (
+                  {activeTab === "badges" ? (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Icon Emoji</label>
                       <input
                         type="text"
                         placeholder="🏆"
                         className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={newBadgeIcon}
+                        onChange={(e) => setNewBadgeIcon(e.target.value)}
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Target count</label>
+                      <input
+                        type="number"
+                        min={1}
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={newAchRequirement}
+                        onChange={(e) => setNewAchRequirement(Number(e.target.value) || 1)}
                       />
                     </div>
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Requirement</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Complete 10 sessions"
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
+                {activeTab === "badges" && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Requirement</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Complete 10 sessions"
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={newBadgeRequirement}
+                      onChange={(e) => setNewBadgeRequirement(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 mt-6">
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setShowCreateModal(false)}
@@ -729,9 +842,10 @@ export function BadgeManager() {
                 </motion.button>
 
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={handleSubmitCreate}
                   className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
                 >
                   Create
@@ -748,7 +862,7 @@ export function BadgeManager() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
               onClick={() => setEditBadgeModal(null)}
             >
               <motion.div
@@ -874,7 +988,7 @@ export function BadgeManager() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
               onClick={() => setViewStatsModal(null)}
             >
               <motion.div
