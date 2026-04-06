@@ -1181,6 +1181,14 @@ export const api = {
       const res = await fetch(`${API_URL}/admin/push-campaigns/${id}`, { method: 'DELETE', headers });
       return handleResponse(res, 'Failed to delete campaign');
     },
+    async dispatchPushCampaign(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/push-campaigns/${id}/dispatch`, {
+        method: 'POST',
+        headers,
+      });
+      return handleResponse(res, 'Failed to dispatch campaign');
+    },
 
     // Support Tickets
     async getSupportTickets(params?: { page?: number; limit?: number; status?: string }) {
@@ -1201,6 +1209,20 @@ export const api = {
       return handleResponse(res, 'Failed to update ticket');
     },
 
+    async getContentPerformance(params?: { range?: '7d' | '30d' | '90d' }) {
+      const headers = await getHeaders();
+      const q =
+        params?.range != null
+          ? `?${new URLSearchParams({ range: params.range }).toString()}`
+          : '';
+      const res = await fetch(`${API_URL}/admin/content-performance${q}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch content performance');
+    },
+
     // Community
     async getCommunityStats() {
       const headers = await getHeaders();
@@ -1211,6 +1233,47 @@ export const api = {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/admin/community/groups`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch groups');
+    },
+    async getCommunityPosts() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/posts`, { method: 'GET', headers });
+      return handleResponse(res, 'Failed to fetch community posts');
+    },
+    async patchCommunityPost(id: string, data: { locked?: boolean; flag_count?: number }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/posts/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to update post');
+    },
+    async deleteCommunityPost(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/posts/${id}`, { method: 'DELETE', headers });
+      return handleResponseAllowEmpty(res, 'Failed to delete post');
+    },
+    async patchCommunityGroup(id: string, data: Record<string, unknown>) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/groups/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to update group');
+    },
+    async deleteCommunityGroup(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/groups/${id}`, { method: 'DELETE', headers });
+      return handleResponseAllowEmpty(res, 'Failed to delete group');
+    },
+    async getCommunityGroupMembers(groupId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/groups/${groupId}/members`, {
+        method: 'GET',
+        headers,
+      });
+      return handleResponse(res, 'Failed to fetch group members');
     },
 
     // Monitoring

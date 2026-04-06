@@ -9,7 +9,10 @@ import {
   getEmailTemplatesHandler, createEmailTemplateHandler, updateEmailTemplateHandler, deleteEmailTemplateHandler,
   getPushCampaignsHandler, createPushCampaignHandler, updatePushCampaignHandler, deletePushCampaignHandler,
   getSupportTicketsHandler, updateSupportTicketHandler,
-  getCommunityStatsHandler, getCommunityGroupsHandler,
+  getCommunityStatsHandler, getCommunityGroupsHandler, getContentPerformanceHandler,
+  getCommunityPostsHandler, patchCommunityPostHandler, deleteCommunityPostHandler,
+  patchCommunityGroupHandler, deleteCommunityGroupHandler, getCommunityGroupMembersHandler,
+  dispatchPushCampaignHandler,
   getLiveSessionsHandler, endLiveSessionHandler, flagSessionForReviewHandler, getActivityLogsHandler, getGlobalAuditLogsHandler, getSessionRecordingsHandler, getErrorLogsHandler, getSessionRecordingTranscriptHandler,
   getAdminSystemHealthHandler, patchErrorLogResolveHandler, postErrorLogsArchiveResolvedHandler, postSessionRecordingReviewedHandler,
   getCrisisEventsHandler, getCrisisEventHandler, updateCrisisEventStatusHandler,
@@ -204,14 +207,27 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.post('/push-campaigns', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, createPushCampaignHandler);
   fastify.put('/push-campaigns/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, updatePushCampaignHandler);
   fastify.delete('/push-campaigns/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, deletePushCampaignHandler);
+  fastify.post('/push-campaigns/:id/dispatch', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, dispatchPushCampaignHandler);
 
   // Support Tickets
   fastify.get('/support-tickets', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getSupportTicketsHandler);
   fastify.put('/support-tickets/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, updateSupportTicketHandler);
 
+  fastify.get(
+    '/content-performance',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] },
+    getContentPerformanceHandler
+  );
+
   // Community
   fastify.get('/community/stats', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getCommunityStatsHandler);
   fastify.get('/community/groups', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getCommunityGroupsHandler);
+  fastify.get('/community/posts', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getCommunityPostsHandler);
+  fastify.patch('/community/posts/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, patchCommunityPostHandler);
+  fastify.delete('/community/posts/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, deleteCommunityPostHandler);
+  fastify.patch('/community/groups/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, patchCommunityGroupHandler);
+  fastify.delete('/community/groups/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, deleteCommunityGroupHandler);
+  fastify.get('/community/groups/:id/members', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getCommunityGroupMembersHandler);
 
   // Monitoring
   fastify.get('/live-sessions', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getLiveSessionsHandler);

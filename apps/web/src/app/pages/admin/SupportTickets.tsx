@@ -5,7 +5,6 @@ import { Input } from "../../components/ui/input";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search,
-  Filter,
   MessageSquare,
   Clock,
   CheckCircle,
@@ -33,6 +32,8 @@ interface Ticket {
   updatedAtIso: string;
   description?: string;
   messages?: { from: string; message: string; time: string }[];
+  assignedToLabel?: string | null;
+  assignedToId?: string | null;
 }
 
 function mapApiStatus(raw: string | null | undefined): Ticket["status"] {
@@ -58,20 +59,52 @@ export function SupportTickets() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [staffUsers, setStaffUsers] = useState<{ id: string; label: string }[]>([]);
   const itemsPerPage = 5;
 
   useEffect(() => {
     fetchTickets();
+  }, [statusFilter]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const users = await api.admin.getUsers();
+        const list = Array.isArray(users) ? users : [];
+        const staff = list
+          .filter((u: any) =>
+            ["super_admin", "org_admin", "team_admin"].includes(u.role)
+          )
+          .map((u: any) => ({
+            id: u.id,
+            label: u.full_name?.trim() || u.email || u.id,
+          }));
+        setStaffUsers(staff);
+      } catch {
+        setStaffUsers([]);
+      }
+    })();
   }, []);
 
   const fetchTickets = async () => {
     try {
       setIsLoading(true);
-      const data = await api.admin.getSupportTickets({ page: 1, limit: 200 });
+      const params: { page: number; limit: number; status?: string } = {
+        page: 1,
+        limit: 200,
+      };
+      if (statusFilter !== "all") {
+        const apiSt =
+          statusFilter === "in-progress" ? "in_progress" : statusFilter;
+        params.status = apiSt;
+      }
+      const data = await api.admin.getSupportTickets(params);
       const list = Array.isArray(data) ? data : [];
       setTickets(
         list.map((t: any) => {
           const profile = t.profiles_support_tickets_user_idToprofiles;
+          const assignee = t.profiles_support_tickets_assigned_toToprofiles;
           const userLabel =
             profile?.full_name?.trim() || profile?.email || "Unknown user";
           const createdAt = t.created_at ? new Date(t.created_at) : new Date();
@@ -88,6 +121,9 @@ export function SupportTickets() {
             updatedAtIso: updatedAt.toISOString(),
             description: t.description ?? "",
             messages: [],
+            assignedToLabel:
+              assignee?.full_name?.trim() || assignee?.email || null,
+            assignedToId: t.assigned_to ? String(t.assigned_to) : null,
           };
         })
       );
@@ -169,6 +205,7 @@ export function SupportTickets() {
 
   const handleViewTicket = (ticket: Ticket) => {
     setViewingTicket(ticket);
+    setNewStatus(ticket.status);
   };
 
   const handlePrevious = () => {
@@ -183,34 +220,71 @@ export function SupportTickets() {
     }
   };
 
-  const handleSendReply = () => {
-    if (!replyMessage.trim()) {
-      alert("⚠️ Please enter a reply message!");
+  const handleSendReply = async () => {
+    if (!replyMessage.trim() || !viewingTicket) {
+      toast.error("Please enter a reply message");
       return;
     }
-    
-    alert(`✅ Reply sent successfully!\n\nTo: ${viewingTicket?.user}\nMessage: ${replyMessage}\n\nThe user will be notified via email.`);
-    
-    setReplyMessage("");
-    setShowReplyModal(false);
-  };
-
-  const handleUpdateStatus = () => {
-    alert(`✅ Status updated successfully!\n\nTicket #${viewingTicket?.id}\nOld Status: ${viewingTicket?.status}\nNew Status: ${newStatus}\n\nThe ticket status has been changed.`);
-    
-    setShowStatusModal(false);
-  };
-
-  const handleAssignAgent = () => {
-    if (!selectedAgent.trim()) {
-      alert("⚠️ Please enter an agent's name!");
-      return;
+    try {
+      const stamp = `\n\n--- Support reply (${new Date().toLocaleString()}) ---\n${replyMessage.trim()}`;
+      await api.admin.updateSupportTicket(viewingTicket.id, {
+        description: `${viewingTicket.description || ""}${stamp}`,
+      });
+      toast.success("Reply saved on the ticket");
+      setReplyMessage("");
+      setShowReplyModal(false);
+      await fetchTickets();
+      setViewingTicket((prev) =>
+        prev
+          ? { ...prev, description: `${prev.description || ""}${stamp}` }
+          : prev
+      );
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to save reply");
     }
-    
-    alert(`✅ Ticket assigned successfully!\n\nTicket #${viewingTicket?.id}\nAssigned to: ${selectedAgent}\n\nThe agent will be notified.`);
-    
-    setSelectedAgent("");
-    setShowAssignModal(false);
+  };
+
+  const handleUpdateStatus = async () => {
+    if (!viewingTicket) return;
+    try {
+      const apiStatus = newStatus === "in-progress" ? "in_progress" : newStatus;
+      await api.admin.updateSupportTicket(viewingTicket.id, {
+        status: apiStatus as "open" | "in_progress" | "resolved" | "closed",
+      });
+      toast.success("Status updated");
+      setShowStatusModal(false);
+      await fetchTickets();
+      setViewingTicket((prev) => (prev ? { ...prev, status: newStatus } : prev));
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to update status");
+    }
+  };
+
+  const handleAssignAgent = async () => {
+    if (!viewingTicket) return;
+    try {
+      await api.admin.updateSupportTicket(viewingTicket.id, {
+        assigned_to: selectedAgent || null,
+      });
+      toast.success("Assignee updated");
+      setShowAssignModal(false);
+      await fetchTickets();
+      const opt = staffUsers.find((s) => s.id === selectedAgent);
+      setViewingTicket((prev) =>
+        prev
+          ? {
+              ...prev,
+              assignedToId: selectedAgent,
+              assignedToLabel: opt?.label ?? null,
+            }
+          : prev
+      );
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to assign ticket");
+    }
   };
 
   return (
@@ -312,10 +386,17 @@ export function SupportTickets() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <Button variant="outline" className="gap-2">
-                <Filter className="w-4 h-4" />
-                Filter
-              </Button>
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="all">All statuses</option>
+                <option value="open">Open</option>
+                <option value="in-progress">In progress</option>
+                <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+              </select>
             </div>
           </Card>
         </motion.div>
@@ -547,6 +628,13 @@ export function SupportTickets() {
                       </span>
                     </div>
 
+                    {viewingTicket.assignedToLabel && (
+                      <div>
+                        <p className="text-xs text-gray-600 mb-1">Assigned to</p>
+                        <p className="font-medium text-gray-900">{viewingTicket.assignedToLabel}</p>
+                      </div>
+                    )}
+
                     {/* Description */}
                     <div>
                       <h3 className="text-sm font-semibold text-gray-900 mb-2">Description</h3>
@@ -587,10 +675,23 @@ export function SupportTickets() {
                       <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={() => setShowReplyModal(true)}>
                         Reply to Ticket
                       </Button>
-                      <Button variant="outline" className="flex-1" onClick={() => setShowStatusModal(true)}>
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => {
+                          if (viewingTicket) setNewStatus(viewingTicket.status);
+                          setShowStatusModal(true);
+                        }}
+                      >
                         Change Status
                       </Button>
-                      <Button variant="outline" onClick={() => setShowAssignModal(true)}>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedAgent(viewingTicket.assignedToId || "");
+                          setShowAssignModal(true);
+                        }}
+                      >
                         Assign to Agent
                       </Button>
                     </div>
@@ -1028,14 +1129,20 @@ export function SupportTickets() {
 
                     {/* Assign Form */}
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-900 mb-2">Assign to Agent</h3>
+                      <h3 className="text-sm font-semibold text-gray-900 mb-2">Assign to team member</h3>
                       <div className="bg-gray-50 rounded-lg p-4">
-                        <Input
-                          placeholder="Enter agent's name..."
-                          className="w-full"
+                        <select
+                          className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
                           value={selectedAgent}
                           onChange={(e) => setSelectedAgent(e.target.value)}
-                        />
+                        >
+                          <option value="">Unassigned</option>
+                          {staffUsers.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
 

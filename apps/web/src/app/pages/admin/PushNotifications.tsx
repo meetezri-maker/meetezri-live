@@ -17,12 +17,14 @@ import {
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { Button } from "@/app/components/ui/button";
 
 interface Notification {
   id: string;
   title: string;
   message: string;
   target: "all" | "core" | "pro" | "trial" | "segment";
+  segmentId?: string | null;
   segmentName?: string;
   scheduledFor?: Date;
   sentAt?: Date;
@@ -42,7 +44,10 @@ export function PushNotifications() {
   const [target, setTarget] = useState<"all" | "core" | "pro" | "trial" | "segment">("all");
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [scheduleDateTime, setScheduleDateTime] = useState("");
-  
+  const [segmentId, setSegmentId] = useState("");
+  const [segments, setSegments] = useState<{ id: string; name: string }[]>([]);
+  const [saving, setSaving] = useState(false);
+
   // Edit/Delete modals
   const [editingNotification, setEditingNotification] = useState<Notification | null>(null);
   const [deletingNotification, setDeletingNotification] = useState<Notification | null>(null);
@@ -54,23 +59,51 @@ export function PushNotifications() {
     fetchNotifications();
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await api.admin.getUserSegments();
+        const list = Array.isArray(raw) ? raw : (raw as { segments?: unknown }).segments ?? [];
+        setSegments(
+          (list as { id: string; name: string }[]).map((s) => ({
+            id: s.id,
+            name: s.name,
+          }))
+        );
+        if (list.length > 0) {
+          setSegmentId((list[0] as { id: string }).id);
+        }
+      } catch {
+        setSegments([]);
+      }
+    })();
+  }, []);
+
   const fetchNotifications = async () => {
     try {
       setIsLoading(true);
       const data = await api.admin.getPushCampaigns();
-      setNotifications(data.map((n: any) => ({
-        id: n.id,
-        title: n.title,
-        message: n.message,
-        target: n.target_audience === 'segment' ? 'segment' : n.target_audience,
-        segmentName: n.segment_name,
-        scheduledFor: n.scheduled_for ? new Date(n.scheduled_for) : undefined,
-        sentAt: n.sent_at ? new Date(n.sent_at) : undefined,
-        status: n.status,
-        deliveredCount: n.delivered_count || 0,
-        clickRate: n.click_rate || 0,
-        priority: n.priority || 'medium'
-      })));
+      const rows = Array.isArray(data) ? data : [];
+      setNotifications(
+        rows.map((n: any) => {
+          const m = (n.metrics || {}) as Record<string, unknown>;
+          const ta = (m.target_audience as string) || (n.target_segment_id ? "segment" : "all");
+          return {
+            id: n.id,
+            title: n.title,
+            message: n.message,
+            target: ta === "segment" ? "segment" : (ta as Notification["target"]),
+            segmentId: n.target_segment_id ?? null,
+            segmentName: undefined,
+            scheduledFor: n.scheduled_at ? new Date(n.scheduled_at) : undefined,
+            sentAt: n.sent_at ? new Date(n.sent_at) : undefined,
+            status: n.status,
+            deliveredCount: typeof m.delivered_count === "number" ? m.delivered_count : 0,
+            clickRate: typeof m.click_rate === "number" ? m.click_rate : 0,
+            priority: (m.priority as Notification["priority"]) || "medium",
+          };
+        })
+      );
     } catch (error) {
       console.error("Failed to fetch push campaigns:", error);
       toast.error("Failed to load notifications");
@@ -126,39 +159,102 @@ export function PushNotifications() {
     scheduled: scheduledNotifications.length,
     sent: sentNotifications.length,
     totalDelivered: sentNotifications.reduce((sum, n) => sum + (n.deliveredCount || 0), 0),
-    avgClickRate: (sentNotifications.reduce((sum, n) => sum + (n.clickRate || 0), 0) / sentNotifications.length).toFixed(1)
+    avgClickRate:
+      sentNotifications.length > 0
+        ? (
+            sentNotifications.reduce((sum, n) => sum + (n.clickRate || 0), 0) /
+            sentNotifications.length
+          ).toFixed(1)
+        : "0.0",
   };
 
-  const handleSendNow = () => {
-    if (!title || !message) {
-      alert("⚠️ Please fill in both title and message fields!");
-      return;
-    }
-    
-    alert(`✅ Notification sent successfully!\n\nTitle: ${title}\nMessage: ${message}\nTarget: ${target}\nPriority: ${priority}\n\nDelivering to users now...`);
-    
-    // Reset form
+  const resetForm = () => {
     setTitle("");
     setMessage("");
     setTarget("all");
     setPriority("medium");
     setScheduleDateTime("");
+    if (segments[0]) setSegmentId(segments[0].id);
   };
 
-  const handleSaveDraft = () => {
-    if (!title || !message) {
-      alert("⚠️ Please fill in both title and message fields!");
+  const buildCampaignBody = (status: "draft" | "scheduled") => {
+    if (target === "segment" && !segmentId) {
+      throw new Error("Select a user segment");
+    }
+    return {
+      title,
+      message,
+      status,
+      scheduled_at:
+        status === "scheduled" && scheduleDateTime
+          ? new Date(scheduleDateTime).toISOString()
+          : null,
+      target_segment_id: target === "segment" ? segmentId : null,
+      metrics: { target_audience: target, priority },
+    };
+  };
+
+  function campaignIdFromResponse(created: unknown): string {
+    if (created && typeof created === "object" && "id" in created) {
+      return String((created as { id: unknown }).id);
+    }
+    return "";
+  }
+
+  const handleSendNow = async () => {
+    if (!title.trim() || !message.trim()) {
+      toast.error("Please fill in both title and message");
       return;
     }
-    
-    alert(`✅ Draft saved successfully!\n\nTitle: ${title}\nMessage: ${message}\nTarget: ${target}\nPriority: ${priority}\n\nYou can edit and send this notification later.`);
-    
-    // Reset form
-    setTitle("");
-    setMessage("");
-    setTarget("all");
-    setPriority("medium");
-    setScheduleDateTime("");
+    if (target === "segment" && !segmentId) {
+      toast.error("Select a segment");
+      return;
+    }
+    try {
+      setSaving(true);
+      if (scheduleDateTime) {
+        await api.admin.createPushCampaign(buildCampaignBody("scheduled"));
+        toast.success("Notification scheduled");
+      } else {
+        const created = await api.admin.createPushCampaign(buildCampaignBody("draft"));
+        const id = campaignIdFromResponse(created);
+        if (!id) {
+          throw new Error("Server did not return a campaign id");
+        }
+        await api.admin.dispatchPushCampaign(id);
+        toast.success("Push notification sent");
+      }
+      resetForm();
+      await fetchNotifications();
+    } catch (e: unknown) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Failed to send");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!title.trim() || !message.trim()) {
+      toast.error("Please fill in both title and message");
+      return;
+    }
+    if (target === "segment" && !segmentId) {
+      toast.error("Select a segment");
+      return;
+    }
+    try {
+      setSaving(true);
+      await api.admin.createPushCampaign(buildCampaignBody("draft"));
+      toast.success("Draft saved");
+      resetForm();
+      await fetchNotifications();
+    } catch (e: unknown) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Failed to save draft");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleEdit = (notification: Notification) => {
@@ -167,51 +263,87 @@ export function PushNotifications() {
     setMessage(notification.message);
     setTarget(notification.target);
     setPriority(notification.priority);
+    setSegmentId(notification.segmentId || segments[0]?.id || "");
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingNotification) return;
-    
-    alert(`✅ Notification updated successfully!\n\nTitle: ${title}\nMessage: ${message}\nTarget: ${target}\nPriority: ${priority}\n\nScheduled notification has been updated.`);
-    
-    setEditingNotification(null);
-    setTitle("");
-    setMessage("");
-    setTarget("all");
-    setPriority("medium");
-    setScheduleDateTime("");
+    if (target === "segment" && !segmentId) {
+      toast.error("Select a segment");
+      return;
+    }
+    try {
+      setSaving(true);
+      await api.admin.updatePushCampaign(editingNotification.id, {
+        title,
+        message,
+        target_segment_id: target === "segment" ? segmentId : null,
+        metrics: { target_audience: target, priority },
+      });
+      toast.success("Campaign updated");
+      setEditingNotification(null);
+      resetForm();
+      await fetchNotifications();
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to update");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = (notification: Notification) => {
     setDeletingNotification(notification);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deletingNotification) return;
-    
-    alert(`✅ Notification deleted successfully!\n\n"${deletingNotification.title}" has been removed from scheduled notifications.`);
-    
-    setDeletingNotification(null);
+    try {
+      setSaving(true);
+      await api.admin.deletePushCampaign(deletingNotification.id);
+      toast.success("Notification removed");
+      setDeletingNotification(null);
+      await fetchNotifications();
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to delete");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleCreateNotification = () => {
-    if (!title || !message) {
-      alert("⚠️ Please fill in both title and message fields!");
+  const handleCreateNotification = async () => {
+    if (!title.trim() || !message.trim()) {
+      toast.error("Please fill in both title and message");
       return;
     }
-    
-    if (scheduleDateTime) {
-      alert(`✅ Notification scheduled successfully!\n\nTitle: ${title}\nMessage: ${message}\nTarget: ${target}\nPriority: ${priority}\nScheduled for: ${new Date(scheduleDateTime).toLocaleString()}`);
-    } else {
-      alert(`✅ Notification sent successfully!\n\nTitle: ${title}\nMessage: ${message}\nTarget: ${target}\nPriority: ${priority}\n\nDelivering to users now...`);
+    if (target === "segment" && !segmentId) {
+      toast.error("Select a segment");
+      return;
     }
-    
-    setShowCreateModal(false);
-    setTitle("");
-    setMessage("");
-    setTarget("all");
-    setPriority("medium");
-    setScheduleDateTime("");
+    try {
+      setSaving(true);
+      if (scheduleDateTime) {
+        await api.admin.createPushCampaign(buildCampaignBody("scheduled"));
+        toast.success("Scheduled");
+      } else {
+        const created = await api.admin.createPushCampaign(buildCampaignBody("draft"));
+        const id = campaignIdFromResponse(created);
+        if (!id) {
+          throw new Error("Server did not return a campaign id");
+        }
+        await api.admin.dispatchPushCampaign(id);
+        toast.success("Sent");
+      }
+      setShowCreateModal(false);
+      resetForm();
+      await fetchNotifications();
+    } catch (e: unknown) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -414,6 +546,27 @@ export function PushNotifications() {
                 </div>
               </div>
 
+              {target === "segment" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">User segment</label>
+                  <select
+                    value={segmentId}
+                    onChange={(e) => setSegmentId(e.target.value)}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    {segments.length === 0 ? (
+                      <option value="">No segments — create one under User Segmentation</option>
+                    ) : (
+                      segments.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Schedule (Optional)</label>
                 <input
@@ -425,24 +578,25 @@ export function PushNotifications() {
               </div>
 
               <div className="flex gap-3 pt-4">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleSendNow}
-                  className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
+                <Button
+                  type="button"
+                  onClick={() => void handleSendNow()}
+                  disabled={saving}
+                  className="flex-1 min-h-12 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium disabled:opacity-50"
                 >
                   <Send className="w-4 h-4 inline mr-2" />
-                  Send Now
-                </motion.button>
+                  {saving ? "Working…" : scheduleDateTime ? "Schedule" : "Send Now"}
+                </Button>
 
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleSaveDraft}
-                  className="px-4 py-3 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void handleSaveDraft()}
+                  disabled={saving}
+                  className="min-h-12 rounded-xl disabled:opacity-50"
                 >
                   Save Draft
-                </motion.button>
+                </Button>
               </div>
             </div>
           </motion.div>
@@ -611,6 +765,7 @@ export function PushNotifications() {
                   <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
                     <h2 className="text-2xl font-bold text-gray-900">Create Notification</h2>
                     <button
+                      type="button"
                       onClick={() => setShowCreateModal(false)}
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                     >
@@ -672,6 +827,27 @@ export function PushNotifications() {
                       </div>
                     </div>
 
+                    {target === "segment" && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">User segment</label>
+                        <select
+                          value={segmentId}
+                          onChange={(e) => setSegmentId(e.target.value)}
+                          className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                        >
+                          {segments.length === 0 ? (
+                            <option value="">No segments — create one under User Segmentation</option>
+                          ) : (
+                            segments.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+                    )}
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Schedule (Optional)</label>
                       <input
@@ -684,23 +860,24 @@ export function PushNotifications() {
                     </div>
 
                     <div className="flex gap-3 pt-4">
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={handleCreateNotification}
-                        className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
+                      <Button
+                        type="button"
+                        onClick={() => void handleCreateNotification()}
+                        disabled={saving}
+                        className="flex-1 min-h-12 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-medium disabled:opacity-50"
                       >
-                        {scheduleDateTime ? "Schedule Notification" : "Send Now"}
-                      </motion.button>
+                        {saving ? "Working…" : scheduleDateTime ? "Schedule Notification" : "Send Now"}
+                      </Button>
 
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
+                      <Button
+                        type="button"
+                        variant="secondary"
                         onClick={() => setShowCreateModal(false)}
-                        className="px-4 py-3 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
+                        disabled={saving}
+                        className="min-h-12 rounded-xl disabled:opacity-50"
                       >
                         Cancel
-                      </motion.button>
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -792,12 +969,30 @@ export function PushNotifications() {
                       </div>
                     </div>
 
+                    {target === "segment" && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">User segment</label>
+                        <select
+                          value={segmentId}
+                          onChange={(e) => setSegmentId(e.target.value)}
+                          className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                        >
+                          {segments.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     <div className="flex gap-3 pt-4">
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         onClick={handleSaveEdit}
-                        className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
+                        disabled={saving}
+                        className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium disabled:opacity-50"
                       >
                         Save Changes
                       </motion.button>
@@ -806,7 +1001,8 @@ export function PushNotifications() {
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         onClick={() => setEditingNotification(null)}
-                        className="px-4 py-3 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
+                        disabled={saving}
+                        className="px-4 py-3 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium disabled:opacity-50"
                       >
                         Cancel
                       </motion.button>

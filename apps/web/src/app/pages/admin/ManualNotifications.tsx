@@ -521,21 +521,27 @@ export function ManualNotifications() {
                   <Button
                     size="sm"
                     variant="ghost"
+                    type="button"
                     className="text-gray-600 hover:text-gray-900"
+                    onClick={() => toast.info("File attachments are not supported here—paste a link in the message instead.")}
                   >
                     <Paperclip className="w-4 h-4" />
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
+                    type="button"
                     className="text-gray-600 hover:text-gray-900"
+                    onClick={() => toast.info("Inline images are not supported in this composer—use links or HTML email templates.")}
                   >
                     <ImageIcon className="w-4 h-4" />
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
+                    type="button"
                     className="text-gray-600 hover:text-gray-900"
+                    onClick={() => toast.info("Emoji picker is not available in this editor.")}
                   >
                     <Smile className="w-4 h-4" />
                   </Button>

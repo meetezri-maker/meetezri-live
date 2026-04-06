@@ -5,14 +5,21 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, Bell, Users, Calendar, MessageSquare, X, Clock, CheckCircle, Eye, TrendingUp, Target } from "lucide-react";
+import { Send, Bell, Users, Calendar, MessageSquare, X, Clock } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
 export function NotificationsCenter() {
   const [selectedAudience, setSelectedAudience] = useState("all");
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState<any>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState<{
+    id: string;
+    title: string;
+    message: string;
+    audience: string;
+    sent: string;
+    delivered: number;
+  } | null>(null);
   const [notificationTitle, setNotificationTitle] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -28,6 +35,9 @@ export function NotificationsCenter() {
     avgOpenRate: 0,
     totalDelivered: 0
   });
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [sendAlsoPush, setSendAlsoPush] = useState(true);
 
   useEffect(() => {
     fetchNotifications();
@@ -46,32 +56,55 @@ export function NotificationsCenter() {
   const fetchNotifications = async () => {
     try {
       const data = await api.admin.getManualNotifications();
-      
-      const formatted = data.map((n: any) => ({
-        id: n.id,
-        title: n.title,
-        message: n.message,
-        audience: n.metadata?.target_audience ? 
-          (n.metadata.target_audience === 'all' ? 'All Users' : 
-           n.metadata.target_audience.charAt(0).toUpperCase() + n.metadata.target_audience.slice(1) + ' Users') 
-          : (n.segment_name || 'Targeted'),
-        sent: new Date(n.sent_at || n.created_at).toLocaleString(),
-        delivered: 1,
-        status: n.is_read ? 'Read' : 'Sent'
-      }));
+
+      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+      const formatted = data.map((n: any) => {
+        const md = n.metadata || {};
+        const audienceRaw = md.target_audience;
+        const audience =
+          audienceRaw === "all"
+            ? "All Users"
+            : audienceRaw === "premium"
+            ? "Premium Users"
+            : audienceRaw === "trial"
+            ? "Trial Users"
+            : audienceRaw === "active"
+            ? "Active Users"
+            : audienceRaw === "segment"
+            ? "Segment"
+            : audienceRaw === "specific"
+            ? "Specific users"
+            : typeof audienceRaw === "string"
+            ? audienceRaw.charAt(0).toUpperCase() + audienceRaw.slice(1)
+            : "Targeted";
+        const created = new Date(n.created_at).getTime();
+        const count =
+          typeof md.target_count === "number"
+            ? md.target_count
+            : 1;
+        return {
+          id: n.id,
+          title: n.title,
+          message: n.message || "",
+          audience,
+          sent: new Date(n.created_at).toLocaleString(),
+          delivered: count,
+          status: md.campaign_status === "scheduled" ? "Scheduled" : n.is_read ? "Read" : "Sent",
+          createdMs: created,
+        };
+      });
 
       setRecentNotifications(formatted);
 
-      // Calculate simple stats
-      const totalSent = formatted.length;
-      const totalDelivered = formatted.length; // Since each is 1
-      
-      setStats({
-        sentThisWeek: totalSent, // Ideally this should be filtered by date
-        avgOpenRate: 0, // Not tracking opens yet
-        totalDelivered: totalDelivered
-      });
+      const thisWeek = formatted.filter((f) => f.createdMs >= weekAgo);
+      const totalDelivered = formatted.reduce((s, f) => s + (f.delivered || 0), 0);
 
+      setStats({
+        sentThisWeek: thisWeek.length,
+        avgOpenRate: 0,
+        totalDelivered,
+      });
     } catch (error) {
       console.error("Failed to fetch notifications:", error);
     }
@@ -88,7 +121,7 @@ export function NotificationsCenter() {
       await api.admin.createManualNotification({
         title: notificationTitle,
         message: notificationMessage,
-        channel: 'push', // Defaulting to push for this quick send
+        channel: sendAlsoPush ? 'push' : 'in-app',
         target_audience: selectedAudience,
       });
       
@@ -98,6 +131,40 @@ export function NotificationsCenter() {
       fetchNotifications();
     } catch (error) {
       toast.error('Failed to send notification');
+      console.error(error);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleScheduleSubmit = async () => {
+    if (!notificationTitle || !notificationMessage) {
+      toast.error('Please fill in both title and message');
+      return;
+    }
+    if (!scheduleDate || !scheduleTime) {
+      toast.error('Pick a date and time');
+      return;
+    }
+    setIsSending(true);
+    try {
+      const scheduledFor = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+      await api.admin.createManualNotification({
+        title: notificationTitle,
+        message: notificationMessage,
+        channel: sendAlsoPush ? 'push' : 'in-app',
+        target_audience: selectedAudience,
+        scheduled_for: scheduledFor,
+      });
+      toast.success('Notification scheduled');
+      setShowScheduleModal(false);
+      setNotificationTitle('');
+      setNotificationMessage('');
+      setScheduleDate('');
+      setScheduleTime('');
+      fetchNotifications();
+    } catch (error) {
+      toast.error('Failed to schedule');
       console.error(error);
     } finally {
       setIsSending(false);
@@ -178,8 +245,18 @@ export function NotificationsCenter() {
                 <div>
                   <Label htmlFor="scheduleDate">Schedule (Optional)</Label>
                   <div className="grid grid-cols-2 gap-3 mt-2">
-                    <Input id="scheduleDate" type="date" />
-                    <Input id="scheduleTime" type="time" />
+                    <Input
+                      id="scheduleDate"
+                      type="date"
+                      value={scheduleDate}
+                      onChange={(e) => setScheduleDate(e.target.value)}
+                    />
+                    <Input
+                      id="scheduleTimeInline"
+                      type="time"
+                      value={scheduleTime}
+                      onChange={(e) => setScheduleTime(e.target.value)}
+                    />
                   </div>
                 </div>
 
@@ -187,10 +264,12 @@ export function NotificationsCenter() {
                   <input
                     type="checkbox"
                     id="pushNotification"
+                    checked={sendAlsoPush}
+                    onChange={(e) => setSendAlsoPush(e.target.checked)}
                     className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                   />
                   <Label htmlFor="pushNotification" className="!mb-0 cursor-pointer">
-                    Also send as push notification
+                    Deliver as push (in-app notification if unchecked)
                   </Label>
                 </div>
 
@@ -325,7 +404,20 @@ export function NotificationsCenter() {
                       Delivered to {notification.delivered.toLocaleString()} users
                     </p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => setShowDetailsModal(notification)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setShowDetailsModal({
+                        id: notification.id,
+                        title: notification.title,
+                        message: notification.message,
+                        audience: notification.audience,
+                        sent: notification.sent,
+                        delivered: notification.delivered,
+                      })
+                    }
+                  >
                     View Details
                   </Button>
                 </motion.div>
@@ -357,27 +449,28 @@ export function NotificationsCenter() {
               </div>
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="scheduleDate">Date</Label>
-                  <Input id="scheduleDate" type="date" />
+                  <Label htmlFor="scheduleDateModal">Date</Label>
+                  <Input
+                    id="scheduleDateModal"
+                    type="date"
+                    value={scheduleDate}
+                    onChange={(e) => setScheduleDate(e.target.value)}
+                  />
                 </div>
                 <div>
-                  <Label htmlFor="scheduleTime">Time</Label>
-                  <Input id="scheduleTime" type="time" />
+                  <Label htmlFor="scheduleTimeModal">Time</Label>
+                  <Input
+                    id="scheduleTimeModal"
+                    type="time"
+                    value={scheduleTime}
+                    onChange={(e) => setScheduleTime(e.target.value)}
+                  />
                 </div>
               </div>
               <div className="flex gap-3 pt-4">
-                <Button className="flex-1 gap-2" onClick={() => {
-                  if (!notificationTitle || !notificationMessage) {
-                    alert('Please fill in both title and message');
-                    return;
-                  }
-                  alert(`Notification scheduled successfully!\n\nTitle: ${notificationTitle}\nMessage: ${notificationMessage}\nAudience: ${selectedAudience}`);
-                  setShowScheduleModal(false);
-                  setNotificationTitle('');
-                  setNotificationMessage('');
-                }}>
+                <Button className="flex-1 gap-2" onClick={handleScheduleSubmit} disabled={isSending}>
                   <Clock className="w-4 h-4" />
-                  Schedule
+                  {isSending ? 'Scheduling…' : 'Schedule'}
                 </Button>
                 <Button
                   variant="outline"
@@ -434,8 +527,8 @@ export function NotificationsCenter() {
                 </p>
                 <div className="mt-4">
                   <Label className="font-bold">Message</Label>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    {showDetailsModal.title}
+                  <p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap">
+                    {showDetailsModal.message}
                   </p>
                 </div>
               </div>

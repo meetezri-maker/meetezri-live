@@ -10,6 +10,9 @@ import {
   getPushCampaigns, createPushCampaign, updatePushCampaign, deletePushCampaign,
   getSupportTickets, updateSupportTicket,
   getCommunityStats, getCommunityGroups,
+  getCommunityPostsForAdmin, updateCommunityPostAdmin, softDeleteCommunityPostAdmin,
+  updateCommunityGroupAdmin, deleteCommunityGroupAdmin, getCommunityGroupMembersAdmin,
+  dispatchPushCampaignAsNotifications,
   getLiveSessions, getActivityLogs, getGlobalAuditLogs, getSessionRecordings, getErrorLogs, getSessionRecordingTranscript,
   getCrisisEvents, getCrisisEvent, updateCrisisEventStatus,
   endLiveSessionByAdmin, flagSessionForReview,
@@ -17,6 +20,7 @@ import {
   getOrgTeamMembers, addOrgTeamMember, updateOrgTeamMember, removeOrgTeamMember,
   getBackupRecoveryDashboard, createLogicalBackup, createDataExportRecord, requestRestoreFromBackup,
   getBackupRecordJsonForDownload,
+  getContentPerformanceAnalytics,
 } from './admin.service';
 import {
   listFeatureFlags,
@@ -532,6 +536,21 @@ export async function getCommunityStatsHandler(request: FastifyRequest, reply: F
   }
 }
 
+export async function getContentPerformanceHandler(
+  request: FastifyRequest<{ Querystring: { range?: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const r = request.query?.range;
+    const days: 7 | 30 | 90 = r === '7d' ? 7 : r === '90d' ? 90 : 30;
+    const data = await getContentPerformanceAnalytics(days);
+    return reply.code(200).send(data);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to fetch content performance' });
+  }
+}
+
 export async function getCommunityGroupsHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
     const groups = await getCommunityGroups();
@@ -539,6 +558,94 @@ export async function getCommunityGroupsHandler(request: FastifyRequest, reply: 
   } catch (error) {
     request.log.error(error);
     return reply.code(500).send({ message: 'Failed to fetch groups' });
+  }
+}
+
+export async function getCommunityPostsHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const posts = await getCommunityPostsForAdmin();
+    return reply.code(200).send(posts);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to fetch community posts' });
+  }
+}
+
+export async function patchCommunityPostHandler(
+  request: FastifyRequest<{ Params: { id: string }; Body: { locked?: boolean; flag_count?: number } }>,
+  reply: FastifyReply
+) {
+  try {
+    const post = await updateCommunityPostAdmin(request.params.id, request.body || {});
+    return reply.code(200).send(post);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to update post' });
+  }
+}
+
+export async function deleteCommunityPostHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    await softDeleteCommunityPostAdmin(request.params.id);
+    return reply.code(204).send();
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to delete post' });
+  }
+}
+
+export async function patchCommunityGroupHandler(
+  request: FastifyRequest<{ Params: { id: string }; Body: Record<string, unknown> }>,
+  reply: FastifyReply
+) {
+  try {
+    const group = await updateCommunityGroupAdmin(request.params.id, request.body || {});
+    return reply.code(200).send(group);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to update group' });
+  }
+}
+
+export async function deleteCommunityGroupHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    await deleteCommunityGroupAdmin(request.params.id);
+    return reply.code(204).send();
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to delete group' });
+  }
+}
+
+export async function getCommunityGroupMembersHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const members = await getCommunityGroupMembersAdmin(request.params.id);
+    return reply.code(200).send(members);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to fetch group members' });
+  }
+}
+
+export async function dispatchPushCampaignHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const result = await dispatchPushCampaignAsNotifications(request.params.id);
+    return reply.code(200).send(result);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: (error as Error).message || 'Failed to dispatch campaign' });
   }
 }
 
