@@ -2,6 +2,7 @@
   "name": "@meetezri/api",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@9.1.1",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
     "build": "node -e \"process.env.PRISMA_CLIENT_ENGINE_TYPE='binary';require('child_process').execSync('prisma generate',{stdio:'inherit'})\" && tsc",
