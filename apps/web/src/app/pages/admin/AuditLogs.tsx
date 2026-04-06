@@ -7,6 +7,7 @@ import { Search, Download, Shield, User, Settings as SettingsIcon } from "lucide
 import { useState, useEffect, useMemo } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 
 type Row = {
   id: string;
@@ -240,13 +241,9 @@ export function AuditLogs() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-gray-200 bg-white">
                   {isLoading && (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
-                        Loading audit logs…
-                      </td>
-                    </tr>
+                    <AdminTableSkeletonRows columns={6} rows={8} padding="comfortable" />
                   )}
                   {!isLoading && filtered.length === 0 && (
                     <tr>

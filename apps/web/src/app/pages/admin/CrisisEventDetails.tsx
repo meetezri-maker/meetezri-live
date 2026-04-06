@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { api } from "../../../lib/api";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 
 interface CrisisEvent {
   id: string;
@@ -483,8 +484,48 @@ export function CrisisEventDetails() {
     if (listLoading) {
       return (
         <AdminLayoutNew>
-          <div className="flex items-center justify-center h-[60vh]">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+          <div className="space-y-6" key="crisis-events-loading">
+            <div>
+              <Button variant="ghost" className="gap-2 mb-4" asChild>
+                <Link to="/admin/crisis-dashboard">
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to Crisis Dashboard
+                </Link>
+              </Button>
+              <h1 className="text-2xl font-bold">Crisis events</h1>
+              <p className="text-muted-foreground mt-1">Loading events…</p>
+            </div>
+            <Card className="p-0 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                        When
+                      </th>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                        User
+                      </th>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                        Risk
+                      </th>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                        Status
+                      </th>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                        Type
+                      </th>
+                      <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 bg-white">
+                    <AdminTableSkeletonRows columns={6} rows={8} padding="comfortable" />
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </div>
         </AdminLayoutNew>
       );
@@ -517,17 +558,29 @@ export function CrisisEventDetails() {
           <Card className="p-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-muted/50">
+                <thead className="bg-gray-50 border-b">
                   <tr>
-                    <th className="text-left p-3 font-semibold">When</th>
-                    <th className="text-left p-3 font-semibold">User</th>
-                    <th className="text-left p-3 font-semibold">Risk</th>
-                    <th className="text-left p-3 font-semibold">Status</th>
-                    <th className="text-left p-3 font-semibold">Type</th>
-                    <th className="text-right p-3 font-semibold">Action</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      When
+                    </th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      User
+                    </th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Risk
+                    </th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Status
+                    </th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Type
+                    </th>
+                    <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Action
+                    </th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-gray-200 bg-white">
                   {listRows.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="p-8 text-center text-muted-foreground">

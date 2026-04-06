@@ -5,6 +5,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { motion, AnimatePresence } from "motion/react";
 import { api } from "../../../lib/api";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 import { mergeApiBuiltinsForAdmin } from "../../../lib/mergeAdminWellnessTools";
 import {
   WELLNESS_BUILTIN_TOOLS_ADMIN,
@@ -494,16 +495,9 @@ export function ContentManagement() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-200 bg-white">
                     {isLoading ? (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          className="px-6 py-8 text-center text-sm text-muted-foreground"
-                        >
-                          Loading exercises...
-                        </td>
-                      </tr>
+                      <AdminTableSkeletonRows columns={6} rows={8} padding="comfortable" />
                     ) : filteredExercises.length === 0 ? (
                       <tr>
                         <td

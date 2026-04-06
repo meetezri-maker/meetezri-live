@@ -38,6 +38,7 @@ import { buttonVariants } from "@/app/components/ui/button";
 import { cn } from "@/app/components/ui/utils";
 import { api } from "../../../lib/api";
 import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 import { buildStatsQuery, datesForPreset, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
 
 function formatStatsRangeUtc(stats: { rangeStart?: string; rangeEnd?: string } | null) {
@@ -226,16 +227,6 @@ export function RetentionMetrics() {
 
   const COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b"];
 
-  if (isLoading && !stats) {
-    return (
-      <AdminLayoutNew>
-        <div className="flex items-center justify-center h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary" />
-        </div>
-      </AdminLayoutNew>
-    );
-  }
-
   if (error && !stats) {
     return (
       <AdminLayoutNew>
@@ -302,7 +293,18 @@ export function RetentionMetrics() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {statsCards.map((stat, index) => (
+          {isLoading && !stats
+            ? Array.from({ length: 4 }).map((_, index) => (
+                <Card
+                  key={index}
+                  className="bg-white border-gray-200 p-6 h-36 animate-pulse"
+                >
+                  <div className="h-4 w-28 bg-gray-200 rounded mb-4" />
+                  <div className="h-8 w-20 bg-gray-200 rounded mb-2" />
+                  <div className="h-3 w-40 bg-gray-100 rounded" />
+                </Card>
+              ))
+            : statsCards.map((stat, index) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, scale: 0.9 }}
@@ -360,19 +362,36 @@ export function RetentionMetrics() {
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left !text-gray-700 font-medium pb-3">Cohort</th>
-                    <th className="text-center !text-gray-700 font-medium pb-3">Week 1</th>
-                    <th className="text-center !text-gray-700 font-medium pb-3">Week 2</th>
-                    <th className="text-center !text-gray-700 font-medium pb-3">Week 3</th>
-                    <th className="text-center !text-gray-700 font-medium pb-3">Week 4</th>
-                    <th className="text-center !text-gray-700 font-medium pb-3">Month 2</th>
-                    <th className="text-center !text-gray-700 font-medium pb-3">Month 3</th>
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Cohort
+                    </th>
+                    <th className="text-center px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Week 1
+                    </th>
+                    <th className="text-center px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Week 2
+                    </th>
+                    <th className="text-center px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Week 3
+                    </th>
+                    <th className="text-center px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Week 4
+                    </th>
+                    <th className="text-center px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Month 2
+                    </th>
+                    <th className="text-center px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Month 3
+                    </th>
                   </tr>
                 </thead>
-                <tbody>
-                  {cohortRetentionData.map((cohort, rowIdx) => (
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {isLoading && !stats ? (
+                    <AdminTableSkeletonRows columns={7} rows={6} padding="comfortable" />
+                  ) : (
+                  cohortRetentionData.map((cohort, rowIdx) => (
                     <tr key={`cohort-${rowIdx}-${String(cohort.cohort)}`} className="border-b border-gray-100">
                       <td className="py-3 !text-gray-900 font-medium">{cohort.cohort}</td>
                       <td className="text-center">
@@ -446,7 +465,8 @@ export function RetentionMetrics() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                  ))
+                  )}
                 </tbody>
               </table>
             </div>

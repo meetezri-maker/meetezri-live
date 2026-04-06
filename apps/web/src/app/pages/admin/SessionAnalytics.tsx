@@ -27,6 +27,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { api } from "../../../lib/api";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 
 export function SessionAnalytics() {
   const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
@@ -178,16 +179,6 @@ export function SessionAnalytics() {
     };
   });
 
-  if (isLoading) {
-    return (
-      <AdminLayoutNew>
-        <div className="flex items-center justify-center h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-        </div>
-      </AdminLayoutNew>
-    );
-  }
-
   if (error) {
     return (
       <AdminLayoutNew>
@@ -244,18 +235,28 @@ export function SessionAnalytics() {
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {statsCards.map((card) => (
-            <StatsCard
-              key={card.title}
-              title={card.title}
-              value={card.value}
-              change={card.change}
-              changeType={card.changeType as "positive" | "negative" | "neutral"}
-              icon={card.icon}
-              color={card.color as any}
-              delay={card.delay}
-            />
-          ))}
+          {isLoading
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="rounded-xl border border-gray-200 bg-white p-6 h-32 animate-pulse"
+                >
+                  <div className="h-4 w-24 bg-gray-200 rounded mb-4" />
+                  <div className="h-8 w-20 bg-gray-200 rounded" />
+                </div>
+              ))
+            : statsCards.map((card) => (
+                <StatsCard
+                  key={card.title}
+                  title={card.title}
+                  value={card.value}
+                  change={card.change}
+                  changeType={card.changeType as "positive" | "negative" | "neutral"}
+                  icon={card.icon}
+                  color={card.color as any}
+                  delay={card.delay}
+                />
+              ))}
         </div>
 
         {/* Charts Row 1 */}
@@ -431,8 +432,17 @@ export function SessionAnalytics() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {mappedRecentSessions.map((session) => (
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {isLoading && (
+                    <AdminTableSkeletonRows
+                      columns={6}
+                      rows={8}
+                      firstColumnWide
+                      padding="comfortable"
+                    />
+                  )}
+                  {!isLoading &&
+                    mappedRecentSessions.map((session) => (
                     <tr key={session.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
@@ -469,6 +479,16 @@ export function SessionAnalytics() {
                       </td>
                     </tr>
                   ))}
+                  {!isLoading && mappedRecentSessions.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="px-6 py-12 text-center text-sm text-muted-foreground"
+                      >
+                        No recent sessions in this range.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

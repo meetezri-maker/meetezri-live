@@ -31,6 +31,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../../lib/api";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 
 interface User {
   id: string;
@@ -780,41 +781,15 @@ export function UserManagement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {isLoading &&
-                    Array.from({ length: 8 }).map((_, index) => (
-                      <tr key={`skeleton-${index}`} className="animate-pulse">
-                        <td className="px-4 py-4">
-                          <div className="h-4 w-4 rounded bg-gray-200" />
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-gray-200" />
-                            <div className="space-y-2">
-                              <div className="h-4 w-32 bg-gray-200 rounded" />
-                              <div className="h-3 w-48 bg-gray-100 rounded" />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="h-6 w-16 bg-gray-200 rounded-full" />
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="h-6 w-14 bg-gray-200 rounded-full" />
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="h-4 w-8 bg-gray-200 rounded" />
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="h-4 w-12 bg-gray-200 rounded" />
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="h-4 w-28 bg-gray-200 rounded" />
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="h-8 w-16 bg-gray-200 rounded" />
-                        </td>
-                      </tr>
-                    ))}
+                  {isLoading && (
+                    <AdminTableSkeletonRows
+                      columns={8}
+                      rows={8}
+                      showCheckboxColumn
+                      firstColumnWide
+                      padding="compact"
+                    />
+                  )}
                   {!isLoading &&
                     paginatedUsers.map((user, index) => (
                     <motion.tr

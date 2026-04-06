@@ -15,6 +15,7 @@ import {
 import { LineChart, Line, BarChart, Bar, AreaChart, Area, PieChart as RechartsPie, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { useState, useEffect } from "react";
 import { api } from "../../../lib/api";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 
 interface Transaction {
   id: string;
@@ -217,13 +218,7 @@ export function Billing() {
   return (
     <AdminLayoutNew>
       <div className="max-w-7xl mx-auto space-y-6">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-24 text-gray-500 gap-2">
-            <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <p>Loading billing data from Stripe…</p>
-          </div>
-        ) : (
-          <>
+        <>
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -261,6 +256,19 @@ export function Billing() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {isLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 h-36 animate-pulse"
+              >
+                <div className="h-4 w-28 bg-gray-200 rounded mb-4" />
+                <div className="h-8 w-24 bg-gray-200 rounded mb-2" />
+                <div className="h-3 w-32 bg-gray-100 rounded" />
+              </div>
+            ))
+          ) : (
+          <>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -335,6 +343,8 @@ export function Billing() {
             <h3 className="text-2xl font-bold text-gray-900">{stats.churnRate}%</h3>
             <p className="text-gray-600 text-sm mt-1">Churn Rate</p>
           </motion.div>
+          </>
+          )}
         </div>
 
         {/* Revenue Chart */}
@@ -443,18 +453,34 @@ export function Billing() {
 
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">User</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Plan</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Amount</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Method</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Status</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">Date</th>
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">
+                    User
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">
+                    Plan
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">
+                    Amount
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">
+                    Method
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">
+                    Status
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">
+                    Date
+                  </th>
                 </tr>
               </thead>
-              <tbody>
-                {filteredTransactions.map((transaction, index) => (
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {isLoading && (
+                  <AdminTableSkeletonRows columns={6} rows={8} padding="compact" />
+                )}
+                {!isLoading &&
+                  filteredTransactions.map((transaction, index) => (
                   <motion.tr
                     key={transaction.id}
                     initial={{ opacity: 0, y: 20 }}
@@ -480,12 +506,18 @@ export function Billing() {
                     </td>
                   </motion.tr>
                 ))}
+                {!isLoading && filteredTransactions.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-8 px-4 text-center text-sm text-gray-500">
+                      No transactions in this view.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </motion.div>
-          </>
-        )}
+        </>
       </div>
     </AdminLayoutNew>
   );

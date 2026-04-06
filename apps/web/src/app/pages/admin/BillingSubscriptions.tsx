@@ -5,6 +5,7 @@ import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../../lib/api";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 import { format } from "date-fns";
 import {
   CreditCard,
@@ -308,13 +309,7 @@ export function BillingSubscriptions() {
   return (
     <AdminLayoutNew>
       <div className="space-y-6">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-2">
-            <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <p>Loading subscriptions and invoices…</p>
-          </div>
-        ) : (
-          <>
+        <>
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -347,6 +342,15 @@ export function BillingSubscriptions() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {isLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i} className="p-6 h-32 border-gray-200 animate-pulse bg-gray-50">
+                <div className="h-4 w-32 bg-gray-200 rounded mb-4" />
+                <div className="h-8 w-24 bg-gray-200 rounded" />
+              </Card>
+            ))
+          ) : (
+          <>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -414,6 +418,8 @@ export function BillingSubscriptions() {
               <p className="text-sm text-muted-foreground">ARPU (active)</p>
             </Card>
           </motion.div>
+          </>
+          )}
         </div>
 
         {/* Tabs */}
@@ -627,16 +633,32 @@ export function BillingSubscriptions() {
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b">
                       <tr>
-                        <th className="text-left p-4 font-medium">Date</th>
-                        <th className="text-left p-4 font-medium">Organization</th>
-                        <th className="text-left p-4 font-medium">Amount</th>
-                        <th className="text-left p-4 font-medium">Invoice</th>
-                        <th className="text-left p-4 font-medium">Status</th>
-                        <th className="text-left p-4 font-medium">Actions</th>
+                        <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                          Date
+                        </th>
+                        <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                          Organization
+                        </th>
+                        <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                          Amount
+                        </th>
+                        <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                          Invoice
+                        </th>
+                        <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                          Status
+                        </th>
+                        <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {transactions.map((txn, index) => (
+                    <tbody className="divide-y divide-gray-200 bg-white">
+                      {isLoading && (
+                        <AdminTableSkeletonRows columns={6} rows={8} padding="comfortable" />
+                      )}
+                      {!isLoading &&
+                        transactions.map((txn, index) => (
                         <motion.tr
                           key={txn.id}
                           initial={{ opacity: 0, x: -20 }}
@@ -671,6 +693,13 @@ export function BillingSubscriptions() {
                           </td>
                         </motion.tr>
                       ))}
+                      {!isLoading && transactions.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-12 text-center text-sm text-muted-foreground">
+                            No transactions loaded.
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -678,8 +707,7 @@ export function BillingSubscriptions() {
             </motion.div>
           </div>
         )}
-          </>
-        )}
+        </>
       </div>
 
       {/* Process Payment Modal */}

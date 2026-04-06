@@ -22,6 +22,7 @@ import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { SUBSCRIPTION_PLANS } from "../../utils/subscriptionPlans";
 import type { PlanTier } from "../../utils/subscriptionPlans";
 import { api } from "../../../lib/api";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 
 type AdminPaygTransaction = {
   id: string;
@@ -179,13 +180,7 @@ export function PayAsYouGoManager() {
             {loadError}
           </div>
         )}
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-2">
-            <div className="h-8 w-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-            <p>Loading PAYG transactions…</p>
-          </div>
-        ) : (
-          <>
+        <>
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
@@ -238,6 +233,16 @@ export function PayAsYouGoManager() {
 
         {/* Statistics Cards */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
+          {isLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i} className="p-6 h-36 border-gray-200 animate-pulse bg-gray-50">
+                <div className="h-4 w-24 bg-gray-200 rounded mb-4" />
+                <div className="h-8 w-32 bg-gray-200 rounded mb-2" />
+                <div className="h-3 w-40 bg-gray-100 rounded" />
+              </Card>
+            ))
+          ) : (
+          <>
           <Card className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
             <div className="flex items-center justify-between mb-2">
               <DollarSign className="w-8 h-8 text-green-600" />
@@ -300,6 +305,8 @@ export function PayAsYouGoManager() {
               Per transaction
             </p>
           </Card>
+          </>
+          )}
         </div>
 
         {/* Plan Breakdown */}
@@ -308,6 +315,19 @@ export function PayAsYouGoManager() {
             <Zap className="w-5 h-5 text-amber-600" />
             Revenue by Plan Tier
           </h3>
+          {isLoading ? (
+            <div className="grid md:grid-cols-3 gap-6">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="p-4 rounded-lg border border-border bg-muted/30 h-48 animate-pulse">
+                  <div className="h-6 w-32 bg-gray-200 rounded mb-4" />
+                  <div className="space-y-2">
+                    <div className="h-4 w-full bg-gray-200 rounded" />
+                    <div className="h-4 w-3/4 bg-gray-200 rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className="grid md:grid-cols-3 gap-6">
             {(["core", "pro"] as PlanTier[]).map(planId => {
               const plan = SUBSCRIPTION_PLANS[planId];
@@ -359,6 +379,7 @@ export function PayAsYouGoManager() {
               );
             })}
           </div>
+          )}
         </Card>
 
         {/* Top Customers */}
@@ -367,6 +388,13 @@ export function PayAsYouGoManager() {
             <Users className="w-5 h-5 text-blue-600" />
             Top PAYG Customers
           </h3>
+          {isLoading ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="p-4 rounded-lg border border-border h-36 animate-pulse bg-muted/30" />
+              ))}
+            </div>
+          ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {(() => {
               // Calculate top customers
@@ -432,6 +460,7 @@ export function PayAsYouGoManager() {
               ));
             })()}
           </div>
+          )}
         </Card>
 
         {/* Filters and Search */}
@@ -470,21 +499,42 @@ export function PayAsYouGoManager() {
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-muted/50 border-b border-border">
+              <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Transaction ID</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Customer</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Plan</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Minutes</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Rate</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Total Cost</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Payment</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Date</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Transaction ID
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Customer
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Plan
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Minutes
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Rate
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Total Cost
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Payment
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Status
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
-                {filteredTransactions.length === 0 ? (
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {isLoading && (
+                  <AdminTableSkeletonRows columns={9} rows={8} padding="comfortable" />
+                )}
+                {!isLoading && filteredTransactions.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center gap-2">
@@ -496,7 +546,7 @@ export function PayAsYouGoManager() {
                       </div>
                     </td>
                   </tr>
-                ) : (
+                ) : !isLoading ? (
                   filteredTransactions.map((transaction) => {
                     const planType = (transaction.plan_type as PlanTier | null | undefined) || "core";
                     const plan = SUBSCRIPTION_PLANS[planType];
@@ -576,7 +626,7 @@ export function PayAsYouGoManager() {
                       </motion.tr>
                     );
                   })
-                )}
+                ) : null}
               </tbody>
             </table>
           </div>
@@ -601,8 +651,7 @@ export function PayAsYouGoManager() {
             </div>
           </div>
         </Card>
-          </>
-        )}
+        </>
       </div>
     </AdminLayoutNew>
   );

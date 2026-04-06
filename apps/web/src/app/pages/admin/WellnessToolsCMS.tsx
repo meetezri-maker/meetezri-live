@@ -38,6 +38,13 @@ import {
 import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/app/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence } from "motion/react";
 import { api } from "../../../lib/api";
@@ -582,9 +589,57 @@ export function WellnessToolsCMS() {
                       >
                         {tool.status}
                       </span>
-                      <button className="p-1 hover:bg-gray-100 rounded-lg transition-all">
-                        <MoreVertical className="w-4 h-4 text-gray-600" />
-                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="p-1 hover:bg-gray-100 rounded-lg transition-all outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                            aria-label={`Actions for ${tool.title}`}
+                          >
+                            <MoreVertical className="w-4 h-4 text-gray-600" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem
+                            onSelect={() => handleViewTool(tool)}
+                            className="cursor-pointer"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => handleCopyTool(tool)}
+                            disabled={tool.isBuiltin || tool.isPlaceholder}
+                            className="cursor-pointer"
+                          >
+                            <Copy className="w-4 h-4" />
+                            Duplicate…
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              tool.isBuiltin || tool.isPlaceholder
+                                ? navigate(
+                                    `/admin/wellness-tool-editor?category=${encodeURIComponent(tool.category)}`
+                                  )
+                                : navigate(`/admin/wellness-tool-editor?id=${tool.id}`)
+                            }
+                            className="cursor-pointer"
+                          >
+                            <Edit className="w-4 h-4" />
+                            {tool.isBuiltin || tool.isPlaceholder ? "Create in category" : "Edit"}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => handleDeleteTool(tool)}
+                            disabled={tool.isBuiltin || tool.isPlaceholder}
+                            className="cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
 

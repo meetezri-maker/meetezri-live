@@ -18,6 +18,7 @@ import {
 import { useState, useEffect, useMemo } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 
 interface Ticket {
   id: string;
@@ -438,13 +439,9 @@ export function SupportTickets() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-gray-200 bg-white">
                   {isLoading && (
-                    <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center text-muted-foreground">
-                        Loading tickets…
-                      </td>
-                    </tr>
+                    <AdminTableSkeletonRows columns={8} rows={8} padding="comfortable" />
                   )}
                   {!isLoading && filteredTickets.length === 0 && (
                     <tr>
