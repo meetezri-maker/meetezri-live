@@ -5,7 +5,6 @@ import { api } from "../../../lib/api";
 import { motion } from "motion/react";
 import {
   Users,
-  Building2,
   Globe,
   TrendingUp,
   Activity,
@@ -22,7 +21,6 @@ import {
   MessageSquare,
   UserCheck,
   BarChart3,
-  Bell,
   Eye,
   Download,
   Smile,
@@ -58,6 +56,20 @@ function formatTimeAgo(iso: string) {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
+}
+
+function formatUsd(n: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(n) ? n : 0);
+}
+
+function formatPctSigned(n: number) {
+  if (!Number.isFinite(n)) return "—";
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${n.toFixed(1)}%`;
 }
 
 export function SuperAdminDashboard() {
@@ -209,14 +221,29 @@ export function SuperAdminDashboard() {
   // Use stats data or fallbacks
   const userCount = stats?.totalUsers || 0;
   const sessionCount = stats?.activeSessions || 0;
-  const totalSessions = stats?.totalSessions || 0;
   const revenue = stats?.revenue || 0;
+  const kpi = stats?.kpi as
+    | {
+        signupsLast7Days: number;
+        signupsWeekOverWeekPct: number;
+        sessionsLastHour: number;
+        paymentVolumeThisMonthCents: number;
+        paymentMomPct: number;
+        subscriptionMrrApprox: number;
+      }
+    | undefined;
+  const processHealth = stats?.processHealth as
+    | { databaseConnected: boolean; errors24h: number; uptimeSeconds: number }
+    | undefined;
   const userGrowthData = stats?.userGrowth || [];
   const sessionData = stats?.sessionActivity || [];
   const revenueData = stats?.revenueData || [];
   const platformDistribution = stats?.platformDistribution || [];
   const systemHealth = stats?.systemHealth || [];
   const mockedSections: string[] = stats?.mockedSections || [];
+
+  const mrrDisplay = kpi != null ? kpi.subscriptionMrrApprox : Number(revenue);
+  const payThisMonthUsd = (kpi?.paymentVolumeThisMonthCents ?? 0) / 100;
 
   return (
     <AdminLayoutNew>
@@ -255,7 +282,7 @@ export function SuperAdminDashboard() {
 
         {mockedSections.length > 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Some dashboard metrics are currently mocked/estimated: {mockedSections.join(", ")}.
+            Some chart series have limited data: {mockedSections.join(", ")}. Totals and KPIs below are still from the database.
           </div>
         )}
 
@@ -274,8 +301,14 @@ export function SuperAdminDashboard() {
                   <div className="w-12 h-12 rounded-xl bg-purple-500 flex items-center justify-center">
                     <Users className="w-6 h-6 text-white" />
                   </div>
-                  <div className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
-                    +12.5%
+                  <div
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      (kpi?.signupsWeekOverWeekPct ?? 0) >= 0
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {kpi != null ? formatPctSigned(kpi.signupsWeekOverWeekPct) : "—"}
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground mb-1">Total Users</p>
@@ -290,7 +323,11 @@ export function SuperAdminDashboard() {
                 </motion.div>
                 <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <TrendingUp className="w-3 h-3 text-green-600" />
-                  <span>+1,234 this week</span>
+                  <span>
+                    {kpi != null
+                      ? `${kpi.signupsLast7Days.toLocaleString()} signups in the last 7 days`
+                      : "—"}
+                  </span>
                 </div>
               </div>
             </Card>
@@ -328,7 +365,11 @@ export function SuperAdminDashboard() {
                 </motion.div>
                 <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <Eye className="w-3 h-3 text-cyan-600" />
-                  <span>234 in last hour</span>
+                  <span>
+                    {kpi != null
+                      ? `${kpi.sessionsLastHour.toLocaleString()} sessions started in the last hour`
+                      : "—"}
+                  </span>
                 </div>
               </div>
             </Card>
@@ -347,15 +388,23 @@ export function SuperAdminDashboard() {
                   <div className="w-12 h-12 rounded-xl bg-green-500 flex items-center justify-center">
                     <DollarSign className="w-6 h-6 text-white" />
                   </div>
-                  <div className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
-                    +23.1%
+                  <div
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      (kpi?.paymentMomPct ?? 0) >= 0
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {kpi != null ? formatPctSigned(kpi.paymentMomPct) : "—"} vs prior month
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Revenue (MRR)</p>
-                <div className="text-3xl font-bold">${revenue}K</div>
+                <p className="text-sm text-muted-foreground mb-1">Subscription MRR (active)</p>
+                <div className="text-3xl font-bold">{formatUsd(mrrDisplay)}</div>
                 <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <TrendingUp className="w-3 h-3 text-green-600" />
-                  <span>$58K this month</span>
+                  <span>
+                    {formatUsd(payThisMonthUsd)} completed payments (this month, Stripe)
+                  </span>
                 </div>
               </div>
             </Card>
@@ -457,7 +506,17 @@ export function SuperAdminDashboard() {
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-green-500" />
+                        <div
+                          className={`w-2 h-2 rounded-full ${
+                            metric.status === "excellent"
+                              ? "bg-green-500"
+                              : metric.status === "good"
+                                ? "bg-amber-500"
+                                : metric.status === "degraded" || metric.status === "critical"
+                                  ? "bg-red-500"
+                                  : "bg-blue-500"
+                          }`}
+                        />
                         <span className="text-sm font-medium">{metric.name}</span>
                       </div>
                       <span className={`font-bold text-sm ${metric.color}`}>
@@ -467,12 +526,16 @@ export function SuperAdminDashboard() {
                     <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${metric.percentage}%` }}
+                        animate={{ width: `${Math.min(100, metric.percentage)}%` }}
                         transition={{ delay: 0.7 + index * 0.1, duration: 1 }}
                         className={`h-full ${
                           metric.status === "excellent"
                             ? "bg-green-500"
-                            : "bg-blue-500"
+                            : metric.status === "good"
+                              ? "bg-blue-500"
+                              : metric.status === "degraded" || metric.status === "critical"
+                                ? "bg-red-500"
+                                : "bg-blue-500"
                         }`}
                       />
                     </div>
@@ -484,11 +547,31 @@ export function SuperAdminDashboard() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1 }}
-                className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200"
+                className={`mt-6 p-4 rounded-lg border ${
+                  processHealth && !processHealth.databaseConnected
+                    ? "bg-red-50 border-red-200"
+                    : processHealth && processHealth.errors24h > 0
+                      ? "bg-amber-50 border-amber-200"
+                      : "bg-green-50 border-green-200"
+                }`}
               >
-                <div className="flex items-center gap-2 text-green-700">
-                  <CheckCircle2 className="w-5 h-5" />
-                  <span className="font-medium text-sm">All systems operational</span>
+                <div
+                  className={`flex items-center gap-2 ${
+                    processHealth && !processHealth.databaseConnected
+                      ? "text-red-800"
+                      : processHealth && processHealth.errors24h > 0
+                        ? "text-amber-900"
+                        : "text-green-700"
+                  }`}
+                >
+                  <CheckCircle2 className="w-5 h-5 shrink-0" />
+                  <span className="font-medium text-sm">
+                    {processHealth && !processHealth.databaseConnected
+                      ? "Database unreachable — check API logs and connection."
+                      : processHealth && processHealth.errors24h > 0
+                        ? `${processHealth.errors24h} error log(s) in the last 24h — review Error Tracking.`
+                        : "API process healthy — database reachable, no blocking issues from this snapshot."}
+                  </span>
                 </div>
               </motion.div>
             </Card>
@@ -700,9 +783,11 @@ export function SuperAdminDashboard() {
                         </p>
                       </div>
                       {alert.status === "pending" && (
-                        <Button size="sm" variant="outline">
-                          Review
-                        </Button>
+                        <Link to="/admin/crisis-monitoring">
+                          <Button size="sm" variant="outline" type="button">
+                            Review
+                          </Button>
+                        </Link>
                       )}
                     </div>
                   </motion.div>
@@ -722,10 +807,10 @@ export function SuperAdminDashboard() {
                 <div>
                   <h2 className="font-bold text-xl flex items-center gap-2">
                     <Globe className="w-5 h-5 text-blue-500" />
-                    Platform Usage
+                    Avatar selection
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Distribution by device type
+                    Share of users by chosen profile avatar (from profiles)
                   </p>
                 </div>
               </div>

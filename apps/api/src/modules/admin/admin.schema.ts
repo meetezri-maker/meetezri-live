@@ -79,6 +79,25 @@ export const dashboardStatsSchema = z.object({
       lost90: z.number(),
     })
     .optional(),
+  kpi: z
+    .object({
+      signupsLast7Days: z.number(),
+      signupsPrev7Days: z.number(),
+      signupsWeekOverWeekPct: z.number(),
+      sessionsLastHour: z.number(),
+      paymentVolumeThisMonthCents: z.number(),
+      paymentVolumePrevMonthCents: z.number(),
+      paymentMomPct: z.number(),
+      subscriptionMrrApprox: z.number(),
+    })
+    .optional(),
+  processHealth: z
+    .object({
+      databaseConnected: z.boolean(),
+      errors24h: z.number(),
+      uptimeSeconds: z.number(),
+    })
+    .optional(),
 });
 
 export type DashboardStats = z.infer<typeof dashboardStatsSchema>;

@@ -220,7 +220,12 @@ export async function getDashboardStats(
         (SELECT count(*) FROM sleep_entries) as sleep_entries,
         (SELECT count(*) FROM habit_logs) as habit_logs,
         (SELECT count(*) FROM user_wellness_progress) as wellness_progress,
-        (SELECT count(*) FROM crisis_events) as total_crisis
+        (SELECT count(*) FROM crisis_events) as total_crisis,
+        (SELECT count(*)::bigint FROM profiles WHERE created_at >= timezone('utc', now()) - interval '7 days') as signups_7d,
+        (SELECT count(*)::bigint FROM profiles WHERE created_at >= timezone('utc', now()) - interval '14 days' AND created_at < timezone('utc', now()) - interval '7 days') as signups_prev_7d,
+        (SELECT count(*)::bigint FROM app_sessions WHERE started_at >= timezone('utc', now()) - interval '1 hour') as sessions_1h,
+        (SELECT COALESCE(SUM(amount), 0)::bigint FROM payment_transactions WHERE status = 'completed' AND created_at >= date_trunc('month', timezone('utc', now())) AND created_at < date_trunc('month', timezone('utc', now())) + interval '1 month') as pay_cents_this_month,
+        (SELECT COALESCE(SUM(amount), 0)::bigint FROM payment_transactions WHERE status = 'completed' AND created_at >= date_trunc('month', timezone('utc', now())) - interval '1 month' AND created_at < date_trunc('month', timezone('utc', now()))) as pay_cents_prev_month
     `,
     // 2. Calculate MRR (Monthly Recurring Revenue) from active subscriptions
     prisma.subscriptions.aggregate({
@@ -310,6 +315,23 @@ export async function getDashboardStats(
   const counts = (countsResult as any[])[0] || {};
 
   const totalUsers = Number(counts.total_users || 0);
+  const signupsLast7Days = Number(counts.signups_7d || 0);
+  const signupsPrev7Days = Number(counts.signups_prev_7d || 0);
+  const sessionsLastHour = Number(counts.sessions_1h || 0);
+  const payCentsThisMonth = Number(counts.pay_cents_this_month || 0);
+  const payCentsPrevMonth = Number(counts.pay_cents_prev_month || 0);
+  const signupsWeekOverWeekPct =
+    signupsPrev7Days > 0
+      ? Math.round(((signupsLast7Days - signupsPrev7Days) / signupsPrev7Days) * 1000) / 10
+      : signupsLast7Days > 0
+        ? 100
+        : 0;
+  const paymentMomPct =
+    payCentsPrevMonth > 0
+      ? Math.round(((payCentsThisMonth - payCentsPrevMonth) / payCentsPrevMonth) * 1000) / 10
+      : payCentsThisMonth > 0
+        ? 100
+        : 0;
 
   const userGrowthSeries = await queryUserGrowthSeries(chartPeriod, rangeStart, rangeEnd);
 
@@ -434,12 +456,43 @@ export async function getDashboardStats(
   const onboardingSignupsInRange = onboardingDaily.reduce((s, x) => s + x.signups, 0);
   const onboardingCompletedInRange = onboardingDaily.reduce((s, x) => s + x.completions, 0);
 
-  // System Health - Still hard to get real metrics without infra access
+  const procHealth = await getAdminSystemHealth();
+  const heapPct =
+    procHealth.memoryHeapTotalMb > 0
+      ? Math.round((procHealth.memoryHeapUsedMb / procHealth.memoryHeapTotalMb) * 100)
+      : 0;
+  const errorLoadPct = Math.max(0, 100 - Math.min(100, procHealth.errors24h * 5));
+  const uptimePct = Math.min(100, Math.round((procHealth.uptimeSeconds / (86400 * 14)) * 100));
+
   const systemHealth = [
-    { name: "API Response Time", value: "45ms", status: "excellent", color: "text-green-600", percentage: 95 },
-    { name: "Server Uptime", value: "99.98%", status: "excellent", color: "text-green-600", percentage: 99 },
-    { name: "Database Load", value: "42%", status: "good", color: "text-blue-600", percentage: 58 },
-    { name: "CDN Performance", value: "98%", status: "excellent", color: "text-green-600", percentage: 98 },
+    {
+      name: 'Database',
+      value: procHealth.databaseConnected ? 'Connected' : 'Unreachable',
+      status: procHealth.databaseConnected ? 'excellent' : 'critical',
+      color: procHealth.databaseConnected ? 'text-green-600' : 'text-red-600',
+      percentage: procHealth.databaseConnected ? 100 : 0,
+    },
+    {
+      name: 'Node heap',
+      value: `${heapPct}%`,
+      status: heapPct < 85 ? 'excellent' : heapPct < 95 ? 'good' : 'degraded',
+      color: heapPct < 85 ? 'text-green-600' : heapPct < 95 ? 'text-amber-600' : 'text-red-600',
+      percentage: heapPct,
+    },
+    {
+      name: 'Error logs (24h)',
+      value: String(procHealth.errors24h),
+      status: procHealth.errors24h === 0 ? 'excellent' : procHealth.errors24h < 20 ? 'good' : 'degraded',
+      color: procHealth.errors24h === 0 ? 'text-green-600' : 'text-amber-600',
+      percentage: errorLoadPct,
+    },
+    {
+      name: 'Process uptime',
+      value: `${Math.floor(procHealth.uptimeSeconds / 3600)}h`,
+      status: 'excellent',
+      color: 'text-green-600',
+      percentage: uptimePct,
+    },
   ];
 
   const ugFromSeries = (userGrowthSeries as Array<{ label: string; users: bigint }>).map((r) => ({
@@ -511,13 +564,12 @@ export async function getDashboardStats(
     usage: maxFeatureCount > 0 ? Math.round((item.count / maxFeatureCount) * 100) : 0
   }));
 
-  const platformDistribution = [
-    { name: "Mobile App", value: 58, color: "#8b5cf6" },
-    { name: "Web", value: 32, color: "#ec4899" },
-    { name: "Desktop", value: 10, color: "#06b6d4" },
-  ];
+  const platformDistribution =
+    avatarTotal > 0
+      ? avatarDistribution.slice(0, 8)
+      : [{ name: 'No avatar data', value: 100, color: '#94a3b8' }];
 
-  const mockedSections: string[] = ['systemHealth', 'platformDistribution'];
+  const mockedSections: string[] = [];
   if (userGrowthIsMock) mockedSections.push('userGrowth');
   if (revenueIsMock) mockedSections.push('revenueData');
 
@@ -552,6 +604,21 @@ export async function getDashboardStats(
       daily: onboardingDaily,
     },
     winbackStats,
+    kpi: {
+      signupsLast7Days,
+      signupsPrev7Days,
+      signupsWeekOverWeekPct,
+      sessionsLastHour,
+      paymentVolumeThisMonthCents: payCentsThisMonth,
+      paymentVolumePrevMonthCents: payCentsPrevMonth,
+      paymentMomPct,
+      subscriptionMrrApprox: Math.round(revenue * 100) / 100,
+    },
+    processHealth: {
+      databaseConnected: procHealth.databaseConnected,
+      errors24h: procHealth.errors24h,
+      uptimeSeconds: procHealth.uptimeSeconds,
+    },
   };
 
   if (!opts.skipCache) {
