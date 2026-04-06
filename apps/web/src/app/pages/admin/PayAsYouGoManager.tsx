@@ -44,14 +44,21 @@ export function PayAsYouGoManager() {
   const [selectedPlan, setSelectedPlan] = useState<PlanTier | "all">("all");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("month");
   const [transactions, setTransactions] = useState<AdminPaygTransaction[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
+      setIsLoading(true);
+      setLoadError(null);
       try {
         const data = await api.billing.getAdminPaygTransactions();
         setTransactions(data || []);
       } catch (error) {
         console.error("Failed to load PAYG transactions:", error);
+        setLoadError("Could not load PAYG data. Try again or check the API.");
+      } finally {
+        setIsLoading(false);
       }
     };
     load();
@@ -78,9 +85,15 @@ export function PayAsYouGoManager() {
 
     // Plan filter
     if (selectedPlan !== "all") {
-      filtered = filtered.filter(t => {
-        const planType = t.plan_type as PlanTier | null | undefined;
-        return planType === selectedPlan;
+      filtered = filtered.filter((t) => {
+        const raw = (t.plan_type || "core").toLowerCase();
+        const normalized: PlanTier =
+          raw === "pro"
+            ? "pro"
+            : raw === "trial"
+              ? "trial"
+              : "core";
+        return normalized === selectedPlan;
       });
     }
 
@@ -98,7 +111,7 @@ export function PayAsYouGoManager() {
     }
 
     return filtered;
-  }, [searchQuery, selectedPlan, timeFilter]);
+  }, [transactions, searchQuery, selectedPlan, timeFilter]);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -141,13 +154,13 @@ export function PayAsYouGoManager() {
       pro: { count: 0, revenue: 0, minutes: 0 }
     };
 
-    filteredTransactions.forEach(t => {
-      const planType = t.plan_type as PlanTier | null | undefined;
-      if (planType && breakdown[planType]) {
-        breakdown[planType].count++;
-        breakdown[planType].revenue += t.amount || 0;
-        breakdown[planType].minutes += t.minutes_purchased || 0;
-      }
+    filteredTransactions.forEach((t) => {
+      const raw = (t.plan_type || "core").toLowerCase();
+      const planType: "core" | "pro" =
+        raw === "pro" ? "pro" : "core";
+      breakdown[planType].count++;
+      breakdown[planType].revenue += t.amount || 0;
+      breakdown[planType].minutes += t.minutes_purchased || 0;
     });
 
     return breakdown;
@@ -161,20 +174,32 @@ export function PayAsYouGoManager() {
   return (
     <AdminLayoutNew>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {loadError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {loadError}
+          </div>
+        )}
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-2">
+            <div className="h-8 w-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            <p>Loading PAYG transactions…</p>
+          </div>
+        ) : (
+          <>
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
             <div>
               <h1 className="text-3xl font-bold mb-2">Pay-As-You-Go Management</h1>
               <p className="text-muted-foreground">
-                Track customer PAYG purchases and revenue analytics
+                Completed credit purchases from the database (same records as webhooks / sync).
               </p>
             </div>
             <div className="flex gap-3">
               <Link to="/admin/package-manager">
                 <Button 
                   variant="outline"
-                  className="border-purple-200 hover:bg-purple-50"
+                  className="border-purple-200 hover:bg-purple-500"
                 >
                   <Settings className="w-4 h-4 mr-2" />
                   Configure PAYG Rates
@@ -576,6 +601,8 @@ export function PayAsYouGoManager() {
             </div>
           </div>
         </Card>
+          </>
+        )}
       </div>
     </AdminLayoutNew>
   );

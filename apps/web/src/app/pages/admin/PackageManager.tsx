@@ -33,10 +33,14 @@ export function PackageManager() {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await api.billing.getAdminBillingOverview();
-        setSubscriptions(data?.subscriptions || []);
-        const payg = data?.paygTransactions || [];
-        setPaygRevenueTotal(payg.reduce((sum: number, t: { amount?: number }) => sum + (t.amount || 0), 0));
+        const [subs, paygSummary] = await Promise.all([
+          api.billing.getAllSubscriptions(),
+          api.billing.getAdminPaygSummary(),
+        ]);
+        setSubscriptions(subs || []);
+        setPaygRevenueTotal(
+          typeof paygSummary?.totalRevenue === "number" ? paygSummary.totalRevenue : 0
+        );
       } catch (error) {
         console.error("Failed to load subscription stats:", error);
       }

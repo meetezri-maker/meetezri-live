@@ -3,12 +3,6 @@ import { stripe } from '../../../config/stripe';
 import { PLAN_LIMITS } from '../billing.constants';
 import { CreateCreditPurchaseInput } from '../billing.schema';
 import { CLIENT_URL } from '../billing.config';
-import { listStripeInvoicesForAdmin } from './admin-stripe-list.service';
-import {
-  isPaygInvoice,
-  loadProfilesByStripeCustomerIds,
-  mapStripeInvoiceToPaygRow,
-} from './admin-billing-shared';
 import { getSubscription } from './subscription.service';
 import { getOrCreateStripeCustomer } from './stripe-customer.service';
 
@@ -72,20 +66,63 @@ export async function createCreditPurchaseSession(
   return { checkoutUrl: session.url };
 }
 
+/**
+ * Admin PAYG list: source of truth is `payment_transactions` (written when checkout completes).
+ * Stripe invoice heuristics missed many real purchases (line items without expanded price metadata).
+ */
 export async function getAllPaygTransactions() {
-  const invoices = await listStripeInvoicesForAdmin();
+  const txs = await prisma.payment_transactions.findMany({
+    where: { status: 'completed' },
+    orderBy: { created_at: 'desc' },
+    take: 500,
+  });
 
-  const paygInvoices = invoices.filter(isPaygInvoice);
+  if (txs.length === 0) {
+    return [];
+  }
 
-  const customerIds = Array.from(
-    new Set(
-      paygInvoices.map((invoice) => invoice.customer).filter((id): id is string => typeof id === 'string')
-    )
-  );
+  const userIds = [...new Set(txs.map((t) => t.user_id))];
+  const profiles = await prisma.profiles.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, email: true, full_name: true },
+  });
+  const profileById = new Map(profiles.map((p) => [p.id, p]));
 
-  const profileByCustomerId = await loadProfilesByStripeCustomerIds(customerIds);
+  return txs.map((tx) => {
+    const meta = (tx.metadata as Record<string, unknown> | null) || {};
+    const planType =
+      (meta.planType as string | undefined) ||
+      (meta.plan_type as string | undefined) ||
+      'credits';
 
-  return paygInvoices.map((invoice) => mapStripeInvoiceToPaygRow(invoice, profileByCustomerId));
+    return {
+      id: tx.stripe_session_id,
+      status: tx.status,
+      amount: tx.amount / 100,
+      currency: tx.currency,
+      created: tx.created_at.toISOString(),
+      user_id: tx.user_id,
+      user_email: profileById.get(tx.user_id)?.email ?? null,
+      user_name: profileById.get(tx.user_id)?.full_name ?? null,
+      minutes_purchased: tx.credits_amount,
+      payment_method: 'Card',
+      plan_type: planType,
+    };
+  });
+}
+
+/** Fast aggregate for dashboards (no Stripe). */
+export async function getAdminPaygSummary() {
+  const agg = await prisma.payment_transactions.aggregate({
+    where: { status: 'completed' },
+    _sum: { amount: true },
+    _count: true,
+  });
+
+  return {
+    totalRevenue: (agg._sum.amount ?? 0) / 100,
+    transactionCount: agg._count,
+  };
 }
 
 export async function syncPaygCredits(userId: string) {

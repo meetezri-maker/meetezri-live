@@ -13,10 +13,28 @@ import {
   getLiveSessions, getActivityLogs, getGlobalAuditLogs, getSessionRecordings, getErrorLogs, getSessionRecordingTranscript,
   getCrisisEvents, getCrisisEvent, updateCrisisEventStatus,
   endLiveSessionByAdmin, flagSessionForReview,
+  getAdminSystemHealth, resolveErrorLog, deleteResolvedErrorLogs, markSessionRecordingReviewed,
   getOrgTeamMembers, addOrgTeamMember, updateOrgTeamMember, removeOrgTeamMember,
   getBackupRecoveryDashboard, createLogicalBackup, createDataExportRecord, requestRestoreFromBackup,
   getBackupRecordJsonForDownload,
 } from './admin.service';
+import {
+  listFeatureFlags,
+  createFeatureFlag,
+  updateFeatureFlag,
+  deleteFeatureFlag,
+  listAbTests,
+  createAbTest,
+  updateAbTest,
+  deleteAbTest,
+  getApiPlatformConfig,
+  saveApiPlatformConfig,
+  createAdminApiKey,
+  getIntegrationsConfig,
+  saveIntegrationsConfig,
+  getBrandingConfig,
+  saveBrandingConfig,
+} from './admin-platform.service';
 import { updateUserSchema, createAdminUserSchema } from './admin.schema';
 import { z } from 'zod';
 import type { DashboardStatsQuery } from './admin.service';
@@ -632,6 +650,65 @@ export async function getErrorLogsHandler(request: FastifyRequest, reply: Fastif
   }
 }
 
+export async function getAdminSystemHealthHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const snapshot = await getAdminSystemHealth();
+    return reply.code(200).send(snapshot);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to load system health' });
+  }
+}
+
+export async function patchErrorLogResolveHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    await resolveErrorLog(request.params.id);
+    return reply.code(204).send();
+  } catch (error: any) {
+    if (error?.code === 'P2025') {
+      return reply.code(404).send({ message: 'Error log not found' });
+    }
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to resolve error log' });
+  }
+}
+
+export async function postErrorLogsArchiveResolvedHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const result = await deleteResolvedErrorLogs();
+    return reply.code(200).send({ deleted: result.count });
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to archive resolved error logs' });
+  }
+}
+
+export async function postSessionRecordingReviewedHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const user = request.user as { sub?: string } | undefined;
+    if (!user?.sub) {
+      return reply.code(401).send({ message: 'Unauthorized' });
+    }
+    const session = await markSessionRecordingReviewed(request.params.id, user.sub);
+    return reply.code(200).send(session);
+  } catch (error: any) {
+    if (error?.message === 'Session not found') {
+      return reply.code(404).send({ message: 'Session not found' });
+    }
+    if (error?.message === 'Session is still active') {
+      return reply.code(400).send({ message: error.message });
+    }
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to mark recording as reviewed' });
+  }
+}
+
 // Organization team (Team Management)
 export async function getOrgTeamHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
@@ -811,5 +888,230 @@ export async function getBackupRecoveryDownloadHandler(
   } catch (error) {
     request.log.error(error);
     return reply.code(500).send({ message: 'Failed to download' });
+  }
+}
+
+// --- Platform admin (feature flags, A/B tests, API config, integrations, branding) ---
+
+export async function getFeatureFlagsHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const flags = await listFeatureFlags();
+    return reply.code(200).send(flags);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to list feature flags' });
+  }
+}
+
+export async function postFeatureFlagHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const body = (request.body || {}) as Record<string, unknown>;
+    const flag = await createFeatureFlag({
+      key: String(body.key ?? ''),
+      name: String(body.name ?? ''),
+      description: body.description != null ? String(body.description) : undefined,
+      enabled: typeof body.enabled === 'boolean' ? body.enabled : undefined,
+      environment: body.environment != null ? String(body.environment) : undefined,
+      rolloutPercentage:
+        typeof body.rolloutPercentage === 'number' ? body.rolloutPercentage : undefined,
+      category: body.category != null ? String(body.category) : undefined,
+      targetUsers: Array.isArray(body.targetUsers) ? (body.targetUsers as string[]) : undefined,
+    });
+    return reply.code(201).send(flag);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to create feature flag';
+    const code = msg.includes('already exists') ? 409 : 400;
+    return reply.code(code).send({ message: msg });
+  }
+}
+
+export async function patchFeatureFlagHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const body = (request.body || {}) as Record<string, unknown>;
+    const flag = await updateFeatureFlag(request.params.id, {
+      name: body.name != null ? String(body.name) : undefined,
+      description: body.description != null ? String(body.description) : undefined,
+      enabled: typeof body.enabled === 'boolean' ? body.enabled : undefined,
+      environment: body.environment != null ? String(body.environment) : undefined,
+      rolloutPercentage:
+        typeof body.rolloutPercentage === 'number' ? body.rolloutPercentage : undefined,
+      category: body.category != null ? String(body.category) : undefined,
+      targetUsers: Array.isArray(body.targetUsers) ? (body.targetUsers as string[]) : undefined,
+    });
+    return reply.code(200).send(flag);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to update feature flag';
+    return reply.code(400).send({ message: msg });
+  }
+}
+
+export async function deleteFeatureFlagHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    await deleteFeatureFlag(request.params.id);
+    return reply.code(204).send();
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to delete feature flag';
+    return reply.code(400).send({ message: msg });
+  }
+}
+
+export async function getAbTestsHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const tests = await listAbTests();
+    return reply.code(200).send(tests);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to list A/B tests' });
+  }
+}
+
+export async function postAbTestHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const body = (request.body || {}) as Record<string, unknown>;
+    const test = await createAbTest({
+      name: String(body.name ?? ''),
+      description: body.description != null ? String(body.description) : undefined,
+      status: body.status != null ? String(body.status) : undefined,
+      goal: body.goal != null ? String(body.goal) : undefined,
+      variants: Array.isArray(body.variants) ? body.variants : undefined,
+    });
+    return reply.code(201).send(test);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to create A/B test';
+    return reply.code(400).send({ message: msg });
+  }
+}
+
+export async function patchAbTestHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const body = (request.body || {}) as Record<string, unknown>;
+    const test = await updateAbTest(request.params.id, {
+      name: body.name != null ? String(body.name) : undefined,
+      description: body.description != null ? String(body.description) : undefined,
+      status: body.status != null ? String(body.status) : undefined,
+      startDate: body.startDate != null ? String(body.startDate) : undefined,
+      endDate: body.endDate === null ? null : body.endDate != null ? String(body.endDate) : undefined,
+      variants: Array.isArray(body.variants) ? body.variants : undefined,
+      goal: body.goal != null ? String(body.goal) : undefined,
+      confidence: typeof body.confidence === 'number' ? body.confidence : undefined,
+      winner: body.winner === null ? null : body.winner != null ? String(body.winner) : undefined,
+    });
+    return reply.code(200).send(test);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to update A/B test';
+    return reply.code(400).send({ message: msg });
+  }
+}
+
+export async function deleteAbTestHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    await deleteAbTest(request.params.id);
+    return reply.code(204).send();
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to delete A/B test';
+    return reply.code(400).send({ message: msg });
+  }
+}
+
+export async function getApiPlatformConfigHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const cfg = await getApiPlatformConfig();
+    return reply.code(200).send(cfg);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to load API configuration' });
+  }
+}
+
+export async function putApiPlatformConfigHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const user = request.user as { sub?: string };
+    const body = (request.body || {}) as { apiKeys?: unknown[]; webhooks?: unknown[] };
+    const cfg = await saveApiPlatformConfig(
+      { apiKeys: body.apiKeys, webhooks: body.webhooks },
+      user.sub
+    );
+    return reply.code(200).send(cfg);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to save API configuration' });
+  }
+}
+
+export async function postAdminApiKeyHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const user = request.user as { sub?: string };
+    const body = (request.body || {}) as { name?: string; environment?: string; rateLimit?: string };
+    const key = await createAdminApiKey(
+      {
+        name: String(body.name ?? 'API Key'),
+        environment: String(body.environment ?? 'production'),
+        rateLimit: String(body.rateLimit ?? '1000/hour'),
+      },
+      user.sub
+    );
+    return reply.code(201).send(key);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to create API key' });
+  }
+}
+
+export async function getIntegrationsConfigHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const data = await getIntegrationsConfig();
+    return reply.code(200).send(data);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to load integrations' });
+  }
+}
+
+export async function putIntegrationsConfigHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const user = request.user as { sub?: string };
+    const body = request.body;
+    if (!Array.isArray(body)) {
+      return reply.code(400).send({ message: 'Body must be a JSON array' });
+    }
+    await saveIntegrationsConfig(body as import('@prisma/client').Prisma.JsonArray, user.sub);
+    return reply.code(200).send(body);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to save integrations' });
+  }
+}
+
+export async function getBrandingConfigHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const data = await getBrandingConfig();
+    return reply.code(200).send(data ?? {});
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to load branding' });
+  }
+}
+
+export async function putBrandingConfigHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const user = request.user as { sub?: string };
+    const body = (request.body || {}) as Record<string, unknown>;
+    await saveBrandingConfig(body, user.sub);
+    return reply.code(200).send(body);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to save branding' });
   }
 }

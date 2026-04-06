@@ -71,8 +71,12 @@ let emailTemplatesCache: { data: any[]; timestamp: number } | null = null;
 const ERROR_LOGS_CACHE_TTL = 120 * 1000; // 120 seconds
 const errorLogsCache = new Map<string, { data: any[]; timestamp: number }>();
 
-const LIVE_SESSIONS_CACHE_TTL = 120 * 1000; // 120 seconds
+const LIVE_SESSIONS_CACHE_TTL = 15 * 1000; // 15 seconds — admin monitor expects near real-time data
 let liveSessionsCache: { data: any[]; timestamp: number } | null = null;
+
+function invalidateErrorLogsCache() {
+  errorLogsCache.clear();
+}
 
 export async function getDashboardStats(
   opts: DashboardStatsQuery = {}
@@ -1939,7 +1943,9 @@ export async function endLiveSessionByAdmin(sessionId: string) {
     return session;
   }
 
-  return endSession(session.user_id, session.id);
+  const ended = await endSession(session.user_id, session.id);
+  liveSessionsCache = null;
+  return ended;
 }
 
 export async function flagSessionForReview(sessionId: string) {
@@ -1957,12 +1963,14 @@ export async function flagSessionForReview(sessionId: string) {
     admin_flagged: true
   };
 
-  return prisma.app_sessions.update({
+  const updated = await prisma.app_sessions.update({
     where: { id: sessionId },
     data: {
       config: updatedConfig
     }
   });
+  liveSessionsCache = null;
+  return updated;
 }
 //
 // 8. Activity Logs
@@ -2036,6 +2044,80 @@ export async function getErrorLogs(page: number = 1, limit: number = 25) {
 
   errorLogsCache.set(cacheKey, { data: result, timestamp: Date.now() });
   return result;
+}
+
+export async function getAdminSystemHealth() {
+  const mem = process.memoryUsage();
+  const uptime = process.uptime();
+  let databaseConnected = false;
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    databaseConnected = true;
+  } catch {
+    databaseConnected = false;
+  }
+  const [activeSessions, errors24h] = await Promise.all([
+    prisma.app_sessions.count({
+      where: { ended_at: null, started_at: { not: null } },
+    }),
+    prisma.error_logs.count({
+      where: { created_at: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+    }),
+  ]);
+  return {
+    timestamp: new Date().toISOString(),
+    uptimeSeconds: uptime,
+    memoryHeapUsedMb: mem.heapUsed / 1024 / 1024,
+    memoryHeapTotalMb: mem.heapTotal / 1024 / 1024,
+    memoryRssMb: mem.rss / 1024 / 1024,
+    databaseConnected,
+    activeSessions,
+    errors24h,
+  };
+}
+
+export async function resolveErrorLog(id: string) {
+  await prisma.error_logs.update({
+    where: { id },
+    data: {
+      status: 'resolved',
+      resolved_at: new Date(),
+    },
+  });
+  invalidateErrorLogsCache();
+}
+
+export async function deleteResolvedErrorLogs() {
+  const result = await prisma.error_logs.deleteMany({
+    where: { status: 'resolved' },
+  });
+  invalidateErrorLogsCache();
+  return result;
+}
+
+export async function markSessionRecordingReviewed(sessionId: string, reviewerId: string) {
+  const session = await prisma.app_sessions.findUnique({
+    where: { id: sessionId },
+  });
+  if (!session) {
+    throw new Error('Session not found');
+  }
+  if (!session.ended_at) {
+    throw new Error('Session is still active');
+  }
+  const currentConfig = (session.config || {}) as Record<string, unknown>;
+  const updatedConfig = {
+    ...currentConfig,
+    status: 'reviewed',
+    reviewed_by: reviewerId,
+    reviewed_at: new Date().toISOString(),
+  };
+  return prisma.app_sessions.update({
+    where: { id: sessionId },
+    data: {
+      config: updatedConfig as Prisma.InputJsonValue,
+    },
+  });
 }
 
 function mapCrisisStatusFromDb(status: string | null): string {

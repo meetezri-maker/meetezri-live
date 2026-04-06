@@ -89,6 +89,21 @@ async function handleResponse(res: Response, defaultErrorMessage: string) {
   return res.json();
 }
 
+async function handleResponseAllowEmpty(res: Response, defaultErrorMessage: string) {
+  if (res.status === 401) {
+    await supabase.auth.signOut();
+    throw new Error('Session expired. Please login again.');
+  }
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({} as Record<string, unknown>));
+    throw new Error(formatApiErrorBody(errorData, defaultErrorMessage));
+  }
+  if (res.status === 204) return null;
+  const text = await res.text();
+  if (!text.trim()) return null;
+  return JSON.parse(text);
+}
+
 async function handleBlobResponse(res: Response, errorMessage: string) {
   if (!res.ok) {
     const errorBody = await res.text();
@@ -232,6 +247,121 @@ export const api = {
       body: JSON.stringify({ key, value, description }),
     });
     return handleResponse(res, 'Failed to update setting');
+  },
+
+  /** Super admin: feature flags backed by DB */
+  async listFeatureFlags() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/feature-flags`, { method: 'GET', headers, cache: 'no-store' });
+    return handleResponse(res, 'Failed to load feature flags');
+  },
+  async createFeatureFlag(body: Record<string, unknown>) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/feature-flags`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to create feature flag');
+  },
+  async updateFeatureFlag(id: string, body: Record<string, unknown>) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/feature-flags/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to update feature flag');
+  },
+  async deleteFeatureFlag(id: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/feature-flags/${id}`, { method: 'DELETE', headers });
+    return handleResponseAllowEmpty(res, 'Failed to delete feature flag');
+  },
+
+  /** Super admin + org admin: A/B tests */
+  async listAbTests() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/ab-tests`, { method: 'GET', headers, cache: 'no-store' });
+    return handleResponse(res, 'Failed to load A/B tests');
+  },
+  async createAbTest(body: Record<string, unknown>) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/ab-tests`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to create A/B test');
+  },
+  async updateAbTest(id: string, body: Record<string, unknown>) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/ab-tests/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to update A/B test');
+  },
+  async deleteAbTest(id: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/ab-tests/${id}`, { method: 'DELETE', headers });
+    return handleResponseAllowEmpty(res, 'Failed to delete A/B test');
+  },
+
+  /** Super admin: API keys & webhooks (JSON in system_settings) */
+  async getApiPlatformConfig() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/platform/api-config`, { method: 'GET', headers, cache: 'no-store' });
+    return handleResponse(res, 'Failed to load API configuration');
+  },
+  async saveApiPlatformConfig(body: { apiKeys?: unknown[]; webhooks?: unknown[] }) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/platform/api-config`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to save API configuration');
+  },
+  async createAdminApiKey(body: { name: string; environment: string; rateLimit: string }) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/platform/api-keys`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to create API key');
+  },
+
+  /** Integrations + branding (super_admin + org_admin) */
+  async getIntegrationsConfig() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/platform/integrations`, { method: 'GET', headers, cache: 'no-store' });
+    return handleResponse(res, 'Failed to load integrations');
+  },
+  async saveIntegrationsConfig(integrations: unknown[]) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/platform/integrations`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(integrations),
+    });
+    return handleResponse(res, 'Failed to save integrations');
+  },
+  async getBrandingConfig() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/platform/branding`, { method: 'GET', headers, cache: 'no-store' });
+    return handleResponse(res, 'Failed to load branding');
+  },
+  async saveBrandingConfig(payload: Record<string, unknown>) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/platform/branding`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res, 'Failed to save branding');
   },
 
   // Emergency Contacts API
@@ -1152,6 +1282,26 @@ export const api = {
       const res = await fetch(`${API_URL}/admin/error-logs${query}`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch error logs');
     },
+    async resolveErrorLog(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/error-logs/${id}/resolve`, { method: 'PATCH', headers });
+      return handleResponseAllowEmpty(res, 'Failed to resolve error log');
+    },
+    async archiveResolvedErrorLogs() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/error-logs/archive-resolved`, { method: 'POST', headers });
+      return handleResponse(res, 'Failed to archive resolved errors');
+    },
+    async getSystemHealth() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/system-health`, { method: 'GET', headers, cache: 'no-store' });
+      return handleResponse(res, 'Failed to fetch system health');
+    },
+    async markSessionRecordingReviewed(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/session-recordings/${id}/reviewed`, { method: 'POST', headers });
+      return handleResponse(res, 'Failed to mark recording reviewed');
+    },
 
     async getCrisisEvents(params?: { status?: string; page?: number; limit?: number }) {
       const headers = await getHeaders();
@@ -1327,6 +1477,17 @@ export const api = {
         cache: 'no-store',
       });
       return handleResponse(res, 'Failed to fetch PAYG transactions');
+    },
+
+    /** DB aggregate only — fast for package manager (no Stripe). */
+    async getAdminPaygSummary() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/billing/admin/payg-summary`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch PAYG summary');
     },
 
     /** Single request: subscriptions + Stripe invoices + PAYG rows (faster than three separate calls). */

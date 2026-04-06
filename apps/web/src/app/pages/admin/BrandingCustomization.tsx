@@ -16,7 +16,9 @@ import {
   Trash2,
   Edit,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 
@@ -140,9 +142,46 @@ export function BrandingCustomization() {
     },
   ];
 
-  const handleSave = () => {
-    console.log("Saving branding:", { branding, emailTemplates, whiteLabelSettings });
-    setHasChanges(false);
+  const [saving, setSaving] = useState(false);
+
+  const loadBranding = useCallback(async () => {
+    try {
+      const data = (await api.getBrandingConfig()) as Record<string, unknown> | null;
+      if (!data || Object.keys(data).length === 0) return;
+      if (data.branding && typeof data.branding === "object") {
+        setBranding((prev) => ({ ...prev, ...(data.branding as typeof branding) }));
+      }
+      if (data.emailTemplates && typeof data.emailTemplates === "object") {
+        setEmailTemplates((prev) => ({ ...prev, ...(data.emailTemplates as typeof emailTemplates) }));
+      }
+      if (data.whiteLabelSettings && typeof data.whiteLabelSettings === "object") {
+        setWhiteLabelSettings((prev) => ({ ...prev, ...(data.whiteLabelSettings as typeof whiteLabelSettings) }));
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to load branding");
+    }
+  }, []);
+
+  useEffect(() => {
+    loadBranding();
+  }, [loadBranding]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.saveBrandingConfig({
+        branding,
+        emailTemplates,
+        whiteLabelSettings,
+      });
+      setHasChanges(false);
+      toast.success("Branding saved");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save branding");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleReset = () => {
@@ -193,21 +232,23 @@ export function BrandingCustomization() {
 
           <div className="flex items-center gap-3">
             <Button
+              type="button"
               onClick={handleReset}
               variant="outline"
               className="border-gray-300 text-gray-700 hover:bg-gray-100"
-              disabled={!hasChanges}
+              disabled={!hasChanges || saving}
             >
               <RotateCcw className="w-4 h-4 mr-2" />
               Reset
             </Button>
             <Button
-              onClick={handleSave}
+              type="button"
+              onClick={() => void handleSave()}
               className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
-              disabled={!hasChanges}
+              disabled={saving}
             >
               <Save className="w-4 h-4 mr-2" />
-              Save Changes
+              {saving ? "Saving…" : "Save Changes"}
             </Button>
           </div>
         </motion.div>

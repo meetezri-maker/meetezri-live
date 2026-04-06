@@ -3,15 +3,15 @@ import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 import {
   Settings,
-  Globe,
   Mail,
   Bell,
   Shield,
   Database,
-  Zap,
   Lock,
   Eye,
   EyeOff,
@@ -21,21 +21,192 @@ import {
   AlertTriangle,
   Server,
   Cloud,
-  Key,
-  Clock,
-  Users,
-  FileText,
-  Image,
-  Video,
   Code,
   Palette,
-  MessageSquare,
 } from "lucide-react";
+
+const SETTINGS_KEY = "admin.system_settings_enhanced";
+
+export type SystemSettingsEnhancedState = {
+  general: {
+    platformName: string;
+    supportEmail: string;
+    companyWebsite: string;
+    timezone: string;
+    language: string;
+    sessionDuration: string;
+    maxConcurrentSessions: number;
+    allowAnonymousSessions: boolean;
+  };
+  email: {
+    smtpHost: string;
+    smtpPort: number;
+    encryption: string;
+    smtpUser: string;
+    smtpPassword: string;
+    fromEmail: string;
+    fromName: string;
+  };
+  notifications: {
+    emailNotif: boolean;
+    pushNotif: boolean;
+    smsNotif: boolean;
+    crisisAlerts: boolean;
+  };
+  security: {
+    twoFactor: boolean;
+    passwordPolicy: string;
+    sessionTimeout: number;
+    maxLoginAttempts: number;
+    ipWhitelisting: boolean;
+    databaseEncryption: boolean;
+  };
+  database: {
+    dbHost: string;
+    dbPort: number;
+    dbName: string;
+    autoBackup: boolean;
+    backupSchedule: string;
+    retentionPeriod: string;
+  };
+  api: {
+    apiBaseUrl: string;
+    masterApiKey: string;
+    rateLimit: number;
+    apiVersion: string;
+  };
+  storage: {
+    storageProvider: string;
+    maxFileMb: number;
+    allowedTypes: string;
+  };
+  appearance: {
+    defaultTheme: string;
+    primaryColor: string;
+    accentColor: string;
+    reducedMotion: boolean;
+  };
+};
+
+const DEFAULT_SETTINGS: SystemSettingsEnhancedState = {
+  general: {
+    platformName: "Ezri Health",
+    supportEmail: "support@ezri.health",
+    companyWebsite: "https://ezri.health",
+    timezone: "UTC",
+    language: "English (US)",
+    sessionDuration: "30 minutes",
+    maxConcurrentSessions: 100,
+    allowAnonymousSessions: false,
+  },
+  email: {
+    smtpHost: "smtp.sendgrid.net",
+    smtpPort: 587,
+    encryption: "TLS",
+    smtpUser: "apikey",
+    smtpPassword: "",
+    fromEmail: "noreply@ezri.health",
+    fromName: "Ezri Health",
+  },
+  notifications: {
+    emailNotif: true,
+    pushNotif: true,
+    smsNotif: false,
+    crisisAlerts: true,
+  },
+  security: {
+    twoFactor: true,
+    passwordPolicy: "Strong (12+ chars, mixed case, numbers, symbols)",
+    sessionTimeout: 30,
+    maxLoginAttempts: 5,
+    ipWhitelisting: false,
+    databaseEncryption: true,
+  },
+  database: {
+    dbHost: "localhost",
+    dbPort: 5432,
+    dbName: "ezri_production",
+    autoBackup: true,
+    backupSchedule: "Daily at 2:00 AM",
+    retentionPeriod: "30 days",
+  },
+  api: {
+    apiBaseUrl: "https://api.ezri.health/v1",
+    masterApiKey: "",
+    rateLimit: 100,
+    apiVersion: "v1 (Current)",
+  },
+  storage: {
+    storageProvider: "AWS S3",
+    maxFileMb: 50,
+    allowedTypes: "jpg, png, pdf, mp4, mp3",
+  },
+  appearance: {
+    defaultTheme: "Light",
+    primaryColor: "#3B82F6",
+    accentColor: "#8B5CF6",
+    reducedMotion: false,
+  },
+};
+
+function mergeLoaded(
+  base: SystemSettingsEnhancedState,
+  raw: unknown
+): SystemSettingsEnhancedState {
+  if (!raw || typeof raw !== "object") return base;
+  const p = raw as Record<string, unknown>;
+  const pick = <K extends keyof SystemSettingsEnhancedState>(k: K) =>
+    p[k] && typeof p[k] === "object" ? (p[k] as Record<string, unknown>) : {};
+
+  return {
+    general: { ...base.general, ...pick("general") } as SystemSettingsEnhancedState["general"],
+    email: { ...base.email, ...pick("email") } as SystemSettingsEnhancedState["email"],
+    notifications: {
+      ...base.notifications,
+      ...pick("notifications"),
+    } as SystemSettingsEnhancedState["notifications"],
+    security: { ...base.security, ...pick("security") } as SystemSettingsEnhancedState["security"],
+    database: { ...base.database, ...pick("database") } as SystemSettingsEnhancedState["database"],
+    api: { ...base.api, ...pick("api") } as SystemSettingsEnhancedState["api"],
+    storage: { ...base.storage, ...pick("storage") } as SystemSettingsEnhancedState["storage"],
+    appearance: {
+      ...base.appearance,
+      ...pick("appearance"),
+    } as SystemSettingsEnhancedState["appearance"],
+  };
+}
+
+function Toggle({
+  checked,
+  onChange,
+  accentClass = "peer-checked:bg-blue-600",
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  accentClass?: string;
+}) {
+  return (
+    <label className="relative inline-flex items-center cursor-pointer">
+      <input
+        type="checkbox"
+        className="sr-only peer"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <div
+        className={`w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${accentClass}`}
+      />
+    </label>
+  );
+}
 
 export function SystemSettingsEnhanced() {
   const [activeSection, setActiveSection] = useState<string>("general");
   const [showApiKey, setShowApiKey] = useState(false);
-  const [unsavedChanges, setUnsavedChanges] = useState(false);
+  const [settings, setSettings] = useState<SystemSettingsEnhancedState>(DEFAULT_SETTINGS);
+  const [baseline, setBaseline] = useState<SystemSettingsEnhancedState>(DEFAULT_SETTINGS);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const sections = [
     { id: "general", label: "General", icon: Settings },
@@ -48,10 +219,70 @@ export function SystemSettingsEnhanced() {
     { id: "appearance", label: "Appearance", icon: Palette },
   ];
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await api.getSettings();
+        const rows = Array.isArray(data) ? data : [];
+        const row = rows.find((r: { key?: string }) => r.key === SETTINGS_KEY);
+        if (row?.value != null && cancelled === false) {
+          const merged = mergeLoaded(DEFAULT_SETTINGS, row.value);
+          setSettings(merged);
+          setBaseline(merged);
+        }
+      } catch (e) {
+        console.error(e);
+        toast.error("Failed to load system settings");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const unsavedChanges = useMemo(
+    () => JSON.stringify(settings) !== JSON.stringify(baseline),
+    [settings, baseline]
+  );
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.updateSetting(SETTINGS_KEY, settings, "System Settings (enhanced UI) persisted state");
+      setBaseline(settings);
+      toast.success("Saved");
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setG = (patch: Partial<SystemSettingsEnhancedState["general"]>) =>
+    setSettings((s) => ({ ...s, general: { ...s.general, ...patch } }));
+  const setE = (patch: Partial<SystemSettingsEnhancedState["email"]>) =>
+    setSettings((s) => ({ ...s, email: { ...s.email, ...patch } }));
+  const setN = (patch: Partial<SystemSettingsEnhancedState["notifications"]>) =>
+    setSettings((s) => ({ ...s, notifications: { ...s.notifications, ...patch } }));
+  const setSec = (patch: Partial<SystemSettingsEnhancedState["security"]>) =>
+    setSettings((s) => ({ ...s, security: { ...s.security, ...patch } }));
+  const setDb = (patch: Partial<SystemSettingsEnhancedState["database"]>) =>
+    setSettings((s) => ({ ...s, database: { ...s.database, ...patch } }));
+  const setApi = (patch: Partial<SystemSettingsEnhancedState["api"]>) =>
+    setSettings((s) => ({ ...s, api: { ...s.api, ...patch } }));
+  const setSt = (patch: Partial<SystemSettingsEnhancedState["storage"]>) =>
+    setSettings((s) => ({ ...s, storage: { ...s.storage, ...patch } }));
+  const setAp = (patch: Partial<SystemSettingsEnhancedState["appearance"]>) =>
+    setSettings((s) => ({ ...s, appearance: { ...s.appearance, ...patch } }));
+
   return (
     <AdminLayoutNew>
       <div className="space-y-6">
-        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -64,18 +295,31 @@ export function SystemSettingsEnhanced() {
               <div>
                 <h1 className="text-3xl font-bold">System Settings</h1>
                 <p className="text-muted-foreground">
-                  Configure platform-wide settings and preferences
+                  Configure platform-wide settings (stored in system settings)
                 </p>
               </div>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                disabled={loading || saving}
+                onClick={() => {
+                  setSettings(DEFAULT_SETTINGS);
+                }}
+              >
                 <RotateCcw className="w-4 h-4" />
                 Reset All
               </Button>
-              <Button className="gap-2">
+              <Button
+                type="button"
+                className="gap-2"
+                disabled={loading || saving || !unsavedChanges}
+                onClick={() => void handleSave()}
+              >
                 <Save className="w-4 h-4" />
-                Save Changes
+                {saving ? "Saving…" : "Save Changes"}
               </Button>
             </div>
           </div>
@@ -92,7 +336,6 @@ export function SystemSettingsEnhanced() {
         </motion.div>
 
         <div className="grid lg:grid-cols-4 gap-6">
-          {/* Sidebar */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -105,6 +348,7 @@ export function SystemSettingsEnhanced() {
                   return (
                     <button
                       key={section.id}
+                      type="button"
                       onClick={() => setActiveSection(section.id)}
                       className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                         activeSection === section.id
@@ -121,9 +365,11 @@ export function SystemSettingsEnhanced() {
             </Card>
           </motion.div>
 
-          {/* Main Content */}
           <div className="lg:col-span-3 space-y-6">
-            {/* General Settings */}
+            {loading && (
+              <p className="text-sm text-muted-foreground">Loading settings…</p>
+            )}
+
             {activeSection === "general" && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -135,20 +381,35 @@ export function SystemSettingsEnhanced() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Platform Name</label>
-                      <Input defaultValue="Ezri Health" />
+                      <Input
+                        value={settings.general.platformName}
+                        onChange={(e) => setG({ platformName: e.target.value })}
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">Support Email</label>
-                      <Input type="email" defaultValue="support@ezri.health" />
+                      <Input
+                        type="email"
+                        value={settings.general.supportEmail}
+                        onChange={(e) => setG({ supportEmail: e.target.value })}
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">Company Website</label>
-                      <Input type="url" defaultValue="https://ezri.health" />
+                      <Input
+                        type="url"
+                        value={settings.general.companyWebsite}
+                        onChange={(e) => setG({ companyWebsite: e.target.value })}
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-2">Default Timezone</label>
-                        <select className="w-full px-3 py-2 border rounded-lg">
+                        <select
+                          className="w-full px-3 py-2 border rounded-lg"
+                          value={settings.general.timezone}
+                          onChange={(e) => setG({ timezone: e.target.value })}
+                        >
                           <option>UTC</option>
                           <option>America/New_York</option>
                           <option>America/Los_Angeles</option>
@@ -157,7 +418,11 @@ export function SystemSettingsEnhanced() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Default Language</label>
-                        <select className="w-full px-3 py-2 border rounded-lg">
+                        <select
+                          className="w-full px-3 py-2 border rounded-lg"
+                          value={settings.general.language}
+                          onChange={(e) => setG({ language: e.target.value })}
+                        >
                           <option>English (US)</option>
                           <option>Spanish</option>
                           <option>French</option>
@@ -173,7 +438,11 @@ export function SystemSettingsEnhanced() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-2">Default Session Duration</label>
-                        <select className="w-full px-3 py-2 border rounded-lg">
+                        <select
+                          className="w-full px-3 py-2 border rounded-lg"
+                          value={settings.general.sessionDuration}
+                          onChange={(e) => setG({ sessionDuration: e.target.value })}
+                        >
                           <option>30 minutes</option>
                           <option>45 minutes</option>
                           <option>60 minutes</option>
@@ -181,25 +450,32 @@ export function SystemSettingsEnhanced() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Max Concurrent Sessions</label>
-                        <Input type="number" defaultValue="100" />
+                        <Input
+                          type="number"
+                          value={settings.general.maxConcurrentSessions}
+                          onChange={(e) =>
+                            setG({ maxConcurrentSessions: parseInt(e.target.value, 10) || 0 })
+                          }
+                        />
                       </div>
                     </div>
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div>
                         <p className="font-medium">Allow Anonymous Sessions</p>
-                        <p className="text-sm text-muted-foreground">Users can chat without creating an account</p>
+                        <p className="text-sm text-muted-foreground">
+                          Users can chat without creating an account
+                        </p>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                      </label>
+                      <Toggle
+                        checked={settings.general.allowAnonymousSessions}
+                        onChange={(v) => setG({ allowAnonymousSessions: v })}
+                      />
                     </div>
                   </div>
                 </Card>
               </motion.div>
             )}
 
-            {/* Email Settings */}
             {activeSection === "email" && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -211,16 +487,24 @@ export function SystemSettingsEnhanced() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">SMTP Host</label>
-                      <Input defaultValue="smtp.sendgrid.net" />
+                      <Input value={settings.email.smtpHost} onChange={(e) => setE({ smtpHost: e.target.value })} />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-2">SMTP Port</label>
-                        <Input type="number" defaultValue="587" />
+                        <Input
+                          type="number"
+                          value={settings.email.smtpPort}
+                          onChange={(e) => setE({ smtpPort: parseInt(e.target.value, 10) || 0 })}
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Encryption</label>
-                        <select className="w-full px-3 py-2 border rounded-lg">
+                        <select
+                          className="w-full px-3 py-2 border rounded-lg"
+                          value={settings.email.encryption}
+                          onChange={(e) => setE({ encryption: e.target.value })}
+                        >
                           <option>TLS</option>
                           <option>SSL</option>
                           <option>None</option>
@@ -229,16 +513,22 @@ export function SystemSettingsEnhanced() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">SMTP Username</label>
-                      <Input defaultValue="apikey" />
+                      <Input
+                        value={settings.email.smtpUser}
+                        onChange={(e) => setE({ smtpUser: e.target.value })}
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">SMTP Password</label>
                       <div className="relative">
                         <Input
                           type={showApiKey ? "text" : "password"}
-                          defaultValue="SG.xxxxxxxxxxxx"
+                          value={settings.email.smtpPassword}
+                          placeholder="••••••••"
+                          onChange={(e) => setE({ smtpPassword: e.target.value })}
                         />
                         <button
+                          type="button"
                           className="absolute right-3 top-1/2 -translate-y-1/2"
                           onClick={() => setShowApiKey(!showApiKey)}
                         >
@@ -248,11 +538,18 @@ export function SystemSettingsEnhanced() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">From Email</label>
-                      <Input type="email" defaultValue="noreply@ezri.health" />
+                      <Input
+                        type="email"
+                        value={settings.email.fromEmail}
+                        onChange={(e) => setE({ fromEmail: e.target.value })}
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">From Name</label>
-                      <Input defaultValue="Ezri Health" />
+                      <Input
+                        value={settings.email.fromName}
+                        onChange={(e) => setE({ fromName: e.target.value })}
+                      />
                     </div>
                   </div>
                 </Card>
@@ -268,7 +565,9 @@ export function SystemSettingsEnhanced() {
                           <p className="text-sm text-muted-foreground">Sent to new users after signup</p>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm">Edit</Button>
+                      <Button type="button" variant="outline" size="sm">
+                        Edit
+                      </Button>
                     </div>
                     <div className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center gap-3">
@@ -278,14 +577,15 @@ export function SystemSettingsEnhanced() {
                           <p className="text-sm text-muted-foreground">Password recovery email</p>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm">Edit</Button>
+                      <Button type="button" variant="outline" size="sm">
+                        Edit
+                      </Button>
                     </div>
                   </div>
                 </Card>
               </motion.div>
             )}
 
-            {/* Notification Settings */}
             {activeSection === "notifications" && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -300,50 +600,47 @@ export function SystemSettingsEnhanced() {
                         <p className="font-medium">Email Notifications</p>
                         <p className="text-sm text-muted-foreground">Send email updates to users</p>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                      </label>
+                      <Toggle
+                        checked={settings.notifications.emailNotif}
+                        onChange={(v) => setN({ emailNotif: v })}
+                      />
                     </div>
-
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div>
                         <p className="font-medium">Push Notifications</p>
                         <p className="text-sm text-muted-foreground">Send push notifications to mobile apps</p>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                      </label>
+                      <Toggle
+                        checked={settings.notifications.pushNotif}
+                        onChange={(v) => setN({ pushNotif: v })}
+                      />
                     </div>
-
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div>
                         <p className="font-medium">SMS Notifications</p>
                         <p className="text-sm text-muted-foreground">Send text message alerts</p>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                      </label>
+                      <Toggle
+                        checked={settings.notifications.smsNotif}
+                        onChange={(v) => setN({ smsNotif: v })}
+                      />
                     </div>
-
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div>
                         <p className="font-medium">Crisis Alerts</p>
                         <p className="text-sm text-muted-foreground">Immediate alerts for crisis situations</p>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
-                      </label>
+                      <Toggle
+                        checked={settings.notifications.crisisAlerts}
+                        onChange={(v) => setN({ crisisAlerts: v })}
+                        accentClass="peer-checked:bg-red-600"
+                      />
                     </div>
                   </div>
                 </Card>
               </motion.div>
             )}
 
-            {/* Security Settings */}
             {activeSection === "security" && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -358,41 +655,54 @@ export function SystemSettingsEnhanced() {
                         <p className="font-medium">Two-Factor Authentication</p>
                         <p className="text-sm text-muted-foreground">Require 2FA for admin accounts</p>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                      </label>
+                      <Toggle
+                        checked={settings.security.twoFactor}
+                        onChange={(v) => setSec({ twoFactor: v })}
+                      />
                     </div>
-
                     <div>
                       <label className="block text-sm font-medium mb-2">Password Policy</label>
-                      <select className="w-full px-3 py-2 border rounded-lg">
+                      <select
+                        className="w-full px-3 py-2 border rounded-lg"
+                        value={settings.security.passwordPolicy}
+                        onChange={(e) => setSec({ passwordPolicy: e.target.value })}
+                      >
                         <option>Strong (12+ chars, mixed case, numbers, symbols)</option>
                         <option>Medium (8+ chars, mixed case, numbers)</option>
                         <option>Basic (6+ chars)</option>
                       </select>
                     </div>
-
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-2">Session Timeout (minutes)</label>
-                        <Input type="number" defaultValue="30" />
+                        <Input
+                          type="number"
+                          value={settings.security.sessionTimeout}
+                          onChange={(e) =>
+                            setSec({ sessionTimeout: parseInt(e.target.value, 10) || 0 })
+                          }
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Max Login Attempts</label>
-                        <Input type="number" defaultValue="5" />
+                        <Input
+                          type="number"
+                          value={settings.security.maxLoginAttempts}
+                          onChange={(e) =>
+                            setSec({ maxLoginAttempts: parseInt(e.target.value, 10) || 0 })
+                          }
+                        />
                       </div>
                     </div>
-
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div>
                         <p className="font-medium">IP Whitelisting</p>
                         <p className="text-sm text-muted-foreground">Restrict admin access to specific IPs</p>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                      </label>
+                      <Toggle
+                        checked={settings.security.ipWhitelisting}
+                        onChange={(v) => setSec({ ipWhitelisting: v })}
+                      />
                     </div>
                   </div>
                 </Card>
@@ -415,17 +725,16 @@ export function SystemSettingsEnhanced() {
                         <p className="font-medium">Database Encryption</p>
                         <p className="text-sm text-muted-foreground">Encrypt sensitive data at rest</p>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                      </label>
+                      <Toggle
+                        checked={settings.security.databaseEncryption}
+                        onChange={(v) => setSec({ databaseEncryption: v })}
+                      />
                     </div>
                   </div>
                 </Card>
               </motion.div>
             )}
 
-            {/* Database Settings */}
             {activeSection === "database" && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -437,16 +746,26 @@ export function SystemSettingsEnhanced() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Database Host</label>
-                      <Input defaultValue="localhost" />
+                      <Input
+                        value={settings.database.dbHost}
+                        onChange={(e) => setDb({ dbHost: e.target.value })}
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-2">Port</label>
-                        <Input type="number" defaultValue="5432" />
+                        <Input
+                          type="number"
+                          value={settings.database.dbPort}
+                          onChange={(e) => setDb({ dbPort: parseInt(e.target.value, 10) || 0 })}
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Database Name</label>
-                        <Input defaultValue="ezri_production" />
+                        <Input
+                          value={settings.database.dbName}
+                          onChange={(e) => setDb({ dbName: e.target.value })}
+                        />
                       </div>
                     </div>
                     <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -454,7 +773,9 @@ export function SystemSettingsEnhanced() {
                         <Database className="w-5 h-5 text-blue-600 mt-0.5" />
                         <div>
                           <p className="font-medium text-blue-900 mb-1">Database Status</p>
-                          <p className="text-sm text-blue-700">Connected • PostgreSQL 14.2 • 234GB / 500GB used</p>
+                          <p className="text-sm text-blue-700">
+                            Connected • PostgreSQL (values here are configuration; not live DB diagnostics)
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -469,14 +790,18 @@ export function SystemSettingsEnhanced() {
                         <p className="font-medium">Automatic Backups</p>
                         <p className="text-sm text-muted-foreground">Daily automated backups</p>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                      </label>
+                      <Toggle
+                        checked={settings.database.autoBackup}
+                        onChange={(v) => setDb({ autoBackup: v })}
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">Backup Schedule</label>
-                      <select className="w-full px-3 py-2 border rounded-lg">
+                      <select
+                        className="w-full px-3 py-2 border rounded-lg"
+                        value={settings.database.backupSchedule}
+                        onChange={(e) => setDb({ backupSchedule: e.target.value })}
+                      >
                         <option>Daily at 2:00 AM</option>
                         <option>Every 12 hours</option>
                         <option>Every 6 hours</option>
@@ -485,14 +810,18 @@ export function SystemSettingsEnhanced() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">Retention Period</label>
-                      <select className="w-full px-3 py-2 border rounded-lg">
+                      <select
+                        className="w-full px-3 py-2 border rounded-lg"
+                        value={settings.database.retentionPeriod}
+                        onChange={(e) => setDb({ retentionPeriod: e.target.value })}
+                      >
                         <option>30 days</option>
                         <option>60 days</option>
                         <option>90 days</option>
                         <option>1 year</option>
                       </select>
                     </div>
-                    <Button className="w-full gap-2">
+                    <Button type="button" className="w-full gap-2" variant="secondary">
                       <Database className="w-4 h-4" />
                       Create Backup Now
                     </Button>
@@ -501,7 +830,6 @@ export function SystemSettingsEnhanced() {
               </motion.div>
             )}
 
-            {/* API Settings */}
             {activeSection === "api" && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -513,16 +841,22 @@ export function SystemSettingsEnhanced() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">API Base URL</label>
-                      <Input defaultValue="https://api.ezri.health/v1" />
+                      <Input
+                        value={settings.api.apiBaseUrl}
+                        onChange={(e) => setApi({ apiBaseUrl: e.target.value })}
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">Master API Key</label>
                       <div className="relative">
                         <Input
                           type={showApiKey ? "text" : "password"}
-                          defaultValue="ezri_sk_xxxxxxxxxxxx"
+                          value={settings.api.masterApiKey}
+                          placeholder="ezri_sk_…"
+                          onChange={(e) => setApi({ masterApiKey: e.target.value })}
                         />
                         <button
+                          type="button"
                           className="absolute right-3 top-1/2 -translate-y-1/2"
                           onClick={() => setShowApiKey(!showApiKey)}
                         >
@@ -533,17 +867,25 @@ export function SystemSettingsEnhanced() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-2">Rate Limit (req/min)</label>
-                        <Input type="number" defaultValue="100" />
+                        <Input
+                          type="number"
+                          value={settings.api.rateLimit}
+                          onChange={(e) => setApi({ rateLimit: parseInt(e.target.value, 10) || 0 })}
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">API Version</label>
-                        <select className="w-full px-3 py-2 border rounded-lg">
+                        <select
+                          className="w-full px-3 py-2 border rounded-lg"
+                          value={settings.api.apiVersion}
+                          onChange={(e) => setApi({ apiVersion: e.target.value })}
+                        >
                           <option>v1 (Current)</option>
                           <option>v2 (Beta)</option>
                         </select>
                       </div>
                     </div>
-                    <Button variant="outline" className="w-full">
+                    <Button type="button" variant="outline" className="w-full">
                       Generate New API Key
                     </Button>
                   </div>
@@ -557,28 +899,33 @@ export function SystemSettingsEnhanced() {
                         <p className="font-medium">OpenAI API</p>
                         <p className="text-sm text-muted-foreground">AI-powered conversations</p>
                       </div>
-                      <Button variant="outline" size="sm">Configure</Button>
+                      <Button type="button" variant="outline" size="sm">
+                        Configure
+                      </Button>
                     </div>
                     <div className="flex items-center justify-between p-4 border rounded-lg">
                       <div>
                         <p className="font-medium">Twilio</p>
                         <p className="text-sm text-muted-foreground">SMS notifications</p>
                       </div>
-                      <Button variant="outline" size="sm">Configure</Button>
+                      <Button type="button" variant="outline" size="sm">
+                        Configure
+                      </Button>
                     </div>
                     <div className="flex items-center justify-between p-4 border rounded-lg">
                       <div>
                         <p className="font-medium">Stripe</p>
                         <p className="text-sm text-muted-foreground">Payment processing</p>
                       </div>
-                      <Button variant="outline" size="sm">Configure</Button>
+                      <Button type="button" variant="outline" size="sm">
+                        Configure
+                      </Button>
                     </div>
                   </div>
                 </Card>
               </motion.div>
             )}
 
-            {/* Storage Settings */}
             {activeSection === "storage" && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -590,7 +937,11 @@ export function SystemSettingsEnhanced() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Storage Provider</label>
-                      <select className="w-full px-3 py-2 border rounded-lg">
+                      <select
+                        className="w-full px-3 py-2 border rounded-lg"
+                        value={settings.storage.storageProvider}
+                        onChange={(e) => setSt({ storageProvider: e.target.value })}
+                      >
                         <option>AWS S3</option>
                         <option>Google Cloud Storage</option>
                         <option>Azure Blob Storage</option>
@@ -600,7 +951,7 @@ export function SystemSettingsEnhanced() {
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium">Storage Usage</span>
-                        <span className="text-sm text-muted-foreground">456 GB / 1 TB</span>
+                        <span className="text-sm text-muted-foreground">(illustrative)</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div className="bg-blue-600 h-2 rounded-full" style={{ width: "45.6%" }} />
@@ -608,18 +959,24 @@ export function SystemSettingsEnhanced() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">Max File Size (MB)</label>
-                      <Input type="number" defaultValue="50" />
+                      <Input
+                        type="number"
+                        value={settings.storage.maxFileMb}
+                        onChange={(e) => setSt({ maxFileMb: parseInt(e.target.value, 10) || 0 })}
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">Allowed File Types</label>
-                      <Input defaultValue="jpg, png, pdf, mp4, mp3" />
+                      <Input
+                        value={settings.storage.allowedTypes}
+                        onChange={(e) => setSt({ allowedTypes: e.target.value })}
+                      />
                     </div>
                   </div>
                 </Card>
               </motion.div>
             )}
 
-            {/* Appearance Settings */}
             {activeSection === "appearance" && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -631,7 +988,11 @@ export function SystemSettingsEnhanced() {
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Default Theme</label>
-                      <select className="w-full px-3 py-2 border rounded-lg">
+                      <select
+                        className="w-full px-3 py-2 border rounded-lg"
+                        value={settings.appearance.defaultTheme}
+                        onChange={(e) => setAp({ defaultTheme: e.target.value })}
+                      >
                         <option>Light</option>
                         <option>Dark</option>
                         <option>System</option>
@@ -640,15 +1001,33 @@ export function SystemSettingsEnhanced() {
                     <div>
                       <label className="block text-sm font-medium mb-2">Primary Color</label>
                       <div className="flex gap-3">
-                        <input type="color" defaultValue="#3B82F6" className="w-16 h-10 border rounded" />
-                        <Input defaultValue="#3B82F6" className="flex-1" />
+                        <input
+                          type="color"
+                          value={settings.appearance.primaryColor}
+                          onChange={(e) => setAp({ primaryColor: e.target.value })}
+                          className="w-16 h-10 border rounded"
+                        />
+                        <Input
+                          value={settings.appearance.primaryColor}
+                          onChange={(e) => setAp({ primaryColor: e.target.value })}
+                          className="flex-1"
+                        />
                       </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">Accent Color</label>
                       <div className="flex gap-3">
-                        <input type="color" defaultValue="#8B5CF6" className="w-16 h-10 border rounded" />
-                        <Input defaultValue="#8B5CF6" className="flex-1" />
+                        <input
+                          type="color"
+                          value={settings.appearance.accentColor}
+                          onChange={(e) => setAp({ accentColor: e.target.value })}
+                          className="w-16 h-10 border rounded"
+                        />
+                        <Input
+                          value={settings.appearance.accentColor}
+                          onChange={(e) => setAp({ accentColor: e.target.value })}
+                          className="flex-1"
+                        />
                       </div>
                     </div>
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
@@ -656,10 +1035,10 @@ export function SystemSettingsEnhanced() {
                         <p className="font-medium">Reduced Motion</p>
                         <p className="text-sm text-muted-foreground">Minimize animations for accessibility</p>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                      </label>
+                      <Toggle
+                        checked={settings.appearance.reducedMotion}
+                        onChange={(v) => setAp({ reducedMotion: v })}
+                      />
                     </div>
                   </div>
                 </Card>

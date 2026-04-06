@@ -51,14 +51,17 @@ export function SessionRecordings() {
   const [transcriptErrorId, setTranscriptErrorId] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchRecordings = async () => {
+    const fetchRecordings = async (showSpinner: boolean) => {
       try {
-        const data = await api.admin.getSessionRecordings();
+        if (showSpinner) setIsLoading(true);
+        const data = await api.admin.getSessionRecordings({ limit: 100, page: 1 });
         const mappedRecordings: SessionRecording[] = data.map((session: any) => {
           const config = session.config || {};
 
           let status: SessionRecording["status"] = "completed";
-          if (config.admin_flagged) {
+          if (config.reviewed_at || config.status === "reviewed") {
+            status = "reviewed";
+          } else if (config.admin_flagged) {
             status = "flagged";
           } else if (config.status && ["completed", "flagged", "reviewed", "escalated"].includes(config.status)) {
             status = config.status;
@@ -89,15 +92,14 @@ export function SessionRecordings() {
       } catch (error) {
         console.error("Failed to fetch session recordings:", error);
       } finally {
-        setIsLoading(false);
+        if (showSpinner) setIsLoading(false);
       }
     };
 
-    fetchRecordings();
+    void fetchRecordings(true);
+    const t = setInterval(() => void fetchRecordings(false), 60000);
+    return () => clearInterval(t);
   }, []);
-
-  // Mock session recordings
-  /* const recordings: SessionRecording[] = [ ... ] */
 
   const filteredRecordings = recordings.filter(rec => {
     const matchesSearch = rec.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -168,6 +170,63 @@ export function SessionRecordings() {
       .finally(() => {
         setTranscriptLoadingId(null);
       });
+  };
+
+  const handleDownloadRecording = async (e: React.MouseEvent, recording: SessionRecording) => {
+    e.stopPropagation();
+    let msgs = transcripts[recording.id];
+    if (!msgs && recording.transcriptAvailable) {
+      setTranscriptLoadingId(recording.id);
+      setTranscriptErrorId(null);
+      try {
+        const data = await api.admin.getSessionRecordingTranscript(recording.id);
+        msgs = data.map((m: any) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          created_at: m.created_at,
+        }));
+        setTranscripts((prev) => ({ ...prev, [recording.id]: msgs! }));
+      } catch {
+        setTranscriptErrorId(recording.id);
+        return;
+      } finally {
+        setTranscriptLoadingId(null);
+      }
+    }
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      sessionId: recording.id,
+      userName: recording.userName,
+      sessionDate: recording.sessionDate.toISOString(),
+      durationMinutes: recording.duration,
+      status: recording.status,
+      transcript: msgs ?? [],
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `session-recording-${recording.id}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleMarkReviewed = async (e: React.MouseEvent, recording: SessionRecording) => {
+    e.stopPropagation();
+    try {
+      await api.admin.markSessionRecordingReviewed(recording.id);
+      setRecordings((prev) =>
+        prev.map((r) =>
+          r.id === recording.id ? { ...r, status: "reviewed" as const } : r
+        )
+      );
+    } catch (err) {
+      console.error(err);
+      alert("Could not mark as reviewed. Try again.");
+    }
   };
 
   const handleToggleRecording = (recording: SessionRecording) => {
@@ -309,6 +368,13 @@ export function SessionRecordings() {
         >
           <h2 className="text-xl font-bold text-gray-900 mb-6">Session Recordings</h2>
 
+          {isLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-32 rounded-xl bg-gray-100 animate-pulse" />
+              ))}
+            </div>
+          ) : (
           <div className="space-y-4">
             {filteredRecordings.map((recording, index) => {
               const StatusIcon = getStatusIcon(recording.status);
@@ -482,17 +548,22 @@ export function SessionRecordings() {
                         </motion.button>
 
                         <motion.button
+                          type="button"
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          className="px-3 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium"
+                          onClick={(e) => void handleDownloadRecording(e, recording)}
+                          disabled={transcriptLoadingId === recording.id}
+                          className="px-3 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium disabled:opacity-50"
                         >
                           <Download className="w-4 h-4" />
                         </motion.button>
 
-                        {recording.status === "flagged" && (
+                        {(recording.status === "flagged" || recording.status === "escalated") && (
                           <motion.button
+                            type="button"
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
+                            onClick={(e) => void handleMarkReviewed(e, recording)}
                             className="px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium flex items-center gap-1"
                           >
                             <CheckCircle className="w-4 h-4" />
@@ -506,6 +577,7 @@ export function SessionRecordings() {
               );
             })}
           </div>
+          )}
         </motion.div>
       </div>
     </AdminLayoutNew>

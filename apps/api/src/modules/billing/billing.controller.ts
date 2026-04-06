@@ -14,6 +14,7 @@ import {
   getInvoicesForUser,
   getAllInvoices,
   getAllPaygTransactions,
+  getAdminPaygSummary,
   getAdminBillingOverview,
   syncPaygCredits,
   createGuestCheckoutSession,
@@ -166,6 +167,14 @@ export async function getAllPaygTransactionsHandler(
 ) {
   const transactions = await getAllPaygTransactions();
   return reply.send(transactions);
+}
+
+export async function getAdminPaygSummaryHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const summary = await getAdminPaygSummary();
+  return reply.send(summary);
 }
 
 export async function getAdminBillingOverviewHandler(

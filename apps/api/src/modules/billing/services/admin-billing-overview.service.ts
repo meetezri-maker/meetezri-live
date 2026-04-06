@@ -1,20 +1,17 @@
 import { getAllSubscriptions } from './subscription.service';
 import { listStripeInvoicesForAdmin } from './admin-stripe-list.service';
-import {
-  isPaygInvoice,
-  loadProfilesByStripeCustomerIds,
-  mapStripeInvoiceToAdminRow,
-  mapStripeInvoiceToPaygRow,
-} from './admin-billing-shared';
+import { loadProfilesByStripeCustomerIds, mapStripeInvoiceToAdminRow } from './admin-billing-shared';
+import { getAllPaygTransactions } from './payg.service';
 
 /**
- * One round-trip for admin billing UIs: subscriptions + Stripe-derived invoices + PAYG rows.
- * Uses a single Stripe invoices.list via listStripeInvoicesForAdmin (shared with other admin handlers).
+ * Subscriptions (DB) + invoices (Stripe) + PAYG rows (`payment_transactions` DB).
+ * Stripe + DB run in parallel; PAYG no longer depends on Stripe invoice guessing.
  */
 export async function getAdminBillingOverview() {
-  const [subscriptions, stripeInvoices] = await Promise.all([
+  const [subscriptions, stripeInvoices, paygTransactions] = await Promise.all([
     getAllSubscriptions(1, 500),
     listStripeInvoicesForAdmin(),
+    getAllPaygTransactions(),
   ]);
 
   const customerIds = Array.from(
@@ -30,10 +27,6 @@ export async function getAdminBillingOverview() {
   const invoices = stripeInvoices.map((inv) =>
     mapStripeInvoiceToAdminRow(inv, profileByCustomerId)
   );
-
-  const paygTransactions = stripeInvoices
-    .filter(isPaygInvoice)
-    .map((inv) => mapStripeInvoiceToPaygRow(inv, profileByCustomerId));
 
   return {
     subscriptions,

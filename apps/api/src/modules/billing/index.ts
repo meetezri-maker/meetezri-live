@@ -21,6 +21,7 @@ export {
 export {
   createCreditPurchaseSession,
   getAllPaygTransactions,
+  getAdminPaygSummary,
   syncPaygCredits,
 } from './services/payg.service';
 

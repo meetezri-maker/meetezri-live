@@ -11,10 +11,16 @@ import {
   getSupportTicketsHandler, updateSupportTicketHandler,
   getCommunityStatsHandler, getCommunityGroupsHandler,
   getLiveSessionsHandler, endLiveSessionHandler, flagSessionForReviewHandler, getActivityLogsHandler, getGlobalAuditLogsHandler, getSessionRecordingsHandler, getErrorLogsHandler, getSessionRecordingTranscriptHandler,
+  getAdminSystemHealthHandler, patchErrorLogResolveHandler, postErrorLogsArchiveResolvedHandler, postSessionRecordingReviewedHandler,
   getCrisisEventsHandler, getCrisisEventHandler, updateCrisisEventStatusHandler,
   getOrgTeamHandler, addOrgTeamMemberHandler, updateOrgTeamMemberHandler, removeOrgTeamMemberHandler,
   getBackupRecoveryHandler, postBackupRecoveryCreateHandler, postBackupRecoveryExportHandler,
   postBackupRecoveryRestoreHandler, getBackupRecoveryDownloadHandler,
+  getFeatureFlagsHandler, postFeatureFlagHandler, patchFeatureFlagHandler, deleteFeatureFlagHandler,
+  getAbTestsHandler, postAbTestHandler, patchAbTestHandler, deleteAbTestHandler,
+  getApiPlatformConfigHandler, putApiPlatformConfigHandler, postAdminApiKeyHandler,
+  getIntegrationsConfigHandler, putIntegrationsConfigHandler,
+  getBrandingConfigHandler, putBrandingConfigHandler,
 } from './admin.controller';
 import {
   dashboardStatsSchema,
@@ -215,10 +221,35 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.get('/audit-logs', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getGlobalAuditLogsHandler);
   fastify.get('/session-recordings', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getSessionRecordingsHandler);
   fastify.get('/session-recordings/:id/transcript', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getSessionRecordingTranscriptHandler);
+  fastify.post('/session-recordings/:id/reviewed', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, postSessionRecordingReviewedHandler);
   fastify.get('/error-logs', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getErrorLogsHandler);
+  fastify.patch('/error-logs/:id/resolve', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, patchErrorLogResolveHandler);
+  fastify.post('/error-logs/archive-resolved', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, postErrorLogsArchiveResolvedHandler);
+  fastify.get('/system-health', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin'])] }, getAdminSystemHealthHandler);
 
   // Crisis Management
   fastify.get('/crisis-events', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getCrisisEventsHandler);
   fastify.get('/crisis-events/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getCrisisEventHandler);
   fastify.patch('/crisis-events/:id/status', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, updateCrisisEventStatusHandler);
+
+  // Platform admin
+  fastify.get('/feature-flags', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin'])] }, getFeatureFlagsHandler);
+  fastify.post('/feature-flags', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin'])] }, postFeatureFlagHandler);
+  fastify.patch('/feature-flags/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin'])] }, patchFeatureFlagHandler);
+  fastify.delete('/feature-flags/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin'])] }, deleteFeatureFlagHandler);
+
+  fastify.get('/ab-tests', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, getAbTestsHandler);
+  fastify.post('/ab-tests', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, postAbTestHandler);
+  fastify.patch('/ab-tests/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, patchAbTestHandler);
+  fastify.delete('/ab-tests/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, deleteAbTestHandler);
+
+  fastify.get('/platform/api-config', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin'])] }, getApiPlatformConfigHandler);
+  fastify.put('/platform/api-config', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin'])] }, putApiPlatformConfigHandler);
+  fastify.post('/platform/api-keys', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin'])] }, postAdminApiKeyHandler);
+
+  fastify.get('/platform/integrations', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, getIntegrationsConfigHandler);
+  fastify.put('/platform/integrations', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, putIntegrationsConfigHandler);
+
+  fastify.get('/platform/branding', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, getBrandingConfigHandler);
+  fastify.put('/platform/branding', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, putBrandingConfigHandler);
 }

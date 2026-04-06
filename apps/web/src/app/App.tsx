@@ -401,12 +401,54 @@ export default function App() {
               element={<Navigate to="/admin/system-settings-enhanced" replace />}
             />
             <Route path="/admin/system-settings-enhanced" element={<SystemSettingsEnhanced />} />
-            <Route path="/admin/global-configuration" element={<GlobalConfiguration />} />
-            <Route path="/admin/feature-flags" element={<FeatureFlags />} />
-            <Route path="/admin/api-management" element={<APIManagement />} />
-            <Route path="/admin/integration-settings" element={<IntegrationSettings />} />
-            <Route path="/admin/branding-customization" element={<BrandingCustomization />} />
-            <Route path="/admin/ab-testing" element={<ABTesting />} />
+            <Route
+              path="/admin/global-configuration"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin']}>
+                  <GlobalConfiguration />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/feature-flags"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin']}>
+                  <FeatureFlags />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/api-management"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin']}>
+                  <APIManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/integration-settings"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin', 'org_admin']}>
+                  <IntegrationSettings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/branding-customization"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin', 'org_admin']}>
+                  <BrandingCustomization />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/ab-testing"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin', 'org_admin']}>
+                  <ABTesting />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Billing */}
             <Route path="/admin/billing" element={<AdminBilling />} />

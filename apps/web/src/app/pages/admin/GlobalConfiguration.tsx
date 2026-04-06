@@ -323,7 +323,16 @@ export function GlobalConfiguration() {
           ...section,
           settings: section.settings.map(setting => {
             const found = data.find((s: any) => s.key === setting.id);
-            return found ? { ...setting, value: found.value } : setting;
+            if (!found) return setting;
+            let v = found.value;
+            if (setting.type === "toggle" && typeof v !== "boolean") {
+              v = v === true || v === "true" || v === 1;
+            }
+            if (setting.type === "number" && typeof v !== "number") {
+              const n = Number(v);
+              v = Number.isFinite(n) ? n : setting.defaultValue;
+            }
+            return { ...setting, value: v };
           })
         })));
       } catch (err) {

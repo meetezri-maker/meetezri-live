@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import {
@@ -13,6 +13,8 @@ import {
   Trash2,
   Search,
 } from "lucide-react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 interface FeatureFlag {
   id: string;
@@ -29,6 +31,31 @@ interface FeatureFlag {
   category: "feature" | "experiment" | "killswitch" | "config";
 }
 
+function mapApiToFlag(row: Record<string, unknown>): FeatureFlag {
+  const env = String(row.environment || "production");
+  const environment = (["all", "production", "development", "staging"].includes(env)
+    ? env
+    : "production") as FeatureFlag["environment"];
+  const cat = String(row.category || "feature");
+  const category = (["feature", "experiment", "killswitch", "config"].includes(cat)
+    ? cat
+    : "feature") as FeatureFlag["category"];
+  return {
+    id: String(row.id),
+    key: String(row.key),
+    name: String(row.name),
+    description: String(row.description ?? ""),
+    enabled: Boolean(row.enabled),
+    environment,
+    rolloutPercentage: typeof row.rolloutPercentage === "number" ? row.rolloutPercentage : 0,
+    targetUsers: Array.isArray(row.targetUsers) ? (row.targetUsers as string[]) : undefined,
+    createdBy: String(row.createdBy ?? "Admin"),
+    createdAt: new Date(String(row.createdAt)),
+    lastModified: new Date(String(row.lastModified)),
+    category,
+  };
+}
+
 export function FeatureFlags() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -37,142 +64,33 @@ export function FeatureFlags() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedFlag, setSelectedFlag] = useState<FeatureFlag | null>(null);
+  const [flags, setFlags] = useState<FeatureFlag[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  // Mock feature flags
-  const [flags, setFlags] = useState<FeatureFlag[]>([
-    {
-      id: "ff1",
-      name: "AI Voice Sessions",
-      key: "ai_voice_sessions_enabled",
-      description: "Enable voice-based AI therapy sessions with real-time speech recognition",
-      enabled: true,
-      environment: "production",
-      rolloutPercentage: 100,
-      createdBy: "Admin Sarah",
-      createdAt: new Date("2024-01-15"),
-      lastModified: new Date("2024-06-20"),
-      category: "feature"
-    },
-    {
-      id: "ff2",
-      name: "Advanced Analytics Dashboard",
-      key: "advanced_analytics_v2",
-      description: "New analytics dashboard with enhanced visualizations and insights",
-      enabled: true,
-      environment: "production",
-      rolloutPercentage: 75,
-      createdBy: "Admin John",
-      createdAt: new Date("2024-02-10"),
-      lastModified: new Date("2024-06-25"),
-      category: "feature"
-    },
-    {
-      id: "ff3",
-      name: "Group Therapy Sessions",
-      key: "group_sessions_beta",
-      description: "Beta feature for group therapy sessions with multiple participants",
-      enabled: false,
-      environment: "development",
-      rolloutPercentage: 10,
-      targetUsers: ["beta_testers"],
-      createdBy: "Admin Mike",
-      createdAt: new Date("2024-03-01"),
-      lastModified: new Date("2024-06-15"),
-      category: "experiment"
-    },
-    {
-      id: "ff4",
-      name: "Gamification System",
-      key: "gamification_enabled",
-      description: "Achievement badges, streaks, and rewards for wellness activities",
-      enabled: true,
-      environment: "production",
-      rolloutPercentage: 100,
-      createdBy: "Admin Sarah",
-      createdAt: new Date("2024-01-20"),
-      lastModified: new Date("2024-06-28"),
-      category: "feature"
-    },
-    {
-      id: "ff5",
-      name: "Emergency Session Killswitch",
-      key: "emergency_killswitch",
-      description: "Ability to immediately disable all AI sessions in case of emergency",
-      enabled: false,
-      environment: "all",
-      rolloutPercentage: 0,
-      createdBy: "Admin John",
-      createdAt: new Date("2024-02-01"),
-      lastModified: new Date("2024-03-10"),
-      category: "killswitch"
-    },
-    {
-      id: "ff6",
-      name: "Premium Features",
-      key: "premium_tier_enabled",
-      description: "Enable premium subscription features including extended sessions",
-      enabled: true,
-      environment: "production",
-      rolloutPercentage: 100,
-      createdBy: "Admin Sarah",
-      createdAt: new Date("2024-01-10"),
-      lastModified: new Date("2024-06-29"),
-      category: "feature"
-    },
-    {
-      id: "ff7",
-      name: "Session Recording",
-      key: "session_recording_consent",
-      description: "Allow users to optionally record therapy sessions for playback",
-      enabled: true,
-      environment: "production",
-      rolloutPercentage: 50,
-      createdBy: "Admin Mike",
-      createdAt: new Date("2024-03-15"),
-      lastModified: new Date("2024-06-22"),
-      category: "feature"
-    },
-    {
-      id: "ff8",
-      name: "Dark Mode",
-      key: "dark_mode_theme",
-      description: "Enable dark theme across the application",
-      enabled: true,
-      environment: "all",
-      rolloutPercentage: 100,
-      createdBy: "Admin Sarah",
-      createdAt: new Date("2024-02-05"),
-      lastModified: new Date("2024-06-18"),
-      category: "config"
-    },
-    {
-      id: "ff9",
-      name: "Multi-language Support",
-      key: "i18n_enabled",
-      description: "Support for Spanish, French, and German languages",
-      enabled: false,
-      environment: "staging",
-      rolloutPercentage: 20,
-      targetUsers: ["translators", "beta_testers"],
-      createdBy: "Admin John",
-      createdAt: new Date("2024-04-01"),
-      lastModified: new Date("2024-06-26"),
-      category: "experiment"
-    },
-    {
-      id: "ff10",
-      name: "Biometric Authentication",
-      key: "biometric_auth_enabled",
-      description: "Enable fingerprint and face ID login",
-      enabled: true,
-      environment: "production",
-      rolloutPercentage: 90,
-      createdBy: "Admin Mike",
-      createdAt: new Date("2024-03-20"),
-      lastModified: new Date("2024-06-24"),
-      category: "feature"
+  const [newName, setNewName] = useState("");
+  const [newKey, setNewKey] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [newCategory, setNewCategory] = useState<FeatureFlag["category"]>("feature");
+  const [newEnvironment, setNewEnvironment] = useState<FeatureFlag["environment"]>("production");
+  const [newRollout, setNewRollout] = useState(0);
+
+  const loadFlags = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.listFeatureFlags();
+      setFlags((Array.isArray(data) ? data : []).map((r) => mapApiToFlag(r as Record<string, unknown>)));
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to load feature flags");
+    } finally {
+      setLoading(false);
     }
-  ]);
+  }, []);
+
+  useEffect(() => {
+    loadFlags();
+  }, [loadFlags]);
 
   const filteredFlags = flags.filter(flag => {
     const matchesSearch = 
@@ -184,10 +102,99 @@ export function FeatureFlags() {
     return matchesSearch && matchesCategory && matchesEnvironment;
   });
 
-  const toggleFlag = (flagId: string) => {
-    setFlags(flags.map(flag => 
-      flag.id === flagId ? { ...flag, enabled: !flag.enabled, lastModified: new Date() } : flag
-    ));
+  const toggleFlag = async (flagId: string) => {
+    const flag = flags.find((f) => f.id === flagId);
+    if (!flag) return;
+    setSaving(true);
+    try {
+      const updated = await api.updateFeatureFlag(flagId, { enabled: !flag.enabled });
+      setFlags((prev) =>
+        prev.map((f) => (f.id === flagId ? mapApiToFlag(updated as Record<string, unknown>) : f))
+      );
+      toast.success("Flag updated");
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Failed to update flag");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitCreate = async () => {
+    if (!newKey.trim() || !newName.trim()) {
+      toast.error("Name and key are required");
+      return;
+    }
+    setSaving(true);
+    try {
+      const created = await api.createFeatureFlag({
+        key: newKey.trim(),
+        name: newName.trim(),
+        description: newDescription.trim(),
+        enabled: false,
+        environment: newEnvironment,
+        rolloutPercentage: newRollout,
+        category: newCategory,
+      });
+      setFlags((prev) => [mapApiToFlag(created as Record<string, unknown>), ...prev]);
+      setShowCreateModal(false);
+      setNewName("");
+      setNewKey("");
+      setNewDescription("");
+      setNewCategory("feature");
+      setNewEnvironment("production");
+      setNewRollout(0);
+      toast.success("Feature flag created");
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Failed to create flag");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitEdit = async () => {
+    if (!selectedFlag) return;
+    setSaving(true);
+    try {
+      const updated = await api.updateFeatureFlag(selectedFlag.id, {
+        name: selectedFlag.name,
+        description: selectedFlag.description,
+        enabled: selectedFlag.enabled,
+        environment: selectedFlag.environment,
+        rolloutPercentage: selectedFlag.rolloutPercentage,
+        category: selectedFlag.category,
+        targetUsers: selectedFlag.targetUsers,
+      });
+      setFlags((prev) =>
+        prev.map((f) => (f.id === selectedFlag.id ? mapApiToFlag(updated as Record<string, unknown>) : f))
+      );
+      setShowEditModal(false);
+      setSelectedFlag(null);
+      toast.success("Flag saved");
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Failed to save flag");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitDelete = async () => {
+    if (!selectedFlag) return;
+    setSaving(true);
+    try {
+      await api.deleteFeatureFlag(selectedFlag.id);
+      setFlags((prev) => prev.filter((f) => f.id !== selectedFlag.id));
+      setShowDeleteModal(false);
+      setSelectedFlag(null);
+      toast.success("Flag deleted");
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Failed to delete flag");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const getCategoryColor = (category: string) => {
@@ -235,7 +242,8 @@ export function FeatureFlags() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg"
+            disabled={loading}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
             Create Flag
@@ -367,8 +375,12 @@ export function FeatureFlags() {
         >
           <h2 className="text-xl font-bold text-gray-900 mb-6">Feature Flags ({filteredFlags.length})</h2>
 
+          {loading && (
+            <p className="text-gray-600 py-8 text-center">Loading flags…</p>
+          )}
+
           <div className="space-y-4">
-            {filteredFlags.map((flag, index) => (
+            {!loading && filteredFlags.map((flag, index) => (
               <motion.div
                 key={flag.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -445,9 +457,10 @@ export function FeatureFlags() {
                     <motion.button
                       whileTap={{ scale: 0.95 }}
                       onClick={() => toggleFlag(flag.id)}
+                      disabled={saving}
                       className={`relative w-16 h-8 rounded-full transition-colors ${
                         flag.enabled ? "bg-green-500" : "bg-gray-300"
-                      }`}
+                      } disabled:opacity-50`}
                     >
                       <motion.div
                         animate={{ x: flag.enabled ? 32 : 0 }}
@@ -494,7 +507,7 @@ export function FeatureFlags() {
             ))}
           </div>
 
-          {filteredFlags.length === 0 && (
+          {!loading && filteredFlags.length === 0 && (
             <div className="text-center py-12">
               <Flag className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-600">No feature flags match your filters</p>
@@ -523,6 +536,8 @@ export function FeatureFlags() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Flag Name</label>
                   <input
                     type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
                     placeholder="e.g., AI Voice Sessions"
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
@@ -532,6 +547,8 @@ export function FeatureFlags() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Flag Key</label>
                   <input
                     type="text"
+                    value={newKey}
+                    onChange={(e) => setNewKey(e.target.value)}
                     placeholder="e.g., ai_voice_sessions_enabled"
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none font-mono"
                   />
@@ -541,6 +558,8 @@ export function FeatureFlags() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                   <textarea
                     rows={3}
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
                     placeholder="Describe what this feature flag controls..."
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                   />
@@ -549,21 +568,29 @@ export function FeatureFlags() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                    <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
-                      <option>Feature</option>
-                      <option>Experiment</option>
-                      <option>Killswitch</option>
-                      <option>Config</option>
+                    <select
+                      value={newCategory}
+                      onChange={(e) => setNewCategory(e.target.value as FeatureFlag["category"])}
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="feature">Feature</option>
+                      <option value="experiment">Experiment</option>
+                      <option value="killswitch">Killswitch</option>
+                      <option value="config">Config</option>
                     </select>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Environment</label>
-                    <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
-                      <option>Production</option>
-                      <option>Staging</option>
-                      <option>Development</option>
-                      <option>All</option>
+                    <select
+                      value={newEnvironment}
+                      onChange={(e) => setNewEnvironment(e.target.value as FeatureFlag["environment"])}
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="production">Production</option>
+                      <option value="staging">Staging</option>
+                      <option value="development">Development</option>
+                      <option value="all">All</option>
                     </select>
                   </div>
                 </div>
@@ -574,9 +601,11 @@ export function FeatureFlags() {
                     type="range"
                     min="0"
                     max="100"
-                    defaultValue="0"
+                    value={newRollout}
+                    onChange={(e) => setNewRollout(parseInt(e.target.value, 10))}
                     className="w-full"
                   />
+                  <p className="text-sm text-gray-600 mt-1">{newRollout}%</p>
                 </div>
               </div>
 
@@ -585,6 +614,7 @@ export function FeatureFlags() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setShowCreateModal(false)}
+                  disabled={saving}
                   className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
                 >
                   Cancel
@@ -593,10 +623,11 @@ export function FeatureFlags() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
+                  onClick={() => void submitCreate()}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium disabled:opacity-50"
                 >
-                  Create Flag
+                  {saving ? "Creating…" : "Create Flag"}
                 </motion.button>
               </div>
             </motion.div>
@@ -673,10 +704,10 @@ export function FeatureFlags() {
                       }}
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                     >
-                      <option>Feature</option>
-                      <option>Experiment</option>
-                      <option>Killswitch</option>
-                      <option>Config</option>
+                      <option value="feature">Feature</option>
+                      <option value="experiment">Experiment</option>
+                      <option value="killswitch">Killswitch</option>
+                      <option value="config">Config</option>
                     </select>
                   </div>
 
@@ -690,10 +721,10 @@ export function FeatureFlags() {
                       }}
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                     >
-                      <option>Production</option>
-                      <option>Staging</option>
-                      <option>Development</option>
-                      <option>All</option>
+                      <option value="production">Production</option>
+                      <option value="staging">Staging</option>
+                      <option value="development">Development</option>
+                      <option value="all">All</option>
                     </select>
                   </div>
                 </div>
@@ -719,6 +750,7 @@ export function FeatureFlags() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setShowEditModal(false)}
+                  disabled={saving}
                   className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
                 >
                   Cancel
@@ -727,15 +759,11 @@ export function FeatureFlags() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => {
-                    if (selectedFlag) {
-                      setFlags(flags.map(flag => flag.id === selectedFlag.id ? selectedFlag : flag));
-                      setShowEditModal(false);
-                    }
-                  }}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
+                  onClick={() => void submitEdit()}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium disabled:opacity-50"
                 >
-                  Save Changes
+                  {saving ? "Saving…" : "Save Changes"}
                 </motion.button>
               </div>
             </motion.div>
@@ -767,6 +795,7 @@ export function FeatureFlags() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setShowDeleteModal(false)}
+                  disabled={saving}
                   className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
                 >
                   Cancel
@@ -775,15 +804,11 @@ export function FeatureFlags() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => {
-                    if (selectedFlag) {
-                      setFlags(flags.filter(flag => flag.id !== selectedFlag.id));
-                      setShowDeleteModal(false);
-                    }
-                  }}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white font-medium"
+                  onClick={() => void submitDelete()}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white font-medium disabled:opacity-50"
                 >
-                  Delete Flag
+                  {saving ? "Deleting…" : "Delete Flag"}
                 </motion.button>
               </div>
             </motion.div>
