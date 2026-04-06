@@ -80,3 +80,12 @@ export function mergeWellnessToolsForAdminDisplay<
 export function placeholderWellnessToolId(category: WellnessToolCategory): string {
   return `${WELLNESS_PLACEHOLDER_ID_PREFIX}${categorySlug(category)}`;
 }
+
+/** API rows merged with built-in rows; skip API duplicate titles (same as user app). */
+export function mergeApiBuiltinsForAdmin<
+  T extends { title: string }
+>(builtins: T[], apiItems: T[]): T[] {
+  const titles = new Set(builtins.map((b) => b.title.toLowerCase().trim()));
+  const extra = apiItems.filter((t) => !titles.has(t.title.toLowerCase().trim()));
+  return [...builtins, ...extra];
+}

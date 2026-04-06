@@ -45,11 +45,17 @@ import { formatDistanceToNow } from "date-fns";
 import { WELLNESS_TOOL_CATEGORIES, type WellnessToolCategory } from "../../../lib/wellnessToolCategories";
 import {
   mergeWellnessToolsForAdminDisplay,
+  mergeApiBuiltinsForAdmin,
   placeholderWellnessToolId,
   isWellnessPlaceholderId,
   CATEGORY_ICON_HEX,
   CATEGORY_ICON_NAME,
 } from "../../../lib/mergeAdminWellnessTools";
+import {
+  WELLNESS_BUILTIN_TOOLS_ADMIN,
+  isBuiltinWellnessListId,
+  type WellnessBuiltinToolMeta,
+} from "../../../lib/wellnessBuiltinToolsMetadata";
 
 interface WellnessTool {
   id: string;
@@ -67,6 +73,8 @@ interface WellnessTool {
   createdBy: string;
   /** Not persisted — shown until a real tool exists for this category */
   isPlaceholder?: boolean;
+  /** Shipped with the app — same tools users see in Wellness Tools */
+  isBuiltin?: boolean;
 }
 
 const iconMap: Record<string, any> = {
@@ -89,6 +97,30 @@ const iconMap: Record<string, any> = {
   HandHelping,
   Timer,
 };
+
+function mapBuiltinMetaToTool(meta: WellnessBuiltinToolMeta): WellnessTool {
+  const cat = meta.category as WellnessToolCategory;
+  const iconName = CATEGORY_ICON_NAME[cat] || "Sparkles";
+  const durMin =
+    meta.duration === "∞" ? 0 : parseInt(meta.duration.replace(/\D/g, ""), 10) || 5;
+  return {
+    id: `builtin:${meta.id}`,
+    title: meta.title,
+    category: meta.category,
+    description: meta.description,
+    duration: durMin,
+    difficulty: "Beginner",
+    status: "published",
+    icon: iconMap[iconName] || Sparkles,
+    iconColor: CATEGORY_ICON_HEX[cat],
+    usageCount: 0,
+    rating: 0,
+    lastUpdated: "Built-in",
+    createdBy: "Ezri app",
+    isPlaceholder: false,
+    isBuiltin: true,
+  };
+}
 
 function buildPlaceholderTool(category: WellnessToolCategory): WellnessTool {
   const iconName = CATEGORY_ICON_NAME[category];
@@ -134,6 +166,7 @@ export function WellnessToolsCMS() {
       setIsLoading(true);
       const tools = await api.wellness.getAll();
       const list = Array.isArray(tools) ? tools : [];
+      const builtinRows = WELLNESS_BUILTIN_TOOLS_ADMIN.map(mapBuiltinMetaToTool);
       const mappedTools: WellnessTool[] = list.map((t: any) => ({
         id: t.id,
         title: t.title,
@@ -149,11 +182,17 @@ export function WellnessToolsCMS() {
         lastUpdated: formatDistanceToNow(new Date(t.updated_at), { addSuffix: true }),
         createdBy: t.profiles?.full_name || "Admin",
         isPlaceholder: false,
+        isBuiltin: false,
       }));
-      const merged = mergeWellnessToolsForAdminDisplay(mappedTools, buildPlaceholderTool);
+      const combined = mergeApiBuiltinsForAdmin(builtinRows, mappedTools);
+      const merged = mergeWellnessToolsForAdminDisplay(combined, buildPlaceholderTool);
       setWellnessTools(merged);
     } catch (error) {
       console.error("Failed to fetch wellness tools:", error);
+      const builtinRows = WELLNESS_BUILTIN_TOOLS_ADMIN.map(mapBuiltinMetaToTool);
+      setWellnessTools(
+        mergeWellnessToolsForAdminDisplay(builtinRows, buildPlaceholderTool)
+      );
     } finally {
       setIsLoading(false);
     }
@@ -214,9 +253,11 @@ export function WellnessToolsCMS() {
   };
 
   const handleBulkAction = async (action: string) => {
-    const realIds = selectedTools.filter((id) => !isWellnessPlaceholderId(id));
+    const realIds = selectedTools.filter(
+      (id) => !isWellnessPlaceholderId(id) && !isBuiltinWellnessListId(id)
+    );
     if (realIds.length === 0) {
-      alert("Select saved tools only — placeholders cannot be bulk-updated.");
+      alert("Select CMS tools only — built-ins and placeholders cannot be bulk-updated.");
       return;
     }
     try {
@@ -245,6 +286,10 @@ export function WellnessToolsCMS() {
   };
 
   const handleCopyTool = (tool: WellnessTool) => {
+    if (tool.isBuiltin) {
+      alert("Built-in tools are fixed in the app. Create a new tool in the editor to extend the library.");
+      return;
+    }
     if (tool.isPlaceholder) {
       alert("Create a real tool first — placeholders are not copied.");
       return;
@@ -253,6 +298,10 @@ export function WellnessToolsCMS() {
   };
 
   const handleDeleteTool = (tool: WellnessTool) => {
+    if (tool.isBuiltin) {
+      alert("Built-in tools ship with the app and cannot be deleted here. Remove or archive CMS tools only.");
+      return;
+    }
     if (tool.isPlaceholder) {
       alert("This is a category placeholder — it disappears when you publish a tool for this category.");
       return;
@@ -262,6 +311,10 @@ export function WellnessToolsCMS() {
 
   const handleConfirmDelete = async () => {
     if (!deleteModalTool) return;
+    if (deleteModalTool.isBuiltin || isBuiltinWellnessListId(deleteModalTool.id)) {
+      setDeleteModalTool(null);
+      return;
+    }
     if (deleteModalTool.isPlaceholder || isWellnessPlaceholderId(deleteModalTool.id)) {
       setDeleteModalTool(null);
       return;
@@ -605,14 +658,20 @@ export function WellnessToolsCMS() {
                         size="sm"
                         variant="ghost"
                         onClick={() =>
-                          tool.isPlaceholder
+                          tool.isBuiltin || tool.isPlaceholder
                             ? navigate(
                                 `/admin/wellness-tool-editor?category=${encodeURIComponent(tool.category)}`
                               )
                             : navigate(`/admin/wellness-tool-editor?id=${tool.id}`)
                         }
                         className="text-blue-600 hover:text-blue-700"
-                        title={tool.isPlaceholder ? "Create tool for this category" : "Edit"}
+                        title={
+                          tool.isBuiltin
+                            ? "Add a CMS tool for this category"
+                            : tool.isPlaceholder
+                              ? "Create tool for this category"
+                              : "Edit"
+                        }
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
@@ -763,7 +822,7 @@ export function WellnessToolsCMS() {
                       className="flex-1"
                       onClick={() => {
                         setViewModalTool(null);
-                        if (viewModalTool.isPlaceholder) {
+                        if (viewModalTool.isBuiltin || viewModalTool.isPlaceholder) {
                           navigate(
                             `/admin/wellness-tool-editor?category=${encodeURIComponent(viewModalTool.category)}`
                           );

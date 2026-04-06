@@ -5,11 +5,6 @@ import { motion, AnimatePresence } from "motion/react";
 import { EzriGuidedMode } from "../../components/modals";
 import {
   Heart,
-  Wind,
-  Brain,
-  Music,
-  Moon,
-  Smile,
   Play,
   Pause,
   RotateCcw,
@@ -18,16 +13,10 @@ import {
   Star,
   Sparkles,
   Lock,
-  Activity,
-  Leaf,
-  HeartPulse,
-  Shield,
-  Waves,
-  CloudRain,
-  HandHelping,
+  LayoutGrid,
   type LucideIcon,
 } from "lucide-react";
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -46,32 +35,10 @@ import {
   wellnessProgressTotalSeconds,
   type WellnessProgressRow,
 } from "../../../lib/wellnessLocalProgress";
-import { getWellnessToolLucideIcon } from "../../../lib/wellnessToolIcons";
-
-/** Default built-in to scroll to per category (admin-aligned names). Fallback: first exercise in that category. */
-const ALL_CATEGORY_TAB_SCROLL: Record<WellnessToolCategory, string> = {
-  "Anxiety Management": "grounding-54321",
-  "Stress Management": "stress-release-waves",
-  Meditation: "body-scan",
-  "Sleep Health": "sleep-meditation",
-  Exercise: "gentle-movement",
-  "Self-Care": "gratitude",
-  Relaxation: "box-breathing",
-  "Depression Support": "compassion-pause",
-  Mindfulness: "mindful-anchor",
-};
-
-const CATEGORY_TAB_ICONS: Record<WellnessToolCategory, LucideIcon> = {
-  "Anxiety Management": Heart,
-  "Stress Management": Wind,
-  Meditation: Brain,
-  "Sleep Health": Moon,
-  Exercise: Activity,
-  "Self-Care": Sparkles,
-  Relaxation: Music,
-  "Depression Support": HeartPulse,
-  Mindfulness: Leaf,
-};
+import {
+  getWellnessCategoryIcon,
+  WELLNESS_CATEGORY_ICONS,
+} from "../../../lib/wellnessCategoryIcons";
 
 const BUILTIN_FAVORITES_KEY = "wellness-builtin-favorites";
 
@@ -116,7 +83,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       description: "Name five things you see, four you feel, three you hear, two you smell, one you taste",
       duration: "5 min",
       difficulty: "Beginner",
-      icon: Shield,
+      icon: getWellnessCategoryIcon("Anxiety Management"),
       color: WELLNESS_CATEGORY_GRADIENT["Anxiety Management"],
     },
     {
@@ -126,7 +93,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       description: "Notice and soften stress in the body with slow breathing",
       duration: "8 min",
       difficulty: "Beginner",
-      icon: Waves,
+      icon: getWellnessCategoryIcon("Stress Management"),
       color: WELLNESS_CATEGORY_GRADIENT["Stress Management"],
     },
     {
@@ -136,7 +103,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       description: "Progressive relaxation from head to toe",
       duration: "10 min",
       difficulty: "Beginner",
-      icon: Brain,
+      icon: getWellnessCategoryIcon("Meditation"),
       color: WELLNESS_CATEGORY_GRADIENT.Meditation,
     },
     {
@@ -146,7 +113,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       description: "Wind down and prepare for restful sleep",
       duration: "20 min",
       difficulty: "Beginner",
-      icon: Moon,
+      icon: getWellnessCategoryIcon("Sleep Health"),
       color: WELLNESS_CATEGORY_GRADIENT["Sleep Health"],
     },
     {
@@ -156,7 +123,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       description: "Light stretches and mobility to reconnect with your body",
       duration: "10 min",
       difficulty: "Beginner",
-      icon: Activity,
+      icon: getWellnessCategoryIcon("Exercise"),
       color: WELLNESS_CATEGORY_GRADIENT.Exercise,
     },
     {
@@ -166,7 +133,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       description: "Focus on three things you're grateful for",
       duration: "5 min",
       difficulty: "Beginner",
-      icon: Smile,
+      icon: getWellnessCategoryIcon("Self-Care"),
       color: WELLNESS_CATEGORY_GRADIENT["Self-Care"],
     },
     {
@@ -176,7 +143,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       description: "4-4-4-4 breathing pattern to reduce stress",
       duration: "5 min",
       difficulty: "Beginner",
-      icon: Wind,
+      icon: getWellnessCategoryIcon("Relaxation"),
       color: WELLNESS_CATEGORY_GRADIENT.Relaxation,
     },
     {
@@ -186,7 +153,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       description: "A short pause with kind phrases you can repeat softly",
       duration: "6 min",
       difficulty: "Beginner",
-      icon: HandHelping,
+      icon: getWellnessCategoryIcon("Depression Support"),
       color: WELLNESS_CATEGORY_GRADIENT["Depression Support"],
     },
     {
@@ -196,7 +163,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       description: "Anchor attention on the breath and gentle body awareness",
       duration: "12 min",
       difficulty: "Intermediate",
-      icon: Leaf,
+      icon: getWellnessCategoryIcon("Mindfulness"),
       color: WELLNESS_CATEGORY_GRADIENT.Mindfulness,
     },
     {
@@ -206,7 +173,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       description: "Calming nature sounds for relaxation",
       duration: "∞",
       difficulty: "Any",
-      icon: CloudRain,
+      icon: getWellnessCategoryIcon("Relaxation"),
       color: WELLNESS_CATEGORY_GRADIENT.Relaxation,
     },
   ];
@@ -274,6 +241,7 @@ export function WellnessTools() {
   const [phaseTimer, setPhaseTimer] = useState(0);
   const [guidedExercise, setGuidedExercise] = useState<string | null>(null);
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
+  const [selectedCategoryTab, setSelectedCategoryTab] = useState<WellnessToolCategory | "all">("all");
   const [exercises, setExercises] = useState<WellnessExerciseItem[]>([]);
   const [progress, setProgress] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -300,7 +268,7 @@ export function WellnessTools() {
           description: t.description || "",
           duration: t.duration_minutes ? `${t.duration_minutes} min` : "∞",
           difficulty: t.difficulty || "Beginner",
-          icon: getWellnessToolLucideIcon(typeof t.icon === "string" ? t.icon : "Sparkles"),
+          icon: getWellnessCategoryIcon(t.category),
           color:
             WELLNESS_CATEGORY_GRADIENT[t.category as WellnessToolCategory] ||
             "from-indigo-400 to-purple-500",
@@ -351,21 +319,15 @@ export function WellnessTools() {
   }, [exercises]);
 
   const displayExercises = useMemo(() => {
-    return showOnlyFavorites ? exercisesSorted.filter((ex) => ex.favorite) : exercisesSorted;
-  }, [exercisesSorted, showOnlyFavorites]);
-
-  const scrollToCategoryTool = useCallback((cat: WellnessToolCategory) => {
-    setShowOnlyFavorites(false);
-    const preferredId = ALL_CATEGORY_TAB_SCROLL[cat];
-    window.setTimeout(() => {
-      let el = document.getElementById(`wellness-exercise-card-${preferredId}`);
-      if (!el) {
-        const first = exercises.find((e) => e.category === cat);
-        if (first) el = document.getElementById(`wellness-exercise-card-${first.id}`);
-      }
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 50);
-  }, [exercises]);
+    let base = exercisesSorted;
+    if (selectedCategoryTab !== "all") {
+      base = base.filter((e) => e.category === selectedCategoryTab);
+    }
+    if (showOnlyFavorites) {
+      base = base.filter((e) => e.favorite);
+    }
+    return base;
+  }, [exercisesSorted, showOnlyFavorites, selectedCategoryTab]);
 
   const stats = [
     { 
@@ -486,7 +448,9 @@ export function WellnessTools() {
   };
 
   const activeExerciseData = exercises.find((ex) => ex.id === activeExercise);
-  const ActiveExerciseIcon = activeExerciseData?.icon;
+  const ActiveExerciseIcon = activeExerciseData
+    ? getWellnessCategoryIcon(activeExerciseData.category)
+    : undefined;
 
   useEffect(() => {
     if (isPlaying && activeExerciseData) {
@@ -686,7 +650,7 @@ export function WellnessTools() {
           </div>
         </motion.div>
 
-        {/* All nine category tabs — same style as before; scroll to that category’s tool */}
+        {/* Category tabs: filter exercises below (each category has a unique icon in wellnessCategoryIcons) */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -695,19 +659,43 @@ export function WellnessTools() {
         >
           <h2 className="text-xl font-bold mb-4">Categories</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <motion.button
+              type="button"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.18 }}
+              whileHover={{ scale: 1.03, y: -3 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                setSelectedCategoryTab("all");
+                setShowOnlyFavorites(false);
+              }}
+              className={`flex min-h-[112px] flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-slate-500 to-slate-700 p-4 text-center text-white shadow-lg sm:min-h-[120px] sm:p-5 ${
+                selectedCategoryTab === "all" ? "ring-4 ring-white/90 ring-offset-2 ring-offset-slate-100" : ""
+              }`}
+            >
+              <LayoutGrid className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" aria-hidden />
+              <span className="text-xs font-bold leading-tight sm:text-sm">All</span>
+            </motion.button>
             {WELLNESS_TOOL_CATEGORIES.map((cat, index) => {
-              const Icon = CATEGORY_TAB_ICONS[cat];
+              const Icon = WELLNESS_CATEGORY_ICONS[cat];
+              const active = selectedCategoryTab === cat;
               return (
                 <motion.button
                   key={cat}
                   type="button"
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.18 + index * 0.03 }}
+                  transition={{ delay: 0.2 + index * 0.03 }}
                   whileHover={{ scale: 1.03, y: -3 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => scrollToCategoryTool(cat)}
-                  className={`flex min-h-[112px] flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-br ${WELLNESS_CATEGORY_GRADIENT[cat]} p-4 text-center text-white shadow-lg sm:min-h-[120px] sm:p-5`}
+                  onClick={() => {
+                    setSelectedCategoryTab(cat);
+                    setShowOnlyFavorites(false);
+                  }}
+                  className={`flex min-h-[112px] flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-br ${WELLNESS_CATEGORY_GRADIENT[cat]} p-4 text-center text-white shadow-lg sm:min-h-[120px] sm:p-5 ${
+                    active ? "ring-4 ring-white/90 ring-offset-2 ring-offset-slate-100" : ""
+                  }`}
                 >
                   <Icon className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" aria-hidden />
                   <span className="text-xs font-bold leading-tight sm:text-sm">{cat}</span>
@@ -727,7 +715,9 @@ export function WellnessTools() {
             <h2 className="text-xl font-bold">
               {showOnlyFavorites
                 ? `Favorite exercises (${favoriteCount})`
-                : "Exercises"}
+                : selectedCategoryTab === "all"
+                  ? "Exercises"
+                  : selectedCategoryTab}
             </h2>
             <button 
               onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
@@ -751,11 +741,13 @@ export function WellnessTools() {
               <p className="text-muted-foreground col-span-full text-center py-8">
                 {showOnlyFavorites
                   ? "No favorites yet. Tap the heart on an exercise to save it here."
-                  : "No exercises available."}
+                  : selectedCategoryTab !== "all"
+                    ? `No exercises in this category yet.`
+                    : "No exercises available."}
               </p>
             ) : (
             displayExercises.map((exercise, index) => {
-              const Icon = exercise.icon;
+              const Icon = getWellnessCategoryIcon(exercise.category);
               return (
                 <motion.div
                   id={`wellness-exercise-card-${exercise.id}`}
@@ -1005,7 +997,9 @@ export function WellnessTools() {
           exerciseTitle={exercises.find(ex => ex.id === guidedExercise)!.title}
           exerciseDescription={exercises.find(ex => ex.id === guidedExercise)!.description}
           exerciseColor={exercises.find(ex => ex.id === guidedExercise)!.color}
-          exerciseIcon={exercises.find(ex => ex.id === guidedExercise)!.icon}
+          exerciseIcon={getWellnessCategoryIcon(
+            exercises.find((ex) => ex.id === guidedExercise)!.category
+          )}
           duration={exercises.find(ex => ex.id === guidedExercise)!.duration}
         />
       )}

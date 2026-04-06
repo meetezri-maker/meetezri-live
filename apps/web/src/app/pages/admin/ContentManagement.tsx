@@ -5,6 +5,12 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { motion, AnimatePresence } from "motion/react";
 import { api } from "../../../lib/api";
+import { mergeApiBuiltinsForAdmin } from "../../../lib/mergeAdminWellnessTools";
+import {
+  WELLNESS_BUILTIN_TOOLS_ADMIN,
+  isBuiltinWellnessListId,
+} from "../../../lib/wellnessBuiltinToolsMetadata";
+import { WELLNESS_TOOL_CATEGORIES } from "../../../lib/wellnessToolCategories";
 import {
   Plus,
   Edit,
@@ -16,6 +22,21 @@ import {
   X,
 } from "lucide-react";
 
+const LS_PROMPTS = "ezri-admin-content-prompts";
+const LS_RESOURCES = "ezri-admin-content-resources";
+
+const DEFAULT_JOURNAL_PROMPTS: Prompt[] = [
+  { id: "jp-1", text: "What is one thing that went better than you expected today?", category: "Gratitude", uses: 0 },
+  { id: "jp-2", text: "Name three sensations you notice in your body right now.", category: "Mindfulness", uses: 0 },
+  { id: "jp-3", text: "What would you tell a friend who felt the way you feel today?", category: "Self-Compassion", uses: 0 },
+  { id: "jp-4", text: "What boundary do you want to honor this week?", category: "Stress", uses: 0 },
+];
+
+const DEFAULT_RESOURCES: Resource[] = [
+  { id: "res-1", title: "Crisis resources (US)", type: "Article", views: 0, rating: 5 },
+  { id: "res-2", title: "Sleep hygiene basics", type: "Guide", views: 0, rating: 4 },
+];
+
 interface Exercise {
   id: string;
   name: string;
@@ -23,6 +44,8 @@ interface Exercise {
   duration: string;
   uses: number;
   status: string;
+  /** Matches in-app built-ins — not editable via this API row */
+  isBuiltin?: boolean;
 }
 
 interface Prompt {
@@ -49,8 +72,8 @@ export function ContentManagement() {
 
   // State for content items
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [prompts, setPrompts] = useState<Prompt[]>([]);
-  const [resources, setResources] = useState<Resource[]>([]);
+  const [prompts, setPrompts] = useState<Prompt[]>(DEFAULT_JOURNAL_PROMPTS);
+  const [resources, setResources] = useState<Resource[]>(DEFAULT_RESOURCES);
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -85,19 +108,44 @@ export function ContentManagement() {
         api.wellness.getProgress(),
       ]);
       const progressMap = new Map(
-        (progressRes || []).map((p: any) => [p.toolId, p.sessionsCompleted])
+        (Array.isArray(progressRes) ? progressRes : []).map((p: any) => [
+          p.toolId,
+          p.sessionsCompleted,
+        ])
       );
-      const mappedExercises: Exercise[] = toolsRes.map((t: any) => ({
+      const apiList = Array.isArray(toolsRes) ? toolsRes : [];
+      const builtinRows: Exercise[] = WELLNESS_BUILTIN_TOOLS_ADMIN.map((b) => ({
+        id: `builtin:${b.id}`,
+        name: b.title,
+        category: b.category,
+        duration: b.duration,
+        uses: 0,
+        status: "published",
+        isBuiltin: true,
+      }));
+      const mappedApi: Exercise[] = apiList.map((t: any) => ({
         id: t.id,
         name: t.title,
         category: t.category,
         duration: t.duration_minutes ? `${t.duration_minutes} min` : "∞",
         uses: progressMap.get(t.id) ?? 0,
         status: (t.status as string) || "draft",
+        isBuiltin: false,
       }));
-      setExercises(mappedExercises);
+      setExercises(mergeApiBuiltinsForAdmin(builtinRows, mappedApi));
     } catch (error) {
       console.error("Failed to fetch exercises:", error);
+      setExercises(
+        WELLNESS_BUILTIN_TOOLS_ADMIN.map((b) => ({
+          id: `builtin:${b.id}`,
+          name: b.title,
+          category: b.category,
+          duration: b.duration,
+          uses: 0,
+          status: "published",
+          isBuiltin: true,
+        }))
+      );
     } finally {
       setIsLoading(false);
     }
@@ -105,6 +153,20 @@ export function ContentManagement() {
 
   useEffect(() => {
     fetchExercises();
+    try {
+      const rawP = localStorage.getItem(LS_PROMPTS);
+      if (rawP) {
+        const parsed = JSON.parse(rawP) as Prompt[];
+        if (Array.isArray(parsed) && parsed.length > 0) setPrompts(parsed);
+      }
+      const rawR = localStorage.getItem(LS_RESOURCES);
+      if (rawR) {
+        const parsed = JSON.parse(rawR) as Resource[];
+        if (Array.isArray(parsed) && parsed.length > 0) setResources(parsed);
+      }
+    } catch {
+      /* keep initial defaults */
+    }
   }, []);
 
   const searchQueryLower = searchQuery.toLowerCase();
@@ -170,6 +232,24 @@ export function ContentManagement() {
     setShowDeleteModal(true);
   };
 
+  const persistPrompts = (next: Prompt[]) => {
+    setPrompts(next);
+    try {
+      localStorage.setItem(LS_PROMPTS, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const persistResources = (next: Resource[]) => {
+    setResources(next);
+    try {
+      localStorage.setItem(LS_RESOURCES, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
   // Confirm Add
   const confirmAdd = async () => {
     if (activeTab === "exercises") {
@@ -201,21 +281,21 @@ export function ContentManagement() {
       }
     } else if (activeTab === "prompts") {
       const newPrompt: Prompt = {
-        id: String(prompts.length + 1),
+        id: `jp-${Date.now()}`,
         text: promptForm.text,
         category: promptForm.category,
         uses: 0,
       };
-      setPrompts([...prompts, newPrompt]);
+      persistPrompts([...prompts, newPrompt]);
     } else if (activeTab === "resources") {
       const newResource: Resource = {
-        id: String(resources.length + 1),
+        id: `res-${Date.now()}`,
         title: resourceForm.title,
         type: resourceForm.type,
         views: 0,
         rating: 0,
       };
-      setResources([...resources, newResource]);
+      persistResources([...resources, newResource]);
     }
     setShowAddModal(false);
   };
@@ -223,6 +303,13 @@ export function ContentManagement() {
   // Confirm Edit
   const confirmEdit = async () => {
     if (activeTab === "exercises") {
+      if (selectedItem?.isBuiltin || isBuiltinWellnessListId(selectedItem?.id)) {
+        alert(
+          "Built-in exercises ship with the app. Edit them in code, or create a new CMS tool in Wellness Tools CMS."
+        );
+        setShowEditModal(false);
+        return;
+      }
       try {
         const durationMatch = exerciseForm.duration.match(/\d+/);
         const durationMinutes = durationMatch ? parseInt(durationMatch[0], 10) : undefined;
@@ -250,7 +337,7 @@ export function ContentManagement() {
         console.error("Failed to update exercise:", error);
       }
     } else if (activeTab === "prompts") {
-      setPrompts(
+      persistPrompts(
         prompts.map((pr) =>
           pr.id === selectedItem.id
             ? { ...pr, ...promptForm }
@@ -258,7 +345,7 @@ export function ContentManagement() {
         )
       );
     } else if (activeTab === "resources") {
-      setResources(
+      persistResources(
         resources.map((res) =>
           res.id === selectedItem.id
             ? { ...res, ...resourceForm }
@@ -272,6 +359,11 @@ export function ContentManagement() {
   // Confirm Delete
   const confirmDelete = async () => {
     if (activeTab === "exercises") {
+      if (selectedItem?.isBuiltin || isBuiltinWellnessListId(selectedItem?.id)) {
+        alert("Built-in exercises cannot be deleted from here.");
+        setShowDeleteModal(false);
+        return;
+      }
       try {
         await api.wellness.delete(selectedItem.id);
         setExercises(exercises.filter((ex) => ex.id !== selectedItem.id));
@@ -279,9 +371,9 @@ export function ContentManagement() {
         console.error("Failed to delete exercise:", error);
       }
     } else if (activeTab === "prompts") {
-      setPrompts(prompts.filter((pr) => pr.id !== selectedItem.id));
+      persistPrompts(prompts.filter((pr) => pr.id !== selectedItem.id));
     } else if (activeTab === "resources") {
-      setResources(resources.filter((res) => res.id !== selectedItem.id));
+      persistResources(resources.filter((res) => res.id !== selectedItem.id));
     }
     setShowDeleteModal(false);
   };
@@ -424,7 +516,14 @@ export function ContentManagement() {
                     ) : (
                       filteredExercises.map((exercise) => (
                         <tr key={exercise.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 font-medium">{exercise.name}</td>
+                          <td className="px-6 py-4 font-medium">
+                            {exercise.name}
+                            {exercise.isBuiltin ? (
+                              <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                                Built-in
+                              </span>
+                            ) : null}
+                          </td>
                           <td className="px-6 py-4 text-sm text-gray-600">
                             {exercise.category}
                           </td>
@@ -439,10 +538,22 @@ export function ContentManagement() {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex gap-2">
-                              <Button variant="ghost" size="sm" onClick={() => handleEdit(exercise)}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={exercise.isBuiltin}
+                                onClick={() => handleEdit(exercise)}
+                                title={exercise.isBuiltin ? "Built-in tools are not edited here" : "Edit"}
+                              >
                                 <Edit className="w-4 h-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleDelete(exercise)}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={exercise.isBuiltin}
+                                onClick={() => handleDelete(exercise)}
+                                title={exercise.isBuiltin ? "Cannot delete built-in" : "Delete"}
+                              >
                                 <Trash2 className="w-4 h-4 text-red-600" />
                               </Button>
                             </div>
@@ -587,11 +698,18 @@ export function ContentManagement() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Category</label>
-                        <Input
+                        <select
                           value={exerciseForm.category}
                           onChange={(e) => setExerciseForm({ ...exerciseForm, category: e.target.value })}
-                          placeholder="e.g., Anxiety Relief"
-                        />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                          <option value="">Select category</option>
+                          {WELLNESS_TOOL_CATEGORIES.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Duration</label>
@@ -698,11 +816,18 @@ export function ContentManagement() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Category</label>
-                        <Input
+                        <select
                           value={exerciseForm.category}
                           onChange={(e) => setExerciseForm({ ...exerciseForm, category: e.target.value })}
-                          placeholder="e.g., Anxiety Relief"
-                        />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                          <option value="">Select category</option>
+                          {WELLNESS_TOOL_CATEGORIES.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Duration</label>
