@@ -310,6 +310,9 @@ export async function getDashboardStats(
   const counts = (countsResult as any[])[0] || {};
 
   const totalUsers = Number(counts.total_users || 0);
+
+  const userGrowthSeries = await queryUserGrowthSeries(chartPeriod, rangeStart, rangeEnd);
+
   const activeSessions = Number(counts.active_sessions || 0);
   const totalSessions = Number(counts.total_sessions || 0);
   const avgSessionLength = Math.round(Number(counts.avg_duration || 0));

@@ -4,7 +4,7 @@ import { StatsCard } from "../../components/StatsCard";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
-import { buildStatsQuery, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
+import { buildStatsQuery, datesForPreset, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
 import {
   MessageSquare,
   Clock,
@@ -32,19 +32,15 @@ export function SessionAnalytics() {
   const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
   const [rangePreset, setRangePreset] = useState<DashboardTimePreset>("30d");
   const [useCustomRange, setUseCustomRange] = useState(false);
-  const [dateFrom, setDateFrom] = useState(() => {
-    const x = new Date();
-    x.setUTCDate(x.getUTCDate() - 29);
-    return x.toISOString().slice(0, 10);
-  });
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
+  const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
 
   const [statsData, setStatsData] = useState<any | null>(null);
   const [recentSessions, setRecentSessions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceRefresh?: boolean) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -56,7 +52,7 @@ export function SessionAnalytics() {
         dateTo,
       });
       const [stats, recent] = await Promise.all([
-        api.admin.getStats(q),
+        api.admin.getStats({ ...q, ...(forceRefresh ? { refresh: true } : {}) }),
         api.admin.getRecentActivity(),
       ]);
       setStatsData(stats);
@@ -232,7 +228,7 @@ export function SessionAnalytics() {
             dateTo={dateTo}
             onDateFromChange={setDateFrom}
             onDateToChange={setDateTo}
-            onRefresh={() => void loadData()}
+            onRefresh={() => void loadData(true)}
             isLoading={isLoading}
             onExport={() => {
               if (!statsData) return;

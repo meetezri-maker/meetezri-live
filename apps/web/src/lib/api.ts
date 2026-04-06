@@ -861,6 +861,8 @@ export const api = {
       rangeDays?: number;
       dateFrom?: string;
       dateTo?: string;
+      /** Bypass server 60s stats cache */
+      refresh?: boolean;
     }) {
       const headers = await getHeaders();
       const search = new URLSearchParams();
@@ -873,6 +875,7 @@ export const api = {
       }
       if (params?.dateFrom) search.set('dateFrom', params.dateFrom);
       if (params?.dateTo) search.set('dateTo', params.dateTo);
+      if (params?.refresh) search.set('refresh', '1');
       const qs = search.toString();
       const res = await fetch(`${API_URL}/admin/stats${qs ? `?${qs}` : ''}`, {
         method: 'GET',

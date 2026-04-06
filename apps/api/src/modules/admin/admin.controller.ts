@@ -63,12 +63,14 @@ export async function getDashboardStatsHandler(
         : undefined;
     const dateFrom = q.dateFrom?.trim() || undefined;
     const dateTo = q.dateTo?.trim() || undefined;
+    const skipCache = q.refresh === '1' || q.nocache === '1';
     const stats = await getDashboardStats({
       chartPeriod,
       sessionWeekOffset,
       rangeDays,
       dateFrom,
       dateTo,
+      skipCache,
     });
     return reply.code(200).send(stats);
   } catch (error) {

@@ -15,6 +15,14 @@ export function presetToRangeDays(p: DashboardTimePreset): number {
   }
 }
 
+/** UTC calendar dates for a rolling preset ending today. */
+export function datesForPreset(preset: DashboardTimePreset, now = new Date()): { dateFrom: string; dateTo: string } {
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - (presetToRangeDays(preset) - 1));
+  return { dateFrom: start.toISOString().slice(0, 10), dateTo: end.toISOString().slice(0, 10) };
+}
+
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -63,8 +71,10 @@ export function buildStatsQuery(opts: {
       dateTo,
     };
   }
+  const d = datesForPreset(rangePreset);
   return {
     chartPeriod,
-    rangeDays: presetToRangeDays(rangePreset),
+    dateFrom: d.dateFrom,
+    dateTo: d.dateTo,
   };
 }

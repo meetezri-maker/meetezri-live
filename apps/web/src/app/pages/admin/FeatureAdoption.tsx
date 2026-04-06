@@ -45,7 +45,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { api } from "../../../lib/api";
 import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
-import { buildStatsQuery, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
+import { buildStatsQuery, datesForPreset, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
 
 const ICON_MAP: Record<string, typeof Brain> = {
   "AI Sessions": Brain,
@@ -61,16 +61,12 @@ export function FeatureAdoption() {
   const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
   const [rangePreset, setRangePreset] = useState<DashboardTimePreset>("30d");
   const [useCustomRange, setUseCustomRange] = useState(false);
-  const [dateFrom, setDateFrom] = useState(() => {
-    const x = new Date();
-    x.setUTCDate(x.getUTCDate() - 29);
-    return x.toISOString().slice(0, 10);
-  });
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
+  const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
   const [dash, setDash] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadStats = useCallback(async () => {
+  const loadStats = useCallback(async (forceRefresh?: boolean) => {
     setIsLoading(true);
     try {
       const q = buildStatsQuery({
@@ -80,7 +76,7 @@ export function FeatureAdoption() {
         dateFrom,
         dateTo,
       });
-      setDash(await api.admin.getStats(q));
+      setDash(await api.admin.getStats({ ...q, ...(forceRefresh ? { refresh: true } : {}) }));
     } finally {
       setIsLoading(false);
     }
@@ -257,7 +253,7 @@ export function FeatureAdoption() {
             dateTo={dateTo}
             onDateFromChange={setDateFrom}
             onDateToChange={setDateTo}
-            onRefresh={() => void loadStats()}
+            onRefresh={() => void loadStats(true)}
             isLoading={isLoading}
             onExport={() => {
               if (!dash) return;
@@ -282,7 +278,7 @@ export function FeatureAdoption() {
                   <div
                     className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-lg`}
                   >
-                    <stat.icon className="w-6 h-6 text-white" />
+                    <stat.icon className="w-6 h-6 text-black" />
                   </div>
                   <div
                     className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
@@ -316,7 +312,7 @@ export function FeatureAdoption() {
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-xl font-bold text-white mb-1">
+                <h3 className="text-xl font-bold text-black mb-1">
                   Feature Adoption Overview
                 </h3>
                 <p className="text-sm text-gray-400">
@@ -346,7 +342,7 @@ export function FeatureAdoption() {
                       />
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-semibold text-white text-sm">
+                      <h4 className="font-semibold text-black text-sm">
                         {feature.feature}
                       </h4>
                       <p className="text-xs text-gray-400">{feature.users.toLocaleString()} users</p>
@@ -356,7 +352,7 @@ export function FeatureAdoption() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-400">Adoption</span>
-                      <span className="text-white font-bold">{feature.adoption}%</span>
+                      <span className="text-black font-bold">{feature.adoption}%</span>
                     </div>
                     <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                       <motion.div
@@ -396,7 +392,7 @@ export function FeatureAdoption() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
+                  <h3 className="text-xl font-bold text-black mb-1">
                     Adoption Trend Over Time
                   </h3>
                   <p className="text-sm text-gray-400">Monthly adoption rates</p>
@@ -460,7 +456,7 @@ export function FeatureAdoption() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
+                  <h3 className="text-xl font-bold text-black mb-1">
                     Feature Rollout Impact
                   </h3>
                   <p className="text-sm text-gray-400">New feature adoption curve</p>
@@ -528,7 +524,7 @@ export function FeatureAdoption() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
+                  <h3 className="text-xl font-bold text-black mb-1">
                     Feature Adoption Funnel
                   </h3>
                   <p className="text-sm text-gray-400">User journey to power user</p>
@@ -542,7 +538,7 @@ export function FeatureAdoption() {
                   return (
                     <div key={stage.stage} className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-white font-medium text-sm">
+                        <span className="text-black font-medium text-sm">
                           {stage.stage}
                         </span>
                         <span className="text-gray-400 text-sm">
@@ -550,7 +546,7 @@ export function FeatureAdoption() {
                         </span>
                       </div>
                       <div className="h-8 rounded-lg overflow-hidden" style={{ width: `${percentage}%`, backgroundColor: stage.fill }}>
-                        <div className="h-full flex items-center justify-center text-white text-xs font-medium">
+                        <div className="h-full flex items-center justify-center text-black text-xs font-medium">
                           {percentage}%
                         </div>
                       </div>
@@ -570,7 +566,7 @@ export function FeatureAdoption() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
+                  <h3 className="text-xl font-bold text-black mb-1">
                     Time to Adoption
                   </h3>
                   <p className="text-sm text-gray-400">

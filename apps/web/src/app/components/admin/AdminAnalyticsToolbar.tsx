@@ -1,6 +1,6 @@
 import { RefreshCw, Download } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
-import type { DashboardTimePreset } from '@/lib/adminAnalytics';
+import { datesForPreset, type DashboardTimePreset } from '@/lib/adminAnalytics';
 
 type Props = {
   chartPeriod: 'week' | 'month' | 'year';
@@ -63,6 +63,9 @@ export function AdminAnalyticsToolbar({
             } else {
               onUseCustomRangeChange(false);
               onRangePresetChange(v as DashboardTimePreset);
+              const d = datesForPreset(v as DashboardTimePreset);
+              onDateFromChange(d.dateFrom);
+              onDateToChange(d.dateTo);
             }
           }}
           className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 text-sm"
@@ -71,27 +74,35 @@ export function AdminAnalyticsToolbar({
           <option value="30d">Last 30 days</option>
           <option value="90d">Last 90 days</option>
           <option value="1y">Last year</option>
-          <option value="custom">Custom…</option>
+          <option value="custom">Custom range</option>
         </select>
       </div>
 
-      {useCustomRange && (
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => onDateFromChange(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm"
-          />
-          <span className="text-muted-foreground">–</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => onDateToChange(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm"
-          />
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="date"
+          value={dateFrom}
+          min="2020-01-01"
+          max="2099-12-31"
+          onChange={(e) => {
+            onUseCustomRangeChange(true);
+            onDateFromChange(e.target.value);
+          }}
+          className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900"
+        />
+        <span className="text-muted-foreground">–</span>
+        <input
+          type="date"
+          value={dateTo}
+          min="2020-01-01"
+          max="2099-12-31"
+          onChange={(e) => {
+            onUseCustomRangeChange(true);
+            onDateToChange(e.target.value);
+          }}
+          className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900"
+        />
+      </div>
 
       <Button
         type="button"

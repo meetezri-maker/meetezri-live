@@ -38,23 +38,30 @@ import { buttonVariants } from "@/app/components/ui/button";
 import { cn } from "@/app/components/ui/utils";
 import { api } from "../../../lib/api";
 import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
-import { buildStatsQuery, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
+import { buildStatsQuery, datesForPreset, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
+
+function formatStatsRangeUtc(stats: { rangeStart?: string; rangeEnd?: string } | null) {
+  if (!stats?.rangeStart || !stats?.rangeEnd) return "";
+  try {
+    const a = new Date(stats.rangeStart).toISOString().slice(0, 10);
+    const b = new Date(stats.rangeEnd).toISOString().slice(0, 10);
+    return `${a} → ${b} UTC`;
+  } catch {
+    return "";
+  }
+}
 
 export function RetentionMetrics() {
   const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
   const [rangePreset, setRangePreset] = useState<DashboardTimePreset>("30d");
   const [useCustomRange, setUseCustomRange] = useState(false);
-  const [dateFrom, setDateFrom] = useState(() => {
-    const x = new Date();
-    x.setUTCDate(x.getUTCDate() - 29);
-    return x.toISOString().slice(0, 10);
-  });
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
+  const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
   const [stats, setStats] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadStats = useCallback(async () => {
+  const loadStats = useCallback(async (forceRefresh?: boolean) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -65,7 +72,7 @@ export function RetentionMetrics() {
         dateFrom,
         dateTo,
       });
-      const data = await api.admin.getStats(q);
+      const data = await api.admin.getStats({ ...q, ...(forceRefresh ? { refresh: true } : {}) });
       setStats(data);
     } catch (e: any) {
       setError(e?.message || "Failed to load retention metrics");
@@ -269,7 +276,7 @@ export function RetentionMetrics() {
             dateTo={dateTo}
             onDateFromChange={setDateFrom}
             onDateToChange={setDateTo}
-            onRefresh={() => void loadStats()}
+            onRefresh={() => void loadStats(true)}
             isLoading={isLoading}
             onExport={() => {
               if (!stats) return;
@@ -285,6 +292,13 @@ export function RetentionMetrics() {
             }}
           />
         </motion.div>
+
+        {stats && formatStatsRangeUtc(stats) && (
+          <p className="text-sm text-gray-500">
+            Data window: {formatStatsRangeUtc(stats)} · Chart bucket:{" "}
+            {chartPeriod === "week" ? "week" : chartPeriod === "year" ? "year" : "month"}
+          </p>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -338,10 +352,10 @@ export function RetentionMetrics() {
                   Cohort Retention Analysis
                 </h3>
                 <p className="text-sm !text-gray-600">
-                  Retention rates by signup cohort over time
+                  Derived from cumulative signups per {chartPeriod === "week" ? "week" : chartPeriod === "year" ? "year" : "month"} in your selected date range
                 </p>
               </div>
-              <Calendar className="w-5 h-5 text-purple-600" />
+              <Calendar className="w-5 h-5 text-purple-600 shrink-0" aria-hidden />
             </div>
 
             <div className="overflow-x-auto">
@@ -453,7 +467,9 @@ export function RetentionMetrics() {
                   <h3 className="text-xl font-bold text-black mb-1">
                     Monthly Retention Curve
                   </h3>
-                  <p className="text-sm text-gray-400">User retention over 12 months</p>
+                  <p className="text-sm text-gray-400">
+                    Cumulative user total vs latest bucket (range follows toolbar)
+                  </p>
                 </div>
                 <Heart className="w-5 h-5 text-pink-400" />
               </div>
@@ -502,7 +518,7 @@ export function RetentionMetrics() {
                   <h3 className="text-xl font-bold text-black mb-1">
                     Churn Rate Trend
                   </h3>
-                  <p className="text-sm text-gray-400">Monthly churn percentage</p>
+                  <p className="text-sm text-gray-400">Bucket-over-bucket change from the user growth series</p>
                 </div>
                 <AlertCircle className="w-5 h-5 text-red-400" />
               </div>
@@ -559,7 +575,9 @@ export function RetentionMetrics() {
                   <h3 className="text-xl font-bold text-black mb-1">
                     Trial to Paid Conversion
                   </h3>
-                  <p className="text-sm text-gray-400">Conversion rate over time</p>
+                  <p className="text-sm text-gray-400">
+                    Placeholder demo curve — connect billing trials when available
+                  </p>
                 </div>
                 <Target className="w-5 h-5 text-green-400" />
               </div>
@@ -615,7 +633,7 @@ export function RetentionMetrics() {
                   <h3 className="text-xl font-bold text-black mb-1">
                     Lifetime Value by Segment
                   </h3>
-                  <p className="text-sm text-gray-400">LTV estimates per user type</p>
+                  <p className="text-sm text-gray-400">Illustrative segments — not computed from live billing yet</p>
                 </div>
                 <DollarSign className="w-5 h-5 text-yellow-400" />
               </div>
@@ -662,11 +680,17 @@ export function RetentionMetrics() {
                     Win-back Opportunities
                   </h3>
                   <p className="text-sm text-gray-400">
-                    Inactive users and revenue potential
+                    Current snapshot from profile activity (not tied to the date range above)
                   </p>
                 </div>
                 <RefreshCw className="w-5 h-5 text-cyan-400" />
               </div>
+
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                A <span className="font-medium text-gray-700">win-back campaign</span> is outreach to bring back
+                inactive users (email, push, or in-app nudges). This screen only shows counts; it does not send
+                messages. Use Nudge Management to create templates and target segments.
+              </p>
 
               <div className="space-y-4">
                 {winbackData.map((item, index) => (
@@ -674,10 +698,10 @@ export function RetentionMetrics() {
                     key={item.status}
                     className="bg-white/5 rounded-xl p-4 border border-white/10 hover:bg-white/10 transition-all"
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div
-                          className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
                             index === 0
                               ? "bg-yellow-500/20"
                               : index === 1
@@ -695,30 +719,31 @@ export function RetentionMetrics() {
                             }`}
                           />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <h4 className="font-semibold text-black text-sm">
                             {item.status}
                           </h4>
                           <p className="text-xs text-gray-400">{item.count} users</p>
                         </div>
                       </div>
-                      <div className="text-right max-w-[55%]">
-                        <p className="text-xs text-gray-400 leading-snug">{item.hint}</p>
-                      </div>
+                      <p className="text-xs text-gray-400 leading-snug text-right max-w-[min(100%,20rem)]">
+                        {item.hint}
+                      </p>
                     </div>
-                    <Link
-                      to="/admin/nudge-management"
-                      className={cn(
-                        buttonVariants({ size: "sm" }),
-                        "w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-black"
-                      )}
-                    >
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Open nudges (win-back)
-                    </Link>
                   </div>
                 ))}
               </div>
+
+              <Link
+                to="/admin/nudge-management"
+                className={cn(
+                  buttonVariants({ size: "default" }),
+                  "mt-4 w-full justify-center bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-black"
+                )}
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Open Nudge Management (win-back)
+              </Link>
             </Card>
           </motion.div>
 
@@ -734,9 +759,7 @@ export function RetentionMetrics() {
                   <h3 className="text-xl font-bold text-black mb-1">
                     Retention by User Type
                   </h3>
-                  <p className="text-sm text-gray-400">
-                    Retention rates at key milestones
-                  </p>
+                  <p className="text-sm text-gray-400">Placeholder benchmarks — not range-filtered yet</p>
                 </div>
                 <Users className="w-5 h-5 text-blue-400" />
               </div>

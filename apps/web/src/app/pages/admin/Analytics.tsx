@@ -15,24 +15,20 @@ import { LineChart, Line, BarChart, Bar, PieChart as RechartsPie, Pie, Cell, Are
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../lib/api";
 import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
-import { buildStatsQuery, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
+import { buildStatsQuery, datesForPreset, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
 
 export function Analytics() {
   const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
   const [rangePreset, setRangePreset] = useState<DashboardTimePreset>("30d");
   const [useCustomRange, setUseCustomRange] = useState(false);
-  const [dateFrom, setDateFrom] = useState(() => {
-    const x = new Date();
-    x.setUTCDate(x.getUTCDate() - 29);
-    return x.toISOString().slice(0, 10);
-  });
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
+  const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
 
   const [dashboard, setDashboard] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadStats = useCallback(async () => {
+  const loadStats = useCallback(async (forceRefresh?: boolean) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -43,7 +39,7 @@ export function Analytics() {
         dateFrom,
         dateTo,
       });
-      const data = await api.admin.getStats(q);
+      const data = await api.admin.getStats({ ...q, ...(forceRefresh ? { refresh: true } : {}) });
       setDashboard(data);
     } catch (err: any) {
       console.error("Failed to fetch analytics stats", err);
@@ -216,7 +212,7 @@ export function Analytics() {
             dateTo={dateTo}
             onDateFromChange={setDateFrom}
             onDateToChange={setDateTo}
-            onRefresh={() => void loadStats()}
+            onRefresh={() => void loadStats(true)}
             isLoading={isLoading}
             onExport={() => {
               if (!dashboard) return;

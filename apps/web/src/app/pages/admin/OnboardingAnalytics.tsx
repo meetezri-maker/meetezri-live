@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { api } from "../../../lib/api";
 import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
-import { buildStatsQuery, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
+import { buildStatsQuery, datesForPreset, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 import {
   Users,
@@ -42,16 +42,12 @@ export function OnboardingAnalytics() {
   const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
   const [rangePreset, setRangePreset] = useState<DashboardTimePreset>("30d");
   const [useCustomRange, setUseCustomRange] = useState(false);
-  const [dateFrom, setDateFrom] = useState(() => {
-    const x = new Date();
-    x.setUTCDate(x.getUTCDate() - 29);
-    return x.toISOString().slice(0, 10);
-  });
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
+  const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
   const [dash, setDash] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadStats = useCallback(async () => {
+  const loadStats = useCallback(async (forceRefresh?: boolean) => {
     setIsLoading(true);
     try {
       const q = buildStatsQuery({
@@ -61,7 +57,7 @@ export function OnboardingAnalytics() {
         dateFrom,
         dateTo,
       });
-      setDash(await api.admin.getStats(q));
+      setDash(await api.admin.getStats({ ...q, ...(forceRefresh ? { refresh: true } : {}) }));
     } finally {
       setIsLoading(false);
     }
@@ -233,7 +229,7 @@ export function OnboardingAnalytics() {
             dateTo={dateTo}
             onDateFromChange={setDateFrom}
             onDateToChange={setDateTo}
-            onRefresh={() => void loadStats()}
+            onRefresh={() => void loadStats(true)}
             isLoading={isLoading}
             onExport={() => {
               if (!dash?.onboardingStats?.daily) return;
