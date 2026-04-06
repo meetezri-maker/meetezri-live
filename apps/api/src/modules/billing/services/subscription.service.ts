@@ -6,6 +6,7 @@ import { CLIENT_URL } from '../billing.config';
 import {
   subscriptionsCache,
   SUBSCRIPTIONS_CACHE_TTL,
+  clearSubscriptionsCache,
 } from '../billing.cache';
 import { getOrCreateStripeCustomer } from './stripe-customer.service';
 import { addSubscriptionAllowanceMinutes } from '../credit-balance.service';
@@ -228,6 +229,7 @@ export async function updateSubscription(userId: string, data: UpdateSubscriptio
 }
 
 export async function updateSubscriptionById(id: string, data: UpdateSubscriptionInput) {
+  clearSubscriptionsCache();
   return prisma.subscriptions.update({
     where: { id },
     data: {
@@ -271,7 +273,7 @@ export async function getAllSubscriptions(page: number = 1, limit: number = 50) 
   }
 
   const skip = (page - 1) * limit;
-  const take = Math.min(limit, 100);
+  const take = Math.min(limit, 500);
 
   // 1. Fetch subscriptions WITH profiles in one go
   const subs = await prisma.subscriptions.findMany({

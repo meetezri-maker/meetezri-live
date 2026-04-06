@@ -131,7 +131,7 @@ export function PayAsYouGoManager() {
       growth,
       transactionCount: filteredTransactions.length
     };
-  }, [filteredTransactions, timeFilter]);
+  }, [filteredTransactions, transactions, timeFilter]);
 
   // Plan breakdown
   const planBreakdown = useMemo(() => {

@@ -1329,6 +1329,17 @@ export const api = {
       return handleResponse(res, 'Failed to fetch PAYG transactions');
     },
 
+    /** Single request: subscriptions + Stripe invoices + PAYG rows (faster than three separate calls). */
+    async getAdminBillingOverview() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/billing/admin/overview`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch admin billing overview');
+    },
+
     async updateSubscriptionById(id: string, data: { plan_type?: 'trial' | 'core' | 'pro'; billing_cycle?: 'monthly' | 'yearly'; status?: string }) { // Admin only
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/billing/admin/subscriptions/${id}`, {

@@ -31,18 +31,19 @@ export function Billing() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [invoices, setInvoices] = useState<any[]>([]);
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
+      setIsLoading(true);
       try {
-        const [subs, invs] = await Promise.all([
-          api.billing.getAllSubscriptions(),
-          api.billing.getAdminInvoices()
-        ]);
-        setSubscriptions(subs || []);
-        setInvoices(invs || []);
+        const data = await api.billing.getAdminBillingOverview();
+        setSubscriptions(data?.subscriptions || []);
+        setInvoices(data?.invoices || []);
       } catch (error) {
         console.error("Failed to load billing overview data:", error);
+      } finally {
+        setIsLoading(false);
       }
     };
     load();
@@ -216,6 +217,13 @@ export function Billing() {
   return (
     <AdminLayoutNew>
       <div className="max-w-7xl mx-auto space-y-6">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-24 text-gray-500 gap-2">
+            <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <p>Loading billing data from Stripe…</p>
+          </div>
+        ) : (
+          <>
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -319,9 +327,9 @@ export function Billing() {
               <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500 to-red-600">
                 <ArrowDown className="w-6 h-6 text-white" />
               </div>
-              <div className="flex items-center gap-1 px-2 py-1 rounded-lg text-sm bg-green-100 text-green-700">
+              <div className="flex items-center gap-1 px-2 py-1 rounded-lg text-sm bg-gray-100 text-gray-600">
                 <ArrowDown className="w-4 h-4" />
-                0.3%
+                churn
               </div>
             </div>
             <h3 className="text-2xl font-bold text-gray-900">{stats.churnRate}%</h3>
@@ -476,6 +484,8 @@ export function Billing() {
             </table>
           </div>
         </motion.div>
+          </>
+        )}
       </div>
     </AdminLayoutNew>
   );

@@ -167,6 +167,23 @@ export async function billingRoutes(app: FastifyInstance) {
   );
 
   app.get(
+    '/admin/overview',
+    {
+      schema: {
+        response: {
+          200: z.object({
+            subscriptions: z.array(z.any()),
+            invoices: z.array(z.any()),
+            paygTransactions: z.array(z.any()),
+          }),
+        },
+      },
+      preHandler: [app.authenticate, app.authorize(['super_admin', 'org_admin'])],
+    },
+    billingController.getAdminBillingOverviewHandler
+  );
+
+  app.get(
     '/admin/subscriptions',
     {
       schema: {

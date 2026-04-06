@@ -24,3 +24,5 @@ export {
   syncPaygCredits,
 } from './services/payg.service';
 
+export { getAdminBillingOverview } from './services/admin-billing-overview.service';
+

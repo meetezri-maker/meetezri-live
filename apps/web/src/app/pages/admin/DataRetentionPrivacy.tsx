@@ -49,6 +49,25 @@ type PrivacyReq = {
   completedDate: string | null;
 };
 
+const CUSTOM_POLICIES_KEY = "ezri-admin-retention-policies";
+
+function parseStoredPolicies(raw: string | null): Policy[] {
+  if (!raw) return [];
+  try {
+    const data = JSON.parse(raw) as unknown;
+    if (!Array.isArray(data)) return [];
+    return data.filter(
+      (p): p is Policy =>
+        p &&
+        typeof p === "object" &&
+        typeof (p as Policy).id === "string" &&
+        typeof (p as Policy).dataType === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+
 export function DataRetentionPrivacy() {
   const [activeTab, setActiveTab] = useState<"retention" | "privacy" | "requests">("retention");
   const [showAddPolicyModal, setShowAddPolicyModal] = useState(false);
@@ -56,7 +75,9 @@ export function DataRetentionPrivacy() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showConfigureModal, setShowConfigureModal] = useState(false);
   const [selectedPolicy, setSelectedPolicy] = useState<Policy | null>(null);
-  const [customPolicies, setCustomPolicies] = useState<Policy[]>([]);
+  const [customPolicies, setCustomPolicies] = useState<Policy[]>(() =>
+    typeof window !== "undefined" ? parseStoredPolicies(window.localStorage.getItem(CUSTOM_POLICIES_KEY)) : []
+  );
   const [newDataType, setNewDataType] = useState("");
   const [newRetention, setNewRetention] = useState("");
   const [newAutoDelete, setNewAutoDelete] = useState(false);
@@ -82,6 +103,14 @@ export function DataRetentionPrivacy() {
       c = true;
     };
   }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CUSTOM_POLICIES_KEY, JSON.stringify(customPolicies));
+    } catch {
+      /* ignore quota */
+    }
+  }, [customPolicies]);
 
   const baseRetentionPolicies: Policy[] = useMemo(() => {
     const review = format(new Date(), "MMM d, yyyy");

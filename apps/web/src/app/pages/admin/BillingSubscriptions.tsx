@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
@@ -24,7 +24,6 @@ import {
   Star,
   Crown,
   Zap,
-  Shield,
   X,
 } from "lucide-react";
 
@@ -66,54 +65,50 @@ export function BillingSubscriptions() {
   const [editStatus, setEditStatus] = useState<string>("active");
   const [editBillingCycle, setEditBillingCycle] = useState<string>("monthly");
 
-  useEffect(() => {
-    fetchSubscriptions();
-    fetchInvoices();
-  }, []);
+  const mapApiSubscription = (sub: any): Subscription => {
+    const rawAmt = sub.amount != null ? Number(sub.amount) : NaN;
+    let mrr = 0;
+    if (Number.isFinite(rawAmt) && rawAmt > 0) {
+      mrr = sub.billing_cycle === "yearly" ? rawAmt / 12 : rawAmt;
+    } else if (sub.plan_type === "pro") {
+      mrr = sub.billing_cycle === "yearly" ? 40 : 49;
+    } else if (sub.plan_type === "core") {
+      mrr = sub.billing_cycle === "yearly" ? 20 : 25;
+    }
 
-  const fetchSubscriptions = async () => {
+    const rawStatus = sub.status === "canceled" ? "cancelled" : sub.status;
+
+    return {
+      id: sub.id,
+      organization: sub.profiles?.full_name || sub.profiles?.email || "Unknown User",
+      plan: (sub.plan_type || "trial") as Subscription["plan"],
+      status: rawStatus as Subscription["status"],
+      users: 1,
+      mrr,
+      nextBilling: sub.next_billing_at
+        ? new Date(sub.next_billing_at).toISOString().split("T")[0]
+        : "N/A",
+      startDate: sub.created_at ? new Date(sub.created_at).toISOString().split("T")[0] : "N/A",
+      billing_cycle: sub.billing_cycle || "monthly",
+    };
+  };
+
+  const loadBillingData = async () => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      const data = await api.billing.getAllSubscriptions();
-      
-      const mappedSubscriptions: Subscription[] = data.map((sub: any) => {
-        // Calculate MRR based on plan and cycle
-        let mrr = 0;
-        if (sub.plan_type === 'pro') {
-          mrr = sub.billing_cycle === 'yearly' ? 40 : 49;
-        } else if (sub.plan_type === 'core') {
-          mrr = sub.billing_cycle === 'yearly' ? 20 : 25;
-        }
-
-        return {
-          id: sub.id,
-          organization: sub.users?.profiles?.full_name || sub.users?.email || "Unknown User",
-          plan: (sub.plan_type || "trial") as any,
-          status: (sub.status === 'canceled' ? 'cancelled' : sub.status) as any,
-          users: 1, // Default to 1 as current model is individual subscriptions
-          mrr: mrr,
-          nextBilling: sub.current_period_end ? new Date(sub.current_period_end).toISOString().split('T')[0] : 'N/A',
-          startDate: sub.created_at ? new Date(sub.created_at).toISOString().split('T')[0] : 'N/A',
-          billing_cycle: sub.billing_cycle || 'monthly'
-        };
-      });
-
-      setSubscriptions(mappedSubscriptions);
+      const data = await api.billing.getAdminBillingOverview();
+      setInvoices(data?.invoices || []);
+      setSubscriptions((data?.subscriptions || []).map(mapApiSubscription));
     } catch (error) {
-      console.error("Failed to fetch subscriptions:", error);
+      console.error("Failed to fetch billing data:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const fetchInvoices = async () => {
-    try {
-      const data = await api.billing.getAdminInvoices();
-      setInvoices(data);
-    } catch (error) {
-      console.error("Failed to fetch invoices:", error);
-    }
-  };
+  useEffect(() => {
+    loadBillingData();
+  }, []);
   
   const handleUpdateSubscription = async () => {
     if (!selectedSubscription) return;
@@ -125,8 +120,7 @@ export function BillingSubscriptions() {
         billing_cycle: editBillingCycle as any
       });
       
-      // Refresh list
-      await fetchSubscriptions();
+      await loadBillingData();
       setShowManageSubscriptionModal(false);
       alert("Subscription updated successfully");
     } catch (error) {
@@ -180,7 +174,7 @@ export function BillingSubscriptions() {
         headers.join(","),
         ["Total MRR", `$${stats.totalMRR.toLocaleString()}`].join(","),
         ["Active Subscriptions", stats.activeSubscriptions].join(","),
-        ["Trial Conversions", `${stats.trialConversions}%`].join(","),
+        ["Invoice revenue (30d)", `$${stats.invoiceRevenue30d.toFixed(2)}`].join(","),
         ["Churn Rate", `${stats.churnRate}%`].join(",")
       ].join("\n");
       filename = `billing-overview-${new Date().toISOString().split("T")[0]}.csv`;
@@ -221,14 +215,39 @@ export function BillingSubscriptions() {
     return matchesSearch && matchesPlan && matchesStatus;
   });
 
-  const stats = {
-    totalMRR: subscriptions.reduce((sum, sub) => sum + sub.mrr, 0),
-    activeSubscriptions: subscriptions.filter((s) => s.status === "active").length,
-    totalUsers: subscriptions.reduce((sum, sub) => sum + sub.users, 0),
-    growth: 23.5,
-    trialConversions: 20,
-    churnRate: 5,
-  };
+  const stats = useMemo(() => {
+    const now = new Date();
+    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const twoMonthsAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+
+    const sumInvoices = (start: Date, end: Date) =>
+      invoices.reduce((sum, inv) => {
+        const d = new Date(inv.created);
+        if (d < start || d > end) return sum;
+        return sum + Number(inv.amount_due ?? 0);
+      }, 0);
+
+    const invoiceRevenue30d = sumInvoices(monthAgo, now);
+    const invoiceRevenuePrev30d = sumInvoices(twoMonthsAgo, monthAgo);
+    const growth =
+      invoiceRevenuePrev30d > 0
+        ? ((invoiceRevenue30d - invoiceRevenuePrev30d) / invoiceRevenuePrev30d) * 100
+        : 0;
+
+    const activeSubscriptions = subscriptions.filter((s) => s.status === "active").length;
+    const canceledSubscriptions = subscriptions.filter((s) => s.status === "cancelled").length;
+    const churnDenom = activeSubscriptions + canceledSubscriptions;
+    const churnRate = churnDenom > 0 ? (canceledSubscriptions / churnDenom) * 100 : 0;
+
+    return {
+      totalMRR: subscriptions.reduce((sum, sub) => sum + sub.mrr, 0),
+      activeSubscriptions,
+      totalSubscriptions: subscriptions.length,
+      growth,
+      churnRate,
+      invoiceRevenue30d,
+    };
+  }, [subscriptions, invoices]);
 
   const getPlanColor = (plan: string) => {
     switch (plan) {
@@ -289,6 +308,13 @@ export function BillingSubscriptions() {
   return (
     <AdminLayoutNew>
       <div className="space-y-6">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-2">
+            <div className="h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <p>Loading subscriptions and invoices…</p>
+          </div>
+        ) : (
+          <>
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -302,7 +328,7 @@ export function BillingSubscriptions() {
               <div>
                 <h1 className="text-3xl font-bold">Billing & Subscriptions</h1>
                 <p className="text-muted-foreground">
-                  Manage subscriptions, plans, and billing (Placeholder)
+                  Subscriptions from the database; invoices from Stripe (last 100).
                 </p>
               </div>
             </div>
@@ -315,15 +341,6 @@ export function BillingSubscriptions() {
                 <CreditCard className="w-4 h-4" />
                 Process Payment
               </Button>
-            </div>
-          </div>
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
-            <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-blue-900">Placeholder Mode</p>
-              <p className="text-xs text-blue-700">
-                This is a fully-designed billing interface. Connect to Stripe or your payment processor to enable real transactions.
-              </p>
             </div>
           </div>
         </motion.div>
@@ -344,7 +361,7 @@ export function BillingSubscriptions() {
               <div className="flex items-center gap-1 text-sm">
                 <ArrowUpRight className="w-4 h-4 text-green-600" />
                 <span className="text-green-600 font-medium">{stats.growth}%</span>
-                <span className="text-muted-foreground">vs last month</span>
+                <span className="text-muted-foreground">invoice revenue vs prior 30 days</span>
               </div>
             </Card>
           </motion.div>
@@ -373,11 +390,11 @@ export function BillingSubscriptions() {
           >
             <Card className="p-6">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-muted-foreground">Total Users</p>
+                <p className="text-sm text-muted-foreground">All subscriptions</p>
                 <Users className="w-5 h-5 text-purple-600" />
               </div>
-              <p className="text-3xl font-bold mb-1">{stats.totalUsers}</p>
-              <p className="text-sm text-muted-foreground">Across all plans</p>
+              <p className="text-3xl font-bold mb-1">{stats.totalSubscriptions}</p>
+              <p className="text-sm text-muted-foreground">All statuses</p>
             </Card>
           </motion.div>
 
@@ -392,9 +409,9 @@ export function BillingSubscriptions() {
                 <TrendingUp className="w-5 h-5 text-orange-600" />
               </div>
               <p className="text-3xl font-bold mb-1">
-                ${(stats.totalMRR / stats.totalUsers).toFixed(2)}
+                ${(stats.totalMRR / Math.max(1, stats.activeSubscriptions)).toFixed(2)}
               </p>
-              <p className="text-sm text-muted-foreground">ARPU</p>
+              <p className="text-sm text-muted-foreground">ARPU (active)</p>
             </Card>
           </motion.div>
         </div>
@@ -469,21 +486,19 @@ export function BillingSubscriptions() {
               })}
             </div>
 
-            {/* Revenue Chart Placeholder */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.8 }}
             >
               <Card className="p-6">
-                <h3 className="font-bold text-lg mb-4">Revenue Trends</h3>
-                <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
-                  <div className="text-center">
-                    <TrendingUp className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-muted-foreground">Chart visualization would go here</p>
-                    <p className="text-sm text-muted-foreground">Connect your analytics to view trends</p>
-                  </div>
-                </div>
+                <h3 className="font-bold text-lg mb-4">Stripe invoice snapshot</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  {invoices.length} invoice{invoices.length === 1 ? "" : "s"} in the last fetch (up to 100). Use Billing &amp; Revenue for charts.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Churn rate (active vs cancelled in list): {stats.churnRate.toFixed(1)}%
+                </p>
               </Card>
             </motion.div>
           </div>
@@ -663,6 +678,8 @@ export function BillingSubscriptions() {
             </motion.div>
           </div>
         )}
+          </>
+        )}
       </div>
 
       {/* Process Payment Modal */}
@@ -745,12 +762,12 @@ export function BillingSubscriptions() {
                 />
               </div>
 
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-700 mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-blue-900">Placeholder Mode</p>
-                  <p className="text-xs text-blue-700">
-                    This would process a payment through your connected payment processor.
+                  <p className="text-sm font-medium text-amber-900">Not wired to Stripe</p>
+                  <p className="text-xs text-amber-800">
+                    Use the customer billing portal or Stripe Dashboard to charge customers.
                   </p>
                 </div>
               </div>
@@ -766,11 +783,10 @@ export function BillingSubscriptions() {
                 <Button
                   className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
                   onClick={() => {
-                    console.log("Processing payment...");
                     setShowProcessPaymentModal(false);
                   }}
                 >
-                  Process Payment
+                  Close
                 </Button>
               </div>
             </div>
@@ -1008,12 +1024,12 @@ export function BillingSubscriptions() {
                 </span>
               </div>
 
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div className="p-3 bg-muted/50 border border-border rounded-lg flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-muted-foreground mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-blue-900">Placeholder Mode</p>
-                  <p className="text-xs text-blue-700">
-                    This would download the invoice from your connected payment processor.
+                  <p className="text-sm font-medium">Stripe-hosted PDF</p>
+                  <p className="text-xs text-muted-foreground">
+                    For the official invoice PDF, open the invoice in Stripe or use the billing portal.
                   </p>
                 </div>
               </div>
@@ -1029,7 +1045,6 @@ export function BillingSubscriptions() {
                 <Button
                   className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
                   onClick={() => {
-                    // Create invoice data
                     const invoiceData = `INVOICE: ${selectedTransaction.invoice}\n\nDate: ${selectedTransaction.date}\nOrganization: ${selectedTransaction.organization}\nAmount: $${selectedTransaction.amount}\nStatus: ${selectedTransaction.status}\n\n---\nGenerated by Ezri Admin Dashboard`;
                     
                     // Create and download file

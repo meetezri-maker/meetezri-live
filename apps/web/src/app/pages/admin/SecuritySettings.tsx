@@ -10,15 +10,83 @@ import {
   Users,
   Clock,
   Smartphone,
-  Mail,
   FileText,
   Activity,
-  Settings,
   Save,
-  X
+  X,
+  Loader2,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
+
+const SECURITY_SETTINGS_KEY = "admin_security_settings";
+
+export type AdminSecurityForm = {
+  twoFactorEnabled: boolean;
+  twoFactorSms: boolean;
+  twoFactorTotp: boolean;
+  twoFactorEmail: boolean;
+  ssoEnabled: boolean;
+  ssoGoogle: boolean;
+  ssoAzure: boolean;
+  ssoSaml: boolean;
+  minPasswordLength: number;
+  passwordExpiry: string;
+  maxLoginAttempts: string;
+  lockoutMinutes: string;
+  requireUppercase: boolean;
+  requireLowercase: boolean;
+  requireNumbers: boolean;
+  requireSpecial: boolean;
+  preventReuse: boolean;
+  sessionTimeout: string;
+  maxConcurrentSessions: string;
+  rememberDevice: boolean;
+  forceLogoutOnPasswordChange: boolean;
+  allowConcurrentSameIp: boolean;
+};
+
+const DEFAULT_SECURITY_FORM: AdminSecurityForm = {
+  twoFactorEnabled: true,
+  twoFactorSms: true,
+  twoFactorTotp: true,
+  twoFactorEmail: false,
+  ssoEnabled: true,
+  ssoGoogle: true,
+  ssoAzure: false,
+  ssoSaml: false,
+  minPasswordLength: 12,
+  passwordExpiry: "90",
+  maxLoginAttempts: "5",
+  lockoutMinutes: "30",
+  requireUppercase: true,
+  requireLowercase: true,
+  requireNumbers: true,
+  requireSpecial: true,
+  preventReuse: true,
+  sessionTimeout: "30",
+  maxConcurrentSessions: "3",
+  rememberDevice: true,
+  forceLogoutOnPasswordChange: true,
+  allowConcurrentSameIp: false,
+};
+
+function mergeSecurityPayload(raw: unknown): AdminSecurityForm {
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_SECURITY_FORM };
+  const o = raw as Record<string, unknown>;
+  const next = { ...DEFAULT_SECURITY_FORM };
+  (Object.keys(DEFAULT_SECURITY_FORM) as Array<keyof AdminSecurityForm>).forEach((k) => {
+    if (!(k in o)) return;
+    const v = o[k];
+    const d = DEFAULT_SECURITY_FORM[k];
+    if (typeof d === "boolean" && typeof v === "boolean") (next as Record<string, unknown>)[k] = v;
+    else if (typeof d === "number" && typeof v === "number" && Number.isFinite(v))
+      (next as Record<string, unknown>)[k] = Math.min(128, Math.max(6, Math.round(v)));
+    else if (typeof d === "string" && typeof v === "string") (next as Record<string, unknown>)[k] = v;
+  });
+  return next;
+}
 
 interface SecurityLog {
   id: string;
@@ -31,23 +99,59 @@ interface SecurityLog {
 }
 
 export function SecuritySettings() {
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
-  const [passwordExpiry, setPasswordExpiry] = useState("90");
-  const [maxLoginAttempts, setMaxLoginAttempts] = useState("5");
-  const [sessionTimeout, setSessionTimeout] = useState("30");
+  const [form, setForm] = useState<AdminSecurityForm>(DEFAULT_SECURITY_FORM);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [showLogDetails, setShowLogDetails] = useState(false);
   const [selectedLog, setSelectedLog] = useState<SecurityLog | null>(null);
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 
-  const handleSaveChanges = () => {
-    console.log("Saving security settings:", {
-      twoFactorEnabled,
-      passwordExpiry,
-      maxLoginAttempts,
-      sessionTimeout
-    });
-    setShowSaveConfirmation(true);
-    setTimeout(() => setShowSaveConfirmation(false), 3000);
+  const patchForm = useCallback((partial: Partial<AdminSecurityForm>) => {
+    setForm((f) => ({ ...f, ...partial }));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await api.getSettings();
+        const list = Array.isArray(rows) ? rows : [];
+        const row = list.find((r: { key?: string }) => r.key === SECURITY_SETTINGS_KEY);
+        const raw = row?.value;
+        if (!cancelled) {
+          setForm(mergeSecurityPayload(raw));
+          setSettingsLoaded(true);
+        }
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) {
+          toast.error("Could not load saved security settings (using defaults).");
+          setSettingsLoaded(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSaveChanges = async () => {
+    setIsSaving(true);
+    try {
+      await api.updateSetting(
+        SECURITY_SETTINGS_KEY,
+        form,
+        "Admin security policy configuration (UI preferences; enforce in auth layer separately)"
+      );
+      toast.success("Security settings saved.");
+      setShowSaveConfirmation(true);
+      setTimeout(() => setShowSaveConfirmation(false), 3000);
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to save security settings.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleViewLog = (log: SecurityLog) => {
@@ -151,13 +255,15 @@ export function SecuritySettings() {
           </div>
 
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg"
+            type="button"
+            disabled={!settingsLoaded || isSaving}
+            whileHover={{ scale: settingsLoaded && !isSaving ? 1.02 : 1 }}
+            whileTap={{ scale: settingsLoaded && !isSaving ? 0.98 : 1 }}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg disabled:opacity-60 disabled:pointer-events-none"
             onClick={handleSaveChanges}
           >
-            <Save className="w-4 h-4" />
-            Save Changes
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {isSaving ? "Saving…" : "Save Changes"}
           </motion.button>
         </motion.div>
 
@@ -254,15 +360,30 @@ export function SecuritySettings() {
                   <p className="text-sm text-gray-600">Require users to verify identity with a second factor</p>
                   <div className="mt-3 space-y-2">
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="rounded" defaultChecked />
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={form.twoFactorSms}
+                        onChange={(e) => patchForm({ twoFactorSms: e.target.checked })}
+                      />
                       <span className="text-gray-700">SMS verification</span>
                     </label>
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="rounded" defaultChecked />
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={form.twoFactorTotp}
+                        onChange={(e) => patchForm({ twoFactorTotp: e.target.checked })}
+                      />
                       <span className="text-gray-700">Authenticator app (TOTP)</span>
                     </label>
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="rounded" />
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={form.twoFactorEmail}
+                        onChange={(e) => patchForm({ twoFactorEmail: e.target.checked })}
+                      />
                       <span className="text-gray-700">Email verification</span>
                     </label>
                   </div>
@@ -270,14 +391,15 @@ export function SecuritySettings() {
               </div>
 
               <motion.button
+                type="button"
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setTwoFactorEnabled(!twoFactorEnabled)}
+                onClick={() => patchForm({ twoFactorEnabled: !form.twoFactorEnabled })}
                 className={`relative w-14 h-7 rounded-full transition-colors ${
-                  twoFactorEnabled ? "bg-green-500" : "bg-gray-300"
+                  form.twoFactorEnabled ? "bg-green-500" : "bg-gray-300"
                 }`}
               >
                 <motion.div
-                  animate={{ x: twoFactorEnabled ? 28 : 0 }}
+                  animate={{ x: form.twoFactorEnabled ? 28 : 0 }}
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
                   className="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow-md"
                 />
@@ -293,15 +415,30 @@ export function SecuritySettings() {
                   <p className="text-sm text-gray-600">Allow users to login with third-party providers</p>
                   <div className="mt-3 space-y-2">
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="rounded" defaultChecked />
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={form.ssoGoogle}
+                        onChange={(e) => patchForm({ ssoGoogle: e.target.checked })}
+                      />
                       <span className="text-gray-700">Google OAuth</span>
                     </label>
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="rounded" />
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={form.ssoAzure}
+                        onChange={(e) => patchForm({ ssoAzure: e.target.checked })}
+                      />
                       <span className="text-gray-700">Microsoft Azure AD</span>
                     </label>
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="rounded" />
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={form.ssoSaml}
+                        onChange={(e) => patchForm({ ssoSaml: e.target.checked })}
+                      />
                       <span className="text-gray-700">SAML 2.0</span>
                     </label>
                   </div>
@@ -309,11 +446,15 @@ export function SecuritySettings() {
               </div>
 
               <motion.button
+                type="button"
                 whileTap={{ scale: 0.95 }}
-                className="relative w-14 h-7 rounded-full transition-colors bg-green-500"
+                onClick={() => patchForm({ ssoEnabled: !form.ssoEnabled })}
+                className={`relative w-14 h-7 rounded-full transition-colors ${
+                  form.ssoEnabled ? "bg-green-500" : "bg-gray-300"
+                }`}
               >
                 <motion.div
-                  animate={{ x: 28 }}
+                  animate={{ x: form.ssoEnabled ? 28 : 0 }}
                   className="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow-md"
                 />
               </motion.button>
@@ -338,9 +479,14 @@ export function SecuritySettings() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Minimum Password Length
               </label>
-              <input
+                  <input
                 type="number"
-                defaultValue="12"
+                min={6}
+                max={128}
+                value={form.minPasswordLength}
+                onChange={(e) =>
+                  patchForm({ minPasswordLength: Math.min(128, Math.max(6, Number(e.target.value) || 6)) })
+                }
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
@@ -350,8 +496,8 @@ export function SecuritySettings() {
                 Password Expiry (days)
               </label>
               <select
-                value={passwordExpiry}
-                onChange={(e) => setPasswordExpiry(e.target.value)}
+                value={form.passwordExpiry}
+                onChange={(e) => patchForm({ passwordExpiry: e.target.value })}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="30">30 days</option>
@@ -366,8 +512,8 @@ export function SecuritySettings() {
                 Max Login Attempts
               </label>
               <select
-                value={maxLoginAttempts}
-                onChange={(e) => setMaxLoginAttempts(e.target.value)}
+                value={form.maxLoginAttempts}
+                onChange={(e) => patchForm({ maxLoginAttempts: e.target.value })}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="3">3 attempts</option>
@@ -380,7 +526,11 @@ export function SecuritySettings() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Account Lockout Duration (minutes)
               </label>
-              <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
+              <select
+                value={form.lockoutMinutes}
+                onChange={(e) => patchForm({ lockoutMinutes: e.target.value })}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+              >
                 <option value="15">15 minutes</option>
                 <option value="30">30 minutes</option>
                 <option value="60">1 hour</option>
@@ -391,23 +541,48 @@ export function SecuritySettings() {
 
           <div className="mt-6 space-y-3">
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" defaultChecked />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.requireUppercase}
+                onChange={(e) => patchForm({ requireUppercase: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Require uppercase letters</span>
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" defaultChecked />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.requireLowercase}
+                onChange={(e) => patchForm({ requireLowercase: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Require lowercase letters</span>
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" defaultChecked />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.requireNumbers}
+                onChange={(e) => patchForm({ requireNumbers: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Require numbers</span>
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" defaultChecked />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.requireSpecial}
+                onChange={(e) => patchForm({ requireSpecial: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Require special characters</span>
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" defaultChecked />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.preventReuse}
+                onChange={(e) => patchForm({ preventReuse: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Prevent password reuse (last 5 passwords)</span>
             </label>
           </div>
@@ -431,8 +606,8 @@ export function SecuritySettings() {
                 Session Timeout (minutes)
               </label>
               <select
-                value={sessionTimeout}
-                onChange={(e) => setSessionTimeout(e.target.value)}
+                value={form.sessionTimeout}
+                onChange={(e) => patchForm({ sessionTimeout: e.target.value })}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="15">15 minutes</option>
@@ -446,7 +621,11 @@ export function SecuritySettings() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Max Concurrent Sessions
               </label>
-              <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
+              <select
+                value={form.maxConcurrentSessions}
+                onChange={(e) => patchForm({ maxConcurrentSessions: e.target.value })}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+              >
                 <option value="1">1 device</option>
                 <option value="3">3 devices</option>
                 <option value="5">5 devices</option>
@@ -457,15 +636,30 @@ export function SecuritySettings() {
 
           <div className="mt-6 space-y-3">
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" defaultChecked />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.rememberDevice}
+                onChange={(e) => patchForm({ rememberDevice: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Remember device for 30 days</span>
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" defaultChecked />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.forceLogoutOnPasswordChange}
+                onChange={(e) => patchForm({ forceLogoutOnPasswordChange: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Force logout on password change</span>
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.allowConcurrentSameIp}
+                onChange={(e) => patchForm({ allowConcurrentSameIp: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Allow concurrent logins from same IP</span>
             </label>
           </div>

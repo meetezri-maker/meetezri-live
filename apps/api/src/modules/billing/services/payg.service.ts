@@ -3,11 +3,12 @@ import { stripe } from '../../../config/stripe';
 import { PLAN_LIMITS } from '../billing.constants';
 import { CreateCreditPurchaseInput } from '../billing.schema';
 import { CLIENT_URL } from '../billing.config';
+import { listStripeInvoicesForAdmin } from './admin-stripe-list.service';
 import {
-  allTransactionsCache,
-  BILLING_CACHE_TTL,
-  setAllTransactionsCache,
-} from '../billing.cache';
+  isPaygInvoice,
+  loadProfilesByStripeCustomerIds,
+  mapStripeInvoiceToPaygRow,
+} from './admin-billing-shared';
 import { getSubscription } from './subscription.service';
 import { getOrCreateStripeCustomer } from './stripe-customer.service';
 
@@ -72,22 +73,9 @@ export async function createCreditPurchaseSession(
 }
 
 export async function getAllPaygTransactions() {
-  const now = Date.now();
-  if (allTransactionsCache && (now - allTransactionsCache.timestamp < BILLING_CACHE_TTL)) {
-    return allTransactionsCache.data;
-  }
+  const invoices = await listStripeInvoicesForAdmin();
 
-  const invoices = await stripe.invoices.list({
-    limit: 100,
-  });
-
-  const paygInvoices = invoices.data.filter((invoice) => {
-    const isCreditsInvoice = invoice.lines.data.some(
-      (line) => line.price?.metadata?.type === 'credits' || line.metadata?.type === 'credits'
-    );
-    const isCreditsMetadata = invoice.metadata?.type === 'credits';
-    return isCreditsInvoice || isCreditsMetadata;
-  });
+  const paygInvoices = invoices.filter(isPaygInvoice);
 
   const customerIds = Array.from(
     new Set(
@@ -95,72 +83,9 @@ export async function getAllPaygTransactions() {
     )
   );
 
-  const profiles = await prisma.profiles.findMany({
-    where: {
-      stripe_customer_id: {
-        in: customerIds,
-      },
-    },
-    select: {
-      id: true,
-      email: true,
-      full_name: true,
-      stripe_customer_id: true,
-    },
-  });
+  const profileByCustomerId = await loadProfilesByStripeCustomerIds(customerIds);
 
-  const profileByCustomerId = new Map<string, (typeof profiles)[number]>();
-  for (const profile of profiles) {
-    if (profile.stripe_customer_id) {
-      profileByCustomerId.set(profile.stripe_customer_id, profile);
-    }
-  }
-
-  const result = paygInvoices.map((invoice) => {
-    const customerId = typeof invoice.customer === 'string' ? invoice.customer : null;
-    const profile = customerId ? profileByCustomerId.get(customerId) : undefined;
-
-    const creditsFromMetadata = invoice.metadata?.credits
-      ? parseInt(invoice.metadata.credits, 10)
-      : undefined;
-
-    const creditsFromLines = invoice.lines.data.reduce((sum, line) => {
-      const value = line.metadata?.credits ? parseInt(line.metadata.credits, 10) : 0;
-      return sum + (Number.isFinite(value) ? value : 0);
-    }, 0);
-
-    const totalCredits =
-      (Number.isFinite(creditsFromMetadata || NaN) ? creditsFromMetadata || 0 : 0) + creditsFromLines;
-
-    const planTypeFromMetadata =
-      (invoice.metadata?.planType as string | undefined) ||
-      (invoice.metadata?.plan_type as string | undefined) ||
-      invoice.lines.data
-        .map(
-          (line) =>
-            (line.metadata?.planType as string | undefined) ||
-            (line.metadata?.plan_type as string | undefined)
-        )
-        .find((value) => !!value);
-
-    return {
-      id: invoice.id,
-      status: invoice.status,
-      amount: (invoice.amount_paid || invoice.amount_due || 0) / 100,
-      currency: invoice.currency,
-      created: new Date(invoice.created * 1000).toISOString(),
-      credits: totalCredits,
-      minutes_purchased: totalCredits > 0 ? totalCredits : null,
-      payment_method: invoice.payment_intent ? 'Card' : null,
-      plan_type: planTypeFromMetadata || 'credits',
-      user_id: profile?.id || null,
-      user_email: profile?.email || null,
-      user_name: profile?.full_name || null,
-    };
-  });
-
-  setAllTransactionsCache({ data: result, timestamp: now });
-  return result;
+  return paygInvoices.map((invoice) => mapStripeInvoiceToPaygRow(invoice, profileByCustomerId));
 }
 
 export async function syncPaygCredits(userId: string) {
