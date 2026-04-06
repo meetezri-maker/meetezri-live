@@ -157,7 +157,8 @@ export class EmailService {
     console.log(`Attempting to send email to ${to}...`);
     try {
       const info = await this.transporter.sendMail({
-        from: process.env.SMTP_FROM || '"MeetEzri" <noreply@meetezri.com>',
+        // Brand as Ezri; override with SMTP_FROM if your mail host requires a specific envelope.
+        from: process.env.SMTP_FROM || '"Ezri" <noreply@meetezri.com>',
         to,
         subject,
         html,

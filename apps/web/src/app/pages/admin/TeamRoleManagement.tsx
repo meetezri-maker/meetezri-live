@@ -283,8 +283,17 @@ export function TeamRoleManagement() {
   if (loading && members.length === 0 && !org) {
     return (
       <AdminLayoutNew>
-        <div className="flex items-center justify-center h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+        <div className="max-w-7xl mx-auto space-y-6 animate-pulse">
+          <div className="h-10 bg-muted rounded-lg w-72 max-w-full" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="h-24 bg-muted/80 rounded-xl" />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="h-56 bg-muted/80 rounded-xl" />
+            <div className="h-56 bg-muted/80 rounded-xl" />
+          </div>
         </div>
       </AdminLayoutNew>
     );
@@ -325,7 +334,7 @@ export function TeamRoleManagement() {
                   ))}
                 </select>
               )}
-              <Button className="gap-2" onClick={() => setShowCreateMemberModal(true)}>
+              <Button type="button" className="gap-2" onClick={() => setShowCreateMemberModal(true)}>
                 <UserPlus className="w-4 h-4" />
                 Add Team Member
               </Button>
@@ -405,11 +414,11 @@ export function TeamRoleManagement() {
 
         <Card className="p-1">
           <div className="flex gap-1">
-            <Button variant={activeTab === "members" ? "default" : "ghost"} className="flex-1" onClick={() => setActiveTab("members")}>
+            <Button type="button" variant={activeTab === "members" ? "default" : "ghost"} className="flex-1" onClick={() => setActiveTab("members")}>
               <Users className="w-4 h-4 mr-2" />
               Team Members
             </Button>
-            <Button variant={activeTab === "roles" ? "default" : "ghost"} className="flex-1" onClick={() => setActiveTab("roles")}>
+            <Button type="button" variant={activeTab === "roles" ? "default" : "ghost"} className="flex-1" onClick={() => setActiveTab("roles")}>
               <Shield className="w-4 h-4 mr-2" />
               Roles & Permissions
             </Button>
@@ -533,6 +542,7 @@ export function TeamRoleManagement() {
 
                     <div className="flex flex-wrap gap-2">
                       <Button
+                        type="button"
                         variant="outline"
                         size="sm"
                         className="flex-1"
@@ -544,16 +554,17 @@ export function TeamRoleManagement() {
                         <Eye className="w-4 h-4 mr-2" />
                         View
                       </Button>
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(member)}>
+                      <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => openEdit(member)}>
                         <Edit className="w-4 h-4 mr-2" />
                         Edit
                       </Button>
                       <Button
+                        type="button"
                         variant="outline"
                         size="sm"
                         className="text-red-600 border-red-200 hover:bg-red-50"
                         disabled={saving}
-                        onClick={() => handleRemove(member)}
+                        onClick={() => void handleRemove(member)}
                       >
                         <Trash2 className="w-4 h-4 mr-2" />
                         Remove
@@ -590,7 +601,9 @@ export function TeamRoleManagement() {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground border-t pt-3">
-                    Stored on <code className="text-xs">profiles.role</code>. Admin UI routes check this role for access.
+                    Permissions below are derived from <code className="text-xs">profiles.role</code> (see{" "}
+                    <code className="text-xs">permissionsForProfileRole</code> in the API). Super admins may assign org admins;
+                    org admins manage their org’s team; team admins get operational/support-style access scoped to the organization.
                   </p>
                 </Card>
               </motion.div>
@@ -604,7 +617,7 @@ export function TeamRoleManagement() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
               onClick={() => setShowCreateMemberModal(false)}
             >
               <motion.div
@@ -616,7 +629,7 @@ export function TeamRoleManagement() {
               >
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold">Add Team Member</h2>
-                  <Button variant="ghost" size="sm" onClick={() => setShowCreateMemberModal(false)}>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setShowCreateMemberModal(false)}>
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
@@ -667,10 +680,10 @@ export function TeamRoleManagement() {
                     </p>
                   </div>
                   <div className="flex gap-2 pt-4">
-                    <Button variant="outline" className="flex-1" onClick={() => setShowCreateMemberModal(false)}>
+                    <Button type="button" variant="outline" className="flex-1" onClick={() => setShowCreateMemberModal(false)}>
                       Cancel
                     </Button>
-                    <Button className="flex-1" disabled={saving} onClick={() => void handleAddMember()}>
+                    <Button type="button" className="flex-1" disabled={saving} onClick={() => void handleAddMember()}>
                       {saving ? "Saving…" : "Add member"}
                     </Button>
                   </div>
@@ -686,7 +699,7 @@ export function TeamRoleManagement() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
               onClick={() => setShowViewMemberModal(false)}
             >
               <motion.div
@@ -710,7 +723,7 @@ export function TeamRoleManagement() {
                       <p className="text-muted-foreground">{profileRoleLabel(selectedMember.profile_role)}</p>
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => setShowViewMemberModal(false)}>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setShowViewMemberModal(false)}>
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
@@ -760,10 +773,11 @@ export function TeamRoleManagement() {
                 </div>
 
                 <div className="flex gap-3 mt-6 pt-6 border-t flex-wrap">
-                  <Button variant="outline" className="flex-1" onClick={() => setShowViewMemberModal(false)}>
+                  <Button type="button" variant="outline" className="flex-1" onClick={() => setShowViewMemberModal(false)}>
                     Close
                   </Button>
                   <Button
+                    type="button"
                     className="flex-1"
                     onClick={() => {
                       setShowViewMemberModal(false);
@@ -773,7 +787,7 @@ export function TeamRoleManagement() {
                     <Edit className="w-4 h-4 mr-2" />
                     Edit member
                   </Button>
-                  <Button variant="destructive" className="flex-1" disabled={saving} onClick={() => void handleRemove(selectedMember)}>
+                  <Button type="button" variant="destructive" className="flex-1" disabled={saving} onClick={() => void handleRemove(selectedMember)}>
                     <Trash2 className="w-4 h-4 mr-2" />
                     Remove from org
                   </Button>
@@ -789,7 +803,7 @@ export function TeamRoleManagement() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
               onClick={() => setShowEditMemberModal(false)}
             >
               <motion.div
@@ -801,7 +815,7 @@ export function TeamRoleManagement() {
               >
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold">Edit Team Member</h2>
-                  <Button variant="ghost" size="sm" onClick={() => setShowEditMemberModal(false)}>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setShowEditMemberModal(false)}>
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
@@ -855,13 +869,13 @@ export function TeamRoleManagement() {
                     <p className="text-xs text-muted-foreground mt-1">Stored on the organization membership record.</p>
                   </div>
                   <div className="flex gap-2 pt-4 flex-wrap">
-                    <Button variant="outline" className="flex-1" onClick={() => setShowEditMemberModal(false)}>
+                    <Button type="button" variant="outline" className="flex-1" onClick={() => setShowEditMemberModal(false)}>
                       Cancel
                     </Button>
-                    <Button className="flex-1" disabled={saving} onClick={() => void handleSaveEdit()}>
+                    <Button type="button" className="flex-1" disabled={saving} onClick={() => void handleSaveEdit()}>
                       {saving ? "Saving…" : "Save changes"}
                     </Button>
-                    <Button variant="destructive" disabled={saving} onClick={() => void handleRemove(selectedMember)}>
+                    <Button type="button" variant="destructive" disabled={saving} onClick={() => void handleRemove(selectedMember)}>
                       Remove
                     </Button>
                   </div>

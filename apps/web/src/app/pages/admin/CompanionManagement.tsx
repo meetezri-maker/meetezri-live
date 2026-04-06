@@ -1,10 +1,9 @@
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
-import { 
+import {
   UserCheck,
   Plus,
   Search,
-  Filter,
   Mail,
   Phone,
   Calendar,
@@ -14,12 +13,15 @@ import {
   Trash2,
   Eye,
   CheckCircle,
-  XCircle,
-  Clock
+  Clock,
+  Loader2,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { api } from "../../../lib/api";
+import { toast } from "sonner";
+import { format } from "date-fns";
 
-interface Companion {
+type Companion = {
   id: string;
   name: string;
   email: string;
@@ -28,155 +30,238 @@ interface Companion {
   license: string;
   status: "active" | "inactive" | "pending";
   verified: boolean;
-  joinedDate: Date;
+  joinedDate: string;
   sessionsCount: number;
   rating: number;
   availability: string;
   languages: string[];
+};
+
+function parseCommaList(s: string): string[] {
+  return s
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
 }
 
 export function CompanionManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [companions, setCompanions] = useState<Companion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const companionsFirstLoad = useRef(true);
+
   const [selectedCompanion, setSelectedCompanion] = useState<Companion | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  // Mock companions data
-  const companions: Companion[] = [
-    {
-      id: "th001",
-      name: "Dr. Sarah Mitchell",
-      email: "sarah.mitchell@ezri.com",
-      phone: "+1 (555) 123-4567",
-      specialization: ["Anxiety", "Depression", "Trauma"],
-      license: "LCSW-12345",
-      status: "active",
-      verified: true,
-      joinedDate: new Date("2024-01-15"),
-      sessionsCount: 342,
-      rating: 4.9,
-      availability: "Mon-Fri, 9AM-5PM",
-      languages: ["English", "Spanish"]
-    },
-    {
-      id: "th002",
-      name: "Dr. Michael Chen",
-      email: "michael.chen@ezri.com",
-      phone: "+1 (555) 234-5678",
-      specialization: ["PTSD", "Relationships", "Stress Management"],
-      license: "PhD-67890",
-      status: "active",
-      verified: true,
-      joinedDate: new Date("2024-02-01"),
-      sessionsCount: 289,
-      rating: 4.8,
-      availability: "Tue-Sat, 10AM-6PM",
-      languages: ["English", "Mandarin"]
-    },
-    {
-      id: "th003",
-      name: "Dr. Emily Rodriguez",
-      email: "emily.rodriguez@ezri.com",
-      phone: "+1 (555) 345-6789",
-      specialization: ["Family Therapy", "Child Psychology", "Behavioral Issues"],
-      license: "MFT-11223",
-      status: "active",
-      verified: true,
-      joinedDate: new Date("2024-01-20"),
-      sessionsCount: 412,
-      rating: 5.0,
-      availability: "Mon-Thu, 1PM-8PM",
-      languages: ["English", "Spanish", "Portuguese"]
-    },
-    {
-      id: "th004",
-      name: "Dr. James Wilson",
-      email: "james.wilson@ezri.com",
-      phone: "+1 (555) 456-7890",
-      specialization: ["Substance Abuse", "Addiction", "Recovery"],
-      license: "LMHC-44556",
-      status: "inactive",
-      verified: true,
-      joinedDate: new Date("2023-11-10"),
-      sessionsCount: 178,
-      rating: 4.7,
-      availability: "Flexible",
-      languages: ["English"]
-    },
-    {
-      id: "th005",
-      name: "Dr. Priya Sharma",
-      email: "priya.sharma@ezri.com",
-      phone: "+1 (555) 567-8901",
-      specialization: ["Mindfulness", "Meditation", "Stress"],
-      license: "PsyD-78901",
-      status: "pending",
-      verified: false,
-      joinedDate: new Date("2024-06-25"),
-      sessionsCount: 0,
-      rating: 0,
-      availability: "Mon-Fri, 8AM-4PM",
-      languages: ["English", "Hindi"]
-    },
-    {
-      id: "th006",
-      name: "Dr. David Kim",
-      email: "david.kim@ezri.com",
-      phone: "+1 (555) 678-9012",
-      specialization: ["OCD", "Anxiety Disorders", "Panic Attacks"],
-      license: "LCSW-33445",
-      status: "active",
-      verified: true,
-      joinedDate: new Date("2024-03-05"),
-      sessionsCount: 256,
-      rating: 4.9,
-      availability: "Wed-Sun, 11AM-7PM",
-      languages: ["English", "Korean"]
-    }
-  ];
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    license: "",
+    specializations: "",
+    languages: "",
+    availability: "",
+  });
 
-  const filteredCompanions = companions.filter(companion => {
-    const matchesSearch = 
+  const [editForm, setEditForm] = useState({
+    name: "",
+    phone: "",
+    license: "",
+    specializations: "",
+    languages: "",
+    availability: "",
+    verified: false,
+    account_status: "active",
+  });
+
+  const loadCompanions = useCallback(async () => {
+    try {
+      if (companionsFirstLoad.current) setLoading(true);
+      const data = (await api.admin.getCompanions()) as Companion[];
+      setCompanions(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to load companions");
+      setCompanions([]);
+    } finally {
+      if (companionsFirstLoad.current) {
+        setLoading(false);
+        companionsFirstLoad.current = false;
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadCompanions();
+  }, [loadCompanions]);
+
+  const filteredCompanions = companions.filter((companion) => {
+    const matchesSearch =
       companion.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       companion.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      companion.specialization.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
+      companion.specialization.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesStatus = filterStatus === "all" || companion.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
 
   const getStatusColor = (status: string) => {
-    switch(status) {
-      case "active": return "bg-green-100 text-green-700";
-      case "inactive": return "bg-gray-100 text-gray-700";
-      case "pending": return "bg-yellow-100 text-yellow-700";
-      default: return "bg-gray-100 text-gray-700";
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch(status) {
-      case "active": return CheckCircle;
-      case "inactive": return XCircle;
-      case "pending": return Clock;
-      default: return Clock;
+    switch (status) {
+      case "active":
+        return "bg-green-100 text-green-700";
+      case "inactive":
+        return "bg-gray-100 text-gray-700";
+      case "pending":
+        return "bg-yellow-100 text-yellow-700";
+      default:
+        return "bg-gray-100 text-gray-700";
     }
   };
 
   const stats = {
     total: companions.length,
-    active: companions.filter(t => t.status === "active").length,
-    pending: companions.filter(t => t.status === "pending").length,
+    active: companions.filter((t) => t.status === "active").length,
+    pending: companions.filter((t) => t.status === "pending").length,
     totalSessions: companions.reduce((sum, t) => sum + t.sessionsCount, 0),
-    avgRating: (companions.filter(t => t.rating > 0).reduce((sum, t) => sum + t.rating, 0) / companions.filter(t => t.rating > 0).length).toFixed(1)
+    avgRating:
+      companions.filter((t) => t.rating > 0).length > 0
+        ? (
+            companions.filter((t) => t.rating > 0).reduce((sum, t) => sum + t.rating, 0) /
+            companions.filter((t) => t.rating > 0).length
+          ).toFixed(1)
+        : "0",
   };
+
+  const openEdit = (c: Companion) => {
+    setSelectedCompanion(c);
+    setEditForm({
+      name: c.name,
+      phone: c.phone,
+      license: c.license,
+      specializations: c.specialization.join(", "),
+      languages: c.languages.join(", "),
+      availability: c.availability === "—" ? "" : c.availability,
+      verified: c.verified,
+      account_status: c.status === "inactive" ? "inactive" : "active",
+    });
+    setShowEditModal(true);
+  };
+
+  const handleCreate = async () => {
+    if (!createForm.name.trim() || !createForm.email.trim()) {
+      toast.error("Name and email are required");
+      return;
+    }
+    setSaving(true);
+    try {
+      const list = (await api.admin.createCompanion({
+        full_name: createForm.name.trim(),
+        email: createForm.email.trim(),
+        phone: createForm.phone.trim() || undefined,
+        license_number: createForm.license.trim() || undefined,
+        specializations: parseCommaList(createForm.specializations),
+        languages: parseCommaList(createForm.languages),
+        availability: createForm.availability.trim() || undefined,
+      })) as Companion[];
+      setCompanions(Array.isArray(list) ? list : companions);
+      toast.success("Companion saved. New accounts receive an invite email when needed.");
+      setShowCreateModal(false);
+      setCreateForm({
+        name: "",
+        email: "",
+        phone: "",
+        license: "",
+        specializations: "",
+        languages: "",
+        availability: "",
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to create companion";
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedCompanion) return;
+    setSaving(true);
+    try {
+      const list = (await api.admin.updateCompanion(selectedCompanion.id, {
+        full_name: editForm.name.trim(),
+        phone: editForm.phone.trim() || undefined,
+        license_number: editForm.license.trim() || undefined,
+        specializations: parseCommaList(editForm.specializations),
+        languages: parseCommaList(editForm.languages),
+        availability: editForm.availability.trim() || undefined,
+        is_verified: editForm.verified,
+        account_status: editForm.account_status,
+      })) as Companion[];
+      setCompanions(Array.isArray(list) ? list : companions);
+      toast.success("Companion updated");
+      setShowEditModal(false);
+      setSelectedCompanion(null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to update";
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedCompanion) return;
+    setSaving(true);
+    try {
+      const list = (await api.admin.deleteCompanion(selectedCompanion.id)) as Companion[];
+      setCompanions(Array.isArray(list) ? list : companions);
+      toast.success("Companion profile removed (user account remains)");
+      setShowDeleteModal(false);
+      setSelectedCompanion(null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to delete";
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const joinedLabel = (iso: string) => {
+    try {
+      return format(new Date(iso), "MMM d, yyyy");
+    } catch {
+      return iso;
+    }
+  };
+
+  if (loading && companions.length === 0) {
+    return (
+      <AdminLayoutNew>
+        <div className="max-w-7xl mx-auto space-y-6 animate-pulse">
+          <div className="h-10 bg-gray-200 rounded-lg w-80 max-w-full" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-28 bg-gray-100 rounded-2xl" />
+            ))}
+          </div>
+          <div className="h-12 bg-gray-100 rounded-xl" />
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-36 bg-gray-100 rounded-2xl" />
+            ))}
+          </div>
+        </div>
+      </AdminLayoutNew>
+    );
+  }
 
   return (
     <AdminLayoutNew>
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -184,10 +269,11 @@ export function CompanionManagement() {
         >
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Companion Management</h1>
-            <p className="text-gray-600 mt-1">Manage licensed companions and counselors</p>
+            <p className="text-gray-600 mt-1">Licensed companions from your database (companion_profiles)</p>
           </div>
 
           <motion.button
+            type="button"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowCreateModal(true)}
@@ -198,7 +284,6 @@ export function CompanionManagement() {
           </motion.button>
         </motion.div>
 
-        {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -285,7 +370,6 @@ export function CompanionManagement() {
           </motion.div>
         </div>
 
-        {/* Filters */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -296,7 +380,7 @@ export function CompanionManagement() {
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
-                type="text"
+                type="search"
                 placeholder="Search companions by name, email, or specialization..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -317,7 +401,6 @@ export function CompanionManagement() {
           </div>
         </motion.div>
 
-        {/* Companions List */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -328,8 +411,6 @@ export function CompanionManagement() {
 
           <div className="space-y-4">
             {filteredCompanions.map((companion, index) => {
-              const StatusIcon = getStatusIcon(companion.status);
-              
               return (
                 <motion.div
                   key={companion.id}
@@ -339,14 +420,16 @@ export function CompanionManagement() {
                   className="border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-start gap-4">
-                    {/* Avatar */}
                     <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xl flex-shrink-0">
-                      {companion.name.split(' ').map(n => n[0]).join('')}
+                      {companion.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .slice(0, 2)}
                     </div>
 
-                    {/* Main Info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <h3 className="font-bold text-gray-900 text-lg">{companion.name}</h3>
                         {companion.verified && (
                           <div className="p-1 rounded-full bg-blue-100">
@@ -360,25 +443,25 @@ export function CompanionManagement() {
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 text-sm">
                         <div className="flex items-center gap-2 text-gray-600">
-                          <Mail className="w-4 h-4" />
-                          {companion.email}
+                          <Mail className="w-4 h-4 shrink-0" />
+                          {companion.email || "—"}
                         </div>
                         <div className="flex items-center gap-2 text-gray-600">
-                          <Phone className="w-4 h-4" />
-                          {companion.phone}
+                          <Phone className="w-4 h-4 shrink-0" />
+                          {companion.phone || "—"}
                         </div>
                         <div className="flex items-center gap-2 text-gray-600">
-                          <Award className="w-4 h-4" />
-                          {companion.license}
+                          <Award className="w-4 h-4 shrink-0" />
+                          {companion.license || "—"}
                         </div>
                         <div className="flex items-center gap-2 text-gray-600">
-                          <Calendar className="w-4 h-4" />
-                          Joined {companion.joinedDate.toLocaleDateString()}
+                          <Calendar className="w-4 h-4 shrink-0" />
+                          Joined {joinedLabel(companion.joinedDate)}
                         </div>
                       </div>
 
                       <div className="flex flex-wrap gap-2 mb-3">
-                        {companion.specialization.map(spec => (
+                        {companion.specialization.map((spec) => (
                           <span key={spec} className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-lg font-medium">
                             {spec}
                           </span>
@@ -386,7 +469,7 @@ export function CompanionManagement() {
                       </div>
 
                       <div className="flex flex-wrap gap-2 mb-3">
-                        {companion.languages.map(lang => (
+                        {companion.languages.map((lang) => (
                           <span key={lang} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-lg">
                             {lang}
                           </span>
@@ -401,19 +484,19 @@ export function CompanionManagement() {
                         <div>
                           <p className="text-gray-600">Rating</p>
                           <p className="font-bold text-gray-900">
-                            {companion.rating > 0 ? `${companion.rating} ⭐` : 'N/A'}
+                            {companion.rating > 0 ? `${companion.rating.toFixed(1)} ⭐` : "N/A"}
                           </p>
                         </div>
                         <div>
                           <p className="text-gray-600">Availability</p>
-                          <p className="font-bold text-gray-900 text-xs">{companion.availability}</p>
+                          <p className="font-bold text-gray-900 text-xs break-words">{companion.availability}</p>
                         </div>
                       </div>
                     </div>
 
-                    {/* Actions */}
                     <div className="flex flex-col gap-2">
                       <motion.button
+                        type="button"
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => {
@@ -426,18 +509,17 @@ export function CompanionManagement() {
                       </motion.button>
 
                       <motion.button
+                        type="button"
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
-                        onClick={() => {
-                          setSelectedCompanion(companion);
-                          setShowEditModal(true);
-                        }}
+                        onClick={() => openEdit(companion)}
                         className="p-2 rounded-lg hover:bg-green-50 text-green-600"
                       >
                         <Edit className="w-4 h-4" />
                       </motion.button>
 
                       <motion.button
+                        type="button"
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => {
@@ -463,13 +545,12 @@ export function CompanionManagement() {
           )}
         </motion.div>
 
-        {/* Create Modal */}
         {showCreateModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setShowCreateModal(false)}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+            onClick={() => !saving && setShowCreateModal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -485,64 +566,72 @@ export function CompanionManagement() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                     <input
                       type="text"
+                      value={createForm.name}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
                       placeholder="Dr. Jane Smith"
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">License Number</label>
                     <input
                       type="text"
+                      value={createForm.license}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, license: e.target.value }))}
                       placeholder="LCSW-12345"
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                     <input
                       type="email"
-                      placeholder="companion@ezri.com"
+                      value={createForm.email}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+                      placeholder="companion@example.com"
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
                     <input
                       type="tel"
+                      value={createForm.phone}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, phone: e.target.value }))}
                       placeholder="+1 (555) 123-4567"
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Specializations</label>
                   <input
                     type="text"
-                    placeholder="e.g., Anxiety, Depression, Trauma (comma separated)"
+                    value={createForm.specializations}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, specializations: e.target.value }))}
+                    placeholder="Anxiety, Depression, Trauma"
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Languages</label>
                   <input
                     type="text"
-                    placeholder="e.g., English, Spanish (comma separated)"
+                    value={createForm.languages}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, languages: e.target.value }))}
+                    placeholder="English, Spanish"
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Availability</label>
                   <input
                     type="text"
-                    placeholder="e.g., Mon-Fri, 9AM-5PM"
+                    value={createForm.availability}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, availability: e.target.value }))}
+                    placeholder="Mon–Fri, 9AM–5PM"
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
@@ -550,20 +639,24 @@ export function CompanionManagement() {
 
               <div className="flex gap-3 mt-6">
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
+                  disabled={saving}
                   onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
+                  className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium disabled:opacity-50"
                 >
                   Cancel
                 </motion.button>
-
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
+                  disabled={saving}
+                  onClick={() => void handleCreate()}
+                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2"
                 >
+                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                   Add Companion
                 </motion.button>
               </div>
@@ -571,12 +664,11 @@ export function CompanionManagement() {
           </motion.div>
         )}
 
-        {/* View Modal */}
         {showViewModal && selectedCompanion && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
             onClick={() => setShowViewModal(false)}
           >
             <motion.div
@@ -585,86 +677,32 @@ export function CompanionManagement() {
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             >
-              <h3 className="text-2xl font-bold text-gray-900 mb-6">View Companion Details</h3>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-                    <input
-                      type="text"
-                      value={selectedCompanion.name}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                      readOnly
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">License Number</label>
-                    <input
-                      type="text"
-                      value={selectedCompanion.license}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                      readOnly
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                    <input
-                      type="email"
-                      value={selectedCompanion.email}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                      readOnly
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-                    <input
-                      type="tel"
-                      value={selectedCompanion.phone}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                      readOnly
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Specializations</label>
-                  <input
-                    type="text"
-                    value={selectedCompanion.specialization.join(', ')}
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                    readOnly
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Languages</label>
-                  <input
-                    type="text"
-                    value={selectedCompanion.languages.join(', ')}
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                    readOnly
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Availability</label>
-                  <input
-                    type="text"
-                    value={selectedCompanion.availability}
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                    readOnly
-                  />
-                </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-6">Companion Details</h3>
+              <div className="space-y-3 text-sm">
+                <p>
+                  <span className="text-gray-600">Name:</span>{" "}
+                  <span className="font-medium">{selectedCompanion.name}</span>
+                </p>
+                <p>
+                  <span className="text-gray-600">Email:</span>{" "}
+                  <span className="font-medium">{selectedCompanion.email}</span>
+                </p>
+                <p>
+                  <span className="text-gray-600">Phone:</span>{" "}
+                  <span className="font-medium">{selectedCompanion.phone || "—"}</span>
+                </p>
+                <p>
+                  <span className="text-gray-600">License:</span>{" "}
+                  <span className="font-medium">{selectedCompanion.license || "—"}</span>
+                </p>
+                <p>
+                  <span className="text-gray-600">Status:</span>{" "}
+                  <span className="font-medium">{selectedCompanion.status}</span>
+                </p>
               </div>
-
               <div className="flex gap-3 mt-6">
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setShowViewModal(false)}
@@ -677,13 +715,12 @@ export function CompanionManagement() {
           </motion.div>
         )}
 
-        {/* Edit Modal */}
         {showEditModal && selectedCompanion && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setShowEditModal(false)}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+            onClick={() => !saving && setShowEditModal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -691,93 +728,108 @@ export function CompanionManagement() {
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             >
-              <h3 className="text-2xl font-bold text-gray-900 mb-6">Edit Companion Details</h3>
-
+              <h3 className="text-2xl font-bold text-gray-900 mb-6">Edit Companion</h3>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                     <input
                       type="text"
-                      value={selectedCompanion.name}
+                      value={editForm.name}
+                      onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">License Number</label>
                     <input
                       type="text"
-                      value={selectedCompanion.license}
+                      value={editForm.license}
+                      onChange={(e) => setEditForm((f) => ({ ...f, license: e.target.value }))}
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                    <input
-                      type="email"
-                      value={selectedCompanion.email}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-                    <input
-                      type="tel"
-                      value={selectedCompanion.phone}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                  </div>
-                </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Specializations</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
                   <input
-                    type="text"
-                    value={selectedCompanion.specialization.join(', ')}
+                    type="tel"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Languages</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Specializations (comma-separated)</label>
                   <input
                     type="text"
-                    value={selectedCompanion.languages.join(', ')}
+                    value={editForm.specializations}
+                    onChange={(e) => setEditForm((f) => ({ ...f, specializations: e.target.value }))}
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
-
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Languages (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={editForm.languages}
+                    onChange={(e) => setEditForm((f) => ({ ...f, languages: e.target.value }))}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Availability</label>
                   <input
                     type="text"
-                    value={selectedCompanion.availability}
+                    value={editForm.availability}
+                    onChange={(e) => setEditForm((f) => ({ ...f, availability: e.target.value }))}
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="verified"
+                    checked={editForm.verified}
+                    onChange={(e) => setEditForm((f) => ({ ...f, verified: e.target.checked }))}
+                  />
+                  <label htmlFor="verified" className="text-sm font-medium text-gray-700">
+                    Verified
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Account status</label>
+                  <select
+                    value={editForm.account_status}
+                    onChange={(e) => setEditForm((f) => ({ ...f, account_status: e.target.value }))}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="suspended">Suspended</option>
+                  </select>
+                </div>
               </div>
-
               <div className="flex gap-3 mt-6">
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
+                  disabled={saving}
                   onClick={() => setShowEditModal(false)}
                   className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
                 >
                   Cancel
                 </motion.button>
-
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowEditModal(false)}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
+                  disabled={saving}
+                  onClick={() => void handleSaveEdit()}
+                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium inline-flex items-center justify-center gap-2"
                 >
+                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                   Save Changes
                 </motion.button>
               </div>
@@ -785,43 +837,45 @@ export function CompanionManagement() {
           </motion.div>
         )}
 
-        {/* Delete Modal */}
         {showDeleteModal && selectedCompanion && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setShowDeleteModal(false)}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+            onClick={() => !saving && setShowDeleteModal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-2xl p-6 max-w-lg w-full"
             >
-              <h3 className="text-2xl font-bold text-gray-900 mb-6">Delete Companion</h3>
-
-              <div className="space-y-4">
-                <p className="text-gray-600">Are you sure you want to delete the companion <strong>{selectedCompanion.name}</strong>?</p>
-              </div>
-
+              <h3 className="text-2xl font-bold text-gray-900 mb-4">Remove companion profile</h3>
+              <p className="text-gray-600">
+                Remove the companion profile for <strong>{selectedCompanion.name}</strong>? Their user account stays; only the
+                companion record is removed and their role is set back to user.
+              </p>
               <div className="flex gap-3 mt-6">
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
+                  disabled={saving}
                   onClick={() => setShowDeleteModal(false)}
                   className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
                 >
                   Cancel
                 </motion.button>
-
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowDeleteModal(false)}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white font-medium"
+                  disabled={saving}
+                  onClick={() => void handleDelete()}
+                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white font-medium inline-flex items-center justify-center gap-2"
                 >
-                  Delete Companion
+                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Remove
                 </motion.button>
               </div>
             </motion.div>

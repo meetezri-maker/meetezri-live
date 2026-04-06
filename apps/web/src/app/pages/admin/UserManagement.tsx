@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -99,11 +99,12 @@ export function UserManagement() {
     organization: "",
   });
   const usersPerPage = 10;
+  const usersFirstLoad = useRef(true);
 
   const fetchUsers = async () => {
     try {
-      setIsLoading(true);
-      const data = await api.admin.getUsers();
+      if (usersFirstLoad.current) setIsLoading(true);
+      const data = await api.admin.getUsers({ limit: 1000 });
       
       const mappedUsers = data.map((u: any) => ({
         id: u.id,
@@ -121,7 +122,10 @@ export function UserManagement() {
     } catch (error) {
       console.error("Failed to fetch users:", error);
     } finally {
-      setIsLoading(false);
+      if (usersFirstLoad.current) {
+        setIsLoading(false);
+        usersFirstLoad.current = false;
+      }
     }
   };
 
@@ -398,11 +402,11 @@ export function UserManagement() {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="gap-2" onClick={handleExport}>
+              <Button type="button" variant="outline" className="gap-2" onClick={handleExport}>
                 <Download className="w-4 h-4" />
                 Export
               </Button>
-              <Button className="gap-2" onClick={handleAddUser}>
+              <Button type="button" className="gap-2" onClick={handleAddUser}>
                 <UserPlus className="w-4 h-4" />
                 Add User
               </Button>
@@ -411,7 +415,11 @@ export function UserManagement() {
         </motion.div>
 
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div
+          className={`grid grid-cols-1 md:grid-cols-5 gap-4 transition-opacity ${
+            isLoading ? "opacity-40 pointer-events-none" : ""
+          }`}
+        >
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -648,6 +656,7 @@ export function UserManagement() {
                   </div>
                   <div className="flex gap-2">
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={() => handleBulkAction("activate")}
@@ -656,6 +665,7 @@ export function UserManagement() {
                       Activate
                     </Button>
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={() => handleBulkAction("suspend")}
@@ -664,6 +674,7 @@ export function UserManagement() {
                       Suspend
                     </Button>
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={() => handleBulkAction("email")}
@@ -672,6 +683,7 @@ export function UserManagement() {
                       Email
                     </Button>
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={() => setSelectedUsers([])}
@@ -699,8 +711,12 @@ export function UserManagement() {
                     <th className="px-4 py-3 text-left">
                       <input
                         type="checkbox"
-                        checked={selectedUsers.length === paginatedUsers.length}
+                        checked={
+                          paginatedUsers.length > 0 &&
+                          selectedUsers.length === paginatedUsers.length
+                        }
                         onChange={toggleSelectAll}
+                        disabled={isLoading}
                         className="rounded"
                       />
                     </th>
@@ -764,7 +780,43 @@ export function UserManagement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {paginatedUsers.map((user, index) => (
+                  {isLoading &&
+                    Array.from({ length: 8 }).map((_, index) => (
+                      <tr key={`skeleton-${index}`} className="animate-pulse">
+                        <td className="px-4 py-4">
+                          <div className="h-4 w-4 rounded bg-gray-200" />
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-gray-200" />
+                            <div className="space-y-2">
+                              <div className="h-4 w-32 bg-gray-200 rounded" />
+                              <div className="h-3 w-48 bg-gray-100 rounded" />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="h-6 w-16 bg-gray-200 rounded-full" />
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="h-6 w-14 bg-gray-200 rounded-full" />
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="h-4 w-8 bg-gray-200 rounded" />
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="h-4 w-12 bg-gray-200 rounded" />
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="h-4 w-28 bg-gray-200 rounded" />
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="h-8 w-16 bg-gray-200 rounded" />
+                        </td>
+                      </tr>
+                    ))}
+                  {!isLoading &&
+                    paginatedUsers.map((user, index) => (
                     <motion.tr
                       key={user.id}
                       initial={{ opacity: 0, y: 10 }}
@@ -825,7 +877,14 @@ export function UserManagement() {
                         </span>
                       </td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">
-                        {user.lastActive}
+                        {(() => {
+                          try {
+                            const d = new Date(user.lastActive);
+                            return isNaN(d.getTime()) ? user.lastActive : format(d, "MMM d, yyyy h:mm a");
+                          } catch {
+                            return user.lastActive;
+                          }
+                        })()}
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">

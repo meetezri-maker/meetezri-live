@@ -17,6 +17,7 @@ import {
   getAdminSystemHealthHandler, patchErrorLogResolveHandler, postErrorLogsArchiveResolvedHandler, postSessionRecordingReviewedHandler, patchSessionRecordingHandler,
   getCrisisEventsHandler, getCrisisEventHandler, updateCrisisEventStatusHandler,
   getOrgTeamHandler, addOrgTeamMemberHandler, updateOrgTeamMemberHandler, removeOrgTeamMemberHandler,
+  getCompanionsHandler, postCompanionHandler, patchCompanionHandler, deleteCompanionHandler,
   getBackupRecoveryHandler, postBackupRecoveryCreateHandler, postBackupRecoveryExportHandler,
   postBackupRecoveryRestoreHandler, getBackupRecoveryDownloadHandler,
   getFeatureFlagsHandler, postFeatureFlagHandler, patchFeatureFlagHandler, deleteFeatureFlagHandler,
@@ -145,6 +146,28 @@ export async function adminRoutes(fastify: FastifyInstance) {
     '/organization-team/:userId',
     { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] },
     removeOrgTeamMemberHandler
+  );
+
+  // Companion Management (licensed companions — `companion_profiles`)
+  fastify.get(
+    '/companions',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] },
+    getCompanionsHandler
+  );
+  fastify.post(
+    '/companions',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] },
+    postCompanionHandler
+  );
+  fastify.patch(
+    '/companions/:id',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] },
+    patchCompanionHandler
+  );
+  fastify.delete(
+    '/companions/:id',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] },
+    deleteCompanionHandler
   );
 
   // Backup & Recovery (super_admin only)

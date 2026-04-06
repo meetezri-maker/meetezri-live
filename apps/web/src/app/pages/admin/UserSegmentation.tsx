@@ -19,11 +19,13 @@ import {
   X,
   Mail,
   Send,
-  Trash2
+  Trash2,
+  Loader2,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { api } from "../../../lib/api";
+import { toast } from "sonner";
 
 const SEGMENT_COLOR_PALETTE = [
   "#3b82f6",
@@ -137,6 +139,9 @@ export function UserSegmentation() {
   const [showCampaignModal, setShowCampaignModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [viewingSegment, setViewingSegment] = useState<Segment | null>(null);
+  const [creatingSegment, setCreatingSegment] = useState(false);
+  const [deletingSegmentId, setDeletingSegmentId] = useState<string | null>(null);
+  const segmentsFirstLoad = useRef(true);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -148,7 +153,7 @@ export function UserSegmentation() {
 
   const fetchSegments = async () => {
     try {
-      setIsLoading(true);
+      if (segmentsFirstLoad.current) setIsLoading(true);
       const data = await api.admin.getUserSegments() as {
         segments?: unknown[];
         platform?: SegmentationPlatform;
@@ -179,7 +184,10 @@ export function UserSegmentation() {
     } catch (error) {
       console.error("Failed to fetch segments", error);
     } finally {
-      setIsLoading(false);
+      if (segmentsFirstLoad.current) {
+        setIsLoading(false);
+        segmentsFirstLoad.current = false;
+      }
     }
   };
 
@@ -188,32 +196,48 @@ export function UserSegmentation() {
   }, []);
 
   const handleCreate = async () => {
+    const name = formData.name.trim();
+    if (!name) {
+      toast.error("Please enter a segment name.");
+      return;
+    }
+    if (creatingSegment) return;
+    setCreatingSegment(true);
     try {
       await api.admin.createUserSegment({
-        name: formData.name,
-        description: formData.description,
+        name,
+        description: formData.description.trim() || undefined,
         criteria: {
           color: formData.color,
           rules: formData.criteria,
         },
         user_count: 0,
       });
+      toast.success("Segment created.");
       setShowCreateModal(false);
       setFormData({ name: '', description: '', criteria: [], color: '#3b82f6' });
       fetchSegments();
     } catch (error) {
       console.error("Failed to create segment", error);
+      const msg = error instanceof Error ? error.message : "Failed to create segment";
+      toast.error(msg);
+    } finally {
+      setCreatingSegment(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this segment?')) {
-      try {
-        await api.admin.deleteUserSegment(id);
-        fetchSegments();
-      } catch (error) {
-        console.error("Failed to delete segment", error);
-      }
+    if (deletingSegmentId) return;
+    if (!confirm('Are you sure you want to delete this segment?')) return;
+    setDeletingSegmentId(id);
+    try {
+      await api.admin.deleteUserSegment(id);
+      fetchSegments();
+    } catch (error) {
+      console.error("Failed to delete segment", error);
+      toast.error("Failed to delete segment");
+    } finally {
+      setDeletingSegmentId(null);
     }
   };
 
@@ -236,19 +260,26 @@ export function UserSegmentation() {
     premiumUsers: platform.premium_users,
   };
 
-  if (isLoading) {
-    return (
-      <AdminLayoutNew>
-        <div className="flex items-center justify-center h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
-        </div>
-      </AdminLayoutNew>
-    );
-  }
-
   return (
     <AdminLayoutNew>
       <div className="max-w-7xl mx-auto space-y-6">
+        {isLoading && (
+          <div className="animate-pulse space-y-6 mb-2" aria-hidden>
+            <div className="h-10 bg-gray-200 rounded-lg w-64 max-w-full" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-28 bg-gray-100 rounded-2xl" />
+              ))}
+            </div>
+            <div className="grid lg:grid-cols-2 gap-6">
+              <div className="h-72 bg-gray-100 rounded-2xl" />
+              <div className="h-72 bg-gray-100 rounded-2xl" />
+            </div>
+            <div className="h-48 bg-gray-100 rounded-2xl" />
+          </div>
+        )}
+
+        <div className={isLoading ? "opacity-0 h-0 overflow-hidden pointer-events-none" : "space-y-6"}>
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -526,15 +557,21 @@ export function UserSegmentation() {
                         </motion.button>
 
                         <motion.button
+                          type="button"
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          className="px-3 py-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium"
+                          disabled={deletingSegmentId === segment.id}
+                          className="px-3 py-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium disabled:opacity-60"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDelete(segment.id);
+                            void handleDelete(segment.id);
                           }}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {deletingSegmentId === segment.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
                         </motion.button>
                       </div>
                     </div>
@@ -544,6 +581,7 @@ export function UserSegmentation() {
             </div>
           )}
         </motion.div>
+        </div>
 
         {/* Create Segment Modal */}
         {showCreateModal && (
@@ -551,7 +589,7 @@ export function UserSegmentation() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setShowCreateModal(false)}
+            onClick={() => !creatingSegment && setShowCreateModal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -592,44 +630,55 @@ export function UserSegmentation() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Segment Color</label>
-                  <div className="flex gap-2">
-                    {SEGMENT_COLOR_PALETTE.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        title={color}
-                        aria-label={`Color ${color}`}
-                        aria-pressed={formData.color === color}
-                        onClick={() => setFormData((prev) => ({ ...prev, color }))}
-                        className={`w-10 h-10 rounded-lg border-2 transition-all shrink-0 ${
-                          formData.color === color
-                            ? "border-gray-900 ring-2 ring-gray-900 ring-offset-2 scale-105"
-                            : "border-gray-200 hover:border-gray-500"
-                        }`}
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
+                  <div className="flex flex-wrap gap-2">
+                    {SEGMENT_COLOR_PALETTE.map((color) => {
+                      const selected = formData.color.toLowerCase() === color.toLowerCase();
+                      return (
+                        <button
+                          key={color}
+                          type="button"
+                          title={color}
+                          aria-label={`Color ${color}`}
+                          aria-pressed={selected}
+                          onClick={() => setFormData((prev) => ({ ...prev, color }))}
+                          className={`relative w-10 h-10 rounded-lg border-2 transition-all shrink-0 shadow-sm ${
+                            selected
+                              ? "border-white ring-2 ring-offset-2 ring-offset-white ring-gray-900 scale-105 z-10"
+                              : "border-white/80 hover:border-gray-400"
+                          }`}
+                          style={{ backgroundColor: color }}
+                        />
+                      );
+                    })}
                   </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Selected: <span className="font-mono">{formData.color}</span>
+                  </p>
                 </div>
               </div>
 
               <div className="flex gap-3 mt-6">
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
+                  disabled={creatingSegment}
                   onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
+                  className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium disabled:opacity-50"
                 >
                   Cancel
                 </motion.button>
 
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={handleCreate}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
+                  disabled={creatingSegment}
+                  onClick={() => void handleCreate()}
+                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium inline-flex items-center justify-center gap-2 disabled:opacity-70"
                 >
-                  Create Segment
+                  {creatingSegment && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {creatingSegment ? "Creating…" : "Create Segment"}
                 </motion.button>
               </div>
             </motion.div>

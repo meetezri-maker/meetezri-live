@@ -895,9 +895,13 @@ export const api = {
       return handleResponse(res, 'Failed to fetch recent activity');
     },
 
-    async getUsers() {
+    async getUsers(params?: { page?: number; limit?: number }) {
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/users`, {
+      const search = new URLSearchParams();
+      if (params?.page != null && params.page > 0) search.set('page', String(params.page));
+      if (params?.limit != null && params.limit > 0) search.set('limit', String(params.limit));
+      const qs = search.toString();
+      const res = await fetch(`${API_URL}/admin/users${qs ? `?${qs}` : ''}`, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -1109,6 +1113,61 @@ export const api = {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/admin/user-segments/${id}`, { method: 'DELETE', headers });
       return handleResponse(res, 'Failed to delete segment');
+    },
+
+    async getCompanions() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/companions`, { method: 'GET', headers, cache: 'no-store' });
+      return handleResponse(res, 'Failed to fetch companions');
+    },
+
+    async createCompanion(body: {
+      email: string;
+      full_name: string;
+      phone?: string;
+      license_number?: string;
+      specializations?: string[];
+      languages?: string[];
+      availability?: string;
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/companions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to create companion');
+    },
+
+    async updateCompanion(
+      id: string,
+      body: {
+        full_name?: string;
+        phone?: string;
+        license_number?: string;
+        specializations?: string[];
+        languages?: string[];
+        availability?: string;
+        is_verified?: boolean;
+        account_status?: string;
+      }
+    ) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/companions/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to update companion');
+    },
+
+    async deleteCompanion(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/companions/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers,
+      });
+      return handleResponse(res, 'Failed to delete companion');
     },
 
     // Notifications

@@ -603,9 +603,9 @@ export async function getAllUsers(page: number = 1, limit: number = 20) {
   }
 
   const skip = (page - 1) * limit;
-  const take = Math.min(limit, 100);
+  const take = Math.min(limit, 1000);
 
-  // Single optimized query to fetch all related data in one go
+  // Single query for list rows; latest mood per user is loaded in one batch (avoids per-row subqueries).
   const users = await prisma.profiles.findMany({
     take,
     skip,
@@ -618,49 +618,58 @@ export async function getAllUsers(page: number = 1, limit: number = 20) {
       created_at: true,
       updated_at: true,
       role: true,
-      // Get session stats
       _count: {
-        select: { 
-          app_sessions: { 
-            where: { ended_at: { not: null } } 
-          } 
-        }
+        select: {
+          app_sessions: {
+            where: { ended_at: { not: null } },
+          },
+        },
       },
       app_sessions: {
         orderBy: { started_at: 'desc' },
         take: 1,
-        select: { started_at: true }
+        select: { started_at: true },
       },
-      // Get active subscription
       subscriptions: {
         where: { status: 'active' },
         orderBy: { created_at: 'desc' },
         take: 1,
-        select: { plan_type: true }
+        select: { plan_type: true },
       },
-      // Get organization
       org_members: {
         take: 1,
         select: {
-          organizations: { select: { name: true } }
-        }
+          organizations: { select: { name: true } },
+        },
       },
-      // Get latest mood
-      mood_entries: {
-        orderBy: { created_at: 'desc' },
-        take: 1,
-        select: { mood: true, intensity: true }
-      }
-    }
+    },
   });
 
-  const result = users.map(user => {
+  const userIds = users.map((u) => u.id);
+  const moodByUser = new Map<string, { mood: string | null; intensity: number | null }>();
+  if (userIds.length > 0) {
+    const moodRows = await prisma.$queryRaw<
+      { user_id: string; mood: string | null; intensity: number | null }[]
+    >(Prisma.sql`
+      SELECT DISTINCT ON (user_id) user_id::text AS user_id, mood, intensity
+      FROM mood_entries
+      WHERE user_id::text IN (${Prisma.join(userIds)})
+      ORDER BY user_id, created_at DESC
+    `);
+    for (const row of moodRows) {
+      moodByUser.set(row.user_id, { mood: row.mood, intensity: row.intensity });
+    }
+  }
+
+  const result = users.map((user) => {
     const lastSessionDate = user.app_sessions[0]?.started_at;
-    const lastActive = lastSessionDate 
-      ? (new Date(lastSessionDate).getTime() > new Date(user.updated_at).getTime() ? lastSessionDate : user.updated_at)
+    const lastActive = lastSessionDate
+      ? new Date(lastSessionDate).getTime() > new Date(user.updated_at).getTime()
+        ? lastSessionDate
+        : user.updated_at
       : user.updated_at;
 
-    const lastMood = user.mood_entries[0];
+    const lastMood = moodByUser.get(user.id);
     const moodVal = lastMood?.mood;
     const intensity = lastMood?.intensity || 0;
 
@@ -1135,16 +1144,302 @@ export async function getUserSegmentationDashboard() {
   return payload;
 }
 
-export async function createUserSegment(data: any) {
+export async function createUserSegment(data: {
+  name: string;
+  description?: string | null;
+  criteria: unknown;
+  user_count?: number | null;
+}) {
+  segmentationDashboardCache = null;
   return prisma.user_segments.create({
-    data,
+    data: {
+      name: data.name.trim(),
+      description: data.description?.trim() || null,
+      criteria: data.criteria as Prisma.InputJsonValue,
+      user_count: data.user_count ?? 0,
+    },
   });
 }
 
 export async function deleteUserSegment(id: string) {
+  segmentationDashboardCache = null;
   return prisma.user_segments.delete({
     where: { id },
   });
+}
+
+// --- Companion Management (`companion_profiles` + therapist `profiles`) ---
+
+function companionAvailabilityToString(av: unknown): string {
+  if (av == null) return '—';
+  if (typeof av === 'string') return av;
+  try {
+    return JSON.stringify(av);
+  } catch {
+    return '—';
+  }
+}
+
+function mapProfileToCompanionStatus(p: {
+  email: string | null;
+  account_status: string | null;
+  role: string | null;
+}): 'active' | 'inactive' | 'pending' {
+  if (!p.email) return 'pending';
+  if (p.role === 'suspended' || p.account_status === 'suspended') return 'inactive';
+  if (p.account_status === 'inactive') return 'inactive';
+  return 'active';
+}
+
+export async function listCompanionsForAdmin() {
+  const rows = await prisma.companion_profiles.findMany({
+    include: {
+      profiles: {
+        select: {
+          email: true,
+          full_name: true,
+          phone: true,
+          account_status: true,
+          role: true,
+          updated_at: true,
+        },
+      },
+    },
+    orderBy: { created_at: 'desc' },
+  });
+
+  const ids = rows.map((r) => r.id);
+  if (ids.length === 0) return [];
+
+  const [counts, avgs] = await Promise.all([
+    prisma.appointments.groupBy({
+      by: ['companion_id'],
+      where: { companion_id: { in: ids } },
+      _count: { _all: true },
+    }),
+    prisma.appointments.groupBy({
+      by: ['companion_id'],
+      where: { companion_id: { in: ids }, rating: { not: null } },
+      _avg: { rating: true },
+    }),
+  ]);
+
+  const countMap = new Map<string, number>();
+  for (const c of counts) {
+    if (c.companion_id != null) countMap.set(c.companion_id, c._count._all);
+  }
+  const avgMap = new Map<string, number>();
+  for (const a of avgs) {
+    if (a.companion_id != null && a._avg.rating != null) {
+      avgMap.set(a.companion_id, Number(a._avg.rating));
+    }
+  }
+
+  return rows.map((row) => {
+    const p = row.profiles;
+    const sessionsCount = countMap.get(row.id) ?? 0;
+    const rating = avgMap.get(row.id) ?? 0;
+    return {
+      id: row.id,
+      name: p.full_name || p.email?.split('@')[0] || 'Companion',
+      email: p.email ?? '',
+      phone: p.phone ?? '',
+      specialization: row.specializations ?? [],
+      license: row.license_number ?? '',
+      status: mapProfileToCompanionStatus(p),
+      verified: row.is_verified === true,
+      joinedDate: row.joined_date?.toISOString() ?? row.created_at.toISOString(),
+      sessionsCount,
+      rating,
+      availability: companionAvailabilityToString(row.availability),
+      languages: row.languages ?? [],
+    };
+  });
+}
+
+export async function createCompanionByAdmin(
+  input: {
+    email: string;
+    full_name: string;
+    phone?: string;
+    license_number?: string;
+    specializations?: string[];
+    languages?: string[];
+    availability?: string;
+  },
+  webBaseUrl: string
+) {
+  const emailNorm = input.email.trim().toLowerCase();
+  const nameTrim = input.full_name.trim();
+  if (!emailNorm || !nameTrim) {
+    throw new Error('Email and full name are required');
+  }
+
+  const specs = input.specializations?.map((s) => s.trim()).filter(Boolean) ?? [];
+  const langs = input.languages?.map((s) => s.trim()).filter(Boolean) ?? [];
+  const availability =
+    input.availability?.trim() ||
+    JSON.stringify({ note: 'Set hours in profile', timezone: 'UTC' });
+
+  const existing = await prisma.profiles.findFirst({
+    where: { email: { equals: emailNorm, mode: 'insensitive' } },
+    select: { id: true, role: true },
+  });
+
+  if (existing) {
+    if (existing.role === 'super_admin') {
+      throw new Error('Cannot convert a super admin account into a companion here');
+    }
+    await prisma.profiles.update({
+      where: { id: existing.id },
+      data: {
+        role: 'therapist',
+        full_name: nameTrim,
+        ...(input.phone?.trim() ? { phone: input.phone.trim() } : {}),
+        account_status: 'active',
+      },
+    });
+    await prisma.companion_profiles.upsert({
+      where: { id: existing.id },
+      create: {
+        id: existing.id,
+        license_number: input.license_number?.trim() || null,
+        specializations: specs,
+        languages: langs,
+        availability,
+        is_verified: false,
+      },
+      update: {
+        license_number: input.license_number?.trim() || null,
+        specializations: specs,
+        languages: langs,
+        availability,
+      },
+    });
+    usersCache.clear();
+    return listCompanionsForAdmin();
+  }
+
+  const base = webBaseUrl.replace(/\/$/, '');
+  const redirectTo = `${base}/login`;
+
+  const { data: invited, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+    emailNorm,
+    {
+      data: { full_name: nameTrim },
+      redirectTo,
+    }
+  );
+
+  if (inviteError) {
+    throw new Error(inviteError.message || 'Failed to send invite');
+  }
+  const userId = invited?.user?.id;
+  if (!userId) {
+    throw new Error('Invite did not return a user id');
+  }
+
+  await userService.createProfile(userId, emailNorm, nameTrim, 'trial');
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: {
+      role: 'therapist',
+      ...(input.phone?.trim() ? { phone: input.phone.trim() } : {}),
+      account_status: 'active',
+    },
+  });
+
+  await prisma.companion_profiles.create({
+    data: {
+      id: userId,
+      license_number: input.license_number?.trim() || null,
+      specializations: specs,
+      languages: langs,
+      availability,
+      is_verified: false,
+    },
+  });
+
+  usersCache.clear();
+  return listCompanionsForAdmin();
+}
+
+export async function updateCompanionByAdmin(
+  companionUserId: string,
+  data: {
+    full_name?: string;
+    phone?: string;
+    license_number?: string;
+    specializations?: string[];
+    languages?: string[];
+    availability?: string;
+    is_verified?: boolean;
+    account_status?: string;
+  }
+) {
+  const row = await prisma.companion_profiles.findUnique({
+    where: { id: companionUserId },
+    include: { profiles: { select: { role: true } } },
+  });
+  if (!row) {
+    throw new Error('Companion not found');
+  }
+
+  const profUpdate: Prisma.profilesUpdateInput = {};
+  if (data.full_name !== undefined) profUpdate.full_name = data.full_name.trim() || null;
+  if (data.phone !== undefined) profUpdate.phone = data.phone.trim() || null;
+  if (data.account_status !== undefined) profUpdate.account_status = data.account_status;
+
+  if (Object.keys(profUpdate).length > 0) {
+    await prisma.profiles.update({
+      where: { id: companionUserId },
+      data: profUpdate,
+    });
+  }
+
+  const cpUpdate: Prisma.companion_profilesUpdateInput = {};
+  if (data.license_number !== undefined) cpUpdate.license_number = data.license_number.trim() || null;
+  if (data.specializations !== undefined) cpUpdate.specializations = data.specializations;
+  if (data.languages !== undefined) cpUpdate.languages = data.languages;
+  if (data.availability !== undefined) {
+    const av = data.availability.trim();
+    cpUpdate.availability = av ? av : Prisma.JsonNull;
+  }
+  if (data.is_verified !== undefined) cpUpdate.is_verified = data.is_verified;
+
+  if (Object.keys(cpUpdate).length > 0) {
+    await prisma.companion_profiles.update({
+      where: { id: companionUserId },
+      data: cpUpdate,
+    });
+  }
+
+  usersCache.clear();
+  return listCompanionsForAdmin();
+}
+
+export async function deleteCompanionProfile(companionUserId: string) {
+  const row = await prisma.companion_profiles.findUnique({
+    where: { id: companionUserId },
+    include: { profiles: { select: { role: true } } },
+  });
+  if (!row) {
+    throw new Error('Companion not found');
+  }
+  if (row.profiles.role === 'super_admin') {
+    throw new Error('Cannot remove companion profile for this account');
+  }
+
+  await prisma.companion_profiles.delete({
+    where: { id: companionUserId },
+  });
+  await prisma.profiles.update({
+    where: { id: companionUserId },
+    data: { role: 'user' },
+  });
+
+  usersCache.clear();
+  return listCompanionsForAdmin();
 }
 
 // --- Organization team (Team Management) — backed by `org_members` + `profiles.role` ---

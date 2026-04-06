@@ -18,6 +18,7 @@ import {
   endLiveSessionByAdmin, flagSessionForReview,
   getAdminSystemHealth, resolveErrorLog, deleteResolvedErrorLogs, markSessionRecordingReviewed, updateSessionRecordingMeta,
   getOrgTeamMembers, addOrgTeamMember, updateOrgTeamMember, removeOrgTeamMember,
+  listCompanionsForAdmin, createCompanionByAdmin, updateCompanionByAdmin, deleteCompanionProfile,
   getBackupRecoveryDashboard, createLogicalBackup, createDataExportRecord, requestRestoreFromBackup,
   getBackupRecordJsonForDownload,
   getContentPerformanceAnalytics,
@@ -99,7 +100,7 @@ export async function getUsersHandler(
   try {
     const query = request.query as any;
     const page = query.page && !isNaN(parseInt(query.page, 10)) ? parseInt(query.page, 10) : 1;
-    const limit = query.limit && !isNaN(parseInt(query.limit, 10)) ? parseInt(query.limit, 10) : 20;
+    const limit = query.limit && !isNaN(parseInt(query.limit, 10)) ? parseInt(query.limit, 10) : 500;
     
     const users = await getAllUsers(page, limit);
     return reply.code(200).send(users);
@@ -275,7 +276,21 @@ export async function getUserSegmentsHandler(request: FastifyRequest, reply: Fas
 
 export async function createUserSegmentHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
-    const segment = await createUserSegment(request.body);
+    const body = (request.body || {}) as {
+      name?: string;
+      description?: string | null;
+      criteria?: unknown;
+      user_count?: number | null;
+    };
+    if (!body.name?.trim()) {
+      return reply.code(400).send({ message: 'Segment name is required' });
+    }
+    const segment = await createUserSegment({
+      name: body.name,
+      description: body.description,
+      criteria: body.criteria ?? {},
+      user_count: body.user_count,
+    });
     return reply.code(201).send(segment);
   } catch (error) {
     request.log.error(error);
@@ -950,6 +965,86 @@ export async function removeOrgTeamMemberHandler(
     request.log.error({ error }, 'removeOrgTeamMember');
     const code = msg === 'Forbidden' ? 403 : 400;
     return reply.code(code).send({ message: msg });
+  }
+}
+
+export async function getCompanionsHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const list = await listCompanionsForAdmin();
+    return reply.code(200).send(list);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to load companions' });
+  }
+}
+
+export async function postCompanionHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const body = (request.body || {}) as {
+      email?: string;
+      full_name?: string;
+      phone?: string;
+      license_number?: string;
+      specializations?: string[];
+      languages?: string[];
+      availability?: string;
+    };
+    const webBaseUrl = resolveWebBaseUrl(request);
+    const list = await createCompanionByAdmin(
+      {
+        email: String(body.email ?? ''),
+        full_name: String(body.full_name ?? ''),
+        phone: body.phone,
+        license_number: body.license_number,
+        specializations: body.specializations,
+        languages: body.languages,
+        availability: body.availability,
+      },
+      webBaseUrl
+    );
+    return reply.code(201).send(list);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to create companion';
+    request.log.error({ error }, 'postCompanion');
+    return reply.code(400).send({ message: msg });
+  }
+}
+
+export async function patchCompanionHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const body = (request.body || {}) as {
+      full_name?: string;
+      phone?: string;
+      license_number?: string;
+      specializations?: string[];
+      languages?: string[];
+      availability?: string;
+      is_verified?: boolean;
+      account_status?: string;
+    };
+    const list = await updateCompanionByAdmin(request.params.id, body);
+    return reply.code(200).send(list);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to update companion';
+    request.log.error({ error }, 'patchCompanion');
+    return reply.code(400).send({ message: msg });
+  }
+}
+
+export async function deleteCompanionHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const list = await deleteCompanionProfile(request.params.id);
+    return reply.code(200).send(list);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to delete companion';
+    request.log.error({ error }, 'deleteCompanion');
+    return reply.code(400).send({ message: msg });
   }
 }
 
