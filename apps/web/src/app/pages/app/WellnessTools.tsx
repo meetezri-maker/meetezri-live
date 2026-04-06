@@ -910,7 +910,7 @@ export function WellnessTools() {
                       aria-labelledby="wellness-time-complete-title"
                       initial={{ opacity: 0, scale: 0.96 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-2xl bg-black/55 px-6 py-10 text-center backdrop-blur-md"
+                      className="absolute inset-0 z-50 flex flex-col items-center justify-center rounded-2xl bg-black/55 px-6 py-10 text-center backdrop-blur-md"
                     >
                       <CheckCircle2 className="mb-4 h-16 w-16 text-emerald-300 drop-shadow-lg" aria-hidden />
                       <h3
@@ -957,21 +957,23 @@ export function WellnessTools() {
                       whileHover={{ scale: 1.1, rotate: 90 }}
                       whileTap={{ scale: 0.9 }}
                       onClick={handleCloseExercise}
-                      className="absolute right-0 top-0 z-30 rounded-full bg-white/20 p-2 transition-colors hover:bg-white/30"
+                      className="absolute right-0 top-0 z-50 rounded-full bg-white/20 p-2 transition-colors hover:bg-white/30"
                     >
                       <X className="w-5 h-5" />
                     </motion.button>
 
-                    <div className="relative z-20 text-center mb-8">
+                    <div className="relative z-40 text-center mb-10">
                       <motion.div
-                        animate={{ scale: [1, 1.1, 1] }}
+                        animate={{ scale: [1, 1.08, 1] }}
                         transition={{ duration: 2, repeat: Infinity }}
                         className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm"
                       >
                         {ActiveExerciseIcon ? <ActiveExerciseIcon className="w-12 h-12" /> : null}
                       </motion.div>
-                      <h2 className="text-2xl font-bold mb-2">{activeExerciseData.title}</h2>
-                      <p className="text-white/90">{activeExerciseData.description}</p>
+                      <h2 className="relative text-2xl font-bold mb-2 drop-shadow-md">
+                        {activeExerciseData.title}
+                      </h2>
+                      <p className="relative text-white/90 drop-shadow-md">{activeExerciseData.description}</p>
                     </div>
 
                     {nearEndNudge && (
@@ -979,7 +981,7 @@ export function WellnessTools() {
                         role="status"
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="relative z-20 mb-6 rounded-2xl border border-white/25 bg-white/15 px-4 py-3 text-center shadow-lg backdrop-blur-md"
+                        className="relative z-40 mb-6 rounded-2xl border border-white/25 bg-white/15 px-4 py-3 text-center shadow-lg backdrop-blur-md"
                       >
                         <p className="text-sm font-medium text-white">
                           We hope you&apos;re enjoying this moment.
@@ -990,62 +992,68 @@ export function WellnessTools() {
                       </motion.div>
                     )}
 
-                    {/* Breathing Animation — lower z so scale transform does not paint over headings */}
-                    <div className="relative z-10 mb-8 flex flex-col items-center justify-center">
-                      <motion.div
-                        animate={{
-                          scale: breathPhase === "inhale" || breathPhase === "hold" ? 1.8 : 1,
-                        }}
-                        transition={{
-                          duration: breathPhase === "inhale" ? 4 : breathPhase === "exhale" ? 4 : 0.5,
-                          ease: "easeInOut"
-                        }}
-                        className="w-40 h-40 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center relative"
-                      >
+                    {/* Breathing rings: clipped so scale cannot paint over title or labels */}
+                    <div className="relative z-0 mb-6 flex flex-col items-center">
+                      <div className="flex h-[220px] w-full max-w-[300px] items-center justify-center overflow-hidden rounded-2xl">
                         <motion.div
                           animate={{
-                            scale: breathPhase === "inhale" || breathPhase === "hold" ? 1.2 : 0.6,
+                            scale:
+                              breathPhase === "inhale" || breathPhase === "hold" ? 1.38 : 1,
                           }}
                           transition={{
                             duration: breathPhase === "inhale" ? 4 : breathPhase === "exhale" ? 4 : 0.5,
-                            ease: "easeInOut"
+                            ease: "easeInOut",
                           }}
-                          className="w-28 h-28 rounded-full bg-white/60 flex items-center justify-center"
+                          className="relative flex h-40 w-40 shrink-0 items-center justify-center rounded-full bg-white/30 backdrop-blur-sm will-change-transform"
+                          style={{ transformOrigin: "center center" }}
                         >
                           <motion.div
                             animate={{
-                              scale: breathPhase === "inhale" || breathPhase === "hold" ? 1 : 0.5,
+                              scale:
+                                breathPhase === "inhale" || breathPhase === "hold" ? 1.18 : 0.65,
                             }}
                             transition={{
                               duration: breathPhase === "inhale" ? 4 : breathPhase === "exhale" ? 4 : 0.5,
-                              ease: "easeInOut"
+                              ease: "easeInOut",
                             }}
-                            className="w-16 h-16 rounded-full bg-white/80"
-                          />
+                            className="flex h-28 w-28 items-center justify-center rounded-full bg-white/60"
+                          >
+                            <motion.div
+                              animate={{
+                                scale:
+                                  breathPhase === "inhale" || breathPhase === "hold" ? 1 : 0.55,
+                              }}
+                              transition={{
+                                duration: breathPhase === "inhale" ? 4 : breathPhase === "exhale" ? 4 : 0.5,
+                                ease: "easeInOut",
+                              }}
+                              className="h-16 w-16 rounded-full bg-white/80"
+                            />
+                          </motion.div>
                         </motion.div>
-                      </motion.div>
-                      
-                      {/* Breath Phase Indicator */}
+                      </div>
+
+                      {/* Phase copy sits above rings in the stack — never inside the scaled layer */}
                       <motion.div
                         key={breathPhase}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="mt-6 text-center"
+                        className="relative z-30 mt-5 w-full text-center"
                       >
-                        <div className="text-2xl font-bold mb-1">
+                        <div className="text-2xl font-bold mb-1 drop-shadow-md">
                           {breathPhase === "inhale" && "Breathe In"}
                           {breathPhase === "hold" && "Hold"}
                           {breathPhase === "exhale" && "Breathe Out"}
                           {breathPhase === "hold2" && "Hold"}
                         </div>
-                        <div className="text-sm text-white/70">
+                        <div className="text-sm text-white/90 drop-shadow-md">
                           {4 - phaseTimer} seconds
                         </div>
                       </motion.div>
                     </div>
 
                     {/* Timer */}
-                    <div className="relative z-20 text-center mb-6">
+                    <div className="relative z-40 text-center mb-6">
                       <div className="text-4xl font-bold mb-2 tabular-nums">
                         {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, "0")}
                       </div>
@@ -1060,7 +1068,7 @@ export function WellnessTools() {
 
                     {/* Controls */}
                     <div
-                      className={`relative z-20 flex items-center justify-center gap-4 ${sessionTimeComplete ? "pointer-events-none opacity-40" : ""}`}
+                      className={`relative z-40 flex items-center justify-center gap-4 ${sessionTimeComplete ? "pointer-events-none opacity-40" : ""}`}
                     >
                       <motion.button
                         whileHover={{ scale: 1.1 }}
