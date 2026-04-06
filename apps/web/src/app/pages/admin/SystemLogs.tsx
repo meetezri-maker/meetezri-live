@@ -174,6 +174,50 @@ export function SystemLogs() {
     };
   }, [logs]);
 
+  const exportLogsCsv = (rows: LogEntry[]) => {
+    const headers = [
+      "ID",
+      "Timestamp (ISO)",
+      "Level",
+      "Category",
+      "Message",
+      "Source",
+      "UserId",
+      "IP",
+      "Details",
+    ];
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((log) =>
+        [
+          log.id,
+          log.timestamp.toISOString(),
+          log.level,
+          log.category,
+          `"${String(log.message).replace(/"/g, '""')}"`,
+          `"${String(log.source).replace(/"/g, '""')}"`,
+          log.userId ?? "",
+          log.ipAddress ?? "",
+          `"${String(log.details ?? "").replace(/"/g, '""')}"`,
+        ].join(",")
+      ),
+    ].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `system-logs-${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    toast.success(`Exported ${rows.length} log row${rows.length === 1 ? "" : "s"}`);
+  };
+
+  const handleExportLogs = () => {
+    exportLogsCsv(filteredLogs);
+  };
+
   return (
     <AdminLayoutNew>
       <div className="max-w-7xl mx-auto space-y-6">
@@ -190,9 +234,11 @@ export function SystemLogs() {
 
           <div className="flex gap-3">
             <motion.button
+              type="button"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg"
+              onClick={handleExportLogs}
             >
               <Download className="w-4 h-4" />
               Export Logs
@@ -464,9 +510,16 @@ export function SystemLogs() {
           <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid md:grid-cols-3 gap-4">
             <motion.button
+              type="button"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className="bg-white rounded-xl p-4 text-left hover:shadow-md transition-shadow"
+              onClick={() => {
+                setFilterLevel("error");
+                setFilterCategory("all");
+                setDateFilter("all");
+                toast.info("Showing error-level logs only.");
+              }}
             >
               <XCircle className="w-8 h-8 text-red-600 mb-2" />
               <h3 className="font-bold text-gray-900 mb-1">View All Errors</h3>
@@ -474,9 +527,15 @@ export function SystemLogs() {
             </motion.button>
 
             <motion.button
+              type="button"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className="bg-white rounded-xl p-4 text-left hover:shadow-md transition-shadow"
+              onClick={() => {
+                setFilterCategory("security");
+                setFilterLevel("all");
+                toast.info("Filtered to security category.");
+              }}
             >
               <Shield className="w-8 h-8 text-purple-600 mb-2" />
               <h3 className="font-bold text-gray-900 mb-1">Security Logs</h3>
@@ -484,13 +543,15 @@ export function SystemLogs() {
             </motion.button>
 
             <motion.button
+              type="button"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className="bg-white rounded-xl p-4 text-left hover:shadow-md transition-shadow"
+              onClick={handleExportLogs}
             >
               <Download className="w-8 h-8 text-blue-600 mb-2" />
               <h3 className="font-bold text-gray-900 mb-1">Export Report</h3>
-              <p className="text-sm text-gray-600">Download logs as CSV or JSON</p>
+              <p className="text-sm text-gray-600">Download filtered logs as CSV</p>
             </motion.button>
           </div>
         </motion.div>

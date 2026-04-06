@@ -29,6 +29,7 @@ import {
 import { toast } from "sonner";
 
 type Policy = {
+  id: string;
   dataType: string;
   retention: string;
   autoDelete: boolean;
@@ -55,6 +56,10 @@ export function DataRetentionPrivacy() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showConfigureModal, setShowConfigureModal] = useState(false);
   const [selectedPolicy, setSelectedPolicy] = useState<Policy | null>(null);
+  const [customPolicies, setCustomPolicies] = useState<Policy[]>([]);
+  const [newDataType, setNewDataType] = useState("");
+  const [newRetention, setNewRetention] = useState("");
+  const [newAutoDelete, setNewAutoDelete] = useState(false);
   const [dash, setDash] = useState<{ totalUsers?: number; totalSessions?: number } | null>(null);
   const [auditLoaded, setAuditLoaded] = useState(0);
 
@@ -78,12 +83,13 @@ export function DataRetentionPrivacy() {
     };
   }, []);
 
-  const retentionPolicies: Policy[] = useMemo(() => {
+  const baseRetentionPolicies: Policy[] = useMemo(() => {
     const review = format(new Date(), "MMM d, yyyy");
     const tu = dash?.totalUsers ?? 0;
     const ts = dash?.totalSessions ?? 0;
     return [
       {
+        id: "builtin-profiles",
         dataType: "User profiles",
         retention: "Defined by your organization and applicable law (review with counsel).",
         autoDelete: false,
@@ -92,6 +98,7 @@ export function DataRetentionPrivacy() {
         status: "active",
       },
       {
+        id: "builtin-sessions",
         dataType: "App sessions (historical)",
         retention: "Defined by your organization; align with clinical / retention policy.",
         autoDelete: false,
@@ -100,6 +107,7 @@ export function DataRetentionPrivacy() {
         status: "active",
       },
       {
+        id: "builtin-audit",
         dataType: "Audit log rows (admin sample)",
         retention: "Typically multi-year; confirm with legal.",
         autoDelete: false,
@@ -109,6 +117,7 @@ export function DataRetentionPrivacy() {
         status: "active",
       },
       {
+        id: "builtin-ugc",
         dataType: "Journal, mood, sleep, habits (user-generated)",
         retention: "User-controlled or policy-driven — row counts not summarized in admin stats yet.",
         autoDelete: false,
@@ -118,6 +127,11 @@ export function DataRetentionPrivacy() {
       },
     ];
   }, [dash, auditLoaded]);
+
+  const retentionPolicies = useMemo(
+    () => [...baseRetentionPolicies, ...customPolicies],
+    [baseRetentionPolicies, customPolicies]
+  );
 
   const privacyRequests: PrivacyReq[] = [];
 
@@ -168,8 +182,33 @@ export function DataRetentionPrivacy() {
   };
 
   const handleAddPolicy = () => {
-    toast.success("New retention policy added successfully!");
+    const dt = newDataType.trim();
+    const rt = newRetention.trim();
+    if (!dt || !rt) {
+      toast.error("Enter a data type and retention period.");
+      return;
+    }
+    const id =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `custom-${Date.now()}`;
+    setCustomPolicies((prev) => [
+      ...prev,
+      {
+        id,
+        dataType: dt,
+        retention: rt,
+        autoDelete: newAutoDelete,
+        lastReview: format(new Date(), "MMM d, yyyy"),
+        itemsAffected: null,
+        status: "active",
+      },
+    ]);
+    toast.success("Retention policy added.");
     setShowAddPolicyModal(false);
+    setNewDataType("");
+    setNewRetention("");
+    setNewAutoDelete(false);
   };
 
   const handleViewPolicy = (policy: Policy) => {
@@ -239,6 +278,7 @@ export function DataRetentionPrivacy() {
                 Archive Old Data
               </Button>
               <Button
+                type="button"
                 className="gap-2"
                 onClick={() => setShowAddPolicyModal(true)}
               >
@@ -349,7 +389,7 @@ export function DataRetentionPrivacy() {
           <div className="space-y-4">
             {retentionPolicies.map((policy, index) => (
               <motion.div
-                key={index}
+                key={policy.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 + index * 0.05 }}
@@ -613,7 +653,7 @@ export function DataRetentionPrivacy() {
 
         {/* Archive Old Data Modal */}
         {showArchiveModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -666,7 +706,7 @@ export function DataRetentionPrivacy() {
 
         {/* Add Policy Modal */}
         {showAddPolicyModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -689,17 +729,30 @@ export function DataRetentionPrivacy() {
                   <Label className="block text-sm font-medium text-gray-700 mb-2">
                     Data Type
                   </Label>
-                  <Input placeholder="e.g., User Analytics Data" />
+                  <Input
+                    placeholder="e.g., User Analytics Data"
+                    value={newDataType}
+                    onChange={(e) => setNewDataType(e.target.value)}
+                  />
                 </div>
                 <div>
                   <Label className="block text-sm font-medium text-gray-700 mb-2">
                     Retention Period
                   </Label>
-                  <Input placeholder="e.g., 2 years" />
+                  <Input
+                    placeholder="e.g., 2 years"
+                    value={newRetention}
+                    onChange={(e) => setNewRetention(e.target.value)}
+                  />
                 </div>
                 <div>
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" className="w-4 h-4" />
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4"
+                      checked={newAutoDelete}
+                      onChange={(e) => setNewAutoDelete(e.target.checked)}
+                    />
                     <span className="text-sm font-medium text-gray-700">
                       Enable auto-deletion
                     </span>
@@ -707,12 +760,14 @@ export function DataRetentionPrivacy() {
                 </div>
                 <div className="flex gap-3 pt-4">
                   <Button
+                    type="button"
                     className="flex-1"
                     onClick={handleAddPolicy}
                   >
                     Add Policy
                   </Button>
                   <Button
+                    type="button"
                     variant="outline"
                     className="flex-1"
                     onClick={() => setShowAddPolicyModal(false)}
@@ -727,7 +782,7 @@ export function DataRetentionPrivacy() {
 
         {/* View Policy Modal */}
         {showViewModal && selectedPolicy && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -805,7 +860,7 @@ export function DataRetentionPrivacy() {
 
         {/* Configure Policy Modal */}
         {showConfigureModal && selectedPolicy && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}

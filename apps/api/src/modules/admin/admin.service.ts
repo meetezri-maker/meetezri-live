@@ -2161,3 +2161,290 @@ export async function updateCrisisEventStatus(
     assigned_profile: event.profiles_crisis_events_assigned_toToprofiles
   };
 }
+
+// --- Backup & Recovery (audit + logical metadata; physical backups are host-managed) ---
+
+function formatBytes(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return '—';
+  if (n < 1024) return `${Math.round(n)} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function formatDurationMs(ms: number | null | undefined): string {
+  if (ms == null) return '—';
+  if (ms < 1000) return `${ms} ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)} s`;
+  return `${Math.round(ms / 60000)} min`;
+}
+
+function relativeTime(d: Date): string {
+  const s = Math.round((Date.now() - d.getTime()) / 1000);
+  if (s < 5) return 'just now';
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}
+
+async function collectTableCounts() {
+  const [profiles, app_sessions, organizations, journal_entries, mood_entries] =
+    await Promise.all([
+      prisma.profiles.count(),
+      prisma.app_sessions.count(),
+      prisma.organizations.count(),
+      prisma.journal_entries.count(),
+      prisma.mood_entries.count(),
+    ]);
+  return { profiles, app_sessions, organizations, journal_entries, mood_entries };
+}
+
+function estimateLogicalBytes(counts: {
+  profiles: number;
+  app_sessions: number;
+  organizations: number;
+  journal_entries: number;
+  mood_entries: number;
+}): number {
+  return Math.round(
+    counts.profiles * 2048 +
+      counts.app_sessions * 512 +
+      counts.organizations * 256 +
+      counts.journal_entries * 400 +
+      counts.mood_entries * 200
+  );
+}
+
+function serializeBackupRecord(r: {
+  id: string;
+  kind: string;
+  status: string;
+  size_bytes: bigint | null;
+  duration_ms: number | null;
+  storage_path: string | null;
+  metadata: Prisma.JsonValue | null;
+  error_message: string | null;
+  created_at: Date;
+  completed_at: Date | null;
+  profiles: { full_name: string | null; email: string | null } | null;
+}) {
+  const sz = r.size_bytes != null ? Number(r.size_bytes) : null;
+  const ts = r.completed_at ?? r.created_at;
+  return {
+    id: r.id,
+    kind: r.kind,
+    status: r.status,
+    sizeBytes: r.size_bytes?.toString() ?? null,
+    sizeFormatted: sz != null ? formatBytes(sz) : '—',
+    durationMs: r.duration_ms,
+    durationFormatted: formatDurationMs(r.duration_ms),
+    storagePath: r.storage_path,
+    metadata: r.metadata,
+    errorMessage: r.error_message,
+    createdAt: r.created_at.toISOString(),
+    completedAt: r.completed_at?.toISOString() ?? null,
+    timestampLabel: ts.toLocaleString(),
+    relativeTime: relativeTime(ts),
+    createdByName: r.profiles?.full_name || r.profiles?.email || null,
+  };
+}
+
+export async function getBackupRecoveryDashboard() {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const backupKinds = ['full', 'incremental', 'data_export'] as const;
+
+  const [records, totalBackups, sumSize, lastRecord, recoveryRows] = await Promise.all([
+    prisma.admin_backup_records.findMany({
+      where: { kind: { in: [...backupKinds] } },
+      orderBy: { created_at: 'desc' },
+      take: 50,
+      include: {
+        profiles: { select: { full_name: true, email: true } },
+      },
+    }),
+    prisma.admin_backup_records.count({
+      where: { kind: { in: [...backupKinds] }, status: 'completed' },
+    }),
+    prisma.admin_backup_records.aggregate({
+      where: { kind: { in: [...backupKinds] }, status: 'completed', size_bytes: { not: null } },
+      _sum: { size_bytes: true },
+    }),
+    prisma.admin_backup_records.findFirst({
+      where: { kind: { in: [...backupKinds] }, status: 'completed' },
+      orderBy: { completed_at: 'desc' },
+      select: { completed_at: true, created_at: true },
+    }),
+    prisma.admin_backup_records.findMany({
+      where: {
+        kind: 'full',
+        status: 'completed',
+        created_at: { gte: thirtyDaysAgo },
+      },
+      orderBy: { created_at: 'desc' },
+      take: 30,
+      select: {
+        id: true,
+        created_at: true,
+        completed_at: true,
+        size_bytes: true,
+      },
+    }),
+  ]);
+
+  const last = lastRecord?.completed_at ?? lastRecord?.created_at;
+  const sumBytes = sumSize._sum.size_bytes;
+
+  return {
+    records: records.map((r) => serializeBackupRecord(r)),
+    stats: {
+      lastBackupRelative: last ? relativeTime(last) : 'Never',
+      totalBackups,
+      storageUsedFormatted: formatBytes(Number(sumBytes ?? 0)),
+      storageUsedBytes: sumBytes?.toString() ?? '0',
+      recoveryPointsCount: recoveryRows.length,
+      recoveryRetentionDays: Number(process.env.ADMIN_BACKUP_RETENTION_DAYS || 30),
+    },
+    schedule: {
+      full:
+        process.env.ADMIN_BACKUP_FULL_SCHEDULE ||
+        'Physical backups: use your database host (e.g. Supabase Dashboard → Database → Backups).',
+      incremental:
+        process.env.ADMIN_BACKUP_INCREMENTAL_SCHEDULE ||
+        'Point-in-time recovery: available on the host when enabled; not configured in this app.',
+      snapshot:
+        process.env.ADMIN_BACKUP_SNAPSHOT_SCHEDULE ||
+        'Logical snapshots below are recorded in this app when you run Create Backup.',
+    },
+    recoveryPoints: recoveryRows.map((rp) => {
+      const t = rp.completed_at ?? rp.created_at;
+      const sz = rp.size_bytes != null ? Number(rp.size_bytes) : 0;
+      return {
+        id: rp.id,
+        date: t.toISOString(),
+        dateLabel: t.toLocaleString(),
+        type: 'Full',
+        sizeFormatted: formatBytes(sz),
+      };
+    }),
+  };
+}
+
+export async function createLogicalBackup(userId: string, kind: 'full' | 'incremental') {
+  const start = Date.now();
+  const row = await prisma.admin_backup_records.create({
+    data: {
+      kind: kind === 'incremental' ? 'incremental' : 'full',
+      status: 'in_progress',
+      created_by: userId,
+    },
+  });
+  try {
+    const counts = await collectTableCounts();
+    const estimated = estimateLogicalBytes(counts);
+    const durationMs = Date.now() - start;
+    await prisma.admin_backup_records.update({
+      where: { id: row.id },
+      data: {
+        status: 'completed',
+        duration_ms: durationMs,
+        size_bytes: BigInt(estimated),
+        completed_at: new Date(),
+        storage_path:
+          'Host-managed (Postgres/Supabase). This row records a logical snapshot for audit.',
+        metadata: {
+          counts,
+          note: 'Estimated logical size from table row counts. Not a downloadable file.',
+        } as Prisma.InputJsonValue,
+      },
+    });
+  } catch (e) {
+    await prisma.admin_backup_records.update({
+      where: { id: row.id },
+      data: {
+        status: 'failed',
+        error_message: e instanceof Error ? e.message : String(e),
+        completed_at: new Date(),
+        duration_ms: Date.now() - start,
+      },
+    });
+    throw e;
+  }
+  return getBackupRecoveryDashboard();
+}
+
+export type DataExportOptions = {
+  exportType?: string;
+  format?: string;
+  dateRange?: string;
+  compression?: string;
+};
+
+export async function createDataExportRecord(userId: string, options: DataExportOptions = {}) {
+  const start = Date.now();
+  const counts = await collectTableCounts();
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    version: 1,
+    counts,
+    exportOptions: {
+      exportType: options.exportType ?? 'full',
+      format: options.format ?? 'json',
+      dateRange: options.dateRange ?? 'all',
+      compression: options.compression ?? 'none',
+    },
+    disclaimer:
+      'Metadata-only export. No PII. For full database backups use your hosting provider (e.g. Supabase pg_dump / backups).',
+  };
+  const json = JSON.stringify(payload);
+  await prisma.admin_backup_records.create({
+    data: {
+      kind: 'data_export',
+      status: 'completed',
+      duration_ms: Date.now() - start,
+      size_bytes: BigInt(Buffer.byteLength(json, 'utf8')),
+      created_by: userId,
+      completed_at: new Date(),
+      metadata: payload as Prisma.InputJsonValue,
+      storage_path: 'JSON export (download from this page)',
+    },
+  });
+  return { payload, dashboard: await getBackupRecoveryDashboard() };
+}
+
+export async function requestRestoreFromBackup(userId: string, backupId: string) {
+  const backup = await prisma.admin_backup_records.findUnique({ where: { id: backupId } });
+  if (!backup) throw new Error('Backup record not found');
+  await prisma.admin_backup_records.create({
+    data: {
+      kind: 'restore_request',
+      status: 'completed',
+      created_by: userId,
+      completed_at: new Date(),
+      metadata: {
+        requestedBackupId: backupId,
+        requestedKind: backup.kind,
+        note: 'Restore is not executed from this app. Use Supabase (or your host) PITR / backup restore, or contact operations.',
+      } as Prisma.InputJsonValue,
+      storage_path: 'See database host console',
+    },
+  });
+  return getBackupRecoveryDashboard();
+}
+
+export async function getBackupRecordJsonForDownload(id: string) {
+  const r = await prisma.admin_backup_records.findUnique({ where: { id } });
+  if (!r) return null;
+  return {
+    id: r.id,
+    kind: r.kind,
+    status: r.status,
+    createdAt: r.created_at.toISOString(),
+    completedAt: r.completed_at?.toISOString() ?? null,
+    metadata: r.metadata,
+    sizeBytes: r.size_bytes?.toString() ?? null,
+    durationMs: r.duration_ms,
+    storagePath: r.storage_path,
+    errorMessage: r.error_message,
+  };
+}

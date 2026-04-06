@@ -854,6 +854,74 @@ export const api = {
       return handleResponse(res, 'Failed to remove team member');
     },
 
+    async getBackupRecovery() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/backup-recovery`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch backup & recovery');
+    },
+
+    async createBackupRecord(body: { kind?: 'full' | 'incremental' }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/backup-recovery`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to create backup');
+    },
+
+    async exportBackupMetadata(body?: {
+      exportType?: string;
+      format?: string;
+      dateRange?: string;
+      compression?: string;
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/backup-recovery/export`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body ?? {}),
+      });
+      return handleResponse(res, 'Failed to export data');
+    },
+
+    async requestBackupRestore(backupId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/backup-recovery/${backupId}/restore`, {
+        method: 'POST',
+        headers,
+      });
+      return handleResponse(res, 'Failed to request restore');
+    },
+
+    async downloadBackupRecordFile(backupId: string): Promise<void> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/backup-recovery/${backupId}/download`, {
+        method: 'GET',
+        headers,
+      });
+      if (res.status === 401) {
+        await supabase.auth.signOut();
+        throw new Error('Session expired. Please login again.');
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(formatApiErrorBody(err, 'Failed to download'));
+      }
+      const text = await res.text();
+      const blob = new Blob([text], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ezri-backup-record-${backupId}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+
     async getUserSubscription(userId: string) {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/admin/users/${userId}/subscription`, {

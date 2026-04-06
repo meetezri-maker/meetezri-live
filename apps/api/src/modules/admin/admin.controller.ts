@@ -14,6 +14,8 @@ import {
   getCrisisEvents, getCrisisEvent, updateCrisisEventStatus,
   endLiveSessionByAdmin, flagSessionForReview,
   getOrgTeamMembers, addOrgTeamMember, updateOrgTeamMember, removeOrgTeamMember,
+  getBackupRecoveryDashboard, createLogicalBackup, createDataExportRecord, requestRestoreFromBackup,
+  getBackupRecordJsonForDownload,
 } from './admin.service';
 import { updateUserSchema, createAdminUserSchema } from './admin.schema';
 import { z } from 'zod';
@@ -726,5 +728,88 @@ export async function removeOrgTeamMemberHandler(
     request.log.error({ error }, 'removeOrgTeamMember');
     const code = msg === 'Forbidden' ? 403 : 400;
     return reply.code(code).send({ message: msg });
+  }
+}
+
+export async function getBackupRecoveryHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const data = await getBackupRecoveryDashboard();
+    return reply.code(200).send(data);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to load backup & recovery' });
+  }
+}
+
+export async function postBackupRecoveryCreateHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const user = request.user as { sub?: string };
+    if (!user.sub) return reply.code(401).send({ message: 'Unauthorized' });
+    const body = (request.body || {}) as { kind?: string };
+    const kind = body.kind === 'incremental' ? 'incremental' : 'full';
+    const data = await createLogicalBackup(user.sub, kind);
+    return reply.code(201).send(data);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to create backup';
+    request.log.error({ error }, 'createLogicalBackup');
+    return reply.code(400).send({ message: msg });
+  }
+}
+
+export async function postBackupRecoveryExportHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const user = request.user as { sub?: string };
+    if (!user.sub) return reply.code(401).send({ message: 'Unauthorized' });
+    const body = (request.body || {}) as {
+      exportType?: string;
+      format?: string;
+      dateRange?: string;
+      compression?: string;
+    };
+    const result = await createDataExportRecord(user.sub, {
+      exportType: body.exportType,
+      format: body.format,
+      dateRange: body.dateRange,
+      compression: body.compression,
+    });
+    return reply.code(201).send(result);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to export';
+    request.log.error({ error }, 'createDataExportRecord');
+    return reply.code(400).send({ message: msg });
+  }
+}
+
+export async function postBackupRecoveryRestoreHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const user = request.user as { sub?: string };
+    if (!user.sub) return reply.code(401).send({ message: 'Unauthorized' });
+    const data = await requestRestoreFromBackup(user.sub, request.params.id);
+    return reply.code(200).send(data);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Failed to record restore request';
+    request.log.error({ error }, 'requestRestoreFromBackup');
+    return reply.code(400).send({ message: msg });
+  }
+}
+
+export async function getBackupRecoveryDownloadHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const json = await getBackupRecordJsonForDownload(request.params.id);
+    if (!json) return reply.code(404).send({ message: 'Record not found' });
+    const filename = `ezri-backup-record-${request.params.id}.json`;
+    return reply
+      .header('Content-Type', 'application/json; charset=utf-8')
+      .header('Content-Disposition', `attachment; filename="${filename}"`)
+      .send(JSON.stringify(json, null, 2));
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to download' });
   }
 }

@@ -426,7 +426,14 @@ export default function App() {
 
             {/* Data */}
             <Route path="/admin/data-export" element={<DataExport />} />
-            <Route path="/admin/backup-recovery" element={<BackupRecovery />} />
+            <Route
+              path="/admin/backup-recovery"
+              element={
+                <ProtectedRoute allowedRoles={['super_admin']}>
+                  <BackupRecovery />
+                </ProtectedRoute>
+              }
+            />
 
             {/* No generic /admin/* fallback so every admin URL must point to a real page */}
             </Route>

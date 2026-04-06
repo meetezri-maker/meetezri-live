@@ -13,6 +13,8 @@ import {
   getLiveSessionsHandler, endLiveSessionHandler, flagSessionForReviewHandler, getActivityLogsHandler, getGlobalAuditLogsHandler, getSessionRecordingsHandler, getErrorLogsHandler, getSessionRecordingTranscriptHandler,
   getCrisisEventsHandler, getCrisisEventHandler, updateCrisisEventStatusHandler,
   getOrgTeamHandler, addOrgTeamMemberHandler, updateOrgTeamMemberHandler, removeOrgTeamMemberHandler,
+  getBackupRecoveryHandler, postBackupRecoveryCreateHandler, postBackupRecoveryExportHandler,
+  postBackupRecoveryRestoreHandler, getBackupRecoveryDownloadHandler,
 } from './admin.controller';
 import {
   dashboardStatsSchema,
@@ -134,6 +136,33 @@ export async function adminRoutes(fastify: FastifyInstance) {
     '/organization-team/:userId',
     { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] },
     removeOrgTeamMemberHandler
+  );
+
+  // Backup & Recovery (super_admin only)
+  fastify.get(
+    '/backup-recovery',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin'])] },
+    getBackupRecoveryHandler
+  );
+  fastify.post(
+    '/backup-recovery',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin'])] },
+    postBackupRecoveryCreateHandler
+  );
+  fastify.post(
+    '/backup-recovery/export',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin'])] },
+    postBackupRecoveryExportHandler
+  );
+  fastify.post(
+    '/backup-recovery/:id/restore',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin'])] },
+    postBackupRecoveryRestoreHandler
+  );
+  fastify.get(
+    '/backup-recovery/:id/download',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin'])] },
+    getBackupRecoveryDownloadHandler
   );
 
   // User Segmentation
