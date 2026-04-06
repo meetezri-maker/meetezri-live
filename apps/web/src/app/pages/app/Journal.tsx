@@ -34,7 +34,7 @@ interface JournalEntry {
   location: string | null;
   created_at: string;
   updated_at: string;
-  // Derived fields for UI
+  // Derived fields for UI (date includes local time of creation)
   date?: string;
   preview?: string;
   mood?: string;
@@ -78,6 +78,10 @@ export function Journal() {
   const [filterMood, setFilterMood] = useState<string>("");
   const [filterFavorites, setFilterFavorites] = useState(false);
   const [filterDateRange, setFilterDateRange] = useState<"all" | "week" | "month" | "year">("all");
+  /** Draft values while the filter modal is open; applied to the list only on "Apply Filters". */
+  const [draftMood, setDraftMood] = useState<string>("");
+  const [draftFavorites, setDraftFavorites] = useState(false);
+  const [draftDateRange, setDraftDateRange] = useState<"all" | "week" | "month" | "year">("all");
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -113,10 +117,9 @@ export function Journal() {
 
         return {
           ...entry,
-          date: new Date(entry.created_at).toLocaleDateString('en-US', {
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric'
+          date: new Date(entry.created_at).toLocaleString('en-US', {
+            dateStyle: 'long',
+            timeStyle: 'medium'
           }),
           preview: entry.content ? entry.content.replace(/<[^>]*>/g, '').substring(0, 100) + '...' : '',
           mood: moodDisplay,
@@ -150,6 +153,14 @@ export function Journal() {
   useEffect(() => {
     fetchEntries();
   }, [session]);
+
+  useEffect(() => {
+    if (showFilterModal) {
+      setDraftMood(filterMood);
+      setDraftDateRange(filterDateRange);
+      setDraftFavorites(filterFavorites);
+    }
+  }, [showFilterModal]);
 
   const handleSaveEntry = async () => {
     if (!session) return;
@@ -618,19 +629,7 @@ export function Journal() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={(e) => handleToggleFavorite(entry.id, e)}
-                        disabled={togglingFavoriteId === entry.id}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors z-10 disabled:opacity-50"
-                      >
-                         {togglingFavoriteId === entry.id ? (
-                           <Loader2 className="w-5 h-5 animate-spin text-red-500" />
-                         ) : (
-                           <Heart className={`w-5 h-5 ${entry.favorite ? "text-red-500 fill-red-500" : "text-gray-400 dark:text-gray-500"}`} />
-                         )}
-                      </motion.button>
+                    
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
@@ -651,6 +650,19 @@ export function Journal() {
                         ) : (
                           <Trash2 className="w-4 h-4 text-red-500 dark:text-red-400" />
                         )}
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={(e) => handleToggleFavorite(entry.id, e)}
+                        disabled={togglingFavoriteId === entry.id}
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors z-10 disabled:opacity-50"
+                      >
+                         {togglingFavoriteId === entry.id ? (
+                           <Loader2 className="w-5 h-5 animate-spin text-red-500" />
+                         ) : (
+                           <Heart className={`w-5 h-5 ${entry.favorite ? "text-red-500 fill-red-500" : "text-gray-400 dark:text-gray-500"}`} />
+                         )}
                       </motion.button>
                     </div>
                   </div>
@@ -734,9 +746,9 @@ export function Journal() {
                           key={mood.value}
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
-                          onClick={() => setFilterMood(filterMood === mood.emoji ? "" : mood.emoji)}
+                          onClick={() => setDraftMood(draftMood === mood.emoji ? "" : mood.emoji)}
                           className={`text-3xl p-3 rounded-lg transition-all ${
-                            filterMood === mood.emoji
+                            draftMood === mood.emoji
                               ? "bg-primary/10 ring-2 ring-primary"
                               : "hover:bg-gray-100"
                           }`}
@@ -745,11 +757,11 @@ export function Journal() {
                         </motion.button>
                       ))}
                     </div>
-                    {filterMood && (
+                    {draftMood && (
                       <motion.button
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        onClick={() => setFilterMood("")}
+                        onClick={() => setDraftMood("")}
                         className="text-sm text-primary mt-2 hover:underline"
                       >
                         Clear mood filter
@@ -766,14 +778,14 @@ export function Journal() {
                           key={range}
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={() => setFilterDateRange(range as any)}
+                          onClick={() => setDraftDateRange(range as "all" | "week" | "month" | "year")}
                           className={`p-3 rounded-lg border-2 transition-all capitalize ${
-                            filterDateRange === range
+                            draftDateRange === range
                               ? "border-primary bg-primary text-white"
                               : "border-border hover:border-primary/50"
                           }`}
                         >
-                          {range === "all" ? "All Time" : `Past ${range}`}
+                          {range === "all" ? "All Journals" : `Past ${range}`}
                         </motion.button>
                       ))}
                     </div>
@@ -784,20 +796,20 @@ export function Journal() {
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => setFilterFavorites(!filterFavorites)}
+                      onClick={() => setDraftFavorites(!draftFavorites)}
                       className={`w-full p-4 rounded-lg border-2 transition-all flex items-center justify-between ${
-                        filterFavorites
+                        draftFavorites
                           ? "border-red-500 bg-red-50"
                           : "border-border hover:border-red-500/50"
                       }`}
                     >
                       <div className="flex items-center gap-2">
-                        <Heart className={`w-5 h-5 ${filterFavorites ? "text-red-500 fill-red-500" : "text-gray-400"}`} />
+                        <Heart className={`w-5 h-5 ${draftFavorites ? "text-red-500 fill-red-500" : "text-gray-400"}`} />
                         <span className="font-medium">Show Favorites Only</span>
                       </div>
-                      <div className={`w-12 h-6 rounded-full transition-colors ${filterFavorites ? "bg-red-500" : "bg-gray-300"}`}>
+                      <div className={`w-12 h-6 rounded-full transition-colors ${draftFavorites ? "bg-red-500" : "bg-gray-300"}`}>
                         <motion.div
-                          animate={{ x: filterFavorites ? 24 : 0 }}
+                          animate={{ x: draftFavorites ? 24 : 0 }}
                           className="w-6 h-6 bg-white rounded-full shadow-md"
                         />
                       </div>
@@ -809,9 +821,9 @@ export function Journal() {
                     <Button
                       variant="outline"
                       onClick={() => {
-                        setFilterMood("");
-                        setFilterDateRange("all");
-                        setFilterFavorites(false);
+                        setDraftMood("");
+                        setDraftDateRange("all");
+                        setDraftFavorites(false);
                       }}
                       className="flex-1"
                     >
@@ -819,7 +831,12 @@ export function Journal() {
                     </Button>
                     <Button
                       className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600"
-                      onClick={() => setShowFilterModal(false)}
+                      onClick={() => {
+                        setFilterMood(draftMood);
+                        setFilterDateRange(draftDateRange);
+                        setFilterFavorites(draftFavorites);
+                        setShowFilterModal(false);
+                      }}
                     >
                       Apply Filters
                     </Button>
