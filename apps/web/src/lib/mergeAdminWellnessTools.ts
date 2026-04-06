@@ -81,11 +81,17 @@ export function placeholderWellnessToolId(category: WellnessToolCategory): strin
   return `${WELLNESS_PLACEHOLDER_ID_PREFIX}${categorySlug(category)}`;
 }
 
+type BuiltinMergeLabel = { title: string } | { name: string };
+
+function labelForBuiltinMerge(t: BuiltinMergeLabel): string {
+  if ("title" in t && typeof t.title === "string") return t.title;
+  if ("name" in t && typeof t.name === "string") return t.name;
+  return "";
+}
+
 /** API rows merged with built-in rows; skip API duplicate titles (same as user app). */
-export function mergeApiBuiltinsForAdmin<
-  T extends { title: string }
->(builtins: T[], apiItems: T[]): T[] {
-  const titles = new Set(builtins.map((b) => b.title.toLowerCase().trim()));
-  const extra = apiItems.filter((t) => !titles.has(t.title.toLowerCase().trim()));
+export function mergeApiBuiltinsForAdmin<T extends BuiltinMergeLabel>(builtins: T[], apiItems: T[]): T[] {
+  const titles = new Set(builtins.map((b) => labelForBuiltinMerge(b).toLowerCase().trim()));
+  const extra = apiItems.filter((t) => !titles.has(labelForBuiltinMerge(t).toLowerCase().trim()));
   return [...builtins, ...extra];
 }

@@ -716,7 +716,7 @@ export function WellnessTools() {
               {showOnlyFavorites
                 ? `Favorite exercises (${favoriteCount})`
                 : selectedCategoryTab === "all"
-                  ? "Exercises"
+                  ? "Wellness Tools"
                   : selectedCategoryTab}
             </h2>
             <button 

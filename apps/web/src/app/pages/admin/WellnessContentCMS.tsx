@@ -146,22 +146,36 @@ export function WellnessContentCMS() {
   const [deleteModalContent, setDeleteModalContent] = useState<Content | null>(null);
   const [editModalContent, setEditModalContent] = useState<Content | null>(null);
 
-  const [createForm, setCreateForm] = useState({
+  const [createForm, setCreateForm] = useState<{
+    title: string;
+    type: Content["type"];
+    category: WellnessToolCategory;
+    excerpt: string;
+    body: string;
+    tags: string;
+  }>({
     title: "",
-    type: "guide" as Content["type"],
+    type: "guide",
     category: WELLNESS_TOOL_CATEGORIES[0],
     excerpt: "",
     body: "",
     tags: "",
   });
 
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<{
+    title: string;
+    type: Content["type"];
+    category: WellnessToolCategory;
+    excerpt: string;
+    tags: string;
+    status: Content["status"];
+  }>({
     title: "",
-    type: "guide" as Content["type"],
+    type: "guide",
     category: WELLNESS_TOOL_CATEGORIES[0],
     excerpt: "",
     tags: "",
-    status: "draft" as Content["status"],
+    status: "draft",
   });
 
   const loadContent = useCallback(async () => {
@@ -190,10 +204,13 @@ export function WellnessContentCMS() {
 
   useEffect(() => {
     if (editModalContent) {
+      const cat = (WELLNESS_TOOL_CATEGORIES as readonly string[]).includes(editModalContent.category)
+        ? (editModalContent.category as WellnessToolCategory)
+        : WELLNESS_TOOL_CATEGORIES[0];
       setEditForm({
         title: editModalContent.title,
         type: editModalContent.type,
-        category: editModalContent.category,
+        category: cat,
         excerpt: editModalContent.excerpt,
         tags: editModalContent.tags.join(", "),
         status: editModalContent.status,
@@ -247,10 +264,6 @@ export function WellnessContentCMS() {
     }
     setSaving(true);
     try {
-      const tagParts = createForm.tags
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
       await api.wellness.create({
         title: createForm.title.trim(),
         category: createForm.category,
@@ -793,7 +806,12 @@ export function WellnessContentCMS() {
                       <select
                         className="w-full px-3 py-2 border rounded-lg"
                         value={createForm.category}
-                        onChange={(e) => setCreateForm({ ...createForm, category: e.target.value })}
+                        onChange={(e) =>
+                          setCreateForm({
+                            ...createForm,
+                            category: e.target.value as WellnessToolCategory,
+                          })
+                        }
                       >
                         {WELLNESS_TOOL_CATEGORIES.map((cat) => (
                           <option key={cat} value={cat}>
@@ -1046,7 +1064,12 @@ export function WellnessContentCMS() {
                       <select
                         className="w-full px-3 py-2 border rounded-lg"
                         value={editForm.category}
-                        onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            category: e.target.value as WellnessToolCategory,
+                          })
+                        }
                       >
                         {WELLNESS_TOOL_CATEGORIES.map((cat) => (
                           <option key={cat} value={cat}>
