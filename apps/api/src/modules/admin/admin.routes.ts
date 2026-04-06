@@ -14,7 +14,7 @@ import {
   patchCommunityGroupHandler, deleteCommunityGroupHandler, getCommunityGroupMembersHandler,
   dispatchPushCampaignHandler,
   getLiveSessionsHandler, endLiveSessionHandler, flagSessionForReviewHandler, getActivityLogsHandler, getGlobalAuditLogsHandler, getSessionRecordingsHandler, getErrorLogsHandler, getSessionRecordingTranscriptHandler,
-  getAdminSystemHealthHandler, patchErrorLogResolveHandler, postErrorLogsArchiveResolvedHandler, postSessionRecordingReviewedHandler,
+  getAdminSystemHealthHandler, patchErrorLogResolveHandler, postErrorLogsArchiveResolvedHandler, postSessionRecordingReviewedHandler, patchSessionRecordingHandler,
   getCrisisEventsHandler, getCrisisEventHandler, updateCrisisEventStatusHandler,
   getOrgTeamHandler, addOrgTeamMemberHandler, updateOrgTeamMemberHandler, removeOrgTeamMemberHandler,
   getBackupRecoveryHandler, postBackupRecoveryCreateHandler, postBackupRecoveryExportHandler,
@@ -238,6 +238,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.get('/session-recordings', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getSessionRecordingsHandler);
   fastify.get('/session-recordings/:id/transcript', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getSessionRecordingTranscriptHandler);
   fastify.post('/session-recordings/:id/reviewed', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, postSessionRecordingReviewedHandler);
+  fastify.patch('/session-recordings/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, patchSessionRecordingHandler);
   fastify.get('/error-logs', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getErrorLogsHandler);
   fastify.patch('/error-logs/:id/resolve', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, patchErrorLogResolveHandler);
   fastify.post('/error-logs/archive-resolved', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, postErrorLogsArchiveResolvedHandler);

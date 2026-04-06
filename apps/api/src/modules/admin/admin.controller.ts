@@ -16,7 +16,7 @@ import {
   getLiveSessions, getActivityLogs, getGlobalAuditLogs, getSessionRecordings, getErrorLogs, getSessionRecordingTranscript,
   getCrisisEvents, getCrisisEvent, updateCrisisEventStatus,
   endLiveSessionByAdmin, flagSessionForReview,
-  getAdminSystemHealth, resolveErrorLog, deleteResolvedErrorLogs, markSessionRecordingReviewed,
+  getAdminSystemHealth, resolveErrorLog, deleteResolvedErrorLogs, markSessionRecordingReviewed, updateSessionRecordingMeta,
   getOrgTeamMembers, addOrgTeamMember, updateOrgTeamMember, removeOrgTeamMember,
   getBackupRecoveryDashboard, createLogicalBackup, createDataExportRecord, requestRestoreFromBackup,
   getBackupRecordJsonForDownload,
@@ -828,6 +828,29 @@ export async function postSessionRecordingReviewedHandler(
     }
     request.log.error(error);
     return reply.code(500).send({ message: 'Failed to mark recording as reviewed' });
+  }
+}
+
+export async function patchSessionRecordingHandler(
+  request: FastifyRequest<{
+    Params: { id: string };
+    Body: { admin_flagged?: boolean; review_notes?: string };
+  }>,
+  reply: FastifyReply
+) {
+  try {
+    const body = (request.body || {}) as { admin_flagged?: boolean; review_notes?: string };
+    const session = await updateSessionRecordingMeta(request.params.id, {
+      admin_flagged: typeof body.admin_flagged === 'boolean' ? body.admin_flagged : undefined,
+      review_notes: typeof body.review_notes === 'string' ? body.review_notes : undefined,
+    });
+    return reply.code(200).send(session);
+  } catch (error: any) {
+    if (error?.message === 'Session not found') {
+      return reply.code(404).send({ message: 'Session not found' });
+    }
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to update session recording' });
   }
 }
 

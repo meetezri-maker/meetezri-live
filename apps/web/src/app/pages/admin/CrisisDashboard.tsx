@@ -536,16 +536,11 @@ export function CrisisDashboard() {
 
                   {/* Actions */}
                   <div className="flex lg:flex-col gap-2 lg:items-end">
-                    <Button 
-                      variant="outline" 
-                      className="w-full gap-2"
-                      onClick={() => {
-                        setSelectedEvent(event);
-                        setShowDetailsModal(true);
-                      }}
-                    >
-                      <Eye className="w-4 h-4" />
-                      View Details
+                    <Button variant="outline" className="w-full gap-2" asChild>
+                      <Link to={`/admin/crisis-event-details?id=${encodeURIComponent(event.id)}`}>
+                        <Eye className="w-4 h-4" />
+                        Full page details
+                      </Link>
                     </Button>
                     {event.status === "pending" && (
                       <Button 

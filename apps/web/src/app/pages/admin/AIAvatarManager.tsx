@@ -81,9 +81,9 @@ export function AIAvatarManager() {
         voiceType: item.voice_type,
         accentType: item.accent_type,
         rating: Number(item.rating) || 5.0,
-        totalUsers: 0, // Placeholder until relations are set
-        totalSessions: 0,
-        avgSessionLength: 0,
+        totalUsers: typeof item.unique_users === 'number' ? item.unique_users : 0,
+        totalSessions: typeof item.session_count === 'number' ? item.session_count : 0,
+        avgSessionLength: typeof item.avg_session_minutes === 'number' ? item.avg_session_minutes : 0,
         isActive: item.is_active,
         createdAt: item.created_at
       }));
@@ -102,7 +102,7 @@ export function AIAvatarManager() {
   const stats = {
     totalAvatars: avatars.length,
     activeAvatars: avatars.filter(a => a.isActive).length,
-    totalUsers: avatars.reduce((sum, a) => sum + a.totalUsers, 0),
+    totalSessionUsage: avatars.reduce((sum, a) => sum + a.totalSessions, 0),
     avgRating: avatars.length > 0 ? (avatars.reduce((sum, a) => sum + a.rating, 0) / avatars.length).toFixed(1) : "0.0"
   };
 
@@ -268,9 +268,10 @@ export function AIAvatarManager() {
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <Users className="w-8 h-8 text-blue-600" />
-                <span className="text-2xl font-bold text-gray-900">{stats.totalUsers.toLocaleString()}</span>
+                <span className="text-2xl font-bold text-gray-900">{stats.totalSessionUsage.toLocaleString()}</span>
               </div>
-              <p className="text-sm text-gray-600">Total Users</p>
+              <p className="text-sm text-gray-600">Sessions (usage)</p>
+              <p className="text-xs text-gray-400 mt-1">Ended sessions matched to avatars by name</p>
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
@@ -477,6 +478,30 @@ export function AIAvatarManager() {
                   {/* Image Selection */}
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Avatar Image</label>
+                    {showCreateModal && avatars.length > 0 && (
+                      <div className="mb-4">
+                        <p className="text-xs font-medium text-gray-500 mb-2">Existing avatars — click to reuse</p>
+                        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1 rounded-lg border border-gray-100 bg-gray-50/80">
+                          {avatars.map((a) => (
+                            <button
+                              key={a.id}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, image: a.image || '👤' })}
+                              className={`flex flex-col items-center gap-1 px-2 py-2 rounded-lg border-2 text-left transition-all min-w-[4.5rem] ${
+                                formData.image === a.image
+                                  ? 'border-purple-500 bg-purple-50'
+                                  : 'border-gray-200 hover:border-purple-300 bg-white'
+                              }`}
+                              title={a.name}
+                            >
+                              <span className="text-2xl leading-none">{a.image}</span>
+                              <span className="text-[10px] font-medium text-gray-700 truncate max-w-[5rem]">{a.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-xs font-medium text-gray-500 mb-2">Preset icons</p>
                     <div className="flex flex-wrap gap-2">
                       {emojiOptions.map((emoji) => (
                         <button

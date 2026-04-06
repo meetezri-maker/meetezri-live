@@ -1,6 +1,12 @@
 
 import { FastifyReply, FastifyRequest } from "fastify";
-import { createAvatar, getAllAvatars, getAvatarById, updateAvatar, deleteAvatar } from "./ai-avatars.service";
+import {
+  createAvatar,
+  getAllAvatarsWithUsageStats,
+  getAvatarById,
+  updateAvatar,
+  deleteAvatar,
+} from "./ai-avatars.service";
 import { CreateAvatarInput, UpdateAvatarInput } from "./ai-avatars.schema";
 
 export async function createAvatarHandler(
@@ -21,7 +27,7 @@ export async function getAllAvatarsHandler(
   reply: FastifyReply
 ) {
   try {
-    const avatars = await getAllAvatars();
+    const avatars = await getAllAvatarsWithUsageStats();
     return reply.code(200).send(avatars);
   } catch (error) {
     request.log.error(error);

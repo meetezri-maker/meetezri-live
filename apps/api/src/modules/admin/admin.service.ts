@@ -2789,6 +2789,32 @@ export async function markSessionRecordingReviewed(sessionId: string, reviewerId
   });
 }
 
+export async function updateSessionRecordingMeta(
+  sessionId: string,
+  input: { admin_flagged?: boolean; review_notes?: string }
+) {
+  const session = await prisma.app_sessions.findUnique({
+    where: { id: sessionId },
+  });
+  if (!session) {
+    throw new Error('Session not found');
+  }
+  const currentConfig = (session.config || {}) as Record<string, unknown>;
+  const updatedConfig = { ...currentConfig };
+  if (typeof input.admin_flagged === 'boolean') {
+    updatedConfig.admin_flagged = input.admin_flagged;
+  }
+  if (typeof input.review_notes === 'string') {
+    updatedConfig.review_notes = input.review_notes;
+  }
+  return prisma.app_sessions.update({
+    where: { id: sessionId },
+    data: {
+      config: updatedConfig as Prisma.InputJsonValue,
+    },
+  });
+}
+
 function mapCrisisStatusFromDb(status: string | null): string {
   if (!status) {
     return 'pending';
@@ -2853,21 +2879,76 @@ export async function getCrisisEvent(id: string) {
     where: { id },
     include: {
       profiles_crisis_events_user_idToprofiles: {
-        select: { full_name: true, email: true }
+        select: {
+          full_name: true,
+          email: true,
+          phone: true,
+          timezone: true,
+          emergency_contact_name: true,
+          emergency_contact_phone: true,
+          emergency_contact_relationship: true,
+        },
       },
       profiles_crisis_events_assigned_toToprofiles: {
-        select: { full_name: true, email: true }
-      }
-    }
+        select: { full_name: true, email: true, phone: true },
+      },
+    },
   });
 
   if (!event) return null;
+
+  const userId = event.user_id;
+
+  const [prior_crisis_events, recent_mood_entries, emergency_contacts_list] = await Promise.all([
+    prisma.crisis_events.findMany({
+      where: { user_id: userId, id: { not: id } },
+      orderBy: { created_at: 'desc' },
+      take: 12,
+      select: {
+        id: true,
+        created_at: true,
+        risk_level: true,
+        event_type: true,
+        status: true,
+        keywords: true,
+      },
+    }),
+    prisma.mood_entries.findMany({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+      take: 12,
+      select: {
+        created_at: true,
+        mood: true,
+        intensity: true,
+        notes: true,
+      },
+    }),
+    prisma.emergency_contacts.findMany({
+      where: { user_id: userId },
+      orderBy: [{ is_trusted: 'desc' }, { created_at: 'desc' }],
+      take: 5,
+      select: {
+        name: true,
+        relationship: true,
+        phone: true,
+        email: true,
+        is_trusted: true,
+      },
+    }),
+  ]);
 
   return {
     ...event,
     status: mapCrisisStatusFromDb(event.status as any),
     profiles: event.profiles_crisis_events_user_idToprofiles,
-    assigned_profile: event.profiles_crisis_events_assigned_toToprofiles
+    assigned_profile: event.profiles_crisis_events_assigned_toToprofiles,
+    prior_crisis_events: prior_crisis_events.map((e: any) => ({
+      ...e,
+      status: mapCrisisStatusFromDb(e.status || null),
+    })),
+    recent_mood_entries,
+    emergency_contacts_list,
   };
 }
 

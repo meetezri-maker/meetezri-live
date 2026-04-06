@@ -317,6 +317,7 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
       <AnimatePresence>
         {sidebarOpen && (
           <motion.div
+            key="admin-mobile-sidebar-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

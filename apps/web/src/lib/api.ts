@@ -1397,6 +1397,15 @@ export const api = {
       const res = await fetch(`${API_URL}/admin/session-recordings/${id}/reviewed`, { method: 'POST', headers });
       return handleResponse(res, 'Failed to mark recording reviewed');
     },
+    async updateSessionRecording(id: string, data: { admin_flagged?: boolean; review_notes?: string }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/session-recordings/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to update session recording');
+    },
 
     async getCrisisEvents(params?: { status?: string; page?: number; limit?: number }) {
       const headers = await getHeaders();
