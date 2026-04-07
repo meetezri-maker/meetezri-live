@@ -52,13 +52,10 @@ import { getOrCreateEzriUserid } from "@/lib/ezri/ids";
 import { createEzriApiClient } from "@/lib/ezri/apiClient";
 import { EzriRealtimeClient, type EzriWsStatus } from "@/lib/ezri/realtimeClient";
 import { normalizeAudioSource, toObjectUrl } from "@/lib/ezri/audio";
+import { AVATAR_MODEL_URL } from "@/lib/avatar/avatarModelUrl";
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-
-// Use Vite base path so production deployments under sub-paths work.
-// NOTE: BASE_URL is usually relative (e.g. "/"), so don't pass it to `new URL()`.
-const AVATAR_MODEL_PATH = `${import.meta.env.BASE_URL}T1.glb`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Keyword lists — covers Ready Player Me, Blender ARKit, Mixamo, CC3/CC4,
@@ -320,6 +317,13 @@ function ThreeAvatar({
   speechText: string;
   speechCharIndex: number;
 }) {
+  const [avatarLoadState, setAvatarLoadState] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+  const [avatarLoadProgress, setAvatarLoadProgress] = useState<number | null>(
+    null
+  );
+
   const isSpeakingRef = useRef(isSpeaking);
   const audioLevelRef = useRef(audioLevel);
   useEffect(() => {
@@ -391,6 +395,14 @@ function ThreeAvatar({
     const container = containerRef.current;
     if (!container) return;
 
+    let cancelled = false;
+
+    const loadingManager = new THREE.LoadingManager();
+    loadingManager.onProgress = (_url, loaded, total) => {
+      if (cancelled || total <= 0) return;
+      setAvatarLoadProgress(loaded / total);
+    };
+
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 600;
 
@@ -442,11 +454,12 @@ function ThreeAvatar({
     cheekBindingsRef.current = [];
     cheekBonesRef.current = [];
     faceBoneDefaultsRef.current = new Map();
-    const loader = new GLTFLoader();
+    const loader = new GLTFLoader(loadingManager);
 
     loader.load(
-      AVATAR_MODEL_PATH,
+      AVATAR_MODEL_URL,
       (gltf) => {
+        if (cancelled) return;
         const model = gltf.scene;
         modelRef.current = model;
         // const model = gltf.scene;
@@ -660,11 +673,16 @@ function ThreeAvatar({
         );
         camera.updateProjectionMatrix();
 
+        if (!cancelled) {
+          setAvatarLoadState("ready");
+          setAvatarLoadProgress(1);
+        }
         startBlinkLoop();
       },
       undefined,
       (error) => {
         console.error("[Avatar] Failed to load GLB:", error);
+        if (!cancelled) setAvatarLoadState("error");
       }
     );
 
@@ -1114,6 +1132,7 @@ function ThreeAvatar({
     }
 
     return () => {
+      cancelled = true;
       window.removeEventListener("resize", handleResize);
 
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
@@ -1212,7 +1231,43 @@ function ThreeAvatar({
       if (rafId) cancelAnimationFrame(rafId);
     };
   }, [isSpeaking, audioLevel, speechText, speechCharIndex]);
-  return <div ref={containerRef} className="w-full h-full min-h-[500px]" />;
+  return (
+    <div className="relative w-full h-full min-h-[500px]">
+      {avatarLoadState === "loading" && (
+        <div
+          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl bg-gradient-to-b from-slate-900/95 to-purple-950/90 px-6 text-center"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="h-10 w-10 shrink-0 animate-spin text-purple-300" />
+          <p className="text-sm font-medium text-white">Loading avatar…</p>
+          {avatarLoadProgress !== null && avatarLoadProgress < 1 && (
+            <p className="text-xs text-white/70">
+              {Math.round(avatarLoadProgress * 100)}%
+            </p>
+          )}
+          <p className="max-w-sm text-xs text-white/50">
+            The model file is large; first visit may take a while on slower
+            networks.
+          </p>
+        </div>
+      )}
+      {avatarLoadState === "error" && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 rounded-2xl bg-slate-900/90 px-6 text-center">
+          <p className="text-sm text-white">Could not load avatar.</p>
+          <p className="text-xs text-white/60">
+            Refresh the page or try again on a stronger connection.
+          </p>
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        className={`h-full min-h-[500px] w-full ${
+          avatarLoadState !== "ready" ? "opacity-0" : "opacity-100"
+        }`}
+      />
+    </div>
+  );
 }
 
 export default ThreeAvatar;

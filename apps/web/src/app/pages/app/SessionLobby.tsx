@@ -22,6 +22,7 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Skeleton } from "../../components/ui/skeleton";
+import { preloadAvatarModel } from "@/lib/avatar/preloadAvatarModel";
 
 interface BackendSession {
   id: string;
@@ -76,6 +77,10 @@ export function SessionLobby() {
       setTempSelectedAvatar(profile.selected_avatar);
     }
   }, [profile?.selected_avatar]);
+
+  useEffect(() => {
+    preloadAvatarModel();
+  }, []);
 
   useEffect(() => {
     // Load once on mount; avoid depending on `profile` identity
