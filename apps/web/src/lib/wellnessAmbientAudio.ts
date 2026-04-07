@@ -12,7 +12,8 @@ export type WellnessAmbientKind =
   | "selfcare_music"
   | "sleephealth_music"
   | "stress_management_music"
-  | "anxiety_management_music";
+  | "anxiety_management_music"
+  | "depression_support_music";
 
 let audioContext: AudioContext | null = null;
 let sourceNode: AudioBufferSourceNode | null = null;
@@ -33,6 +34,7 @@ const SELFCARE_MUSIC_PATHS = ["/music/selfcare.mp3"];
 const SLEEPHEALTH_MUSIC_PATHS = ["/music/sleephealth.mp3"];
 const STRESS_MANAGEMENT_MUSIC_PATHS = ["/music/stress management.mp3"];
 const ANXIETY_MANAGEMENT_MUSIC_PATHS = ["/music/Anxietymanagement.mp3"];
+const DEPRESSION_SUPPORT_MUSIC_PATHS = ["/music/depression-support.mp3"];
 
 function getOrCreateContext(): AudioContext {
   if (!audioContext) {
@@ -200,6 +202,13 @@ export async function startWellnessAmbient(kind: WellnessAmbientKind): Promise<v
     return;
   }
 
+  if (kind === "depression_support_music") {
+    await startMediaLoop(DEPRESSION_SUPPORT_MUSIC_PATHS, 0.44);
+    if (token !== ambientSessionToken) return;
+    activeKind = kind;
+    return;
+  }
+
   const ctx = getOrCreateContext();
   await ctx.resume();
 
@@ -290,10 +299,10 @@ export function ambientKindForExerciseId(exerciseId: string): WellnessAmbientKin
   if (exerciseId === "box-breathing") return "relaxation_music";
   if (exerciseId === "stress-release-waves") return "stress_management_music";
   if (exerciseId === "grounding-54321") return "anxiety_management_music";
+  if (exerciseId === "compassion-pause") return "depression_support_music";
   if (exerciseId === "mindful-anchor") return "mindfulness_music";
   if (exerciseId === "body-scan") return "meditation_music";
   if (exerciseId === "sleep-meditation") return "sleephealth_music";
   if (exerciseId === "gratitude") return "selfcare_music";
-  if (exerciseId === "compassion-pause") return "relaxation_music";
   return null;
 }
