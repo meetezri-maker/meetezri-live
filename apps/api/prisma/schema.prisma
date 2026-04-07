@@ -1297,6 +1297,8 @@ model wellness_tools {
   description            String?
   content_url            String?
   duration_minutes       Int?
+  /// Exact session length for timers (optional; falls back to duration_minutes × 60).
+  duration_seconds       Int?
   difficulty             String?
   is_premium             Boolean?                 @default(false)
   status                 String?                  @default("draft")

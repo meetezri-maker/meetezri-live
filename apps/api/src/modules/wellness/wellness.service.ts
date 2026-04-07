@@ -19,17 +19,40 @@ function clearUserWellnessCaches(userId: string) {
   wellnessStatsCache.delete(userId);
 }
 
+function resolveDurationFields(input: {
+  duration_minutes?: number | null;
+  duration_seconds?: number | null;
+}): { duration_minutes: number | null; duration_seconds: number | null } {
+  const dmIn = input.duration_minutes ?? null;
+  const dsIn = input.duration_seconds ?? null;
+  if (dsIn != null && dsIn >= 0) {
+    return {
+      duration_seconds: dsIn,
+      duration_minutes: Math.max(1, Math.round(dsIn / 60)),
+    };
+  }
+  if (dmIn != null && dmIn > 0) {
+    return {
+      duration_minutes: dmIn,
+      duration_seconds: dmIn * 60,
+    };
+  }
+  return { duration_minutes: dmIn, duration_seconds: dsIn };
+}
+
 export async function createWellnessTool(data: CreateWellnessToolInput & { created_by?: string }) {
   const { created_by, image_url, content } = data;
   /** Guided JSON lives in `content_url` (text column) when no separate asset URL. */
   const storedContent = image_url ?? content ?? null;
+  const { duration_minutes, duration_seconds } = resolveDurationFields(data);
 
   const created = await prisma.wellness_tools.create({
     data: {
       title: data.title,
       category: data.category,
       description: data.description,
-      duration_minutes: data.duration_minutes,
+      duration_minutes,
+      duration_seconds,
       difficulty: data.difficulty,
       is_premium: data.is_premium,
       status: data.status,
@@ -472,6 +495,7 @@ export async function updateWellnessTool(id: string, data: UpdateWellnessToolInp
     description?: string | null;
     category?: string;
     duration_minutes?: number | null;
+    duration_seconds?: number | null;
     difficulty?: string | null;
     is_premium?: boolean | null;
     status?: string | null;
@@ -483,7 +507,20 @@ export async function updateWellnessTool(id: string, data: UpdateWellnessToolInp
   if (data.title !== undefined) patch.title = data.title;
   if (data.description !== undefined) patch.description = data.description;
   if (data.category !== undefined) patch.category = data.category;
-  if (data.duration_minutes !== undefined) patch.duration_minutes = data.duration_minutes;
+  if (data.duration_minutes !== undefined || data.duration_seconds !== undefined) {
+    const existing = await prisma.wellness_tools.findUnique({
+      where: { id },
+      select: { duration_minutes: true, duration_seconds: true },
+    });
+    const merged = resolveDurationFields({
+      duration_minutes:
+        data.duration_minutes !== undefined ? data.duration_minutes : existing?.duration_minutes,
+      duration_seconds:
+        data.duration_seconds !== undefined ? data.duration_seconds : existing?.duration_seconds,
+    });
+    patch.duration_minutes = merged.duration_minutes;
+    patch.duration_seconds = merged.duration_seconds;
+  }
   if (data.difficulty !== undefined) patch.difficulty = data.difficulty;
   if (data.is_premium !== undefined) patch.is_premium = data.is_premium;
   if (data.status !== undefined) patch.status = data.status;

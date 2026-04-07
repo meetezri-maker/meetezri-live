@@ -63,6 +63,11 @@ import {
   isBuiltinWellnessListId,
   type WellnessBuiltinToolMeta,
 } from "../../../lib/wellnessBuiltinToolsMetadata";
+import {
+  formatSecondsAsMmSs,
+  mmssToRoundedMinutes,
+  WELLNESS_CATEGORY_DURATION_MMSS,
+} from "../../../lib/wellnessCategoryDurations";
 
 interface WellnessTool {
   id: string;
@@ -70,6 +75,8 @@ interface WellnessTool {
   category: string;
   description: string;
   duration: number;
+  /** Built-ins: exact label e.g. 15:29 */
+  durationDisplay?: string;
   difficulty: "Beginner" | "Intermediate" | "Advanced";
   status: "published" | "draft" | "archived";
   icon: any;
@@ -105,17 +112,29 @@ const iconMap: Record<string, any> = {
   Timer,
 };
 
+function formatToolDurationLabel(tool: WellnessTool): string {
+  if (tool.durationDisplay) {
+    return tool.durationDisplay === "∞" ? "∞" : tool.durationDisplay;
+  }
+  return tool.duration > 0 ? `${tool.duration} min` : "—";
+}
+
 function mapBuiltinMetaToTool(meta: WellnessBuiltinToolMeta): WellnessTool {
   const cat = meta.category as WellnessToolCategory;
   const iconName = CATEGORY_ICON_NAME[cat] || "Sparkles";
   const durMin =
-    meta.duration === "∞" ? 0 : parseInt(meta.duration.replace(/\D/g, ""), 10) || 5;
+    meta.duration === "∞"
+      ? 0
+      : meta.duration.includes(":")
+        ? mmssToRoundedMinutes(meta.duration)
+        : parseInt(meta.duration.replace(/\D/g, ""), 10) || 5;
   return {
     id: `builtin:${meta.id}`,
     title: meta.title,
     category: meta.category,
     description: meta.description,
     duration: durMin,
+    durationDisplay: meta.duration === "∞" ? "∞" : meta.duration,
     difficulty: "Beginner",
     status: "published",
     icon: iconMap[iconName] || Sparkles,
@@ -131,13 +150,16 @@ function mapBuiltinMetaToTool(meta: WellnessBuiltinToolMeta): WellnessTool {
 
 function buildPlaceholderTool(category: WellnessToolCategory): WellnessTool {
   const iconName = CATEGORY_ICON_NAME[category];
+  const mmss = WELLNESS_CATEGORY_DURATION_MMSS[category];
+  const durRounded = mmssToRoundedMinutes(mmss);
   return {
     id: placeholderWellnessToolId(category),
     title: `${category} — add your tool`,
     category,
     description:
       "No tool in the database for this category yet. Create and publish one in the editor to replace this row.",
-    duration: 5,
+    duration: durRounded,
+    durationDisplay: mmss,
     difficulty: "Beginner",
     status: "draft",
     icon: iconMap[iconName] || Sparkles,
@@ -179,7 +201,14 @@ export function WellnessToolsCMS() {
         title: t.title,
         category: t.category,
         description: t.description || "",
-        duration: t.duration_minutes || 0,
+        duration:
+          typeof t.duration_seconds === "number" && t.duration_seconds > 0
+            ? Math.max(1, Math.round(t.duration_seconds / 60))
+            : t.duration_minutes || 0,
+        durationDisplay:
+          typeof t.duration_seconds === "number" && t.duration_seconds > 0
+            ? formatSecondsAsMmSs(t.duration_seconds)
+            : undefined,
         difficulty: (t.difficulty as any) || "Beginner",
         status: (t.status as any) || "draft",
         icon: iconMap[t.icon || "Sparkles"] || Sparkles,
@@ -358,14 +387,14 @@ export function WellnessToolsCMS() {
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
+              className="border-gray-300 text-gray-700 hover:bg-gray-500"
             >
               <Upload className="w-4 h-4 mr-2" />
               Import
             </Button>
             <Button
               variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
+              className="border-gray-300 text-gray-700 hover:bg-gray-500"
             >
               <Download className="w-4 h-4 mr-2" />
               Export
@@ -654,7 +683,7 @@ export function WellnessToolsCMS() {
                     <div>
                       <p className="text-xs text-gray-500">Duration</p>
                       <p className="text-sm text-gray-900 font-medium">
-                        {tool.duration} min
+                        {formatToolDurationLabel(tool)}
                       </p>
                     </div>
                     <div>
@@ -837,7 +866,7 @@ export function WellnessToolsCMS() {
                     </div>
                     <div>
                       <h3 className="text-sm font-medium text-gray-500 mb-1">Duration</h3>
-                      <p className="text-gray-900">{viewModalTool.duration} minutes</p>
+                      <p className="text-gray-900">{formatToolDurationLabel(viewModalTool)}</p>
                     </div>
                     <div>
                       <h3 className="text-sm font-medium text-gray-500 mb-1">Difficulty</h3>

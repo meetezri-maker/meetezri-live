@@ -1,6 +1,6 @@
 /**
- * Procedural ambient loops (rain / wind) via Web Audio API — no external assets.
- * Call start after a user gesture (e.g. Play) so AudioContext can resume.
+ * Category music from `/public/music` (looped HTMLAudioElement) plus procedural wind.
+ * Rain uses `/music/rain.mp3` (e.g. 30 min rain/thunder). Call start after a user gesture.
  */
 
 export type WellnessAmbientKind =
@@ -35,6 +35,7 @@ const SLEEPHEALTH_MUSIC_PATHS = ["/music/sleephealth.mp3"];
 const STRESS_MANAGEMENT_MUSIC_PATHS = ["/music/stress management.mp3"];
 const ANXIETY_MANAGEMENT_MUSIC_PATHS = ["/music/Anxietymanagement.mp3"];
 const DEPRESSION_SUPPORT_MUSIC_PATHS = ["/music/depression-support.mp3"];
+const RAIN_MUSIC_PATHS = ["/music/rain.mp3"];
 
 function getOrCreateContext(): AudioContext {
   if (!audioContext) {
@@ -209,36 +210,18 @@ export async function startWellnessAmbient(kind: WellnessAmbientKind): Promise<v
     return;
   }
 
+  if (kind === "rain") {
+    await startMediaLoop(RAIN_MUSIC_PATHS, 0.42);
+    if (token !== ambientSessionToken) return;
+    activeKind = kind;
+    return;
+  }
+
   const ctx = getOrCreateContext();
   await ctx.resume();
 
   const white = createWhiteNoiseBuffer(ctx, 2);
   let buffer: AudioBuffer;
-
-  if (kind === "rain") {
-    buffer = white;
-    const src = ctx.createBufferSource();
-    src.buffer = buffer;
-    src.loop = true;
-
-    const lowpass = ctx.createBiquadFilter();
-    lowpass.type = "lowpass";
-    lowpass.frequency.value = 1400;
-    lowpass.Q.value = 0.5;
-
-    const g = ctx.createGain();
-    g.gain.value = 0.24;
-
-    src.connect(lowpass);
-    lowpass.connect(g);
-    g.connect(ctx.destination);
-
-    src.start(0);
-    sourceNode = src;
-    gainNode = g;
-    activeKind = kind;
-    return;
-  }
 
   // wind — pink-ish noise + gentle amplitude wobble
   buffer = whiteToPinkBuffer(ctx, white);

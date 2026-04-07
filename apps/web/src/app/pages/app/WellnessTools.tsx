@@ -46,6 +46,11 @@ import {
   startWellnessAmbient,
   stopWellnessAmbient,
 } from "../../../lib/wellnessAmbientAudio";
+import {
+  formatSecondsAsMmSs,
+  parseWellnessDurationLabelToSeconds,
+  WELLNESS_CATEGORY_DURATION_MMSS,
+} from "../../../lib/wellnessCategoryDurations";
 
 const BUILTIN_FAVORITES_KEY = "wellness-builtin-favorites";
 
@@ -88,7 +93,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       category: "Anxiety Management",
       title: "Grounding 5-4-3-2-1",
       description: "Name five things you see, four you feel, three you hear, two you smell, one you taste",
-      duration: "5 min",
+      duration: WELLNESS_CATEGORY_DURATION_MMSS["Anxiety Management"],
       difficulty: "Beginner",
       icon: getWellnessCategoryIcon("Anxiety Management"),
       color: WELLNESS_CATEGORY_GRADIENT["Anxiety Management"],
@@ -98,7 +103,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       category: "Stress Management",
       title: "Tension Release Scan",
       description: "Notice and soften stress in the body with slow breathing",
-      duration: "8 min",
+      duration: WELLNESS_CATEGORY_DURATION_MMSS["Stress Management"],
       difficulty: "Beginner",
       icon: getWellnessCategoryIcon("Stress Management"),
       color: WELLNESS_CATEGORY_GRADIENT["Stress Management"],
@@ -108,7 +113,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       category: "Meditation",
       title: "Body Scan Meditation",
       description: "Progressive relaxation from head to toe",
-      duration: "10 min",
+      duration: WELLNESS_CATEGORY_DURATION_MMSS.Meditation,
       difficulty: "Beginner",
       icon: getWellnessCategoryIcon("Meditation"),
       color: WELLNESS_CATEGORY_GRADIENT.Meditation,
@@ -118,7 +123,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       category: "Sleep Health",
       title: "Sleep Meditation",
       description: "Wind down and prepare for restful sleep",
-      duration: "20 min",
+      duration: WELLNESS_CATEGORY_DURATION_MMSS["Sleep Health"],
       difficulty: "Beginner",
       icon: getWellnessCategoryIcon("Sleep Health"),
       color: WELLNESS_CATEGORY_GRADIENT["Sleep Health"],
@@ -128,7 +133,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       category: "Exercise",
       title: "Gentle Movement",
       description: "Light stretches and mobility to reconnect with your body",
-      duration: "10 min",
+      duration: WELLNESS_CATEGORY_DURATION_MMSS.Exercise,
       difficulty: "Beginner",
       icon: getWellnessCategoryIcon("Exercise"),
       color: WELLNESS_CATEGORY_GRADIENT.Exercise,
@@ -138,7 +143,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       category: "Self-Care",
       title: "Gratitude Reflection",
       description: "Focus on three things you're grateful for",
-      duration: "5 min",
+      duration: WELLNESS_CATEGORY_DURATION_MMSS["Self-Care"],
       difficulty: "Beginner",
       icon: getWellnessCategoryIcon("Self-Care"),
       color: WELLNESS_CATEGORY_GRADIENT["Self-Care"],
@@ -148,7 +153,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       category: "Relaxation",
       title: "Box Breathing",
       description: "4-4-4-4 breathing pattern to reduce stress",
-      duration: "5 min",
+      duration: WELLNESS_CATEGORY_DURATION_MMSS.Relaxation,
       difficulty: "Beginner",
       icon: getWellnessCategoryIcon("Relaxation"),
       color: WELLNESS_CATEGORY_GRADIENT.Relaxation,
@@ -158,7 +163,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       category: "Depression Support",
       title: "Compassion Pause",
       description: "A short pause with kind phrases you can repeat softly",
-      duration: "6 min",
+      duration: WELLNESS_CATEGORY_DURATION_MMSS["Depression Support"],
       difficulty: "Beginner",
       icon: getWellnessCategoryIcon("Depression Support"),
       color: WELLNESS_CATEGORY_GRADIENT["Depression Support"],
@@ -168,7 +173,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       category: "Mindfulness",
       title: "Mindful Anchor Breath",
       description: "Anchor attention on the breath and gentle body awareness",
-      duration: "12 min",
+      duration: WELLNESS_CATEGORY_DURATION_MMSS.Mindfulness,
       difficulty: "Intermediate",
       icon: getWellnessCategoryIcon("Mindfulness"),
       color: WELLNESS_CATEGORY_GRADIENT.Mindfulness,
@@ -178,7 +183,7 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
       category: "Relaxation",
       title: "Rain & Thunder",
       description: "Calming nature sounds for relaxation",
-      duration: "∞",
+      duration: "30:00",
       difficulty: "Any",
       icon: getWellnessCategoryIcon("Relaxation"),
       color: WELLNESS_CATEGORY_GRADIENT.Relaxation,
@@ -203,15 +208,6 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
     source: "builtin" as const,
     favorite: favMap[row.id] ?? defaultFavorite[row.id] ?? false,
   }));
-}
-
-/** Seconds for timed sessions; Infinity for open-ended tools (no auto-complete). */
-function parseWellnessDurationSeconds(durationLabel: string): number {
-  const d = durationLabel.trim();
-  if (d === "∞" || d.toLowerCase() === "infinity") return Number.POSITIVE_INFINITY;
-  const n = parseInt(d.replace(/\s*min\s*/i, "").trim(), 10);
-  if (!Number.isFinite(n) || n <= 0) return Number.POSITIVE_INFINITY;
-  return n * 60;
 }
 
 const WELLNESS_COMPLETION_MESSAGES = [
@@ -302,7 +298,12 @@ export function WellnessTools() {
           category: t.category,
           title: t.title,
           description: t.description || "",
-          duration: t.duration_minutes ? `${t.duration_minutes} min` : "∞",
+          duration:
+            typeof t.duration_seconds === "number" && t.duration_seconds > 0
+              ? formatSecondsAsMmSs(t.duration_seconds)
+              : t.duration_minutes
+                ? `${t.duration_minutes} min`
+                : "∞",
           difficulty: t.difficulty || "Beginner",
           icon: getWellnessCategoryIcon(t.category),
           color:
@@ -506,7 +507,7 @@ export function WellnessTools() {
   useEffect(() => {
     if (!isPlaying || !activeExerciseData) return;
 
-    const durationSec = parseWellnessDurationSeconds(activeExerciseData.duration);
+    const durationSec = parseWellnessDurationLabelToSeconds(activeExerciseData.duration);
 
     const interval = setInterval(() => {
       setTimer((prevTimer) => {
@@ -634,7 +635,7 @@ export function WellnessTools() {
 
   const nearEndNudge = useMemo(() => {
     if (!activeExerciseData || !isPlaying || sessionTimeComplete) return false;
-    const total = parseWellnessDurationSeconds(activeExerciseData.duration);
+    const total = parseWellnessDurationLabelToSeconds(activeExerciseData.duration);
     if (!Number.isFinite(total)) return false;
     const remaining = total - timer;
     return remaining > 0 && remaining <= 60;

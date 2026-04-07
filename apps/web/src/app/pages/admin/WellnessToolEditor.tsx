@@ -33,7 +33,7 @@ import {
   HandHelping,
   Timer,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -43,6 +43,12 @@ import {
   WELLNESS_TOOL_CATEGORIES,
   isWellnessToolCategory,
 } from "../../../lib/wellnessToolCategories";
+import {
+  formatSecondsAsMmSs,
+  mmssToSeconds,
+  parseFlexibleDurationInput,
+  WELLNESS_CATEGORY_DURATION_MMSS,
+} from "../../../lib/wellnessCategoryDurations";
 
 function parseGuidedPayloadFromContentUrl(
   raw: string | null | undefined
@@ -98,6 +104,9 @@ export function WellnessToolEditor() {
   const [searchParams] = useSearchParams();
   const editId = searchParams.get("id");
   const categoryFromQuery = searchParams.get("category");
+  const [resolvedEditId, setResolvedEditId] = useState<string | null>(null);
+  const [isResolvingCategory, setIsResolvingCategory] = useState(false);
+  const effectiveEditId = useMemo(() => editId ?? resolvedEditId, [editId, resolvedEditId]);
   const [showPreview, setShowPreview] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingTool, setIsLoadingTool] = useState(false);
@@ -105,7 +114,10 @@ export function WellnessToolEditor() {
     title: "",
     category: WELLNESS_TOOL_CATEGORIES[0],
     description: "",
-    duration: 5,
+    /** Total session length in seconds (stored in API as `duration_seconds`). */
+    sessionDurationSeconds: mmssToSeconds(
+      WELLNESS_CATEGORY_DURATION_MMSS[WELLNESS_TOOL_CATEGORIES[0]]
+    ),
     difficulty: "Beginner",
     icon: "Wind",
     tags: [] as string[],
@@ -118,6 +130,12 @@ export function WellnessToolEditor() {
   });
 
   const [tagInput, setTagInput] = useState("");
+  const [sessionDurationText, setSessionDurationText] = useState(() =>
+    formatSecondsAsMmSs(
+      mmssToSeconds(WELLNESS_CATEGORY_DURATION_MMSS[WELLNESS_TOOL_CATEGORIES[0]])
+    )
+  );
+  const lastSyncedSecondsRef = useRef(formData.sessionDurationSeconds);
 
   const iconOptions = [
     { name: "Wind", icon: Wind, color: "#06b6d4" },
@@ -141,30 +159,79 @@ export function WellnessToolEditor() {
   ];
 
   useEffect(() => {
+    if (editId) setResolvedEditId(null);
+  }, [editId]);
+
+  useEffect(() => {
     if (editId || !categoryFromQuery) return;
     if (isWellnessToolCategory(categoryFromQuery)) {
       setFormData((prev) => ({ ...prev, category: categoryFromQuery }));
     }
   }, [editId, categoryFromQuery]);
 
+  /** Opened with ?category= only: if a CMS tool already exists for that category, edit it (same row) instead of creating a duplicate. */
   useEffect(() => {
-    if (!editId) return;
+    if (editId || !categoryFromQuery || !isWellnessToolCategory(categoryFromQuery)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setIsResolvingCategory(true);
+        const list = await api.wellness.getAll(categoryFromQuery);
+        const arr = Array.isArray(list) ? list : [];
+        if (arr.length === 0) {
+          if (!cancelled) {
+            setResolvedEditId(null);
+            const sec = mmssToSeconds(WELLNESS_CATEGORY_DURATION_MMSS[categoryFromQuery]);
+            setFormData((prev) => ({
+              ...prev,
+              category: categoryFromQuery,
+              sessionDurationSeconds: sec,
+            }));
+            setSessionDurationText(formatSecondsAsMmSs(sec));
+            lastSyncedSecondsRef.current = sec;
+          }
+          return;
+        }
+        const sorted = [...arr].sort(
+          (a: { updated_at?: string }, b: { updated_at?: string }) =>
+            new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
+        );
+        const pick = sorted[0] as { id?: string };
+        if (!cancelled && pick?.id) setResolvedEditId(pick.id);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!cancelled) setIsResolvingCategory(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editId, categoryFromQuery]);
+
+  useEffect(() => {
+    if (!effectiveEditId) return;
     let cancelled = false;
     (async () => {
       try {
         setIsLoadingTool(true);
-        const t = await api.wellness.getTool(editId);
+        const t = await api.wellness.getTool(effectiveEditId);
         if (cancelled || !t) return;
         const guided = parseGuidedPayloadFromContentUrl(t.content_url);
         const rawIcon = typeof t.icon === "string" ? t.icon : "Sparkles";
         const icon = EDITOR_ICON_NAMES.has(rawIcon) ? rawIcon : "Sparkles";
+        const loadedSec =
+          typeof (t as { duration_seconds?: number | null }).duration_seconds === "number" &&
+          (t as { duration_seconds?: number | null }).duration_seconds! > 0
+            ? (t as { duration_seconds: number }).duration_seconds
+            : Math.max(60, (t.duration_minutes ?? 5) * 60);
         setFormData({
           title: t.title || "",
           category: isWellnessToolCategory(t.category)
             ? t.category
             : WELLNESS_TOOL_CATEGORIES[0],
           description: t.description || "",
-          duration: t.duration_minutes ?? 5,
+          sessionDurationSeconds: loadedSec,
           difficulty: (t.difficulty as "Beginner" | "Intermediate" | "Advanced") || "Beginner",
           icon,
           tags: guided?.tags ?? [],
@@ -180,6 +247,8 @@ export function WellnessToolEditor() {
           audioEnabled: guided?.audioEnabled ?? false,
           visualsEnabled: guided?.visualsEnabled ?? true,
         });
+        setSessionDurationText(formatSecondsAsMmSs(loadedSec));
+        lastSyncedSecondsRef.current = loadedSec;
       } catch (e) {
         console.error(e);
         alert("Failed to load wellness tool.");
@@ -190,7 +259,7 @@ export function WellnessToolEditor() {
     return () => {
       cancelled = true;
     };
-  }, [editId]);
+  }, [effectiveEditId]);
 
   const handleAddTag = () => {
     if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
@@ -248,11 +317,13 @@ export function WellnessToolEditor() {
   const handleSave = async (status: "draft" | "published") => {
     try {
       setIsSaving(true);
+      const ds = Math.max(60, formData.sessionDurationSeconds);
       const payload = {
         title: formData.title,
         category: formData.category,
         description: formData.description,
-        duration_minutes: formData.duration,
+        duration_seconds: ds,
+        duration_minutes: Math.max(1, Math.round(ds / 60)),
         difficulty: formData.difficulty,
         icon: formData.icon,
         status: status,
@@ -265,8 +336,9 @@ export function WellnessToolEditor() {
         }),
       };
 
-      if (editId) {
-        await api.wellness.update(editId, payload);
+      const targetId = editId ?? resolvedEditId;
+      if (targetId) {
+        await api.wellness.update(targetId, payload);
       } else {
         await api.wellness.create(payload);
       }
@@ -282,7 +354,7 @@ export function WellnessToolEditor() {
   const selectedIcon = iconOptions.find((opt) => opt.name === formData.icon);
   const PreviewIconComponent = selectedIcon?.icon;
 
-  if (editId && isLoadingTool) {
+  if ((effectiveEditId && isLoadingTool) || isResolvingCategory) {
     return (
       <AdminLayoutNew>
         <div className="max-w-7xl mx-auto flex items-center justify-center min-h-[40vh]">
@@ -311,7 +383,7 @@ export function WellnessToolEditor() {
             </Button>
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">
-                {editId ? "Edit Wellness Tool" : "Create Wellness Tool"}
+                {effectiveEditId ? "Edit Wellness Tool" : "Create Wellness Tool"}
               </h1>
               <p className="text-gray-600">
                 Build a guided wellness exercise for users
@@ -382,9 +454,21 @@ export function WellnessToolEditor() {
                     </label>
                     <select
                       value={formData.category}
-                      onChange={(e) =>
-                        setFormData({ ...formData, category: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const cat = e.target.value;
+                        if (isWellnessToolCategory(cat)) {
+                          const sec = mmssToSeconds(WELLNESS_CATEGORY_DURATION_MMSS[cat]);
+                          setFormData({
+                            ...formData,
+                            category: cat,
+                            sessionDurationSeconds: sec,
+                          });
+                          setSessionDurationText(formatSecondsAsMmSs(sec));
+                          lastSyncedSecondsRef.current = sec;
+                        } else {
+                          setFormData({ ...formData, category: cat });
+                        }
+                      }}
                       className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                     >
                       {WELLNESS_TOOL_CATEGORIES.map((cat) => (
@@ -396,21 +480,28 @@ export function WellnessToolEditor() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Duration (min)
+                      Session duration (MM:SS)
                     </label>
                     <input
-                      type="number"
-                      value={formData.duration}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          duration: parseInt(e.target.value),
-                        })
-                      }
-                      min="1"
-                      max="60"
+                      type="text"
+                      inputMode="numeric"
+                      value={sessionDurationText}
+                      onChange={(e) => setSessionDurationText(e.target.value)}
+                      onBlur={() => {
+                        const parsed =
+                          parseFlexibleDurationInput(sessionDurationText) ??
+                          lastSyncedSecondsRef.current;
+                        const clamped = Math.max(60, parsed);
+                        setFormData((prev) => ({ ...prev, sessionDurationSeconds: clamped }));
+                        setSessionDurationText(formatSecondsAsMmSs(clamped));
+                        lastSyncedSecondsRef.current = clamped;
+                      }}
+                      placeholder="15:29"
                       className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Stored precisely for app timers. Minimum 1:00.
+                    </p>
                   </div>
                 </div>
 
@@ -715,7 +806,7 @@ export function WellnessToolEditor() {
                       <div className="text-center">
                         <p className="text-xs text-gray-600">Duration</p>
                         <p className="text-lg font-bold text-gray-900">
-                          {formData.duration} min
+                          {formatSecondsAsMmSs(formData.sessionDurationSeconds)}
                         </p>
                       </div>
                       <div className="text-center">

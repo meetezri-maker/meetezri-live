@@ -11,7 +11,8 @@
     "test": "jest",
     "db:pull": "prisma db pull",
     "db:studio": "prisma studio",
-    "db:generate": "prisma generate"
+    "db:generate": "prisma generate",
+    "db:seed-wellness": "ts-node-dev --transpile-only --no-notify scripts/seed-wellness-tools.ts"
   },
   "dependencies": {
     "@fastify/compress": "^7.0.3",

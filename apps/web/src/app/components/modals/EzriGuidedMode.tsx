@@ -7,6 +7,7 @@ import {
   startWellnessAmbient,
   stopWellnessAmbient,
 } from "../../../lib/wellnessAmbientAudio";
+import { parseWellnessDurationLabelToSeconds } from "../../../lib/wellnessCategoryDurations";
 
 interface EzriGuidedModeProps {
   isOpen: boolean;
@@ -50,18 +51,11 @@ export function EzriGuidedMode({
     "Excellent work! When you're ready, slowly open your eyes."
   ];
 
-  const dTrim = duration.trim();
-  const isOpenEnded =
-    dTrim === "∞" ||
-    dTrim.toLowerCase() === "infinity" ||
-    !Number.isFinite(parseInt(dTrim.replace(/\s*min\s*/i, "").trim(), 10));
-  const durationMinutes = isOpenEnded
-    ? Number.POSITIVE_INFINITY
-    : Math.max(1, parseInt(dTrim.replace(/\s*min\s*/i, "").trim(), 10) || 5);
+  const totalSecondsRaw = parseWellnessDurationLabelToSeconds(duration.trim());
   const totalSeconds =
-    durationMinutes === Number.POSITIVE_INFINITY
+    totalSecondsRaw === Number.POSITIVE_INFINITY
       ? Number.POSITIVE_INFINITY
-      : durationMinutes * 60;
+      : Math.max(1, totalSecondsRaw);
 
   const showNearEndNudge =
     stage === "active" &&

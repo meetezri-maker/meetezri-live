@@ -855,7 +855,7 @@ export function Journal() {
       <JournalExportModal
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
-        entriesCount={entries.length}
+        entries={entries}
       />
     </AppLayout>
   );

@@ -20,6 +20,8 @@ export const createWellnessToolSchema = z.object({
   description: z.string().optional(),
   category: wellnessToolCategorySchema,
   duration_minutes: z.number().optional(),
+  /** Exact length in seconds (preferred over duration_minutes for timers). */
+  duration_seconds: z.number().int().min(0).optional(),
   content: z.string().optional(),
   image_url: z.string().optional(),
   is_premium: z.boolean().default(false),
@@ -33,6 +35,7 @@ export const updateWellnessToolSchema = z.object({
   description: z.string().optional(),
   category: wellnessToolCategorySchema.optional(),
   duration_minutes: z.number().optional(),
+  duration_seconds: z.number().int().min(0).optional(),
   /** Guided script JSON; stored in DB `content_url` (text). */
   content: z.string().optional(),
   image_url: z.string().optional(),
@@ -50,6 +53,7 @@ export const wellnessToolResponseSchema = z.object({
   description: z.string().nullable(),
   category: z.string(),
   duration_minutes: z.number().nullable(),
+  duration_seconds: z.number().nullable().optional(),
   content_url: z.string().nullable(),
   is_premium: z.boolean().nullable(),
   difficulty: z.string().nullable(),
