@@ -668,7 +668,7 @@ export function ErrorTracking() {
                 <Button
                   variant="outline"
                   onClick={handleCloseModal}
-                  className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                  className="border-gray-300 text-gray-700 hover:bg-gray-500"
                 >
                   Close
                 </Button>
@@ -755,7 +755,7 @@ export function ErrorTracking() {
                 <Button
                   variant="outline"
                   onClick={handleCloseModal}
-                  className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                  className="border-gray-300 text-gray-700 hover:bg-gray-500"
                 >
                   Cancel
                 </Button>
@@ -829,7 +829,7 @@ export function ErrorTracking() {
                 <Button
                   variant="outline"
                   onClick={handleCloseModal}
-                  className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                  className="border-gray-300 text-gray-700 hover:bg-gray-500"
                 >
                   Cancel
                 </Button>

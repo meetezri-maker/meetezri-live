@@ -454,7 +454,7 @@ export function NudgePerformance() {
             <Button
               type="button"
               variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
+              className="border-gray-300 text-gray-700 hover:bg-gray-500"
               disabled={isLoading}
               onClick={() => setRefreshKey((k) => k + 1)}
             >

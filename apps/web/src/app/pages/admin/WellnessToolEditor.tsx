@@ -395,7 +395,7 @@ export function WellnessToolEditor() {
             <Button
               variant="outline"
               onClick={() => setShowPreview(!showPreview)}
-              className="border-gray-300 text-gray-700 hover:bg-gray-200"
+              className="border-gray-300 text-gray-700 hover:bg-gray-500"
             >
               <Eye className="w-4 h-4 mr-2" />
               {showPreview ? "Hide" : "Show"} Preview
@@ -403,7 +403,7 @@ export function WellnessToolEditor() {
             <Button
               variant="outline"
               onClick={handleSaveDraft}
-              className="border-gray-300 text-gray-700 hover:bg-gray-200"
+              className="border-gray-300 text-gray-700 hover:bg-gray-500"
             >
               <Save className="w-4 h-4 mr-2" />
               Save Draft

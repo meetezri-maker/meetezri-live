@@ -495,7 +495,7 @@ export function NudgeScheduler() {
 
               <Button
                 variant="outline"
-                className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                className="border-gray-300 text-gray-700 hover:bg-gray-500"
               >
                 <Filter className="w-4 h-4 mr-2" />
                 Advanced Filters

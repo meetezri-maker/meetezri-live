@@ -522,7 +522,7 @@ export function WellnessToolsCMS() {
                       size="sm"
                       variant="outline"
                       onClick={() => handleBulkAction("publish")}
-                      className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                      className="border-gray-300 text-gray-700 hover:bg-gray-500"
                     >
                       Publish
                     </Button>
@@ -530,7 +530,7 @@ export function WellnessToolsCMS() {
                       size="sm"
                       variant="outline"
                       onClick={() => handleBulkAction("archive")}
-                      className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                      className="border-gray-300 text-gray-700 hover:bg-gray-500"
                     >
                       Archive
                     </Button>
@@ -538,7 +538,7 @@ export function WellnessToolsCMS() {
                       size="sm"
                       variant="outline"
                       onClick={() => handleBulkAction("delete")}
-                      className="border-red-300 text-red-600 hover:bg-red-50"
+                      className="border-red-300 text-red-600 hover:bg-red-500"
                     >
                       Delete
                     </Button>
