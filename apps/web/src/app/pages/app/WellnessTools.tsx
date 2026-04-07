@@ -224,14 +224,19 @@ function pickRandomCompletionMessage(): string {
   ];
 }
 
-/** Built-ins first; API tools appended. Skip API rows that duplicate a built-in title (case-insensitive). */
+/**
+ * Built-ins plus API tools. If an API row matches a built-in’s title and category, the API
+ * row is shown (DB/CMS description) and the shipped duplicate is omitted.
+ */
 function mergeBuiltinAndApi(
   builtins: WellnessExerciseItem[],
   apiItems: WellnessExerciseItem[]
 ): WellnessExerciseItem[] {
-  const titles = new Set(builtins.map((b) => b.title.toLowerCase().trim()));
-  const extra = apiItems.filter((t) => !titles.has(t.title.toLowerCase().trim()));
-  return [...builtins, ...extra];
+  const norm = (s: string) => s.toLowerCase().trim();
+  const key = (t: WellnessExerciseItem) => `${norm(t.title)}|${norm(t.category)}`;
+  const overridden = new Set(apiItems.map(key));
+  const builtinsKept = builtins.filter((b) => !overridden.has(key(b)));
+  return [...builtinsKept, ...apiItems];
 }
 
 export function WellnessTools() {

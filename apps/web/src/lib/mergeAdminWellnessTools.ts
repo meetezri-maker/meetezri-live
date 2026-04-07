@@ -89,9 +89,17 @@ function labelForBuiltinMerge(t: BuiltinMergeLabel): string {
   return "";
 }
 
-/** API rows merged with built-in rows; skip API duplicate titles (same as user app). */
-export function mergeApiBuiltinsForAdmin<T extends BuiltinMergeLabel>(builtins: T[], apiItems: T[]): T[] {
-  const titles = new Set(builtins.map((b) => labelForBuiltinMerge(b).toLowerCase().trim()));
-  const extra = apiItems.filter((t) => !titles.has(labelForBuiltinMerge(t).toLowerCase().trim()));
-  return [...builtins, ...extra];
+/**
+ * API rows merged with built-in rows. When a published API tool matches a built-in’s
+ * title and category, the API row wins so CMS / DB edits are visible (same rule as user app).
+ */
+export function mergeApiBuiltinsForAdmin<T extends BuiltinMergeLabel & { category: string }>(
+  builtins: T[],
+  apiItems: T[]
+): T[] {
+  const norm = (s: string) => s.toLowerCase().trim();
+  const rowKey = (t: T) => `${norm(labelForBuiltinMerge(t))}|${norm(t.category)}`;
+  const overridden = new Set(apiItems.map(rowKey));
+  const builtinsKept = builtins.filter((b) => !overridden.has(rowKey(b)));
+  return [...builtinsKept, ...apiItems];
 }
