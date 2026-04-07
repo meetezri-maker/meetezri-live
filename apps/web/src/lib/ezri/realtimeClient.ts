@@ -251,6 +251,14 @@ export class EzriRealtimeClient {
     ws.send(JSON.stringify({ type: "playback_done" }));
   }
 
+  sendInterrupt(source = "client_barge_in") {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      throw new Error("Ezri WebSocket is not connected.");
+    }
+    ws.send(JSON.stringify({ type: "interrupt", source }));
+  }
+
   disconnect() {
     this.manuallyClosed = true;
     this.clearReconnect();

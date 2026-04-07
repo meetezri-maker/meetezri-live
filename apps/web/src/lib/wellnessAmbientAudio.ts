@@ -3,7 +3,16 @@
  * Call start after a user gesture (e.g. Play) so AudioContext can resume.
  */
 
-export type WellnessAmbientKind = "rain" | "wind";
+export type WellnessAmbientKind =
+  | "rain"
+  | "wind"
+  | "mindfulness_music"
+  | "meditation_music"
+  | "relaxation_music"
+  | "selfcare_music"
+  | "sleephealth_music"
+  | "stress_management_music"
+  | "anxiety_management_music";
 
 let audioContext: AudioContext | null = null;
 let sourceNode: AudioBufferSourceNode | null = null;
@@ -11,6 +20,19 @@ let gainNode: GainNode | null = null;
 let lfoNode: OscillatorNode | null = null;
 let lfoGain: GainNode | null = null;
 let activeKind: WellnessAmbientKind | null = null;
+let mediaAudioEl: HTMLAudioElement | null = null;
+let ambientSessionToken = 0;
+
+const MINDFULNESS_MUSIC_PATHS = [
+  "/music/mindfullness.mp3",
+  "/music/Breathing Anchor Meditation to Steady the Mind   15 Minutes.mp3",
+];
+const MEDITATION_MUSIC_PATHS = ["/music/Meditation.mp3", "/music/Medication.mp3"];
+const RELAXATION_MUSIC_PATHS = ["/music/relaxation.mp3"];
+const SELFCARE_MUSIC_PATHS = ["/music/selfcare.mp3"];
+const SLEEPHEALTH_MUSIC_PATHS = ["/music/sleephealth.mp3"];
+const STRESS_MANAGEMENT_MUSIC_PATHS = ["/music/stress management.mp3"];
+const ANXIETY_MANAGEMENT_MUSIC_PATHS = ["/music/Anxietymanagement.mp3"];
 
 function getOrCreateContext(): AudioContext {
   if (!audioContext) {
@@ -74,11 +96,110 @@ function disconnectGraph() {
   activeKind = null;
 }
 
+function stopMediaAudio() {
+  if (!mediaAudioEl) return;
+  try {
+    mediaAudioEl.pause();
+    mediaAudioEl.currentTime = 0;
+  } catch {
+    /* no-op */
+  }
+  mediaAudioEl = null;
+}
+
+async function startMediaLoop(urls: string[], volume: number): Promise<void> {
+  stopMediaAudio();
+  const token = ++ambientSessionToken;
+  const audio = new Audio();
+  audio.preload = "auto";
+  audio.loop = true;
+  audio.volume = volume;
+  let idx = 0;
+
+  const tryPlay = async (): Promise<void> => {
+    if (idx >= urls.length) {
+      throw new Error("No playable ambient music source found.");
+    }
+    audio.src = encodeURI(urls[idx]);
+    idx += 1;
+    try {
+      await audio.play();
+    } catch {
+      await tryPlay();
+    }
+  };
+
+  await tryPlay();
+  // If stop was called while play() was resolving, cancel this stale audio.
+  if (token !== ambientSessionToken) {
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+    } catch {
+      /* no-op */
+    }
+    return;
+  }
+  mediaAudioEl = audio;
+}
+
 /**
  * Start looping ambient. Stops any previous ambient first.
  */
 export async function startWellnessAmbient(kind: WellnessAmbientKind): Promise<void> {
+  const token = ++ambientSessionToken;
   disconnectGraph();
+  stopMediaAudio();
+
+  if (kind === "mindfulness_music") {
+    await startMediaLoop(MINDFULNESS_MUSIC_PATHS, 0.5);
+    if (token !== ambientSessionToken) return;
+    activeKind = kind;
+    return;
+  }
+
+  if (kind === "meditation_music") {
+    await startMediaLoop(MEDITATION_MUSIC_PATHS, 0.45);
+    if (token !== ambientSessionToken) return;
+    activeKind = kind;
+    return;
+  }
+
+  if (kind === "relaxation_music") {
+    await startMediaLoop(RELAXATION_MUSIC_PATHS, 0.42);
+    if (token !== ambientSessionToken) return;
+    activeKind = kind;
+    return;
+  }
+
+  if (kind === "selfcare_music") {
+    await startMediaLoop(SELFCARE_MUSIC_PATHS, 0.45);
+    if (token !== ambientSessionToken) return;
+    activeKind = kind;
+    return;
+  }
+
+  if (kind === "sleephealth_music") {
+    await startMediaLoop(SLEEPHEALTH_MUSIC_PATHS, 0.4);
+    if (token !== ambientSessionToken) return;
+    activeKind = kind;
+    return;
+  }
+
+  if (kind === "stress_management_music") {
+    await startMediaLoop(STRESS_MANAGEMENT_MUSIC_PATHS, 0.45);
+    if (token !== ambientSessionToken) return;
+    activeKind = kind;
+    return;
+  }
+
+  if (kind === "anxiety_management_music") {
+    await startMediaLoop(ANXIETY_MANAGEMENT_MUSIC_PATHS, 0.45);
+    if (token !== ambientSessionToken) return;
+    activeKind = kind;
+    return;
+  }
+
   const ctx = getOrCreateContext();
   await ctx.resume();
 
@@ -153,7 +274,10 @@ export async function startWellnessAmbient(kind: WellnessAmbientKind): Promise<v
 }
 
 export function stopWellnessAmbient(): void {
+  // Invalidate any in-flight async start call immediately.
+  ambientSessionToken++;
   disconnectGraph();
+  stopMediaAudio();
 }
 
 export function getActiveAmbientKind(): WellnessAmbientKind | null {
@@ -163,6 +287,13 @@ export function getActiveAmbientKind(): WellnessAmbientKind | null {
 /** Built-in tools that use ambient loops (by id). */
 export function ambientKindForExerciseId(exerciseId: string): WellnessAmbientKind | null {
   if (exerciseId === "rain-sounds") return "rain";
-  if (exerciseId === "box-breathing") return "wind";
+  if (exerciseId === "box-breathing") return "relaxation_music";
+  if (exerciseId === "stress-release-waves") return "stress_management_music";
+  if (exerciseId === "grounding-54321") return "anxiety_management_music";
+  if (exerciseId === "mindful-anchor") return "mindfulness_music";
+  if (exerciseId === "body-scan") return "meditation_music";
+  if (exerciseId === "sleep-meditation") return "sleephealth_music";
+  if (exerciseId === "gratitude") return "selfcare_music";
+  if (exerciseId === "compassion-pause") return "relaxation_music";
   return null;
 }

@@ -214,6 +214,20 @@ function parseWellnessDurationSeconds(durationLabel: string): number {
   return n * 60;
 }
 
+const WELLNESS_COMPLETION_MESSAGES = [
+  "Great job, you've completed your wellness exercise. Take a moment to appreciate this step you've taken for yourself today.",
+  "You've successfully completed your wellness exercise. Notice how you feel, and carry this sense of calm with you.",
+  "Congratulations! You've completed your wellness exercise, small steps like this create meaningful change over time.",
+  "Well done. You've completed your exercise, remember, taking time for yourself is always worth it.",
+  "Exercise complete. You showed up for yourself today, that matters.",
+];
+
+function pickRandomCompletionMessage(): string {
+  return WELLNESS_COMPLETION_MESSAGES[
+    Math.floor(Math.random() * WELLNESS_COMPLETION_MESSAGES.length)
+  ];
+}
+
 /** Built-ins first; API tools appended. Skip API rows that duplicate a built-in title (case-insensitive). */
 function mergeBuiltinAndApi(
   builtins: WellnessExerciseItem[],
@@ -266,6 +280,9 @@ export function WellnessTools() {
   const activeExerciseSourceRef = useRef<"builtin" | "api">("api");
   /** True after planned duration elapses (standard player); reset when starting a session. */
   const [sessionTimeComplete, setSessionTimeComplete] = useState(false);
+  const [completionMessage, setCompletionMessage] = useState(
+    WELLNESS_COMPLETION_MESSAGES[0]
+  );
   const timedSessionEndFiredRef = useRef(false);
 
   useEffect(() => {
@@ -368,6 +385,7 @@ export function WellnessTools() {
 
   const handleStartExercise = async (exerciseId: string) => {
     setSessionTimeComplete(false);
+    setCompletionMessage(WELLNESS_COMPLETION_MESSAGES[0]);
     timedSessionEndFiredRef.current = false;
     setActiveExercise(exerciseId);
     setIsPlaying(true);
@@ -377,6 +395,13 @@ export function WellnessTools() {
 
     const ex = exercises.find((x) => x.id === exerciseId);
     activeExerciseSourceRef.current = ex?.source === "builtin" ? "builtin" : "api";
+    const ambientKind = ambientKindForExerciseId(exerciseId);
+    if (ambientKind) {
+      // Run from direct user gesture to avoid autoplay blocks.
+      void startWellnessAmbient(ambientKind).catch((err) =>
+        console.error("Failed to start exercise ambient audio:", err)
+      );
+    }
     if (ex?.source === "builtin") {
       setCurrentSessionId(null);
       return;
@@ -424,6 +449,7 @@ export function WellnessTools() {
     setActiveExercise(null);
     setIsPlaying(false);
     setSessionTimeComplete(false);
+    setCompletionMessage(WELLNESS_COMPLETION_MESSAGES[0]);
     timedSessionEndFiredRef.current = false;
     setTimer(0);
     setBreathPhase("inhale");
@@ -494,6 +520,7 @@ export function WellnessTools() {
           timedSessionEndFiredRef.current = true;
           queueMicrotask(() => {
             setSessionTimeComplete(true);
+            setCompletionMessage(pickRandomCompletionMessage());
             setIsPlaying(false);
             setBreathPhase("inhale");
             setPhaseTimer(0);
@@ -572,6 +599,24 @@ export function WellnessTools() {
   ]);
 
   const favoriteCount = exercises.filter((ex) => ex.favorite).length;
+
+  const handleTogglePlay = () => {
+    setIsPlaying((prev) => {
+      const next = !prev;
+      const ambientKind = activeExercise ? ambientKindForExerciseId(activeExercise) : null;
+      if (ambientKind) {
+        if (next) {
+          // Play/resume from user click for reliable media start.
+          void startWellnessAmbient(ambientKind).catch((err) =>
+            console.error("Failed to resume ambient audio:", err)
+          );
+        } else {
+          stopWellnessAmbient();
+        }
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     const kind = activeExercise ? ambientKindForExerciseId(activeExercise) : null;
@@ -817,7 +862,7 @@ export function WellnessTools() {
                   whileHover={{ y: -5 }}
                   className="scroll-mt-28 h-full"
                 >
-                  <Card className="p-5 shadow-lg hover:shadow-xl transition-all group cursor-pointer border border-slate-100 h-full min-h-[300px] flex flex-col">
+                  <Card className="p-4 shadow-lg hover:shadow-xl transition-all group cursor-pointer border border-slate-100 h-full min-h-[240px] flex flex-col">
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="flex items-start gap-3 min-w-0 flex-1">
                         <motion.div
@@ -844,7 +889,7 @@ export function WellnessTools() {
                         <Heart className={`w-5 h-5 ${exercise.favorite ? "text-red-500 fill-red-500" : "text-gray-300"}`} />
                       </motion.button>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-4 line-clamp-3 min-h-[4.125rem] flex-1">
+                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2 min-h-[2.75rem] flex-1">
                       {exercise.description}
                     </p>
                     <div className="flex items-center justify-between text-xs text-muted-foreground mb-4 mt-auto">
@@ -898,10 +943,10 @@ export function WellnessTools() {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="fixed inset-4 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-lg z-50"
+                className="fixed inset-x-3 top-3 bottom-3 z-50 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-[min(92vw,430px)] sm:-translate-x-1/2 sm:-translate-y-1/2"
               >
                 <Card
-                  className={`p-8 shadow-2xl bg-gradient-to-br ${activeExerciseData.color} text-white relative overflow-hidden`}
+                  className={`relative flex h-full max-h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-2xl bg-gradient-to-br ${activeExerciseData.color} p-3 text-white shadow-2xl sm:h-auto sm:max-h-none sm:p-4`}
                 >
                   {sessionTimeComplete && (
                     <motion.div
@@ -920,7 +965,7 @@ export function WellnessTools() {
                         Time&apos;s up
                       </h3>
                       <p className="mb-8 max-w-sm text-base leading-relaxed text-white/90">
-                        Your session time has ended. Progress has been saved when applicable.
+                        {completionMessage}
                       </p>
                       <Button
                         type="button"
@@ -952,7 +997,7 @@ export function WellnessTools() {
                     className="pointer-events-none absolute -bottom-20 -left-20 z-0 h-60 w-60 rounded-full bg-white/20 blur-3xl"
                   />
 
-                  <div className="relative isolate z-10">
+                  <div className="relative isolate z-10 flex-1">
                     <motion.button
                       whileHover={{ scale: 1.1, rotate: 90 }}
                       whileTap={{ scale: 0.9 }}
@@ -962,18 +1007,18 @@ export function WellnessTools() {
                       <X className="w-5 h-5" />
                     </motion.button>
 
-                    <div className="relative z-40 text-center mb-10">
+                    <div className="relative z-40 mb-4 text-center sm:mb-5">
                       <motion.div
                         animate={{ scale: [1, 1.08, 1] }}
                         transition={{ duration: 2, repeat: Infinity }}
-                        className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm"
+                        className="mx-auto mb-2.5 flex h-16 w-16 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm sm:mb-3 sm:h-20 sm:w-20"
                       >
-                        {ActiveExerciseIcon ? <ActiveExerciseIcon className="w-12 h-12" /> : null}
+                        {ActiveExerciseIcon ? <ActiveExerciseIcon className="h-8 w-8 sm:h-10 sm:w-10" /> : null}
                       </motion.div>
-                      <h2 className="relative text-2xl font-bold mb-2 drop-shadow-md">
+                      <h2 className="relative mb-1.5 text-[clamp(1rem,4.2vw,1.2rem)] font-bold drop-shadow-md">
                         {activeExerciseData.title}
                       </h2>
-                      <p className="relative text-white/90 drop-shadow-md">{activeExerciseData.description}</p>
+                      <p className="relative text-xs text-white/90 drop-shadow-md sm:text-sm">{activeExerciseData.description}</p>
                     </div>
 
                     {nearEndNudge && (
@@ -981,20 +1026,20 @@ export function WellnessTools() {
                         role="status"
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="relative z-40 mb-6 rounded-2xl border border-white/25 bg-white/15 px-4 py-3 text-center shadow-lg backdrop-blur-md"
+                        className="relative z-40 mb-3 rounded-xl border border-white/25 bg-white/15 px-2.5 py-2 text-center shadow-lg backdrop-blur-md sm:mb-4 sm:px-3 sm:py-2.5"
                       >
-                        <p className="text-sm font-medium text-white">
+                        <p className="text-xs font-medium text-white sm:text-sm">
                           We hope you&apos;re enjoying this moment.
                         </p>
-                        <p className="mt-1 text-sm text-white/90">
+                        <p className="mt-0.5 text-xs text-white/90 sm:text-sm">
                           How are you feeling right now?
                         </p>
                       </motion.div>
                     )}
 
                     {/* Breathing rings: clipped so scale cannot paint over title or labels */}
-                    <div className="relative z-0 mb-6 flex flex-col items-center">
-                      <div className="flex h-[220px] w-full max-w-[300px] items-center justify-center overflow-hidden rounded-2xl">
+                    <div className="relative z-0 mb-2.5 flex flex-col items-center sm:mb-3">
+                      <div className="flex h-[120px] w-full max-w-[175px] items-center justify-center overflow-hidden rounded-2xl sm:h-[150px] sm:max-w-[210px]">
                         <motion.div
                           animate={{
                             scale:
@@ -1004,7 +1049,7 @@ export function WellnessTools() {
                             duration: breathPhase === "inhale" ? 4 : breathPhase === "exhale" ? 4 : 0.5,
                             ease: "easeInOut",
                           }}
-                          className="relative flex h-40 w-40 shrink-0 items-center justify-center rounded-full bg-white/30 backdrop-blur-sm will-change-transform"
+                          className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-white/30 backdrop-blur-sm will-change-transform sm:h-24 sm:w-24"
                           style={{ transformOrigin: "center center" }}
                         >
                           <motion.div
@@ -1016,7 +1061,7 @@ export function WellnessTools() {
                               duration: breathPhase === "inhale" ? 4 : breathPhase === "exhale" ? 4 : 0.5,
                               ease: "easeInOut",
                             }}
-                            className="flex h-28 w-28 items-center justify-center rounded-full bg-white/60"
+                            className="flex h-12 w-12 items-center justify-center rounded-full bg-white/60 sm:h-16 sm:w-16"
                           >
                             <motion.div
                               animate={{
@@ -1027,7 +1072,7 @@ export function WellnessTools() {
                                 duration: breathPhase === "inhale" ? 4 : breathPhase === "exhale" ? 4 : 0.5,
                                 ease: "easeInOut",
                               }}
-                              className="h-16 w-16 rounded-full bg-white/80"
+                              className="h-8 w-8 rounded-full bg-white/80 sm:h-10 sm:w-10"
                             />
                           </motion.div>
                         </motion.div>
@@ -1038,26 +1083,26 @@ export function WellnessTools() {
                         key={breathPhase}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="relative z-30 mt-5 w-full text-center"
+                        className="relative z-30 mt-1.5 w-full text-center sm:mt-2"
                       >
-                        <div className="text-2xl font-bold mb-1 drop-shadow-md">
+                        <div className="mb-0.5 text-base font-bold drop-shadow-md sm:text-lg">
                           {breathPhase === "inhale" && "Breathe In"}
                           {breathPhase === "hold" && "Hold"}
                           {breathPhase === "exhale" && "Breathe Out"}
                           {breathPhase === "hold2" && "Hold"}
                         </div>
-                        <div className="text-sm text-white/90 drop-shadow-md">
+                        <div className="text-[11px] text-white/90 drop-shadow-md sm:text-xs">
                           {4 - phaseTimer} seconds
                         </div>
                       </motion.div>
                     </div>
 
                     {/* Timer */}
-                    <div className="relative z-40 text-center mb-6">
-                      <div className="text-4xl font-bold mb-2 tabular-nums">
+                    <div className="relative z-40 mb-2.5 text-center sm:mb-3">
+                      <div className="mb-1 text-[clamp(1.65rem,7vw,2rem)] font-bold tabular-nums">
                         {Math.floor(timer / 60)}:{(timer % 60).toString().padStart(2, "0")}
                       </div>
-                      <p className="text-white/80 text-sm">
+                      <p className="text-[11px] text-white/80 sm:text-xs">
                         {sessionTimeComplete
                           ? "Session time finished"
                           : isPlaying
@@ -1068,27 +1113,27 @@ export function WellnessTools() {
 
                     {/* Controls */}
                     <div
-                      className={`relative z-40 flex items-center justify-center gap-4 ${sessionTimeComplete ? "pointer-events-none opacity-40" : ""}`}
+                      className={`relative z-40 flex items-center justify-center gap-2.5 pb-1 ${sessionTimeComplete ? "pointer-events-none opacity-40" : ""}`}
                     >
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => setTimer(0)}
-                        className="p-4 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+                        className="rounded-full bg-white/20 p-2.5 transition-colors hover:bg-white/30 sm:p-3"
                       >
-                        <RotateCcw className="w-5 h-5" />
+                        <RotateCcw className="h-4 w-4" />
                       </motion.button>
 
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
-                        onClick={() => setIsPlaying(!isPlaying)}
-                        className="p-6 rounded-full bg-white text-primary shadow-lg hover:shadow-xl transition-all"
+                        onClick={handleTogglePlay}
+                        className="rounded-full bg-white p-3.5 text-primary shadow-lg transition-all hover:shadow-xl sm:p-4"
                       >
                         {isPlaying ? (
-                          <Pause className="w-8 h-8" />
+                          <Pause className="h-5 w-5 sm:h-6 sm:w-6" />
                         ) : (
-                          <Play className="w-8 h-8" />
+                          <Play className="h-5 w-5 sm:h-6 sm:w-6" />
                         )}
                       </motion.button>
 
@@ -1096,9 +1141,9 @@ export function WellnessTools() {
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={(e) => handleToggleFavorite(activeExerciseData.id, e)}
-                        className="p-4 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+                        className="rounded-full bg-white/20 p-2.5 transition-colors hover:bg-white/30 sm:p-3"
                       >
-                        <Heart className={`w-5 h-5 ${activeExerciseData.favorite ? "text-red-500 fill-red-500" : "text-white"}`} />
+                        <Heart className={`h-4 w-4 ${activeExerciseData.favorite ? "text-red-500 fill-red-500" : "text-white"}`} />
                       </motion.button>
                     </div>
                   </div>

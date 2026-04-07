@@ -136,6 +136,15 @@ export function EzriGuidedMode({
     onClose();
   };
 
+  const handleCloseModal = () => {
+    stopWellnessAmbient();
+    setStage("intro");
+    setTimer(0);
+    setProgress(0);
+    setCurrentGuidance("");
+    onClose();
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -151,6 +160,7 @@ export function EzriGuidedMode({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            onClick={handleCloseModal}
             className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
           />
 
@@ -188,7 +198,7 @@ export function EzriGuidedMode({
                 <motion.button
                   whileHover={{ scale: 1.1, rotate: 90 }}
                   whileTap={{ scale: 0.9 }}
-                  onClick={onClose}
+                  onClick={handleCloseModal}
                   className="absolute top-6 right-6 p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
                 >
                   <X className="w-5 h-5" />

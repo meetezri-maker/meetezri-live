@@ -1353,6 +1353,7 @@ export function ActiveSession() {
   /** WS TTS queue (declared early for sound-off / stop handlers). */
   const wsAudioQueueRef = useRef<{ subtitle: string; audio: unknown }[]>([]);
   const wsIsPlaybackActiveRef = useRef(false);
+  const lastBargeInAtRef = useRef(0);
   const transcriptRef = useRef<
     { role: string; content: string; timestamp: number }[]
   >([]);
@@ -1639,6 +1640,20 @@ export function ActiveSession() {
     ]);
   };
 
+  const requestBargeInInterrupt = (source: string) => {
+    const now = Date.now();
+    if (now - lastBargeInAtRef.current < 400) return;
+    lastBargeInAtRef.current = now;
+    wsAudioQueueRef.current = [];
+    wsIsPlaybackActiveRef.current = false;
+    wsTtsDoneReceivedRef.current = false;
+    wsPendingFallbackTextRef.current = "";
+    stopAudioAndSpeechDriver();
+    try {
+      wsClientRef.current?.sendInterrupt(source);
+    } catch {}
+  };
+
   const handleUserText = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -1808,19 +1823,21 @@ export function ActiveSession() {
       toast.info("Microphone Active");
     };
 
-    recognition.onsoundstart = () =>
+    recognition.onsoundstart = () => {
       console.log("SpeechRecognition: Sound detected");
+      if (
+        !isMutedRef.current &&
+        !isSessionPausedRef.current &&
+        isEzriSpeakingRef.current
+      ) {
+        requestBargeInInterrupt("speech_soundstart");
+      }
+    };
     recognition.onsoundend = () =>
       console.log("SpeechRecognition: Sound ended");
 
     recognition.onresult = (event: any) => {
-      if (
-        isMutedRef.current ||
-        isSessionPausedRef.current ||
-        isEzriSpeakingRef.current
-      ) {
-        if (isEzriSpeakingRef.current)
-          console.log("Ignored speech: Ezri is speaking");
+      if (isMutedRef.current || isSessionPausedRef.current) {
         return;
       }
 
@@ -1831,6 +1848,10 @@ export function ActiveSession() {
 
       if (transcriptText.trim()) {
         const trimmed = transcriptText.trim();
+
+        if (isEzriSpeakingRef.current) {
+          requestBargeInInterrupt(isFinal ? "speech_final" : "speech_interim");
+        }
 
         if (!isFinal) {
           console.log("Interim:", trimmed);
@@ -2819,7 +2840,7 @@ export function ActiveSession() {
               className="absolute bottom-8 left-0 right-0 px-8 flex justify-center z-40 pointer-events-none"
             >
               <div className="bg-black/70 backdrop-blur-md px-6 py-4 rounded-2xl border border-white/10 max-w-2xl text-center shadow-xl">
-                <p className="text-white text-lg font-medium leading-relaxed">
+                <p className="text-white text-sm font-medium leading-relaxed">
                   {currentSubtitle}
                 </p>
               </div>
