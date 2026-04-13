@@ -22,6 +22,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const lastUserIdRef = useRef<string | null>(null);
+  const profileRef = useRef<any | null>(null);
+  profileRef.current = profile;
 
   const hasRole = (role: string | string[]) => {
     if (!profile?.role) return false;
@@ -85,33 +87,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // Check active session
+    // Hydrate session once; profile load is driven by onAuthStateChange only so we do not double-fetch /users/me.
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      
+
       if (session?.user) {
-        // User is authenticated, clear any error hash
         if (window.location.hash && window.location.hash.includes('error=')) {
           window.history.replaceState(null, '', window.location.pathname);
         }
         applyAppearanceForUser(session.user);
-        // Clear verification metadata when Supabase says the email is confirmed.
-        maybeClearEmailVerificationRequired(session.user).finally(() => {
-          // Wait for profile bootstrap so UI doesn't assume authentication.
-          fetchProfile();
-        });
+        void maybeClearEmailVerificationRequired(session.user);
       } else {
-        // No session, check for errors in URL
         handleAuthErrors();
         setIsLoading(false);
       }
     });
 
-    // Listen for changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -121,14 +116,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const isSameUser = lastUserId === incomingUserId;
         lastUserIdRef.current = incomingUserId;
 
-        // Avoid route-tree teardown on tab focus/auth refresh events.
-        // Only enter a blocking loading state when we don't yet have a profile for this user.
-        if (!isSameUser || !profile) {
-          setIsLoading(true);
+        // Token refresh does not change profile; refetching here caused duplicate /users/me traffic.
+        const shouldLoadProfile =
+          event === 'INITIAL_SESSION' ||
+          event === 'SIGNED_IN' ||
+          event === 'USER_UPDATED';
+
+        if (shouldLoadProfile) {
+          if (!isSameUser || !profileRef.current) {
+            setIsLoading(true);
+          }
+          maybeClearEmailVerificationRequired(session.user).finally(() => {
+            fetchProfile();
+          });
         }
-        maybeClearEmailVerificationRequired(session.user).finally(() => {
-          fetchProfile();
-        });
       } else {
         setProfile(null);
         setIsLoading(false);

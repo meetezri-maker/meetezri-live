@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { api } from "../../../lib/api";
 import { useAuth } from "@/app/contexts/AuthContext";
+import { PhoneInput } from "../../components/ui/phone-input";
+import { normalizeStoredPhoneForInput, isValidOptionalAppPhone } from "@/lib/normalizeStoredPhone";
 import {
   Users,
   Plus,
@@ -199,7 +201,7 @@ export function TeamRoleManagement() {
   const openEdit = (m: TeamMemberRow) => {
     setSelectedMember(m);
     setEditForm({
-      phone: m.phone ?? "",
+      phone: normalizeStoredPhoneForInput(m.phone ?? ""),
       profile_role: (["org_admin", "team_admin", "user"].includes(m.profile_role)
         ? m.profile_role
         : "team_admin") as "org_admin" | "team_admin" | "user",
@@ -212,6 +214,10 @@ export function TeamRoleManagement() {
   const handleAddMember = async () => {
     if (!newMember.email.trim() || !newMember.full_name.trim()) {
       toast.error("Name and email are required");
+      return;
+    }
+    if (!isValidOptionalAppPhone(newMember.phone)) {
+      toast.error("Enter a valid phone with country code (7–12 digits), or leave blank");
       return;
     }
     setSaving(true);
@@ -237,6 +243,10 @@ export function TeamRoleManagement() {
 
   const handleSaveEdit = async () => {
     if (!selectedMember) return;
+    if (!isValidOptionalAppPhone(editForm.phone)) {
+      toast.error("Enter a valid phone with country code (7–12 digits), or leave blank");
+      return;
+    }
     setSaving(true);
     try {
       await api.admin.updateOrganizationTeamMember(
@@ -653,10 +663,11 @@ export function TeamRoleManagement() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">Phone (optional)</label>
-                    <Input
-                      type="tel"
+                    <p className="text-xs text-muted-foreground mb-1">Country code + number (max 12 digits total).</p>
+                    <PhoneInput
                       value={newMember.phone}
-                      onChange={(e) => setNewMember((p) => ({ ...p, phone: e.target.value }))}
+                      onChange={(v) => setNewMember((p) => ({ ...p, phone: v }))}
+                      placeholder="Phone number"
                     />
                   </div>
                   <div>
@@ -825,10 +836,11 @@ export function TeamRoleManagement() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-2">Phone</label>
-                    <Input
-                      type="tel"
+                    <p className="text-xs text-muted-foreground mb-1">Country code + number (max 12 digits total).</p>
+                    <PhoneInput
                       value={editForm.phone}
-                      onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+                      onChange={(v) => setEditForm((f) => ({ ...f, phone: v }))}
+                      placeholder="Phone number"
                     />
                   </div>
                   <div>

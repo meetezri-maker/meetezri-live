@@ -43,7 +43,7 @@ interface JournalEntry {
 }
 
 export function Journal() {
-  const { session, profile } = useAuth();
+  const { session, profile, user } = useAuth();
   const navigate = useNavigate();
   
   // Feature Gate for Trial Users
@@ -99,7 +99,7 @@ export function Journal() {
   ];
 
   const fetchEntries = async () => {
-    if (!session) return;
+    if (!user?.id) return;
     try {
       setIsLoading(true);
       const data = await api.journal.getAll();
@@ -154,8 +154,9 @@ export function Journal() {
   };
 
   useEffect(() => {
-    fetchEntries();
-  }, [session]);
+    void fetchEntries();
+    // `session` is a new object on each Supabase token refresh; `user.id` is stable for the signed-in user.
+  }, [user?.id]);
 
   useEffect(() => {
     if (showFilterModal) {

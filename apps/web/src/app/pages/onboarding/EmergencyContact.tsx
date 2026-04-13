@@ -29,15 +29,25 @@ import {
   FormLabel,
   FormMessage,
 } from "../../components/ui/form";
+import { PhoneInput } from "../../components/ui/phone-input";
+import { normalizeStoredPhoneForInput } from "@/lib/normalizeStoredPhone";
+
+const countPhoneDigits = (value: string) => (value.match(/\d/g) || []).length;
 
 const emergencyContactSchema = z.object({
   emergencyName: z.string().trim().min(2, "Emergency contact name is required"),
   emergencyPhone: z
     .string()
     .trim()
-    .min(1, "Emergency contact phone is required")
-    .refine((phone) => /^\+?\d{7,15}$/.test(phone.replace(/[^\d+]/g, "")), {
-      message: "Enter a valid phone number",
+    .min(1, "Phone is required when adding an emergency contact")
+    .refine((v) => v.startsWith("+"), {
+      message: "Choose a country code and enter your contact's number",
+    })
+    .refine((v) => {
+      const n = countPhoneDigits(v);
+      return n >= 7 && n <= 12;
+    }, {
+      message: "Use 7–12 digits total including country code",
     }),
   emergencyRelationship: z
     .string()
@@ -63,7 +73,7 @@ export function OnboardingEmergencyContact() {
     mode: "onChange",
     defaultValues: {
       emergencyName: data.emergencyContactName || "",
-      emergencyPhone: data.emergencyContactPhone || "",
+      emergencyPhone: normalizeStoredPhoneForInput(data.emergencyContactPhone || ""),
       emergencyRelationship: data.emergencyContactRelationship || "",
     },
   });
@@ -173,13 +183,17 @@ export function OnboardingEmergencyContact() {
                     name="emergencyPhone"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Phone Number</FormLabel>
+                        <FormLabel>Phone number</FormLabel>
+                        <p className="text-xs text-muted-foreground -mt-1 mb-1">
+                          Select country code, then number (max 12 digits including code).
+                        </p>
                         <FormControl>
-                          <Input
-                            type="tel"
-                            placeholder="+1 (555) 123-4567"
-                            className="bg-input-background transition-all focus:scale-[1.02]"
-                            {...field}
+                          <PhoneInput
+                            value={field.value}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            name={field.name}
+                            placeholder="Phone number"
                           />
                         </FormControl>
                         <FormMessage />

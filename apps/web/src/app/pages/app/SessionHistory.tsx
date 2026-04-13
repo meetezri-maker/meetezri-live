@@ -7,17 +7,12 @@ import {
   Calendar,
   Video,
   MessageSquare,
-  TrendingUp,
   Heart,
-  Bookmark,
   Play,
   ChevronRight,
   Filter,
   Search,
   Download,
-  Smile,
-  Meh,
-  Frown,
   Star,
   Lock
 } from "lucide-react";
@@ -31,15 +26,13 @@ interface SessionData {
   id: string;
   date: string;
   duration: string;
+  /** Fractional minutes for summary stats (avoids parsing the label string). */
+  durationMinutesForStats: number;
   type: "video" | "chat";
-  mood: "positive" | "neutral" | "concerned";
-  moodEmoji: string;
   messagesCount: number;
-  highlightsCount: number;
   topicsDiscussed: string[];
   thumbnail: string;
   summary: string;
-  sentiment: number;
   favorite: boolean;
   status?: "completed" | "upcoming";
   recordingUrl?: string;
@@ -56,6 +49,7 @@ interface BackendSession {
   started_at: string | null;
   ended_at: string | null;
   duration_minutes: number | null;
+  billed_seconds?: number | null;
   recording_url: string | null;
   is_favorite: boolean;
   created_at: string;
@@ -63,6 +57,56 @@ interface BackendSession {
   _count?: {
     session_messages: number;
   };
+}
+
+/**
+ * `duration_minutes` is stored as floor(seconds/60), so sub-minute sessions are 0 — but the UI
+ * used truthy checks and showed "N/A". Prefer wall-clock (started_at → ended_at) when available.
+ */
+function formatSessionDuration(s: BackendSession): { label: string; minutesForStats: number } {
+  const billedSec =
+    typeof s.billed_seconds === "number" &&
+    Number.isFinite(s.billed_seconds) &&
+    s.billed_seconds > 0
+      ? s.billed_seconds
+      : null;
+
+  const spanMs =
+    s.started_at && s.ended_at
+      ? Math.max(0, new Date(s.ended_at).getTime() - new Date(s.started_at).getTime())
+      : null;
+  const spanMinutes = spanMs != null ? spanMs / 60000 : null;
+
+  const storedMin =
+    typeof s.duration_minutes === "number" && !Number.isNaN(s.duration_minutes)
+      ? s.duration_minutes
+      : null;
+
+  if (spanMinutes != null && spanMinutes > 0) {
+    if (spanMinutes >= 1) {
+      const m = Math.floor(spanMinutes);
+      return { label: `${m} min`, minutesForStats: m };
+    }
+    return { label: "< 1 min", minutesForStats: spanMinutes };
+  }
+
+  if (storedMin != null && storedMin > 0) {
+    return { label: `${storedMin} min`, minutesForStats: storedMin };
+  }
+
+  if (storedMin === 0) {
+    return { label: "0 min", minutesForStats: 0 };
+  }
+
+  if (billedSec != null) {
+    const m = billedSec / 60;
+    return {
+      label: m < 1 ? "< 1 min" : `${Math.floor(m)} min`,
+      minutesForStats: m,
+    };
+  }
+
+  return { label: "N/A", minutesForStats: 0 };
 }
 
 export function SessionHistory() {
@@ -92,7 +136,6 @@ export function SessionHistory() {
   }
 
   const [selectedSession, setSelectedSession] = useState<SessionData | null>(null);
-  const [filterMood, setFilterMood] = useState<string>("all");
   const [filterFavorites, setFilterFavorites] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"completed" | "upcoming">("completed");
@@ -101,7 +144,9 @@ export function SessionHistory() {
   const [upcomingSessions, setUpcomingSessions] = useState<SessionData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  const [transcript, setTranscript] = useState<{ role: string; content: string; created_at: string }[]>([]);
+  const [transcript, setTranscript] = useState<
+    { role: string; content: string; created_at?: string }[]
+  >([]);
   const [loadingTranscript, setLoadingTranscript] = useState(false);
 
   const handleToggleFavorite = async (sessionId: string, e: React.MouseEvent) => {
@@ -159,6 +204,8 @@ export function SessionHistory() {
             (s.status === 'scheduled' || s.status === 'active') &&
             baseDate.getTime() >= now.getTime();
 
+          const { label: durationLabel, minutesForStats } = formatSessionDuration(s);
+
           return {
             id: s.id,
             date: baseDate.toLocaleDateString('en-US', {
@@ -168,16 +215,13 @@ export function SessionHistory() {
               hour: s.scheduled_at ? 'numeric' : undefined,
               minute: s.scheduled_at ? 'numeric' : undefined,
             }),
-            duration: s.duration_minutes ? `${s.duration_minutes} min` : "N/A",
+            duration: durationLabel,
+            durationMinutesForStats: minutesForStats,
             type: s.type === 'instant' ? 'video' : (s.type as "video" | "chat") || 'video',
-            mood: "neutral",
-            moodEmoji: "😐",
             messagesCount: s._count?.session_messages || 0,
-            highlightsCount: 0,
             topicsDiscussed: [],
             thumbnail: `gradient-${(s.id.charCodeAt(0) % 5) + 1}`,
-            summary: s.title || "No summary available",
-            sentiment: 0,
+            summary: s.title?.trim() || "Session",
             favorite: s.is_favorite || false,
             status: s.status === 'completed' ? 'completed' : 'upcoming',
             recordingUrl: s.recording_url || undefined,
@@ -207,48 +251,71 @@ export function SessionHistory() {
     // navigate("/app/active-session");
   };
 
-  const handleExportSession = (session: SessionData) => {
-    // Create session data object
-    const exportData = {
-      sessionId: session.id,
-      date: session.date,
-      duration: session.duration,
-      type: session.type,
-      mood: session.mood,
-      sentiment: `${session.sentiment}%`,
-      messagesCount: session.messagesCount,
-      highlightsCount: session.highlightsCount,
-      topicsDiscussed: session.topicsDiscussed.join(", "),
-      summary: session.summary,
-      exportedAt: new Date().toISOString()
-    };
+  const transcriptLine = (role: string, content: string) => {
+    const r = role.toLowerCase();
+    const label = r === "user" ? "You" : "Ezri";
+    return `[${label}] ${content}`;
+  };
 
-    // Convert to JSON string
-    const jsonString = JSON.stringify(exportData, null, 2);
-    
-    // Create a blob and download
-    const blob = new Blob([jsonString], { type: "application/json" });
+  const downloadTextFile = (filename: string, body: string) => {
+    const blob = new Blob([body], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `session-${session.id}-${session.date.replace(/,?\s+/g, "-")}.json`;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
+  const handleExportSession = async (
+    session: SessionData,
+    messages?: { role: string; content: string; created_at?: string }[]
+  ) => {
+    let rows: { role: string; content: string; created_at?: string }[];
+    if (messages !== undefined) {
+      rows = messages;
+    } else {
+      try {
+        rows = await api.sessions.getTranscript(session.id);
+      } catch {
+        rows = [];
+      }
+    }
+
+    const header = [
+      `Session ID: ${session.id}`,
+      `Date: ${session.date}`,
+      `Duration: ${session.duration}`,
+      `Summary: ${session.summary}`,
+      "",
+      "--- Transcript ---",
+      "",
+    ].join("\n");
+
+    const body =
+      rows.length > 0
+        ? rows.map((m) => transcriptLine(m.role, m.content)).join("\n\n")
+        : "(No messages stored for this session.)";
+
+    const text = `${header}${body}`;
+    const safeDate = session.date.replace(/,?\s+/g, "-");
+    downloadTextFile(`session-${session.id}-${safeDate}-transcript.txt`, text);
+  };
+
 
   const sessions = activeTab === "completed" ? completedSessions : upcomingSessions;
 
   const filteredSessions = sessions.filter((session) => {
-    if (activeTab === "upcoming") return true; // Don't filter upcoming sessions by mood
-    const matchesMood = filterMood === "all" || session.mood === filterMood;
+    if (activeTab === "upcoming") return true;
     const matchesFavorite = !filterFavorites || session.favorite;
-    const matchesSearch = session.topicsDiscussed.some(topic => 
-      topic.toLowerCase().includes(searchQuery.toLowerCase())
-    ) || session.summary.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesMood && matchesFavorite && (searchQuery === "" || matchesSearch);
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch =
+      q === "" ||
+      session.summary.toLowerCase().includes(q) ||
+      session.topicsDiscussed.some((topic) => topic.toLowerCase().includes(q));
+    return matchesFavorite && matchesSearch;
   });
 
   const gradientStyles: Record<string, string> = {
@@ -259,21 +326,13 @@ export function SessionHistory() {
     "gradient-5": "from-indigo-400 to-blue-500"
   };
 
-  const getMoodIcon = (mood: string) => {
-    switch (mood) {
-      case "positive": return <Smile className="w-4 h-4 text-green-500" />;
-      case "neutral": return <Meh className="w-4 h-4 text-blue-500" />;
-      case "concerned": return <Frown className="w-4 h-4 text-orange-500" />;
-      default: return null;
-    }
-  };
-
   // Calculate stats
-  const totalDurationMinutes = completedSessions.reduce((acc, s) => {
-    const minutes = parseInt(s.duration.split(' ')[0]) || 0;
-    return acc + minutes;
-  }, 0);
+  const totalDurationMinutes = completedSessions.reduce(
+    (acc, s) => acc + s.durationMinutesForStats,
+    0
+  );
   const totalHours = (totalDurationMinutes / 60).toFixed(1);
+  const totalMessages = completedSessions.reduce((acc, s) => acc + s.messagesCount, 0);
 
   if (isLoading) {
     return (
@@ -366,10 +425,10 @@ export function SessionHistory() {
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Avg Sentiment</p>
-                  <p className="text-2xl font-bold">N/A</p>
+                  <p className="text-sm text-muted-foreground">Messages saved</p>
+                  <p className="text-2xl font-bold">{totalMessages}</p>
                 </div>
-                <TrendingUp className="w-8 h-8 text-green-500" />
+                <MessageSquare className="w-8 h-8 text-green-500" />
               </div>
             </Card>
             <Card className="p-4">
@@ -434,7 +493,7 @@ export function SessionHistory() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search topics or keywords..."
+                  placeholder="Search by session title..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
@@ -444,22 +503,11 @@ export function SessionHistory() {
                 <Button
                   onClick={() => setFilterFavorites(!filterFavorites)}
                   variant={filterFavorites ? "default" : "outline"}
-                  className={`gap-2 ${filterFavorites ? "bg-red-500 hover:bg-red-600 text-white border-red-500" : "text-gray-600 hover:text-red-500 hover:border-red-200"}`}
+                  className={`gap-2 ${filterFavorites ? "bg-red-500 hover:bg-red-600 text-white border-red-500" : "text-gray-600 hover:text-white hover:border-red-200"}`}
                 >
                   <Heart className={`w-4 h-4 ${filterFavorites ? "fill-current" : ""}`} />
                   Favorites
                 </Button>
-                <div className="w-px h-8 bg-gray-200 mx-2" />
-                {["all", "positive", "neutral", "concerned"].map((mood) => (
-                  <Button
-                    key={mood}
-                    onClick={() => setFilterMood(mood)}
-                    variant={filterMood === mood ? "default" : "outline"}
-                    className="capitalize"
-                  >
-                    {mood === "all" ? "All" : mood}
-                  </Button>
-                ))}
               </div>
             </div>
           )}
@@ -548,7 +596,6 @@ export function SessionHistory() {
                         </div>
                         <p className="text-sm text-gray-600 mb-2">{session.summary}</p>
                       </div>
-                      {getMoodIcon(session.mood)}
                     </div>
 
                     {/* Topics */}
@@ -567,15 +614,9 @@ export function SessionHistory() {
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <MessageSquare className="w-4 h-4" />
-                        <span>{session.messagesCount} messages</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Bookmark className="w-4 h-4" />
-                        <span>{session.highlightsCount} highlights</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Heart className="w-4 h-4" />
-                        <span>{session.sentiment}% positive</span>
+                        <span>
+                          {session.messagesCount} message{session.messagesCount === 1 ? "" : "s"} saved
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -596,7 +637,7 @@ export function SessionHistory() {
                       className="flex-1 sm:flex-none"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleExportSession(session);
+                        void handleExportSession(session);
                       }}
                     >
                       <Download className="w-4 h-4" />
@@ -646,50 +687,6 @@ export function SessionHistory() {
                       <p className="text-sm text-gray-600">{selectedSession.summary}</p>
                     </div>
 
-                    {/* Key Highlights */}
-                    <div>
-                      <h3 className="font-bold mb-2">Key Highlights</h3>
-                      <div className="space-y-2">
-                        {[
-                          "Identified work stress triggers",
-                          "Practiced breathing exercises",
-                          "Created action plan for self-care",
-                          "Discussed support system",
-                          "Set goals for next session"
-                        ].slice(0, selectedSession.highlightsCount).map((highlight, i) => (
-                          <div key={i} className="flex items-start gap-2">
-                            <Star className="w-4 h-4 text-yellow-500 flex-shrink-0 mt-0.5" />
-                            <p className="text-sm text-gray-600">{highlight}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Sentiment Analysis */}
-                    <div>
-                      <h3 className="font-bold mb-2">Sentiment Analysis</h3>
-                      <div className="flex items-center gap-3">
-                        {getMoodIcon(selectedSession.mood)}
-                        <div className="flex-1">
-                          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                            <motion.div
-                              initial={{ width: 0 }}
-                              animate={{ width: `${selectedSession.sentiment}%` }}
-                              transition={{ duration: 1 }}
-                              className={`h-full rounded-full ${
-                                selectedSession.mood === "positive"
-                                  ? "bg-green-500"
-                                  : selectedSession.mood === "concerned"
-                                  ? "bg-orange-500"
-                                  : "bg-blue-500"
-                              }`}
-                            />
-                          </div>
-                        </div>
-                        <span className="text-sm font-medium">{selectedSession.sentiment}%</span>
-                      </div>
-                    </div>
-
                     {/* Transcript */}
                     <div>
                       <h3 className="font-bold mb-2">Transcript</h3>
@@ -697,20 +694,23 @@ export function SessionHistory() {
                         {loadingTranscript ? (
                            <p className="text-sm text-gray-500 text-center">Loading transcript...</p>
                         ) : transcript.length > 0 ? (
-                          transcript.map((msg, i) => (
-                            <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                          transcript.map((msg, i) => {
+                            const isUser = msg.role?.toLowerCase() === "user";
+                            return (
+                            <div key={i} className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
                               <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
+                                isUser ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
                               }`}>
-                                {msg.role === 'user' ? 'U' : 'E'}
+                                {isUser ? 'U' : 'E'}
                               </div>
                               <div className={`p-3 rounded-lg max-w-[80%] text-sm ${
-                                msg.role === 'user' ? 'bg-primary/10' : 'bg-white border border-gray-200 shadow-sm'
+                                isUser ? 'bg-primary/10' : 'bg-white border border-gray-200 shadow-sm'
                               }`}>
                                 <p>{msg.content}</p>
                               </div>
                             </div>
-                          ))
+                            );
+                          })
                         ) : (
                           <p className="text-sm text-gray-500 text-center italic">No transcript available for this session.</p>
                         )}
@@ -719,7 +719,11 @@ export function SessionHistory() {
 
                     {/* Actions */}
                     <div className="flex gap-2 pt-4 border-t border-gray-200">
-                      <Button className="flex-1" variant="outline" onClick={() => handleExportSession(selectedSession)}>
+                      <Button
+                        className="flex-1"
+                        variant="outline"
+                        onClick={() => void handleExportSession(selectedSession, transcript)}
+                      >
                         <Download className="w-4 h-4 mr-2" />
                         Export Transcript
                       </Button>

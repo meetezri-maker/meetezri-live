@@ -1,23 +1,65 @@
 import { z } from 'zod';
 
-const ageSchema = z
+/** Age as years ("24") or date of birth "YYYY-MM-DD" (stored in `profiles.age`). */
+function ageFromIsoDob(val: string): number | null {
+  const v = val.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  const birth = new Date(`${v}T12:00:00`);
+  if (Number.isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let years = today.getFullYear() - birth.getFullYear();
+  const md = today.getMonth() - birth.getMonth();
+  if (md < 0 || (md === 0 && today.getDate() < birth.getDate())) {
+    years -= 1;
+  }
+  if (!Number.isFinite(years)) return null;
+  return years;
+}
+
+const ageOrIsoDobSchema = z
   .string()
   .refine((val) => {
-    const num = Number.parseInt(val, 10);
+    const v = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      const y = ageFromIsoDob(v);
+      return y !== null && y >= 13 && y <= 120;
+    }
+    const num = Number.parseInt(v, 10);
     return Number.isFinite(num) && num >= 13 && num <= 120;
-  }, 'Age must be between 13 and 120');
+  }, 'Age must be between 13 and 120, or use date of birth (YYYY-MM-DD)');
+
+/** Accept string/number from clients; allow ISO DOB for account settings. */
+const ageSchemaCoerced = z.preprocess(
+  (val) => (val === '' || val === null || val === undefined ? undefined : String(val)),
+  ageOrIsoDobSchema.optional()
+);
 
 const emergencyPhoneSchema = z
   .string()
   .transform((value) => value.replace(/[^\d+]/g, ''))
-  .refine((value) => /^\+?\d{7,15}$/.test(value), 'Emergency contact phone must be valid');
+  .refine((value) => /^\+?\d{7,12}$/.test(value), 'Emergency contact phone must be valid (max 12 digits)');
+
+const optionalPhoneSchema = z
+  .string()
+  .transform((value) => value.replace(/[^\d+]/g, ''))
+  .refine((value) => /^\+?\d{7,12}$/.test(value), 'Phone must be valid (max 12 digits)');
+
+/** Treat "" as omitted so partial clears don't fail validation. */
+const optionalEmergencyPhoneSchema = z.preprocess(
+  (val) => (val === '' || val === null || val === undefined ? undefined : val),
+  emergencyPhoneSchema.optional()
+);
 
 export const onboardingSchema = z.object({
   full_name: z.string().min(2).max(100).optional(),
   avatar_url: z.string().url().nullable().optional(),
   role: z.enum(['user', 'therapist']).default('user'),
   pronouns: z.string().optional(),
-  age: ageSchema.optional(),
+  phone: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    optionalPhoneSchema.optional()
+  ),
+  age: ageSchemaCoerced,
   timezone: z.string().optional(),
   current_mood: z.string().optional(),
   selected_goals: z.array(z.string()).optional(),
@@ -27,7 +69,7 @@ export const onboardingSchema = z.object({
   selected_avatar: z.string().optional(),
   selected_environment: z.string().optional(),
   emergency_contact_name: z.string().optional(),
-  emergency_contact_phone: emergencyPhoneSchema.optional(),
+  emergency_contact_phone: optionalEmergencyPhoneSchema,
   emergency_contact_relationship: z.string().optional(),
   permissions: z.record(z.any()).optional(),
   notification_preferences: z.record(z.any()).optional(),
@@ -71,12 +113,19 @@ export const onboardingSchema = z.object({
 export const updateProfileSchema = z.object({
   full_name: z.string().min(2).max(100).optional(),
   email: z.string().email().optional(),
-  phone: z.string().optional(),
-  avatar_url: z.string().url().nullable().optional(),
-  age: ageSchema.optional(),
+  phone: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    optionalPhoneSchema.optional()
+  ),
+  avatar_url: z.preprocess(
+    (v) => (v === '' ? null : v),
+    z.union([z.string().url(), z.null()]).optional()
+  ),
+  age: ageSchemaCoerced,
   timezone: z.string().optional(),
   pronouns: z.string().optional(),
   current_mood: z.string().optional(),
+  bio: z.string().max(2000).optional().or(z.literal('')),
   selected_goals: z.array(z.string()).optional(),
   in_therapy: z.string().optional(),
   on_medication: z.string().optional(),
@@ -85,7 +134,7 @@ export const updateProfileSchema = z.object({
   selected_voice: z.string().optional(),
   selected_environment: z.string().optional(),
   emergency_contact_name: z.string().optional(),
-  emergency_contact_phone: emergencyPhoneSchema.optional(),
+  emergency_contact_phone: optionalEmergencyPhoneSchema,
   emergency_contact_relationship: z.string().optional(),
   notification_preferences: z.record(z.any()).optional(),
   privacy_settings: z.record(z.any()).optional(),

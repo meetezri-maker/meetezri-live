@@ -4,6 +4,7 @@ import { AppLayout } from '@/app/components/AppLayout';
 import { Brain, CheckCircle, Star, Users, Volume2, Heart, ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
 import { AnimatedCard } from '@/app/components/AnimatedCard';
 import { Link } from 'react-router-dom';
+import { companionCardImageUrl } from '@/lib/avatar/companionModelUrl';
 
 interface AIAvatar {
   id: string;
@@ -13,7 +14,10 @@ interface AIAvatar {
   personality: string;
   specialty: string[];
   description: string;
+  /** Emoji fallback when `imageUrl` is not set */
   image: string;
+  /** Optional portrait from `public/avatars/` */
+  imageUrl?: string;
   voiceType: string;
   accentType: string;
   rating: number;
@@ -39,6 +43,7 @@ export function ChangeAvatar() {
       specialty: ["Anxiety", "Depression", "Stress Management"],
       description: "A compassionate AI companion with a warm presence. Maya specializes in helping with anxiety, stress, and building emotional resilience through mindfulness.",
       image: "👩‍💼",
+      imageUrl: companionCardImageUrl("maya chen.png"),
       voiceType: "Warm & Soothing",
       accentType: "Neutral American",
       rating: 4.9,
@@ -53,6 +58,7 @@ export function ChangeAvatar() {
       specialty: ["PTSD", "Trauma", "Life Transitions"],
       description: "A gentle and patient listener who creates a safe space for healing. Alex focuses on trauma recovery and navigating life's big changes.",
       image: "👨‍💼",
+      imageUrl: companionCardImageUrl("Alex.png"),
       voiceType: "Deep & Calming",
       accentType: "Neutral American",
       rating: 4.8,
@@ -67,6 +73,7 @@ export function ChangeAvatar() {
       specialty: ["Self-Esteem", "Relationships", "Personal Growth"],
       description: "An uplifting companion who helps you discover your strengths. Jordan specializes in building confidence and personal development.",
       image: "🧑‍💼",
+      imageUrl: companionCardImageUrl("jordan Taylor.png"),
       voiceType: "Bright & Encouraging",
       accentType: "Neutral American",
       rating: 4.7,
@@ -81,6 +88,7 @@ export function ChangeAvatar() {
       specialty: ["Grief", "Family Issues", "Chronic Illness"],
       description: "A wise and nurturing presence with deep empathy. Sarah brings years of life experience in supporting people through challenging times.",
       image: "👩‍🦳",
+      imageUrl: companionCardImageUrl("Sara Mitchell.png"),
       voiceType: "Gentle & Maternal",
       accentType: "British",
       rating: 4.9,
@@ -139,7 +147,15 @@ export function ChangeAvatar() {
                 </div>
 
                 <div className="flex items-start gap-6">
-                  <div className="text-7xl">{currentAvatar.image}</div>
+                  {currentAvatar.imageUrl ? (
+                    <img
+                      src={currentAvatar.imageUrl}
+                      alt=""
+                      className="h-28 w-28 shrink-0 rounded-2xl object-cover border-2 border-purple-200/80 dark:border-purple-700/80 shadow-md"
+                    />
+                  ) : (
+                    <div className="text-7xl">{currentAvatar.image}</div>
+                  )}
                   <div className="flex-1">
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{currentAvatar.name}</h3>
                     <p className="text-gray-700 dark:text-slate-300 mb-3">
@@ -233,7 +249,15 @@ export function ChangeAvatar() {
                       <div className="p-6">
                         {/* Avatar Image & Basic Info */}
                         <div className="flex items-start gap-4 mb-4">
-                          <div className="text-6xl">{avatar.image}</div>
+                          {avatar.imageUrl ? (
+                            <img
+                              src={avatar.imageUrl}
+                              alt=""
+                              className="h-24 w-24 shrink-0 rounded-xl object-cover border border-gray-200 dark:border-slate-600"
+                            />
+                          ) : (
+                            <div className="text-6xl">{avatar.image}</div>
+                          )}
                           <div className="flex-1">
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">{avatar.name}</h3>
                             <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">

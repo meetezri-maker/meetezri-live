@@ -27,6 +27,7 @@ const APP_API_PREFIXES = [
   '/api/notifications',
   '/api/ai-avatars',
   '/api/emergency-contacts',
+  '/api/community',
 ];
 
 const ADMIN_ROLES = ['super_admin', 'org_admin', 'team_admin'] as const;

@@ -36,7 +36,7 @@ interface BackendSession {
 
 export function Dashboard() {
   const location = useLocation();
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile } = useAuth();
   const [upcomingSessionsCount, setUpcomingSessionsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [confirmEmailDismissed, setConfirmEmailDismissed] = useState(false);
@@ -98,7 +98,6 @@ export function Dashboard() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        await refreshProfile();
         const sessions = await api.sessions.list({ status: "scheduled" });
         const now = new Date();
         const nonExpired = (sessions as BackendSession[]).filter((session) => {
@@ -157,7 +156,14 @@ export function Dashboard() {
           subscription_total,
           purchased_seconds,
           purchased,
-        } = await api.getCredits();
+        } = (await api.getCredits()) as {
+          credits_seconds?: number;
+          credits?: number;
+          subscription_total_seconds?: number;
+          subscription_total?: number;
+          purchased_seconds?: number;
+          purchased?: number;
+        };
         const seconds =
           typeof credits_seconds === "number"
             ? Math.max(0, credits_seconds)
@@ -193,7 +199,8 @@ export function Dashboard() {
       }
     };
     void loadCredits();
-  }, [user?.id, profile?.credits_total, profile?.credits_remaining]);
+    // Profile already supplies credit fallbacks; avoid re-fetching /users/credits when profile fields hydrate.
+  }, [user?.id]);
 
   const creditsRemainingSeconds =
     liveCreditsSeconds !== null

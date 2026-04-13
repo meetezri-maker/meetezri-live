@@ -12,6 +12,12 @@ import {
   checkUserExistsHandler,
   signupHandler,
   resendVerificationHandler,
+  getKnowledgeTwoFactorStatusHandler,
+  setupKnowledgeTwoFactorHandler,
+  verifyKnowledgeTwoFactorHandler,
+  disableKnowledgeTwoFactorHandler,
+  requestKnowledgeTwoFactorRecoveryHandler,
+  verifyKnowledgeTwoFactorRecoveryHandler,
 } from './user.controller';
 import { checkUserSchema, signupSchema } from './user.schema';
 
@@ -69,6 +75,54 @@ export async function userRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate],
     },
     getCreditsHandler
+  );
+
+  fastify.get(
+    '/2fa/knowledge/status',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    getKnowledgeTwoFactorStatusHandler
+  );
+
+  fastify.post(
+    '/2fa/knowledge/setup',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    setupKnowledgeTwoFactorHandler
+  );
+
+  fastify.post(
+    '/2fa/knowledge/verify',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    verifyKnowledgeTwoFactorHandler
+  );
+
+  fastify.post(
+    '/2fa/knowledge/disable',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    disableKnowledgeTwoFactorHandler
+  );
+
+  fastify.post(
+    '/2fa/knowledge/recovery/request',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    requestKnowledgeTwoFactorRecoveryHandler
+  );
+
+  fastify.post(
+    '/2fa/knowledge/recovery/verify',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    verifyKnowledgeTwoFactorRecoveryHandler
   );
 
   fastify.patch(

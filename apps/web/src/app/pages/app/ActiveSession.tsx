@@ -51,8 +51,17 @@ import { getEzriConfig } from "@/lib/ezri/config";
 import { getOrCreateEzriUserid } from "@/lib/ezri/ids";
 import { createEzriApiClient } from "@/lib/ezri/apiClient";
 import { EzriRealtimeClient, type EzriWsStatus } from "@/lib/ezri/realtimeClient";
+import { resolveEzriWsVoiceForCompanion } from "@/lib/ezri/voiceForCompanion";
 import { normalizeAudioSource, toObjectUrl } from "@/lib/ezri/audio";
-import { AVATAR_MODEL_URL } from "@/lib/avatar/avatarModelUrl";
+import {
+  companionSessionUses3dModel,
+  resolveCompanionModelUrl,
+  resolveCompanionPortraitUrl,
+} from "@/lib/avatar/companionModelUrl";
+import {
+  getCompanionViewTuning,
+  type CompanionViewTuning,
+} from "@/lib/avatar/companionViewTuning";
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -301,6 +310,27 @@ function isCheekRelatedMorphKeyForLog(name: string): boolean {
   return /cheek|smile|nasolabial|puff|squint/.test(lower);
 }
 
+/** 2D-only session view (everyone except Sarah): PNG portrait, no GLB — e.g. Alex, Jordan, Maya. */
+function StaticSessionPortrait({
+  imageUrl,
+  isSpeaking,
+}: {
+  imageUrl: string;
+  isSpeaking: boolean;
+}) {
+  return (
+    <div className="relative w-full h-full min-h-[500px] flex items-center justify-center px-4">
+      <img
+        src={imageUrl}
+        alt=""
+        className={`max-h-[min(100%,720px)] w-auto max-w-full object-contain drop-shadow-2xl transition-transform duration-300 ${
+          isSpeaking ? "scale-[1.02]" : "scale-100"
+        }`}
+      />
+    </div>
+  );
+}
+
 function ThreeAvatar({
   isSpeaking,
   audioLevel,
@@ -309,6 +339,8 @@ function ThreeAvatar({
   speechPulse,
   speechText,
   speechCharIndex,
+  modelUrl,
+  viewTuning,
 }: {
   isSpeaking: boolean;
   audioLevel: number;
@@ -316,6 +348,10 @@ function ThreeAvatar({
   speechPulse: number;
   speechText: string;
   speechCharIndex: number;
+  /** Resolved GLB URL for the selected companion (see `resolveCompanionModelUrl`). */
+  modelUrl: string;
+  /** Framing + mouth strength for this companion’s GLB (see `getCompanionViewTuning`). */
+  viewTuning: CompanionViewTuning;
 }) {
   const [avatarLoadState, setAvatarLoadState] = useState<
     "loading" | "ready" | "error"
@@ -351,6 +387,8 @@ function ThreeAvatar({
   const frameRef = useRef<number | null>(null);
 
   const baseScaleRef = useRef(1);
+  const mouthDriveMultRef = useRef(viewTuning.mouthDriveMultiplier);
+  mouthDriveMultRef.current = viewTuning.mouthDriveMultiplier;
 
   const mouthBindingsRef = useRef<MorphBinding[]>([]);
   const blinkBindingsRef = useRef<MorphBinding[]>([]);
@@ -396,6 +434,8 @@ function ThreeAvatar({
     if (!container) return;
 
     let cancelled = false;
+    setAvatarLoadState("loading");
+    setAvatarLoadProgress(null);
 
     const loadingManager = new THREE.LoadingManager();
     loadingManager.onProgress = (_url, loaded, total) => {
@@ -457,7 +497,7 @@ function ThreeAvatar({
     const loader = new GLTFLoader(loadingManager);
 
     loader.load(
-      AVATAR_MODEL_URL,
+      modelUrl,
       (gltf) => {
         if (cancelled) return;
         const model = gltf.scene;
@@ -649,9 +689,11 @@ function ThreeAvatar({
         model.position.sub(center);
 
         const maxDim = Math.max(size.x, size.y, size.z);
-        const baseScale = 4.5 / maxDim;
+        const baseScale =
+          (4.5 / maxDim) * viewTuning.scaleMultiplier;
         baseScaleRef.current = baseScale;
         model.scale.setScalar(baseScale);
+        model.position.y += viewTuning.offsetY;
 
         scene.add(model);
 
@@ -664,8 +706,12 @@ function ThreeAvatar({
 
         const portraitHeight = scaledSize.y * 0.98;
         const fovRad = (camera.fov * Math.PI) / 180;
-        const distance = portraitHeight / 2 / Math.tan(fovRad / 2);
-        const lookAtY = scaledCenter.y + scaledSize.y * 0.12;
+        const distance =
+          (portraitHeight / 2 / Math.tan(fovRad / 2)) *
+          viewTuning.cameraDistanceMultiplier;
+        const lookAtY =
+          scaledCenter.y +
+          scaledSize.y * viewTuning.lookAtYOffsetFraction;
 
         camera.position.set(scaledCenter.x, lookAtY, distance * 1);
         camera.lookAt(
@@ -773,6 +819,11 @@ function ThreeAvatar({
         1.22
       );
 
+      const mdm = mouthDriveMultRef.current;
+      const mouthAdj = THREE.MathUtils.clamp(mouth * mdm, 0, 1.35);
+      const jawOpenAdj = THREE.MathUtils.clamp(jawOpen * mdm, 0, 1.35);
+      const lipFollowAdj = THREE.MathUtils.clamp(lipFollow * mdm, 0, 1.35);
+
       // Apply mouth morphs — conservative ranges to avoid extreme deformation.
       // Also avoid any targets that look like full head/neck controls.
       if (mouthBindingsRef.current.length > 0) {
@@ -803,7 +854,7 @@ function ThreeAvatar({
             lower.includes("lip_lower") ||
             lower.includes("lowlip");
 
-          let strength = mouth;
+          let strength = mouthAdj;
           if (
             lower.includes("jaw") ||
             lower.includes("open") ||
@@ -812,27 +863,27 @@ function ThreeAvatar({
             lower.includes("tooth")
           ) {
             if (isUpperLipMorph) {
-              strength = jawOpen * (1 - lipFollow * 0.42);
+              strength = jawOpenAdj * (1 - lipFollowAdj * 0.42);
             } else if (isLowerLipMorph) {
-              strength = lipFollow;
+              strength = lipFollowAdj;
             } else if (
               lower.includes("teeth") ||
               lower.includes("tooth") ||
               lower.includes("jaw") ||
               lower.includes("open")
             ) {
-              strength = jawOpen;
+              strength = jawOpenAdj;
             } else {
-              strength = jawOpen * 0.9;
+              strength = jawOpenAdj * 0.9;
             }
           } else if (lower.includes("aa") || lower.includes("ah") || lower.includes("oh")) {
-            strength = jawOpen * 0.88;
+            strength = jawOpenAdj * 0.88;
           } else if (lower.includes("ee") || lower.includes("ih")) {
-            strength = jawOpen * 0.65;
+            strength = jawOpenAdj * 0.65;
           } else if (lower.includes("uh")) {
-            strength = jawOpen * 0.75;
+            strength = jawOpenAdj * 0.75;
           } else {
-            strength = mouth * 0.78;
+            strength = mouthAdj * 0.78;
           }
 
           const shaped = Math.pow(THREE.MathUtils.clamp(strength, 0, 1.5), 0.72);
@@ -883,7 +934,7 @@ function ThreeAvatar({
         0.1,
         0.55,
         THREE.MathUtils.clamp(
-          Math.pow(THREE.MathUtils.clamp(jawOpen, 0, 1), 1.05) * 0.55 +
+          Math.pow(THREE.MathUtils.clamp(jawOpenAdj, 0, 1), 1.05) * 0.55 +
             ampNorm * 0.45,
           0,
           1
@@ -932,11 +983,11 @@ function ThreeAvatar({
 
       // Bone-driven mouth (T1.glb: no morphs — bones only)
       const mouthForJaw = Math.pow(
-        THREE.MathUtils.clamp(jawOpen, 0, 1),
+        THREE.MathUtils.clamp(jawOpenAdj, 0, 1),
         1.04
       );
       const mouthForLips = Math.pow(
-        THREE.MathUtils.clamp(lipFollow, 0, 1),
+        THREE.MathUtils.clamp(lipFollowAdj, 0, 1),
         0.93
       );
 
@@ -1169,7 +1220,7 @@ function ThreeAvatar({
 
       blinkFnRef.current = null;
     };
-  }, []);
+  }, [modelUrl, viewTuning]);
 
   useEffect(() => {
     if (!isSpeaking) {
@@ -1277,8 +1328,41 @@ export default ThreeAvatar;
 export function ActiveSession() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, refreshProfile } = useAuth();
+  const { user, refreshProfile, session } = useAuth();
   const { sessionId: stateSessionId, duration, config } = location.state || {};
+
+  const companionAvatarLabel =
+    typeof config?.avatar === "string" ? config.avatar : undefined;
+
+  const sessionUsesCompanion3d = useMemo(
+    () => companionSessionUses3dModel(companionAvatarLabel),
+    [companionAvatarLabel]
+  );
+
+  const companionModelUrl = useMemo(
+    () => resolveCompanionModelUrl(companionAvatarLabel),
+    [companionAvatarLabel]
+  );
+
+  const companionPortraitUrl = useMemo(
+    () => resolveCompanionPortraitUrl(companionAvatarLabel),
+    [companionAvatarLabel]
+  );
+
+  const companionViewTuning = useMemo(
+    () => getCompanionViewTuning(companionAvatarLabel),
+    [companionAvatarLabel]
+  );
+
+  /** Same id as WebSocket `voice=` — must be sent on REST speak/chat too or TTS often defaults to one (female) voice. */
+  const ezriTtsVoiceId = useMemo(
+    () =>
+      resolveEzriWsVoiceForCompanion(
+        companionAvatarLabel,
+        typeof config?.voice === "string" ? config.voice : undefined
+      ),
+    [companionAvatarLabel, config?.voice]
+  );
 
   const ezriConfig = useMemo(() => {
     try {
@@ -1417,6 +1501,25 @@ export function ActiveSession() {
     transcriptRef.current = transcript;
   }, [transcript]);
 
+  const apiSessionIdRef = useRef<string | null>(null);
+  const sessionTimeRef = useRef(0);
+  const authTokenRef = useRef<string | null>(null);
+  const sessionFullyCleanedRef = useRef(false);
+  const remoteEndAttemptedRef = useRef(false);
+  const pendingUnmountTeardownRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    apiSessionIdRef.current = apiSessionId;
+  }, [apiSessionId]);
+
+  useEffect(() => {
+    sessionTimeRef.current = sessionTime;
+  }, [sessionTime]);
+
+  useEffect(() => {
+    authTokenRef.current = session?.access_token ?? null;
+  }, [session?.access_token]);
+
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const [audioLevel, setAudioLevel] = useState(0);
@@ -1434,7 +1537,6 @@ export function ActiveSession() {
     audioLevelForWatchdogRef.current = audioLevel;
   }, [audioLevel]);
 
-  const [currentSubtitle, setCurrentSubtitle] = useState<string | null>(null);
   const [speechPulse, setSpeechPulse] = useState(0);
   const [speechText, setSpeechText] = useState("");
   const [speechCharIndex, setSpeechCharIndex] = useState(0);
@@ -1444,6 +1546,8 @@ export function ActiveSession() {
   const ttsAnalyserRafRef = useRef<number | null>(null);
   const ezriPlaybackSmoothRef = useRef(0);
   const ttsMouthTapOkRef = useRef(false);
+  /** Text of the clip currently playing (for echo filter; state alone lags behind STT). */
+  const ezriPlaybackTextRef = useRef<string>("");
 
   const stopAudioAndSpeechDriver = () => {
     if (ttsAnalyserRafRef.current) {
@@ -1479,9 +1583,9 @@ export function ActiveSession() {
     }
     setIsEzriSpeaking(false);
     isEzriSpeakingRef.current = false;
+    ezriPlaybackTextRef.current = "";
     setSpeechText("");
     setSpeechCharIndex(0);
-    setCurrentSubtitle(null);
   };
 
   const driveSpeechAnimationForText = (text: string, durationMs: number) => {
@@ -1538,8 +1642,6 @@ export function ActiveSession() {
   ) => {
     if (typeof window === "undefined") return;
     if (isSoundOffRef.current) {
-      // Respect “sound off”: don’t start playback, but keep subtitle for accessibility.
-      setCurrentSubtitle(text);
       opts?.onDone?.();
       return;
     }
@@ -1548,7 +1650,7 @@ export function ActiveSession() {
     const seq = audioPlaySeqRef.current;
 
     stopAudioAndSpeechDriver();
-    setCurrentSubtitle(text);
+    ezriPlaybackTextRef.current = text;
     setSpeechText(text);
     setSpeechCharIndex(0);
     setIsEzriSpeaking(true);
@@ -1679,7 +1781,11 @@ export function ActiveSession() {
     if (!ezriApi || !ezriConfig) return;
     try {
       const ttsProvider = ezriConfig.defaults.ttsProvider;
-      const res = await ezriApi.speakRest({ text, tts_provider: ttsProvider });
+      const res = await ezriApi.speakRest({
+        text,
+        tts_provider: ttsProvider,
+        voice: ezriTtsVoiceId,
+      });
       await playEzriAudio(text, res.audio);
     } catch (e: any) {
       console.error("Ezri speak failed:", e);
@@ -1707,6 +1813,64 @@ export function ActiveSession() {
     try {
       wsClientRef.current?.sendInterrupt(source);
     } catch {}
+  };
+
+  const normalizeSpeech = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const shouldIgnoreEchoBargeIn = (candidateRaw: string) => {
+    const candidate = normalizeSpeech(candidateRaw);
+    if (!candidate) return true;
+    if (candidate.length < 4) return true;
+
+    const refs = [
+      ezriPlaybackTextRef.current || "",
+      wsLastFinalTextRef.current || "",
+      transcriptRef.current
+        .slice()
+        .reverse()
+        .find((t) => t.role === "assistant")?.content || "",
+    ]
+      .map(normalizeSpeech)
+      .filter(Boolean);
+
+    const candWords = candidate.split(" ").filter(Boolean);
+    if (candWords.length === 0) return true;
+
+    for (const r of refs) {
+      if (!r) continue;
+      if (r.includes(candidate) || candidate.includes(r)) return true;
+
+      const rWords = new Set(r.split(" ").filter(Boolean));
+      let overlap = 0;
+      for (const w of candWords) {
+        if (rWords.has(w)) overlap += 1;
+      }
+      const overlapRatio = overlap / candWords.length;
+      if (overlapRatio >= 0.5) return true;
+    }
+    return false;
+  };
+
+  const shouldInterruptForSpeech = (candidateRaw: string, isFinal: boolean) => {
+    const candidate = normalizeSpeech(candidateRaw);
+    if (!candidate) return false;
+    if (shouldIgnoreEchoBargeIn(candidate)) return false;
+
+    const words = candidate.split(" ").filter(Boolean);
+    const micLevel = audioLevelForWatchdogRef.current;
+
+    // Interim results are noisy; require stronger evidence.
+    if (!isFinal) {
+      return words.length >= 2 && candidate.length >= 8 && micLevel >= 18;
+    }
+
+    // Final transcript: allow slightly looser thresholds but still avoid tiny echoes.
+    return (words.length >= 2 && candidate.length >= 6) || micLevel >= 26;
   };
 
   const handleUserText = async (text: string) => {
@@ -1757,6 +1921,7 @@ export function ActiveSession() {
         provider: brainProvider,
         userid: ezriUserid,
         session_id: sessionId,
+        voice: ezriTtsVoiceId,
       });
 
       if (res.text) appendAssistantFinal(res.text);
@@ -1880,13 +2045,8 @@ export function ActiveSession() {
 
     recognition.onsoundstart = () => {
       console.log("SpeechRecognition: Sound detected");
-      if (
-        !isMutedRef.current &&
-        !isSessionPausedRef.current &&
-        isEzriSpeakingRef.current
-      ) {
-        requestBargeInInterrupt("speech_soundstart");
-      }
+      // Do not interrupt on raw sound alone — speaker echo can trigger this.
+      // We interrupt on recognized speech text below after echo filtering.
     };
     recognition.onsoundend = () =>
       console.log("SpeechRecognition: Sound ended");
@@ -1904,12 +2064,27 @@ export function ActiveSession() {
       if (transcriptText.trim()) {
         const trimmed = transcriptText.trim();
 
+        // While TTS plays, ignore mic input unless it looks like a deliberate barge-in (not echo).
         if (isEzriSpeakingRef.current) {
-          requestBargeInInterrupt(isFinal ? "speech_final" : "speech_interim");
+          if (shouldInterruptForSpeech(trimmed, isFinal)) {
+            requestBargeInInterrupt(isFinal ? "speech_final" : "speech_interim");
+            if (!isFinal) {
+              return;
+            }
+            if (shouldIgnoreEchoBargeIn(trimmed)) {
+              return;
+            }
+            // Final transcript after real interrupt — fall through to user handling.
+          } else {
+            return;
+          }
         }
 
         if (!isFinal) {
           console.log("Interim:", trimmed);
+          if (isEzriSpeakingRef.current) {
+            return;
+          }
           const now = Date.now();
           if (
             trimmed !== lastInterimTextRef.current ||
@@ -2311,6 +2486,7 @@ export function ActiveSession() {
       brainProvider: ezriConfig.defaults.brainProvider,
       ttsProvider: ezriConfig.defaults.ttsProvider,
       sttProvider: ezriConfig.defaults.sttProvider,
+      voice: ezriTtsVoiceId,
     });
 
     return () => {
@@ -2320,7 +2496,7 @@ export function ActiveSession() {
       }
       client.disconnect();
     };
-  }, [ezriConfig, ezriUserid, sessionId, hasSessionEnded]);
+  }, [ezriConfig, ezriUserid, sessionId, hasSessionEnded, companionAvatarLabel, ezriTtsVoiceId]);
 
   const currentAvatar = {
     name: config?.avatar || "Maya Chen",
@@ -2345,7 +2521,13 @@ export function ActiveSession() {
     if (isSessionPaused || hasSessionEnded) return;
 
     const timer = setInterval(() => {
-      setSessionTime((prev) => prev + 1);
+      setSessionTime((prev) => {
+        const next = prev + 1;
+        // Keep ref in sync immediately so refresh / pagehide always sends accurate seconds
+        // (React state→ref effect can lag one frame behind the interval).
+        sessionTimeRef.current = next;
+        return next;
+      });
     }, 1000);
 
     return () => clearInterval(timer);
@@ -2461,29 +2643,116 @@ export function ActiveSession() {
       .padStart(2, "0")}`;
   };
 
-  const endSessionAndCleanup = async () => {
-    if (isSessionEndingRef.current) return;
+  const SESSION_API_BASE =
+    import.meta.env.VITE_API_URL ||
+    (import.meta.env.DEV
+      ? "http://localhost:3001/api"
+      : "https://meetezri-live-api.vercel.app/api");
+
+  const teardownLocalResources = () => {
+    if (sessionFullyCleanedRef.current) return;
+    sessionFullyCleanedRef.current = true;
     setHasSessionEnded(true);
     isSessionEndingRef.current = true;
+
     if (recognitionRef.current) {
       try {
         recognitionRef.current.onend = null;
         recognitionRef.current.stop();
-      } catch (e) {}
+      } catch {
+        /* ignore */
+      }
       isRecognitionActiveRef.current = false;
       setIsListening(false);
     }
 
     stopAudioAndSpeechDriver();
 
+    try {
+      wsClientRef.current?.disconnect();
+    } catch {
+      /* ignore */
+    }
+
+    try {
+      window.localStorage.removeItem("ezri_active_session_id");
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const notifyServerSessionEndedKeepalive = () => {
+    const id = apiSessionIdRef.current;
+    const token = authTokenRef.current;
+    if (!id || !token || remoteEndAttemptedRef.current) return;
+    remoteEndAttemptedRef.current = true;
+    const payload = {
+      duration_seconds: sessionTimeRef.current,
+      recording_url: undefined as string | undefined,
+      transcript: transcriptRef.current,
+    };
+    try {
+      void fetch(`${SESSION_API_BASE}/sessions/${id}/end`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      });
+    } catch {
+      /* ignore */
+    }
+  };
+
+  /** Refresh / close tab / bfcache-hidden page — browser gives us one keepalive request window. */
+  const abruptSessionEnd = (reason: string) => {
+    if (sessionFullyCleanedRef.current && remoteEndAttemptedRef.current) return;
+    console.log("[ActiveSession] Abrupt session end:", reason);
+    teardownLocalResources();
+    notifyServerSessionEndedKeepalive();
+  };
+
+  useEffect(() => {
+    const pending = pendingUnmountTeardownRef.current;
+    if (pending !== null) {
+      window.clearTimeout(pending);
+      pendingUnmountTeardownRef.current = null;
+    }
+    return () => {
+      pendingUnmountTeardownRef.current = window.setTimeout(() => {
+        pendingUnmountTeardownRef.current = null;
+        abruptSessionEnd("leave_route");
+      }, 0);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onPageHide = (ev: PageTransitionEvent) => {
+      if (ev.persisted) return;
+      abruptSessionEnd("pagehide");
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
+
+  const endSessionAndCleanup = async () => {
+    teardownLocalResources();
+
+    if (!apiSessionId) {
+      toast.error("Missing session id. Please restart the session from the lobby.");
+      return;
+    }
+    if (remoteEndAttemptedRef.current) {
+      return;
+    }
+    remoteEndAttemptedRef.current = true;
+
     setIsUploading(true);
     const durationSeconds = sessionTime;
 
     try {
-      if (!apiSessionId) {
-        toast.error("Missing session id. Please restart the session from the lobby.");
-        return;
-      }
       await api.sessions.end(apiSessionId, durationSeconds, undefined, transcript);
       try {
         await refreshProfile();
@@ -2713,14 +2982,23 @@ export function ActiveSession() {
 
             {/* Stable container — do not animate `y` here or the whole avatar bobs up/down. */}
             <div className="relative z-10 w-full h-full">
-              <ThreeAvatar
-                isSpeaking={isEzriSpeaking}
-                audioLevel={audioLevel}
-                mouthAudioLevelRef={mouthAudioLevelRef}
-                speechPulse={speechPulse}
-                speechText={speechText}
-                speechCharIndex={speechCharIndex}
-              />
+              {sessionUsesCompanion3d ? (
+                <ThreeAvatar
+                  modelUrl={companionModelUrl}
+                  viewTuning={companionViewTuning}
+                  isSpeaking={isEzriSpeaking}
+                  audioLevel={audioLevel}
+                  mouthAudioLevelRef={mouthAudioLevelRef}
+                  speechPulse={speechPulse}
+                  speechText={speechText}
+                  speechCharIndex={speechCharIndex}
+                />
+              ) : (
+                <StaticSessionPortrait
+                  imageUrl={companionPortraitUrl}
+                  isSpeaking={isEzriSpeaking}
+                />
+              )}
             </div>
 
             {isEzriSpeaking && (
@@ -2884,24 +3162,6 @@ export function ActiveSession() {
             </motion.div>
           </div>
         </div>
-
-        {/* Subtitles */}
-        <AnimatePresence>
-          {currentSubtitle && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="absolute bottom-8 left-0 right-0 px-8 flex justify-center z-40 pointer-events-none"
-            >
-              <div className="bg-black/70 backdrop-blur-md px-6 py-4 rounded-2xl border border-white/10 max-w-2xl text-center shadow-xl">
-                <p className="text-white text-sm font-medium leading-relaxed">
-                  {currentSubtitle}
-                </p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* User PiP camera — draggable */}
         <motion.div

@@ -23,6 +23,11 @@ import { useState, useEffect } from "react";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
 import { Skeleton } from "../../components/ui/skeleton";
+import { PhoneInput } from "../../components/ui/phone-input";
+import {
+  normalizeStoredPhoneForInput,
+  isValidOptionalAppPhone,
+} from "@/lib/normalizeStoredPhone";
 
 interface EmergencyContact {
   id: string;
@@ -87,13 +92,17 @@ export function EmergencyContacts() {
       toast.error("Name is required");
       return;
     }
+    if (!isValidOptionalAppPhone(formData.phone)) {
+      toast.error("Enter a valid phone with country code (7–12 digits total), or leave blank");
+      return;
+    }
 
     try {
       setIsSubmitting(true);
       const newContact = await api.emergencyContacts.create({
         name: formData.name,
         relationship: formData.relationship || undefined,
-        phone: formData.phone || undefined,
+        phone: formData.phone.trim() || undefined,
         email: formData.email || undefined,
         is_trusted: formData.is_trusted
       });
@@ -114,7 +123,7 @@ export function EmergencyContacts() {
     setFormData({
       name: contact.name,
       relationship: contact.relationship || "",
-      phone: contact.phone || "",
+      phone: normalizeStoredPhoneForInput(contact.phone || ""),
       email: contact.email || "",
       is_trusted: contact.is_trusted,
     });
@@ -127,13 +136,17 @@ export function EmergencyContacts() {
       toast.error("Name is required");
       return;
     }
+    if (!isValidOptionalAppPhone(formData.phone)) {
+      toast.error("Enter a valid phone with country code (7–12 digits total), or leave blank");
+      return;
+    }
 
     try {
       setIsSubmitting(true);
       const updatedContact = await api.emergencyContacts.update(editingContact.id, {
         name: formData.name,
         relationship: formData.relationship || undefined,
-        phone: formData.phone || undefined,
+        phone: formData.phone.trim() || undefined,
         email: formData.email || undefined,
         is_trusted: formData.is_trusted
       });
@@ -487,17 +500,18 @@ export function EmergencyContacts() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">Phone Number</label>
-                    <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg">
-                      <Phone className="w-4 h-4 text-gray-400" />
-                      <input
-                        type="tel"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        placeholder="(555) 123-4567"
-                        className="flex-1 outline-none bg-transparent"
-                      />
-                    </div>
+                    <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
+                      Phone number
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Choose country code, then number (max 12 digits including code).
+                    </p>
+                    <PhoneInput
+                      value={formData.phone}
+                      onChange={(v) => setFormData({ ...formData, phone: v })}
+                      placeholder="Phone number"
+                      className="w-full"
+                    />
                   </div>
 
                   <div>

@@ -76,6 +76,15 @@ function formatApiErrorBody(
 
 async function handleResponse(res: Response, defaultErrorMessage: string) {
   if (res.status === 401) {
+    const errorData = await res.json().catch(() => ({} as Record<string, unknown>));
+    const message = typeof errorData.message === 'string' ? errorData.message : '';
+
+    // Some endpoints (e.g. knowledge 2FA verify) legitimately return 401 for bad code.
+    // Preserve that message and avoid signing out a valid session.
+    if (message && message.toLowerCase().includes('invalid second-factor code')) {
+      throw new Error(message);
+    }
+
     // Session is invalid/expired on the server side
     await supabase.auth.signOut();
     throw new Error('Session expired. Please login again.');
@@ -91,6 +100,13 @@ async function handleResponse(res: Response, defaultErrorMessage: string) {
 
 async function handleResponseAllowEmpty(res: Response, defaultErrorMessage: string) {
   if (res.status === 401) {
+    const errorData = await res.json().catch(() => ({} as Record<string, unknown>));
+    const message = typeof errorData.message === 'string' ? errorData.message : '';
+
+    if (message && message.toLowerCase().includes('invalid second-factor code')) {
+      throw new Error(message);
+    }
+
     await supabase.auth.signOut();
     throw new Error('Session expired. Please login again.');
   }
@@ -113,20 +129,39 @@ async function handleBlobResponse(res: Response, errorMessage: string) {
   return res.blob();
 }
 
+/** Merge overlapping GET /users/me calls (same tick / auth bootstrap). Admin calls pass explicit token and bypass. */
+let getMeInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /users/credits calls. */
+let getCreditsInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /journal list calls (auth/session churn on load). */
+let getJournalListInFlight: Promise<any> | null = null;
+
 export const api = {
   async getMe(accessToken?: string) {
-    const headers = await getHeaders(accessToken);
-    const res = await fetch(`${API_URL}/users/me`, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-    });
-    
-    if (res.status === 404) {
-      throw new Error('Profile not found');
+    const run = async () => {
+      const headers = await getHeaders(accessToken);
+      const res = await fetch(`${API_URL}/users/me`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+
+      if (res.status === 404) {
+        throw new Error('Profile not found');
+      }
+
+      return handleResponse(res, 'Failed to fetch user profile');
+    };
+
+    if (accessToken) {
+      return run();
     }
-    
-    return handleResponse(res, 'Failed to fetch user profile');
+    if (!getMeInFlight) {
+      getMeInFlight = run().finally(() => {
+        getMeInFlight = null;
+      });
+    }
+    return getMeInFlight;
   },
 
   async initProfile() {
@@ -149,6 +184,89 @@ export const api = {
     return handleResponse(res, 'Failed to update profile');
   },
 
+  async getCommunityOverview() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/overview`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+    return handleResponse(res, 'Failed to load community overview');
+  },
+
+  async getCommunityGroups() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/groups`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+    return handleResponse(res, 'Failed to load community groups');
+  },
+
+  async getCommunityPosts(limit = 30) {
+    const headers = await getHeaders();
+    const res = await fetch(
+      `${API_URL}/community/posts?${new URLSearchParams({ limit: String(limit) })}`,
+      { method: 'GET', headers, cache: 'no-store' }
+    );
+    return handleResponse(res, 'Failed to load community posts');
+  },
+
+  async createCommunityPost(body: {
+    content: string;
+    tags?: string[];
+    group_id?: string | null;
+  }) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/posts`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to create post');
+  },
+
+  async joinCommunityGroup(groupId: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/groups/${groupId}/join`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    return handleResponse(res, 'Failed to join group');
+  },
+
+  async leaveCommunityGroup(groupId: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/groups/${groupId}/leave`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    return handleResponse(res, 'Failed to leave group');
+  },
+
+  async likeCommunityPost(postId: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/posts/${postId}/like`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    return handleResponse(res, 'Failed to like post');
+  },
+
+  async getCommunityMemberProfile(userId: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/members/${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+    return handleResponse(res, 'Failed to load member profile');
+  },
+
   async resendVerificationEmail() {
     const headers = await getHeaders();
     const res = await fetch(`${API_URL}/users/resend-verification`, {
@@ -156,6 +274,70 @@ export const api = {
       headers,
     });
     return handleResponse(res, 'Failed to send verification email');
+  },
+
+  async getKnowledgeTwoFactorStatus() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/status`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+    return handleResponse(res, 'Failed to load knowledge 2FA status');
+  },
+
+  async setupKnowledgeTwoFactor(body: {
+    pin: string;
+    securityQuestion: string;
+    securityAnswer: string;
+  }) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/setup`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to setup knowledge 2FA');
+  },
+
+  async verifyKnowledgeTwoFactor(code: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/verify`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ code }),
+    });
+    return handleResponse(res, 'Failed to verify knowledge 2FA');
+  },
+
+  async disableKnowledgeTwoFactor() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/disable`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    return handleResponse(res, 'Failed to disable knowledge 2FA');
+  },
+
+  async requestKnowledgeTwoFactorRecovery() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/recovery/request`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    return handleResponse(res, 'Failed to send recovery code');
+  },
+
+  async verifyKnowledgeTwoFactorRecovery(code: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/recovery/verify`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ code }),
+    });
+    return handleResponse(res, 'Failed to verify recovery code');
   },
 
   async completeOnboarding(data: any) {
@@ -229,14 +411,21 @@ export const api = {
     return handleResponse(res, 'Failed to fetch settings');
   },
 
-  async getCredits() {
-    const headers = await getHeaders();
-    const res = await fetch(`${API_URL}/users/credits`, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-    });
-    return handleResponse(res, 'Failed to fetch credits');
+  async getCredits(): Promise<any> {
+    if (!getCreditsInFlight) {
+      getCreditsInFlight = (async () => {
+        const headers = await getHeaders();
+        const res = await fetch(`${API_URL}/users/credits`, {
+          method: 'GET',
+          headers,
+          cache: 'no-store',
+        });
+        return handleResponse(res, 'Failed to fetch credits');
+      })().finally(() => {
+        getCreditsInFlight = null;
+      });
+    }
+    return getCreditsInFlight;
   },
 
   async updateSetting(key: string, value: any, description?: string) {
@@ -424,14 +613,21 @@ export const api = {
       return handleResponse(res, 'Failed to create journal entry');
     },
 
-    async getAll() {
-      const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/journal`, {
-        method: 'GET',
-        headers,
-        cache: 'no-store',
-      });
-      return handleResponse(res, 'Failed to fetch journal entries');
+    async getAll(): Promise<any> {
+      if (!getJournalListInFlight) {
+        getJournalListInFlight = (async () => {
+          const headers = await getHeaders();
+          const res = await fetch(`${API_URL}/journal`, {
+            method: 'GET',
+            headers,
+            cache: 'no-store',
+          });
+          return handleResponse(res, 'Failed to fetch journal entries');
+        })().finally(() => {
+          getJournalListInFlight = null;
+        });
+      }
+      return getJournalListInFlight;
     },
 
     async get(id: string) {

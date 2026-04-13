@@ -253,14 +253,18 @@ export async function endSession(
     throw new Error('Session not found');
   }
 
-  // Calculate duration in seconds, preferring explicit client value
-  let secondsUsed = 0;
-  if (typeof durationSeconds === 'number' && durationSeconds >= 0) {
+  // Wall-clock elapsed — used when client omits duration or sends 0 (refresh / keepalive / race with React state).
+  let serverElapsedSeconds = 0;
+  if (session.started_at) {
+    const durationMs = Date.now() - new Date(session.started_at).getTime();
+    serverElapsedSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  }
+
+  let secondsUsed: number;
+  if (typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0) {
     secondsUsed = durationSeconds;
-  } else if (session.started_at) {
-    const now = new Date();
-    const durationMs = now.getTime() - new Date(session.started_at).getTime();
-    secondsUsed = Math.max(0, Math.floor(durationMs / 1000));
+  } else {
+    secondsUsed = serverElapsedSeconds;
   }
 
   // Deduct credits

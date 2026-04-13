@@ -1,9 +1,22 @@
 import { z } from 'zod';
 
+const emergencyContactPhoneInner = z
+  .string()
+  .transform((value) => value.replace(/[^\d+]/g, ''))
+  .refine((value) => /^\+?\d{7,12}$/.test(value), {
+    message: 'Phone must include country code (7–12 digits total)',
+  });
+
+/** Same rules as profile `phone`: omit or valid E.164-style (7–12 digits). */
+const emergencyContactPhoneField = z.preprocess(
+  (val) => (val === '' || val === null || val === undefined ? undefined : val),
+  emergencyContactPhoneInner.optional()
+);
+
 export const createEmergencyContactSchema = z.object({
   name: z.string().min(1, "Name is required"),
   relationship: z.string().optional(),
-  phone: z.string().optional(),
+  phone: emergencyContactPhoneField,
   email: z.string().email().optional().or(z.literal('')),
   is_trusted: z.boolean().optional().default(false),
 });

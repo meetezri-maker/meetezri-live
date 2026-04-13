@@ -49,6 +49,7 @@ import { OnboardingComplete } from '@/app/pages/onboarding/Complete';
 import { Dashboard } from '@/app/pages/app/Dashboard';
 import { MoodCheckIn } from '@/app/pages/app/MoodCheckIn';
 import { UserProfile } from '@/app/pages/app/UserProfile';
+import { MemberProfileView } from '@/app/pages/app/MemberProfileView';
 import { SessionLobby } from '@/app/pages/app/SessionLobby';
 import { ActiveSession } from '@/app/pages/app/ActiveSession';
 import { Billing } from '@/app/pages/app/Billing';
@@ -142,6 +143,19 @@ import { MoodHistory } from './pages/app/MoodHistory';
 import { Journal } from './pages/app/Journal';
 import { WellnessTools } from './pages/app/WellnessTools';
 import { SecuritySettings } from './pages/admin/SecuritySettings';
+import { SessionHistory } from './pages/app/SessionHistory';
+import { Settings } from './pages/app/Settings';
+import { SettingsHub } from './pages/app/SettingsHub';
+import { AccountSettings } from './pages/app/AccountSettings';
+import { EmergencyContacts } from './pages/app/EmergencyContacts';
+import { Notifications } from './pages/app/Notifications';
+import { PrivacySettings } from './pages/app/PrivacySettings';
+import { AccessibilitySettings } from './pages/app/AccessibilitySettings';
+import { AppearanceSettings } from './pages/app/AppearanceSettings';
+import { ChangeAvatar } from './pages/app/ChangeAvatar';
+import { Achievements } from './pages/app/Achievements';
+import { NotificationHistory } from './pages/app/NotificationHistory';
+// import { Community } from './pages/app/Community';
 
 function NetworkWatcher() {
   const navigate = useNavigate();
@@ -310,10 +324,28 @@ export default function App() {
             <Route path="/app/mood-history" element={<MoodHistory />} />
             <Route path="/app/journal" element={<Journal />} />
             <Route path="/app/wellness-tools" element={<WellnessTools />} />
+
             <Route path="/app/session-lobby" element={<SessionLobby />} />
+            <Route path= "/app/session-history" element={<SessionHistory />} />
+            <Route path="/app/settings" element={<SettingsHub />} />
+            <Route path="/app/settings/account" element={<AccountSettings />} />
+            <Route path="/app/settings/emergency-contacts" element={<EmergencyContacts />} />
+           <Route path="/app/notifications" element={<Notifications />} />
             <Route path="/app/active-session" element={<ActiveSession />} />
+            <Route path = "/app/settings/privacy" element={<PrivacySettings />} />
+            <Route path = "/app/settings/accessibility" element={<AccessibilitySettings />} />
+            <Route path = "/app/settings/appearance" element={<AppearanceSettings />} />
+            <Route path = "/app/settings/change-avatar" element={<ChangeAvatar />} />
+            <Route path = "/app/settings/achievements" element={<Achievements />} />
+            <Route path = "/app/settings/notification-history" element={<NotificationHistory />} />
+            <Route path="/app/profile/:userId" element={<MemberProfileView />} />
+            <Route path="/profile/:userId" element={<MemberProfileView />} />
+            <Route path="/app/profile" element={<Navigate to="/app/user-profile" replace />} />
             <Route path="/app/user-profile" element={<UserProfile />} />
+            {/* <Route path="/app/settings/community" element={<Community />} /> */}
             <Route path="/app/billing" element={<Billing />} />
+            <Route path="/app/settings/notifications" element={<Notifications />} />
+            
             <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />
             
             {/* Admin Routes - Protected and role-gated */}

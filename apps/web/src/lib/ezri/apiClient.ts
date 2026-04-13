@@ -6,6 +6,8 @@ export type EzriChatRestRequest = {
   provider: string;
   userid: string;
   session_id: string;
+  /** Same Kokoro/RunPod voice id as WebSocket `voice=` (required for correct male/female TTS on REST). */
+  voice?: string;
 };
 
 export type EzriChatRestResult = {
@@ -17,6 +19,8 @@ export type EzriChatRestResult = {
 export type EzriSpeakRestRequest = {
   text: string;
   tts_provider: string;
+  /** Same voice id as WS; without this, many backends default to a single (often female) voice. */
+  voice?: string;
 };
 
 export type EzriSpeakRestResult = {

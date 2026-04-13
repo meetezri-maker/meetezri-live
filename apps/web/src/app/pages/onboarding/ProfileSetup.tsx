@@ -22,11 +22,31 @@ import {
   FormLabel,
   FormMessage,
 } from "../../components/ui/form";
+import { PhoneInput } from "../../components/ui/phone-input";
+import { normalizeStoredPhoneForInput } from "@/lib/normalizeStoredPhone";
+
+const countPhoneDigits = (value: string) => (value.match(/\d/g) || []).length;
 
 const profileSetupSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
   lastName: z.string().min(2, "Last name must be at least 2 characters"),
   pronouns: z.string().optional(),
+  phone: z.preprocess(
+    (v) => (v === undefined || v === null ? "" : String(v)),
+    z
+      .string()
+      .refine((v) => {
+        const t = v.trim();
+        if (!t) return true;
+        return t.startsWith("+");
+      }, { message: "Choose a country code for your phone number" })
+      .refine((v) => {
+        const t = v.trim();
+        if (!t) return true;
+        const n = countPhoneDigits(t);
+        return n >= 7 && n <= 12;
+      }, { message: "Use 7–12 digits total including country code" })
+  ),
   age: z.string().refine((val) => {
     const num = parseInt(val);
     return !isNaN(num) && num >= 13 && num <= 120;
@@ -39,17 +59,21 @@ type ProfileSetupValues = z.infer<typeof profileSetupSchema>;
 export function OnboardingProfileSetup() {
   const navigate = useNavigate();
   const { data, updateData, completeOnboarding } = useOnboarding();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [availableTimezones] = useState<string[]>((Intl as any).supportedValuesOf('timeZone'));
 
   const form = useForm<ProfileSetupValues>({
     resolver: zodResolver(profileSetupSchema as any),
+    mode: "onChange",
     defaultValues: {
       firstName: data.firstName || "",
       lastName: data.lastName || "",
       pronouns: data.pronouns || "",
+      phone: normalizeStoredPhoneForInput(
+        data.phone || (profile as { phone?: string } | null)?.phone || ""
+      ),
       age: data.age || "",
       timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
@@ -60,6 +84,9 @@ export function OnboardingProfileSetup() {
     if (data.firstName) form.setValue("firstName", data.firstName);
     if (data.lastName) form.setValue("lastName", data.lastName);
     if (data.pronouns) form.setValue("pronouns", data.pronouns);
+    if (data.phone !== undefined) {
+      form.setValue("phone", normalizeStoredPhoneForInput(data.phone));
+    }
     if (data.age) form.setValue("age", data.age);
     if (data.timezone) form.setValue("timezone", data.timezone);
     else {
@@ -163,6 +190,7 @@ export function OnboardingProfileSetup() {
         last_name: values.lastName,
         full_name: `${values.firstName} ${values.lastName}`,
         pronouns: values.pronouns || "",
+        ...(values.phone?.trim() ? { phone: values.phone.trim() } : {}),
         age: values.age,
         timezone: values.timezone
       });
@@ -171,7 +199,8 @@ export function OnboardingProfileSetup() {
       updateData({ 
         firstName: values.firstName, 
         lastName: values.lastName, 
-        pronouns: values.pronouns, 
+        pronouns: values.pronouns,
+        phone: values.phone?.trim() || "",
         age: values.age, 
         timezone: values.timezone 
       });
@@ -187,6 +216,7 @@ export function OnboardingProfileSetup() {
           firstName: values.firstName,
           lastName: values.lastName,
           pronouns: values.pronouns,
+          phone: values.phone?.trim() || "",
           age: values.age,
           timezone: values.timezone,
           selectedPlan: "trial",
@@ -356,6 +386,36 @@ export function OnboardingProfileSetup() {
                           </motion.button>
                         ))}
                       </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </motion.div>
+
+            {/* Phone (optional) */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.55 }}
+            >
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Phone (optional)</FormLabel>
+                    <p className="text-xs text-muted-foreground -mt-1 mb-1">
+                      Country code and number (max 12 digits including code).
+                    </p>
+                    <FormControl>
+                      <PhoneInput
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        placeholder="Your phone number"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

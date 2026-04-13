@@ -10,6 +10,8 @@ export type EzriRealtimeConnectArgs = {
   brainProvider: string;
   ttsProvider: string;
   sttProvider: string;
+  /** TTS voice id for the server (e.g. `af_heart`, `am_echo`, `af_sky`). */
+  voice: string;
 };
 
 export type EzriRealtimeClientHandlers = {
@@ -133,7 +135,8 @@ export class EzriRealtimeClient {
       `&tts_provider=${encodeURIComponent(args.ttsProvider)}` +
       `&stt_provider=${encodeURIComponent(args.sttProvider)}` +
       `&userid=${encodeURIComponent(args.userid)}` +
-      `&session_id=${encodeURIComponent(args.sessionId)}`;
+      `&session_id=${encodeURIComponent(args.sessionId)}` +
+      `&voice=${encodeURIComponent(args.voice)}`;
 
     try {
       this.ws = new WebSocket(url);

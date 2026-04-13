@@ -1910,7 +1910,7 @@ export async function removeOrgTeamMember(
   return getOrgTeamMembers(callerId, callerRole, orgId);
 }
 
-function invalidateCommunityCaches() {
+export function invalidateCommunityCaches() {
   communityStatsCache = null;
   communityGroupsCache = null;
 }

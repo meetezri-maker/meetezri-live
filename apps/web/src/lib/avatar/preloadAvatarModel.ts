@@ -1,18 +1,21 @@
-import { AVATAR_MODEL_URL } from "./avatarModelUrl";
+import { resolveCompanionModelUrl } from "./companionModelUrl";
 
-let preloadPromise: Promise<void> | null = null;
+const preloadByUrl = new Map<string, Promise<void>>();
 
 /**
  * Warm HTTP cache for the avatar GLB while the user is still on lobby / other screens.
  * The file is large (~50MB+); preloading reduces perceived delay when ActiveSession mounts.
  */
-export function preloadAvatarModel(): Promise<void> {
-  if (preloadPromise) return preloadPromise;
-  preloadPromise = fetch(AVATAR_MODEL_URL, {
+export function preloadAvatarModel(modelUrl?: string): Promise<void> {
+  const url = modelUrl ?? resolveCompanionModelUrl(undefined);
+  const existing = preloadByUrl.get(url);
+  if (existing) return existing;
+  const p = fetch(url, {
     mode: "same-origin",
     cache: "force-cache",
   })
     .then(() => undefined)
     .catch(() => undefined);
-  return preloadPromise;
+  preloadByUrl.set(url, p);
+  return p;
 }

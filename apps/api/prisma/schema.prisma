@@ -956,6 +956,7 @@ model profiles {
   signup_type                                          String?                        // 'trial' | 'plan' | null
   age                                                   String?
   current_mood                                          String?
+  bio                                                   String? // About-me (Account Settings); separate from current_mood
   pronouns                                              String?
   selected_goals                                        String[]
   timezone                                              String?

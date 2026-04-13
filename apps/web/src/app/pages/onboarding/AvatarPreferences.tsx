@@ -17,6 +17,7 @@ import {
   FormLabel,
   FormMessage,
 } from "../../components/ui/form";
+import { companionCardImageUrl } from "@/lib/avatar/companionModelUrl";
 
 interface AIAvatar {
   id: string;
@@ -26,7 +27,10 @@ interface AIAvatar {
   personality: string;
   specialty: string[];
   description: string;
+  /** Emoji fallback when `imageUrl` is not set */
   image: string;
+  /** Optional portrait from `public/avatars/` */
+  imageUrl?: string;
   voiceType: string;
   accentType: string;
   rating: number;
@@ -62,6 +66,7 @@ export function OnboardingAvatarPreferences() {
       specialty: ["Anxiety", "Depression", "Stress Management"],
       description: "A compassionate AI companion with a warm presence. Maya specializes in helping with anxiety, stress, and building emotional resilience through mindfulness.",
       image: "👩‍💼",
+      imageUrl: companionCardImageUrl("maya chen.png"),
       voiceType: "Warm & Soothing",
       accentType: "Neutral American",
       rating: 4.9,
@@ -76,6 +81,7 @@ export function OnboardingAvatarPreferences() {
       specialty: ["PTSD", "Trauma", "Life Transitions"],
       description: "A gentle and patient listener who creates a safe space for healing. Alex focuses on trauma recovery and navigating life's big changes.",
       image: "👨‍💼",
+      imageUrl: companionCardImageUrl("Alex.png"),
       voiceType: "Deep & Calming",
       accentType: "Neutral American",
       rating: 4.8,
@@ -90,6 +96,7 @@ export function OnboardingAvatarPreferences() {
       specialty: ["Self-Esteem", "Relationships", "Personal Growth"],
       description: "An uplifting companion who helps you discover your strengths. Jordan specializes in building confidence and personal development.",
       image: "🧑‍💼",
+      imageUrl: companionCardImageUrl("jordan Taylor.png"),
       voiceType: "Bright & Encouraging",
       accentType: "Neutral American",
       rating: 4.7,
@@ -104,6 +111,7 @@ export function OnboardingAvatarPreferences() {
       specialty: ["Grief", "Family Issues", "Chronic Illness"],
       description: "A wise and nurturing presence with deep empathy. Sarah brings years of life experience in supporting people through challenging times.",
       image: "👩‍🦳",
+      imageUrl: companionCardImageUrl("Sara Mitchell.png"),
       voiceType: "Gentle & Maternal",
       accentType: "British",
       rating: 4.9,
@@ -207,7 +215,15 @@ export function OnboardingAvatarPreferences() {
                           <div className="p-6 text-left">
                             {/* Avatar Image & Basic Info */}
                             <div className="flex items-start gap-4 mb-4">
-                              <div className="text-6xl">{avatar.image}</div>
+                              {avatar.imageUrl ? (
+                                <img
+                                  src={avatar.imageUrl}
+                                  alt=""
+                                  className="h-24 w-24 shrink-0 rounded-xl object-cover border border-gray-200"
+                                />
+                              ) : (
+                                <div className="text-6xl">{avatar.image}</div>
+                              )}
                               <div className="flex-1">
                                 <h3 className="text-lg font-bold text-gray-900 mb-1">{avatar.name}</h3>
                                 <p className="text-sm text-muted-foreground mb-2">

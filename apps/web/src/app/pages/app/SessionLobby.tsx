@@ -2,7 +2,7 @@ import { AppLayout } from "../../components/AppLayout";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { motion, AnimatePresence } from "motion/react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import {
   Video,
   Calendar,
@@ -15,14 +15,21 @@ import {
   ArrowRight,
   Play,
   X,
-  Check
+  Check,
+  Palette,
+  Loader2,
 } from "lucide-react";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Skeleton } from "../../components/ui/skeleton";
 import { preloadAvatarModel } from "@/lib/avatar/preloadAvatarModel";
+import {
+  companionSessionUses3dModel,
+  resolveCompanionModelUrl,
+  companionCardImageUrl,
+} from "@/lib/avatar/companionModelUrl";
 
 interface BackendSession {
   id: string;
@@ -45,23 +52,95 @@ interface UpcomingSession {
   isExpired: boolean;
 }
 
+const SESSION_ENVIRONMENTS = [
+  { value: "beach", label: "Beach Sunset", emoji: "🏖️", gradient: "from-orange-300 to-blue-400" },
+  { value: "forest", label: "Peaceful Forest", emoji: "🌲", gradient: "from-green-400 to-emerald-600" },
+  { value: "mountains", label: "Mountain View", emoji: "⛰️", gradient: "from-blue-300 to-purple-400" },
+  { value: "space", label: "Starry Night", emoji: "🌌", gradient: "from-indigo-500 to-purple-900" },
+  { value: "minimal", label: "Minimal Studio", emoji: "⬜", gradient: "from-gray-100 to-gray-300" }
+];
+
+function environmentLabel(value: string | undefined | null): string {
+  if (!value) return "Default";
+  const found = SESSION_ENVIRONMENTS.find((e) => e.value === value);
+  return found?.label ?? value;
+}
+
+/** Lobby companion list — card portraits from `public/avatars/` via companionCardImageUrl */
+const LOBBY_AVATARS: {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+  cardImage?: string;
+}[] = [
+  {
+    id: "Alex Rivera",
+    name: "Alex Rivera",
+    emoji: "👨‍⚕️",
+    description: "Supportive and empathetic",
+    cardImage: companionCardImageUrl("Alex.png"),
+  },
+  {
+    id: "Sarah Mitchell",
+    name: "Sarah Mitchell",
+    emoji: "👩‍⚕️",
+    description: "Warm and understanding",
+    cardImage: companionCardImageUrl("Sara Mitchell.png"),
+  },
+  {
+    id: "Jordan Taylor",
+    name: "Jordan Taylor",
+    emoji: "👨‍💼",
+    description: "Professional and attentive",
+    cardImage: companionCardImageUrl("jordan Taylor.png"),
+  },
+  {
+    id: "Maya chen",
+    name: "Maya Chen",
+    emoji: "👩‍🦰",
+    description: "Kind and patient",
+    cardImage: companionCardImageUrl("maya chen.png"),
+  },
+];
+
+function lobbyAvatarByName(name: string) {
+  const n = name.trim().toLowerCase();
+  if (!n) return LOBBY_AVATARS[0];
+  return (
+    LOBBY_AVATARS.find((a) => a.name.toLowerCase() === n) ??
+    LOBBY_AVATARS.find((a) => a.id.toLowerCase() === n) ??
+    LOBBY_AVATARS.find((a) => a.name.split(/\s+/)[0]?.toLowerCase() === n) ??
+    LOBBY_AVATARS[0]
+  );
+}
+
 export function SessionLobby() {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const voiceSectionRef = useRef<HTMLDivElement>(null);
+  const avatarSectionRef = useRef<HTMLDivElement>(null);
+  const environmentSectionRef = useRef<HTMLDivElement>(null);
   const [showCarveoutBanner, setShowCarveoutBanner] = useState(false);
   const [selectedMode, setSelectedMode] = useState<"now" | "schedule">("now");
   const [selectedDuration, setSelectedDuration] = useState(30);
   const [showMinutesPicker, setShowMinutesPicker] = useState(false);
   const [customMinutesInput, setCustomMinutesInput] = useState("30");
   const [showCustomizeModal, setShowCustomizeModal] = useState(false);
+  const [isSavingCustomize, setIsSavingCustomize] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState("Voice 1");
+  const [selectedVoice, setSelectedVoice] = useState(profile?.selected_voice || "Voice 1");
   const [selectedAvatar, setSelectedAvatar] = useState(profile?.selected_avatar || "Alex");
-  
+  const [selectedEnvironment, setSelectedEnvironment] = useState(
+    profile?.selected_environment || "minimal"
+  );
+
   // Temporary state for modal
   const [tempSelectedVoice, setTempSelectedVoice] = useState(selectedVoice);
   const [tempSelectedAvatar, setTempSelectedAvatar] = useState(selectedAvatar);
+  const [tempSelectedEnvironment, setTempSelectedEnvironment] = useState(selectedEnvironment);
 
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
@@ -79,8 +158,23 @@ export function SessionLobby() {
   }, [profile?.selected_avatar]);
 
   useEffect(() => {
-    preloadAvatarModel();
-  }, []);
+    if (profile?.selected_voice) {
+      setSelectedVoice(profile.selected_voice);
+      setTempSelectedVoice(profile.selected_voice);
+    }
+  }, [profile?.selected_voice]);
+
+  useEffect(() => {
+    if (profile?.selected_environment) {
+      setSelectedEnvironment(profile.selected_environment);
+      setTempSelectedEnvironment(profile.selected_environment);
+    }
+  }, [profile?.selected_environment]);
+
+  useEffect(() => {
+    if (!companionSessionUses3dModel(profile?.selected_avatar)) return;
+    void preloadAvatarModel(resolveCompanionModelUrl(profile?.selected_avatar));
+  }, [profile?.selected_avatar]);
 
   useEffect(() => {
     // Load once on mount; avoid depending on `profile` identity
@@ -101,8 +195,38 @@ export function SessionLobby() {
     if (showCustomizeModal) {
       setTempSelectedVoice(selectedVoice);
       setTempSelectedAvatar(selectedAvatar);
+      setTempSelectedEnvironment(selectedEnvironment);
     }
-  }, [showCustomizeModal, selectedVoice, selectedAvatar]);
+  }, [showCustomizeModal, selectedVoice, selectedAvatar, selectedEnvironment]);
+
+  // Deep link from Profile → Session Preferences (Voice / Environment)
+  useEffect(() => {
+    const raw = searchParams.get("customize");
+    if (!raw) return;
+    const section = raw.toLowerCase();
+    if (!["voice", "avatar", "environment"].includes(section)) return;
+
+    setShowCustomizeModal(true);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("customize");
+        return next;
+      },
+      { replace: true }
+    );
+
+    const scrollTarget =
+      section === "voice"
+        ? voiceSectionRef
+        : section === "avatar"
+          ? avatarSectionRef
+          : environmentSectionRef;
+    const t = window.setTimeout(() => {
+      scrollTarget.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [searchParams, setSearchParams]);
 
   const [liveCreditsSeconds, setLiveCreditsSeconds] = useState<number | null>(null);
 
@@ -205,11 +329,29 @@ export function SessionLobby() {
     setSelectedDuration(Math.floor(customMinutesValue));
   };
 
-  const handleSaveCustomize = () => {
-    setSelectedVoice(tempSelectedVoice);
-    setSelectedAvatar(tempSelectedAvatar);
-    setShowCustomizeModal(false);
-    toast.success("Session settings updated");
+  const handleSaveCustomize = async () => {
+    if (isSavingCustomize) return;
+    setIsSavingCustomize(true);
+    try {
+      await api.updateProfile({
+        selected_voice: tempSelectedVoice,
+        selected_avatar: tempSelectedAvatar,
+        selected_environment: tempSelectedEnvironment
+      });
+      await refreshProfile();
+      setSelectedVoice(tempSelectedVoice);
+      setSelectedAvatar(tempSelectedAvatar);
+      setSelectedEnvironment(tempSelectedEnvironment);
+      setShowCustomizeModal(false);
+      toast.success("Session settings updated — reloading…");
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 400);
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not save session preferences");
+      setIsSavingCustomize(false);
+    }
   };
 
   const loadUpcomingSessions = async () => {
@@ -334,12 +476,12 @@ export function SessionLobby() {
     { id: "voice4", name: "Voice 4", description: "Gentle and soothing", gender: "Male" }
   ];
 
-  const avatars = [
-    { id: "Alex Rivera", name: "Alex Rivera", emoji: "👨‍⚕️", description: "Supportive and empathetic" },
-    { id: "Sarah Mitchell", name: "Sarah Mitchell", emoji: "👩‍⚕️", description: "Warm and understanding" },
-    { id: "Jordan Taylor", name: "Jordan Taylor", emoji: "👨‍💼", description: "Professional and attentive" },
-    { id: "Maya chen", name: "Maya Chen", emoji: "👩‍🦰", description: "Kind and patient" }
-  ];
+  const avatars = LOBBY_AVATARS;
+
+  const selectedCompanionPreview = useMemo(
+    () => lobbyAvatarByName(selectedAvatar),
+    [selectedAvatar]
+  );
 
   const [checklistItems, setChecklistItems] = useState([
     { label: "Find a quiet, private space", checked: true },
@@ -698,9 +840,19 @@ export function SessionLobby() {
                         rotate: [0, 5, -5, 0]
                       }}
                       transition={{ duration: 3, repeat: Infinity }}
-                      className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-4xl"
+                      className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-4xl overflow-hidden ring-2 ring-white/30"
                     >
-                      👨‍⚕️
+                      {selectedCompanionPreview.cardImage ? (
+                        <img
+                          src={selectedCompanionPreview.cardImage}
+                          alt=""
+                          className="h-full w-full object-cover object-top"
+                        />
+                      ) : (
+                        <span className="text-4xl leading-none">
+                          {selectedCompanionPreview.emoji}
+                        </span>
+                      )}
                     </motion.div>
                     <div>
                       <h3 className="font-bold text-lg">Ezri is ready</h3>
@@ -828,6 +980,15 @@ export function SessionLobby() {
                       <span className="text-sm">Avatar</span>
                     </div>
                     <span className="text-sm font-medium">{selectedAvatar}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Palette className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm">Environment</span>
+                    </div>
+                    <span className="text-sm font-medium text-right max-w-[55%] truncate">
+                      {environmentLabel(selectedEnvironment)}
+                    </span>
                   </div>
                   <Button
                     type="button"
@@ -997,7 +1158,7 @@ export function SessionLobby() {
                     {/* Scrollable Content */}
                     <div className="p-6 overflow-y-auto">
                       {/* Voice Selection */}
-                      <div className="mb-6">
+                      <div ref={voiceSectionRef} className="mb-6 scroll-mt-4">
                         <div className="flex items-center gap-2 mb-4">
                           <Volume2 className="w-5 h-5 text-primary" />
                           <h3 className="font-bold text-lg">Voice Selection</h3>
@@ -1042,7 +1203,7 @@ export function SessionLobby() {
                       </div>
 
                       {/* Avatar Selection */}
-                      <div className="mb-6">
+                      <div ref={avatarSectionRef} className="mb-6 scroll-mt-4">
                         <div className="flex items-center gap-2 mb-4">
                           <User className="w-5 h-5 text-primary" />
                           <h3 className="font-bold text-lg">Avatar Selection</h3>
@@ -1073,10 +1234,57 @@ export function SessionLobby() {
                                   <Check className="w-3 h-3 text-white" />
                                 </motion.div>
                               )}
-                              <div className="text-4xl mb-2">{avatar.emoji}</div>
+                              {avatar.cardImage ? (
+                                <img
+                                  src={avatar.cardImage}
+                                  alt=""
+                                  className="mx-auto mb-2 h-16 w-16 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="text-4xl mb-2">{avatar.emoji}</div>
+                              )}
                               <div className="font-bold mb-1">{avatar.name}</div>
                               <div className="text-xs text-muted-foreground">
                                 {avatar.description}
+                              </div>
+                            </motion.button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Session background (environment) */}
+                      <div ref={environmentSectionRef} className="mb-2 scroll-mt-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Palette className="w-5 h-5 text-primary" />
+                          <h3 className="font-bold text-lg">Session Background</h3>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Choose a calming background for your video sessions
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {SESSION_ENVIRONMENTS.map((env, index) => (
+                            <motion.button
+                              key={env.value}
+                              type="button"
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ delay: 0.05 * index }}
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => setTempSelectedEnvironment(env.value)}
+                              className={`rounded-lg border-2 overflow-hidden transition-all text-left ${
+                                tempSelectedEnvironment === env.value
+                                  ? "border-primary shadow-lg"
+                                  : "border-border hover:border-primary/50"
+                              }`}
+                            >
+                              <div
+                                className={`h-20 bg-gradient-to-br ${env.gradient} flex items-center justify-center dark:opacity-95`}
+                              >
+                                <span className="text-3xl">{env.emoji}</span>
+                              </div>
+                              <div className="p-2 bg-white dark:bg-gray-950">
+                                <p className="text-sm font-medium">{env.label}</p>
                               </div>
                             </motion.button>
                           ))}
@@ -1089,17 +1297,32 @@ export function SessionLobby() {
                       <Button
                         type="button"
                         variant="outline"
+                        disabled={isSavingCustomize}
                         onClick={() => setShowCustomizeModal(false)}
                       >
                         Cancel
                       </Button>
                       <Button
                         type="button"
-                        className="bg-gradient-to-r from-blue-600 to-purple-600 text-white"
-                        onClick={handleSaveCustomize}
+                        disabled={isSavingCustomize}
+                        aria-busy={isSavingCustomize}
+                        className="bg-gradient-to-r from-blue-600 to-purple-600 text-white min-w-[148px]"
+                        onClick={() => void handleSaveCustomize()}
                       >
-                        <Check className="w-4 h-4 mr-2" />
-                        Save Changes
+                        {isSavingCustomize ? (
+                          <>
+                            <Loader2
+                              className="w-4 h-4 mr-2 animate-spin shrink-0"
+                              aria-hidden
+                            />
+                            Saving…
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4 mr-2 shrink-0" />
+                            Save Changes
+                          </>
+                        )}
                       </Button>
                     </div>
                   </Card>

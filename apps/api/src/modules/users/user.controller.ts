@@ -20,18 +20,28 @@ function sanitizeSelfProfileResponse(profile: Record<string, any> | null) {
   delete (sanitized as any).stripe_subscription_id;
   delete (sanitized as any).organization_id;
   delete (sanitized as any).deleted_at;
+  if ((sanitized as any).permissions && typeof (sanitized as any).permissions === 'object') {
+    const perms = { ...((sanitized as any).permissions as Record<string, any>) };
+    if (perms.two_factor_knowledge && typeof perms.two_factor_knowledge === 'object') {
+      perms.two_factor_knowledge = {
+        enabled: perms.two_factor_knowledge.enabled === true,
+        security_question: perms.two_factor_knowledge.security_question || null,
+      };
+    }
+    (sanitized as any).permissions = perms;
+  }
 
   return sanitized;
 }
 
-function isLocalWebOrigin(value?: string | null) {
-  if (!value) return false;
+function tryParseHttpOrigin(value?: string | null): string | null {
+  if (!value) return null;
   try {
     const url = new URL(value);
-    const host = url.hostname;
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    return url.origin;
   } catch {
-    return value.includes('localhost') || value.includes('127.0.0.1') || value.includes('::1');
+    return null;
   }
 }
 
@@ -41,29 +51,24 @@ function getWebBaseUrlFromRequest(
   const origin = request.headers.origin;
   const referer = request.headers.referer;
 
-  // 1) Prefer the actual browser origin when it is clearly local.
-  if (origin && isLocalWebOrigin(origin)) {
-    try {
-      return { webBaseUrl: new URL(origin).origin, source: 'request.origin' };
-    } catch {
-      return { webBaseUrl: origin, source: 'request.origin(raw)' };
-    }
+  // Browser requests from the SPA always send Origin (same-origin POST) or Referer.
+  // Use that first so production (e.g. Vercel) verification links match the site the user
+  // signed up on. The previous logic only honored localhost origins and fell back to env /
+  // localhost, which broke deployed frontends when WEB_BASE_URL was unset on the API.
+  const fromOrigin = tryParseHttpOrigin(origin);
+  if (fromOrigin) {
+    return { webBaseUrl: fromOrigin, source: 'request.origin' };
   }
 
-  // 2) If origin is missing, try referer.
-  if (referer && isLocalWebOrigin(referer)) {
-    try {
-      return { webBaseUrl: new URL(referer).origin, source: 'request.referer' };
-    } catch {
-      return { webBaseUrl: referer, source: 'request.referer(raw)' };
-    }
+  const fromReferer = tryParseHttpOrigin(referer);
+  if (fromReferer) {
+    return { webBaseUrl: fromReferer, source: 'request.referer' };
   }
 
-  // 3) Environment-aware fallback.
-  // Prefer WEB_BASE_URL, then APP_URL (legacy), then localhost for safety.
   const envWebBaseUrl =
     process.env.WEB_BASE_URL ||
     process.env.APP_URL ||
+    process.env.CLIENT_URL ||
     'http://localhost:5173';
 
   return { webBaseUrl: envWebBaseUrl, source: 'env' };
@@ -475,6 +480,103 @@ export async function getCreditsHandler(
   return credits;
 }
 
+export async function getKnowledgeTwoFactorStatusHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  try {
+    return await userService.getKnowledgeTwoFactorStatus(user.sub);
+  } catch (error: any) {
+    return reply.code(500).send({ message: error?.message || 'Failed to load 2FA status' });
+  }
+}
+
+export async function setupKnowledgeTwoFactorHandler(
+  request: FastifyRequest<{ Body: { pin: string; securityQuestion: string; securityAnswer: string } }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const { pin, securityQuestion, securityAnswer } = request.body || ({} as any);
+  try {
+    return await userService.setupKnowledgeTwoFactor(user.sub, {
+      pin: String(pin || ''),
+      securityQuestion: String(securityQuestion || ''),
+      securityAnswer: String(securityAnswer || ''),
+    });
+  } catch (error: any) {
+    const status = error?.statusCode === 400 ? 400 : 500;
+    return reply.code(status).send({ message: error?.message || 'Failed to setup knowledge 2FA' });
+  }
+}
+
+export async function verifyKnowledgeTwoFactorHandler(
+  request: FastifyRequest<{ Body: { code: string } }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const { code } = request.body || ({} as any);
+  try {
+    return await userService.verifyKnowledgeTwoFactor(user.sub, { code: String(code || '') });
+  } catch (error: any) {
+    const status =
+      error?.statusCode === 400 || error?.statusCode === 401 || error?.statusCode === 404
+        ? error.statusCode
+        : 500;
+    return reply.code(status).send({ message: error?.message || 'Failed to verify knowledge 2FA' });
+  }
+}
+
+export async function disableKnowledgeTwoFactorHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  try {
+    return await userService.disableKnowledgeTwoFactor(user.sub);
+  } catch (error: any) {
+    return reply.code(500).send({ message: error?.message || 'Failed to disable knowledge 2FA' });
+  }
+}
+
+export async function requestKnowledgeTwoFactorRecoveryHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  try {
+    return await userService.requestKnowledgeTwoFactorRecovery(user.sub);
+  } catch (error: any) {
+    const status =
+      error?.statusCode === 400 ||
+      error?.statusCode === 404 ||
+      error?.statusCode === 429
+        ? error.statusCode
+        : 500;
+    return reply.code(status).send({ message: error?.message || 'Failed to send recovery code' });
+  }
+}
+
+export async function verifyKnowledgeTwoFactorRecoveryHandler(
+  request: FastifyRequest<{ Body: { code: string } }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const { code } = request.body || ({} as any);
+  try {
+    return await userService.verifyKnowledgeTwoFactorRecovery(user.sub, { code: String(code || '') });
+  } catch (error: any) {
+    const status =
+      error?.statusCode === 400 ||
+      error?.statusCode === 401 ||
+      error?.statusCode === 404 ||
+      error?.statusCode === 429
+        ? error.statusCode
+        : 500;
+    return reply.code(status).send({ message: error?.message || 'Failed to verify recovery code' });
+  }
+}
+
 export async function updateProfileHandler(
   request: FastifyRequest,
   reply: FastifyReply
@@ -485,7 +587,15 @@ export async function updateProfileHandler(
   const result = updateProfileSchema.safeParse(request.body);
   if (!result.success) {
     request.log.warn({ error: result.error }, 'Update profile validation failed');
-    return reply.code(400).send(result.error);
+    // Never send the ZodError instance: fastify-type-provider-zod's serializerCompiler
+    // validates outgoing payloads and will turn this into a 500 with error "ZodError".
+    const firstIssue = result.error.issues[0];
+    return reply.code(400).send({
+      statusCode: 400,
+      error: 'Bad Request',
+      message: firstIssue?.message ?? 'Validation failed',
+      issues: result.error.issues,
+    });
   }
 
   const updatedProfile = await userService.updateProfile(user.sub, result.data);
@@ -503,7 +613,13 @@ export async function completeOnboardingHandler(
   const result = onboardingSchema.safeParse(request.body);
   if (!result.success) {
     request.log.warn({ error: result.error }, 'Onboarding validation failed');
-    return reply.code(400).send(result.error);
+    const firstIssue = result.error.issues[0];
+    return reply.code(400).send({
+      statusCode: 400,
+      error: 'Bad Request',
+      message: firstIssue?.message ?? 'Validation failed',
+      issues: result.error.issues,
+    });
   }
 
   try {

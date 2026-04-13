@@ -20,6 +20,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { PhoneInput } from "../../components/ui/phone-input";
+import { normalizeStoredPhoneForInput, isValidOptionalAppPhone } from "@/lib/normalizeStoredPhone";
 
 type Companion = {
   id: string;
@@ -140,7 +142,7 @@ export function CompanionManagement() {
     setSelectedCompanion(c);
     setEditForm({
       name: c.name,
-      phone: c.phone,
+      phone: normalizeStoredPhoneForInput(c.phone || ""),
       license: c.license,
       specializations: c.specialization.join(", "),
       languages: c.languages.join(", "),
@@ -154,6 +156,10 @@ export function CompanionManagement() {
   const handleCreate = async () => {
     if (!createForm.name.trim() || !createForm.email.trim()) {
       toast.error("Name and email are required");
+      return;
+    }
+    if (!isValidOptionalAppPhone(createForm.phone)) {
+      toast.error("Enter a valid phone with country code (7–12 digits), or leave blank");
       return;
     }
     setSaving(true);
@@ -189,6 +195,10 @@ export function CompanionManagement() {
 
   const handleSaveEdit = async () => {
     if (!selectedCompanion) return;
+    if (!isValidOptionalAppPhone(editForm.phone)) {
+      toast.error("Enter a valid phone with country code (7–12 digits), or leave blank");
+      return;
+    }
     setSaving(true);
     try {
       const list = (await api.admin.updateCompanion(selectedCompanion.id, {
@@ -595,13 +605,12 @@ export function CompanionManagement() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-                    <input
-                      type="tel"
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone (optional)</label>
+                    <p className="text-xs text-muted-foreground mb-1">Country code + number (max 12 digits total).</p>
+                    <PhoneInput
                       value={createForm.phone}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, phone: e.target.value }))}
-                      placeholder="+1 (555) 123-4567"
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      onChange={(v) => setCreateForm((f) => ({ ...f, phone: v }))}
+                      placeholder="Phone number"
                     />
                   </div>
                 </div>
@@ -751,12 +760,12 @@ export function CompanionManagement() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-                  <input
-                    type="tel"
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone (optional)</label>
+                  <p className="text-xs text-muted-foreground mb-1">Country code + number (max 12 digits total).</p>
+                  <PhoneInput
                     value={editForm.phone}
-                    onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    onChange={(v) => setEditForm((f) => ({ ...f, phone: v }))}
+                    placeholder="Phone number"
                   />
                 </div>
                 <div>

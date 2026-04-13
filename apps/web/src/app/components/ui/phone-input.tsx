@@ -74,12 +74,35 @@ const countries = [
 export interface PhoneInputProps {
   value?: string
   onChange?: (value: string) => void
+  onBlur?: React.FocusEventHandler<HTMLInputElement>
+  name?: string
+  id?: string
   disabled?: boolean
   className?: string
   placeholder?: string
 }
 
-export function PhoneInput({ value = "", onChange, disabled, className, placeholder }: PhoneInputProps) {
+const MAX_PHONE_DIGITS = 12
+
+const countDigits = (value: string) => (value.match(/\d/g) || []).length
+
+const limitLocalPhoneDigits = (value: string, countryCode: string) => {
+  const allowedDigits = Math.max(0, MAX_PHONE_DIGITS - countDigits(countryCode))
+  let localDigits = 0
+  let limitedValue = ""
+
+  for (const char of value) {
+    if (/\d/.test(char)) {
+      if (localDigits >= allowedDigits) continue
+      localDigits += 1
+    }
+    limitedValue += char
+  }
+
+  return limitedValue
+}
+
+export function PhoneInput({ value = "", onChange, onBlur, name, id, disabled, className, placeholder }: PhoneInputProps) {
   const [open, setOpen] = React.useState(false)
   
   // Parse value into country code and number
@@ -109,18 +132,20 @@ export function PhoneInput({ value = "", onChange, disabled, className, placehol
   const handleCountrySelect = (currentValue: string) => {
     const newCountry = countries.find((c) => c.value === currentValue) || countries[0]
     setOpen(false)
+    const limitedNumber = limitLocalPhoneDigits(phoneNumber, newCountry.value)
+    setPhoneNumber(limitedNumber)
     if (onChange) {
-      onChange(newCountry.value + phoneNumber)
+      onChange(newCountry.value + limitedNumber)
     }
   }
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newNumber = e.target.value.replace(/[^0-9\s-().+]/g, "") // Allow digits and formatting
-    if (newNumber.length > 20) return // Simple length limit
+    const limitedNumber = limitLocalPhoneDigits(newNumber, selectedCountry.value)
     
-    setPhoneNumber(newNumber)
+    setPhoneNumber(limitedNumber)
     if (onChange) {
-      onChange(selectedCountry.value + newNumber)
+      onChange(selectedCountry.value + limitedNumber)
     }
   }
 
@@ -170,9 +195,14 @@ export function PhoneInput({ value = "", onChange, disabled, className, placehol
         </PopoverContent>
       </Popover>
       <Input
+        id={id}
+        name={name}
         type="tel"
+        inputMode="tel"
+        autoComplete="tel-national"
         value={phoneNumber}
         onChange={handlePhoneChange}
+        onBlur={onBlur}
         disabled={disabled}
         placeholder={placeholder || "Phone number"}
         className="flex-1"

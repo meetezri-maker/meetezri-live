@@ -22,6 +22,7 @@ import { emergencyContactRoutes } from './modules/users/emergency-contacts.route
 import { notificationRoutes } from './modules/notifications/notifications.routes';
 import { notificationsService } from './modules/notifications/notifications.service';
 import { aiAvatarsRoutes } from './modules/ai-avatars/ai-avatars.routes';
+import { communityRoutes } from './modules/community/community.routes';
 import jwkToPem from 'jwk-to-pem';
 const jwtLib = require('jsonwebtoken');
 
@@ -244,14 +245,19 @@ app.register(habitsRoutes, { prefix: '/api/habits' });
 app.register(emergencyContactRoutes, { prefix: '/api/emergency-contacts' });
 app.register(notificationRoutes, { prefix: '/api/notifications' });
 app.register(aiAvatarsRoutes, { prefix: '/api/ai-avatars' });
+app.register(communityRoutes, { prefix: '/api/community' });
 
 app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) => {
+  // Zod / response validation errors often omit statusCode and would default to 500.
+  const inferredFromName =
+    error?.name === 'ZodError' || error?.name === 'ResponseValidationError' ? 400 : undefined;
+
   const statusCode =
     typeof error?.statusCode === 'number'
       ? error.statusCode
       : typeof error?.status === 'number'
       ? error.status
-      : 500;
+      : inferredFromName ?? 500;
 
   const isServerError = statusCode >= 500;
   let message = isServerError ? 'An unexpected error occurred' : (error?.message || 'Request failed');

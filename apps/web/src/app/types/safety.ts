@@ -65,6 +65,7 @@ export interface SafetyContext {
   stateChangedAt: number;
   sessionId: string;
   consent: SafetyConsent;
+  updateConsent: (partial: Partial<SafetyConsent>) => void;
   updateState: (newState: SafetyState, trigger: string, signals: string[]) => void;
   resetToNormal: () => void;
   getStateDescription: () => string;

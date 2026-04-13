@@ -1,11 +1,14 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../lib/prisma';
 import { supabaseAdmin } from '../../config/supabase';
 import { OnboardingInput, UpdateProfileInput } from './user.schema';
 import { PLAN_LIMITS } from '../billing/billing.constants';
 import * as billingService from '../billing/billing.service';
 import { getLifetimeUsedSeconds } from '../billing/credit-balance.service';
+import { pbkdf2Sync, randomBytes, randomInt, timingSafeEqual } from 'crypto';
+import { emailService } from '../email/email.service';
 
-function calculateStreak(moodEntries: any[]) {
+export function calculateStreak(moodEntries: any[]) {
   if (!moodEntries || moodEntries.length === 0) return 0;
 
   let streak = 0;
@@ -73,6 +76,234 @@ export async function getUserEmail(userId: string): Promise<string | null> {
     select: { email: true }
   });
   return user?.email || null;
+}
+
+type KnowledgeTwoFactorConfig = {
+  enabled: boolean;
+  pin_hash: string;
+  pin_salt: string;
+  security_question: string;
+  answer_hash: string;
+  answer_salt: string;
+  updated_at: string;
+};
+
+const knowledgeRecoveryMap = new Map<
+  string,
+  { code: string; expiresAt: number; attempts: number; sentAt: number }
+>();
+const KNOWLEDGE_RECOVERY_TTL_MS = 10 * 60 * 1000;
+const KNOWLEDGE_RECOVERY_RESEND_MS = 60 * 1000;
+const KNOWLEDGE_RECOVERY_MAX_ATTEMPTS = 5;
+
+function hashSecret(secret: string, salt: string): string {
+  return pbkdf2Sync(secret, salt, 120000, 32, 'sha256').toString('hex');
+}
+
+function constantTimeEquals(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a, 'utf8');
+  const bBuf = Buffer.from(b, 'utf8');
+  if (aBuf.length !== bBuf.length) return false;
+  return timingSafeEqual(aBuf, bBuf);
+}
+
+async function getPermissions(userId: string): Promise<Record<string, any>> {
+  const profile = await prisma.profiles.findUnique({
+    where: { id: userId },
+    select: { permissions: true },
+  });
+  const permissions = profile?.permissions;
+  if (!permissions || typeof permissions !== 'object') return {};
+  return permissions as Record<string, any>;
+}
+
+export async function getKnowledgeTwoFactorStatus(userId: string) {
+  const permissions = await getPermissions(userId);
+  const cfg = permissions.two_factor_knowledge as Partial<KnowledgeTwoFactorConfig> | undefined;
+  return {
+    enabled: cfg?.enabled === true,
+    question: cfg?.security_question || null,
+  };
+}
+
+export async function setupKnowledgeTwoFactor(
+  userId: string,
+  input: { pin: string; securityQuestion: string; securityAnswer: string }
+) {
+  const pin = input.pin.trim();
+  const securityQuestion = input.securityQuestion.trim();
+  const securityAnswer = input.securityAnswer.trim();
+
+  if (!/^\d{4,10}$/.test(pin)) {
+    const err = new Error('PIN must be 4 to 10 digits');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+  if (securityQuestion.length < 6 || securityQuestion.length > 160) {
+    const err = new Error('Security question must be 6 to 160 characters');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+  if (securityAnswer.length < 2 || securityAnswer.length > 120) {
+    const err = new Error('Security answer must be 2 to 120 characters');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const permissions = await getPermissions(userId);
+  const pinSalt = randomBytes(16).toString('hex');
+  const answerSalt = randomBytes(16).toString('hex');
+
+  const config: KnowledgeTwoFactorConfig = {
+    enabled: true,
+    pin_hash: hashSecret(pin, pinSalt),
+    pin_salt: pinSalt,
+    security_question: securityQuestion,
+    answer_hash: hashSecret(securityAnswer.toLowerCase(), answerSalt),
+    answer_salt: answerSalt,
+    updated_at: new Date().toISOString(),
+  };
+
+  const nextPermissions = {
+    ...permissions,
+    two_factor_knowledge: config,
+  };
+
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: { permissions: nextPermissions as any },
+  });
+  invalidateUserProfileCache(userId);
+  return { enabled: true, question: securityQuestion };
+}
+
+export async function verifyKnowledgeTwoFactor(
+  userId: string,
+  input: { code: string }
+) {
+  const code = input.code.trim();
+  if (!code) {
+    const err = new Error('Verification code is required');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const permissions = await getPermissions(userId);
+  const cfg = permissions.two_factor_knowledge as Partial<KnowledgeTwoFactorConfig> | undefined;
+  if (!cfg?.enabled || !cfg.pin_hash || !cfg.pin_salt || !cfg.answer_hash || !cfg.answer_salt) {
+    const err = new Error('Knowledge-based 2FA is not enabled');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+
+  const candidatePinHash = hashSecret(code, cfg.pin_salt);
+  const candidateAnswerHash = hashSecret(code.toLowerCase(), cfg.answer_salt);
+
+  const pinOk = constantTimeEquals(candidatePinHash, cfg.pin_hash);
+  const answerOk = constantTimeEquals(candidateAnswerHash, cfg.answer_hash);
+  if (!pinOk && !answerOk) {
+    const err = new Error('Invalid second-factor code');
+    (err as any).statusCode = 401;
+    throw err;
+  }
+  return { ok: true };
+}
+
+export async function disableKnowledgeTwoFactor(userId: string) {
+  const permissions = await getPermissions(userId);
+  const nextPermissions = { ...permissions };
+  delete (nextPermissions as any).two_factor_knowledge;
+
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: { permissions: nextPermissions as any },
+  });
+  invalidateUserProfileCache(userId);
+  return { enabled: false };
+}
+
+export async function requestKnowledgeTwoFactorRecovery(userId: string) {
+  const permissions = await getPermissions(userId);
+  const cfg = permissions.two_factor_knowledge as Partial<KnowledgeTwoFactorConfig> | undefined;
+  if (!cfg?.enabled) {
+    const err = new Error('Knowledge-based 2FA is not enabled');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+
+  const existing = knowledgeRecoveryMap.get(userId);
+  const now = Date.now();
+  if (existing && now - existing.sentAt < KNOWLEDGE_RECOVERY_RESEND_MS) {
+    const waitSeconds = Math.ceil((KNOWLEDGE_RECOVERY_RESEND_MS - (now - existing.sentAt)) / 1000);
+    const err = new Error(`Please wait ${waitSeconds}s before requesting another code`);
+    (err as any).statusCode = 429;
+    throw err;
+  }
+
+  const email = await getUserEmail(userId);
+  if (!email) {
+    const err = new Error('Email not found for account');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const code = String(randomInt(100000, 1000000));
+  knowledgeRecoveryMap.set(userId, {
+    code,
+    expiresAt: now + KNOWLEDGE_RECOVERY_TTL_MS,
+    attempts: 0,
+    sentAt: now,
+  });
+
+  await emailService.sendEmail(
+    email,
+    'Your Ezri 2FA Recovery Code',
+    `<p>Your one-time recovery code is:</p><p style="font-size:24px;font-weight:700;letter-spacing:2px;">${code}</p><p>It expires in 10 minutes.</p>`,
+    `Your one-time recovery code is ${code}. It expires in 10 minutes.`
+  );
+
+  return { sent: true };
+}
+
+export async function verifyKnowledgeTwoFactorRecovery(userId: string, input: { code: string }) {
+  const code = String(input.code || '').trim();
+  if (!/^\d{6}$/.test(code)) {
+    const err = new Error('Recovery code must be 6 digits');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const record = knowledgeRecoveryMap.get(userId);
+  if (!record) {
+    const err = new Error('No active recovery code. Request a new one.');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+
+  if (Date.now() > record.expiresAt) {
+    knowledgeRecoveryMap.delete(userId);
+    const err = new Error('Recovery code expired. Request a new one.');
+    (err as any).statusCode = 401;
+    throw err;
+  }
+
+  record.attempts += 1;
+  if (record.attempts > KNOWLEDGE_RECOVERY_MAX_ATTEMPTS) {
+    knowledgeRecoveryMap.delete(userId);
+    const err = new Error('Too many attempts. Request a new recovery code.');
+    (err as any).statusCode = 429;
+    throw err;
+  }
+
+  if (record.code !== code) {
+    const err = new Error('Invalid recovery code');
+    (err as any).statusCode = 401;
+    throw err;
+  }
+
+  knowledgeRecoveryMap.delete(userId);
+  await disableKnowledgeTwoFactor(userId);
+  return { ok: true, disabled: true };
 }
 
 type AccountState =
@@ -515,6 +746,19 @@ export async function getProfile(userId: string) {
 
     if (!profileResult) return null;
 
+    // Stale `prisma generate` can omit `bio` from the client model; still read it from DB.
+    let profileBio: string | null | undefined = (profileResult as { bio?: string | null }).bio;
+    if (profileBio === undefined) {
+      try {
+        const bioRows = await prisma.$queryRaw<Array<{ bio: string | null }>>(
+          Prisma.sql`SELECT bio FROM public.profiles WHERE id = ${userId}::uuid LIMIT 1`
+        );
+        profileBio = bioRows[0]?.bio ?? null;
+      } catch {
+        profileBio = null;
+      }
+    }
+
     let activeSubscription = profileResult.subscriptions[0];
     const latestEmergencyContact = profileResult.emergency_contacts[0];
 
@@ -563,6 +807,7 @@ export async function getProfile(userId: string) {
 
     result = {
       ...profileResult,
+      bio: profileBio ?? null,
       emergency_contact_name:
         primaryContact?.name || profileResult.emergency_contact_name,
       emergency_contact_phone:
@@ -745,14 +990,13 @@ export async function getCredits(userId: string) {
 }
 
 export async function updateProfile(userId: string, data: UpdateProfileInput) {
-  // console.log('Updating profile for user:', userId, 'Data:', data);
-
-  const { 
-    emergency_contact_name, 
-    emergency_contact_phone, 
-    emergency_contact_relationship, 
-    ...profileData 
-  } = data as any;
+  const {
+    emergency_contact_name,
+    emergency_contact_phone,
+    emergency_contact_relationship,
+    bio,
+    ...profileForPrisma
+  } = data;
 
   console.log("Updating profile for user:", userId);
   console.log("Emergency Contact Data:", { emergency_contact_name, emergency_contact_phone, emergency_contact_relationship });
@@ -786,11 +1030,34 @@ export async function updateProfile(userId: string, data: UpdateProfileInput) {
       });
     }
   }
-  
-  return prisma.profiles.update({
-    where: { id: userId },
-    data: data as any, // Keep updating legacy fields for now for safety, or use profileData to exclude them
+
+  const bioDbValue =
+    bio === undefined
+      ? undefined
+      : typeof bio === 'string' && bio.trim() === ''
+        ? null
+        : bio;
+
+  // `bio` is written via raw SQL so profile saves work even when the generated Prisma
+  // client is stale (e.g. dev server locks query_engine during `prisma generate`).
+  const updated = await prisma.$transaction(async (tx) => {
+    const row = await tx.profiles.update({
+      where: { id: userId },
+      data: profileForPrisma as any,
+    });
+    if (bioDbValue !== undefined) {
+      await tx.$executeRaw(
+        Prisma.sql`UPDATE public.profiles SET bio = ${bioDbValue} WHERE id = ${userId}::uuid`
+      );
+    }
+    return row;
   });
+
+  invalidateUserProfileCache(userId);
+  if (bioDbValue !== undefined) {
+    return { ...updated, bio: bioDbValue };
+  }
+  return updated;
 }
 
 export async function completeOnboarding(userId: string, data: OnboardingInput) {
@@ -834,6 +1101,7 @@ export async function completeOnboarding(userId: string, data: OnboardingInput) 
     });
   }
 
+  invalidateUserProfileCache(userId);
   return getProfile(userId);
 }
 

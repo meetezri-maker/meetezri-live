@@ -34,7 +34,10 @@ export function PrivacySettings() {
     shareProgress: false,
     allowCookies: true,
     marketingEmails: false,
-    thirdPartySharing: false
+    thirdPartySharing: false,
+    communityEnabled: true,
+    showDisplayNameInCommunity: true,
+    showAvatarInCommunity: true,
   });
 
   // Load settings from profile when component mounts or profile changes
@@ -113,7 +116,7 @@ export function PrivacySettings() {
       
       if (finalConfirmation) {
         try {
-          await api.deleteUser();
+          await api.deleteAccount();
           toast.success('Your data has been permanently deleted.');
           // Optionally redirect to home or logout
           // window.location.href = '/';

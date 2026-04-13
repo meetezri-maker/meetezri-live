@@ -24,6 +24,12 @@ import { AppLayout } from "@/app/components/AppLayout";
 import { api } from "@/lib/api";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { toast } from "sonner";
+import {
+  birthIsoToAgeYears,
+  profileAgeStorageToDateInput,
+} from "@/lib/profileAge";
+import { PhoneInput } from "@/app/components/ui/phone-input";
+import { normalizeStoredPhoneForInput } from "@/lib/normalizeStoredPhone";
 
 const PasswordInput = ({ 
   value, 
@@ -99,14 +105,25 @@ export function AccountSettings() {
     confirmPassword: ""
   });
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordMfaCode, setPasswordMfaCode] = useState("");
 
   // 2FA state
   const [mfaFactors, setMfaFactors] = useState<any[]>([]);
   const [showMfaModal, setShowMfaModal] = useState(false);
-  const [mfaStep, setMfaStep] = useState<'enroll' | 'verify'>('enroll');
+  const [mfaStep, setMfaStep] = useState<'method' | 'knowledgeSetup' | 'enroll' | 'verify'>('method');
+  const [mfaMethod, setMfaMethod] = useState<'authenticator' | 'knowledge'>('authenticator');
   const [mfaData, setMfaData] = useState<{ id: string; qr_code: string; secret: string } | null>(null);
   const [mfaCode, setMfaCode] = useState('');
   const [mfaLoading, setMfaLoading] = useState(false);
+  const [knowledge2fa, setKnowledge2fa] = useState<{ enabled: boolean; question: string | null }>({
+    enabled: false,
+    question: null,
+  });
+  const [knowledgeSetup, setKnowledgeSetup] = useState({
+    pin: '',
+    securityQuestion: '',
+    securityAnswer: '',
+  });
 
   useEffect(() => {
     fetchMfaStatus();
@@ -117,12 +134,20 @@ export function AccountSettings() {
       const { data, error } = await supabase.auth.mfa.listFactors();
       if (error) throw error;
       setMfaFactors(data.totp);
+      const knowledge = (await api.getKnowledgeTwoFactorStatus()) as {
+        enabled: boolean;
+        question: string | null;
+      };
+      setKnowledge2fa({
+        enabled: knowledge.enabled === true,
+        question: knowledge.question || null,
+      });
     } catch (error) {
       console.error('Error fetching MFA status:', error);
     }
   };
 
-  const handleEnrollMfa = async () => {
+  const startAuthenticatorEnrollment = async () => {
     try {
       setMfaLoading(true);
 
@@ -170,6 +195,46 @@ export function AccountSettings() {
     }
   };
 
+  const handleEnrollMfa = async () => {
+    setMfaMethod('authenticator');
+    setMfaData(null);
+    setMfaCode('');
+    setMfaStep('method');
+    setShowMfaModal(true);
+  };
+
+  const handleSetupKnowledgeMfa = async () => {
+    try {
+      if (!/^\d{4,10}$/.test(knowledgeSetup.pin)) {
+        toast.error('PIN must be 4 to 10 digits');
+        return;
+      }
+      if (knowledgeSetup.securityQuestion.trim().length < 6) {
+        toast.error('Security question must be at least 6 characters');
+        return;
+      }
+      if (knowledgeSetup.securityAnswer.trim().length < 2) {
+        toast.error('Security answer must be at least 2 characters');
+        return;
+      }
+      setMfaLoading(true);
+      await api.setupKnowledgeTwoFactor({
+        pin: knowledgeSetup.pin,
+        securityQuestion: knowledgeSetup.securityQuestion,
+        securityAnswer: knowledgeSetup.securityAnswer,
+      });
+      toast.success('Knowledge-based 2FA enabled');
+      setShowMfaModal(false);
+      setMfaStep('method');
+      setKnowledgeSetup({ pin: '', securityQuestion: '', securityAnswer: '' });
+      await fetchMfaStatus();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to setup knowledge 2FA');
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
   const handleVerifyMfa = async () => {
     try {
       if (!mfaData) return;
@@ -202,16 +267,15 @@ export function AccountSettings() {
   const handleDisableMfa = async () => {
     try {
       setMfaLoading(true);
-      // For simplicity, we just unenroll the first factor found
-      const factorId = mfaFactors[0]?.id;
-      if (!factorId) return;
-
-      const { error } = await supabase.auth.mfa.unenroll({
-        factorId,
-      });
-
-      if (error) throw error;
-
+      if (mfaFactors.length > 0) {
+        const factorId = mfaFactors[0]?.id;
+        if (!factorId) return;
+        const { error } = await supabase.auth.mfa.unenroll({ factorId });
+        if (error) throw error;
+      }
+      if (knowledge2fa.enabled) {
+        await api.disableKnowledgeTwoFactor();
+      }
       toast.success('Two-Factor Authentication disabled');
       fetchMfaStatus();
     } catch (error: any) {
@@ -267,6 +331,39 @@ export function AccountSettings() {
         throw new Error("Incorrect current password");
       }
 
+      // If MFA is enabled, verify second factor before sensitive updates.
+      if (mfaFactors.length > 0 || knowledge2fa.enabled) {
+        if (!passwordMfaCode) {
+          throw new Error(
+            mfaFactors.length > 0
+              ? "Enter your 6-digit authenticator code to update password"
+              : "Enter your 2FA PIN or security answer to update password"
+          );
+        }
+        if (mfaFactors.length > 0) {
+          if (passwordMfaCode.length !== 6) {
+            throw new Error("Enter your 6-digit authenticator code to update password");
+          }
+          const factorId = mfaFactors[0]?.id;
+          if (!factorId) {
+            throw new Error("Two-factor factor is not available. Please re-enable 2FA.");
+          }
+          const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
+            factorId,
+          });
+          if (challengeError) throw challengeError;
+
+          const { error: verifyError } = await supabase.auth.mfa.verify({
+            factorId,
+            challengeId: challengeData.id,
+            code: passwordMfaCode,
+          });
+          if (verifyError) throw verifyError;
+        } else if (knowledge2fa.enabled) {
+          await api.verifyKnowledgeTwoFactor(passwordMfaCode);
+        }
+      }
+
       // Update password
       const { error: updateError } = await supabase.auth.updateUser({
         password: passwordState.newPassword
@@ -283,6 +380,7 @@ export function AccountSettings() {
         newPassword: "",
         confirmPassword: ""
       });
+      setPasswordMfaCode("");
     } catch (error: any) {
       console.error("Error updating password:", error);
       toast.error(error.message || "Failed to update password");
@@ -304,14 +402,24 @@ export function AccountSettings() {
         const firstName = nameParts[0] || "";
         const lastName = nameParts.slice(1).join(" ") || "";
 
+        const profileBio =
+          typeof (data as { bio?: string | null }).bio === "string" &&
+          (data as { bio?: string | null }).bio!.trim().length > 0
+            ? (data as { bio?: string | null }).bio!
+            : "";
+        const legacyBioFromMood =
+          !profileBio && typeof data.current_mood === "string"
+            ? data.current_mood
+            : "";
+
         setProfileData({
           firstName,
           lastName,
           email: data.email || user.email || "",
-          phone: data.phone || "",
-          dateOfBirth: data.age || "", // Using age field for DOB temporarily
+          phone: normalizeStoredPhoneForInput(data.phone || ""),
+          dateOfBirth: profileAgeStorageToDateInput(data.age),
           location: data.timezone || "", // Using timezone as location proxy
-          bio: data.current_mood || "", // Using mood as bio proxy
+          bio: profileBio || legacyBioFromMood,
           avatar_url: data.avatar_url || ""
         });
       } catch (error) {
@@ -378,26 +486,41 @@ export function AccountSettings() {
   };
 
   const handleSave = async () => {
+    setSaving(true);
     try {
-      setSaving(true);
-      
       const full_name = `${profileData.firstName} ${profileData.lastName}`.trim();
-      
-      await api.updateProfile({
+      if (full_name.length < 2) {
+        toast.error("Please enter at least 2 characters for your name.");
+        return;
+      }
+
+      const dobIso = profileData.dateOfBirth.trim();
+      if (dobIso && birthIsoToAgeYears(dobIso) === undefined) {
+        toast.error(
+          "Please enter a valid date of birth (you must be between 13 and 120 years old)."
+        );
+        return;
+      }
+
+      const patch: Record<string, unknown> = {
         full_name,
-        // We generally don't update email here as it requires verification
         phone: profileData.phone,
-        age: profileData.dateOfBirth,
         timezone: profileData.location,
-        current_mood: profileData.bio
-      });
+        bio: profileData.bio.trim(),
+      };
+      // Store YYYY-MM-DD in `profiles.age` so the date picker can round-trip after refresh.
+      if (dobIso) {
+        patch.age = dobIso;
+      }
+
+      await api.updateProfile(patch);
 
       setSaved(true);
       toast.success("Profile updated successfully");
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
       console.error("Failed to update profile:", error);
-      toast.error("Failed to update profile");
+      toast.error(error instanceof Error ? error.message : "Failed to update profile");
     } finally {
       setSaving(false);
     }
@@ -574,13 +697,15 @@ export function AccountSettings() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   <Phone className="w-4 h-4 inline mr-1" />
-                  Phone Number
+                  Phone number
                 </label>
-                <input
-                  type="tel"
+                <p className="text-xs text-muted-foreground mb-2">
+                  Country code and number (max 12 digits including code).
+                </p>
+                <PhoneInput
                   value={profileData.phone}
-                  onChange={(e) => setProfileData({...profileData, phone: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                  onChange={(v) => setProfileData({ ...profileData, phone: v })}
+                  placeholder="Your phone number"
                 />
               </div>
 
@@ -659,18 +784,31 @@ export function AccountSettings() {
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 transition-colors duration-300">
                 <div className="flex items-center justify-between">
                   <div className="flex items-start gap-3">
-                    <CheckCircle className={`w-5 h-5 mt-0.5 ${mfaFactors.length > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`} />
+                    <CheckCircle className={`w-5 h-5 mt-0.5 ${mfaFactors.length > 0 || knowledge2fa.enabled ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`} />
                     <div>
                       <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">Two-Factor Authentication</p>
                       <p className="text-sm text-blue-700 dark:text-blue-300">
-                        {mfaFactors.length > 0 
-                          ? 'Enabled via authenticator app' 
+                        {mfaFactors.length > 0 || knowledge2fa.enabled
+                          ? `Enabled via ${
+                              mfaFactors.length > 0 && knowledge2fa.enabled
+                                ? 'authenticator app and knowledge factor'
+                                : mfaFactors.length > 0
+                                  ? 'authenticator app'
+                                  : 'password/PIN/security question'
+                            }`
                           : 'Add an extra layer of security to your account'}
                       </p>
+                      <div className="mt-2 space-y-1.5 text-xs text-blue-800 dark:text-blue-200">
+                        <p>Available options:</p>
+                        <ul className="list-disc pl-4 space-y-1">
+                          <li>Authenticator app (Google Authenticator/Authy)</li>
+                          <li>A password, PIN, or answers to security questions</li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
                   
-                  {mfaFactors.length > 0 ? (
+                  {mfaFactors.length > 0 || knowledge2fa.enabled ? (
                     <button 
                       onClick={handleDisableMfa}
                       disabled={mfaLoading}
@@ -797,7 +935,10 @@ export function AccountSettings() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-              onClick={() => setShowMfaModal(false)}
+                  onClick={() => {
+                    setShowMfaModal(false);
+                    setMfaStep('method');
+                  }}
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
@@ -806,8 +947,135 @@ export function AccountSettings() {
                 className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full shadow-2xl transition-colors duration-300"
               >
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
-                  {mfaStep === 'enroll' ? 'Setup 2FA' : 'Verify Code'}
+                  {mfaStep === 'method'
+                    ? 'Choose 2FA Method'
+                    : mfaStep === 'knowledgeSetup'
+                      ? 'Setup Knowledge-Based 2FA'
+                    : mfaStep === 'enroll'
+                      ? 'Setup 2FA'
+                      : 'Verify Code'}
                 </h3>
+
+                {mfaStep === 'method' && (
+                  <div className="space-y-4">
+                    <button
+                      type="button"
+                      onClick={() => setMfaMethod('authenticator')}
+                      className={`w-full rounded-xl border p-4 text-left transition-colors ${
+                        mfaMethod === 'authenticator'
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                          : 'border-gray-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <p className="font-medium text-gray-900 dark:text-white">Authenticator app</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Google Authenticator, Authy, Microsoft Authenticator
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setMfaMethod('knowledge')}
+                      className={`w-full rounded-xl border p-4 text-left transition-colors ${
+                        mfaMethod === 'knowledge'
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                          : 'border-gray-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        A password, PIN, or answers to security questions
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Knowledge-based second factor
+                      </p>
+                    </button>
+
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        if (mfaMethod === 'authenticator') {
+                          startAuthenticatorEnrollment();
+                        } else {
+                          setMfaStep('knowledgeSetup');
+                        }
+                      }}
+                      disabled={mfaLoading}
+                      className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {mfaLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Continue
+                    </motion.button>
+                  </div>
+                )}
+
+                {mfaStep === 'knowledgeSetup' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        PIN (4-10 digits)
+                      </label>
+                      <input
+                        type="password"
+                        value={knowledgeSetup.pin}
+                        onChange={(e) =>
+                          setKnowledgeSetup((prev) => ({
+                            ...prev,
+                            pin: e.target.value.replace(/\D/g, '').slice(0, 10),
+                          }))
+                        }
+                        placeholder="Enter PIN"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Security Question
+                      </label>
+                      <input
+                        type="text"
+                        value={knowledgeSetup.securityQuestion}
+                        onChange={(e) =>
+                          setKnowledgeSetup((prev) => ({ ...prev, securityQuestion: e.target.value }))
+                        }
+                        placeholder="e.g. What is your favorite book?"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Security Answer
+                      </label>
+                      <input
+                        type="password"
+                        value={knowledgeSetup.securityAnswer}
+                        onChange={(e) =>
+                          setKnowledgeSetup((prev) => ({ ...prev, securityAnswer: e.target.value }))
+                        }
+                        placeholder="Enter answer"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                      />
+                    </div>
+
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleSetupKnowledgeMfa}
+                      disabled={mfaLoading}
+                      className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {mfaLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Save & Enable
+                    </motion.button>
+                    <button
+                      type="button"
+                      onClick={() => setMfaStep('method')}
+                      className="w-full py-2 text-sm text-gray-600 dark:text-gray-400 hover:underline"
+                    >
+                      Back
+                    </button>
+                  </div>
+                )}
 
                 {mfaStep === 'enroll' && mfaData ? (
                   <div className="space-y-6">
@@ -919,13 +1187,41 @@ export function AccountSettings() {
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
                     />
                   </div>
+
+                  {(mfaFactors.length > 0 || knowledge2fa.enabled) && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        {mfaFactors.length > 0 ? 'Authenticator Code (2FA)' : 'PIN / Security Answer (2FA)'}
+                      </label>
+                      <input
+                        type={mfaFactors.length > 0 ? 'text' : 'password'}
+                        value={passwordMfaCode}
+                        onChange={(e) =>
+                          setPasswordMfaCode(
+                            mfaFactors.length > 0
+                              ? e.target.value.replace(/\D/g, '').slice(0, 6)
+                              : e.target.value
+                          )
+                        }
+                        placeholder={mfaFactors.length > 0 ? '000000' : 'Enter PIN or answer'}
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none text-center text-xl tracking-widest transition-colors"
+                        maxLength={mfaFactors.length > 0 ? 6 : 120}
+                      />
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Required because two-factor authentication is enabled.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-3">
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowPasswordModal(false)}
+                    onClick={() => {
+                      setShowPasswordModal(false);
+                      setPasswordMfaCode("");
+                    }}
                     disabled={passwordLoading}
                     className="flex-1 px-4 py-3 rounded-xl bg-gray-200 dark:bg-slate-800 hover:bg-gray-300 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 font-medium disabled:opacity-50 transition-colors"
                   >
