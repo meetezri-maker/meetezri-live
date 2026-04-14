@@ -81,11 +81,18 @@ export function PrivacySettings() {
   const handleDownloadData = async () => {
     toast.info("Preparing your data for download...");
     try {
-      const blob = await api.exportUserData();
+      const { blob, filename, contentType } = await api.exportUserData();
+      const fallbackExtension = contentType.includes("csv")
+        ? "csv"
+        : contentType.includes("zip")
+          ? "zip"
+          : "json";
+      const resolvedFilename =
+        filename?.trim() || `ezri-data-export-${new Date().toISOString().split('T')[0]}.${fallbackExtension}`;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `ezri-data-export-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = resolvedFilename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);

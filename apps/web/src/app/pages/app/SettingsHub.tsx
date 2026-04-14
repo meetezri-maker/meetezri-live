@@ -27,13 +27,11 @@ import {
   BarChart3,
   History,
   Wind,
-  CreditCard,
-  X
+  CreditCard
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
 import { AppLayout } from "@/app/components/AppLayout";
-import { ComingSoon } from "@/app/pages/onboarding/ComingSoon";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useNotifications } from "@/app/contexts/NotificationsContext";
 import { api } from "@/lib/api";
@@ -54,7 +52,6 @@ export function SettingsHub() {
   const { profile, refreshProfile, user } = useAuth();
   const { unreadCount } = useNotifications();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [showBrainHealthComingSoon, setShowBrainHealthComingSoon] = useState(false);
   
   // Quick Settings State
   const [quickSettings, setQuickSettings] = useState([
@@ -257,7 +254,7 @@ export function SettingsHub() {
       description: "Explore cognitive exercises and brain health tips",
       icon: Brain,
       color: "from-teal-500 to-cyan-600",
-      badge: "Coming Soon"
+      route: "/app/settings/brain-health"
     }
   ];
 
@@ -414,16 +411,9 @@ export function SettingsHub() {
                       )}
                     </div>
                     <p className="text-sm text-gray-600 dark:text-gray-400 break-words">{section.description}</p>
-                    {!section.route && (
-                      <p className="text-xs text-teal-700 dark:text-teal-300 mt-2">
-                        Brain Health tools are in progress and will be available here soon.
-                      </p>
-                    )}
                   </div>
 
-                  {section.route ? (
-                    <ChevronRight className="w-5 h-5 text-gray-400 shrink-0 mt-1" />
-                  ) : null}
+                  <ChevronRight className="w-5 h-5 text-gray-400 shrink-0 mt-1" />
                 </div>
               );
 
@@ -436,45 +426,16 @@ export function SettingsHub() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  {section.route ? (
-                    <Link
-                      to={section.route}
-                      className="block bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all"
-                    >
-                      {sectionCard}
-                    </Link>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowBrainHealthComingSoon(true)}
-                      className="w-full text-left bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all"
-                    >
-                      {sectionCard}
-                    </button>
-                  )}
+                  <Link
+                    to={section.route || "/app/settings"}
+                    className="block bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all"
+                  >
+                    {sectionCard}
+                  </Link>
                 </motion.div>
               );
             })}
           </div>
-
-          {showBrainHealthComingSoon && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50"
-            >
-              <button
-                type="button"
-                onClick={() => setShowBrainHealthComingSoon(false)}
-                className="absolute top-4 right-4 z-[60] rounded-full bg-white/20 hover:bg-white/30 text-white p-2 backdrop-blur-sm border border-white/30"
-                aria-label="Close Brain Health Coming Soon"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              <ComingSoon />
-            </motion.div>
-          )}
 
           {/* Safety & Support Section */}
           <motion.div

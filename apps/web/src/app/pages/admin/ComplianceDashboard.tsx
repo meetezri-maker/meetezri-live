@@ -204,52 +204,63 @@ export function ComplianceDashboard() {
     }
   };
 
+  const toCsvLine = (values: Array<string | number>) =>
+    values
+      .map((value) => {
+        const text = String(value ?? "");
+        if (/[",\n\r]/.test(text)) {
+          return `"${text.replace(/"/g, '""')}"`;
+        }
+        return text;
+      })
+      .join(",");
+
   const handleExportReport = () => {
     const headers = ["Category", "Score", "Status", "Details"];
     const enc =
       complianceMetrics.encryption == null
         ? "Not measured"
         : `${complianceMetrics.encryption}%`;
-    const csvContent = [
-      headers.join(","),
-      [
+    const csvLines = [
+      toCsvLine(headers),
+      toCsvLine([
         "Overall (derived from users, audits, crises, errors)",
         `${complianceMetrics.overall}%`,
         "derived",
         "Not a legal certification",
-      ].join(","),
-      [
+      ]),
+      toCsvLine([
         "HIPAA-oriented score (derived)",
         `${complianceMetrics.hipaa}%`,
         "derived",
         "Based on crisis + audit + error signals",
-      ].join(","),
-      [
+      ]),
+      toCsvLine([
         "GDPR-oriented score (derived)",
         `${complianceMetrics.gdpr}%`,
         "derived",
         "Based on audit volume + errors",
-      ].join(","),
-      [
+      ]),
+      toCsvLine([
         "Data retention oriented (derived)",
         `${complianceMetrics.dataRetention}%`,
         "derived",
         "Based on error volume",
-      ].join(","),
-      [
+      ]),
+      toCsvLine([
         "Encryption",
         enc,
         complianceMetrics.encryption == null ? "n/a" : "derived",
         "Infrastructure not measured in app",
-      ].join(","),
-      "",
-      ["Recent audit log events", "", "", ""],
+      ]),
+      toCsvLine(["Recent audit log events", "", "", ""]),
       ...recentAudits.map((audit) =>
-        [audit.type, `${audit.score}%`, audit.status, `${audit.date}`.replace(/,/g, ";")].join(",")
+        toCsvLine([audit.type, `${audit.score}%`, audit.status, audit.date])
       ),
-    ].join("\n");
+    ];
+    const csvContent = `\uFEFF${csvLines.join("\n")}`;
 
-    const blob = new Blob([csvContent], { type: "text/csv" });
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -273,18 +284,17 @@ export function ComplianceDashboard() {
   };
 
   const handleExportAudit = (audit: (typeof recentAudits)[number]) => {
-    const csvContent = [
-      `Audit log event — ${audit.type}`,
-      "",
-      "Details",
-      `ID,${audit.id}`,
-      `Action,${audit.type}`,
-      `Date,${audit.date}`,
-      `Status,${audit.status}`,
-      `Details (preview),${String(audit.detailsLine || "").replace(/\n/g, " ")}`,
-    ].join("\n");
+    const csvLines = [
+      toCsvLine(["Field", "Value"]),
+      toCsvLine(["ID", String(audit.id)]),
+      toCsvLine(["Action", audit.type]),
+      toCsvLine(["Date", audit.date]),
+      toCsvLine(["Status", audit.status]),
+      toCsvLine(["Details (preview)", String(audit.detailsLine || "").replace(/\n/g, " ")]),
+    ];
+    const csvContent = `\uFEFF${csvLines.join("\n")}`;
 
-    const blob = new Blob([csvContent], { type: "text/csv" });
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

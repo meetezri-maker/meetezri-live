@@ -13,10 +13,6 @@ import {
   Trash2,
   ArrowLeft,
   AlertCircle,
-  Bell,
-  BellOff,
-  Shield,
-  MessageSquare,
   Loader2
 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -46,7 +42,6 @@ export function EmergencyContacts() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingContact, setEditingContact] = useState<EmergencyContact | null>(null);
@@ -55,7 +50,6 @@ export function EmergencyContacts() {
     relationship: "",
     phone: "",
     email: "",
-    is_trusted: false,
   });
 
   useEffect(() => {
@@ -81,7 +75,6 @@ export function EmergencyContacts() {
       relationship: "", 
       phone: "", 
       email: "",
-      is_trusted: false,
     });
     setEditingContact(null);
     setShowAddModal(false);
@@ -104,7 +97,7 @@ export function EmergencyContacts() {
         relationship: formData.relationship || undefined,
         phone: formData.phone.trim() || undefined,
         email: formData.email || undefined,
-        is_trusted: formData.is_trusted
+        is_trusted: true
       });
       
       setContacts([newContact, ...contacts]);
@@ -125,7 +118,6 @@ export function EmergencyContacts() {
       relationship: contact.relationship || "",
       phone: normalizeStoredPhoneForInput(contact.phone || ""),
       email: contact.email || "",
-      is_trusted: contact.is_trusted,
     });
     setShowAddModal(true);
   };
@@ -148,7 +140,7 @@ export function EmergencyContacts() {
         relationship: formData.relationship || undefined,
         phone: formData.phone.trim() || undefined,
         email: formData.email || undefined,
-        is_trusted: formData.is_trusted
+        is_trusted: true
       });
 
       setContacts(contacts.map(c => c.id === editingContact.id ? updatedContact : c));
@@ -177,24 +169,6 @@ export function EmergencyContacts() {
       }
     }
   };
-
-  const toggleTrustedContact = async (contact: EmergencyContact) => {
-    try {
-      setTogglingId(contact.id);
-      const updatedContact = await api.emergencyContacts.update(contact.id, {
-        is_trusted: !contact.is_trusted
-      });
-      setContacts(contacts.map(c => c.id === contact.id ? updatedContact : c));
-      toast.success(updatedContact.is_trusted ? "Added to trusted contacts" : "Removed from trusted contacts");
-    } catch (error) {
-      console.error('Failed to update trusted status:', error);
-      toast.error("Failed to update status");
-    } finally {
-      setTogglingId(null);
-    }
-  };
-
-  const trustedContactsCount = contacts.filter(c => c.is_trusted).length;
 
   if (isLoading) {
     return (
@@ -273,7 +247,7 @@ export function EmergencyContacts() {
                 <h1 className="text-3xl font-bold">Emergency Contacts</h1>
               </div>
               <p className="text-muted-foreground">
-                Manage your trusted contacts for crisis situations
+                Manage contacts we can notify if you need support
               </p>
             </div>
             <motion.button
@@ -309,23 +283,6 @@ export function EmergencyContacts() {
             </div>
           </Card>
 
-          <Card className="p-4 bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800">
-            <div className="flex items-start gap-3">
-              <Shield className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-1">
-                  Trusted Contacts ({trustedContactsCount})
-                </h3>
-                <p className="text-sm text-purple-800 dark:text-purple-200 mb-2">
-                  Trusted contacts can receive automatic check-in notifications when our safety system detects you may need support.
-                </p>
-                <div className="flex items-center gap-2 text-xs text-purple-700 dark:text-purple-200 bg-purple-100 dark:bg-purple-900/40 rounded-lg px-3 py-2">
-                  <Bell className="w-4 h-4" />
-                  <span>Privacy-safe messages • No medical details shared • You stay in control</span>
-                </div>
-              </div>
-            </div>
-          </Card>
         </motion.div>
 
         {/* Contacts List */}
@@ -337,9 +294,7 @@ export function EmergencyContacts() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 + index * 0.05 }}
             >
-              <Card className={`p-6 shadow-lg hover:shadow-xl transition-all group dark:bg-gray-800 ${
-                contact.is_trusted ? 'border-2 border-purple-200 dark:border-purple-800 bg-purple-50/30 dark:bg-purple-900/10' : ''
-              }`}>
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-all group dark:bg-gray-800">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-3">
@@ -349,12 +304,6 @@ export function EmergencyContacts() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-bold text-lg">{contact.name}</h3>
-                          {contact.is_trusted && (
-                            <div className="flex items-center gap-1 px-2 py-1 bg-purple-100 border border-purple-300 rounded-full">
-                              <Shield className="w-3 h-3 text-purple-700" />
-                              <span className="text-xs font-medium text-purple-700">Trusted</span>
-                            </div>
-                          )}
                         </div>
                         <p className="text-sm text-muted-foreground">{contact.relationship}</p>
                       </div>
@@ -379,28 +328,6 @@ export function EmergencyContacts() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    {/* Trusted Contact Toggle */}
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => toggleTrustedContact(contact)}
-                      disabled={togglingId === contact.id}
-                      className={`p-2 rounded-lg transition-colors ${
-                        contact.is_trusted 
-                          ? 'bg-purple-100 hover:bg-purple-200' 
-                          : 'bg-gray-100 hover:bg-gray-200'
-                      } ${togglingId === contact.id ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      title={contact.is_trusted ? 'Remove from trusted contacts' : 'Add to trusted contacts'}
-                    >
-                      {togglingId === contact.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
-                      ) : contact.is_trusted ? (
-                        <Bell className="w-4 h-4 text-purple-600" />
-                      ) : (
-                        <BellOff className="w-4 h-4 text-gray-600" />
-                      )}
-                    </motion.button>
-                    
                     {/* Edit/Delete Actions */}
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <motion.button
@@ -441,7 +368,7 @@ export function EmergencyContacts() {
           >
             <Heart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="font-bold text-lg mb-2">No Emergency Contacts Yet</h3>
-            <p className="text-muted-foreground mb-4">Add trusted contacts who can support you in crisis situations</p>
+            <p className="text-muted-foreground mb-4">Add emergency contacts who can support you in crisis situations</p>
             <Button onClick={() => setShowAddModal(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Your First Contact
@@ -524,19 +451,6 @@ export function EmergencyContacts() {
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         placeholder="contact@email.com"
                         className="flex-1 outline-none bg-transparent"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <label className="block text-sm font-medium mb-2">Trusted Contact</label>
-                    <div className="flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-gray-400" />
-                      <input
-                        type="checkbox"
-                        checked={formData.is_trusted}
-                        onChange={(e) => setFormData({ ...formData, is_trusted: e.target.checked })}
-                        className="h-4 w-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                       />
                     </div>
                   </div>

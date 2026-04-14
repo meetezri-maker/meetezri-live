@@ -186,11 +186,18 @@ export function UserDetailsEnhanced() {
           const html = `<p>Hello ${userData.name},</p><p>You have received a message from the Ezri admin team.</p>`;
           await api.sendEmail(userData.email, subject, html, text);
         } else if (action === "export-data") {
-          const blob = await api.exportUserData();
+          const { blob, filename, contentType } = await api.exportUserData();
+          const fallbackExtension = contentType.includes("csv")
+            ? "csv"
+            : contentType.includes("zip")
+              ? "zip"
+              : "json";
+          const resolvedFilename =
+            filename?.trim() || `ezri-user-${userData.id}-data.${fallbackExtension}`;
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = `ezri-user-${userData.id}-data.json`;
+          a.download = resolvedFilename;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);

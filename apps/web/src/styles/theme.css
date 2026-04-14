@@ -112,6 +112,7 @@
 .high-contrast [class*="text-slate-"],
 .high-contrast [class*="text-zinc-"],
 .high-contrast [class*="text-neutral-"],
+.high-contrast [class*="text-black"],
 .high-contrast [class*="text-green-"],
 .high-contrast [class*="text-blue-"],
 .high-contrast [class*="text-purple-"],
@@ -128,6 +129,8 @@
 .high-contrast [class*="bg-slate-"],
 .high-contrast [class*="bg-zinc-"],
 .high-contrast [class*="bg-neutral-"],
+.high-contrast [class*="bg-white"],
+.high-contrast [class*="bg-["],
 .high-contrast [class*="bg-green-"],
 .high-contrast [class*="bg-blue-"],
 .high-contrast [class*="bg-purple-"],
@@ -163,10 +166,17 @@
   background-image: none !important;
 }
 
+/* Many pages use inline style backgrounds/gradients. Force them dark in high contrast. */
+.high-contrast [style*="background"] {
+  background: #000 !important;
+  background-image: none !important;
+}
+
 .high-contrast [class*="border-gray-"],
 .high-contrast [class*="border-slate-"],
 .high-contrast [class*="border-zinc-"],
 .high-contrast [class*="border-neutral-"],
+.high-contrast [class*="border-white"],
 .high-contrast [class*="border-green-"],
 .high-contrast [class*="border-blue-"],
 .high-contrast [class*="border-purple-"],
@@ -184,6 +194,65 @@
 .high-contrast [role="button"] {
   color: #fff !important;
   border-color: #fff !important;
+}
+
+/* Keep button outlines visible in high contrast */
+.high-contrast button,
+.high-contrast [role="button"] {
+  border-width: 1px !important;
+}
+
+.high-contrast input,
+.high-contrast textarea,
+.high-contrast select,
+.high-contrast option {
+  background: #000 !important;
+  color: #fff !important;
+  border-color: #fff !important;
+}
+
+.high-contrast svg {
+  color: #fff !important;
+}
+
+/* Radix switch: keep clear checked/unchecked states */
+.high-contrast [data-slot="switch"] {
+  border: 2px solid #fff !important;
+  background: #000 !important;
+}
+
+.high-contrast [data-slot="switch"][data-state="checked"] {
+  background: #fff !important;
+}
+
+.high-contrast [data-slot="switch-thumb"] {
+  background: #fff !important;
+  border: 1px solid #000 !important;
+}
+
+.high-contrast [data-slot="switch"][data-state="checked"] [data-slot="switch-thumb"] {
+  background: #000 !important;
+  border-color: #fff !important;
+}
+
+/* Custom motion toggle buttons used in settings pages */
+.high-contrast button[class*="w-14"][class*="h-8"][class*="rounded-full"] {
+  border: 2px solid #fff !important;
+  background: #000 !important;
+}
+
+.high-contrast button[class*="w-14"][class*="h-8"][class*="rounded-full"] > div {
+  background: #fff !important;
+  border: 1px solid #000 !important;
+}
+
+/* Preserve intended colors for appearance color/theme previews. */
+.high-contrast .hc-preserve-color,
+.high-contrast .hc-preserve-color[class*="bg-"],
+.high-contrast .hc-preserve-color[class*="from-"],
+.high-contrast .hc-preserve-color[class*="to-"] {
+  background: revert !important;
+  background-image: revert !important;
 }
 
 .reduced-motion * {

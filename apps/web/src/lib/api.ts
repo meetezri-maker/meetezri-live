@@ -129,6 +129,22 @@ async function handleBlobResponse(res: Response, errorMessage: string) {
   return res.blob();
 }
 
+function parseFilenameFromContentDisposition(contentDisposition: string | null) {
+  if (!contentDisposition) return null;
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]).replace(/["']/g, "");
+    } catch {
+      return utf8Match[1].replace(/["']/g, "");
+    }
+  }
+
+  const plainMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+  return plainMatch?.[1] ?? null;
+}
+
 /** Merge overlapping GET /users/me calls (same tick / auth bootstrap). Admin calls pass explicit token and bypass. */
 let getMeInFlight: Promise<any> | null = null;
 /** Merge overlapping GET /users/credits calls. */
@@ -366,7 +382,16 @@ export const api = {
       method: 'GET',
       headers,
     });
-    return handleBlobResponse(res, 'Failed to export user data');
+    const blob = await handleBlobResponse(res, 'Failed to export user data');
+    const contentDisposition = res.headers.get('content-disposition');
+    const contentType = res.headers.get('content-type') || blob.type || '';
+    const filename = parseFilenameFromContentDisposition(contentDisposition);
+
+    return {
+      blob,
+      filename,
+      contentType,
+    };
   },
 
   async checkUserExists(email: string) {

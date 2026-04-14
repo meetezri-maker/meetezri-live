@@ -25,6 +25,7 @@ import { api } from "../../../lib/api";
 import { htmlToPlainText, truncatePreview } from "../../../lib/htmlPlainText";
 import { useAuth } from "../../contexts/AuthContext";
 import { Skeleton } from "../../components/ui/skeleton";
+import { toast } from "sonner";
 
 interface JournalEntry {
   id: string;
@@ -97,6 +98,20 @@ export function Journal() {
     { value: "excited", emoji: "🤩" },
     { value: "angry", emoji: "😡" }
   ];
+
+  const getMoodSaveMessage = (moodEmoji: string, isEdit: boolean): string => {
+    const actionPrefix = isEdit ? "Entry updated." : "Entry saved.";
+    const messages: Record<string, string> = {
+      "😊": "Love that happy energy - keep it going.",
+      "😌": "Calm and steady - great space to be in.",
+      "😰": "You showed up for yourself today. That matters.",
+      "😢": "Thank you for sharing this. You are not alone.",
+      "🤩": "That excitement is powerful - lean into it.",
+      "😡": "Strong feelings are valid. Thanks for expressing them.",
+    };
+    const moodMessage = messages[moodEmoji] ?? "Nice work capturing your thoughts today.";
+    return `${actionPrefix} ${moodMessage}`;
+  };
 
   const fetchEntries = async () => {
     if (!user?.id) return;
@@ -171,6 +186,8 @@ export function Journal() {
     
     try {
       setIsSaving(true);
+      const moodAtSave = selectedMood;
+      const isEdit = Boolean(editingEntry);
       const entryData = {
         title: newEntryTitle,
         content: newEntryContent,
@@ -191,9 +208,10 @@ export function Journal() {
       setNewEntryContent("");
       setSelectedMood("");
       setEditingEntry(null);
+      toast.success(getMoodSaveMessage(moodAtSave, isEdit));
     } catch (error) {
       console.error("Failed to save journal entry", error);
-      alert("Failed to save entry. Please try again.");
+      toast.error("Failed to save entry. Please try again.");
     } finally {
       setIsSaving(false);
     }

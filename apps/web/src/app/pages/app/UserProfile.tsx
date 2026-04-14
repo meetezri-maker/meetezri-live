@@ -61,6 +61,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../components/ui/dialog";
 
 /* ─── style constants (orange → pink dashboard theme) ─── */
 const GRAD =
@@ -183,6 +191,13 @@ export function UserProfile() {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [joinedAt, setJoinedAt] = useState<string>("");
   const [resending, setResending] = useState(false);
+  const [avatarEditorOpen, setAvatarEditorOpen] = useState(false);
+  const [avatarEditorImageUrl, setAvatarEditorImageUrl] = useState<string | null>(null);
+  const [avatarZoom, setAvatarZoom] = useState(1);
+  const [avatarOffsetX, setAvatarOffsetX] = useState(0);
+  const [avatarOffsetY, setAvatarOffsetY] = useState(0);
+  const [avatarSourceSize, setAvatarSourceSize] = useState<{ width: number; height: number } | null>(null);
+  const avatarPreviewCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -351,18 +366,73 @@ export function UserProfile() {
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && user) {
-      setIsUploading(true);
-      try {
-        const filePath = `${user.id}/${Math.random()}.${file.name.split(".").pop()}`;
-        const { error: uploadError } = await supabase.storage.from("avatars").upload(filePath, file);
-        if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(filePath);
-        setProfileImage(publicUrl);
-        await api.updateProfile({ avatar_url: publicUrl });
-        toast.success("Profile photo updated");
-      } catch { toast.error("Error uploading image"); }
-      finally { setIsUploading(false); }
+    if (!file || !user) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const imageUrl = typeof reader.result === "string" ? reader.result : null;
+      if (!imageUrl) return;
+      const img = new Image();
+      img.onload = () => {
+        setAvatarSourceSize({ width: img.naturalWidth, height: img.naturalHeight });
+        setAvatarEditorImageUrl(imageUrl);
+        setAvatarZoom(1);
+        setAvatarOffsetX(0);
+        setAvatarOffsetY(0);
+        setAvatarEditorOpen(true);
+      };
+      img.src = imageUrl;
+    };
+    reader.readAsDataURL(file);
+    // Allow selecting the same file again.
+    e.target.value = "";
+  };
+
+  useEffect(() => {
+    if (!avatarEditorOpen || !avatarEditorImageUrl || !avatarSourceSize || !avatarPreviewCanvasRef.current) return;
+    const canvas = avatarPreviewCanvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const img = new Image();
+    img.onload = () => {
+      const { width, height } = avatarSourceSize;
+      const baseCrop = Math.min(width, height);
+      const cropSize = baseCrop / avatarZoom;
+      const maxShiftX = Math.max(0, (width - cropSize) / 2);
+      const maxShiftY = Math.max(0, (height - cropSize) / 2);
+      const centerX = width / 2 + avatarOffsetX * maxShiftX;
+      const centerY = height / 2 + avatarOffsetY * maxShiftY;
+      const sx = Math.min(Math.max(0, centerX - cropSize / 2), width - cropSize);
+      const sy = Math.min(Math.max(0, centerY - cropSize / 2), height - cropSize);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, sx, sy, cropSize, cropSize, 0, 0, canvas.width, canvas.height);
+    };
+    img.src = avatarEditorImageUrl;
+  }, [avatarEditorOpen, avatarEditorImageUrl, avatarSourceSize, avatarZoom, avatarOffsetX, avatarOffsetY]);
+
+  const handleAvatarSave = async () => {
+    if (!avatarPreviewCanvasRef.current || !user) return;
+    setIsUploading(true);
+    try {
+      const uploadBlob = await new Promise<Blob>((resolve, reject) => {
+        avatarPreviewCanvasRef.current?.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("Could not prepare image"));
+        }, "image/jpeg", 0.92);
+      });
+      const filePath = `${user.id}/${Math.random()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, uploadBlob, { contentType: "image/jpeg", upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      setProfileImage(publicUrl);
+      await api.updateProfile({ avatar_url: publicUrl });
+      setAvatarEditorOpen(false);
+      toast.success("Profile photo updated");
+    } catch {
+      toast.error("Error uploading image");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -371,11 +441,15 @@ export function UserProfile() {
     try {
       const dirty = form.formState.dirtyFields;
       const patch: Record<string, unknown> = {};
+      const nextPronouns = (data.pronouns || "").trim();
+      const currentPronouns = (rawProfile?.pronouns || "").trim();
       if (dirty.name) patch.full_name = data.name;
       if (dirty.email) patch.email = data.email;
       if (dirty.phone) patch.phone = data.phone;
       if (dirty.birthday) patch.age = data.birthday;
-      if (dirty.pronouns) patch.pronouns = data.pronouns;
+      // Pronouns can be changed via dropdown/custom input; compare values directly
+      // so updates do not depend on dirty field tracking quirks.
+      if (nextPronouns !== currentPronouns) patch.pronouns = nextPronouns;
       if (dirty.location) patch.timezone = data.location;
       if (dirty.in_therapy) patch.in_therapy = data.in_therapy;
       if (dirty.selected_goals) patch.selected_goals = data.selected_goals || [];
@@ -424,10 +498,9 @@ export function UserProfile() {
     catch { toast.error("Failed to log out"); setIsLoggingOut(false); }
   };
 
-  const needsEmailVerification = !!user && !(user as any).email_confirmed_at;
-  const effectiveNeedsVerification =
-    (rawProfile as any)?.needs_email_verification ??
-    (rawProfile ? !(rawProfile as any)?.email_verified : needsEmailVerification);
+  // Use auth session as source of truth for verification state.
+  // Profile patch responses may not include reliable verification flags.
+  const effectiveNeedsVerification = !!user && !(user as any).email_confirmed_at;
 
   /* ─── loading skeleton ─── */
   if (isLoading) {
@@ -712,11 +785,7 @@ export function UserProfile() {
                           whileHover={{ x: 3 }}
                           className="flex items-center gap-3 p-3 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group cursor-pointer"
                         >
-                          <span className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 group-hover:text-white flex items-center justify-center text-gray-500 transition-colors"
-                            style={{ "--hover-bg": GRAD } as any}
-                            onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = GRAD)}
-                            onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = "")}
-                          >
+                          <span className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 group-hover:text-white group-hover:bg-gradient-to-r group-hover:from-orange-500 group-hover:via-pink-500 group-hover:to-fuchsia-500 flex items-center justify-center text-gray-500 transition-colors">
                             {p.icon}
                           </span>
                           <div className="flex-1">
@@ -730,6 +799,81 @@ export function UserProfile() {
                   </div>
                 </div>
               </motion.div>
+              <Dialog open={avatarEditorOpen} onOpenChange={setAvatarEditorOpen}>
+                <DialogContent className="sm:max-w-xl">
+                  <DialogHeader>
+                    <DialogTitle>Adjust profile photo</DialogTitle>
+                    <DialogDescription>Crop and zoom your image before saving.</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="mx-auto w-full max-w-[22rem] rounded-2xl border border-gray-200 dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-900">
+                      <canvas
+                        ref={avatarPreviewCanvasRef}
+                        width={640}
+                        height={640}
+                        className="w-full rounded-xl bg-gray-200 dark:bg-gray-800"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400">
+                        Zoom ({avatarZoom.toFixed(1)}x)
+                        <input
+                          type="range"
+                          min={1}
+                          max={3}
+                          step={0.1}
+                          value={avatarZoom}
+                          onChange={(e) => setAvatarZoom(Number(e.target.value))}
+                          className="mt-1 w-full"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400">
+                        Position left/right
+                        <input
+                          type="range"
+                          min={-1}
+                          max={1}
+                          step={0.01}
+                          value={avatarOffsetX}
+                          onChange={(e) => setAvatarOffsetX(Number(e.target.value))}
+                          className="mt-1 w-full"
+                        />
+                      </label>
+                      <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400">
+                        Position up/down
+                        <input
+                          type="range"
+                          min={-1}
+                          max={1}
+                          step={0.01}
+                          value={avatarOffsetY}
+                          onChange={(e) => setAvatarOffsetY(Number(e.target.value))}
+                          className="mt-1 w-full"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <button
+                      type="button"
+                      onClick={() => setAvatarEditorOpen(false)}
+                      disabled={isUploading}
+                      className="px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAvatarSave}
+                      disabled={isUploading}
+                      className="px-4 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-60"
+                      style={{ background: GRAD }}
+                    >
+                      {isUploading ? "Saving..." : "Save photo"}
+                    </button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               {/* account settings */}
               {[

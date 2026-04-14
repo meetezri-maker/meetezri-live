@@ -238,7 +238,7 @@ export function AppearanceSettings() {
                         : "border-gray-200 bg-gray-50 dark:bg-slate-900 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-500"
                     }`}
                   >
-                    <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${theme.color} flex items-center justify-center mx-auto mb-3`}>
+                    <div className={`hc-preserve-color w-12 h-12 rounded-full bg-gradient-to-br ${theme.color} flex items-center justify-center mx-auto mb-3`}>
                       <Icon className="w-6 h-6 text-white" />
                     </div>
                     <p className="font-medium text-gray-900 dark:text-gray-100">{theme.label}</p>
@@ -275,7 +275,7 @@ export function AppearanceSettings() {
                   onClick={() => updateSetting('accentColor', color.value)}
                   className="relative"
                 >
-                  <div className={`w-full aspect-square rounded-xl ${color.color} ${
+                  <div className={`hc-preserve-color w-full aspect-square rounded-xl ${color.color} ${
                     settings.accentColor === color.value ? "ring-4 ring-offset-2 ring-gray-900" : ""
                   }`} />
                   <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 text-center">{color.label}</p>
@@ -315,7 +315,7 @@ export function AppearanceSettings() {
                       : "border-gray-200 bg-gray-50 dark:bg-slate-900 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-500"
                   }`}
                 >
-                  <div className={`w-full h-20 rounded-lg ${style.preview} mb-3 border border-gray-200 dark:border-slate-700`} />
+                  <div className={`hc-preserve-color w-full h-20 rounded-lg ${style.preview} mb-3 border border-gray-200 dark:border-slate-700`} />
                   <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{style.label}</p>
                   {settings.backgroundStyle === style.value && (
                     <motion.div
@@ -438,7 +438,7 @@ export function AppearanceSettings() {
                 }`}>
                   <div className="flex items-center gap-3 mb-2">
                     {settings.showAvatars && (
-                      <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${
+                      <div className={`hc-preserve-color w-10 h-10 rounded-full bg-gradient-to-br ${
                         settings.accentColor === 'blue' ? 'from-blue-400 to-blue-600' :
                         settings.accentColor === 'purple' ? 'from-purple-400 to-purple-600' :
                         settings.accentColor === 'pink' ? 'from-pink-400 to-pink-600' :

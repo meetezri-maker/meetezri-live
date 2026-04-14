@@ -228,9 +228,8 @@ export async function notifyTrustedContacts(
     allContacts = contactsJson ? JSON.parse(contactsJson) : [];
   }
   
-  // Filter to trusted contacts who can be notified
+  // Emergency contacts are always treated as trusted contacts.
   const eligibleContacts = allContacts.filter(c =>
-    (c.isTrustedContact || c.is_trusted) &&
     canNotifyContact(c)
   );
 

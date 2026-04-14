@@ -96,6 +96,16 @@ const PDF_TITLE_SIZE = 13;
 const PDF_BODY_SIZE = 10;
 const PDF_META_SIZE = 9;
 const PDF_BOTTOM = 287;
+const PDF_SECTION_GAP = 6;
+
+const MOOD_LABELS: Record<string, string> = {
+  "😊": "Happy",
+  "😌": "Calm",
+  "😰": "Anxious",
+  "😢": "Sad",
+  "🤩": "Excited",
+  "😡": "Angry",
+};
 
 function nextY(doc: jsPDF, y: number, step: number): number {
   if (y + step > PDF_BOTTOM) {
@@ -126,30 +136,66 @@ function writeWrapped(
   return cy;
 }
 
+/**
+ * jsPDF core fonts do not support emoji and many pictographic glyphs, which can
+ * show as garbled characters in generated PDFs. Strip those symbols and normalize
+ * whitespace so exported reports stay readable.
+ */
+function cleanPdfText(value: string): string {
+  return value
+    .replace(/[\uFE0F\u200D]/g, "")
+    .replace(/\p{Extended_Pictographic}/gu, "")
+    .replace(/\u00A0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+function formatMoodTags(tags: string[]): string {
+  if (!tags.length) return "";
+  const labels = tags.map((tag) => MOOD_LABELS[tag] ?? tag);
+  return cleanPdfText(`Mood: ${labels.join(", ")}`);
+}
+
 export function buildJournalPdf(entries: JournalExportEntry[]): jsPDF {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const maxW = pageW - PDF_MARGIN * 2;
+  const headerBandY = 8;
+  const headerBandH = 22;
 
   let y = PDF_MARGIN;
+  const exportStamp = new Date();
+
+  doc.setFillColor(243, 247, 255);
+  doc.roundedRect(PDF_MARGIN, headerBandY, maxW, headerBandH, 2, 2, "F");
+  doc.setDrawColor(210, 225, 248);
+  doc.roundedRect(PDF_MARGIN, headerBandY, maxW, headerBandH, 2, 2, "S");
+
+  y = headerBandY + 8;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
   doc.text("Ezri Journal Export", PDF_MARGIN, y);
-  y = nextY(doc, y, 10);
+  y = nextY(doc, y, 7);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(PDF_META_SIZE);
   doc.setTextColor(80, 80, 80);
   y = writeWrapped(
     doc,
-    `Exported ${new Date().toLocaleString()} · ${entries.length} ${entries.length === 1 ? "entry" : "entries"}`,
+    `Exported ${exportStamp.toLocaleString()} - ${entries.length} ${entries.length === 1 ? "entry" : "entries"}`,
     maxW,
     y,
     PDF_LINE,
     (line, yy) => doc.text(line, PDF_MARGIN, yy)
   );
-  y += 4;
+  y += PDF_SECTION_GAP;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(50, 50, 50);
+  doc.text("Journal Entries", PDF_MARGIN, y);
+  y = nextY(doc, y, 4);
   doc.setTextColor(0, 0, 0);
 
   const sorted = [...entries].sort(
@@ -159,28 +205,29 @@ export function buildJournalPdf(entries: JournalExportEntry[]): jsPDF {
 
   for (let i = 0; i < sorted.length; i++) {
     const e = sorted[i];
-    const title = e.title?.trim() || "Untitled Entry";
+    const title = cleanPdfText(e.title?.trim() || "Untitled Entry");
     const when = new Date(e.created_at).toLocaleString();
     const tags = Array.isArray(e.mood_tags) ? e.mood_tags : [];
-    const moods = tags.length > 0 ? `Mood: ${tags.join(", ")}` : "";
+    const moods = formatMoodTags(tags);
     const fav = getEntryFavorite(e) ? " · Favorite" : "";
     const raw = getEntryContent(e);
-    const plain = raw ? htmlToPlainText(raw) : "(No body)";
+    const plainRaw = raw ? htmlToPlainText(raw) : "(No body)";
+    const plain = cleanPdfText(plainRaw) || "(No body)";
 
     if (i > 0) {
-      y += 3;
+      y += PDF_SECTION_GAP - 1;
       if (y + 8 > PDF_BOTTOM) {
         doc.addPage();
         y = PDF_MARGIN;
       }
-      doc.setDrawColor(220, 220, 220);
+      doc.setDrawColor(230, 230, 230);
       doc.line(PDF_MARGIN, y, pageW - PDF_MARGIN, y);
       y += 6;
     }
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(PDF_TITLE_SIZE);
-    y = writeWrapped(doc, title, maxW, y, PDF_LINE + 1, (line, yy) =>
+    y = writeWrapped(doc, `${i + 1}. ${title}`, maxW, y, PDF_LINE + 1, (line, yy) =>
       doc.text(line, PDF_MARGIN, yy)
     );
 
@@ -189,7 +236,7 @@ export function buildJournalPdf(entries: JournalExportEntry[]): jsPDF {
     doc.setTextColor(70, 70, 70);
     y = writeWrapped(
       doc,
-      `${when}${fav}`,
+      cleanPdfText(`${when}${fav}`),
       maxW,
       y,
       PDF_LINE,
