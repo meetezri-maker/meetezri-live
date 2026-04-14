@@ -101,11 +101,109 @@
   --switch-background: #ffffff;
 }
 
+/* Force utility-heavy UIs into true high contrast */
+.high-contrast,
+.high-contrast body {
+  background: #000 !important;
+  color: #fff !important;
+}
+
+.high-contrast [class*="text-gray-"],
+.high-contrast [class*="text-slate-"],
+.high-contrast [class*="text-zinc-"],
+.high-contrast [class*="text-neutral-"],
+.high-contrast [class*="text-green-"],
+.high-contrast [class*="text-blue-"],
+.high-contrast [class*="text-purple-"],
+.high-contrast [class*="text-pink-"],
+.high-contrast [class*="text-indigo-"],
+.high-contrast [class*="text-emerald-"],
+.high-contrast [class*="text-orange-"],
+.high-contrast [class*="text-yellow-"],
+.high-contrast [class*="text-red-"] {
+  color: #fff !important;
+}
+
+.high-contrast [class*="bg-gray-"],
+.high-contrast [class*="bg-slate-"],
+.high-contrast [class*="bg-zinc-"],
+.high-contrast [class*="bg-neutral-"],
+.high-contrast [class*="bg-green-"],
+.high-contrast [class*="bg-blue-"],
+.high-contrast [class*="bg-purple-"],
+.high-contrast [class*="bg-pink-"],
+.high-contrast [class*="bg-indigo-"],
+.high-contrast [class*="bg-emerald-"],
+.high-contrast [class*="bg-orange-"],
+.high-contrast [class*="bg-yellow-"],
+.high-contrast [class*="bg-red-"],
+.high-contrast [class*="from-gray-"],
+.high-contrast [class*="from-slate-"],
+.high-contrast [class*="from-green-"],
+.high-contrast [class*="from-blue-"],
+.high-contrast [class*="from-purple-"],
+.high-contrast [class*="from-pink-"],
+.high-contrast [class*="from-indigo-"],
+.high-contrast [class*="from-emerald-"],
+.high-contrast [class*="from-orange-"],
+.high-contrast [class*="from-yellow-"],
+.high-contrast [class*="from-red-"],
+.high-contrast [class*="to-gray-"],
+.high-contrast [class*="to-slate-"],
+.high-contrast [class*="to-green-"],
+.high-contrast [class*="to-blue-"],
+.high-contrast [class*="to-purple-"],
+.high-contrast [class*="to-pink-"],
+.high-contrast [class*="to-indigo-"],
+.high-contrast [class*="to-emerald-"],
+.high-contrast [class*="to-orange-"],
+.high-contrast [class*="to-yellow-"],
+.high-contrast [class*="to-red-"] {
+  background: #000 !important;
+  background-image: none !important;
+}
+
+.high-contrast [class*="border-gray-"],
+.high-contrast [class*="border-slate-"],
+.high-contrast [class*="border-zinc-"],
+.high-contrast [class*="border-neutral-"],
+.high-contrast [class*="border-green-"],
+.high-contrast [class*="border-blue-"],
+.high-contrast [class*="border-purple-"],
+.high-contrast [class*="border-pink-"],
+.high-contrast [class*="border-indigo-"],
+.high-contrast [class*="border-emerald-"],
+.high-contrast [class*="border-orange-"],
+.high-contrast [class*="border-yellow-"],
+.high-contrast [class*="border-red-"] {
+  border-color: #fff !important;
+}
+
+.high-contrast a,
+.high-contrast button,
+.high-contrast [role="button"] {
+  color: #fff !important;
+  border-color: #fff !important;
+}
+
 .reduced-motion * {
   scroll-behavior: auto !important;
   animation-duration: 0ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0ms !important;
+}
+
+.appearance-no-animations * {
+  scroll-behavior: auto !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+.appearance-hide-avatars img[alt*="avatar" i],
+.appearance-hide-avatars img[alt*="profile" i],
+.appearance-hide-avatars [class*="avatar"],
+.appearance-hide-avatars [class*="Avatar"] {
+  display: none !important;
 }
 
 .focus-indicators *:focus-visible {

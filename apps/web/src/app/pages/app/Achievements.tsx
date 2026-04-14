@@ -1,38 +1,71 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { AppLayout } from '@/app/components/AppLayout';
-import { Trophy, Award, Star, Lock, Calendar, TrendingUp, Target, Zap, Heart, Brain, Moon, CheckCircle, ArrowLeft } from 'lucide-react';
+import { Trophy, Award, Star, Lock, Calendar, TrendingUp, Target, Zap, Heart, Brain, Moon, CheckCircle, ArrowLeft, Users } from 'lucide-react';
 import { AnimatedCard } from '@/app/components/AnimatedCard';
 import { Link } from 'react-router-dom';
+import { useAuth } from '@/app/contexts/AuthContext';
+import { api } from '@/lib/api';
 
 interface Achievement {
   id: string;
   title: string;
   description: string;
   icon: string;
-  category: 'sessions' | 'mood' | 'journal' | 'wellness' | 'streak';
+  category: 'sessions' | 'mood' | 'journal' | 'wellness' | 'streak' | 'community';
   progress: number;
   total: number;
   unlocked: boolean;
-  unlockedDate?: string;
   points: number;
   rarity: 'common' | 'rare' | 'epic' | 'legendary';
 }
 
 export function Achievements() {
+  const { profile } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [wellnessExercises, setWellnessExercises] = useState(0);
+  const [communityPosts, setCommunityPosts] = useState(0);
 
-  const achievements: Achievement[] = [
+  useEffect(() => {
+    const loadMetrics = async () => {
+      try {
+        const [progress, posts] = await Promise.all([
+          api.wellness.getProgress(),
+          api.getCommunityPosts(100),
+        ]);
+
+        const completedWellness = Array.isArray(progress)
+          ? progress.reduce((sum: number, item: any) => sum + Number(item?.sessionsCompleted || 0), 0)
+          : 0;
+        const authoredPosts = Array.isArray(posts)
+          ? posts.filter((post: any) => post?.isByCurrentUser).length
+          : 0;
+
+        setWellnessExercises(completedWellness);
+        setCommunityPosts(authoredPosts);
+      } catch (error) {
+        console.error('Failed to load achievement metrics', error);
+      }
+    };
+
+    loadMetrics();
+  }, []);
+
+  const sessionsCompleted = Number(profile?.stats?.completed_sessions || 0);
+  const moodCheckins = Number(profile?.stats?.total_checkins || 0);
+  const journalEntries = Number(profile?.stats?.total_journals || 0);
+  const streakDays = Number(profile?.streak_days || 0);
+
+  const achievements: Achievement[] = useMemo(() => ([
     {
       id: '1',
       title: 'First Steps',
       description: 'Complete your first session with Ezri',
       icon: 'footprints',
       category: 'sessions',
-      progress: 1,
+      progress: sessionsCompleted,
       total: 1,
-      unlocked: true,
-      unlockedDate: '2026-01-15',
+      unlocked: sessionsCompleted >= 1,
       points: 10,
       rarity: 'common'
     },
@@ -42,22 +75,21 @@ export function Achievements() {
       description: 'Complete 10 sessions with Ezri',
       icon: 'target',
       category: 'sessions',
-      progress: 7,
+      progress: sessionsCompleted,
       total: 10,
-      unlocked: false,
+      unlocked: sessionsCompleted >= 10,
       points: 50,
       rarity: 'rare'
     },
     {
       id: '3',
       title: 'Mood Master',
-      description: 'Log your mood for 7 consecutive days',
+      description: 'Log your mood 7 times',
       icon: 'heart',
       category: 'mood',
-      progress: 7,
+      progress: moodCheckins,
       total: 7,
-      unlocked: true,
-      unlockedDate: '2026-01-20',
+      unlocked: moodCheckins >= 7,
       points: 25,
       rarity: 'rare'
     },
@@ -67,9 +99,9 @@ export function Achievements() {
       description: 'Write 20 journal entries',
       icon: 'book',
       category: 'journal',
-      progress: 12,
+      progress: journalEntries,
       total: 20,
-      unlocked: false,
+      unlocked: journalEntries >= 20,
       points: 40,
       rarity: 'rare'
     },
@@ -79,22 +111,21 @@ export function Achievements() {
       description: 'Complete 5 wellness exercises',
       icon: 'zap',
       category: 'wellness',
-      progress: 5,
+      progress: wellnessExercises,
       total: 5,
-      unlocked: true,
-      unlockedDate: '2026-01-18',
+      unlocked: wellnessExercises >= 5,
       points: 30,
       rarity: 'common'
     },
     {
       id: '6',
       title: 'Night Owl',
-      description: 'Track your sleep for 14 nights',
+      description: 'Complete 14 wellness exercises',
       icon: 'moon',
       category: 'wellness',
-      progress: 8,
+      progress: wellnessExercises,
       total: 14,
-      unlocked: false,
+      unlocked: wellnessExercises >= 14,
       points: 35,
       rarity: 'rare'
     },
@@ -104,33 +135,32 @@ export function Achievements() {
       description: 'Maintain a 30-day streak',
       icon: 'trophy',
       category: 'streak',
-      progress: 15,
+      progress: streakDays,
       total: 30,
-      unlocked: false,
+      unlocked: streakDays >= 30,
       points: 100,
       rarity: 'legendary'
     },
     {
       id: '8',
-      title: 'Early Bird',
-      description: 'Complete a morning session',
-      icon: 'sunrise',
-      category: 'sessions',
-      progress: 1,
-      total: 1,
-      unlocked: true,
-      unlockedDate: '2026-01-22',
-      points: 15,
+      title: 'Community Contributor',
+      description: 'Publish 3 community posts',
+      icon: 'users',
+      category: 'community',
+      progress: communityPosts,
+      total: 3,
+      unlocked: communityPosts >= 3,
+      points: 20,
       rarity: 'common'
     }
-  ];
+  ]), [communityPosts, journalEntries, moodCheckins, sessionsCompleted, streakDays, wellnessExercises]);
 
   const stats = {
     totalPoints: achievements.filter(a => a.unlocked).reduce((sum, a) => sum + a.points, 0),
     unlockedCount: achievements.filter(a => a.unlocked).length,
     totalCount: achievements.length,
-    currentStreak: 15,
-    longestStreak: 22
+    currentStreak: streakDays,
+    longestStreak: streakDays
   };
 
   const categories = [
@@ -139,7 +169,8 @@ export function Achievements() {
     { id: 'mood', label: 'Mood', icon: Heart },
     { id: 'journal', label: 'Journal', icon: Brain },
     { id: 'wellness', label: 'Wellness', icon: Zap },
-    { id: 'streak', label: 'Streaks', icon: TrendingUp }
+    { id: 'streak', label: 'Streaks', icon: TrendingUp },
+    { id: 'community', label: 'Community', icon: Users }
   ];
 
   const filteredAchievements = selectedCategory === 'all' 
@@ -169,7 +200,8 @@ export function Achievements() {
       zap: Zap,
       moon: Moon,
       trophy: Trophy,
-      sunrise: Calendar
+      sunrise: Calendar,
+      users: Users
     };
     return icons[iconName] || Trophy;
   };
@@ -197,6 +229,9 @@ export function Achievements() {
                 <p className="text-gray-600 dark:text-slate-400">Your journey and milestones</p>
               </div>
             </div>
+            <p className="text-sm text-gray-600 dark:text-slate-400">
+              Achievements are activity-based milestones. They unlock as you complete sessions, check-ins, journals, and community goals.
+            </p>
           </div>
 
           {/* Stats Cards */}
@@ -311,7 +346,7 @@ export function Achievements() {
                           {isUnlocked ? (
                             <Icon className="w-8 h-8 text-white" />
                           ) : (
-                            <Lock className="w-8 h-8 text-gray-400 dark:text-slate-600" />
+                            <Icon className="w-8 h-8 text-gray-400 dark:text-slate-600" />
                           )}
                         </div>
                         {isUnlocked && (
@@ -322,7 +357,16 @@ export function Achievements() {
                         )}
                       </div>
 
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{achievement.title}</h3>
+                      <div className="mb-2 flex items-center gap-2 flex-wrap">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">{achievement.title}</h3>
+                        <span className={`text-xs font-bold uppercase px-2 py-1 rounded-lg ${
+                          isUnlocked
+                            ? `bg-gradient-to-r ${rarityColors[achievement.rarity]} text-white`
+                            : 'bg-gray-200 dark:bg-slate-800 text-gray-500 dark:text-slate-400'
+                        }`}>
+                          {achievement.rarity}
+                        </span>
+                      </div>
                       <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">{achievement.description}</p>
 
                       {/* Progress Bar */}
@@ -345,24 +389,17 @@ export function Achievements() {
                         </div>
                       </div>
 
-                      {/* Unlocked Date */}
-                      {isUnlocked && achievement.unlockedDate && (
+                      {isUnlocked ? (
                         <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
                           <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-500" />
-                          <span>Unlocked on {new Date(achievement.unlockedDate).toLocaleDateString()}</span>
+                          <span>Unlocked</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
+                          <Lock className="w-4 h-4 text-gray-500 dark:text-slate-500" />
+                          <span>In progress</span>
                         </div>
                       )}
-
-                      {/* Rarity Badge */}
-                      <div className="absolute top-4 right-4">
-                        <span className={`text-xs font-bold uppercase px-2 py-1 rounded-lg ${
-                          isUnlocked
-                            ? `bg-gradient-to-r ${rarityColors[achievement.rarity]} text-white`
-                            : 'bg-gray-200 dark:bg-slate-800 text-gray-500 dark:text-slate-400'
-                        }`}>
-                          {achievement.rarity}
-                        </span>
-                      </div>
                     </div>
                   </div>
                 </AnimatedCard>

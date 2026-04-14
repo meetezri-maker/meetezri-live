@@ -27,12 +27,15 @@ import {
   BarChart3,
   History,
   Wind,
-  CreditCard
+  CreditCard,
+  X
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
 import { AppLayout } from "@/app/components/AppLayout";
+import { ComingSoon } from "@/app/pages/onboarding/ComingSoon";
 import { useAuth } from "@/app/contexts/AuthContext";
+import { useNotifications } from "@/app/contexts/NotificationsContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -42,14 +45,16 @@ interface SettingSection {
   description: string;
   icon: any;
   color: string;
-  route: string;
+  route?: string;
   badge?: string;
 }
 
 export function SettingsHub() {
   const navigate = useNavigate();
   const { profile, refreshProfile, user } = useAuth();
+  const { unreadCount } = useNotifications();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showBrainHealthComingSoon, setShowBrainHealthComingSoon] = useState(false);
   
   // Quick Settings State
   const [quickSettings, setQuickSettings] = useState([
@@ -196,7 +201,7 @@ export function SettingsHub() {
       icon: Bell,
       color: "from-yellow-500 to-orange-600",
       route: "/app/settings/notifications",
-      badge: "3"
+      badge: unreadCount > 0 ? String(unreadCount) : undefined
     },
     {
       id: "accessibility",
@@ -252,7 +257,7 @@ export function SettingsHub() {
       description: "Explore cognitive exercises and brain health tips",
       icon: Brain,
       color: "from-teal-500 to-cyan-600",
-      route: "/app/wellness-tools"
+      badge: "Coming Soon"
     }
   ];
 
@@ -393,6 +398,35 @@ export function SettingsHub() {
           <div className="space-y-4">
             {settingSections.map((section, index) => {
               const Icon = section.icon;
+              const sectionCard = (
+                <div className="flex items-start gap-4">
+                  <div className={`p-3 rounded-xl bg-gradient-to-br ${section.color} shrink-0`}>
+                    <Icon className="w-6 h-6 text-white" />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-bold text-gray-900 dark:text-gray-100 break-words">{section.title}</h3>
+                      {section.badge && (
+                        <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">
+                          {section.badge}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 break-words">{section.description}</p>
+                    {!section.route && (
+                      <p className="text-xs text-teal-700 dark:text-teal-300 mt-2">
+                        Brain Health tools are in progress and will be available here soon.
+                      </p>
+                    )}
+                  </div>
+
+                  {section.route ? (
+                    <ChevronRight className="w-5 h-5 text-gray-400 shrink-0 mt-1" />
+                  ) : null}
+                </div>
+              );
+
               return (
                 <motion.div
                   key={section.id}
@@ -402,34 +436,45 @@ export function SettingsHub() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <Link
-                    to={section.route}
-                    className="block bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-xl bg-gradient-to-br ${section.color}`}>
-                        <Icon className="w-6 h-6 text-white" />
-                      </div>
-
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-bold text-gray-900 dark:text-gray-100">{section.title}</h3>
-                          {section.badge && (
-                            <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">
-                              {section.badge}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">{section.description}</p>
-                      </div>
-
-                      <ChevronRight className="w-5 h-5 text-gray-400" />
-                    </div>
-                  </Link>
+                  {section.route ? (
+                    <Link
+                      to={section.route}
+                      className="block bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all"
+                    >
+                      {sectionCard}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowBrainHealthComingSoon(true)}
+                      className="w-full text-left bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all"
+                    >
+                      {sectionCard}
+                    </button>
+                  )}
                 </motion.div>
               );
             })}
           </div>
+
+          {showBrainHealthComingSoon && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50"
+            >
+              <button
+                type="button"
+                onClick={() => setShowBrainHealthComingSoon(false)}
+                className="absolute top-4 right-4 z-[60] rounded-full bg-white/20 hover:bg-white/30 text-white p-2 backdrop-blur-sm border border-white/30"
+                aria-label="Close Brain Health Coming Soon"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <ComingSoon />
+            </motion.div>
+          )}
 
           {/* Safety & Support Section */}
           <motion.div
@@ -464,24 +509,24 @@ export function SettingsHub() {
                   to={section.route}
                   className="block bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all"
                 >
-                      <div className="flex items-center gap-4">
-                        <div className={`p-3 rounded-xl bg-gradient-to-br ${section.color}`}>
+                      <div className="flex items-start gap-4">
+                        <div className={`p-3 rounded-xl bg-gradient-to-br ${section.color} shrink-0`}>
                           <Icon className="w-6 h-6 text-white" />
                         </div>
 
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-bold text-gray-900 dark:text-gray-100">{section.title}</h3>
+                            <h3 className="font-bold text-gray-900 dark:text-gray-100 break-words">{section.title}</h3>
                             {section.badge && (
                               <span className="px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">
                                 {section.badge}
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">{section.description}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 break-words">{section.description}</p>
                         </div>
 
-                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                        <ChevronRight className="w-5 h-5 text-gray-400 shrink-0 mt-1" />
                       </div>
                     </Link>
                   </motion.div>

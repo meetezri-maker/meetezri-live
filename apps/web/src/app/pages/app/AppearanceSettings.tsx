@@ -15,6 +15,15 @@ import { useState, useEffect, useMemo } from "react";
 import { AppLayout } from "@/app/components/AppLayout";
 import { useAuth } from "@/app/contexts/AuthContext";
 
+type AppearanceSettingsState = {
+  theme: "light" | "dark" | "auto";
+  accentColor: "blue" | "purple" | "pink" | "green" | "orange" | "teal";
+  backgroundStyle: "solid" | "gradient" | "pattern";
+  animations: boolean;
+  compactMode: boolean;
+  showAvatars: boolean;
+};
+
 export function AppearanceSettings() {
   const { user } = useAuth();
 
@@ -24,7 +33,7 @@ export function AppearanceSettings() {
     return `ezri_appearance_settings_${user.id}`;
   }, [user?.id]);
 
-  const getDefaultSettings = () => ({
+  const getDefaultSettings = (): AppearanceSettingsState => ({
     theme: "light",
     accentColor: "pink",
     backgroundStyle: "gradient",
@@ -33,29 +42,35 @@ export function AppearanceSettings() {
     showAvatars: true
   });
 
-  const [settings, setSettings] = useState(() => {
+  const readSettingsFromStorage = (key: string): AppearanceSettingsState => {
     const isBrowser =
       typeof window !== "undefined" && typeof window.localStorage !== "undefined";
-    const savedSettings = isBrowser
-      ? window.localStorage.getItem(storageKey)
-      : null;
+    if (!isBrowser) return getDefaultSettings();
 
-    if (savedSettings) {
-      try {
-        const parsed = JSON.parse(savedSettings);
-        return {
-          ...getDefaultSettings(),
-          ...parsed
-        };
-      } catch {
-        return getDefaultSettings();
-      }
+    const savedSettings = window.localStorage.getItem(key);
+    if (!savedSettings) return getDefaultSettings();
+
+    try {
+      const parsed = JSON.parse(savedSettings);
+      return {
+        ...getDefaultSettings(),
+        ...parsed
+      };
+    } catch {
+      return getDefaultSettings();
     }
+  };
 
-    return getDefaultSettings();
+  const [settings, setSettings] = useState(() => {
+    return readSettingsFromStorage(storageKey);
   });
 
   const [showSavedMessage, setShowSavedMessage] = useState(false);
+
+  // Ensure we load the correct saved profile when the user changes.
+  useEffect(() => {
+    setSettings(readSettingsFromStorage(storageKey));
+  }, [storageKey]);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
@@ -92,6 +107,8 @@ export function AppearanceSettings() {
     if (typeof document === "undefined") return;
 
     const root = document.documentElement;
+    let mediaQuery: MediaQueryList | null = null;
+    let handleAutoThemeChange: ((event: MediaQueryListEvent) => void) | null = null;
 
     const accentMap: Record<string, string> = {
       blue: "#3b82f6",
@@ -105,9 +122,38 @@ export function AppearanceSettings() {
     const accent = accentMap[settings.accentColor] || accentMap.pink;
 
     root.style.setProperty("--accent", accent);
-  }, [settings.accentColor]);
+    // Keep primary/ring in sync so button and focus styles follow accent color too.
+    root.style.setProperty("--primary", accent);
+    root.style.setProperty("--ring", accent);
+    root.classList.toggle("appearance-no-animations", !settings.animations);
+    root.classList.toggle("appearance-hide-avatars", !settings.showAvatars);
+    root.toggleAttribute("data-ezri-compact-mode", settings.compactMode);
+    root.setAttribute("data-ezri-background-style", settings.backgroundStyle);
 
-  const updateSetting = (key: string, value: any) => {
+    if (settings.theme === "auto") {
+      if (typeof window !== "undefined" && window.matchMedia) {
+        mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+        root.classList.toggle("dark", mediaQuery.matches);
+        handleAutoThemeChange = (event: MediaQueryListEvent) => {
+          root.classList.toggle("dark", event.matches);
+        };
+        mediaQuery.addEventListener("change", handleAutoThemeChange);
+      }
+    } else {
+      root.classList.toggle("dark", settings.theme === "dark");
+    }
+
+    return () => {
+      if (mediaQuery && handleAutoThemeChange) {
+        mediaQuery.removeEventListener("change", handleAutoThemeChange);
+      }
+    };
+  }, [settings]);
+
+  const updateSetting = <K extends keyof AppearanceSettingsState>(
+    key: K,
+    value: AppearanceSettingsState[K]
+  ) => {
     const nextSettings = { ...settings, [key]: value };
     setSettings(nextSettings);
 

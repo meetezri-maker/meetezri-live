@@ -21,6 +21,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../../lib/api";
 import { Skeleton } from "../../components/ui/skeleton";
+import { companionCardImageUrl } from "@/lib/avatar/companionModelUrl";
 
 interface SessionData {
   id: string;
@@ -37,6 +38,8 @@ interface SessionData {
   status?: "completed" | "upcoming";
   recordingUrl?: string;
   isUpcoming?: boolean;
+  avatarName?: string;
+  avatarImage?: string;
 }
 
 interface BackendSession {
@@ -57,6 +60,26 @@ interface BackendSession {
   _count?: {
     session_messages: number;
   };
+  config?: {
+    avatar?: string;
+  };
+}
+
+const HISTORY_AVATARS: { name: string; image: string }[] = [
+  { name: "Alex Rivera", image: companionCardImageUrl("Alex.png") },
+  { name: "Sarah Mitchell", image: companionCardImageUrl("Sara Mitchell.png") },
+  { name: "Jordan Taylor", image: companionCardImageUrl("jordan Taylor.png") },
+  { name: "Maya Chen", image: companionCardImageUrl("maya chen.png") },
+];
+
+function resolveHistoryAvatar(name: string | undefined | null) {
+  const normalized = (name ?? "").trim().toLowerCase();
+  if (!normalized) return HISTORY_AVATARS[0];
+  return (
+    HISTORY_AVATARS.find((a) => a.name.toLowerCase() === normalized) ??
+    HISTORY_AVATARS.find((a) => a.name.split(/\s+/)[0]?.toLowerCase() === normalized) ??
+    HISTORY_AVATARS[0]
+  );
 }
 
 /**
@@ -205,6 +228,7 @@ export function SessionHistory() {
             baseDate.getTime() >= now.getTime();
 
           const { label: durationLabel, minutesForStats } = formatSessionDuration(s);
+          const resolvedAvatar = resolveHistoryAvatar(s.config?.avatar ?? profile?.selected_avatar);
 
           return {
             id: s.id,
@@ -226,6 +250,8 @@ export function SessionHistory() {
             status: s.status === 'completed' ? 'completed' : 'upcoming',
             recordingUrl: s.recording_url || undefined,
             isUpcoming,
+            avatarName: resolvedAvatar.name,
+            avatarImage: resolvedAvatar.image,
           };
         };
 
@@ -543,108 +569,137 @@ export function SessionHistory() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
             >
-              <Card className="group overflow-hidden hover:shadow-lg transition-shadow cursor-pointer">
-                <div className="flex flex-col sm:flex-row">
-                  {/* Thumbnail */}
-                  <div className={`w-full sm:w-48 h-32 bg-gradient-to-br ${gradientStyles[session.thumbnail]} relative`}>
-                    <motion.div
-                      animate={{
-                        scale: [1, 1.1, 1],
-                        opacity: [0.3, 0.5, 0.3]
-                      }}
-                      transition={{ duration: 3, repeat: Infinity }}
-                      className="absolute inset-0 bg-white/20 rounded-full blur-3xl"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => setSelectedSession(session)}
-                        className="w-16 h-16 bg-white/90 rounded-full flex items-center justify-center shadow-xl"
-                      >
-                        <Play className="w-6 h-6 text-primary ml-1" />
-                      </motion.button>
-                    </div>
-                    <button
-                      onClick={(e) => handleToggleFavorite(session.id, e)}
-                      className={`absolute top-2 right-2 p-2 rounded-full transition-all duration-200 ${
-                        session.favorite 
-                          ? "bg-white/20 opacity-100" 
-                          : "bg-black/20 opacity-0 group-hover:opacity-100 hover:bg-black/30"
-                      }`}
-                    >
-                      <Star 
-                        className={`w-5 h-5 transition-colors ${
-                          session.favorite 
-                            ? "text-yellow-400 fill-yellow-400" 
-                            : "text-white"
-                        }`} 
+              {activeTab === "upcoming" ? (
+                <Card className="overflow-hidden border border-primary/15 bg-gradient-to-r from-white to-indigo-50/30 dark:from-gray-900 dark:to-indigo-950/20">
+                  <div className="flex items-center gap-4 p-4 sm:p-5">
+                    <div className="h-16 w-16 rounded-full overflow-hidden border-2 border-white dark:border-gray-900 shadow-md shrink-0">
+                      <img
+                        src={session.avatarImage || HISTORY_AVATARS[0].image}
+                        alt={session.avatarName || "Companion avatar"}
+                        className="h-full w-full object-cover object-top"
                       />
-                    </button>
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <Calendar className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm text-muted-foreground">{session.date}</span>
-                          <span className="text-gray-300">•</span>
-                          <Clock className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm text-muted-foreground">{session.duration}</span>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-2">{session.summary}</p>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-base truncate">
+                        {session.avatarName || "Your companion"}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="w-4 h-4" />
+                        <span>{session.date}</span>
+                        <span className="text-gray-300">•</span>
+                        <Clock className="w-4 h-4" />
+                        <span>{session.duration}</span>
                       </div>
                     </div>
-
-                    {/* Topics */}
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      {session.topicsDiscussed.map((topic) => (
-                        <span
-                          key={topic}
-                          className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium"
+                    <span className="text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                      Upcoming
+                    </span>
+                  </div>
+                </Card>
+              ) : (
+                <Card className="group overflow-hidden hover:shadow-lg transition-shadow cursor-pointer">
+                  <div className="flex flex-col sm:flex-row">
+                    {/* Thumbnail */}
+                    <div className={`w-full sm:w-48 h-32 bg-gradient-to-br ${gradientStyles[session.thumbnail]} relative`}>
+                      <motion.div
+                        animate={{
+                          scale: [1, 1.1, 1],
+                          opacity: [0.3, 0.5, 0.3]
+                        }}
+                        transition={{ duration: 3, repeat: Infinity }}
+                        className="absolute inset-0 bg-white/20 rounded-full blur-3xl"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => setSelectedSession(session)}
+                          className="w-16 h-16 bg-white/90 rounded-full flex items-center justify-center shadow-xl"
                         >
-                          {topic}
-                        </span>
-                      ))}
+                          <Play className="w-6 h-6 text-primary ml-1" />
+                        </motion.button>
+                      </div>
+                      <button
+                        onClick={(e) => handleToggleFavorite(session.id, e)}
+                        className={`absolute top-2 right-2 p-2 rounded-full transition-all duration-200 ${
+                          session.favorite
+                            ? "bg-white/20 opacity-100"
+                            : "bg-black/20 opacity-0 group-hover:opacity-100 hover:bg-black/30"
+                        }`}
+                      >
+                        <Star
+                          className={`w-5 h-5 transition-colors ${
+                            session.favorite
+                              ? "text-yellow-400 fill-yellow-400"
+                              : "text-white"
+                          }`}
+                        />
+                      </button>
                     </div>
 
-                    {/* Stats */}
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <MessageSquare className="w-4 h-4" />
-                        <span>
-                          {session.messagesCount} message{session.messagesCount === 1 ? "" : "s"} saved
-                        </span>
+                    {/* Content */}
+                    <div className="flex-1 p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <Calendar className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm text-muted-foreground">{session.date}</span>
+                            <span className="text-gray-300">•</span>
+                            <Clock className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm text-muted-foreground">{session.duration}</span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">{session.summary}</p>
+                        </div>
+                      </div>
+
+                      {/* Topics */}
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {session.topicsDiscussed.map((topic) => (
+                          <span
+                            key={topic}
+                            className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium"
+                          >
+                            {topic}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Stats */}
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <MessageSquare className="w-4 h-4" />
+                          <span>
+                            {session.messagesCount} message{session.messagesCount === 1 ? "" : "s"} saved
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Actions */}
-                  <div className="p-4 flex sm:flex-col gap-2 border-t sm:border-t-0 sm:border-l border-gray-200">
-                    <Button
-                      onClick={() => setSelectedSession(session)}
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 sm:flex-none"
-                    >
-                      View Details
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="flex-1 sm:flex-none"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleExportSession(session);
-                      }}
-                    >
-                      <Download className="w-4 h-4" />
-                    </Button>
+                    {/* Actions */}
+                    <div className="p-4 flex sm:flex-col gap-2 border-t sm:border-t-0 sm:border-l border-gray-200">
+                      <Button
+                        onClick={() => setSelectedSession(session)}
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 sm:flex-none"
+                      >
+                        View Details
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="flex-1 sm:flex-none"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleExportSession(session);
+                        }}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </Card>
+                </Card>
+              )}
             </motion.div>
           ))}
         </div>

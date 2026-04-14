@@ -59,7 +59,7 @@ export const ComingSoon = () => {
         >
           <div className="absolute -inset-x-20 -inset-y-10 bg-gradient-to-r from-teal-500/20 via-blue-500/20 to-purple-500/20 blur-3xl opacity-30 pointer-events-none rounded-full" />
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white via-white to-slate-400 drop-shadow-sm">
-            Meet Ezri
+            Meet Solace
           </h1>
           <p className="mt-4 text-xl md:text-2xl text-slate-400 max-w-2xl mx-auto leading-relaxed font-light">
             Your personal AI companion for <span className="text-teal-400 font-medium">mental wellness</span>, <span className="text-blue-400 font-medium">growth</span>, and <span className="text-purple-400 font-medium">safety</span>.

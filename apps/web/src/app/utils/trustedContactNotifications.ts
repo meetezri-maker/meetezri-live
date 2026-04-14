@@ -6,22 +6,24 @@
  */
 
 import type { SafetyState } from '@/app/types/safety';
+import { api } from '@/lib/api';
 
 export interface TrustedContact {
-  id: number;
+  id: string | number;
   name: string;
   relationship: string;
-  phone: string;
-  email: string;
-  isTrustedContact: boolean;
-  notificationPreference: 'sms' | 'email' | 'both';
+  phone?: string | null;
+  email?: string | null;
+  isTrustedContact?: boolean;
+  is_trusted?: boolean;
+  notificationPreference?: 'sms' | 'email' | 'both';
   lastNotified?: string;
 }
 
 export interface NotificationEvent {
   id: string;
   timestamp: string;
-  contactId: number;
+  contactId: string | number;
   contactName: string;
   safetyState: SafetyState;
   method: 'sms' | 'email';
@@ -151,23 +153,29 @@ export async function sendNotification(
   state: SafetyState,
   userName: string = 'Your friend'
 ): Promise<NotificationEvent> {
+  const hasPhone = Boolean(contact.phone && String(contact.phone).trim());
+  const hasEmail = Boolean(contact.email && String(contact.email).trim());
+  const preferredMethod =
+    contact.notificationPreference ||
+    (hasPhone && hasEmail ? 'both' : hasPhone ? 'sms' : 'email');
+
   const event: NotificationEvent = {
     id: `notif_${Date.now()}_${contact.id}`,
     timestamp: new Date().toISOString(),
     contactId: contact.id,
     contactName: contact.name,
     safetyState: state,
-    method: contact.notificationPreference === 'both' ? 'sms' : contact.notificationPreference,
+    method: preferredMethod === 'both' ? 'sms' : preferredMethod,
     status: 'pending',
     messageTemplate: ''
   };
 
   try {
     // Determine notification methods
-    const methods: ('sms' | 'email')[] = 
-      contact.notificationPreference === 'both' 
+    const methods: ('sms' | 'email')[] =
+      preferredMethod === 'both'
         ? ['sms', 'email']
-        : [contact.notificationPreference];
+        : [preferredMethod];
 
     // Send via each method
     for (const method of methods) {
@@ -209,15 +217,21 @@ export async function notifyTrustedContacts(
     return [];
   }
 
-  // Load contacts from localStorage
-  const contactsJson = localStorage.getItem('ezri_emergency_contacts');
-  if (!contactsJson) return [];
-
-  const allContacts: TrustedContact[] = JSON.parse(contactsJson);
+  let allContacts: TrustedContact[] = [];
+  try {
+    // Primary source: API-backed emergency contacts.
+    const apiContacts = await api.emergencyContacts.getAll();
+    allContacts = Array.isArray(apiContacts) ? apiContacts : [];
+  } catch {
+    // Compatibility fallback for legacy/local-only setups.
+    const contactsJson = localStorage.getItem('ezri_emergency_contacts');
+    allContacts = contactsJson ? JSON.parse(contactsJson) : [];
+  }
   
   // Filter to trusted contacts who can be notified
-  const eligibleContacts = allContacts.filter(c => 
-    c.isTrustedContact && canNotifyContact(c)
+  const eligibleContacts = allContacts.filter(c =>
+    (c.isTrustedContact || c.is_trusted) &&
+    canNotifyContact(c)
   );
 
   if (eligibleContacts.length === 0) {
@@ -242,12 +256,12 @@ export async function notifyTrustedContacts(
 /**
  * Updates the lastNotified timestamp for a contact
  */
-function updateContactLastNotified(contactId: number): void {
+function updateContactLastNotified(contactId: string | number): void {
   const contactsJson = localStorage.getItem('ezri_emergency_contacts');
   if (!contactsJson) return;
 
   const contacts: TrustedContact[] = JSON.parse(contactsJson);
-  const updated = contacts.map(c => 
+  const updated = contacts.map(c =>
     c.id === contactId 
       ? { ...c, lastNotified: new Date().toISOString() }
       : c
@@ -282,7 +296,7 @@ export function getNotificationHistory(): NotificationEvent[] {
 /**
  * Gets notification history for a specific contact
  */
-export function getContactNotificationHistory(contactId: number): NotificationEvent[] {
+export function getContactNotificationHistory(contactId: string | number): NotificationEvent[] {
   const allEvents = getNotificationHistory();
   return allEvents.filter(e => e.contactId === contactId);
 }

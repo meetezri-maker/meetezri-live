@@ -18,16 +18,45 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { getNotificationHistory, type NotificationEvent } from "@/app/utils/trustedContactNotifications";
+import { useNotifications } from "@/app/contexts/NotificationsContext";
+
+type HistoryNotification = NotificationEvent & {
+  source: "trusted_contact" | "in_app";
+  method: "sms" | "email" | "app";
+};
 
 export function NotificationHistory() {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<NotificationEvent[]>([]);
+  const { notifications: appNotifications } = useNotifications();
+  const [notifications, setNotifications] = useState<HistoryNotification[]>([]);
   const [filter, setFilter] = useState<'all' | 'sent' | 'failed'>('all');
 
   useEffect(() => {
-    const history = getNotificationHistory();
-    setNotifications(history);
-  }, []);
+    const trustedContactHistory = getNotificationHistory().map((event) => ({
+      ...event,
+      source: "trusted_contact" as const,
+      method: event.method,
+    }));
+
+    // Include all in-app notifications so history mirrors what users receive in the notifications feed.
+    const inAppHistory: HistoryNotification[] = appNotifications
+      .map((n) => ({
+        id: `inapp_${n.id}`,
+        timestamp: n.created_at,
+        contactId: "system",
+        contactName: n.title || "Ezri Notification",
+        safetyState: "ELEVATED_CONCERN",
+        method: "app",
+        status: "sent",
+        messageTemplate: n.message || n.title || "Safety notification",
+        source: "in_app",
+      }));
+
+    const merged = [...trustedContactHistory, ...inAppHistory]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    setNotifications(merged);
+  }, [appNotifications]);
 
   const filteredNotifications = notifications.filter(n => {
     if (filter === 'all') return true;
@@ -46,9 +75,9 @@ export function NotificationHistory() {
   };
 
   const getMethodIcon = (method: string) => {
-    return method === 'sms' 
-      ? <Phone className="w-4 h-4" />
-      : <Mail className="w-4 h-4" />;
+    if (method === 'sms') return <Phone className="w-4 h-4" />;
+    if (method === 'email') return <Mail className="w-4 h-4" />;
+    return <Bell className="w-4 h-4" />;
   };
 
   const getSafetyStateColor = (state: string) => {
@@ -102,7 +131,7 @@ export function NotificationHistory() {
                 <h1 className="text-3xl font-bold">Notification History</h1>
               </div>
               <p className="text-muted-foreground">
-                View when your trusted contacts were notified
+                View all notifications you have received
               </p>
             </div>
           </div>
@@ -121,7 +150,7 @@ export function NotificationHistory() {
               <div>
                 <h3 className="font-semibold text-blue-900 mb-1">About Notifications</h3>
                 <p className="text-sm text-blue-800">
-                  Your trusted contacts receive supportive check-in messages when our safety system detects you may need extra support. All messages are privacy-safe and contain no medical details.
+                  This page includes in-app alerts and trusted contact notification events in one timeline.
                 </p>
               </div>
             </div>
@@ -172,16 +201,16 @@ export function NotificationHistory() {
               <h3 className="font-bold text-lg mb-2">No Notifications Yet</h3>
               <p className="text-muted-foreground mb-4">
                 {filter === 'all' 
-                  ? "Your trusted contacts haven't been notified yet"
+                  ? "You have no notification history yet"
                   : `No ${filter} notifications found`
                 }
               </p>
               <Button 
-                onClick={() => navigate('/app/emergency-contacts')}
+                onClick={() => navigate('/app/notifications')}
                 variant="outline"
               >
-                <Shield className="w-4 h-4 mr-2" />
-                Manage Trusted Contacts
+                <Bell className="w-4 h-4 mr-2" />
+                Go to Notifications
               </Button>
             </motion.div>
           ) : (

@@ -28,6 +28,15 @@ interface AppLayoutProps {
   children: ReactNode;
 }
 
+const accentBackgroundMap: Record<string, string> = {
+  blue: "linear-gradient(135deg, #eff6ff 0%, #dbeafe 45%, #bfdbfe 100%)",
+  purple: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 45%, #ddd6fe 100%)",
+  pink: "linear-gradient(135deg, #fdf2f8 0%, #fce7f3 45%, #fbcfe8 100%)",
+  green: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 45%, #bbf7d0 100%)",
+  orange: "linear-gradient(135deg, #fff7ed 0%, #ffedd5 45%, #fed7aa 100%)",
+  teal: "linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 45%, #99f6e4 100%)",
+};
+
 export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -44,12 +53,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     backgroundStyle: string;
     compactMode: boolean;
     theme: string;
+    accentColor: string;
   }>(() => {
     // Initial state setup to avoid flash of wrong theme
     const defaults = {
       backgroundStyle: "gradient",
       compactMode: false,
-      theme: "light"
+      theme: "light",
+      accentColor: "pink"
     };
 
     if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
@@ -83,7 +94,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         return {
           backgroundStyle: parsed.backgroundStyle || "gradient",
           compactMode: Boolean(parsed.compactMode),
-          theme: parsed.theme || "light"
+          theme: parsed.theme || "light",
+          accentColor: parsed.accentColor || "pink"
         };
       } catch {
         return defaults;
@@ -104,13 +116,15 @@ export function AppLayout({ children }: AppLayoutProps) {
         setAppearance({
           backgroundStyle: parsed.backgroundStyle || "gradient",
           compactMode: Boolean(parsed.compactMode),
-          theme: parsed.theme || "light"
+          theme: parsed.theme || "light",
+          accentColor: parsed.accentColor || "pink"
         });
       } catch {
         setAppearance({
           backgroundStyle: "gradient",
           compactMode: false,
-          theme: "light"
+          theme: "light",
+          accentColor: "pink"
         });
       }
     }
@@ -164,7 +178,8 @@ export function AppLayout({ children }: AppLayoutProps) {
       setAppearance({
         backgroundStyle: detail.backgroundStyle || "gradient",
         compactMode: Boolean(detail.compactMode),
-        theme: detail.theme || "light"
+        theme: detail.theme || "light",
+        accentColor: detail.accentColor || "pink"
       });
     };
 
@@ -189,12 +204,17 @@ export function AppLayout({ children }: AppLayoutProps) {
     appearance.backgroundStyle === "solid"
       ? "bg-gray-50 dark:bg-slate-950"
       : appearance.backgroundStyle === "pattern"
-      ? "bg-gray-50 dark:bg-slate-950"
+      ? "bg-gray-50 dark:bg-slate-950 [background-image:radial-gradient(circle,_rgba(148,163,184,0.2)_1px,_transparent_1px)] dark:[background-image:radial-gradient(circle,_rgba(100,116,139,0.28)_1px,_transparent_1px)] [background-size:18px_18px]"
       : "bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950";
+  const gradientBackgroundStyle =
+    appearance.backgroundStyle === "gradient"
+      ? { backgroundImage: accentBackgroundMap[appearance.accentColor] || accentBackgroundMap.pink }
+      : undefined;
 
   const mainPaddingClass = appearance.compactMode
     ? "pb-12 sm:pb-4 sm:pl-64"
     : "pb-20 sm:pb-6 sm:pl-72";
+  const useGradientUI = appearance.backgroundStyle !== "solid";
 
   // Check both standard Supabase verification AND our custom metadata flag
   const isUnverified = user && (!user.email_confirmed_at || user.user_metadata?.email_verification_required);
@@ -215,7 +235,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   return (
-    <div className={`h-screen overflow-auto ${backgroundClass} flex flex-col`}>
+    <div className={`h-screen overflow-auto ${backgroundClass} flex flex-col`} style={gradientBackgroundStyle}>
       {/* Header */}
       <motion.header
         initial={{ y: -100 }}
@@ -234,11 +254,21 @@ export function AppLayout({ children }: AppLayoutProps) {
                 repeat: Infinity,
                 repeatDelay: 5
               }}
-              className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold"
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
+                useGradientUI
+                  ? "bg-gradient-to-br from-primary to-accent"
+                  : "bg-primary"
+              }`}
             >
               E
             </motion.div>
-            <h1 className="font-bold text-xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+            <h1
+              className={`font-bold text-xl ${
+                useGradientUI
+                  ? "bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"
+                  : "text-primary"
+              }`}
+            >
               Ezri
             </h1>
           </div>
@@ -325,7 +355,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                   whileTap={{ scale: 0.98 }}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                     active
-                      ? "bg-gradient-to-r from-primary to-secondary dark:from-blue-600 dark:to-indigo-600 text-white shadow-lg"
+                      ? useGradientUI
+                        ? "bg-gradient-to-r from-primary to-secondary dark:from-blue-600 dark:to-indigo-600 text-white shadow-lg"
+                        : "bg-primary text-primary-foreground shadow-lg"
                       : "hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200"
                   }`}
                 >
@@ -381,7 +413,11 @@ export function AppLayout({ children }: AppLayoutProps) {
             <Link to="/app/billing">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 dark:hover:from-emerald-900 dark:hover:to-emerald-800 text-gray-700 dark:text-gray-200 hover:text-green-700 transition-all border border-transparent hover:border-green-200 dark:hover:border-emerald-600"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-gray-700 dark:text-gray-200 transition-all border border-transparent ${
+                  useGradientUI
+                    ? "hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 dark:hover:from-emerald-900 dark:hover:to-emerald-800 hover:text-green-700 hover:border-green-200 dark:hover:border-emerald-600"
+                    : "hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-primary"
+                }`}
               >
                 <CreditCard className="w-5 h-5" />
                 <span className="font-medium">Billing & Credits</span>

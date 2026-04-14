@@ -150,14 +150,14 @@ export function PhoneInput({ value = "", onChange, onBlur, name, id, disabled, c
   }
 
   return (
-    <div className={cn("flex gap-2", className)}>
+    <div className={cn("flex w-full min-w-0 gap-2", className)}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="w-[140px] justify-between px-3"
+            className="w-[120px] shrink-0 justify-between px-3 sm:w-[140px]"
             disabled={disabled}
           >
             <div className="flex items-center gap-2">
@@ -205,7 +205,7 @@ export function PhoneInput({ value = "", onChange, onBlur, name, id, disabled, c
         onBlur={onBlur}
         disabled={disabled}
         placeholder={placeholder || "Phone number"}
-        className="flex-1"
+        className="min-w-0 flex-1"
       />
     </div>
   )

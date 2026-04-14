@@ -92,6 +92,14 @@ const triggersOptions = [
   { value: "trauma", label: "Trauma/PTSD" },
   { value: "none", label: "None of the above" },
 ];
+const pronounsOptions = [
+  "she/her",
+  "he/him",
+  "they/them",
+  "she/they",
+  "he/they",
+  "prefer not to say",
+];
 
 const MAX_PHONE_DIGITS = 12;
 const countPhoneDigits = (v: string) => (v.match(/\d/g) || []).length;
@@ -810,22 +818,13 @@ export function UserProfile() {
                             <p className="text-[11px] text-gray-500 dark:text-gray-400">Name, contact &amp; location</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {isEditing ? (
+                        {isEditing && (
+                          <div className="flex items-center gap-2 shrink-0">
                             <span className="text-[11px] font-bold px-3 py-1.5 rounded-full text-white shadow-sm" style={{ background: GRAD }}>
                               Editing
                             </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setIsEditing(true)}
-                              className="text-xs font-bold px-4 py-2 rounded-xl text-white shadow-sm hover:opacity-95 transition-opacity"
-                              style={{ background: GRAD }}
-                            >
-                              Edit
-                            </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
                       <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {[
@@ -843,14 +842,49 @@ export function UserProfile() {
                               <FormItem id={`profile-field-${f.name}`} className="scroll-mt-24">
                                 <FieldRow icon={f.icon} label={f.label} editing={isEditing}>
                                   {isEditing ? (
-                                    <input
-                                      {...field}
-                                      disabled={isSaving}
-                                      placeholder={f.placeholder}
-                                      inputMode={f.numeric ? "numeric" : undefined}
-                                      onChange={f.numeric ? (e) => field.onChange(e.target.value.replace(/\D/g, "")) : field.onChange}
-                                      className="w-full text-sm font-semibold bg-transparent outline-none text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600 disabled:opacity-60"
-                                    />
+                                    f.name === "pronouns" ? (
+                                      <div className="space-y-2">
+                                        <select
+                                          value={pronounsOptions.includes((field.value || "").toLowerCase()) ? (field.value || "").toLowerCase() : "__custom__"}
+                                          disabled={isSaving}
+                                          onChange={(e) => {
+                                            const v = e.target.value;
+                                            if (v === "__custom__") {
+                                              field.onChange("");
+                                              return;
+                                            }
+                                            field.onChange(v);
+                                          }}
+                                          className="w-full text-sm font-semibold bg-transparent outline-none text-gray-900 dark:text-white disabled:opacity-60"
+                                        >
+                                          <option value="">Select pronouns</option>
+                                          {pronounsOptions.map((option) => (
+                                            <option key={option} value={option}>
+                                              {option}
+                                            </option>
+                                          ))}
+                                          <option value="__custom__">Other (custom)</option>
+                                        </select>
+                                        {!pronounsOptions.includes((field.value || "").toLowerCase()) && (
+                                          <input
+                                            value={field.value || ""}
+                                            disabled={isSaving}
+                                            placeholder="Type custom pronouns"
+                                            onChange={(e) => field.onChange(e.target.value)}
+                                            className="w-full text-sm font-semibold bg-transparent outline-none text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600 disabled:opacity-60"
+                                          />
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <input
+                                        {...field}
+                                        disabled={isSaving}
+                                        placeholder={f.placeholder}
+                                        inputMode={f.numeric ? "numeric" : undefined}
+                                        onChange={f.numeric ? (e) => field.onChange(e.target.value.replace(/\D/g, "")) : field.onChange}
+                                        className="w-full text-sm font-semibold bg-transparent outline-none text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600 disabled:opacity-60"
+                                      />
+                                    )
                                   ) : (
                                     <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
                                       {f.numeric && field.value ? `${String(field.value).replace(/\D/g, "")} years old` : field.value || <span className="text-gray-300 dark:text-gray-600 font-normal">Not set</span>}
@@ -868,10 +902,16 @@ export function UserProfile() {
                           control={form.control}
                           name="phone"
                           render={({ field }) => (
-                            <FormItem id="profile-field-phone" className="scroll-mt-24">
+                            <FormItem id="profile-field-phone" className="scroll-mt-24 sm:col-span-2">
                               <FieldRow icon={<Phone className="w-3.5 h-3.5" />} label="Phone" editing={isEditing}>
                                 {isEditing ? (
-                                  <PhoneInput value={field.value} onChange={field.onChange} disabled={isSaving} placeholder="Phone number" />
+                                  <PhoneInput
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    disabled={isSaving}
+                                    placeholder="Phone number"
+                                    className="w-full min-w-0"
+                                  />
                                 ) : (
                                   <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
                                     {field.value || <span className="text-gray-300 dark:text-gray-600 font-normal">Not set</span>}

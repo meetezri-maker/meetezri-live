@@ -45,7 +45,9 @@ interface BackendSession {
 
 interface UpcomingSession {
   id: string;
-  avatar: string;
+  avatarName: string;
+  avatarImage?: string;
+  avatarEmoji: string;
   type: string;
   date: string;
   duration: string;
@@ -362,6 +364,8 @@ export function SessionLobby() {
       const mappedSessions: UpcomingSession[] = (sessions as BackendSession[]).map((session) => {
         const scheduledDate = session.scheduled_at ? new Date(session.scheduled_at) : null;
         const isExpired = !!scheduledDate && scheduledDate.getTime() < now.getTime() && session.status === "scheduled";
+        const avatarName = session.config?.avatar || selectedAvatar || "Alex Rivera";
+        const avatarPreview = lobbyAvatarByName(avatarName);
         const date = scheduledDate
           ? scheduledDate.toLocaleString("en-US", {
               month: "short",
@@ -376,7 +380,9 @@ export function SessionLobby() {
 
         return {
           id: session.id,
-          avatar: session.config?.avatar || "👨‍⚕️",
+          avatarName: avatarPreview.name,
+          avatarImage: avatarPreview.cardImage,
+          avatarEmoji: avatarPreview.emoji,
           type: session.type === "instant" ? "Instant" : "Scheduled",
           date,
           duration: session.duration_minutes ? `${session.duration_minutes} min` : "N/A",
@@ -1065,28 +1071,46 @@ export function SessionLobby() {
                 <div className="space-y-3">
                   {upcomingSessions.map((session, index) => (
                     <motion.div
-                      key={index}
+                      key={session.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.5 + index * 0.1 }}
-                      whileHover={{ x: 5 }}
-                      className={`p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg transition-colors ${
-                        session.isExpired ? "opacity-60 cursor-not-allowed" : "hover:bg-gray-100 dark:hover:bg-gray-700/50 cursor-pointer"
+                      whileHover={session.isExpired ? undefined : { y: -2 }}
+                      className={`rounded-xl border p-3 transition-all ${
+                        session.isExpired
+                          ? "opacity-60 border-red-200/70 bg-red-50/50 dark:border-red-900/50 dark:bg-red-950/20"
+                          : "border-gray-200 bg-gradient-to-r from-white to-violet-50/40 hover:border-primary/30 hover:shadow-md dark:border-gray-800 dark:from-gray-900 dark:to-violet-950/20"
                       }`}
                     >
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="text-2xl">{session.avatar}</span>
+                      <div className="flex items-center gap-3">
+                        <div className="h-11 w-11 rounded-full overflow-hidden ring-2 ring-white/80 dark:ring-gray-900 shadow-sm shrink-0 bg-muted/60">
+                          {session.avatarImage ? (
+                            <img
+                              src={session.avatarImage}
+                              alt={session.avatarName}
+                              className="h-full w-full object-cover object-top"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center text-xl">
+                              {session.avatarEmoji}
+                            </div>
+                          )}
+                        </div>
                         <div className="flex-1">
-                          <p className="font-medium text-sm">{session.type}</p>
+                          <p className="font-semibold text-sm">{session.avatarName}</p>
                           <p className="text-xs text-muted-foreground">{session.date}</p>
                         </div>
-                        {session.isExpired && (
-                          <span className="text-[10px] uppercase font-semibold text-red-500">
-                            Expired
-                          </span>
-                        )}
+                        <span
+                          className={`text-[10px] uppercase tracking-wide font-semibold px-2 py-1 rounded-full ${
+                            session.isExpired
+                              ? "text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-900/40"
+                              : "text-indigo-700 bg-indigo-100 dark:text-indigo-300 dark:bg-indigo-900/40"
+                          }`}
+                        >
+                          {session.isExpired ? "Expired" : session.type}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                         <Clock className="w-3 h-3" />
                         {session.duration}
                       </div>

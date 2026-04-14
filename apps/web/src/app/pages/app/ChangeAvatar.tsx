@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { AppLayout } from '@/app/components/AppLayout';
 import { Brain, CheckCircle, Star, Users, Volume2, Heart, ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
 import { AnimatedCard } from '@/app/components/AnimatedCard';
 import { Link } from 'react-router-dom';
 import { companionCardImageUrl } from '@/lib/avatar/companionModelUrl';
+import { useAuth } from '@/app/contexts/AuthContext';
+import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface AIAvatar {
   id: string;
@@ -25,9 +28,11 @@ interface AIAvatar {
 }
 
 export function ChangeAvatar() {
+  const { profile, refreshProfile } = useAuth();
   const [currentAvatarId, setCurrentAvatarId] = useState("maya");
   const [selectedAvatarId, setSelectedAvatarId] = useState("maya");
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [switchHistory, setSwitchHistory] = useState([
     { date: "2026-01-15", from: "Alex Rivera", to: "Maya Chen" },
     { date: "2025-12-20", from: "Jordan Taylor", to: "Alex Rivera" }
@@ -96,20 +101,49 @@ export function ChangeAvatar() {
     }
   ];
 
+  const avatarIdByName = useMemo<Record<string, string>>(
+    () => ({
+      "maya chen": "maya",
+      "alex rivera": "alex",
+      "jordan taylor": "jordan",
+      "sarah mitchell": "sarah",
+    }),
+    []
+  );
+
+  useEffect(() => {
+    const selectedFromProfile = (profile?.selected_avatar || "Maya Chen").trim().toLowerCase();
+    const nextAvatarId = avatarIdByName[selectedFromProfile] || "maya";
+    setCurrentAvatarId(nextAvatarId);
+    setSelectedAvatarId(nextAvatarId);
+  }, [profile?.selected_avatar, avatarIdByName]);
+
   const currentAvatar = aiAvatars.find(a => a.id === currentAvatarId);
   const selectedAvatar = aiAvatars.find(a => a.id === selectedAvatarId);
 
-  const handleConfirmChange = () => {
-    setCurrentAvatarId(selectedAvatarId);
-    setSwitchHistory([
-      {
-        date: new Date().toISOString().split('T')[0],
-        from: currentAvatar?.name || '',
-        to: selectedAvatar?.name || ''
-      },
-      ...switchHistory
-    ]);
-    setShowConfirmModal(false);
+  const handleConfirmChange = async () => {
+    if (!selectedAvatar || isSaving) return;
+    setIsSaving(true);
+    try {
+      await api.updateProfile({ selected_avatar: selectedAvatar.name });
+      await refreshProfile();
+      setCurrentAvatarId(selectedAvatarId);
+      setSwitchHistory([
+        {
+          date: new Date().toISOString().split('T')[0],
+          from: currentAvatar?.name || '',
+          to: selectedAvatar?.name || ''
+        },
+        ...switchHistory
+      ]);
+      setShowConfirmModal(false);
+      toast.success(`AI companion changed to ${selectedAvatar.name}`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not update AI companion");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -396,8 +430,9 @@ export function ChangeAvatar() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
+                    disabled={isSaving}
                     onClick={() => setShowConfirmModal(false)}
-                    className="flex-1 px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium"
+                    className="flex-1 px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium"
                   >
                     Cancel
                   </motion.button>
@@ -405,10 +440,11 @@ export function ChangeAvatar() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={handleConfirmChange}
-                    className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-medium"
+                    disabled={isSaving}
+                    onClick={() => void handleConfirmChange()}
+                    className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium"
                   >
-                    Confirm Change
+                    {isSaving ? "Saving..." : "Confirm Change"}
                   </motion.button>
                 </div>
               </motion.div>

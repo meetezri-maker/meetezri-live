@@ -14,7 +14,7 @@ import {
   CheckCircle
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppLayout } from "@/app/components/AppLayout";
 
 export function AccessibilitySettings() {
@@ -52,6 +52,7 @@ export function AccessibilitySettings() {
   });
 
   const [showSavedMessage, setShowSavedMessage] = useState(false);
+  const hasInitializedSettings = useRef(false);
 
   const toggleSetting = (key: keyof typeof settings) => {
     setSettings(prev => ({
@@ -62,6 +63,10 @@ export function AccessibilitySettings() {
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.localStorage === "undefined") return;
+    if (!hasInitializedSettings.current) {
+      hasInitializedSettings.current = true;
+      return;
+    }
     window.localStorage.setItem("ezri_accessibility_settings", JSON.stringify(settings));
     setShowSavedMessage(true);
     const timer = setTimeout(() => {

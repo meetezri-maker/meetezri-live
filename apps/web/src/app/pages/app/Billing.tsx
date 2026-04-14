@@ -15,6 +15,7 @@ import {
   DollarSign,
   Package,
   Crown,
+  Shield,
   Download,
   RefreshCw,
   ShoppingCart,
@@ -120,8 +121,7 @@ export function Billing() {
             sessionType: 'ai-avatar',
             avatarName: s.config?.avatar || 'Ezri',
             cost: 0 
-          }))
-          .slice(0, 5); 
+          }));
 
         const subscription: UserSubscription = {
           userId: subData.user_id,
@@ -163,6 +163,7 @@ export function Billing() {
     ? ((userSubscription.creditsTotal - userSubscription.creditsRemaining) / userSubscription.creditsTotal) * 100
     : 0;
   const daysUntilRenewal = Math.ceil((new Date(userSubscription.billingCycle.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+  const recentUsageHistory = userSubscription.usageHistory.slice(0, 5);
 
   const [showPAYGModal, setShowPAYGModal] = useState(false);
   const [paygMinutes, setPaygMinutes] = useState(60);
@@ -248,6 +249,46 @@ export function Billing() {
       alert('Failed to cancel subscription. Please try again.');
       setProcessingAction(null);
     }
+  };
+
+  const handleExportSessions = () => {
+    if (userSubscription.usageHistory.length === 0) return;
+
+    const escapeCsv = (value: string | number) => {
+      const stringValue = String(value);
+      if (stringValue.includes(",") || stringValue.includes("\"") || stringValue.includes("\n")) {
+        return `"${stringValue.replace(/"/g, "\"\"")}"`;
+      }
+      return stringValue;
+    };
+
+    const rows = userSubscription.usageHistory.map((record) => {
+      const date = new Date(record.date);
+      return [
+        record.id,
+        Number.isNaN(date.getTime()) ? "" : date.toISOString(),
+        record.avatarName ?? "Ezri",
+        record.sessionType ?? "ai-avatar",
+        record.minutesUsed,
+        record.cost ?? 0,
+      ];
+    });
+
+    const csvLines = [
+      ["session_id", "session_date_utc", "avatar_name", "session_type", "minutes_used", "cost_usd"],
+      ...rows,
+    ].map((row) => row.map(escapeCsv).join(","));
+
+    const blob = new Blob([csvLines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const today = new Date().toISOString().slice(0, 10);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `billing-sessions-${today}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   if (isLoading) {
@@ -637,14 +678,19 @@ export function Billing() {
               <History className="w-5 h-5 text-purple-600 dark:text-purple-400" />
               <h3 className="text-xl font-bold">Recent Sessions</h3>
             </div>
-            <Button variant="outline" size="sm">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportSessions}
+              disabled={userSubscription.usageHistory.length === 0}
+            >
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
           </div>
 
           <div className="space-y-3">
-            {userSubscription.usageHistory.map((record) => (
+            {recentUsageHistory.map((record) => (
               <div 
                 key={record.id}
                 className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-border hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -692,6 +738,12 @@ export function Billing() {
             {(Object.keys(SUBSCRIPTION_PLANS) as PlanTier[]).map((planId) => {
               const plan = SUBSCRIPTION_PLANS[planId];
               const isCurrent = planId === userSubscription.planId;
+              const ctaLabel =
+                planId === 'pro'
+                  ? 'Upgrade to Pro'
+                  : planId === 'core'
+                    ? 'Choose Core'
+                    : 'Start Free Trial';
               
               return (
                 <div
@@ -703,6 +755,7 @@ export function Billing() {
                   }`}
                 >
                   <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${plan.gradient} flex items-center justify-center mb-3`}>
+                    {planId === 'trial' && <Shield className="w-5 h-5 text-white" />}
                     {planId === 'core' && <Package className="w-5 h-5 text-white" />}
                     {planId === 'pro' && <Zap className="w-5 h-5 text-white" />}
                   </div>
@@ -735,13 +788,17 @@ export function Billing() {
                     </div>
                   ) : (
                     <Button 
-                      className="w-full" 
+                      className={
+                        planId === 'pro'
+                          ? 'w-full rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md hover:from-purple-700 hover:to-pink-700 hover:text-pink-100 hover:shadow-lg'
+                          : 'w-full rounded-xl border-purple-300 text-purple-700 bg-purple-50 hover:bg-purple-100 hover:text-purple-900 dark:border-purple-700 dark:text-purple-300 dark:bg-purple-900/20 dark:hover:bg-purple-900/30 dark:hover:text-purple-100'
+                      }
                       variant={planId === 'pro' ? 'default' : 'outline'}
                       onClick={() => handleSubscribe(planId)}
                       isLoading={processingAction === `subscribe_${planId}`}
                       disabled={processingAction !== null}
                     >
-                      {SUBSCRIPTION_PLANS[planId].price > currentPlan.price ? 'Upgrade' : 'Switch'}
+                      {ctaLabel}
                       <ChevronRight className="w-4 h-4 ml-1" />
                     </Button>
                   )}

@@ -211,6 +211,13 @@ export default function App() {
   useEffect(() => {
     let theme = "light";
     let accentKey = "pink";
+    let accessibilitySettings: {
+      highContrast?: boolean;
+      reducedMotion?: boolean;
+      focusIndicators?: boolean;
+      largeClickTargets?: boolean;
+      fontSize?: "small" | "medium" | "large" | "xlarge";
+    } = {};
 
     if (typeof window !== "undefined" && typeof window.localStorage !== "undefined") {
       const pathname = window.location.pathname;
@@ -219,6 +226,7 @@ export default function App() {
       
       if (isAppRoute) {
         const saved = window.localStorage.getItem("ezri_appearance_settings");
+        const savedAccessibility = window.localStorage.getItem("ezri_accessibility_settings");
         if (saved) {
           try {
             const parsed = JSON.parse(saved);
@@ -228,6 +236,12 @@ export default function App() {
             if (parsed.accentColor) {
               accentKey = parsed.accentColor;
             }
+          } catch {
+          }
+        }
+        if (savedAccessibility) {
+          try {
+            accessibilitySettings = JSON.parse(savedAccessibility);
           } catch {
           }
         }
@@ -265,6 +279,22 @@ export default function App() {
 
     const accent = accentMap[accentKey] || accentMap.pink;
     root.style.setProperty("--accent", accent);
+    root.style.setProperty("--primary", accent);
+    root.style.setProperty("--ring", accent);
+
+    const fontSizeMap: Record<string, string> = {
+      small: "14px",
+      medium: "16px",
+      large: "18px",
+      xlarge: "20px",
+    };
+    const fontSize = fontSizeMap[accessibilitySettings.fontSize || "medium"] || "16px";
+    root.style.setProperty("--font-size", fontSize);
+
+    root.classList.toggle("high-contrast", Boolean(accessibilitySettings.highContrast));
+    root.classList.toggle("reduced-motion", Boolean(accessibilitySettings.reducedMotion));
+    root.classList.toggle("focus-indicators", Boolean(accessibilitySettings.focusIndicators));
+    root.classList.toggle("large-click-targets", Boolean(accessibilitySettings.largeClickTargets));
   }, []);
 
   return (
