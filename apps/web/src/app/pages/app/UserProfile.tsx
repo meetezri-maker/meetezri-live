@@ -1475,7 +1475,7 @@ export function UserProfile() {
                           </div>
                         </div>
                       </div>
-                      <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="p-5 grid grid-cols-1 sm:grid-cols-12 gap-3">
                         {[
                           { name: "emergency_contact_name" as const, label: "Name", placeholder: "Contact name" },
                           { name: "emergency_contact_relationship" as const, label: "Relationship", placeholder: "e.g. Parent" },
@@ -1485,7 +1485,7 @@ export function UserProfile() {
                             control={form.control}
                             name={f.name}
                             render={({ field }) => (
-                              <FormItem id={`profile-field-${f.name}`} className="scroll-mt-24">
+                              <FormItem id={`profile-field-${f.name}`} className="scroll-mt-24 sm:col-span-3">
                                 <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-1.5">{f.label}</p>
                                 {isEditing ? (
                                   <input
@@ -1506,16 +1506,17 @@ export function UserProfile() {
                           control={form.control}
                           name="emergency_contact_phone"
                           render={({ field }) => (
-                            <FormItem id="profile-field-emergency_contact_phone" className="scroll-mt-24">
+                            <FormItem id="profile-field-emergency_contact_phone" className="scroll-mt-24 sm:col-span-6">
                               <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-1.5">Phone</p>
                               {isEditing ? (
-                                <input
-                                  {...field}
+                                <PhoneInput
+                                  value={field.value}
+                                  onChange={field.onChange}
                                   disabled={isSaving}
                                   placeholder="Contact phone"
-                                  inputMode="tel"
-                                  onChange={(e) => field.onChange(e.target.value.replace(/[^0-9\s\-().+]/g, ""))}
-                                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-semibold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-red-200 transition-all"
+                                  className="w-full min-w-0"
+                                    buttonClassName="h-10 w-[110px] sm:w-[120px] rounded-xl text-sm"
+                                  inputClassName="h-10 rounded-xl text-sm"
                                 />
                               ) : (
                                 <div className="flex items-center gap-2">

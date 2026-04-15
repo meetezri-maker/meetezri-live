@@ -79,6 +79,8 @@ export interface PhoneInputProps {
   id?: string
   disabled?: boolean
   className?: string
+  buttonClassName?: string
+  inputClassName?: string
   placeholder?: string
 }
 
@@ -102,7 +104,18 @@ const limitLocalPhoneDigits = (value: string, countryCode: string) => {
   return limitedValue
 }
 
-export function PhoneInput({ value = "", onChange, onBlur, name, id, disabled, className, placeholder }: PhoneInputProps) {
+export function PhoneInput({
+  value = "",
+  onChange,
+  onBlur,
+  name,
+  id,
+  disabled,
+  className,
+  buttonClassName,
+  inputClassName,
+  placeholder,
+}: PhoneInputProps) {
   const [open, setOpen] = React.useState(false)
   
   // Parse value into country code and number
@@ -157,7 +170,7 @@ export function PhoneInput({ value = "", onChange, onBlur, name, id, disabled, c
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="w-[120px] shrink-0 justify-between px-3 sm:w-[140px]"
+            className={cn("w-[120px] shrink-0 justify-between px-3 sm:w-[140px]", buttonClassName)}
             disabled={disabled}
           >
             <div className="flex items-center gap-2">
@@ -205,7 +218,7 @@ export function PhoneInput({ value = "", onChange, onBlur, name, id, disabled, c
         onBlur={onBlur}
         disabled={disabled}
         placeholder={placeholder || "Phone number"}
-        className="min-w-0 flex-1"
+        className={cn("min-w-0 flex-1", inputClassName)}
       />
     </div>
   )
