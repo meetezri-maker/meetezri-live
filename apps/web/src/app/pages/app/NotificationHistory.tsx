@@ -122,7 +122,7 @@ export function NotificationHistory() {
             className="flex items-center gap-2 text-muted-foreground hover:text-primary mb-4 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back
+            Back to Settings
           </button>
           <div className="flex items-center justify-between">
             <div>

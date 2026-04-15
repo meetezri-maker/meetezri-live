@@ -12,7 +12,7 @@ interface Achievement {
   title: string;
   description: string;
   icon: string;
-  category: 'sessions' | 'mood' | 'journal' | 'wellness' | 'streak' | 'community';
+  category: 'sessions' | 'mood' | 'journal' | 'wellness' | 'streak' | 'community' | 'custom';
   progress: number;
   total: number;
   unlocked: boolean;
@@ -25,6 +25,16 @@ export function Achievements() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [wellnessExercises, setWellnessExercises] = useState(0);
   const [communityPosts, setCommunityPosts] = useState(0);
+  const [customAchievements, setCustomAchievements] = useState<Achievement[]>([]);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [newTotal, setNewTotal] = useState('1');
+  const [newCategory, setNewCategory] = useState<Achievement['category']>('custom');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const customStorageKey = useMemo(
+    () => `ezri_custom_achievements_${profile?.id || 'guest'}`,
+    [profile?.id]
+  );
 
   useEffect(() => {
     const loadMetrics = async () => {
@@ -50,6 +60,22 @@ export function Achievements() {
 
     loadMetrics();
   }, []);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(customStorageKey);
+      if (!stored) {
+        setCustomAchievements([]);
+        return;
+      }
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        setCustomAchievements(parsed as Achievement[]);
+      }
+    } catch (error) {
+      console.error('Failed to load custom achievements', error);
+    }
+  }, [customStorageKey]);
 
   const sessionsCompleted = Number(profile?.stats?.completed_sessions || 0);
   const moodCheckins = Number(profile?.stats?.total_checkins || 0);
@@ -152,8 +178,9 @@ export function Achievements() {
       unlocked: communityPosts >= 3,
       points: 20,
       rarity: 'common'
-    }
-  ]), [communityPosts, journalEntries, moodCheckins, sessionsCompleted, streakDays, wellnessExercises]);
+    },
+    ...customAchievements
+  ]), [communityPosts, customAchievements, journalEntries, moodCheckins, sessionsCompleted, streakDays, wellnessExercises]);
 
   const stats = {
     totalPoints: achievements.filter(a => a.unlocked).reduce((sum, a) => sum + a.points, 0),
@@ -170,7 +197,8 @@ export function Achievements() {
     { id: 'journal', label: 'Journal', icon: Brain },
     { id: 'wellness', label: 'Wellness', icon: Zap },
     { id: 'streak', label: 'Streaks', icon: TrendingUp },
-    { id: 'community', label: 'Community', icon: Users }
+    { id: 'community', label: 'Community', icon: Users },
+    { id: 'custom', label: 'Custom', icon: Star }
   ];
 
   const filteredAchievements = selectedCategory === 'all' 
@@ -206,6 +234,44 @@ export function Achievements() {
     return icons[iconName] || Trophy;
   };
 
+  const saveCustomAchievements = (items: Achievement[]) => {
+    setCustomAchievements(items);
+    try {
+      localStorage.setItem(customStorageKey, JSON.stringify(items));
+    } catch (error) {
+      console.error('Failed to save custom achievements', error);
+    }
+  };
+
+  const addCustomAchievement = () => {
+    const title = newTitle.trim();
+    const description = newDescription.trim();
+    const total = Math.max(1, Number(newTotal) || 1);
+
+    if (!title || !description) return;
+
+    const next: Achievement = {
+      id: `custom-${Date.now()}`,
+      title,
+      description,
+      icon: 'trophy',
+      category: newCategory,
+      progress: 0,
+      total,
+      unlocked: false,
+      points: 0,
+      rarity: 'common',
+    };
+
+    const updated = [next, ...customAchievements];
+    saveCustomAchievements(updated);
+    setNewTitle('');
+    setNewDescription('');
+    setNewTotal('1');
+    setNewCategory('custom');
+    setShowCreateModal(false);
+  };
+
   return (
     <AppLayout>
       <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
@@ -232,6 +298,16 @@ export function Achievements() {
             <p className="text-sm text-gray-600 dark:text-slate-400">
               Achievements are activity-based milestones. They unlock as you complete sessions, check-ins, journals, and community goals.
             </p>
+          </div>
+
+          <div className="mb-8">
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold hover:opacity-95"
+            >
+              Add Achievement
+            </button>
           </div>
 
           {/* Stats Cards */}
@@ -357,16 +433,7 @@ export function Achievements() {
                         )}
                       </div>
 
-                      <div className="mb-2 flex items-center gap-2 flex-wrap">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">{achievement.title}</h3>
-                        <span className={`text-xs font-bold uppercase px-2 py-1 rounded-lg ${
-                          isUnlocked
-                            ? `bg-gradient-to-r ${rarityColors[achievement.rarity]} text-white`
-                            : 'bg-gray-200 dark:bg-slate-800 text-gray-500 dark:text-slate-400'
-                        }`}>
-                          {achievement.rarity}
-                        </span>
-                      </div>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{achievement.title}</h3>
                       <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">{achievement.description}</p>
 
                       {/* Progress Bar */}
@@ -378,7 +445,7 @@ export function Achievements() {
                         <div className="h-2 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
                           <motion.div
                             initial={{ width: 0 }}
-                            animate={{ width: `${(achievement.progress / achievement.total) * 100}%` }}
+                            animate={{ width: `${Math.min(100, (achievement.progress / achievement.total) * 100)}%` }}
                             transition={{ delay: index * 0.1, duration: 0.5 }}
                             className={`h-full ${
                               isUnlocked 
@@ -417,6 +484,76 @@ export function Achievements() {
           )}
         </div>
       </div>
+      {showCreateModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowCreateModal(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Add your own achievement</h2>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="text-sm text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Achievement title"
+                className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+              />
+              <input
+                type="text"
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                placeholder="Achievement description"
+                className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+              />
+              <input
+                type="number"
+                min={1}
+                value={newTotal}
+                onChange={(e) => setNewTotal(e.target.value)}
+                placeholder="Goal target"
+                className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+              />
+              <select
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value as Achievement['category'])}
+                className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+              >
+                <option value="custom">Custom</option>
+                <option value="sessions">Sessions</option>
+                <option value="mood">Mood</option>
+                <option value="journal">Journal</option>
+                <option value="wellness">Wellness</option>
+                <option value="streak">Streak</option>
+                <option value="community">Community</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={addCustomAchievement}
+              className="mt-4 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold hover:opacity-95"
+            >
+              Save Achievement
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
     </AppLayout>
   );
 }

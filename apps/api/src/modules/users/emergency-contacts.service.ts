@@ -1,5 +1,6 @@
 import prisma from '../../lib/prisma';
 import { CreateEmergencyContactInput, UpdateEmergencyContactInput } from './emergency-contacts.schema';
+import { invalidateUserProfileCache } from './user.service';
 
 export async function getEmergencyContacts(userId: string) {
   const contacts = await prisma.emergency_contacts.findMany({
@@ -42,7 +43,7 @@ export async function createEmergencyContact(userId: string, data: CreateEmergen
   // Prisma schema says email String? so it can be null. 
   // Zod schema allows empty string or email.
   
-  return prisma.emergency_contacts.create({
+  const created = await prisma.emergency_contacts.create({
     data: {
       name: data.name,
       relationship: data.relationship,
@@ -54,6 +55,8 @@ export async function createEmergencyContact(userId: string, data: CreateEmergen
       },
     },
   });
+  invalidateUserProfileCache(userId);
+  return created;
 }
 
 export async function updateEmergencyContact(userId: string, contactId: string, data: UpdateEmergencyContactInput) {
@@ -66,7 +69,7 @@ export async function updateEmergencyContact(userId: string, contactId: string, 
     throw new Error('Contact not found or access denied');
   }
 
-  return prisma.emergency_contacts.update({
+  const updated = await prisma.emergency_contacts.update({
     where: { id: contactId },
     data: {
       ...data,
@@ -74,6 +77,8 @@ export async function updateEmergencyContact(userId: string, contactId: string, 
       updated_at: new Date(),
     },
   });
+  invalidateUserProfileCache(userId);
+  return updated;
 }
 
 export async function deleteEmergencyContact(userId: string, contactId: string) {
@@ -85,7 +90,9 @@ export async function deleteEmergencyContact(userId: string, contactId: string) 
     throw new Error('Contact not found or access denied');
   }
 
-  return prisma.emergency_contacts.delete({
+  const deleted = await prisma.emergency_contacts.delete({
     where: { id: contactId },
   });
+  invalidateUserProfileCache(userId);
+  return deleted;
 }

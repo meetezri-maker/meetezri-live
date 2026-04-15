@@ -86,6 +86,8 @@ const GRAD =
   "linear-gradient(135deg, #ff7a18 0%, #ff5c87 48%, #e040fb 100%)";
 const GRAD_SOFT = "linear-gradient(135deg, rgba(255,122,24,0.12) 0%, rgba(224,64,251,0.1) 100%)";
 const GRAD2 = "linear-gradient(135deg, #6366f1 0%, #a855f7 100%)";
+const AVATAR_EXPORT_WIDTH = 1200;
+const AVATAR_EXPORT_HEIGHT = 900;
 const PILL =
   "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold";
 const CARD_SHELL =
@@ -93,14 +95,22 @@ const CARD_SHELL =
 const CARD_HEADER_ROW = "flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800";
 
 const goalsOptions = [
-  { value: "reduce-stress", label: "Reduce Stress", emoji: "🧘" },
-  { value: "manage-anxiety", label: "Manage Anxiety", emoji: "💭" },
-  { value: "improve-sleep", label: "Improve Sleep", emoji: "😴" },
-  { value: "boost-mood", label: "Boost Mood", emoji: "✨" },
-  { value: "build-confidence", label: "Build Confidence", emoji: "💪" },
+  { value: "feel-calm-in-control", label: "Feel Calm & In Control", emoji: "🧘" },
+  { value: "boost-mood-daily-energy", label: "Boost Mood & Daily Energy", emoji: "✨" },
+  { value: "sleep-recovery", label: "Sleep & Recovery", emoji: "😴" },
+  { value: "build-confidence-self-trust", label: "Build Confidence & Self Trust", emoji: "💪" },
+  { value: "strengthen-relationships", label: "Strengthen Relationships", emoji: "❤️" },
+  { value: "navigate-life-changes", label: "Navigate Life Changes", emoji: "🧭" },
   { value: "work-life-balance", label: "Work-Life Balance", emoji: "⚖️" },
-  { value: "relationship-support", label: "Relationship Support", emoji: "❤️" },
-  { value: "grief-loss", label: "Grief & Loss", emoji: "🕊️" },
+  { value: "career-growth-advancement", label: "Career Growth & Advancement", emoji: "📈" },
+  { value: "business-entrepreneurship", label: "Business & Entrepreneurship", emoji: "🚀" },
+  { value: "time-management-productivity", label: "Time Management & Productivity", emoji: "⏱️" },
+  { value: "financial-wellness", label: "Financial Wellness", emoji: "💰" },
+  { value: "health-fitness-body-goals", label: "Health, Fitness & Body Goals", emoji: "🏃" },
+  { value: "daily-habits-discipline", label: "Daily Habits & Discipline", emoji: "📅" },
+  { value: "mindfulness-presence", label: "Mindfulness & Presence", emoji: "🌿" },
+  { value: "personal-goal-life-direction", label: "Personal Goal & Life Direction", emoji: "🎯" },
+  { value: "faith-purpose-inner-grounding", label: "Faith, Purpose & Inner Grounding", emoji: "🙏" },
 ];
 
 const triggersOptions = [
@@ -247,7 +257,7 @@ export function UserProfile() {
   const [avatarOffsetX, setAvatarOffsetX] = useState(0);
   const [avatarOffsetY, setAvatarOffsetY] = useState(0);
   const [avatarSourceSize, setAvatarSourceSize] = useState<{ width: number; height: number } | null>(null);
-  const avatarPreviewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [avatarPreviewCanvas, setAvatarPreviewCanvas] = useState<HTMLCanvasElement | null>(null);
   const [timezoneOpen, setTimezoneOpen] = useState(false);
   const availableTimezones = useMemo<string[]>(() => {
     try {
@@ -446,34 +456,71 @@ export function UserProfile() {
     e.target.value = "";
   };
 
+  const handleOpenExistingAvatarEditor = async () => {
+    if (!profileImage) {
+      document.getElementById("profile-image-upload")?.click();
+      return;
+    }
+    try {
+      let editableUrl = profileImage;
+      // Convert remote image to data URL so canvas export remains reliable.
+      if (!profileImage.startsWith("data:")) {
+        const resp = await fetch(profileImage);
+        const blob = await resp.blob();
+        editableUrl = await new Promise<string>((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(typeof fr.result === "string" ? fr.result : "");
+          fr.onerror = () => reject(new Error("Could not load image"));
+          fr.readAsDataURL(blob);
+        });
+      }
+      const img = new Image();
+      img.onload = () => {
+        setAvatarSourceSize({ width: img.naturalWidth, height: img.naturalHeight });
+        setAvatarEditorImageUrl(editableUrl);
+        setAvatarZoom(1);
+        setAvatarOffsetX(0);
+        setAvatarOffsetY(0);
+        setAvatarEditorOpen(true);
+      };
+      img.src = editableUrl;
+    } catch {
+      toast.error("Could not open current photo for editing");
+    }
+  };
+
   useEffect(() => {
-    if (!avatarEditorOpen || !avatarEditorImageUrl || !avatarSourceSize || !avatarPreviewCanvasRef.current) return;
-    const canvas = avatarPreviewCanvasRef.current;
+    if (!avatarEditorOpen || !avatarEditorImageUrl || !avatarSourceSize || !avatarPreviewCanvas) return;
+    const canvas = avatarPreviewCanvas;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const img = new Image();
     img.onload = () => {
       const { width, height } = avatarSourceSize;
-      const baseCrop = Math.min(width, height);
-      const cropSize = baseCrop / avatarZoom;
-      const maxShiftX = Math.max(0, (width - cropSize) / 2);
-      const maxShiftY = Math.max(0, (height - cropSize) / 2);
+      const targetAspect = canvas.width / canvas.height;
+      const sourceAspect = width / height;
+      const baseCropWidth = sourceAspect >= targetAspect ? height * targetAspect : width;
+      const baseCropHeight = sourceAspect >= targetAspect ? height : width / targetAspect;
+      const cropWidth = baseCropWidth / avatarZoom;
+      const cropHeight = baseCropHeight / avatarZoom;
+      const maxShiftX = Math.max(0, (width - cropWidth) / 2);
+      const maxShiftY = Math.max(0, (height - cropHeight) / 2);
       const centerX = width / 2 + avatarOffsetX * maxShiftX;
       const centerY = height / 2 + avatarOffsetY * maxShiftY;
-      const sx = Math.min(Math.max(0, centerX - cropSize / 2), width - cropSize);
-      const sy = Math.min(Math.max(0, centerY - cropSize / 2), height - cropSize);
+      const sx = Math.min(Math.max(0, centerX - cropWidth / 2), width - cropWidth);
+      const sy = Math.min(Math.max(0, centerY - cropHeight / 2), height - cropHeight);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, sx, sy, cropSize, cropSize, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, sx, sy, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
     };
     img.src = avatarEditorImageUrl;
-  }, [avatarEditorOpen, avatarEditorImageUrl, avatarSourceSize, avatarZoom, avatarOffsetX, avatarOffsetY]);
+  }, [avatarEditorOpen, avatarEditorImageUrl, avatarSourceSize, avatarZoom, avatarOffsetX, avatarOffsetY, avatarPreviewCanvas]);
 
   const handleAvatarSave = async () => {
-    if (!avatarPreviewCanvasRef.current || !user) return;
+    if (!avatarPreviewCanvas || !user) return;
     setIsUploading(true);
     try {
       const uploadBlob = await new Promise<Blob>((resolve, reject) => {
-        avatarPreviewCanvasRef.current?.toBlob((blob) => {
+        avatarPreviewCanvas.toBlob((blob) => {
           if (blob) resolve(blob);
           else reject(new Error("Could not prepare image"));
         }, "image/jpeg", 0.92);
@@ -494,6 +541,14 @@ export function UserProfile() {
       setIsUploading(false);
     }
   };
+
+  useEffect(() => {
+    if (!isEditing || !rawProfile) return;
+    // Ensure emergency contact fields are hydrated immediately when entering edit mode.
+    form.setValue("emergency_contact_name", rawProfile.emergency_contact_name || "", { shouldDirty: false });
+    form.setValue("emergency_contact_relationship", rawProfile.emergency_contact_relationship || "", { shouldDirty: false });
+    form.setValue("emergency_contact_phone", rawProfile.emergency_contact_phone || "", { shouldDirty: false });
+  }, [isEditing, rawProfile, form]);
 
   const onSubmit = async (data: ProfileFormValues) => {
     setIsSaving(true);
@@ -560,6 +615,11 @@ export function UserProfile() {
   // Use auth session as source of truth for verification state.
   // Profile patch responses may not include reliable verification flags.
   const effectiveNeedsVerification = !!user && !(user as any).email_confirmed_at;
+  const isTrialUser =
+    (rawProfile as any)?.signup_type === "trial" ||
+    (rawProfile as any)?.subscription_plan === "trial" ||
+    (user as any)?.user_metadata?.signup_type === "trial";
+  const showTrialIncompleteBanner = isTrialUser && !profileCompletion.isComplete;
 
   /* ─── loading skeleton ─── */
   if (isLoading) {
@@ -622,6 +682,37 @@ export function UserProfile() {
             </motion.div>
           )}
 
+          {/* trial profile completion banner */}
+          {showTrialIncompleteBanner && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`mb-6 flex items-center justify-between gap-4 px-5 py-4 ${CARD_SHELL} bg-blue-50/90 dark:bg-blue-950/25 border-blue-200/80 dark:border-blue-800`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">Complete your trial profile</p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    Your profile is {profileCompletion.percent}% complete. Add missing details to finish setup.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditing(true);
+                  scrollToProfileField(profileCompletion.missingFields[0]?.key || "name");
+                }}
+                className="shrink-0 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+              >
+                Complete now
+              </button>
+            </motion.div>
+          )}
+
           {/* page title */}
           {/* <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -649,7 +740,7 @@ export function UserProfile() {
               {/* profile card (dashboard-style) */}
               <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}>
                 <div className={`${CARD_SHELL} overflow-hidden`}>
-                  <div className="relative aspect-[4/3] max-h-64 sm:max-h-72 w-full">
+                  <div className="relative aspect-[4/3] w-full">
                     <div
                       className="absolute inset-0 opacity-40"
                       style={{ background: GRAD }}
@@ -666,7 +757,7 @@ export function UserProfile() {
                         </div>
                       )}
                       {profileImage ? (
-                        <img src={profileImage} alt="" className="w-full h-full object-cover object-top" />
+                        <img src={profileImage} alt="" className="w-full h-full object-cover object-center" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-6xl bg-gray-200 dark:bg-gray-800">👤</div>
                       )}
@@ -676,7 +767,7 @@ export function UserProfile() {
                     </motion.div>
                     <button
                       type="button"
-                      onClick={() => document.getElementById("profile-image-upload")?.click()}
+                      onClick={handleOpenExistingAvatarEditor}
                       className="absolute bottom-6 right-6 w-10 h-10 rounded-full bg-white dark:bg-gray-900 text-gray-900 dark:text-white flex items-center justify-center shadow-lg hover:scale-105 transition-transform ring-2 ring-orange-200/80 dark:ring-orange-900/50"
                       aria-label="Change photo"
                     >
@@ -865,14 +956,22 @@ export function UserProfile() {
                     <DialogDescription>Crop and zoom your image before saving.</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
-                    <div className="mx-auto w-full max-w-[22rem] rounded-2xl border border-gray-200 dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-900">
+                    <div className="relative mx-auto w-full max-w-[22rem] rounded-2xl border border-gray-200 dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-900">
                       <canvas
-                        ref={avatarPreviewCanvasRef}
-                        width={640}
-                        height={640}
+                        ref={setAvatarPreviewCanvas}
+                        width={AVATAR_EXPORT_WIDTH}
+                        height={AVATAR_EXPORT_HEIGHT}
                         className="w-full rounded-xl bg-gray-200 dark:bg-gray-800"
                       />
+                      <span className="absolute bottom-4 right-4 rounded-lg bg-black/65 px-2 py-1 text-[10px] font-semibold text-white">
+                        {AVATAR_EXPORT_WIDTH} x {AVATAR_EXPORT_HEIGHT}px
+                      </span>
                     </div>
+                    {avatarSourceSize && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Original image: {avatarSourceSize.width} x {avatarSourceSize.height}px
+                      </p>
+                    )}
                     <div className="space-y-3">
                       <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400">
                         Zoom ({avatarZoom.toFixed(1)}x)
@@ -1275,7 +1374,7 @@ export function UserProfile() {
                             <FormItem id="profile-field-selected_triggers" className="scroll-mt-24">
                               <div className="flex items-center gap-2 mb-3">
                                 <Zap className="w-4 h-4 text-orange-500" />
-                                <FormLabel className="font-bold text-sm text-gray-700 dark:text-gray-300">Triggers / Challenges</FormLabel>
+                                <FormLabel className="font-bold text-sm text-gray-700 dark:text-gray-300">Challenges</FormLabel>
                               </div>
                               <FormControl>
                                 {isEditing ? (
@@ -1359,7 +1458,11 @@ export function UserProfile() {
                   </motion.div>
 
                   {/* emergency contact */}
-                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                  <motion.div
+                    initial={false}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.15 }}
+                  >
                     <div className={`${CARD_SHELL} overflow-hidden border-l-[3px] border-l-pink-500`}>
                       <div className={`${CARD_HEADER_ROW} bg-gradient-to-r from-rose-50/50 to-transparent dark:from-rose-950/20`}>
                         <div className="flex items-center gap-3">
@@ -1406,7 +1509,14 @@ export function UserProfile() {
                             <FormItem id="profile-field-emergency_contact_phone" className="scroll-mt-24">
                               <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-1.5">Phone</p>
                               {isEditing ? (
-                                <PhoneInput value={field.value} onChange={field.onChange} disabled={isSaving} placeholder="Contact phone" />
+                                <input
+                                  {...field}
+                                  disabled={isSaving}
+                                  placeholder="Contact phone"
+                                  inputMode="tel"
+                                  onChange={(e) => field.onChange(e.target.value.replace(/[^0-9\s\-().+]/g, ""))}
+                                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-semibold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-red-200 transition-all"
+                                />
                               ) : (
                                 <div className="flex items-center gap-2">
                                   <Phone className="w-3.5 h-3.5 text-gray-400" />

@@ -21,6 +21,47 @@ import { AppLayout } from "@/app/components/AppLayout";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
+function csvEscape(value: unknown) {
+  const normalized = value === null || value === undefined ? "" : String(value);
+  return `"${normalized.replace(/"/g, '""')}"`;
+}
+
+function flattenForCsv(value: unknown, basePath = "", rows: Array<[string, string]> = []) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      rows.push([basePath || "root", ""]);
+      return rows;
+    }
+    value.forEach((item, index) => {
+      const nextPath = basePath ? `${basePath}[${index}]` : `[${index}]`;
+      flattenForCsv(item, nextPath, rows);
+    });
+    return rows;
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) {
+      rows.push([basePath || "root", ""]);
+      return rows;
+    }
+    entries.forEach(([key, nestedValue]) => {
+      const nextPath = basePath ? `${basePath}.${key}` : key;
+      flattenForCsv(nestedValue, nextPath, rows);
+    });
+    return rows;
+  }
+
+  rows.push([basePath || "root", value === null || value === undefined ? "" : String(value)]);
+  return rows;
+}
+
+function jsonToExcelFriendlyCsv(jsonValue: unknown) {
+  const rows = flattenForCsv(jsonValue);
+  const contentRows = rows.map(([field, value]) => `${csvEscape(field)},${csvEscape(value)}`);
+  return `\uFEFFField,Value\r\n${contentRows.join("\r\n")}`;
+}
+
 export function PrivacySettings() {
   const { consent, updateConsent } = useSafetyConsent();
   const { profile } = useAuth();
@@ -84,14 +125,37 @@ export function PrivacySettings() {
     toast.info("Preparing your data for download...");
     try {
       const { blob, filename, contentType } = await api.exportUserData();
-      const fallbackExtension = contentType.includes("csv")
-        ? "csv"
-        : contentType.includes("zip")
-          ? "zip"
-          : "json";
-      const resolvedFilename =
-        filename?.trim() || `ezri-data-export-${new Date().toISOString().split('T')[0]}.${fallbackExtension}`;
-      const url = window.URL.createObjectURL(blob);
+      const isJsonPayload =
+        contentType.toLowerCase().includes("json") ||
+        (filename?.toLowerCase().endsWith(".json") ?? false);
+
+      let blobToDownload = blob;
+      let resolvedFilename = filename?.trim() || `ezri-data-export-${new Date().toISOString().split("T")[0]}.json`;
+
+      // Convert JSON exports to CSV so they open directly in Excel.
+      if (isJsonPayload) {
+        try {
+          const jsonText = await blob.text();
+          const parsedJson = JSON.parse(jsonText);
+          const csvContent = jsonToExcelFriendlyCsv(parsedJson);
+          blobToDownload = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+          resolvedFilename = resolvedFilename.replace(/\.json$/i, ".csv");
+          if (!resolvedFilename.toLowerCase().endsWith(".csv")) {
+            resolvedFilename = `ezri-data-export-${new Date().toISOString().split("T")[0]}.csv`;
+          }
+        } catch (conversionError) {
+          console.warn("Export returned JSON-like file that could not be converted to CSV:", conversionError);
+        }
+      } else if (!filename?.trim()) {
+        const fallbackExtension = contentType.includes("csv")
+          ? "csv"
+          : contentType.includes("zip")
+            ? "zip"
+            : "json";
+        resolvedFilename = `ezri-data-export-${new Date().toISOString().split("T")[0]}.${fallbackExtension}`;
+      }
+
+      const url = window.URL.createObjectURL(blobToDownload);
       const a = document.createElement('a');
       a.href = url;
       a.download = resolvedFilename;
