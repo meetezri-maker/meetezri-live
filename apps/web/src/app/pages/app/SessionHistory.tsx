@@ -778,7 +778,7 @@ export function SessionHistory() {
 
                     {/* Transcript */}
                     <div>
-                      <h3 className="font-bold mb-2">Transcript</h3>
+                      {/* <h3 className="font-bold mb-2">Summary</h3> */}
                       <div className="bg-gray-50 rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
                         {loadingTranscript ? (
                            <p className="text-sm text-gray-500 text-center">Loading transcript...</p>
