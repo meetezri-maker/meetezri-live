@@ -188,7 +188,7 @@ export function Landing() {
           viewport={{ once: true }}
           className="text-3xl md:text-4xl font-bold text-center mb-12"
         >
-          Why Choose Ezri?
+          Why Choose Solace?
         </motion.h2>
         
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -270,14 +270,14 @@ export function Landing() {
             {
               step: 1,
               title: "Sign Up & Onboard",
-              description: "Create your account and complete a quick wellness baseline to help Ezri understand you better",
+              description: "Create your account and complete a quick wellness baseline to help Solace understand you better",
               icon: CheckCircle2,
               color: "primary",
               gradient: "from-primary/20 to-accent/20"
             },
             {
               step: 2,
-              title: "Connect With Ezri",
+              title: "Connect With Solace",
               description: "Start a FaceTime-style session whenever you need to talk, decompress, or get guided support",
               icon: Video,
               color: "secondary",
@@ -377,7 +377,7 @@ export function Landing() {
                 <h2 className="text-3xl md:text-4xl font-bold">Ready to Start Your Wellness Journey?</h2>
               </motion.div>
               <p className="text-muted-foreground mb-8 text-lg max-w-2xl mx-auto">
-                Join thousands who trust Ezri for their mental health and wellbeing
+                Join thousands who trust Solace for their mental health and wellbeing
               </p>
               <div onClick={() => localStorage.setItem('selectedPlan', 'trial')}>
                 <Link to="/signup">
@@ -645,7 +645,7 @@ export function Landing() {
                 <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
                   <Heart className="w-5 h-5 text-white" fill="white" />
                 </div>
-                <span className="text-xl font-semibold">Ezri</span>
+                <span className="text-xl font-semibold">Solace</span>
               </motion.div>
               <p className="text-sm text-muted-foreground">
                 Your AI-powered wellness companion, available 24/7
@@ -681,7 +681,7 @@ export function Landing() {
           </div>
           
           <div className="border-t border-border mt-8 pt-8 text-center text-sm text-muted-foreground">
-            <p>&copy; 2024 Ezri. All rights reserved.</p>
+            <p>&copy; 2024 Solace. All rights reserved.</p>
             <p className="mt-2">
               This is not a replacement for professional medical or mental health services.
             </p>
