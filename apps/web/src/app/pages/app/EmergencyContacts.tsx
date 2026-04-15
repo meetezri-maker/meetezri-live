@@ -234,11 +234,11 @@ export function EmergencyContacts() {
           className="mb-8"
         >
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate("/app/settings")}
             className="flex items-center gap-2 text-muted-foreground hover:text-primary mb-4 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back
+            Back to Settings
           </button>
           <div className="flex items-center justify-between">
             <div>

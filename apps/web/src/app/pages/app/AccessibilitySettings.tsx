@@ -92,6 +92,20 @@ export function AccessibilitySettings() {
   useEffect(() => {
     if (typeof document === "undefined") return;
     const root = document.documentElement;
+    const textSpacingMap: Record<string, { lineHeight: string; letterSpacing: string }> = {
+      compact: { lineHeight: "1.35", letterSpacing: "-0.005em" },
+      normal: { lineHeight: "1.5", letterSpacing: "0em" },
+      relaxed: { lineHeight: "1.7", letterSpacing: "0.01em" },
+      loose: { lineHeight: "1.9", letterSpacing: "0.015em" },
+    };
+    const spacing = textSpacingMap[settings.textSpacing] || textSpacingMap.normal;
+    root.style.setProperty("--text-line-height", spacing.lineHeight);
+    root.style.setProperty("--text-letter-spacing", spacing.letterSpacing);
+  }, [settings.textSpacing]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
     if (settings.highContrast) {
       root.classList.add("high-contrast");
     } else {
@@ -145,18 +159,9 @@ export function AccessibilitySettings() {
       ? "text-xl"
       : "text-base";
 
-  const containerTextSpacing =
-    settings.textSpacing === "compact"
-      ? "leading-tight"
-      : settings.textSpacing === "relaxed"
-      ? "leading-relaxed"
-      : settings.textSpacing === "loose"
-      ? "leading-loose"
-      : "";
-
   return (
     <AppLayout>
-      <div className={`min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300 ${containerFontSize} ${containerTextSpacing}`}>
+      <div className={`min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300 ${containerFontSize}`}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <motion.div

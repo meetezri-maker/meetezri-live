@@ -18,7 +18,7 @@ export function birthIsoToAgeYears(iso: string): number | undefined {
     years -= 1;
   }
   if (!Number.isFinite(years)) return undefined;
-  if (years < 13 || years > 120) return undefined;
+  if (years < 0) return undefined;
   return years;
 }
 

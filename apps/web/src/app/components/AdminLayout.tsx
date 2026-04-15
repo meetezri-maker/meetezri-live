@@ -50,6 +50,16 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { Button } from "./ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -286,6 +296,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     "Crisis Management",
     "Analytics"
   ]);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     // Get admin role from localStorage
@@ -296,8 +307,13 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   }, []);
 
   const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = () => {
     localStorage.removeItem("adminRole");
     localStorage.removeItem("adminEmail");
+    setShowLogoutModal(false);
     navigate("/admin/login");
   };
 
@@ -523,6 +539,26 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         {/* Page content */}
         <main className="p-4 lg:p-8">{children}</main>
       </div>
+
+      <AlertDialog open={showLogoutModal} onOpenChange={setShowLogoutModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Log out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out of the admin portal?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmLogout}
+              className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
+            >
+              Log Out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

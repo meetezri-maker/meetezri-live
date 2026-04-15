@@ -23,6 +23,16 @@ import { useAuth } from "../contexts/AuthContext";
 import { useNotifications } from "../contexts/NotificationsContext";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -104,6 +114,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     
     return defaults;
   });
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
@@ -230,7 +241,12 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   const handleLogout = async () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = async () => {
     await signOut();
+    setShowLogoutModal(false);
     navigate("/login");
   };
 
@@ -445,6 +461,26 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
         </nav>
       </div>
+
+      <AlertDialog open={showLogoutModal} onOpenChange={setShowLogoutModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Log out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out of your account?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmLogout}
+              className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
+            >
+              Log Out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

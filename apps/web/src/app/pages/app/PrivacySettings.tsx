@@ -3,12 +3,10 @@ import {
   Shield,
   Lock,
   Eye,
-  EyeOff,
   Download,
   Trash2,
   FileText,
   UserX,
-  Globe,
   ArrowLeft,
   CheckCircle,
   AlertCircle,
@@ -29,7 +27,6 @@ export function PrivacySettings() {
   
   const [settings, setSettings] = useState({
     profileVisibility: "private",
-    showOnlineStatus: false,
     allowAnalytics: true,
     shareProgress: false,
     allowCookies: true,
@@ -43,9 +40,14 @@ export function PrivacySettings() {
   // Load settings from profile when component mounts or profile changes
   useEffect(() => {
     if (profile?.privacy_settings) {
+      const normalizedVisibility =
+        profile.privacy_settings.profileVisibility === "friends"
+          ? "private"
+          : profile.privacy_settings.profileVisibility;
       setSettings(prev => ({
         ...prev,
-        ...profile.privacy_settings
+        ...profile.privacy_settings,
+        ...(normalizedVisibility ? { profileVisibility: normalizedVisibility } : {})
       }));
     }
   }, [profile]);
@@ -189,32 +191,8 @@ export function PrivacySettings() {
                   className="px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition-colors"
                 >
                   <option value="public">Public</option>
-                  <option value="friends">Friends Only</option>
                   <option value="private">Private</option>
                 </select>
-              </div>
-
-              {/* Online Status */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-xl transition-colors duration-300">
-                <div className="flex items-center gap-3">
-                  <Globe className="w-5 h-5 text-green-600 dark:text-green-400" />
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">Show Online Status</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Let others see when you're active</p>
-                  </div>
-                </div>
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => toggleSetting("showOnlineStatus")}
-                  className={`w-14 h-8 rounded-full transition-colors ${
-                    settings.showOnlineStatus ? "bg-green-500" : "bg-gray-300 dark:bg-slate-600"
-                  }`}
-                >
-                  <motion.div
-                    animate={{ x: settings.showOnlineStatus ? 24 : 2 }}
-                    className="w-6 h-6 bg-white rounded-full shadow-md"
-                  />
-                </motion.button>
               </div>
 
               {/* Share Progress */}

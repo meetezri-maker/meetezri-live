@@ -25,7 +25,9 @@ import {
   Users,
   Loader2,
   Trophy,
+  Check,
   CheckCircle2,
+  ChevronsUpDown,
   Circle,
 } from "lucide-react";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -69,6 +71,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../components/ui/dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "../../components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 
 /* ─── style constants (orange → pink dashboard theme) ─── */
 const GRAD =
@@ -108,6 +119,45 @@ const pronounsOptions = [
   "he/they",
   "prefer not to say",
 ];
+const fallbackTimezones = [
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Toronto",
+  "Europe/London",
+  "Europe/Berlin",
+  "Asia/Karachi",
+  "Asia/Dubai",
+  "Asia/Kolkata",
+  "Asia/Singapore",
+  "Australia/Sydney",
+];
+
+const getBrowserTimezone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+};
+
+const formatTimezoneOptionLabel = (timezone: string) => {
+  const place = timezone.replace(/_/g, " ").replace(/\//g, ", ");
+  try {
+    const offsetPart = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      timeZoneName: "shortOffset",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date()).find((part) => part.type === "timeZoneName")?.value;
+    return offsetPart ? `${place} (${offsetPart})` : place;
+  } catch {
+    return place;
+  }
+};
 
 const MAX_PHONE_DIGITS = 12;
 const countPhoneDigits = (v: string) => (v.match(/\d/g) || []).length;
@@ -198,6 +248,15 @@ export function UserProfile() {
   const [avatarOffsetY, setAvatarOffsetY] = useState(0);
   const [avatarSourceSize, setAvatarSourceSize] = useState<{ width: number; height: number } | null>(null);
   const avatarPreviewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [timezoneOpen, setTimezoneOpen] = useState(false);
+  const availableTimezones = useMemo<string[]>(() => {
+    try {
+      const list = ((Intl as any).supportedValuesOf?.("timeZone") || []) as string[];
+      return list.length ? list : fallbackTimezones;
+    } catch {
+      return fallbackTimezones;
+    }
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -236,7 +295,7 @@ export function UserProfile() {
         email: profile.email || user?.email || "",
         phone: profile.phone || "",
         birthday: profileAgeStorageToDisplayYears(profile.age),
-        location: profile.timezone || "",
+        location: profile.timezone || getBrowserTimezone(),
         pronouns: profile.pronouns || "",
         emergency_contact_name: profile.emergency_contact_name || "",
         emergency_contact_phone: profile.emergency_contact_phone || "",
@@ -1019,6 +1078,46 @@ export function UserProfile() {
                                           />
                                         )}
                                       </div>
+                                    ) : f.name === "location" ? (
+                                      <Popover open={timezoneOpen} onOpenChange={setTimezoneOpen}>
+                                        <PopoverTrigger asChild>
+                                          <button
+                                            type="button"
+                                            disabled={isSaving}
+                                            className="w-full flex items-center justify-between text-sm font-semibold bg-transparent outline-none text-gray-900 dark:text-white disabled:opacity-60"
+                                          >
+                                            <span className="truncate text-left">
+                                              {field.value ? formatTimezoneOptionLabel(field.value) : "Select timezone"}
+                                            </span>
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
+                                          </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                          <Command>
+                                            <CommandInput placeholder="Search timezone or city..." />
+                                            <CommandList>
+                                              <CommandEmpty>No timezone found.</CommandEmpty>
+                                              <CommandGroup>
+                                                {availableTimezones.map((timezone) => (
+                                                  <CommandItem
+                                                    key={timezone}
+                                                    value={`${timezone} ${formatTimezoneOptionLabel(timezone)}`}
+                                                    onSelect={() => {
+                                                      field.onChange(timezone);
+                                                      setTimezoneOpen(false);
+                                                    }}
+                                                  >
+                                                    <Check
+                                                      className={`h-4 w-4 ${field.value === timezone ? "opacity-100" : "opacity-0"}`}
+                                                    />
+                                                    <span className="truncate">{formatTimezoneOptionLabel(timezone)}</span>
+                                                  </CommandItem>
+                                                ))}
+                                              </CommandGroup>
+                                            </CommandList>
+                                          </Command>
+                                        </PopoverContent>
+                                      </Popover>
                                     ) : (
                                       <input
                                         {...field}
@@ -1031,7 +1130,11 @@ export function UserProfile() {
                                     )
                                   ) : (
                                     <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
-                                      {f.numeric && field.value ? `${String(field.value).replace(/\D/g, "")} years old` : field.value || <span className="text-gray-300 dark:text-gray-600 font-normal">Not set</span>}
+                                      {f.numeric && field.value
+                                        ? `${String(field.value).replace(/\D/g, "")} years old`
+                                        : f.name === "location" && field.value
+                                          ? formatTimezoneOptionLabel(String(field.value))
+                                          : field.value || <span className="text-gray-300 dark:text-gray-600 font-normal">Not set</span>}
                                     </p>
                                   )}
                                 </FieldRow>

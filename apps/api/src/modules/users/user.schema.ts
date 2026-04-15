@@ -22,11 +22,11 @@ const ageOrIsoDobSchema = z
     const v = val.trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
       const y = ageFromIsoDob(v);
-      return y !== null && y >= 13 && y <= 120;
+      return y !== null && y >= 0;
     }
     const num = Number.parseInt(v, 10);
-    return Number.isFinite(num) && num >= 13 && num <= 120;
-  }, 'Age must be between 13 and 120, or use date of birth (YYYY-MM-DD)');
+    return Number.isFinite(num) && num > 0;
+  }, 'Age must be a positive number, or use date of birth (YYYY-MM-DD)');
 
 /** Accept string/number from clients; allow ISO DOB for account settings. */
 const ageSchemaCoerced = z.preprocess(

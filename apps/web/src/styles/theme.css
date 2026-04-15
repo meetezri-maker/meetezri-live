@@ -2,6 +2,8 @@
 
 :root {
   --font-size: 16px;
+  --text-line-height: 1.5;
+  --text-letter-spacing: 0em;
   --background: #fafafa;
   --foreground: #1a1a2e;
   --card: #ffffff;
@@ -334,6 +336,8 @@
 
   body {
     @apply bg-background text-foreground;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 
   /**
@@ -348,42 +352,49 @@
   h1 {
     font-size: var(--text-2xl);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 
   h2 {
     font-size: var(--text-xl);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 
   h3 {
     font-size: var(--text-lg);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 
   h4 {
     font-size: var(--text-base);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 
   label {
     font-size: var(--text-base);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 
   button {
     font-size: var(--text-base);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 
   input {
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
-    line-height: 1.5;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 }

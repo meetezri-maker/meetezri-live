@@ -49,8 +49,8 @@ const profileSetupSchema = z.object({
   ),
   age: z.string().refine((val) => {
     const num = parseInt(val);
-    return !isNaN(num) && num >= 13 && num <= 120;
-  }, "You must be at least 13 years old"),
+    return !isNaN(num) && num > 0;
+  }, "Enter a valid age"),
   timezone: z.string().min(1, "Timezone is required"),
 });
 
@@ -438,15 +438,14 @@ export function OnboardingProfileSetup() {
                     <FormControl>
                       <Input
                         type="number"
-                        min="13"
-                        max="120"
+                        min="1"
                         placeholder="25"
                         className="bg-input-background transition-all focus:scale-[1.02]"
                         {...field}
                       />
                     </FormControl>
                     <p className="text-xs text-muted-foreground">
-                      You must be at least 13 years old to use Ezri
+                      Enter your age
                     </p>
                     <FormMessage />
                   </FormItem>

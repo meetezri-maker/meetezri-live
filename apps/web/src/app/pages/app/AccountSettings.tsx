@@ -11,7 +11,9 @@ import {
   Trash2,
   Save,
   ArrowLeft,
+  Check,
   CheckCircle,
+  ChevronsUpDown,
   AlertCircle,
   Loader2,
   Eye,
@@ -19,7 +21,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { AppLayout } from "@/app/components/AppLayout";
 import { api } from "@/lib/api";
 import { useAuth } from "@/app/contexts/AuthContext";
@@ -30,6 +32,55 @@ import {
 } from "@/lib/profileAge";
 import { PhoneInput } from "@/app/components/ui/phone-input";
 import { normalizeStoredPhoneForInput } from "@/lib/normalizeStoredPhone";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/app/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
+
+const fallbackTimezones = [
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Toronto",
+  "Europe/London",
+  "Europe/Berlin",
+  "Asia/Karachi",
+  "Asia/Dubai",
+  "Asia/Kolkata",
+  "Asia/Singapore",
+  "Australia/Sydney",
+];
+
+const getBrowserTimezone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+};
+
+const formatTimezoneOptionLabel = (timezone: string) => {
+  const place = timezone.replace(/_/g, " ").replace(/\//g, ", ");
+  try {
+    const offsetPart = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      timeZoneName: "shortOffset",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date()).find((part) => part.type === "timeZoneName")?.value;
+    return offsetPart ? `${place} (${offsetPart})` : place;
+  } catch {
+    return place;
+  }
+};
 
 const PasswordInput = ({ 
   value, 
@@ -92,6 +143,15 @@ export function AccountSettings() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [timezoneOpen, setTimezoneOpen] = useState(false);
+  const availableTimezones = useMemo<string[]>(() => {
+    try {
+      const list = ((Intl as any).supportedValuesOf?.("timeZone") || []) as string[];
+      return list.length ? list : fallbackTimezones;
+    } catch {
+      return fallbackTimezones;
+    }
+  }, []);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
@@ -418,7 +478,7 @@ export function AccountSettings() {
           email: data.email || user.email || "",
           phone: normalizeStoredPhoneForInput(data.phone || ""),
           dateOfBirth: profileAgeStorageToDateInput(data.age),
-          location: data.timezone || "", // Using timezone as location proxy
+          location: data.timezone || getBrowserTimezone(), // Using timezone as location proxy
           bio: profileBio || legacyBioFromMood,
           avatar_url: data.avatar_url || ""
         });
@@ -497,7 +557,7 @@ export function AccountSettings() {
       const dobIso = profileData.dateOfBirth.trim();
       if (dobIso && birthIsoToAgeYears(dobIso) === undefined) {
         toast.error(
-          "Please enter a valid date of birth (you must be between 13 and 120 years old)."
+          "Please enter a valid date of birth."
         );
         return;
       }
@@ -728,12 +788,46 @@ export function AccountSettings() {
                     <MapPin className="w-4 h-4 inline mr-1" />
                     Location
                   </label>
-                  <input
-                    type="text"
-                    value={profileData.location}
-                    onChange={(e) => setProfileData({...profileData, location: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
-                  />
+                  <Popover open={timezoneOpen} onOpenChange={setTimezoneOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors flex items-center justify-between"
+                      >
+                        <span className="truncate text-left">
+                          {profileData.location
+                            ? formatTimezoneOptionLabel(profileData.location)
+                            : "Select timezone"}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search timezone or city..." />
+                        <CommandList>
+                          <CommandEmpty>No timezone found.</CommandEmpty>
+                          <CommandGroup>
+                            {availableTimezones.map((timezone) => (
+                              <CommandItem
+                                key={timezone}
+                                value={`${timezone} ${formatTimezoneOptionLabel(timezone)}`}
+                                onSelect={() => {
+                                  setProfileData((prev) => ({ ...prev, location: timezone }));
+                                  setTimezoneOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={`h-4 w-4 ${profileData.location === timezone ? "opacity-100" : "opacity-0"}`}
+                                />
+                                <span className="truncate">{formatTimezoneOptionLabel(timezone)}</span>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 

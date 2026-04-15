@@ -34,6 +34,16 @@ import { motion, AnimatePresence } from "motion/react";
 import { Button } from "./ui/button";
 import { useAuth } from "../contexts/AuthContext";
 import { Navigate } from "react-router-dom";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -269,6 +279,7 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
     // Otherwise, expand the section containing current page
     return findCurrentSection();
   });
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // Update expanded section when navigating to a new page
   useEffect(() => {
@@ -279,8 +290,13 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
   }, [location.pathname]);
 
   const handleLogout = async () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = async () => {
     await signOut();
     localStorage.removeItem("adminExpandedSection");
+    setShowLogoutModal(false);
     navigate("/admin/login");
   };
 
@@ -450,6 +466,26 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
         {/* Page Content */}
         <main className="p-8">{children}</main>
       </div>
+
+      <AlertDialog open={showLogoutModal} onOpenChange={setShowLogoutModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Log out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out of the admin portal?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmLogout}
+              className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
+            >
+              Log Out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

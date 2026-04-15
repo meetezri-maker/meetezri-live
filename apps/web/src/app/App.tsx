@@ -217,6 +217,7 @@ export default function App() {
       focusIndicators?: boolean;
       largeClickTargets?: boolean;
       fontSize?: "small" | "medium" | "large" | "xlarge";
+      textSpacing?: "compact" | "normal" | "relaxed" | "loose";
     } = {};
 
     if (typeof window !== "undefined" && typeof window.localStorage !== "undefined") {
@@ -290,6 +291,16 @@ export default function App() {
     };
     const fontSize = fontSizeMap[accessibilitySettings.fontSize || "medium"] || "16px";
     root.style.setProperty("--font-size", fontSize);
+
+    const textSpacingMap: Record<string, { lineHeight: string; letterSpacing: string }> = {
+      compact: { lineHeight: "1.35", letterSpacing: "-0.005em" },
+      normal: { lineHeight: "1.5", letterSpacing: "0em" },
+      relaxed: { lineHeight: "1.7", letterSpacing: "0.01em" },
+      loose: { lineHeight: "1.9", letterSpacing: "0.015em" },
+    };
+    const spacing = textSpacingMap[accessibilitySettings.textSpacing || "normal"] || textSpacingMap.normal;
+    root.style.setProperty("--text-line-height", spacing.lineHeight);
+    root.style.setProperty("--text-letter-spacing", spacing.letterSpacing);
 
     root.classList.toggle("high-contrast", Boolean(accessibilitySettings.highContrast));
     root.classList.toggle("reduced-motion", Boolean(accessibilitySettings.reducedMotion));
