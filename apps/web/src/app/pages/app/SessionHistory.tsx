@@ -26,6 +26,7 @@ import { companionCardImageUrl } from "@/lib/avatar/companionModelUrl";
 interface SessionData {
   id: string;
   date: string;
+  timeLabel: string;
   duration: string;
   /** Fractional minutes for summary stats (avoids parsing the label string). */
   durationMinutesForStats: number;
@@ -40,6 +41,7 @@ interface SessionData {
   isUpcoming?: boolean;
   avatarName?: string;
   avatarImage?: string;
+  environmentLabel?: string;
 }
 
 interface BackendSession {
@@ -62,6 +64,7 @@ interface BackendSession {
   };
   config?: {
     avatar?: string;
+    environment?: string;
   };
 }
 
@@ -80,6 +83,19 @@ function resolveHistoryAvatar(name: string | undefined | null) {
     HISTORY_AVATARS.find((a) => a.name.split(/\s+/)[0]?.toLowerCase() === normalized) ??
     HISTORY_AVATARS[0]
   );
+}
+
+const SESSION_ENVIRONMENT_LABELS: Record<string, string> = {
+  beach: "Beach Sunset",
+  forest: "Peaceful Forest",
+  mountains: "Mountain View",
+  space: "Starry Night",
+  minimal: "Minimal Studio",
+};
+
+function formatEnvironmentLabel(value: string | undefined | null): string {
+  if (!value) return "Default";
+  return SESSION_ENVIRONMENT_LABELS[value] ?? value;
 }
 
 /**
@@ -236,8 +252,10 @@ export function SessionHistory() {
               month: 'long',
               day: 'numeric',
               year: 'numeric',
-              hour: s.scheduled_at ? 'numeric' : undefined,
-              minute: s.scheduled_at ? 'numeric' : undefined,
+            }),
+            timeLabel: baseDate.toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
             }),
             duration: durationLabel,
             durationMinutesForStats: minutesForStats,
@@ -252,6 +270,7 @@ export function SessionHistory() {
             isUpcoming,
             avatarName: resolvedAvatar.name,
             avatarImage: resolvedAvatar.image,
+            environmentLabel: formatEnvironmentLabel(s.config?.environment ?? profile?.selected_environment),
           };
         };
 
@@ -722,20 +741,35 @@ export function SessionHistory() {
                 className="fixed inset-4 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-3xl z-50"
               >
                 <Card className="p-6 max-h-[90vh] overflow-y-auto">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h2 className="text-2xl font-bold mb-2">Session Details</h2>
-                      <p className="text-sm text-muted-foreground">{selectedSession.date}</p>
-                    </div>
-                    <button
-                      onClick={() => setSelectedSession(null)}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      ✕
-                    </button>
-                  </div>
+               
 
                   <div className="space-y-4">
+                    <div className="space-y-2">
+                      <h3 className="font-bold">Session Details</h3>
+                      <div className="rounded-lg border border-gray-200 overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-3 text-sm border-b border-gray-200">
+                          <span className="text-muted-foreground">Time</span>
+                          <span className="font-medium">{selectedSession.timeLabel}</span>
+                        </div>
+                        <div className="flex items-center justify-between px-4 py-3 text-sm border-b border-gray-200">
+                          <span className="text-muted-foreground">Date</span>
+                          <span className="font-medium">{selectedSession.date}</span>
+                        </div>
+                        <div className="flex items-center justify-between px-4 py-3 text-sm border-b border-gray-200">
+                          <span className="text-muted-foreground">Session Time</span>
+                          <span className="font-medium">{selectedSession.duration}</span>
+                        </div>
+                        <div className="flex items-center justify-between px-4 py-3 text-sm border-b border-gray-200">
+                          <span className="text-muted-foreground">Avatar</span>
+                          <span className="font-medium">{selectedSession.avatarName || "Default"}</span>
+                        </div>
+                        <div className="flex items-center justify-between px-4 py-3 text-sm">
+                          <span className="text-muted-foreground">Environment</span>
+                          <span className="font-medium">{selectedSession.environmentLabel || "Default"}</span>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Summary */}
                     <div>
                       <h3 className="font-bold mb-2">Summary</h3>
