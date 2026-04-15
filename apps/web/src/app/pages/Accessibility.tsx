@@ -109,7 +109,7 @@ export function Accessibility() {
               <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center text-white text-xl">
                 💜
               </div>
-              <span className="text-xl font-bold">Ezri</span>
+              <span className="text-xl font-bold">Solace</span>
             </Link>
             <nav className="hidden md:flex items-center gap-6">
               <Link to="/how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">
@@ -175,7 +175,7 @@ export function Accessibility() {
             transition={{ delay: 0.2 }}
             className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto"
           >
-            We're committed to making Ezri accessible to all users, regardless of ability. 
+            We're committed to making Solace accessible to all users, regardless of ability. 
             Mental health support should be available to everyone.
           </motion.p>
         </div>
@@ -244,7 +244,7 @@ export function Accessibility() {
           >
             <h2 className="text-3xl font-bold mb-4">Assistive Technology Support</h2>
             <p className="text-muted-foreground">
-              Ezri works seamlessly with the tools you already use
+              Solace works seamlessly with the tools you already use
             </p>
           </motion.div>
 
@@ -318,7 +318,7 @@ export function Accessibility() {
               <div className="text-center mb-8">
                 <h2 className="text-3xl font-bold mb-4">Need Assistance?</h2>
                 <p className="text-muted-foreground">
-                  We're here to help ensure you have the best experience with Ezri
+                  We're here to help ensure you have the best experience with Solace
                 </p>
               </div>
               
@@ -380,7 +380,7 @@ export function Accessibility() {
                 Ready to Start Your Wellness Journey?
               </h2>
               <p className="text-muted-foreground mb-8">
-                Join thousands who trust Ezri for their mental health and wellbeing
+                Join thousands who trust Solace for their mental health and wellbeing
               </p>
               <Link to="/signup">
                 <motion.button
@@ -408,7 +408,7 @@ export function Accessibility() {
                 <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center text-white">
                   💜
                 </div>
-                <span className="font-bold">Ezri</span>
+                <span className="font-bold">Solace</span>
               </div>
               <p className="text-sm text-muted-foreground">
                 Your AI-powered wellness companion, available 24/7
@@ -443,7 +443,7 @@ export function Accessibility() {
           </div>
 
           <div className="border-t mt-8 pt-8 text-center text-sm text-muted-foreground">
-            <p>© 2024 Ezri. All rights reserved.</p>
+            <p>© 2024 Solace. All rights reserved.</p>
             <p className="mt-2">This is not a replacement for professional medical or mental health services.</p>
           </div>
         </div>

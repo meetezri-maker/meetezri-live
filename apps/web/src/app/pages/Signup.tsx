@@ -289,7 +289,7 @@ export function Signup() {
     {
       icon: CheckCircle2,
       title: "24/7 Access",
-      description: "Connect with Ezri anytime, anywhere"
+      description: "Connect with Solace anytime, anywhere"
     },
     {
       icon: CheckCircle2,
@@ -355,7 +355,7 @@ export function Signup() {
                 </motion.div>
               </div>
               <p className="text-muted-foreground mb-8 text-lg">
-                Join thousands who trust Ezri for their mental health and wellbeing
+                Join thousands who trust Solace for their mental health and wellbeing
               </p>
             </motion.div>
             
