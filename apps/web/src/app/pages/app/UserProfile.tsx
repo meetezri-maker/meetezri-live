@@ -1189,13 +1189,19 @@ export function UserProfile() {
                                           }}
                                           className="w-full text-sm font-semibold bg-transparent outline-none text-gray-900 dark:text-white disabled:opacity-60"
                                         >
-                                          <option value="">Select pronouns</option>
+                                          <option value="" style={{ color: "#111827", backgroundColor: "#ffffff" }}>Select pronouns</option>
                                           {pronounsOptions.map((option) => (
-                                            <option key={option} value={option}>
+                                            <option
+                                              key={option}
+                                              value={option}
+                                              style={{ color: "#111827", backgroundColor: "#ffffff" }}
+                                            >
                                               {option}
                                             </option>
                                           ))}
-                                          <option value="__custom__">Other (custom)</option>
+                                          <option value="__custom__" style={{ color: "#111827", backgroundColor: "#ffffff" }}>
+                                            Other (custom)
+                                          </option>
                                         </select>
                                         {!pronounsOptions.includes((field.value || "").toLowerCase()) && (
                                           <input
