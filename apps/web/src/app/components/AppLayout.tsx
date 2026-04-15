@@ -210,6 +210,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   ];
 
   const isActive = (path: string) => location.pathname === path;
+  const isRouteActive = (path: string) =>
+    location.pathname === path || location.pathname.startsWith(`${path}/`);
 
   const backgroundClass =
     appearance.backgroundStyle === "solid"
@@ -369,7 +371,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   transition={{ delay: index * 0.05 }}
                   whileHover={{ scale: 1.02, x: 5 }}
                   whileTap={{ scale: 0.98 }}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  className={`app-sidebar-item ${active ? "app-sidebar-item--active" : ""} flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                     active
                       ? useGradientUI
                         ? "bg-gradient-to-r from-primary to-secondary dark:from-blue-600 dark:to-indigo-600 text-white shadow-lg"
@@ -389,7 +391,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <Link to="/app/session-history">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all"
+                className={`app-sidebar-item ${isRouteActive("/app/session-history") ? "app-sidebar-item--active" : ""} flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
               >
                 <Clock className="w-5 h-5" />
                 <span className="font-medium">Session History</span>
@@ -399,7 +401,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <Link to="/app/wellness-tools">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all"
+                className={`app-sidebar-item ${isRouteActive("/app/wellness-tools") ? "app-sidebar-item--active" : ""} flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
               >
                 <Sparkles className="w-5 h-5" />
                 <span className="font-medium">Wellness Tools</span>
@@ -409,7 +411,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <Link to="/app/progress">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all"
+                className={`app-sidebar-item ${isRouteActive("/app/progress") ? "app-sidebar-item--active" : ""} flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
               >
                 <TrendingUp className="w-5 h-5" />
                 <span className="font-medium">Progress</span>
@@ -419,7 +421,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <Link to="/app/sleep-tracker">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all"
+                className={`app-sidebar-item ${isRouteActive("/app/sleep-tracker") ? "app-sidebar-item--active" : ""} flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
               >
                 <Moon className="w-5 h-5" />
                 <span className="font-medium">Sleep Tracker</span>
@@ -429,7 +431,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <Link to="/app/billing">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-gray-700 dark:text-gray-200 transition-all border border-transparent ${
+                className={`app-sidebar-item ${isRouteActive("/app/billing") ? "app-sidebar-item--active" : ""} flex items-center gap-3 px-4 py-3 rounded-xl text-gray-700 dark:text-gray-200 transition-all border border-transparent ${
                   useGradientUI
                     ? "hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 dark:hover:from-emerald-900 dark:hover:to-emerald-800 hover:text-green-700 hover:border-green-200 dark:hover:border-emerald-600"
                     : "hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-primary"
@@ -443,7 +445,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <Link to="/app/habit-tracker">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all"
+                className={`app-sidebar-item ${isRouteActive("/app/habit-tracker") ? "app-sidebar-item--active" : ""} flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
               >
                 <Target className="w-5 h-5" />
                 <span className="font-medium">Habit Tracker</span>

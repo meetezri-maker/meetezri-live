@@ -397,7 +397,7 @@ export function SettingsHub() {
               const Icon = section.icon;
               const sectionCard = (
                 <div className="flex items-start gap-4">
-                  <div className={`p-3 rounded-xl bg-gradient-to-br ${section.color} shrink-0`}>
+                  <div className={`settings-hub-icon-chip p-3 rounded-xl bg-gradient-to-br ${section.color} shrink-0`}>
                     <Icon className="w-6 h-6 text-white" />
                   </div>
 
@@ -445,7 +445,7 @@ export function SettingsHub() {
             className="mt-8"
           >
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg">
+              <div className="settings-hub-icon-chip p-3 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg">
                 <Shield className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -471,7 +471,7 @@ export function SettingsHub() {
                   className="block bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all"
                 >
                       <div className="flex items-start gap-4">
-                        <div className={`p-3 rounded-xl bg-gradient-to-br ${section.color} shrink-0`}>
+                        <div className={`settings-hub-icon-chip p-3 rounded-xl bg-gradient-to-br ${section.color} shrink-0`}>
                           <Icon className="w-6 h-6 text-white" />
                         </div>
 

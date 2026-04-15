@@ -821,10 +821,10 @@ export function UserProfile() {
                         { label: "Days", value: userStats.daysActive },
                       ].map((s) => (
                         <div key={s.label} className="flex flex-col items-center min-w-[3.5rem]">
-                          <span className="text-xl font-black bg-gradient-to-r from-orange-500 to-pink-500 bg-clip-text text-transparent tabular-nums">
+                          <span className="text-xl font-black text-orange-600 dark:text-orange-300 tabular-nums">
                             {s.value}
                           </span>
-                          <span className="text-[10px] text-gray-400 uppercase tracking-wider">{s.label}</span>
+                          <span className="text-[10px] text-gray-500 dark:text-gray-200 uppercase tracking-wider">{s.label}</span>
                         </div>
                       ))}
                     </div>

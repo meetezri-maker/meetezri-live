@@ -144,7 +144,7 @@ export function NotificationHistory() {
           transition={{ delay: 0.1 }}
           className="mb-6"
         >
-          <Card className="p-4 bg-blue-50 border-blue-200">
+          <Card className="notification-history-card p-4 bg-blue-50 border-blue-200">
             <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div>
@@ -221,7 +221,7 @@ export function NotificationHistory() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 + index * 0.05 }}
               >
-                <Card className="p-6 shadow-lg hover:shadow-xl transition-all">
+                <Card className="notification-history-card p-6 shadow-lg hover:shadow-xl transition-all">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-start gap-3 flex-1">
                       {getStatusIcon(notification.status)}
@@ -289,7 +289,7 @@ export function NotificationHistory() {
             transition={{ delay: 0.3 }}
             className="mt-8"
           >
-            <Card className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200">
+            <Card className="notification-history-card p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200">
               <h3 className="font-bold mb-4 flex items-center gap-2">
                 <Shield className="w-5 h-5 text-purple-600" />
                 Summary

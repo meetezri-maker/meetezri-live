@@ -257,6 +257,61 @@
   background-image: revert !important;
 }
 
+/* Settings Hub icon chips: force white-outline style in high contrast */
+.high-contrast .settings-hub-icon-chip {
+  background: transparent !important;
+  border: 1px solid #fff !important;
+}
+
+.high-contrast .settings-hub-icon-chip svg {
+  color: #fff !important;
+}
+
+/* Sidebar: only active item should be bright in high contrast */
+.high-contrast .app-sidebar-item {
+  color: #bfc5cf !important;
+  border-color: transparent !important;
+}
+
+.high-contrast .app-sidebar-item svg,
+.high-contrast .app-sidebar-item span {
+  color: #bfc5cf !important;
+}
+
+.high-contrast .app-sidebar-item--active,
+.high-contrast .app-sidebar-item--active svg,
+.high-contrast .app-sidebar-item--active span {
+  color: #fff !important;
+}
+
+.high-contrast .app-sidebar-item--active {
+  border: 1px solid #fff !important;
+  background: #000 !important;
+}
+
+/* Coming Soon page: force readable, non-gradient text in high contrast */
+.high-contrast .coming-soon-page {
+  background: #000 !important;
+}
+
+.high-contrast .coming-soon-page .coming-soon-title {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  background: none !important;
+  background-image: none !important;
+}
+
+.high-contrast .coming-soon-page [class*="bg-gradient"],
+.high-contrast .coming-soon-page [style*="radial-gradient"],
+.high-contrast .coming-soon-page [style*="linear-gradient"] {
+  background-image: none !important;
+}
+
+/* Notification History cards: force visible white borders in high contrast */
+.high-contrast .notification-history-card {
+  border: 1px solid #fff !important;
+}
+
 .reduced-motion * {
   scroll-behavior: auto !important;
   animation-duration: 0ms !important;
