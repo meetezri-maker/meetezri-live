@@ -28,6 +28,7 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { toast } from "sonner";
 import {
   birthIsoToAgeYears,
+  isIsoDobString,
   profileAgeStorageToDateInput,
 } from "@/lib/profileAge";
 import { PhoneInput } from "@/app/components/ui/phone-input";
@@ -151,6 +152,11 @@ export function AccountSettings() {
     } catch {
       return fallbackTimezones;
     }
+  }, []);
+  const maxAllowedDob = useMemo(() => {
+    const date = new Date();
+    date.setFullYear(date.getFullYear() - 13);
+    return date.toISOString().split("T")[0];
   }, []);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -555,11 +561,18 @@ export function AccountSettings() {
       }
 
       const dobIso = profileData.dateOfBirth.trim();
-      if (dobIso && birthIsoToAgeYears(dobIso) === undefined) {
+      if (dobIso && !isIsoDobString(dobIso)) {
         toast.error(
           "Please enter a valid date of birth."
         );
         return;
+      }
+      if (dobIso) {
+        const ageYears = birthIsoToAgeYears(dobIso);
+        if (ageYears === undefined) {
+          toast.error("You must be at least 13 years old.");
+          return;
+        }
       }
 
       const patch: Record<string, unknown> = {
@@ -779,6 +792,7 @@ export function AccountSettings() {
                     type="date"
                     value={profileData.dateOfBirth}
                     onChange={(e) => setProfileData({...profileData, dateOfBirth: e.target.value})}
+                    max={maxAllowedDob}
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
                   />
                 </div>
