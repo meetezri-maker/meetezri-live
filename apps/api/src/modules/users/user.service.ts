@@ -92,6 +92,10 @@ const knowledgeRecoveryMap = new Map<
   string,
   { code: string; expiresAt: number; attempts: number; sentAt: number }
 >();
+const knowledgeLoginEmailCodeMap = new Map<
+  string,
+  { code: string; expiresAt: number; attempts: number; sentAt: number }
+>();
 const KNOWLEDGE_RECOVERY_TTL_MS = 10 * 60 * 1000;
 const KNOWLEDGE_RECOVERY_RESEND_MS = 60 * 1000;
 const KNOWLEDGE_RECOVERY_MAX_ATTEMPTS = 5;
@@ -304,6 +308,89 @@ export async function verifyKnowledgeTwoFactorRecovery(userId: string, input: { 
   knowledgeRecoveryMap.delete(userId);
   await disableKnowledgeTwoFactor(userId);
   return { ok: true, disabled: true };
+}
+
+export async function requestKnowledgeTwoFactorLoginCode(userId: string) {
+  const permissions = await getPermissions(userId);
+  const cfg = permissions.two_factor_knowledge as Partial<KnowledgeTwoFactorConfig> | undefined;
+  if (!cfg?.enabled) {
+    const err = new Error('Knowledge-based 2FA is not enabled');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+
+  const existing = knowledgeLoginEmailCodeMap.get(userId);
+  const now = Date.now();
+  if (existing && now - existing.sentAt < KNOWLEDGE_RECOVERY_RESEND_MS) {
+    const waitSeconds = Math.ceil((KNOWLEDGE_RECOVERY_RESEND_MS - (now - existing.sentAt)) / 1000);
+    const err = new Error(`Please wait ${waitSeconds}s before requesting another code`);
+    (err as any).statusCode = 429;
+    throw err;
+  }
+
+  const email = await getUserEmail(userId);
+  if (!email) {
+    const err = new Error('Email not found for account');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const code = String(randomInt(100000, 1000000));
+  knowledgeLoginEmailCodeMap.set(userId, {
+    code,
+    expiresAt: now + KNOWLEDGE_RECOVERY_TTL_MS,
+    attempts: 0,
+    sentAt: now,
+  });
+
+  await emailService.sendEmail(
+    email,
+    'Your Ezri Login Authentication Code',
+    `<p>Your one-time login authentication code is:</p><p style="font-size:24px;font-weight:700;letter-spacing:2px;">${code}</p><p>It expires in 10 minutes.</p>`,
+    `Your one-time login authentication code is ${code}. It expires in 10 minutes.`
+  );
+
+  return { sent: true };
+}
+
+export async function verifyKnowledgeTwoFactorLoginCode(userId: string, input: { code: string }) {
+  const code = String(input.code || '').trim();
+  if (!/^\d{6}$/.test(code)) {
+    const err = new Error('Authentication code must be 6 digits');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const record = knowledgeLoginEmailCodeMap.get(userId);
+  if (!record) {
+    const err = new Error('No active authentication code. Request a new one.');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+
+  if (Date.now() > record.expiresAt) {
+    knowledgeLoginEmailCodeMap.delete(userId);
+    const err = new Error('Authentication code expired. Request a new one.');
+    (err as any).statusCode = 401;
+    throw err;
+  }
+
+  record.attempts += 1;
+  if (record.attempts > KNOWLEDGE_RECOVERY_MAX_ATTEMPTS) {
+    knowledgeLoginEmailCodeMap.delete(userId);
+    const err = new Error('Too many attempts. Request a new code.');
+    (err as any).statusCode = 429;
+    throw err;
+  }
+
+  if (record.code !== code) {
+    const err = new Error('Invalid authentication code');
+    (err as any).statusCode = 401;
+    throw err;
+  }
+
+  knowledgeLoginEmailCodeMap.delete(userId);
+  return { ok: true };
 }
 
 type AccountState =

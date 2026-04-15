@@ -41,6 +41,8 @@ export function Login() {
   const [mfaCode, setMfaCode] = useState("");
   const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
   const [knowledgeCode, setKnowledgeCode] = useState("");
+  const [emailAuthCode, setEmailAuthCode] = useState("");
+  const [emailAuthCodeSent, setEmailAuthCodeSent] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState("");
   const [recoveryCodeSent, setRecoveryCodeSent] = useState(false);
@@ -79,6 +81,28 @@ export function Login() {
       cancelled = true;
     };
   }, [user, profile, isAuthLoading, navigate, onboardingStartRoute, loginStep]);
+
+  useEffect(() => {
+    if (loginStep !== "knowledge") return;
+    let cancelled = false;
+    const sendCode = async () => {
+      try {
+        await api.requestKnowledgeTwoFactorLoginCode();
+        if (!cancelled) {
+          setEmailAuthCodeSent(true);
+          toast.success("Authentication code sent to your email.");
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          toast.error(error.message || "Failed to send authentication code");
+        }
+      }
+    };
+    void sendCode();
+    return () => {
+      cancelled = true;
+    };
+  }, [loginStep]);
 
   const handleGoogleLogin = async () => {
     try {
@@ -180,6 +204,8 @@ export function Login() {
       };
       if (knowledgeStatus.enabled === true) {
         setKnowledgeCode("");
+        setEmailAuthCode("");
+        setEmailAuthCodeSent(false);
         setLoginStep("knowledge");
         return;
       }
@@ -266,6 +292,22 @@ export function Login() {
       await continueAfterLogin();
     } catch (error: any) {
       toast.error(error.message || "Invalid recovery code");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyEmailAuthCode = async () => {
+    if (!/^\d{6}$/.test(emailAuthCode.trim())) {
+      toast.error("Enter a valid 6-digit authentication code");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await api.verifyKnowledgeTwoFactorLoginCode(emailAuthCode.trim());
+      await continueAfterLogin();
+    } catch (error: any) {
+      toast.error(error.message || "Invalid authentication code");
     } finally {
       setIsLoading(false);
     }
@@ -542,6 +584,56 @@ export function Login() {
                 </p>
               </div>
 
+              <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+                <p className="text-xs text-muted-foreground">
+                  A 6-digit authentication code is sent to your account email at login.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={async () => {
+                    setIsLoading(true);
+                    try {
+                      await api.requestKnowledgeTwoFactorLoginCode();
+                      setEmailAuthCodeSent(true);
+                      toast.success("Authentication code sent to your email.");
+                    } catch (error: any) {
+                      toast.error(error.message || "Failed to send authentication code");
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  disabled={isLoading}
+                >
+                  {emailAuthCodeSent ? "Resend authentication code" : "Send authentication code"}
+                </Button>
+                <div className="flex justify-center">
+                  <InputOTP
+                    maxLength={6}
+                    value={emailAuthCode}
+                    onChange={(value) => setEmailAuthCode(value)}
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={handleVerifyEmailAuthCode}
+                  disabled={isLoading || emailAuthCode.trim().length !== 6}
+                >
+                  Verify authentication code
+                </Button>
+              </div>
+
               <Input
                 type="password"
                 value={knowledgeCode}
@@ -574,15 +666,22 @@ export function Login() {
                   >
                     {recoveryCodeSent ? "Resend recovery code" : "Send recovery code"}
                   </Button>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    value={recoveryCode}
-                    onChange={(e) => setRecoveryCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    placeholder="Enter 6-digit recovery code"
-                    className="bg-input-background"
-                  />
+                  <div className="flex justify-center">
+                    <InputOTP
+                      maxLength={6}
+                      value={recoveryCode}
+                      onChange={(value) => setRecoveryCode(value)}
+                    >
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} />
+                        <InputOTPSlot index={1} />
+                        <InputOTPSlot index={2} />
+                        <InputOTPSlot index={3} />
+                        <InputOTPSlot index={4} />
+                        <InputOTPSlot index={5} />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
                   <Button
                     type="button"
                     className="w-full"
@@ -616,6 +715,8 @@ export function Login() {
                 onClick={() => {
                   setLoginStep("credentials");
                   setKnowledgeCode("");
+                  setEmailAuthCode("");
+                  setEmailAuthCodeSent(false);
                   setShowRecovery(false);
                   setRecoveryCode("");
                   setRecoveryCodeSent(false);

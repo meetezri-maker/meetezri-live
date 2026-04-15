@@ -18,6 +18,8 @@ import {
   disableKnowledgeTwoFactorHandler,
   requestKnowledgeTwoFactorRecoveryHandler,
   verifyKnowledgeTwoFactorRecoveryHandler,
+  requestKnowledgeTwoFactorLoginCodeHandler,
+  verifyKnowledgeTwoFactorLoginCodeHandler,
 } from './user.controller';
 import { checkUserSchema, signupSchema } from './user.schema';
 
@@ -123,6 +125,22 @@ export async function userRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate],
     },
     verifyKnowledgeTwoFactorRecoveryHandler
+  );
+
+  fastify.post(
+    '/2fa/knowledge/login-code/request',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    requestKnowledgeTwoFactorLoginCodeHandler
+  );
+
+  fastify.post(
+    '/2fa/knowledge/login-code/verify',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    verifyKnowledgeTwoFactorLoginCodeHandler
   );
 
   fastify.patch(

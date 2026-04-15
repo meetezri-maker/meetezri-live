@@ -356,6 +356,26 @@ export const api = {
     return handleResponse(res, 'Failed to verify recovery code');
   },
 
+  async requestKnowledgeTwoFactorLoginCode() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/login-code/request`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    return handleResponse(res, 'Failed to send authentication code');
+  },
+
+  async verifyKnowledgeTwoFactorLoginCode(code: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/login-code/verify`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ code }),
+    });
+    return handleResponse(res, 'Failed to verify authentication code');
+  },
+
   async completeOnboarding(data: any) {
     const headers = await getHeaders();
     const res = await fetch(`${API_URL}/users/onboarding`, {

@@ -84,6 +84,21 @@ const formatTimezoneOptionLabel = (timezone: string) => {
   }
 };
 
+/** Supabase returns TOTP factors in `data.totp`; some versions also include them in `data.all`. */
+function getTotpFactorsFromMfaList(data: { totp?: unknown; all?: unknown } | null | undefined) {
+  const fromTotp = Array.isArray(data?.totp) ? data.totp : [];
+  const fromAll = Array.isArray(data?.all)
+    ? (data.all as { factor_type?: string; id?: string }[]).filter(
+        (f) => f?.factor_type === "totp"
+      )
+    : [];
+  const byId = new Map<string, (typeof fromTotp)[number]>();
+  for (const f of [...fromTotp, ...fromAll] as { id?: string }[]) {
+    if (f?.id) byId.set(f.id, f as (typeof fromTotp)[number]);
+  }
+  return Array.from(byId.values());
+}
+
 const AVATAR_EXPORT_WIDTH = 1200;
 const AVATAR_EXPORT_HEIGHT = 900;
 type CropArea = { x: number; y: number; width: number; height: number };
@@ -242,6 +257,8 @@ export function AccountSettings() {
   const [mfaData, setMfaData] = useState<{ id: string; qr_code: string; secret: string } | null>(null);
   const [mfaCode, setMfaCode] = useState('');
   const [mfaLoading, setMfaLoading] = useState(false);
+  const [showDisableAuthenticatorModal, setShowDisableAuthenticatorModal] = useState(false);
+  const [disableAuthenticatorCode, setDisableAuthenticatorCode] = useState('');
   const [knowledge2fa, setKnowledge2fa] = useState<{ enabled: boolean; question: string | null }>({
     enabled: false,
     question: null,
@@ -251,6 +268,14 @@ export function AccountSettings() {
     securityQuestion: '',
     securityAnswer: '',
   });
+  const genericSecurityQuestions = [
+    "What is your favorite book?",
+    "What city were you born in?",
+    "What was the name of your first school?",
+    "What is your favorite teacher's last name?",
+    "What is your favorite childhood nickname?",
+    "What is the name of your first pet?",
+  ];
 
   useEffect(() => {
     fetchMfaStatus();
@@ -260,7 +285,7 @@ export function AccountSettings() {
     try {
       const { data, error } = await supabase.auth.mfa.listFactors();
       if (error) throw error;
-      setMfaFactors(data.totp);
+      setMfaFactors(getTotpFactorsFromMfaList(data));
       const knowledge = (await api.getKnowledgeTwoFactorStatus()) as {
         enabled: boolean;
         question: string | null;
@@ -280,7 +305,7 @@ export function AccountSettings() {
 
       // Clean up any existing TOTP factors to prevent conflicts
       const { data: factors } = await supabase.auth.mfa.listFactors();
-      const existingTotp = factors?.all?.filter(f => f.factor_type === 'totp') || [];
+      const existingTotp = getTotpFactorsFromMfaList(factors);
       
       if (existingTotp.length > 0) {
         await Promise.all(existingTotp.map(f => supabase.auth.mfa.unenroll({ factorId: f.id })));
@@ -394,12 +419,18 @@ export function AccountSettings() {
   const handleDisableMfa = async () => {
     try {
       setMfaLoading(true);
-      if (mfaFactors.length > 0) {
-        const factorId = mfaFactors[0]?.id;
-        if (!factorId) return;
-        const { error } = await supabase.auth.mfa.unenroll({ factorId });
-        if (error) throw error;
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (error) throw error;
+      const totpFactors = getTotpFactorsFromMfaList(data);
+      setMfaFactors(totpFactors);
+
+      // Never disable while an authenticator factor exists without verification.
+      if (totpFactors.length > 0) {
+        setDisableAuthenticatorCode('');
+        setShowDisableAuthenticatorModal(true);
+        return;
       }
+
       if (knowledge2fa.enabled) {
         await api.disableKnowledgeTwoFactor();
       }
@@ -409,6 +440,78 @@ export function AccountSettings() {
       toast.error(error.message || 'Failed to disable MFA');
     } finally {
       setMfaLoading(false);
+    }
+  };
+
+  const handleConfirmDisableAuthenticator = async () => {
+    if (!/^\d{6}$/.test(disableAuthenticatorCode)) {
+      toast.error('Enter a valid 6-digit authenticator code');
+      return;
+    }
+
+    const { data, error } = await supabase.auth.mfa.listFactors();
+    if (error) {
+      toast.error(error.message || 'Failed to load authenticator factor');
+      return;
+    }
+    const totpFactors = getTotpFactorsFromMfaList(data);
+    setMfaFactors(totpFactors);
+    const factorId = totpFactors[0]?.id;
+    if (!factorId) {
+      toast.error('Authenticator factor is not available');
+      return;
+    }
+
+    try {
+      setMfaLoading(true);
+      const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
+        factorId,
+      });
+      if (challengeError) throw challengeError;
+
+      const { error: verifyError } = await supabase.auth.mfa.verify({
+        factorId,
+        challengeId: challengeData.id,
+        code: disableAuthenticatorCode,
+      });
+      if (verifyError) throw verifyError;
+
+      const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId });
+      if (unenrollError) throw unenrollError;
+
+      if (knowledge2fa.enabled) {
+        await api.disableKnowledgeTwoFactor();
+      }
+
+      toast.success('Two-Factor Authentication disabled');
+      setShowDisableAuthenticatorModal(false);
+      setDisableAuthenticatorCode('');
+      fetchMfaStatus();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to disable authenticator');
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
+  const handleDisableClick = async () => {
+    if (mfaLoading) return;
+    try {
+      // Always use latest factor state before deciding the disable path.
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (error) throw error;
+      const totpFactors = getTotpFactorsFromMfaList(data);
+      setMfaFactors(totpFactors);
+
+      if (totpFactors.length > 0) {
+        setDisableAuthenticatorCode('');
+        setShowDisableAuthenticatorModal(true);
+        return;
+      }
+
+      await handleDisableMfa();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to check authenticator status');
     }
   };
 
@@ -1137,7 +1240,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   
                   {mfaFactors.length > 0 || knowledge2fa.enabled ? (
                     <button 
-                      onClick={handleDisableMfa}
+                      onClick={handleDisableClick}
                       disabled={mfaLoading}
                       className="text-sm text-red-600 dark:text-red-400 font-medium hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50 flex items-center gap-2"
                     >
@@ -1359,15 +1462,20 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Security Question
                       </label>
-                      <input
-                        type="text"
+                      <select
                         value={knowledgeSetup.securityQuestion}
                         onChange={(e) =>
                           setKnowledgeSetup((prev) => ({ ...prev, securityQuestion: e.target.value }))
                         }
-                        placeholder="e.g. What is your favorite book?"
                         className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
-                      />
+                      >
+                        <option value="">Select a security question</option>
+                        {genericSecurityQuestions.map((question) => (
+                          <option key={question} value={question}>
+                            {question}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1467,6 +1575,56 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                     </motion.button>
                   </div>
                 )}
+              </motion.div>
+            </motion.div>
+          )}
+
+          {showDisableAuthenticatorModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => setShowDisableAuthenticatorModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full shadow-2xl transition-colors duration-300"
+              >
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                  Disable Authenticator
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Enter your current 6-digit authenticator code to disable authenticator-based 2FA.
+                </p>
+                <input
+                  type="text"
+                  value={disableAuthenticatorCode}
+                  onChange={(e) => setDisableAuthenticatorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none text-center text-2xl tracking-widest transition-colors"
+                  maxLength={6}
+                />
+                <div className="mt-4 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowDisableAuthenticatorModal(false)}
+                    className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300"
+                    disabled={mfaLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmDisableAuthenticator}
+                    className="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                    disabled={mfaLoading || disableAuthenticatorCode.length !== 6}
+                  >
+                    {mfaLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Disable
+                  </button>
+                </div>
               </motion.div>
             </motion.div>
           )}

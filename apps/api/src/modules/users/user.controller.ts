@@ -577,6 +577,44 @@ export async function verifyKnowledgeTwoFactorRecoveryHandler(
   }
 }
 
+export async function requestKnowledgeTwoFactorLoginCodeHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  try {
+    return await userService.requestKnowledgeTwoFactorLoginCode(user.sub);
+  } catch (error: any) {
+    const status =
+      error?.statusCode === 400 ||
+      error?.statusCode === 404 ||
+      error?.statusCode === 429
+        ? error.statusCode
+        : 500;
+    return reply.code(status).send({ message: error?.message || 'Failed to send authentication code' });
+  }
+}
+
+export async function verifyKnowledgeTwoFactorLoginCodeHandler(
+  request: FastifyRequest<{ Body: { code: string } }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const { code } = request.body || ({} as any);
+  try {
+    return await userService.verifyKnowledgeTwoFactorLoginCode(user.sub, { code: String(code || '') });
+  } catch (error: any) {
+    const status =
+      error?.statusCode === 400 ||
+      error?.statusCode === 401 ||
+      error?.statusCode === 404 ||
+      error?.statusCode === 429
+        ? error.statusCode
+        : 500;
+    return reply.code(status).send({ message: error?.message || 'Failed to verify authentication code' });
+  }
+}
+
 export async function updateProfileHandler(
   request: FastifyRequest,
   reply: FastifyReply

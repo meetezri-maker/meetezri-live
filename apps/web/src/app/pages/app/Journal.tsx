@@ -89,6 +89,8 @@ export function Journal() {
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingFavoriteId, setTogglingFavoriteId] = useState<string | null>(null);
+  const [showSaveFeedbackModal, setShowSaveFeedbackModal] = useState(false);
+  const [saveFeedbackMessage, setSaveFeedbackMessage] = useState("");
 
   const moods = [
     { value: "happy", emoji: "😊" },
@@ -99,18 +101,52 @@ export function Journal() {
     { value: "angry", emoji: "😡" }
   ];
 
-  const getMoodSaveMessage = (moodEmoji: string, isEdit: boolean): string => {
+  const getTextBasedSaveMessage = (
+    contentHtml: string,
+    moodEmoji: string,
+    isEdit: boolean
+  ): string => {
     const actionPrefix = isEdit ? "Entry updated." : "Entry saved.";
-    const messages: Record<string, string> = {
-      "😊": "Love that happy energy - keep it going.",
-      "😌": "Calm and steady - great space to be in.",
-      "😰": "You showed up for yourself today. That matters.",
-      "😢": "Thank you for sharing this. You are not alone.",
-      "🤩": "That excitement is powerful - lean into it.",
-      "😡": "Strong feelings are valid. Thanks for expressing them.",
-    };
-    const moodMessage = messages[moodEmoji] ?? "Nice work capturing your thoughts today.";
-    return `${actionPrefix} ${moodMessage}`;
+    const text = htmlToPlainText(contentHtml || "").toLowerCase();
+
+    const positiveWords = ["grateful", "happy", "joy", "peace", "good", "better", "hopeful", "relaxed", "calm"];
+    const anxiousWords = ["anxious", "overwhelmed", "worry", "stressed", "panic", "nervous"];
+    const sadnessWords = ["sad", "down", "alone", "hurt", "cry", "tired", "empty"];
+    const angerWords = ["angry", "frustrated", "mad", "upset", "annoyed", "irritated"];
+    const growthWords = ["learned", "improved", "progress", "trying", "started", "focus", "discipline"];
+
+    const hasAny = (words: string[]) => words.some((word) => text.includes(word));
+
+    let contextMessage = "Thanks for checking in with yourself today. Keep writing one step at a time.";
+
+    if (hasAny(growthWords)) {
+      contextMessage = "You are noticing your progress, and that is meaningful. Keep building on this momentum.";
+    } else if (hasAny(positiveWords)) {
+      contextMessage = "This entry carries positive energy. Hold onto what is working for you today.";
+    } else if (hasAny(anxiousWords)) {
+      contextMessage = "This sounds like a heavy moment. Take a slow breath, and be kind to yourself.";
+    } else if (hasAny(sadnessWords)) {
+      contextMessage = "Thank you for putting these feelings into words. Naming them is a strong step forward.";
+    } else if (hasAny(angerWords)) {
+      contextMessage = "You expressed intense emotions clearly. A short pause can help create space before reacting.";
+    } else if (text.trim().length > 0) {
+      contextMessage = "You took time to reflect, and that matters. Keep listening to what your thoughts are telling you.";
+    }
+
+    // Fallback to selected mood when text signals are weak.
+    if (!text.trim()) {
+      const moodFallback: Record<string, string> = {
+        "😊": "Love that happy energy - keep it going.",
+        "😌": "Calm and steady - great space to be in.",
+        "😰": "You showed up for yourself today. That matters.",
+        "😢": "Thank you for sharing this. You are not alone.",
+        "🤩": "That excitement is powerful - lean into it.",
+        "😡": "Strong feelings are valid. Thanks for expressing them.",
+      };
+      contextMessage = moodFallback[moodEmoji] ?? contextMessage;
+    }
+
+    return `${actionPrefix} ${contextMessage}`;
   };
 
   const fetchEntries = async () => {
@@ -188,6 +224,7 @@ export function Journal() {
       setIsSaving(true);
       const moodAtSave = selectedMood;
       const isEdit = Boolean(editingEntry);
+      const contentAtSave = newEntryContent;
       const entryData = {
         title: newEntryTitle,
         content: newEntryContent,
@@ -208,7 +245,8 @@ export function Journal() {
       setNewEntryContent("");
       setSelectedMood("");
       setEditingEntry(null);
-      toast.success(getMoodSaveMessage(moodAtSave, isEdit));
+      setSaveFeedbackMessage(getTextBasedSaveMessage(contentAtSave, moodAtSave, isEdit));
+      setShowSaveFeedbackModal(true);
     } catch (error) {
       console.error("Failed to save journal entry", error);
       toast.error("Failed to save entry. Please try again.");
@@ -574,6 +612,49 @@ export function Journal() {
                       </Button>
                     </div>
                   </div>
+                </Card>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
+        {/* Save Feedback Modal */}
+        <AnimatePresence>
+          {showSaveFeedbackModal && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowSaveFeedbackModal(false)}
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60]"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.92, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.92, y: 10 }}
+                className="fixed inset-4 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-md z-[70]"
+              >
+                <Card className="p-6 shadow-2xl border-primary/20">
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-primary" />
+                      <h3 className="text-lg font-bold">Reflection Saved</h3>
+                    </div>
+                    <button
+                      onClick={() => setShowSaveFeedbackModal(false)}
+                      className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{saveFeedbackMessage}</p>
+                  <Button
+                    className="w-full mt-5"
+                    onClick={() => setShowSaveFeedbackModal(false)}
+                  >
+                    Continue
+                  </Button>
                 </Card>
               </motion.div>
             </>
