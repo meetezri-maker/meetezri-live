@@ -162,7 +162,7 @@ export function NotificationSettings() {
   if (isLoading && !profile) {
     return (
       <AppLayout>
-        <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12]">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="mb-8">
               <Skeleton className="h-5 w-32 mb-4" />
@@ -188,7 +188,7 @@ export function NotificationSettings() {
 
   return (
     <AppLayout>
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
+      <div className="min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] transition-colors duration-300">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <motion.div

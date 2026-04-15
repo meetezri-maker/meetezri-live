@@ -248,12 +248,12 @@ export function WellnessTools() {
     return (
       <AppLayout>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-          <div className="text-center py-20 bg-white rounded-2xl shadow-sm border border-slate-200">
-            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock className="w-8 h-8" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Wellness Tools are a Core Feature</h2>
-            <p className="text-slate-600 max-w-md mx-auto mb-8">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Wellness Tools are a Core Feature</h2>
+            <p className="text-slate-600 dark:text-slate-300 max-w-md mx-auto mb-8">
               Upgrade to Core or Pro to unlock the full library of wellness exercises and tools.
             </p>
             <Button onClick={() => navigate('/app/billing')}>
@@ -729,7 +729,7 @@ export function WellnessTools() {
           <div className="flex items-center justify-between mb-4">
              <h2 className="text-xl font-bold">Detailed Progress</h2>
           </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4">
              {isLoading ? (
                <p className="text-gray-500 text-center py-4">Loading progress...</p>
              ) : progress.length === 0 ? (
@@ -743,12 +743,12 @@ export function WellnessTools() {
                            <Star className="w-4 h-4" />
                         </div>
                         <div>
-                          <p className="font-medium text-gray-900">{p.toolTitle}</p>
+                          <p className="font-medium text-gray-900 dark:text-slate-100">{p.toolTitle}</p>
                           <p className="text-sm text-gray-500">{p.sessionsCompleted} sessions completed</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-gray-900">
+                        <p className="font-bold text-gray-900 dark:text-slate-100">
                           {formatWellnessDuration(wellnessProgressTotalSeconds(p))}
                         </p>
                         <p className="text-xs text-gray-500">Total time</p>

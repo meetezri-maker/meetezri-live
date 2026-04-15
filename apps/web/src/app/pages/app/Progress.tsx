@@ -55,12 +55,12 @@ export function Progress() {
     return (
       <AppLayout>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-          <div className="text-center py-20 bg-white rounded-2xl shadow-sm border border-slate-200">
-            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock className="w-8 h-8" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Usage History is a Core Feature</h2>
-            <p className="text-slate-600 max-w-md mx-auto mb-8">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Usage History is a Core Feature</h2>
+            <p className="text-slate-600 dark:text-slate-300 max-w-md mx-auto mb-8">
               Upgrade to Core or Pro to unlock usage history, analytics, and exports.
             </p>
             <Button onClick={() => navigate('/app/billing')}>

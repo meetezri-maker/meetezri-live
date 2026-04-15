@@ -219,8 +219,11 @@ export function AppLayout({ children }: AppLayoutProps) {
       : appearance.backgroundStyle === "pattern"
       ? "bg-gray-50 dark:bg-slate-950 [background-image:radial-gradient(circle,_rgba(148,163,184,0.2)_1px,_transparent_1px)] dark:[background-image:radial-gradient(circle,_rgba(100,116,139,0.28)_1px,_transparent_1px)] [background-size:18px_18px]"
       : "bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950";
+  const isDarkModeActive =
+    typeof document !== "undefined" &&
+    document.documentElement.classList.contains("dark");
   const gradientBackgroundStyle =
-    appearance.backgroundStyle === "gradient"
+    appearance.backgroundStyle === "gradient" && !isDarkModeActive
       ? { backgroundImage: accentBackgroundMap[appearance.accentColor] || accentBackgroundMap.pink }
       : undefined;
 
