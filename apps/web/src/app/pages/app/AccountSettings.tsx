@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { formatDistanceToNow } from "date-fns";
+import Cropper, { type Area } from "react-easy-crop";
 import { 
   User,
   Mail,
@@ -83,6 +84,56 @@ const formatTimezoneOptionLabel = (timezone: string) => {
   }
 };
 
+const AVATAR_EXPORT_WIDTH = 1200;
+const AVATAR_EXPORT_HEIGHT = 900;
+type CropArea = { x: number; y: number; width: number; height: number };
+
+const loadImage = (src: string) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+
+const getCroppedAvatarBlob = async (imageSrc: string, pixelCrop: Area): Promise<Blob> => {
+  const image = await loadImage(imageSrc);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas not available");
+  canvas.width = AVATAR_EXPORT_WIDTH;
+  canvas.height = AVATAR_EXPORT_HEIGHT;
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("Could not export cropped image"));
+    }, "image/jpeg", 0.92);
+  });
+};
+
+const toCropArea = (value: unknown): CropArea | null => {
+  if (!value || typeof value !== "object") return null;
+  const maybe = value as Partial<CropArea>;
+  const { x, y, width, height } = maybe;
+  if ([x, y, width, height].every((n) => typeof n === "number" && Number.isFinite(n))) {
+    return { x: x as number, y: y as number, width: width as number, height: height as number };
+  }
+  return null;
+};
+
 const PasswordInput = ({ 
   value, 
   onChange, 
@@ -144,6 +195,16 @@ export function AccountSettings() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [avatarEditorOpen, setAvatarEditorOpen] = useState(false);
+  const [avatarEditorImageUrl, setAvatarEditorImageUrl] = useState<string | null>(null);
+  const [avatarCrop, setAvatarCrop] = useState({ x: 0, y: 0 });
+  const [avatarZoom, setAvatarZoom] = useState(1);
+  const [avatarInitialCropArea, setAvatarInitialCropArea] = useState<CropArea | null>(null);
+  const [avatarCroppedAreaPercentages, setAvatarCroppedAreaPercentages] = useState<CropArea | null>(null);
+  const [avatarCroppedAreaPixels, setAvatarCroppedAreaPixels] = useState<Area | null>(null);
+  const [avatarSourceSize, setAvatarSourceSize] = useState<{ width: number; height: number } | null>(null);
+  const [avatarOriginalUrl, setAvatarOriginalUrl] = useState<string>("");
+  const [privacySettings, setPrivacySettings] = useState<Record<string, unknown>>({});
   const [timezoneOpen, setTimezoneOpen] = useState(false);
   const availableTimezones = useMemo<string[]>(() => {
     try {
@@ -488,6 +549,12 @@ export function AccountSettings() {
           bio: profileBio || legacyBioFromMood,
           avatar_url: data.avatar_url || ""
         });
+        const nextPrivacy =
+          data.privacy_settings && typeof data.privacy_settings === "object"
+            ? (data.privacy_settings as Record<string, unknown>)
+            : {};
+        setPrivacySettings(nextPrivacy);
+        setAvatarOriginalUrl(typeof nextPrivacy.avatarOriginalUrl === "string" ? nextPrivacy.avatarOriginalUrl : "");
       } catch (error) {
         console.error("Failed to fetch profile:", error);
         toast.error("Failed to load profile data");
@@ -499,33 +566,99 @@ export function AccountSettings() {
     fetchProfile();
   }, [user]);
 
+const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | null = null) => {
+    const img = new Image();
+    img.onload = () => {
+      setAvatarSourceSize({ width: img.naturalWidth, height: img.naturalHeight });
+      setAvatarEditorImageUrl(imageUrl);
+      setAvatarCrop({ x: 0, y: 0 });
+      setAvatarZoom(1);
+      setAvatarInitialCropArea(initialCropArea);
+      setAvatarCroppedAreaPercentages(initialCropArea);
+      setAvatarCroppedAreaPixels(null);
+      setAvatarEditorOpen(true);
+    };
+    img.src = imageUrl;
+  };
+
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
-      if (!event.target.files || event.target.files.length === 0) {
-        return;
-      }
-      setIsUploading(true);
+      if (!event.target.files || event.target.files.length === 0) return;
       const file = event.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user?.id}-${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const imageUrl = typeof reader.result === "string" ? reader.result : null;
+        if (!imageUrl) return;
+        openAvatarEditorFromUrl(imageUrl, null);
+      };
+      reader.readAsDataURL(file);
+      event.target.value = "";
+    } catch (error) {
+      console.error('Error preparing avatar:', error);
+      toast.error('Error preparing avatar');
+    }
+  };
 
+  const handleOpenExistingAvatarEditor = async () => {
+    const sourceForEdit = avatarOriginalUrl || profileData.avatar_url;
+    const savedCropArea = toCropArea(privacySettings.avatarCropAreaPercentages);
+    if (!sourceForEdit) {
+      fileInputRef.current?.click();
+      return;
+    }
+    try {
+      let editableUrl = sourceForEdit;
+      if (!editableUrl.startsWith("data:")) {
+        const resp = await fetch(editableUrl);
+        const blob = await resp.blob();
+        editableUrl = await new Promise<string>((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(typeof fr.result === "string" ? fr.result : "");
+          fr.onerror = () => reject(new Error("Could not load current image"));
+          fr.readAsDataURL(blob);
+        });
+      }
+      openAvatarEditorFromUrl(editableUrl, savedCropArea);
+    } catch (error) {
+      console.error('Error opening avatar editor:', error);
+      toast.error('Could not open current photo for editing');
+    }
+  };
+
+  const handleAvatarSave = async () => {
+    if (!avatarEditorImageUrl || !avatarCroppedAreaPixels || !user) return;
+    setIsUploading(true);
+    try {
+      const uploadBlob = await getCroppedAvatarBlob(avatarEditorImageUrl, avatarCroppedAreaPixels);
+      const originalBlob = await fetch(avatarEditorImageUrl).then((r) => r.blob());
+
+      const filePath = `${user.id}/${Math.random()}.jpg`;
+      const originalPath = `${user.id}/original-${Math.random()}.jpg`;
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, file);
+        .upload(filePath, uploadBlob, { contentType: "image/jpeg", upsert: true });
 
-      if (uploadError) {
-        throw uploadError;
-      }
+      if (uploadError) throw uploadError;
+      const { error: originalUploadError } = await supabase.storage
+        .from('avatars')
+        .upload(originalPath, originalBlob, { contentType: originalBlob.type || "image/jpeg", upsert: true });
+      if (originalUploadError) throw originalUploadError;
 
       const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
       const avatar_url = data.publicUrl;
+      const { data: originalData } = supabase.storage.from("avatars").getPublicUrl(originalPath);
+      const originalUrl = originalData.publicUrl;
+      const nextPrivacy = {
+        ...privacySettings,
+        avatarOriginalUrl: originalUrl,
+        avatarCropAreaPercentages: avatarCroppedAreaPercentages || toCropArea(privacySettings.avatarCropAreaPercentages) || undefined,
+      };
 
       setProfileData(prev => ({ ...prev, avatar_url }));
-      
-      // Auto-save the new avatar URL
-      await api.updateProfile({ avatar_url });
-      
+      setPrivacySettings(nextPrivacy);
+      setAvatarOriginalUrl(originalUrl);
+      await api.updateProfile({ avatar_url, privacy_settings: nextPrivacy });
+      setAvatarEditorOpen(false);
       toast.success("Profile picture updated");
     } catch (error) {
       console.error('Error uploading avatar:', error);
@@ -673,7 +806,7 @@ export function AccountSettings() {
                 <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={handleOpenExistingAvatarEditor}
                   className="absolute bottom-0 right-0 p-2 bg-white dark:bg-slate-800 rounded-full shadow-lg border-2 border-gray-100 dark:border-slate-700 cursor-pointer"
                 >
                   <Camera className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -699,7 +832,7 @@ export function AccountSettings() {
                     className="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {isUploading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {isUploading ? 'Uploading...' : 'Upload Photo'}
+                    {isUploading ? 'Saving...' : 'Upload Photo'}
                   </motion.button>
                   <motion.button
                     whileHover={{ scale: 1.02 }}
@@ -715,6 +848,92 @@ export function AccountSettings() {
               </div>
             </div>
           </motion.div>
+
+          {avatarEditorOpen && (
+            <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+              <div className="w-full max-w-2xl rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Adjust profile photo</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Crop and zoom your image before saving.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAvatarEditorOpen(false)}
+                    disabled={isUploading}
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-60"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="relative mx-auto w-full max-w-[22rem] rounded-2xl border border-gray-200 dark:border-slate-700 p-2 bg-gray-50 dark:bg-slate-800">
+                    <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-gray-200 dark:bg-slate-700">
+                      {avatarEditorImageUrl && (
+                        <Cropper
+                          key={`${avatarEditorImageUrl || "none"}-${avatarInitialCropArea ? JSON.stringify(avatarInitialCropArea) : "no-initial-crop"}`}
+                          image={avatarEditorImageUrl}
+                          crop={avatarCrop}
+                          zoom={avatarZoom}
+                          aspect={4 / 3}
+                          initialCroppedAreaPercentages={avatarInitialCropArea || undefined}
+                          onCropChange={setAvatarCrop}
+                          onZoomChange={setAvatarZoom}
+                          onCropComplete={(croppedAreaPercentages, croppedAreaPixels) => {
+                            setAvatarCroppedAreaPercentages(croppedAreaPercentages as CropArea);
+                            setAvatarCroppedAreaPixels(croppedAreaPixels);
+                          }}
+                          showGrid
+                        />
+                      )}
+                    </div>
+                    <span className="absolute bottom-4 right-4 rounded-lg bg-black/65 px-2 py-1 text-[10px] font-semibold text-white">
+                      {AVATAR_EXPORT_WIDTH} x {AVATAR_EXPORT_HEIGHT}px
+                    </span>
+                  </div>
+                  {avatarSourceSize && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Original image: {avatarSourceSize.width} x {avatarSourceSize.height}px
+                    </p>
+                  )}
+
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400">
+                    Zoom ({avatarZoom.toFixed(1)}x)
+                    <input
+                      type="range"
+                      min={1}
+                      max={3}
+                      step={0.1}
+                      value={avatarZoom}
+                      onChange={(e) => setAvatarZoom(Number(e.target.value))}
+                      className="mt-1 w-full"
+                    />
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Drag the image to adjust crop area.</p>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setAvatarEditorOpen(false)}
+                      disabled={isUploading}
+                      className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAvatarSave}
+                      disabled={isUploading}
+                      className="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold disabled:opacity-60"
+                    >
+                      {isUploading ? "Saving..." : "Save photo"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Personal Information */}
           <motion.div

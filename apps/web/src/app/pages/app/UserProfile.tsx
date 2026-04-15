@@ -2,6 +2,7 @@ import { AppLayout } from "../../components/AppLayout";
 import { motion } from "motion/react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
+import Cropper, { type Area } from "react-easy-crop";
 import {
   User,
   Mail,
@@ -88,6 +89,51 @@ const GRAD_SOFT = "linear-gradient(135deg, rgba(255,122,24,0.12) 0%, rgba(224,64
 const GRAD2 = "linear-gradient(135deg, #6366f1 0%, #a855f7 100%)";
 const AVATAR_EXPORT_WIDTH = 1200;
 const AVATAR_EXPORT_HEIGHT = 900;
+type CropArea = { x: number; y: number; width: number; height: number };
+
+const loadImage = (src: string) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+
+const getCroppedAvatarBlob = async (imageSrc: string, pixelCrop: Area): Promise<Blob> => {
+  const image = await loadImage(imageSrc);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas not available");
+  canvas.width = AVATAR_EXPORT_WIDTH;
+  canvas.height = AVATAR_EXPORT_HEIGHT;
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("Could not export cropped image"));
+    }, "image/jpeg", 0.92);
+  });
+};
+
+const toCropArea = (value: unknown): CropArea | null => {
+  if (!value || typeof value !== "object") return null;
+  const maybe = value as Partial<CropArea>;
+  const { x, y, width, height } = maybe;
+  if ([x, y, width, height].every((n) => typeof n === "number" && Number.isFinite(n))) {
+    return { x: x as number, y: y as number, width: width as number, height: height as number };
+  }
+  return null;
+};
 const PILL =
   "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold";
 const CARD_SHELL =
@@ -253,11 +299,12 @@ export function UserProfile() {
   const [resending, setResending] = useState(false);
   const [avatarEditorOpen, setAvatarEditorOpen] = useState(false);
   const [avatarEditorImageUrl, setAvatarEditorImageUrl] = useState<string | null>(null);
+  const [avatarCrop, setAvatarCrop] = useState({ x: 0, y: 0 });
   const [avatarZoom, setAvatarZoom] = useState(1);
-  const [avatarOffsetX, setAvatarOffsetX] = useState(0);
-  const [avatarOffsetY, setAvatarOffsetY] = useState(0);
+  const [avatarInitialCropArea, setAvatarInitialCropArea] = useState<CropArea | null>(null);
+  const [avatarCroppedAreaPercentages, setAvatarCroppedAreaPercentages] = useState<CropArea | null>(null);
+  const [avatarCroppedAreaPixels, setAvatarCroppedAreaPixels] = useState<Area | null>(null);
   const [avatarSourceSize, setAvatarSourceSize] = useState<{ width: number; height: number } | null>(null);
-  const [avatarPreviewCanvas, setAvatarPreviewCanvas] = useState<HTMLCanvasElement | null>(null);
   const [timezoneOpen, setTimezoneOpen] = useState(false);
   const availableTimezones = useMemo<string[]>(() => {
     try {
@@ -414,6 +461,11 @@ export function UserProfile() {
 
   const communityAvatarPublic =
     (rawProfile?.privacy_settings as { showAvatarInCommunity?: boolean } | undefined)?.showAvatarInCommunity !== false;
+  const avatarOriginalUrl =
+    (rawProfile?.privacy_settings as { avatarOriginalUrl?: string } | undefined)?.avatarOriginalUrl || null;
+  const avatarSavedCropArea = toCropArea(
+    (rawProfile?.privacy_settings as { avatarCropAreaPercentages?: unknown } | undefined)?.avatarCropAreaPercentages
+  );
 
   const handleCommunityAvatarToggle = async (nextPublic: boolean) => {
     const saveId = ++avatarPrivacySaveRef.current;
@@ -444,9 +496,11 @@ export function UserProfile() {
       img.onload = () => {
         setAvatarSourceSize({ width: img.naturalWidth, height: img.naturalHeight });
         setAvatarEditorImageUrl(imageUrl);
+        setAvatarCrop({ x: 0, y: 0 });
         setAvatarZoom(1);
-        setAvatarOffsetX(0);
-        setAvatarOffsetY(0);
+        setAvatarInitialCropArea(null);
+        setAvatarCroppedAreaPercentages(null);
+        setAvatarCroppedAreaPixels(null);
         setAvatarEditorOpen(true);
       };
       img.src = imageUrl;
@@ -457,15 +511,16 @@ export function UserProfile() {
   };
 
   const handleOpenExistingAvatarEditor = async () => {
-    if (!profileImage) {
+    const sourceForEdit = avatarOriginalUrl || profileImage;
+    if (!sourceForEdit) {
       document.getElementById("profile-image-upload")?.click();
       return;
     }
     try {
-      let editableUrl = profileImage;
+      let editableUrl = sourceForEdit;
       // Convert remote image to data URL so canvas export remains reliable.
-      if (!profileImage.startsWith("data:")) {
-        const resp = await fetch(profileImage);
+      if (!sourceForEdit.startsWith("data:")) {
+        const resp = await fetch(sourceForEdit);
         const blob = await resp.blob();
         editableUrl = await new Promise<string>((resolve, reject) => {
           const fr = new FileReader();
@@ -478,9 +533,11 @@ export function UserProfile() {
       img.onload = () => {
         setAvatarSourceSize({ width: img.naturalWidth, height: img.naturalHeight });
         setAvatarEditorImageUrl(editableUrl);
+        setAvatarCrop({ x: 0, y: 0 });
         setAvatarZoom(1);
-        setAvatarOffsetX(0);
-        setAvatarOffsetY(0);
+        setAvatarInitialCropArea(avatarSavedCropArea);
+        setAvatarCroppedAreaPercentages(avatarSavedCropArea);
+        setAvatarCroppedAreaPixels(null);
         setAvatarEditorOpen(true);
       };
       img.src = editableUrl;
@@ -489,50 +546,33 @@ export function UserProfile() {
     }
   };
 
-  useEffect(() => {
-    if (!avatarEditorOpen || !avatarEditorImageUrl || !avatarSourceSize || !avatarPreviewCanvas) return;
-    const canvas = avatarPreviewCanvas;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const img = new Image();
-    img.onload = () => {
-      const { width, height } = avatarSourceSize;
-      const targetAspect = canvas.width / canvas.height;
-      const sourceAspect = width / height;
-      const baseCropWidth = sourceAspect >= targetAspect ? height * targetAspect : width;
-      const baseCropHeight = sourceAspect >= targetAspect ? height : width / targetAspect;
-      const cropWidth = baseCropWidth / avatarZoom;
-      const cropHeight = baseCropHeight / avatarZoom;
-      const maxShiftX = Math.max(0, (width - cropWidth) / 2);
-      const maxShiftY = Math.max(0, (height - cropHeight) / 2);
-      const centerX = width / 2 + avatarOffsetX * maxShiftX;
-      const centerY = height / 2 + avatarOffsetY * maxShiftY;
-      const sx = Math.min(Math.max(0, centerX - cropWidth / 2), width - cropWidth);
-      const sy = Math.min(Math.max(0, centerY - cropHeight / 2), height - cropHeight);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, sx, sy, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
-    };
-    img.src = avatarEditorImageUrl;
-  }, [avatarEditorOpen, avatarEditorImageUrl, avatarSourceSize, avatarZoom, avatarOffsetX, avatarOffsetY, avatarPreviewCanvas]);
-
   const handleAvatarSave = async () => {
-    if (!avatarPreviewCanvas || !user) return;
+    if (!avatarEditorImageUrl || !avatarCroppedAreaPixels || !user) return;
     setIsUploading(true);
     try {
-      const uploadBlob = await new Promise<Blob>((resolve, reject) => {
-        avatarPreviewCanvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error("Could not prepare image"));
-        }, "image/jpeg", 0.92);
-      });
+      const uploadBlob = await getCroppedAvatarBlob(avatarEditorImageUrl, avatarCroppedAreaPixels);
+      const originalBlob = await fetch(avatarEditorImageUrl).then((r) => r.blob());
       const filePath = `${user.id}/${Math.random()}.jpg`;
+      const originalPath = `${user.id}/original-${Math.random()}.jpg`;
       const { error: uploadError } = await supabase.storage
         .from("avatars")
         .upload(filePath, uploadBlob, { contentType: "image/jpeg", upsert: true });
       if (uploadError) throw uploadError;
+      const { error: originalUploadError } = await supabase.storage
+        .from("avatars")
+        .upload(originalPath, originalBlob, { contentType: originalBlob.type || "image/jpeg", upsert: true });
+      if (originalUploadError) throw originalUploadError;
       const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      const { data: { publicUrl: originalUrl } } = supabase.storage.from("avatars").getPublicUrl(originalPath);
       setProfileImage(publicUrl);
-      await api.updateProfile({ avatar_url: publicUrl });
+      const nextPrivacy = {
+        ...(rawProfile?.privacy_settings && typeof rawProfile.privacy_settings === "object" ? rawProfile.privacy_settings : {}),
+        avatarOriginalUrl: originalUrl,
+        avatarCropAreaPercentages: avatarCroppedAreaPercentages || avatarSavedCropArea || undefined,
+      };
+      const updated = await api.updateProfile({ avatar_url: publicUrl, privacy_settings: nextPrivacy });
+      if (updated && typeof updated === "object") setRawProfile(updated);
+      await refreshProfile();
       setAvatarEditorOpen(false);
       toast.success("Profile photo updated");
     } catch {
@@ -957,12 +997,25 @@ export function UserProfile() {
                   </DialogHeader>
                   <div className="space-y-4">
                     <div className="relative mx-auto w-full max-w-[22rem] rounded-2xl border border-gray-200 dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-900">
-                      <canvas
-                        ref={setAvatarPreviewCanvas}
-                        width={AVATAR_EXPORT_WIDTH}
-                        height={AVATAR_EXPORT_HEIGHT}
-                        className="w-full rounded-xl bg-gray-200 dark:bg-gray-800"
-                      />
+                      <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800">
+                        {avatarEditorImageUrl && (
+                          <Cropper
+                            key={`${avatarEditorImageUrl || "none"}-${avatarInitialCropArea ? JSON.stringify(avatarInitialCropArea) : "no-initial-crop"}`}
+                            image={avatarEditorImageUrl}
+                            crop={avatarCrop}
+                            zoom={avatarZoom}
+                            aspect={4 / 3}
+                            initialCroppedAreaPercentages={avatarInitialCropArea || undefined}
+                            onCropChange={setAvatarCrop}
+                            onZoomChange={setAvatarZoom}
+                            onCropComplete={(croppedAreaPercentages, croppedAreaPixels) => {
+                              setAvatarCroppedAreaPercentages(croppedAreaPercentages as CropArea);
+                              setAvatarCroppedAreaPixels(croppedAreaPixels);
+                            }}
+                            showGrid
+                          />
+                        )}
+                      </div>
                       <span className="absolute bottom-4 right-4 rounded-lg bg-black/65 px-2 py-1 text-[10px] font-semibold text-white">
                         {AVATAR_EXPORT_WIDTH} x {AVATAR_EXPORT_HEIGHT}px
                       </span>
@@ -985,30 +1038,7 @@ export function UserProfile() {
                           className="mt-1 w-full"
                         />
                       </label>
-                      <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400">
-                        Position left/right
-                        <input
-                          type="range"
-                          min={-1}
-                          max={1}
-                          step={0.01}
-                          value={avatarOffsetX}
-                          onChange={(e) => setAvatarOffsetX(Number(e.target.value))}
-                          className="mt-1 w-full"
-                        />
-                      </label>
-                      <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400">
-                        Position up/down
-                        <input
-                          type="range"
-                          min={-1}
-                          max={1}
-                          step={0.01}
-                          value={avatarOffsetY}
-                          onChange={(e) => setAvatarOffsetY(Number(e.target.value))}
-                          className="mt-1 w-full"
-                        />
-                      </label>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Drag the image to adjust crop area.</p>
                     </div>
                   </div>
                   <DialogFooter>
