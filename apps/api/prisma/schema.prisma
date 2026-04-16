@@ -862,6 +862,104 @@ model mood_entries {
   @@schema("public")
 }
 
+/// Personal goals created by users for growth tracking.
+model personal_goals {
+  id                      String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id                 String         @db.Uuid
+  goal_title              String
+  goal_category           String
+  goal_description        String
+  why_this_goal_matters   String
+  target_outcome          String
+  priority_level          String
+  status                  String         @default("not_started")
+  start_date              String
+  target_date             String?
+  progress_percentage     Int            @default(0)
+  check_in_frequency      String         @default("daily")
+  reminder_enabled        Boolean        @default(false)
+  reminder_time           String?
+  small_action_steps      String[]
+  emotion_tag             String?
+  support_type_needed     String?
+  notes                   String?
+  last_check_in_date      String?
+  streak_count            Int            @default(0)
+  ai_suggestions          String[]
+  partner_visibility      Boolean        @default(false)
+  partner_comment_enabled Boolean        @default(false)
+  completion_note         String?
+  created_at              DateTime       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at              DateTime       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  profiles                profiles       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  goal_check_ins          goal_check_ins[]
+
+  @@index([user_id])
+  @@index([user_id, created_at(sort: Desc)])
+  @@index([user_id, status])
+  @@schema("public")
+}
+
+model custom_achievements {
+  id                 String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id            String   @db.Uuid
+  title              String
+  description        String
+  icon               String
+  category           String
+  progress           Int      @default(0)
+  total              Int      @default(1)
+  unlocked           Boolean  @default(false)
+  points             Int      @default(0)
+  rarity             String   @default("common")
+  goal_type          String?
+  last_check_in_date String?
+  check_in_history   String[]
+  check_in_entries   Json?
+  goal_category      String?
+  why_it_matters     String?
+  target_outcome     String?
+  start_date         String?
+  target_date        String?
+  priority           String?
+  progress_status    String?
+  check_in_frequency String?
+  reminder_enabled   Boolean?
+  action_steps       String?
+  mood_tag           String?
+  support_type       String?
+  notes              String?
+  linked_goal_id     String?  @db.Uuid
+  /// When true, daily check-ins also write to `personal_goals` / `goal_check_ins`. When false, only this row is updated (personal achievement streaks).
+  sync_with_goals    Boolean  @default(true)
+  created_at         DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at         DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  profiles           profiles @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, created_at(sort: Desc)])
+  @@schema("public")
+}
+
+/// Daily/weekly check-ins attached to a personal goal.
+model goal_check_ins {
+  id               String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  goal_id          String         @db.Uuid
+  user_id          String         @db.Uuid
+  progress_percentage Int
+  mood             String?
+  reflection       String?
+  challenges_faced String?
+  wins             String?
+  notes            String?
+  created_at       DateTime       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  personal_goals   personal_goals @relation(fields: [goal_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  profiles         profiles       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([goal_id, created_at(sort: Desc)])
+  @@index([user_id, created_at(sort: Desc)])
+  @@schema("public")
+}
+
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model notifications {
   id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
@@ -1002,6 +1100,9 @@ model profiles {
   moderation_queue                                      moderation_queue[]
   mood_entries                                          mood_entries[]
   notifications                                         notifications[]
+  custom_achievements                                   custom_achievements[]
+  personal_goals                                        personal_goals[]
+  goal_check_ins                                        goal_check_ins[]
   nudges                                                nudges[]
   org_members                                           org_members[]
   users                                                 users                          @relation(fields: [id], references: [id], onDelete: NoAction, onUpdate: NoAction)

@@ -23,6 +23,8 @@ import { notificationRoutes } from './modules/notifications/notifications.routes
 import { notificationsService } from './modules/notifications/notifications.service';
 import { aiAvatarsRoutes } from './modules/ai-avatars/ai-avatars.routes';
 import { communityRoutes } from './modules/community/community.routes';
+import { goalsRoutes } from './modules/goals/goals.routes';
+import { customAchievementRoutes } from './modules/custom-achievements/custom-achievements.routes';
 import jwkToPem from 'jwk-to-pem';
 const jwtLib = require('jsonwebtoken');
 
@@ -246,6 +248,8 @@ app.register(emergencyContactRoutes, { prefix: '/api/emergency-contacts' });
 app.register(notificationRoutes, { prefix: '/api/notifications' });
 app.register(aiAvatarsRoutes, { prefix: '/api/ai-avatars' });
 app.register(communityRoutes, { prefix: '/api/community' });
+app.register(goalsRoutes, { prefix: '/api/goals' });
+app.register(customAchievementRoutes, { prefix: '/api/custom-achievements' });
 
 app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) => {
   // Zod / response validation errors often omit statusCode and would default to 500.

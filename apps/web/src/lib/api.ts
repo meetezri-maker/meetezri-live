@@ -899,6 +899,129 @@ export const api = {
   },
 
   // Habits API
+  goals: {
+    async list() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals`, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      return handleResponse(res, "Failed to fetch goals");
+    },
+
+    async getById(goalId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals/${encodeURIComponent(goalId)}`, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      return handleResponse(res, "Failed to fetch goal");
+    },
+
+    async create(data: Record<string, unknown>) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, "Failed to create goal");
+    },
+
+    async update(goalId: string, data: Record<string, unknown>) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals/${encodeURIComponent(goalId)}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, "Failed to update goal");
+    },
+
+    async updateStatus(goalId: string, status: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals/${encodeURIComponent(goalId)}/status`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ status }),
+      });
+      return handleResponse(res, "Failed to update goal status");
+    },
+
+    async delete(goalId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals/${encodeURIComponent(goalId)}`, {
+        method: "DELETE",
+        headers,
+      });
+      return handleResponseAllowEmpty(res, "Failed to delete goal");
+    },
+
+    async listCheckIns(goalId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals/${encodeURIComponent(goalId)}/check-ins`, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      return handleResponse(res, "Failed to fetch goal check-ins");
+    },
+
+    async addCheckIn(goalId: string, payload: Record<string, unknown>) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals/${encodeURIComponent(goalId)}/check-ins`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      return handleResponse(res, "Failed to create goal check-in");
+    },
+  },
+
+  customAchievements: {
+    async list() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/custom-achievements`, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      return handleResponse(res, "Failed to fetch custom achievements");
+    },
+
+    async create(data: Record<string, unknown>) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/custom-achievements`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, "Failed to create custom achievement");
+    },
+
+    async update(id: string, data: Record<string, unknown>) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/custom-achievements/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, "Failed to update custom achievement");
+    },
+
+    async delete(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/custom-achievements/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers,
+      });
+      return handleResponseAllowEmpty(res, "Failed to delete custom achievement");
+    },
+  },
+
+  // Habits API
   habits: {
     async getAll() {
       const headers = await getHeaders();

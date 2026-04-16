@@ -1,4 +1,3 @@
-
 import { createRoot } from "react-dom/client";
 import App from "./app/App.tsx";
 import "./styles/index.css";
@@ -8,7 +7,7 @@ if (!rootEl) {
   document.body.innerHTML =
     '<pre style="padding:16px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \\"Liberation Mono\\", \\"Courier New\\", monospace;">Fatal: #root element not found.</pre>';
 } else {
-  const showFatal = (title: string, err: unknown) => {
+  const showStartupFatal = (title: string, err: unknown) => {
     const details =
       err instanceof Error
         ? `${err.name}: ${err.message}\n${err.stack ?? ""}`
@@ -22,15 +21,19 @@ if (!rootEl) {
     `;
   };
 
-  window.addEventListener("error", (e) => showFatal("Runtime error", e.error ?? e.message));
-  window.addEventListener("unhandledrejection", (e) =>
-    showFatal("Unhandled promise rejection", (e as PromiseRejectionEvent).reason)
-  );
+  // Never replace `#root.innerHTML` while React is mounted: that tears down the real DOM
+  // without React knowing, and subsequent updates can throw `removeChild` NotFoundErrors.
+  window.addEventListener("error", (e) => {
+    console.error("Runtime error", e.error ?? e.message, e);
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    console.error("Unhandled promise rejection", (e as PromiseRejectionEvent).reason, e);
+  });
 
   try {
     createRoot(rootEl).render(<App />);
   } catch (err) {
-    showFatal("App crashed during startup", err);
+    showStartupFatal("App crashed during startup", err);
   }
 }
   

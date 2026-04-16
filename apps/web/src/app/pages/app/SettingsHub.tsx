@@ -1,4 +1,3 @@
-import { motion } from "motion/react";
 import { 
   User,
   Shield,
@@ -27,7 +26,8 @@ import {
   BarChart3,
   History,
   Wind,
-  CreditCard
+  CreditCard,
+  Target
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
@@ -36,6 +36,16 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { useNotifications } from "@/app/contexts/NotificationsContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/app/components/ui/alert-dialog";
 
 interface SettingSection {
   id: string;
@@ -49,7 +59,7 @@ interface SettingSection {
 
 export function SettingsHub() {
   const navigate = useNavigate();
-  const { profile, refreshProfile, user } = useAuth();
+  const { profile, refreshProfile, user, signOut } = useAuth();
   const { unreadCount } = useNotifications();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   
@@ -166,6 +176,12 @@ export function SettingsHub() {
     }
   };
 
+  const confirmLogout = async () => {
+    await signOut();
+    setShowLogoutModal(false);
+    navigate("/login");
+  };
+
   const settingSections: SettingSection[] = [
     {
       id: "account",
@@ -231,6 +247,14 @@ export function SettingsHub() {
       icon: Trophy,
       color: "from-yellow-500 to-amber-600",
       route: "/app/settings/achievements"
+    },
+    {
+      id: "goals",
+      title: "Personal Goals",
+      description: "Create, track, and review your personal goals",
+      icon: Target,
+      color: "from-purple-500 to-indigo-600",
+      route: "/app/settings/goals"
     },
     {
       id: "community",
@@ -323,11 +347,7 @@ export function SettingsHub() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8"
-          >
+          <div className="mb-8">
             <Link
               to="/app/dashboard"
               className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white mb-6 transition-colors"
@@ -337,41 +357,27 @@ export function SettingsHub() {
             </Link>
 
             <div className="flex items-center gap-4 mb-2">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.2 }}
-                className="p-4 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg"
-              >
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg transition-transform hover:scale-[1.02]">
                 <Zap className="w-8 h-8 text-white" />
-              </motion.div>
+              </div>
               <div>
                 <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
                 <p className="text-gray-600 dark:text-gray-400">Customize your Ezri experience</p>
               </div>
             </div>
-          </motion.div>
+          </div>
 
           {/* Quick Settings */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.18 }}
-            className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 mb-6"
-          >
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 mb-6">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Quick Settings</h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {quickSettings.map((setting, index) => {
+              {quickSettings.map((setting) => {
                 const Icon = setting.icon;
                 return (
-                  <motion.button
+                  <button
+                    type="button"
                     key={setting.label}
-                    initial={{ opacity: 0, scale: 0.98 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.15 }}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className={`p-4 rounded-xl border-2 transition-all ${
+                    className={`p-4 rounded-xl border-2 transition-all hover:scale-[1.03] active:scale-[0.97] ${
                       setting.enabled
                         ? "border-blue-500 bg-blue-50 dark:bg-blue-950"
                         : "border-gray-200 bg-gray-50 dark:bg-slate-800 dark:border-slate-700"
@@ -386,15 +392,15 @@ export function SettingsHub() {
                     }`}>
                       {setting.label}
                     </p>
-                  </motion.button>
+                  </button>
                 );
               })}
             </div>
-          </motion.div>
+          </div>
 
           {/* Main Settings Sections */}
           <div className="space-y-4">
-            {settingSections.map((section, index) => {
+            {settingSections.map((section) => {
               const Icon = section.icon;
               const sectionCard = (
                 <div className="flex items-start gap-4">
@@ -419,32 +425,20 @@ export function SettingsHub() {
               );
 
               return (
-                <motion.div
-                  key={section.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.16 }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
+                <div key={section.id}>
                   <Link
                     to={section.route || "/app/settings"}
-                    className="block bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all"
+                    className="block bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all hover:scale-[1.01] active:scale-[0.99]"
                   >
                     {sectionCard}
                   </Link>
-                </motion.div>
+                </div>
               );
             })}
           </div>
 
           {/* Safety & Support Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.18 }}
-            className="mt-8"
-          >
+          <div className="mt-8">
             <div className="flex items-center gap-3 mb-4">
               <div className="settings-hub-icon-chip p-3 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg">
                 <Shield className="w-6 h-6 text-white" />
@@ -456,20 +450,13 @@ export function SettingsHub() {
             </div>
 
             <div className="space-y-4">
-              {safetySections.map((section, index) => {
+              {safetySections.map((section) => {
                 const Icon = section.icon;
                 return (
-                  <motion.div
-                    key={section.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.16 }}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
+                  <div key={section.id}>
                 <Link
                   to={section.route}
-                  className="block bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all"
+                  className="block bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all hover:scale-[1.01] active:scale-[0.99]"
                 >
                       <div className="flex items-start gap-4">
                         <div className={`settings-hub-icon-chip p-3 rounded-xl bg-gradient-to-br ${section.color} shrink-0`}>
@@ -491,19 +478,14 @@ export function SettingsHub() {
                         <ChevronRight className="w-5 h-5 text-gray-400 shrink-0 mt-1" />
                       </div>
                     </Link>
-                  </motion.div>
+                  </div>
                 );
               })}
             </div>
-          </motion.div>
+          </div>
 
           {/* Additional Options */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.16 }}
-            className="mt-6 space-y-3"
-          >
+          <div className="mt-6 space-y-3">
             <Link
               to="/app/settings/help-support"
               className="block bg-white dark:bg-slate-900 rounded-xl p-4 shadow-md border border-gray-100 dark:border-slate-700 hover:shadow-lg transition-all"
@@ -524,15 +506,10 @@ export function SettingsHub() {
                 <span className="font-medium text-red-600">Log Out</span>
               </div>
             </button>
-          </motion.div>
+          </div>
 
           {/* App Info */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.16 }}
-            className="mt-8 text-center"
-          >
+          <div className="mt-8 text-center">
             <div className="flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400 text-sm mb-2">
               <Heart className="w-4 h-4" />
               <span>Made with care for your wellbeing</span>
@@ -540,52 +517,27 @@ export function SettingsHub() {
             <p className="text-xs text-gray-400 dark:text-gray-500">
               Ezri v1.0.0 • © 2024 • <Link to="/privacy" className="underline">Privacy</Link> • <Link to="/terms" className="underline">Terms</Link>
             </p>
-          </motion.div>
+          </div>
 
-          {/* Logout Modal */}
-          {showLogoutModal && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-              onClick={() => setShowLogoutModal(false)}
-            >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                onClick={(e) => e.stopPropagation()}
-                className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
-              >
-                <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-red-100 dark:bg-red-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <LogOut className="w-8 h-8 text-red-600" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Log Out?</h3>
-                  <p className="text-gray-600 dark:text-gray-400">Are you sure you want to log out of your account?</p>
-                </div>
-
-                <div className="flex gap-3">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowLogoutModal(false)}
-                    className="flex-1 px-4 py-3 rounded-xl bg-gray-200 dark:bg-slate-800 hover:bg-gray-300 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-100 font-medium"
-                  >
-                    Cancel
-                  </motion.button>
-
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => navigate("/login")}
-                    className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white font-medium"
-                  >
-                    Log Out
-                  </motion.button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
+          <AlertDialog open={showLogoutModal} onOpenChange={setShowLogoutModal}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Log out?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to log out of your account?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={confirmLogout}
+                  className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
+                >
+                  Log Out
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
     </AppLayout>

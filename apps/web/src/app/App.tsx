@@ -155,6 +155,8 @@ import { AppearanceSettings } from './pages/app/AppearanceSettings';
 import { ChangeAvatar } from './pages/app/ChangeAvatar';
 import { Achievements } from './pages/app/Achievements';
 import { NotificationHistory } from './pages/app/NotificationHistory';
+import { GoalsList } from './pages/app/GoalsList';
+import { GoalDetails } from './pages/app/GoalDetails';
 // import { Community } from './pages/app/Community';
 
 function NetworkWatcher() {
@@ -389,6 +391,8 @@ export default function App() {
             <Route path = "/app/settings/appearance" element={<AppearanceSettings />} />
             <Route path = "/app/settings/change-avatar" element={<ChangeAvatar />} />
             <Route path = "/app/settings/achievements" element={<Achievements />} />
+            <Route path = "/app/settings/goals" element={<GoalsList />} />
+            <Route path = "/app/settings/goals/:goalId" element={<GoalDetails />} />
             <Route path = "/app/settings/notification-history" element={<NotificationHistory />} />
             <Route path="/app/profile/:userId" element={<MemberProfileView />} />
             <Route path="/profile/:userId" element={<MemberProfileView />} />
