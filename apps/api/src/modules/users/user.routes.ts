@@ -14,6 +14,7 @@ import {
   resendVerificationHandler,
   getKnowledgeTwoFactorStatusHandler,
   setupKnowledgeTwoFactorHandler,
+  setupKnowledgeTwoFactorEmailHandler,
   verifyKnowledgeTwoFactorHandler,
   disableKnowledgeTwoFactorHandler,
   requestKnowledgeTwoFactorRecoveryHandler,
@@ -93,6 +94,14 @@ export async function userRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate],
     },
     setupKnowledgeTwoFactorHandler
+  );
+
+  fastify.post(
+    '/2fa/knowledge/setup-email',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    setupKnowledgeTwoFactorEmailHandler
   );
 
   fastify.post(

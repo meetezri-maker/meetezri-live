@@ -114,7 +114,7 @@ export function OnboardingWelcome() {
           </Link>
           
           <p className="text-center text-sm text-muted-foreground mt-4">
-            You can skip optional questions and come back later
+            You can skip optional questions and fill it later in the profile setup
           </p>
         </motion.div>
       </div>

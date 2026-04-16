@@ -510,6 +510,18 @@ export async function setupKnowledgeTwoFactorHandler(
   }
 }
 
+export async function setupKnowledgeTwoFactorEmailHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  try {
+    return await userService.setupKnowledgeTwoFactorEmail(user.sub);
+  } catch (error: any) {
+    return reply.code(500).send({ message: error?.message || 'Failed to setup knowledge 2FA email code' });
+  }
+}
+
 export async function verifyKnowledgeTwoFactorHandler(
   request: FastifyRequest<{ Body: { code: string } }>,
   reply: FastifyReply

@@ -31,7 +31,7 @@ export const SUBSCRIPTION_PLANS: Record<PlanTier, SubscriptionPlan> = {
     hardCap: true,
     color: 'gray',
     gradient: 'from-gray-500 to-gray-600',
-    allowanceDescription: '30 Minutes (0.5 Hour) Total Hard Cap',
+    allowanceDescription: '30 minutes total hard cap',
     features: [
       'Landing + How Ezri Works',
       'Signup / Login / Verification',
@@ -60,7 +60,7 @@ export const SUBSCRIPTION_PLANS: Record<PlanTier, SubscriptionPlan> = {
     payAsYouGoRate: 0.20, // $5 per 25 mins = $0.20/min
     color: 'blue',
     gradient: 'from-blue-500 to-blue-600',
-    allowanceDescription: '200 Minutes (3.33 Hours) Resets Monthly',
+    allowanceDescription: '200 minutes reset monthly',
     features: [
       'Full FaceTime with Ezri',
       'Daily mood check-in & history',
@@ -88,7 +88,7 @@ export const SUBSCRIPTION_PLANS: Record<PlanTier, SubscriptionPlan> = {
     popular: true,
     color: 'purple',
     gradient: 'from-purple-500 to-pink-500',
-    allowanceDescription: '400 Minutes (6.66 Hours) Resets Monthly',
+    allowanceDescription: '400 minutes reset monthly',
     features: [
       'Everything in Core',
       'Longer uninterrupted sessions',

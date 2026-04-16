@@ -14,7 +14,6 @@ import {
   Calendar,
   DollarSign,
   Package,
-  Crown,
   Shield,
   Download,
   RefreshCw,
@@ -22,8 +21,7 @@ import {
   Sparkles,
   ChevronRight,
   History,
-  ExternalLink,
-  ArrowLeft
+  ExternalLink
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
@@ -33,8 +31,9 @@ import { SUBSCRIPTION_PLANS } from "../../utils/subscriptionPlans";
 import type { PlanTier, UserSubscription, UsageRecord } from "../../utils/subscriptionPlans";
 
 export function Billing() {
-  const { session, profile, refreshProfile } = useAuth();
+  const { session, profile } = useAuth();
   const [searchParams] = useSearchParams();
+  const checkoutSuccess = searchParams.get('success') === 'true';
   const [isLoading, setIsLoading] = useState(true);
   const [billingHistory, setBillingHistory] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -61,7 +60,7 @@ export function Billing() {
       if (!session?.user) return;
       
       try {
-        if (searchParams.get('success') === 'true') {
+        if (checkoutSuccess) {
           try {
             await Promise.all([
               api.billing.syncSubscription(),
@@ -72,19 +71,9 @@ export function Billing() {
           }
         }
 
-        let latestProfile = profile;
-        try {
-           const refreshed = await refreshProfile();
-           if (refreshed) {
-             latestProfile = refreshed;
-           }
-        } catch (e) {
-          console.error("Error refreshing profile:", e);
-        }
-
         const [subData, sessionsData, historyData, invoiceData, creditsData] = await Promise.all([
           api.billing.getSubscription(),
-          api.sessions.list(),
+          api.sessions.list({ status: "completed", limit: 50 }),
           api.billing.getHistory(),
           api.billing.getInvoices(),
           api.getCredits()
@@ -97,16 +86,16 @@ export function Billing() {
         const now = new Date();
         
         // Canonical amounts from GET /users/credits (subscription + PAYG + lifetime used)
-        const subscriptionCredits = creditsData.subscription ?? latestProfile?.credits ?? 0;
-        const purchasedCredits = creditsData.purchased ?? latestProfile?.purchased_credits ?? 0;
+        const subscriptionCredits = creditsData.subscription ?? profile?.credits ?? 0;
+        const purchasedCredits = creditsData.purchased ?? profile?.purchased_credits ?? 0;
         const accountRemainingMinutes =
           creditsData.remaining_minutes ??
           subscriptionCredits + purchasedCredits;
         const accountTotalMinutes =
           creditsData.total_minutes ??
-          accountRemainingMinutes + (creditsData.used_minutes ?? latestProfile?.minutes_used ?? 0);
+          accountRemainingMinutes + (creditsData.used_minutes ?? profile?.minutes_used ?? 0);
         const accountUsedMinutes =
-          creditsData.used_minutes ?? latestProfile?.minutes_used ?? 0;
+          creditsData.used_minutes ?? profile?.minutes_used ?? 0;
 
         const creditsRemaining = subscriptionCredits;
         const payAsYouGoCredits = purchasedCredits;
@@ -156,9 +145,15 @@ export function Billing() {
     };
 
     fetchData();
-  }, [session, searchParams]);
+  }, [session?.user?.id, checkoutSuccess]);
 
   const currentPlan = SUBSCRIPTION_PLANS[userSubscription.planId];
+  const PlanIcon =
+    userSubscription.planId === 'trial'
+      ? Shield
+      : userSubscription.planId === 'pro'
+        ? Zap
+        : Package;
   const usagePercentage = userSubscription.creditsTotal > 0 
     ? ((userSubscription.creditsTotal - userSubscription.creditsRemaining) / userSubscription.creditsTotal) * 100
     : 0;
@@ -363,20 +358,117 @@ export function Billing() {
           )}
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <Card className="p-6 md:col-span-2 border-2 border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20">
-            <div className="flex items-start justify-between mb-4">
+        <Card className="p-6 mb-8">
+          <h3 className="text-xl font-bold mb-6">Compare All Plans</h3>
+          
+          <div className="grid md:grid-cols-3 gap-6">
+            {(Object.keys(SUBSCRIPTION_PLANS) as PlanTier[]).map((planId) => {
+              const plan = SUBSCRIPTION_PLANS[planId];
+              const isCurrent = planId === userSubscription.planId;
+              const ctaLabel =
+                planId === 'pro'
+                  ? 'Upgrade to Pro'
+                  : planId === 'core'
+                    ? 'Choose Core'
+                    : 'Start Free Trial';
+              
+              return (
+                <div
+                  key={planId}
+                  className={`p-4 rounded-xl border-2 transition-all ${
+                    isCurrent 
+                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' 
+                      : 'border-border bg-muted/30 hover:border-purple-300 dark:hover:border-purple-700'
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${plan.gradient} flex items-center justify-center mb-3`}>
+                    {(() => {
+                      const Icon = planId === 'trial' ? Shield : planId === 'pro' ? Zap : Package;
+                      return <Icon className="w-5 h-5 text-white" />;
+                    })()}
+                  </div>
+                  
+                  <h4 className="font-bold mb-1">{plan.displayName}</h4>
+                  <div className="flex items-baseline gap-1 mb-3">
+                    <span className="text-2xl font-bold">${plan.price}</span>
+                    <span className="text-sm text-muted-foreground">/mo</span>
+                  </div>
+                  
+                  <div className="mb-3 p-2 bg-background rounded-lg">
+                    <p className="text-sm font-medium">{plan.credits} minutes/mo</p>
+                    {plan.payAsYouGoRate && (
+                      <p className="text-xs text-muted-foreground">
+                        PAYG: ${plan.payAsYouGoRate}/min
+                      </p>
+                    )}
+                  </div>
+
+                  {plan.allowanceDescription && (
+                    <p className="text-xs text-muted-foreground mb-4 italic">
+                      {plan.allowanceDescription}
+                    </p>
+                  )}
+
+                  <div className="mb-4 rounded-xl border border-border bg-background/60 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Includes
+                      </p>
+                      <span className="text-[11px] text-muted-foreground">{plan.features.length} items</span>
+                    </div>
+                    <ul className="space-y-1.5 text-sm">
+                      {plan.features.map((f) => (
+                        <li key={f} className="flex items-start gap-2 text-slate-700 dark:text-slate-200">
+                          <Check className="w-4 h-4 mt-0.5 text-purple-600 dark:text-purple-300 shrink-0" />
+                          <span className="leading-5">{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {isCurrent ? (
+                    <div className="flex items-center justify-center gap-2 py-2 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-lg font-medium">
+                      <Check className="w-4 h-4" />
+                      Current Plan
+                    </div>
+                  ) : (
+                    <Button 
+                      className={
+                        planId === 'pro'
+                          ? 'w-full rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md hover:from-purple-700 hover:to-pink-700 hover:text-pink-100 hover:shadow-lg'
+                          : planId === 'core'
+                            ? 'w-full rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md hover:from-blue-700 hover:to-cyan-700 hover:text-white hover:shadow-lg'
+                            : 'w-full rounded-xl border-purple-300 text-purple-700 bg-purple-50 hover:bg-purple-100 hover:text-purple-900 dark:border-purple-700 dark:text-purple-300 dark:bg-purple-900/20 dark:hover:bg-purple-900/30 dark:hover:text-purple-100'
+                      }
+                      variant={planId === 'pro' ? 'default' : 'outline'}
+                      onClick={() => handleSubscribe(planId)}
+                      isLoading={processingAction === `subscribe_${planId}`}
+                      disabled={processingAction !== null}
+                    >
+                      {ctaLabel}
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
+          <Card className="p-5 h-full border border-purple-200/70 dark:border-purple-800/70 bg-white/95 dark:bg-slate-900/95 shadow-[0_20px_60px_-30px_rgba(168,85,247,0.45)] backdrop-blur">
+            <div className="flex items-start justify-between mb-3">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${currentPlan.gradient} flex items-center justify-center`}>
-                    <Package className="w-5 h-5 text-white" />
+                  <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${currentPlan.gradient} flex items-center justify-center shadow-lg shadow-purple-500/20`}>
+                    <PlanIcon className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Current Plan</p>
-                    <h3 className="text-2xl font-bold">{currentPlan.displayName}</h3>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-purple-500 dark:text-purple-300">Current Plan</p>
+                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{currentPlan.displayName}</h3>
                   </div>
                 </div>
-                <div className="flex items-baseline gap-2 mt-2">
+                <div className="flex items-baseline gap-2 mt-3">
                   <span className="text-3xl font-bold text-purple-700 dark:text-purple-300">
                     ${currentPlan.price}
                   </span>
@@ -408,7 +500,7 @@ export function Billing() {
             </div>
 
             {/* Renewal Info */}
-            <div className="flex items-center gap-2 p-3 bg-white/60 dark:bg-black/40 backdrop-blur-sm rounded-lg border border-purple-200 dark:border-purple-800">
+            <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-purple-50 to-white dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-purple-100 dark:border-slate-700">
               <Calendar className="w-4 h-4 text-purple-600 dark:text-purple-400" />
               <span className="text-sm">
                 <span className="font-medium">
@@ -421,16 +513,61 @@ export function Billing() {
                 </span>
               </span>
             </div>
+
+            {/* Plan Details */}
+            <div className="mt-4 grid gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-purple-100 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-purple-500 dark:text-purple-300">
+                    Monthly minutes
+                  </p>
+                  <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                    {currentPlan.credits} min
+                  </p>
+                  {currentPlan.allowanceDescription && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {currentPlan.allowanceDescription}
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-purple-100 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-purple-500 dark:text-purple-300">
+                    PAYG rate
+                  </p>
+                  <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                    {currentPlan.payAsYouGoRate != null ? `$${currentPlan.payAsYouGoRate}/min` : 'Not available'}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {currentPlan.payAsYouGoRate != null ? 'Buy extra minutes anytime' : 'Available on paid plans'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-purple-100 dark:border-slate-700 bg-gradient-to-br from-white to-purple-50/40 dark:from-slate-900/60 dark:to-slate-900 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-purple-500 dark:text-purple-300 mb-2">
+                  Includes
+                </p>
+                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                  {currentPlan.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-slate-700 dark:text-slate-200">
+                      <Check className="w-4 h-4 mt-0.5 text-purple-600 dark:text-purple-300 shrink-0" />
+                      <span className="leading-5">{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </Card>
 
           {/* Credits Remaining Card */}
-          <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-2 border-blue-200 dark:border-blue-800">
+          <Card className="p-5 h-full border border-blue-200/70 dark:border-blue-800/70 bg-white/95 dark:bg-slate-900/95 shadow-[0_20px_60px_-30px_rgba(59,130,246,0.4)] backdrop-blur">
             <div className="flex items-center gap-2 mb-2">
               <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <h3 className="font-semibold text-blue-900 dark:text-blue-100">Minutes Balance</h3>
             </div>
             {userSubscription.accountTotalMinutes != null && (
-              <p className="text-sm text-blue-800/80 dark:text-blue-200/80 mb-4">
+              <p className="text-sm text-blue-800/80 dark:text-blue-200/80 mb-4 leading-6">
                 Account:{" "}
                 <span className="font-semibold">{userSubscription.accountRemainingMinutes ?? 0} min</span>{" "}
                 remaining ·{" "}
@@ -441,8 +578,8 @@ export function Billing() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               {/* Plan Minutes */}
-              <div className="p-4 bg-white/60 dark:bg-black/20 rounded-xl border border-blue-100 dark:border-blue-900/30">
-                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Monthly Plan</p>
+              <div className="p-3 bg-gradient-to-br from-blue-50 to-white dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-blue-100 dark:border-slate-700 shadow-sm">
+                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-[0.18em] mb-2">Monthly Plan</p>
                 <div className="flex items-baseline gap-2 mb-2">
                   <span className="text-3xl font-bold text-blue-900 dark:text-blue-100">
                     {userSubscription.creditsRemaining}
@@ -452,7 +589,7 @@ export function Billing() {
                   </span>
                 </div>
                 {/* Progress Bar */}
-                <div className="w-full h-2 bg-blue-100 dark:bg-blue-900/50 rounded-full overflow-hidden mb-1">
+                <div className="w-full h-2.5 bg-blue-100 dark:bg-blue-900/50 rounded-full overflow-hidden mb-1.5">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${usagePercentage}%` }}
@@ -466,9 +603,9 @@ export function Billing() {
               </div>
 
               {/* PAYG Minutes */}
-              <div className="p-4 bg-green-50/50 dark:bg-green-900/10 rounded-xl border border-green-100 dark:border-green-900/30 group relative">
+              <div className="p-3 bg-gradient-to-br from-emerald-50 to-white dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-emerald-100 dark:border-slate-700 group relative shadow-sm">
                 <div className="flex justify-between items-start mb-1">
-                  <p className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wider">Pay-As-You-Go</p>
+                  <p className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-[0.18em]">Pay-As-You-Go</p>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -480,7 +617,7 @@ export function Billing() {
                     <RefreshCw className={`w-3 h-3 ${processingAction === 'sync_credits' ? 'animate-spin' : ''}`} />
                   </Button>
                 </div>
-                <div className="flex items-baseline gap-2 mb-2">
+                <div className="flex items-baseline gap-2 mb-3">
                   <span className="text-3xl font-bold text-green-900 dark:text-green-100">
                     {userSubscription.payAsYouGoCredits}
                   </span>
@@ -494,23 +631,61 @@ export function Billing() {
               </div>
             </div>
 
-            <Link 
-              to="/app/settings" 
-              className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-2 transition-colors text-sm"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Settings
-            </Link>
+            {/* Details */}
+            <div className="mt-1 rounded-2xl border border-blue-100 dark:border-slate-700 bg-gradient-to-br from-white to-blue-50/40 dark:from-slate-900/60 dark:to-slate-900 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300 mb-3">
+                Details
+              </p>
 
-            {(userSubscription.accountRemainingMinutes ??
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-100 dark:border-slate-700 p-3">
+                  <p className="text-xs text-muted-foreground">Used this cycle</p>
+                  <p className="text-lg font-bold text-slate-900 dark:text-white">
+                    {Math.max(0, (userSubscription.creditsTotal ?? 0) - (userSubscription.creditsRemaining ?? 0))} min
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-100 dark:border-slate-700 p-3">
+                  <p className="text-xs text-muted-foreground">Total remaining</p>
+                  <p className="text-lg font-bold text-slate-900 dark:text-white">
+                    {(userSubscription.accountRemainingMinutes ??
+                      userSubscription.creditsRemaining + userSubscription.payAsYouGoCredits) ?? 0} min
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-100 dark:border-slate-700 p-3">
+                  <p className="text-xs text-muted-foreground">Cycle start</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                    {userSubscription.billingCycle.startDate
+                      ? new Date(userSubscription.billingCycle.startDate).toLocaleDateString()
+                      : 'N/A'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-100 dark:border-slate-700 p-3">
+                  <p className="text-xs text-muted-foreground">Next reset</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                    {userSubscription.billingCycle.endDate
+                      ? new Date(userSubscription.billingCycle.endDate).toLocaleDateString()
+                      : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-start gap-2 text-xs text-blue-700/80 dark:text-blue-200/80">
+                <AlertCircle className="w-4 h-4 mt-0.5 text-blue-600 dark:text-blue-300 shrink-0" />
+                <p className="leading-5">
+                  Monthly minutes reset each billing cycle. Pay‑as‑you‑go minutes never expire.
+                </p>
+              </div>
+            </div>
+
+            {/* {(userSubscription.accountRemainingMinutes ??
               userSubscription.creditsRemaining + userSubscription.payAsYouGoCredits) <= 50 && (
-              <div className="flex items-start gap-2 p-3 mt-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <div className="flex items-start gap-2 p-4 mt-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl">
                 <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-amber-700 dark:text-amber-400">
                   Running low on minutes. Consider purchasing more or upgrading your plan.
                 </p>
               </div>
-            )}
+            )} */}
           </Card>
         </div>
 
@@ -730,83 +905,6 @@ export function Billing() {
           )}
         </Card>
 
-        {/* All Available Plans */}
-        <Card className="p-6">
-          <h3 className="text-xl font-bold mb-6">Compare All Plans</h3>
-          
-          <div className="grid md:grid-cols-3 gap-6">
-            {(Object.keys(SUBSCRIPTION_PLANS) as PlanTier[]).map((planId) => {
-              const plan = SUBSCRIPTION_PLANS[planId];
-              const isCurrent = planId === userSubscription.planId;
-              const ctaLabel =
-                planId === 'pro'
-                  ? 'Upgrade to Pro'
-                  : planId === 'core'
-                    ? 'Choose Core'
-                    : 'Start Free Trial';
-              
-              return (
-                <div
-                  key={planId}
-                  className={`p-4 rounded-xl border-2 transition-all ${
-                    isCurrent 
-                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' 
-                      : 'border-border bg-muted/30 hover:border-purple-300 dark:hover:border-purple-700'
-                  }`}
-                >
-                  <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${plan.gradient} flex items-center justify-center mb-3`}>
-                    {planId === 'trial' && <Shield className="w-5 h-5 text-white" />}
-                    {planId === 'core' && <Package className="w-5 h-5 text-white" />}
-                    {planId === 'pro' && <Zap className="w-5 h-5 text-white" />}
-                  </div>
-                  
-                  <h4 className="font-bold mb-1">{plan.displayName}</h4>
-                  <div className="flex items-baseline gap-1 mb-3">
-                    <span className="text-2xl font-bold">${plan.price}</span>
-                    <span className="text-sm text-muted-foreground">/mo</span>
-                  </div>
-                  
-                  <div className="mb-3 p-2 bg-background rounded-lg">
-                    <p className="text-sm font-medium">{plan.credits} minutes/mo</p>
-                    {plan.payAsYouGoRate && (
-                      <p className="text-xs text-muted-foreground">
-                        PAYG: ${plan.payAsYouGoRate}/min
-                      </p>
-                    )}
-                  </div>
-
-                  {plan.allowanceDescription && (
-                    <p className="text-xs text-muted-foreground mb-4 italic">
-                      {plan.allowanceDescription}
-                    </p>
-                  )}
-
-                  {isCurrent ? (
-                    <div className="flex items-center justify-center gap-2 py-2 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-lg font-medium">
-                      <Check className="w-4 h-4" />
-                      Current Plan
-                    </div>
-                  ) : (
-                    <Button 
-                      className={
-                        planId === 'pro'
-                          ? 'w-full rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md hover:from-purple-700 hover:to-pink-700 hover:text-pink-100 hover:shadow-lg'
-                          : 'w-full rounded-xl border-purple-300 text-purple-700 bg-purple-50 hover:bg-purple-100 hover:text-purple-900 dark:border-purple-700 dark:text-purple-300 dark:bg-purple-900/20 dark:hover:bg-purple-900/30 dark:hover:text-purple-100'
-                      }
-                      variant={planId === 'pro' ? 'default' : 'outline'}
-                      onClick={() => handleSubscribe(planId)}
-                      isLoading={processingAction === `subscribe_${planId}`}
-                      disabled={processingAction !== null}
-                    >
-                      {ctaLabel}
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                    </Button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Card>
       </div>
 
       {/* PAYG Purchase Modal */}

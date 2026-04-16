@@ -43,6 +43,7 @@ export function Login() {
   const [knowledgeCode, setKnowledgeCode] = useState("");
   const [emailAuthCode, setEmailAuthCode] = useState("");
   const [emailAuthCodeSent, setEmailAuthCodeSent] = useState(false);
+  const [knowledgeEmailEnabled, setKnowledgeEmailEnabled] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState("");
   const [recoveryCodeSent, setRecoveryCodeSent] = useState(false);
@@ -84,6 +85,7 @@ export function Login() {
 
   useEffect(() => {
     if (loginStep !== "knowledge") return;
+    if (!knowledgeEmailEnabled) return;
     let cancelled = false;
     const sendCode = async () => {
       try {
@@ -102,7 +104,7 @@ export function Login() {
     return () => {
       cancelled = true;
     };
-  }, [loginStep]);
+  }, [loginStep, knowledgeEmailEnabled]);
 
   const handleGoogleLogin = async () => {
     try {
@@ -201,11 +203,13 @@ export function Login() {
 
       const knowledgeStatus = (await api.getKnowledgeTwoFactorStatus()) as {
         enabled: boolean;
+        email_code_enabled?: boolean;
       };
       if (knowledgeStatus.enabled === true) {
         setKnowledgeCode("");
         setEmailAuthCode("");
         setEmailAuthCodeSent(false);
+        setKnowledgeEmailEnabled(knowledgeStatus.email_code_enabled === true);
         setLoginStep("knowledge");
         return;
       }
@@ -580,65 +584,69 @@ export function Login() {
                 </div>
                 <h3 className="text-lg font-bold">Two-Factor Authentication</h3>
                 <p className="text-sm text-muted-foreground">
-                  Enter your 2FA PIN or security answer.
+                  {knowledgeEmailEnabled
+                    ? "Enter your email authentication code."
+                    : "Enter your 2FA PIN or security answer."}
                 </p>
               </div>
 
-              <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
-                <p className="text-xs text-muted-foreground">
-                  A 6-digit authentication code is sent to your account email at login.
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={async () => {
-                    setIsLoading(true);
-                    try {
-                      await api.requestKnowledgeTwoFactorLoginCode();
-                      setEmailAuthCodeSent(true);
-                      toast.success("Authentication code sent to your email.");
-                    } catch (error: any) {
-                      toast.error(error.message || "Failed to send authentication code");
-                    } finally {
-                      setIsLoading(false);
-                    }
-                  }}
-                  disabled={isLoading}
-                >
-                  {emailAuthCodeSent ? "Resend authentication code" : "Send authentication code"}
-                </Button>
-                <div className="flex justify-center">
-                  <InputOTP
-                    maxLength={6}
-                    value={emailAuthCode}
-                    onChange={(value) => setEmailAuthCode(value)}
+              {knowledgeEmailEnabled && (
+                <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+                  <p className="text-xs text-muted-foreground">
+                    A 6-digit authentication code is sent to your account email at login.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={async () => {
+                      setIsLoading(true);
+                      try {
+                        await api.requestKnowledgeTwoFactorLoginCode();
+                        setEmailAuthCodeSent(true);
+                        toast.success("Authentication code sent to your email.");
+                      } catch (error: any) {
+                        toast.error(error.message || "Failed to send authentication code");
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    disabled={isLoading}
                   >
-                    <InputOTPGroup>
-                      <InputOTPSlot index={0} />
-                      <InputOTPSlot index={1} />
-                      <InputOTPSlot index={2} />
-                      <InputOTPSlot index={3} />
-                      <InputOTPSlot index={4} />
-                      <InputOTPSlot index={5} />
-                    </InputOTPGroup>
-                  </InputOTP>
+                    {emailAuthCodeSent ? "Resend authentication code" : "Send authentication code"}
+                  </Button>
+                  <div className="flex justify-center">
+                    <InputOTP
+                      maxLength={6}
+                      value={emailAuthCode}
+                      onChange={(value) => setEmailAuthCode(value)}
+                    >
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} />
+                        <InputOTPSlot index={1} />
+                        <InputOTPSlot index={2} />
+                        <InputOTPSlot index={3} />
+                        <InputOTPSlot index={4} />
+                        <InputOTPSlot index={5} />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+                  <Button
+                    type="button"
+                    className="w-full"
+                    onClick={handleVerifyEmailAuthCode}
+                    disabled={isLoading || emailAuthCode.trim().length !== 6}
+                  >
+                    Verify authentication code
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  className="w-full"
-                  onClick={handleVerifyEmailAuthCode}
-                  disabled={isLoading || emailAuthCode.trim().length !== 6}
-                >
-                  Verify authentication code
-                </Button>
-              </div>
+              )}
 
               <Input
                 type="password"
                 value={knowledgeCode}
                 onChange={(e) => setKnowledgeCode(e.target.value)}
-                placeholder="Enter PIN or answer"
+                placeholder={knowledgeEmailEnabled ? "PIN/answer not required" : "Enter PIN or answer"}
                 className="bg-input-background"
               />
 
@@ -696,7 +704,7 @@ export function Login() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={isLoading || !knowledgeCode.trim()}
+                disabled={isLoading || knowledgeEmailEnabled || !knowledgeCode.trim()}
               >
                 {isLoading ? (
                   <>

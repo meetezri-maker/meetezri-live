@@ -224,7 +224,7 @@ async function sendScheduledSessionEmails(userId: string, session: any) {
   }
 }
 
-export async function getSessions(userId: string, status?: string) {
+export async function getSessions(userId: string, status?: string, limit?: number) {
   return prisma.app_sessions.findMany({
     where: {
       user_id: userId,
@@ -238,6 +238,7 @@ export async function getSessions(userId: string, status?: string) {
     orderBy: {
       created_at: 'desc',
     },
+    ...(typeof limit === 'number' ? { take: limit } : {}),
   });
 }
 

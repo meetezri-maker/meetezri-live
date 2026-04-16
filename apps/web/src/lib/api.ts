@@ -316,6 +316,16 @@ export const api = {
     return handleResponse(res, 'Failed to setup knowledge 2FA');
   },
 
+  async setupKnowledgeTwoFactorEmail() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/setup-email`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    return handleResponse(res, 'Failed to setup email authentication code 2FA');
+  },
+
   async verifyKnowledgeTwoFactor(code: string) {
     const headers = await getHeaders();
     const res = await fetch(`${API_URL}/users/2fa/knowledge/verify`, {
@@ -984,9 +994,9 @@ export const api = {
       return handleResponse(res, 'Failed to schedule session');
     },
 
-    async list(params?: { status?: string }) {
+    async list(params?: { status?: string; limit?: number }) {
       const headers = await getHeaders();
-      const query = params ? '?' + new URLSearchParams(params).toString() : '';
+      const query = params ? '?' + new URLSearchParams(params as any).toString() : '';
       const res = await fetch(`${API_URL}/sessions${query}`, {
         method: 'GET',
         headers,

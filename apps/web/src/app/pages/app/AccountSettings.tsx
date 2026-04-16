@@ -33,6 +33,7 @@ import {
   profileAgeStorageToDateInput,
 } from "@/lib/profileAge";
 import { PhoneInput } from "@/app/components/ui/phone-input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/app/components/ui/input-otp";
 import { normalizeStoredPhoneForInput } from "@/lib/normalizeStoredPhone";
 import {
   Command,
@@ -189,8 +190,8 @@ const PasswordInput = ({
 
 export function AccountSettings() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const { user, profile: authProfile } = useAuth();
+  const [loading, setLoading] = useState(() => !authProfile);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   
@@ -253,15 +254,27 @@ export function AccountSettings() {
   const [mfaFactors, setMfaFactors] = useState<any[]>([]);
   const [showMfaModal, setShowMfaModal] = useState(false);
   const [mfaStep, setMfaStep] = useState<'method' | 'knowledgeSetup' | 'enroll' | 'verify'>('method');
-  const [mfaMethod, setMfaMethod] = useState<'authenticator' | 'knowledge'>('authenticator');
+  const [mfaMethod, setMfaMethod] = useState<'authenticator' | 'knowledge' | 'knowledge_email'>('authenticator');
   const [mfaData, setMfaData] = useState<{ id: string; qr_code: string; secret: string } | null>(null);
   const [mfaCode, setMfaCode] = useState('');
   const [mfaLoading, setMfaLoading] = useState(false);
   const [showDisableAuthenticatorModal, setShowDisableAuthenticatorModal] = useState(false);
   const [disableAuthenticatorCode, setDisableAuthenticatorCode] = useState('');
-  const [knowledge2fa, setKnowledge2fa] = useState<{ enabled: boolean; question: string | null }>({
+  const [showDisableKnowledgeModal, setShowDisableKnowledgeModal] = useState(false);
+  const [disableKnowledgeCode, setDisableKnowledgeCode] = useState('');
+  const [disableKnowledgeUseEmail, setDisableKnowledgeUseEmail] = useState(false);
+  const [disableKnowledgeEmailCode, setDisableKnowledgeEmailCode] = useState('');
+  const [disableKnowledgeEmailCodeSent, setDisableKnowledgeEmailCodeSent] = useState(false);
+  const [disableKnowledgeUsePin, setDisableKnowledgeUsePin] = useState(true);
+  const [disableKnowledgeEmailOtpKey, setDisableKnowledgeEmailOtpKey] = useState(0);
+  const [knowledge2fa, setKnowledge2fa] = useState<{
+    enabled: boolean;
+    question: string | null;
+    emailCodeEnabled: boolean;
+  }>({
     enabled: false,
     question: null,
+    emailCodeEnabled: false,
   });
   const [knowledgeSetup, setKnowledgeSetup] = useState({
     pin: '',
@@ -289,10 +302,12 @@ export function AccountSettings() {
       const knowledge = (await api.getKnowledgeTwoFactorStatus()) as {
         enabled: boolean;
         question: string | null;
+        email_code_enabled?: boolean;
       };
       setKnowledge2fa({
         enabled: knowledge.enabled === true,
         question: knowledge.question || null,
+        emailCodeEnabled: knowledge.email_code_enabled === true,
       });
     } catch (error) {
       console.error('Error fetching MFA status:', error);
@@ -357,8 +372,8 @@ export function AccountSettings() {
 
   const handleSetupKnowledgeMfa = async () => {
     try {
-      if (!/^\d{4,10}$/.test(knowledgeSetup.pin)) {
-        toast.error('PIN must be 4 to 10 digits');
+      if (!/^\d{4}$/.test(knowledgeSetup.pin)) {
+        toast.error('PIN must be exactly 4 digits');
         return;
       }
       if (knowledgeSetup.securityQuestion.trim().length < 6) {
@@ -370,11 +385,19 @@ export function AccountSettings() {
         return;
       }
       setMfaLoading(true);
-      await api.setupKnowledgeTwoFactor({
+      const setupResult = await api.setupKnowledgeTwoFactor({
         pin: knowledgeSetup.pin,
         securityQuestion: knowledgeSetup.securityQuestion,
         securityAnswer: knowledgeSetup.securityAnswer,
       });
+      // Update immediately to avoid any stale status caching delay.
+      if (setupResult?.enabled === true) {
+        setKnowledge2fa({
+          enabled: true,
+          question: setupResult?.question ?? knowledgeSetup.securityQuestion,
+          emailCodeEnabled: setupResult?.email_code_enabled === true,
+        });
+      }
       toast.success('Knowledge-based 2FA enabled');
       setShowMfaModal(false);
       setMfaStep('method');
@@ -382,6 +405,22 @@ export function AccountSettings() {
       await fetchMfaStatus();
     } catch (error: any) {
       toast.error(error.message || 'Failed to setup knowledge 2FA');
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
+  const handleSetupKnowledgeEmailMfa = async () => {
+    try {
+      setMfaLoading(true);
+      await api.setupKnowledgeTwoFactorEmail();
+      toast.success('Email authentication code 2FA enabled');
+      setShowMfaModal(false);
+      setMfaStep('method');
+      // Refresh flags from backend.
+      await fetchMfaStatus();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to setup email authentication code 2FA');
     } finally {
       setMfaLoading(false);
     }
@@ -419,20 +458,10 @@ export function AccountSettings() {
   const handleDisableMfa = async () => {
     try {
       setMfaLoading(true);
-      const { data, error } = await supabase.auth.mfa.listFactors();
-      if (error) throw error;
-      const totpFactors = getTotpFactorsFromMfaList(data);
-      setMfaFactors(totpFactors);
-
-      // Never disable while an authenticator factor exists without verification.
-      if (totpFactors.length > 0) {
-        setDisableAuthenticatorCode('');
-        setShowDisableAuthenticatorModal(true);
-        return;
-      }
-
+      // This handler is only used as a fallback. We always require verification
+      // via the disable modals when knowledge/authenticator 2FA is enabled.
       if (knowledge2fa.enabled) {
-        await api.disableKnowledgeTwoFactor();
+        throw new Error('Knowledge-based 2FA must be verified before disabling');
       }
       toast.success('Two-Factor Authentication disabled');
       fetchMfaStatus();
@@ -479,16 +508,90 @@ export function AccountSettings() {
       const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId });
       if (unenrollError) throw unenrollError;
 
-      if (knowledge2fa.enabled) {
-        await api.disableKnowledgeTwoFactor();
-      }
+      const knowledge = (await api.getKnowledgeTwoFactorStatus()) as {
+        enabled: boolean;
+        question: string | null;
+      };
 
-      toast.success('Two-Factor Authentication disabled');
       setShowDisableAuthenticatorModal(false);
       setDisableAuthenticatorCode('');
+
+      if (knowledge.enabled === true || knowledge.question) {
+      setKnowledge2fa({ enabled: true, question: knowledge.question, emailCodeEnabled: knowledge.email_code_enabled === true });
+        setDisableKnowledgeCode('');
+        setShowDisableKnowledgeModal(true);
+        return;
+      }
+
+      setKnowledge2fa({ enabled: false, question: null });
+      toast.success('Two-Factor Authentication disabled');
       fetchMfaStatus();
     } catch (error: any) {
       toast.error(error.message || 'Failed to disable authenticator');
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
+  const handleConfirmDisableKnowledge = async () => {
+    if (disableKnowledgeUseEmail) {
+      if (!knowledge2fa.emailCodeEnabled) {
+        toast.error('Email authentication code is not enabled for your account');
+        return;
+      }
+      if (!/^\d{6}$/.test(disableKnowledgeEmailCode.trim())) {
+        toast.error('Enter your 6-digit email authentication code');
+        return;
+      }
+    } else {
+      if (disableKnowledgeUsePin) {
+        if (!/^\d{4}$/.test(disableKnowledgeCode.trim())) {
+          toast.error('Enter your 4-digit PIN');
+          return;
+        }
+      } else {
+        if (disableKnowledgeCode.trim().length < 2) {
+          toast.error('Enter your security answer');
+          return;
+        }
+      }
+    }
+
+    try {
+      setMfaLoading(true);
+      if (disableKnowledgeUseEmail) {
+        await api.verifyKnowledgeTwoFactorLoginCode(disableKnowledgeEmailCode.trim());
+      } else {
+        // Verification accepts either PIN or security answer (backend checks pin_hash and answer_hash).
+        await api.verifyKnowledgeTwoFactor(disableKnowledgeCode.trim());
+      }
+      await api.disableKnowledgeTwoFactor();
+
+      setShowDisableKnowledgeModal(false);
+      setDisableKnowledgeCode('');
+      setDisableKnowledgeEmailCode('');
+      setDisableKnowledgeEmailCodeSent(false);
+      setDisableKnowledgeUseEmail(false);
+      toast.success('Knowledge-based 2FA disabled');
+      fetchMfaStatus();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to disable knowledge-based 2FA');
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
+  const handleRequestDisableKnowledgeEmailCode = async () => {
+    try {
+      setMfaLoading(true);
+      setDisableKnowledgeEmailCode('');
+      setDisableKnowledgeEmailCodeSent(false);
+      setDisableKnowledgeEmailOtpKey((k) => k + 1);
+      await api.requestKnowledgeTwoFactorLoginCode();
+      setDisableKnowledgeEmailCodeSent(true);
+      toast.success('Authentication code sent to your email.');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to send authentication code');
     } finally {
       setMfaLoading(false);
     }
@@ -503,9 +606,26 @@ export function AccountSettings() {
       const totpFactors = getTotpFactorsFromMfaList(data);
       setMfaFactors(totpFactors);
 
+      const knowledge = (await api.getKnowledgeTwoFactorStatus()) as {
+        enabled: boolean;
+        question: string | null;
+        email_code_enabled?: boolean;
+      };
+      setKnowledge2fa({
+        enabled: knowledge.enabled === true,
+        question: knowledge.question || null,
+        emailCodeEnabled: knowledge.email_code_enabled === true,
+      });
+
       if (totpFactors.length > 0) {
         setDisableAuthenticatorCode('');
         setShowDisableAuthenticatorModal(true);
+        return;
+      }
+
+      if (knowledge.enabled === true || knowledge.question) {
+        setDisableKnowledgeCode('');
+        setShowDisableKnowledgeModal(true);
         return;
       }
 
@@ -620,44 +740,88 @@ export function AccountSettings() {
   };
 
   useEffect(() => {
-    async function fetchProfile() {
+    async function hydrate() {
       if (!user) return;
-      
+
+      // Prefer cached profile from AuthContext to avoid refetching on every remount.
+      const data = authProfile;
+      if (data) {
+        try {
+          const nameParts = (data.full_name || "").split(" ");
+          const firstName = nameParts[0] || "";
+          const lastName = nameParts.slice(1).join(" ") || "";
+
+          const profileBio =
+            typeof (data as { bio?: string | null }).bio === "string" &&
+            (data as { bio?: string | null }).bio!.trim().length > 0
+              ? (data as { bio?: string | null }).bio!
+              : "";
+          const legacyBioFromMood =
+            !profileBio && typeof data.current_mood === "string" ? data.current_mood : "";
+
+          const nextPrivacy =
+            data.privacy_settings && typeof data.privacy_settings === "object"
+              ? (data.privacy_settings as Record<string, unknown>)
+              : {};
+
+          setProfileData({
+            firstName,
+            lastName,
+            email: data.email || user.email || "",
+            phone: normalizeStoredPhoneForInput(data.phone || ""),
+            dateOfBirth: profileAgeStorageToDateInput(data.age),
+            location: data.timezone || getBrowserTimezone(),
+            bio: profileBio || legacyBioFromMood,
+            avatar_url: data.avatar_url || "",
+          });
+          setPrivacySettings(nextPrivacy);
+          setAvatarOriginalUrl(
+            typeof nextPrivacy.avatarOriginalUrl === "string" ? nextPrivacy.avatarOriginalUrl : ""
+          );
+          setLoading(false);
+        } catch (error) {
+          console.error("Failed to hydrate profile from cache:", error);
+          setLoading(false);
+        }
+        return;
+      }
+
+      // Fallback: fetch if cache isn't available yet.
       try {
         setLoading(true);
-        const data = await api.getMe();
-        
-        // Split full name into first and last name
-        const nameParts = (data.full_name || "").split(" ");
+        const fetched = await api.getMe();
+
+        const nameParts = (fetched.full_name || "").split(" ");
         const firstName = nameParts[0] || "";
         const lastName = nameParts.slice(1).join(" ") || "";
 
         const profileBio =
-          typeof (data as { bio?: string | null }).bio === "string" &&
-          (data as { bio?: string | null }).bio!.trim().length > 0
-            ? (data as { bio?: string | null }).bio!
+          typeof (fetched as { bio?: string | null }).bio === "string" &&
+          (fetched as { bio?: string | null }).bio!.trim().length > 0
+            ? (fetched as { bio?: string | null }).bio!
             : "";
         const legacyBioFromMood =
-          !profileBio && typeof data.current_mood === "string"
-            ? data.current_mood
-            : "";
+          !profileBio && typeof fetched.current_mood === "string" ? fetched.current_mood : "";
+
+        const nextPrivacy =
+          fetched.privacy_settings && typeof fetched.privacy_settings === "object"
+            ? (fetched.privacy_settings as Record<string, unknown>)
+            : {};
 
         setProfileData({
           firstName,
           lastName,
-          email: data.email || user.email || "",
-          phone: normalizeStoredPhoneForInput(data.phone || ""),
-          dateOfBirth: profileAgeStorageToDateInput(data.age),
-          location: data.timezone || getBrowserTimezone(), // Using timezone as location proxy
+          email: fetched.email || user.email || "",
+          phone: normalizeStoredPhoneForInput(fetched.phone || ""),
+          dateOfBirth: profileAgeStorageToDateInput(fetched.age),
+          location: fetched.timezone || getBrowserTimezone(),
           bio: profileBio || legacyBioFromMood,
-          avatar_url: data.avatar_url || ""
+          avatar_url: fetched.avatar_url || "",
         });
-        const nextPrivacy =
-          data.privacy_settings && typeof data.privacy_settings === "object"
-            ? (data.privacy_settings as Record<string, unknown>)
-            : {};
         setPrivacySettings(nextPrivacy);
-        setAvatarOriginalUrl(typeof nextPrivacy.avatarOriginalUrl === "string" ? nextPrivacy.avatarOriginalUrl : "");
+        setAvatarOriginalUrl(
+          typeof nextPrivacy.avatarOriginalUrl === "string" ? nextPrivacy.avatarOriginalUrl : ""
+        );
       } catch (error) {
         console.error("Failed to fetch profile:", error);
         toast.error("Failed to load profile data");
@@ -666,8 +830,8 @@ export function AccountSettings() {
       }
     }
 
-    fetchProfile();
-  }, [user]);
+    void hydrate();
+  }, [user, authProfile]);
 
 const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | null = null) => {
     const img = new Image();
@@ -1413,10 +1577,27 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                       }`}
                     >
                       <p className="font-medium text-gray-900 dark:text-white">
-                        A password, PIN, or answers to security questions
+                        PIN (with security answer)
                       </p>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Knowledge-based second factor
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setMfaMethod('knowledge_email')}
+                      className={`w-full rounded-xl border p-4 text-left transition-colors ${
+                        mfaMethod === 'knowledge_email'
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                          : 'border-gray-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        Email authentication code
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Use an email 6-digit code at login (no PIN required)
                       </p>
                     </button>
 
@@ -1441,74 +1622,113 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
 
                 {mfaStep === 'knowledgeSetup' && (
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        PIN (4-10 digits)
-                      </label>
-                      <input
-                        type="password"
-                        value={knowledgeSetup.pin}
-                        onChange={(e) =>
-                          setKnowledgeSetup((prev) => ({
-                            ...prev,
-                            pin: e.target.value.replace(/\D/g, '').slice(0, 10),
-                          }))
-                        }
-                        placeholder="Enter PIN"
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Security Question
-                      </label>
-                      <select
-                        value={knowledgeSetup.securityQuestion}
-                        onChange={(e) =>
-                          setKnowledgeSetup((prev) => ({ ...prev, securityQuestion: e.target.value }))
-                        }
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
-                      >
-                        <option value="">Select a security question</option>
-                        {genericSecurityQuestions.map((question) => (
-                          <option key={question} value={question}>
-                            {question}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Security Answer
-                      </label>
-                      <input
-                        type="password"
-                        value={knowledgeSetup.securityAnswer}
-                        onChange={(e) =>
-                          setKnowledgeSetup((prev) => ({ ...prev, securityAnswer: e.target.value }))
-                        }
-                        placeholder="Enter answer"
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
-                      />
-                    </div>
+                    {mfaMethod === 'knowledge_email' ? (
+                      <>
+                        <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 text-sm text-blue-800 dark:text-blue-200">
+                          Email authentication code is enabled. At login, we&apos;ll email you a 6-digit code for verification.
+                        </div>
 
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={handleSetupKnowledgeMfa}
-                      disabled={mfaLoading}
-                      className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {mfaLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                      Save & Enable
-                    </motion.button>
-                    <button
-                      type="button"
-                      onClick={() => setMfaStep('method')}
-                      className="w-full py-2 text-sm text-gray-600 dark:text-gray-400 hover:underline"
-                    >
-                      Back
-                    </button>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={handleSetupKnowledgeEmailMfa}
+                          disabled={mfaLoading}
+                          className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {mfaLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                          Enable Email Authentication Code
+                        </motion.button>
+
+                        <button
+                          type="button"
+                          onClick={() => setMfaStep('method')}
+                          className="w-full py-2 text-sm text-gray-600 dark:text-gray-400 hover:underline"
+                        >
+                          Back
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            PIN (4 digits)
+                          </label>
+                          <div className="flex justify-center">
+                            <InputOTP
+                              maxLength={4}
+                              value={knowledgeSetup.pin}
+                              onChange={(value) =>
+                                setKnowledgeSetup((prev) => ({
+                                  ...prev,
+                                  pin: value.replace(/\D/g, '').slice(0, 4),
+                                }))
+                              }
+                            >
+                              <InputOTPGroup>
+                                <InputOTPSlot index={0} />
+                                <InputOTPSlot index={1} />
+                                <InputOTPSlot index={2} />
+                                <InputOTPSlot index={3} />
+                              </InputOTPGroup>
+                            </InputOTP>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Security Question
+                          </label>
+                          <select
+                            value={knowledgeSetup.securityQuestion}
+                            onChange={(e) =>
+                              setKnowledgeSetup((prev) => ({ ...prev, securityQuestion: e.target.value }))
+                            }
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                          >
+                            <option value="">Select a security question</option>
+                            {genericSecurityQuestions.map((question) => (
+                              <option key={question} value={question}>
+                                {question}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Security Answer
+                          </label>
+                          <input
+                            type="password"
+                            value={knowledgeSetup.securityAnswer}
+                            onChange={(e) =>
+                              setKnowledgeSetup((prev) => ({ ...prev, securityAnswer: e.target.value }))
+                            }
+                            placeholder="Enter answer"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                          />
+                        </div>
+
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={handleSetupKnowledgeMfa}
+                          disabled={mfaLoading}
+                          className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {mfaLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                          Save & Enable
+                        </motion.button>
+
+                        <button
+                          type="button"
+                          onClick={() => setMfaStep('method')}
+                          className="w-full py-2 text-sm text-gray-600 dark:text-gray-400 hover:underline"
+                        >
+                          Back
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -1620,6 +1840,195 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                     onClick={handleConfirmDisableAuthenticator}
                     className="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                     disabled={mfaLoading || disableAuthenticatorCode.length !== 6}
+                  >
+                    {mfaLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Disable
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+
+          {showDisableKnowledgeModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => setShowDisableKnowledgeModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full shadow-2xl transition-colors duration-300"
+              >
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                  Disable Knowledge 2FA
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Disable using PIN/security answer, or use an email authentication code instead.
+                </p>
+
+                <div className="flex gap-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDisableKnowledgeUseEmail(false);
+                      setDisableKnowledgeUsePin(true);
+                      setDisableKnowledgeEmailCode('');
+                      setDisableKnowledgeEmailCodeSent(false);
+                      setDisableKnowledgeEmailOtpKey((k) => k + 1);
+                    }}
+                    className={`flex-1 py-2 rounded-xl border transition-colors ${
+                      !disableKnowledgeUseEmail
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    PIN / Answer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!knowledge2fa.emailCodeEnabled) return;
+                      setDisableKnowledgeUseEmail(true);
+                      setDisableKnowledgeUsePin(true);
+                      setDisableKnowledgeCode('');
+                      setDisableKnowledgeEmailCode('');
+                      setDisableKnowledgeEmailCodeSent(false);
+                      setDisableKnowledgeEmailOtpKey((k) => k + 1);
+                    }}
+                    className={`flex-1 py-2 rounded-xl border transition-colors ${
+                      disableKnowledgeUseEmail
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800"
+                    }`}
+                    disabled={!knowledge2fa.emailCodeEnabled}
+                  >
+                    Email Code
+                  </button>
+                </div>
+
+                {!disableKnowledgeUseEmail ? (
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDisableKnowledgeUsePin(true)}
+                        className={`flex-1 py-2 rounded-xl border transition-colors ${
+                          disableKnowledgeUsePin
+                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                            : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        PIN
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDisableKnowledgeUsePin(false)}
+                        className={`flex-1 py-2 rounded-xl border transition-colors ${
+                          !disableKnowledgeUsePin
+                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                            : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        Security Answer
+                      </button>
+                    </div>
+
+                    {disableKnowledgeUsePin ? (
+                      <div className="space-y-2">
+                        <div className="text-xs text-muted-foreground">
+                          Enter your 4-digit PIN
+                        </div>
+                        <div className="flex justify-center">
+                          <InputOTP
+                            maxLength={4}
+                            value={disableKnowledgeCode}
+                            onChange={(value) =>
+                              setDisableKnowledgeCode(value.replace(/\D/g, "").slice(0, 4))
+                            }
+                          >
+                            <InputOTPGroup>
+                              <InputOTPSlot index={0} />
+                              <InputOTPSlot index={1} />
+                              <InputOTPSlot index={2} />
+                              <InputOTPSlot index={3} />
+                            </InputOTPGroup>
+                          </InputOTP>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="text-xs text-muted-foreground">
+                          Enter your security answer
+                        </div>
+                        <input
+                          type="password"
+                          value={disableKnowledgeCode}
+                          onChange={(e) => setDisableKnowledgeCode(e.target.value)}
+                          placeholder="Enter security answer"
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground">
+                      We&apos;ll email a 6-digit authentication code to your account email.
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={handleRequestDisableKnowledgeEmailCode}
+                      disabled={mfaLoading}
+                      className="w-full py-2 rounded-xl bg-blue-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {disableKnowledgeEmailCodeSent ? "Resend code" : "Send code"}
+                    </button>
+
+                    <div className="flex justify-center">
+                      <InputOTP
+                        key={disableKnowledgeEmailOtpKey}
+                        maxLength={6}
+                        value={disableKnowledgeEmailCode}
+                        onChange={(value) => setDisableKnowledgeEmailCode(value)}
+                      >
+                        <InputOTPGroup>
+                          <InputOTPSlot index={0} />
+                          <InputOTPSlot index={1} />
+                          <InputOTPSlot index={2} />
+                          <InputOTPSlot index={3} />
+                          <InputOTPSlot index={4} />
+                          <InputOTPSlot index={5} />
+                        </InputOTPGroup>
+                      </InputOTP>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-4 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowDisableKnowledgeModal(false)}
+                    className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300"
+                    disabled={mfaLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmDisableKnowledge}
+                    className="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                    disabled={
+                      mfaLoading ||
+                      (!disableKnowledgeUseEmail
+                        ? disableKnowledgeUsePin
+                          ? !/^\d{4}$/.test(disableKnowledgeCode.trim())
+                          : disableKnowledgeCode.trim().length < 2
+                        : !/^\d{6}$/.test(disableKnowledgeEmailCode.trim()))
+                    }
                   >
                     {mfaLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                     Disable

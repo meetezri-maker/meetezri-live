@@ -80,11 +80,15 @@ export async function getUserEmail(userId: string): Promise<string | null> {
 
 type KnowledgeTwoFactorConfig = {
   enabled: boolean;
-  pin_hash: string;
-  pin_salt: string;
-  security_question: string;
-  answer_hash: string;
-  answer_salt: string;
+  // PIN-based factor (optional so email-only 2FA can be enabled).
+  pin_hash?: string;
+  pin_salt?: string;
+  security_question?: string;
+  // Lower-cased answer hash for timing-safe compare.
+  answer_hash?: string;
+  answer_salt?: string;
+  // If true, the system will allow email authentication codes to be requested/verified.
+  email_code_enabled?: boolean;
   updated_at: string;
 };
 
@@ -127,6 +131,7 @@ export async function getKnowledgeTwoFactorStatus(userId: string) {
   return {
     enabled: cfg?.enabled === true,
     question: cfg?.security_question || null,
+    email_code_enabled: cfg?.email_code_enabled === true,
   };
 }
 
@@ -138,8 +143,8 @@ export async function setupKnowledgeTwoFactor(
   const securityQuestion = input.securityQuestion.trim();
   const securityAnswer = input.securityAnswer.trim();
 
-  if (!/^\d{4,10}$/.test(pin)) {
-    const err = new Error('PIN must be 4 to 10 digits');
+  if (!/^\d{4}$/.test(pin)) {
+    const err = new Error('PIN must be exactly 4 digits');
     (err as any).statusCode = 400;
     throw err;
   }
@@ -165,6 +170,7 @@ export async function setupKnowledgeTwoFactor(
     security_question: securityQuestion,
     answer_hash: hashSecret(securityAnswer.toLowerCase(), answerSalt),
     answer_salt: answerSalt,
+    email_code_enabled: false,
     updated_at: new Date().toISOString(),
   };
 
@@ -179,6 +185,30 @@ export async function setupKnowledgeTwoFactor(
   });
   invalidateUserProfileCache(userId);
   return { enabled: true, question: securityQuestion };
+}
+
+export async function setupKnowledgeTwoFactorEmail(userId: string) {
+  const permissions = await getPermissions(userId);
+
+  const config: KnowledgeTwoFactorConfig = {
+    enabled: true,
+    email_code_enabled: true,
+    // Intentionally omit PIN/security hashes for email-only mode.
+    updated_at: new Date().toISOString(),
+  };
+
+  const nextPermissions = {
+    ...permissions,
+    two_factor_knowledge: config,
+  };
+
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: { permissions: nextPermissions as any },
+  });
+
+  invalidateUserProfileCache(userId);
+  return { enabled: true, question: null, email_code_enabled: true };
 }
 
 export async function verifyKnowledgeTwoFactor(
@@ -313,7 +343,7 @@ export async function verifyKnowledgeTwoFactorRecovery(userId: string, input: { 
 export async function requestKnowledgeTwoFactorLoginCode(userId: string) {
   const permissions = await getPermissions(userId);
   const cfg = permissions.two_factor_knowledge as Partial<KnowledgeTwoFactorConfig> | undefined;
-  if (!cfg?.enabled) {
+  if (!cfg?.enabled || cfg?.email_code_enabled !== true) {
     const err = new Error('Knowledge-based 2FA is not enabled');
     (err as any).statusCode = 404;
     throw err;

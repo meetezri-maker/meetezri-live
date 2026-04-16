@@ -12,12 +12,38 @@ interface Achievement {
   title: string;
   description: string;
   icon: string;
-  category: 'sessions' | 'mood' | 'journal' | 'wellness' | 'streak' | 'community' | 'custom';
+  category:
+    | 'sessions'
+    | 'mood'
+    | 'journal'
+    | 'wellness'
+    | 'streak'
+    | 'community'
+    | 'personal'
+    | 'self_improvement'
+    | 'professional';
   progress: number;
   total: number;
   unlocked: boolean;
   points: number;
   rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  goalType?: 'gym' | 'money_management' | 'career' | 'learning' | 'health' | 'custom';
+  lastCheckInDate?: string;
+  checkInHistory?: string[];
+  checkInEntries?: { date: string; amount?: number; note?: string }[];
+  goalCategory?: 'Mental' | 'Emotional' | 'Productivity' | 'Relationships' | 'Wellness';
+  whyItMatters?: string;
+  targetOutcome?: string;
+  startDate?: string;
+  targetDate?: string;
+  priority?: 'Low' | 'Medium' | 'High';
+  progressStatus?: 'Not Started' | 'In Progress' | 'Achieved';
+  checkInFrequency?: 'Daily' | 'Weekly' | 'Custom';
+  reminderEnabled?: boolean;
+  actionSteps?: string;
+  moodTag?: 'Stress' | 'Sadness' | 'Fear' | 'Confidence' | 'Motivation';
+  supportType?: 'Encouragement' | 'Accountability' | 'Reflection' | 'Coping Help';
+  notes?: string;
 }
 
 export function Achievements() {
@@ -29,8 +55,32 @@ export function Achievements() {
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newTotal, setNewTotal] = useState('1');
-  const [newCategory, setNewCategory] = useState<Achievement['category']>('custom');
+  const [newCategory, setNewCategory] = useState<Achievement['category']>('personal');
+  const [newGoalType, setNewGoalType] = useState<NonNullable<Achievement['goalType']>>('gym');
+  const [moneyGoalKind, setMoneyGoalKind] = useState<'saving' | 'budget' | 'debt' | 'investment'>('saving');
+  const [moneyCurrentAmount, setMoneyCurrentAmount] = useState('0');
+  const [moneyTargetAmount, setMoneyTargetAmount] = useState('1000');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [reportText, setReportText] = useState('');
+  const [activeAddTab, setActiveAddTab] = useState<'personal_goals' | 'personal_achievements'>('personal_goals');
+  const [goalTitle, setGoalTitle] = useState('');
+  const [goalCategory, setGoalCategory] = useState<NonNullable<Achievement['goalCategory']>>('Mental');
+  const [goalDescription, setGoalDescription] = useState('');
+  const [goalWhyItMatters, setGoalWhyItMatters] = useState('');
+  const [goalTargetOutcome, setGoalTargetOutcome] = useState('');
+  const [goalPriority, setGoalPriority] = useState<NonNullable<Achievement['priority']>>('Medium');
+  const [goalStartDate, setGoalStartDate] = useState('');
+  const [goalTargetDate, setGoalTargetDate] = useState('');
+  const [goalProgress, setGoalProgress] = useState('0');
+  const [goalCheckInFrequency, setGoalCheckInFrequency] = useState<NonNullable<Achievement['checkInFrequency']>>('Daily');
+  const [goalActionSteps, setGoalActionSteps] = useState('');
+  const [goalMoodTag, setGoalMoodTag] = useState<NonNullable<Achievement['moodTag']>>('Stress');
+  const [goalSupportType, setGoalSupportType] = useState<NonNullable<Achievement['supportType']>>('Encouragement');
+  const [goalNotes, setGoalNotes] = useState('');
+  const [goalReminderEnabled, setGoalReminderEnabled] = useState(true);
+  const [dailyCheckInInputs, setDailyCheckInInputs] = useState<
+    Record<string, { amount: string; note: string }>
+  >({});
   const customStorageKey = useMemo(
     () => `ezri_custom_achievements_${profile?.id || 'guest'}`,
     [profile?.id]
@@ -70,7 +120,14 @@ export function Achievements() {
       }
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
-        setCustomAchievements(parsed as Achievement[]);
+        setCustomAchievements(
+          parsed.map((item: Achievement) => ({
+            ...item,
+            goalType: item.goalType || 'custom',
+            checkInHistory: Array.isArray(item.checkInHistory) ? item.checkInHistory : [],
+            checkInEntries: Array.isArray(item.checkInEntries) ? item.checkInEntries : [],
+          })) as Achievement[]
+        );
       }
     } catch (error) {
       console.error('Failed to load custom achievements', error);
@@ -198,7 +255,9 @@ export function Achievements() {
     { id: 'wellness', label: 'Wellness', icon: Zap },
     { id: 'streak', label: 'Streaks', icon: TrendingUp },
     { id: 'community', label: 'Community', icon: Users },
-    { id: 'custom', label: 'Custom', icon: Star }
+    { id: 'personal', label: 'Personal Achievements', icon: Star },
+    { id: 'self_improvement', label: 'Self Improvement', icon: Star },
+    { id: 'professional', label: 'Professional', icon: Star }
   ];
 
   const filteredAchievements = selectedCategory === 'all' 
@@ -243,10 +302,33 @@ export function Achievements() {
     }
   };
 
+  const goalTypeLabels: Record<NonNullable<Achievement['goalType']>, string> = {
+    gym: 'Gym',
+    money_management: 'Money Management',
+    career: 'Career',
+    learning: 'Learning',
+    health: 'Health',
+    custom: 'Custom',
+  };
+
+  const goalTypeIcons: Record<NonNullable<Achievement['goalType']>, Achievement['icon']> = {
+    gym: 'zap',
+    money_management: 'target',
+    career: 'trophy',
+    learning: 'book',
+    health: 'heart',
+    custom: 'trophy',
+  };
+
   const addCustomAchievement = () => {
-    const title = newTitle.trim();
-    const description = newDescription.trim();
-    const total = Math.max(1, Number(newTotal) || 1);
+    const moneyMode = newGoalType === 'money_management';
+    const moneyCurrent = Math.max(0, Number(moneyCurrentAmount) || 0);
+    const moneyTarget = Math.max(1, Number(moneyTargetAmount) || 1);
+    const title = moneyMode ? (newTitle.trim() || `${goalTypeLabels[newGoalType]} Goal`) : newTitle.trim();
+    const description = moneyMode
+      ? `${moneyGoalKind === 'saving' ? 'Saving' : moneyGoalKind === 'budget' ? 'Budget Control' : moneyGoalKind === 'debt' ? 'Debt Reduction' : 'Investment'} goal: $${moneyCurrent.toLocaleString()} / $${moneyTarget.toLocaleString()}`
+      : newDescription.trim();
+    const total = moneyMode ? moneyTarget : Math.max(1, Number(newTotal) || 1);
 
     if (!title || !description) return;
 
@@ -254,13 +336,14 @@ export function Achievements() {
       id: `custom-${Date.now()}`,
       title,
       description,
-      icon: 'trophy',
+      icon: goalTypeIcons[newGoalType],
       category: newCategory,
-      progress: 0,
+      progress: moneyMode ? moneyCurrent : 0,
       total,
-      unlocked: false,
+      unlocked: moneyMode ? moneyCurrent >= moneyTarget : false,
       points: 0,
       rarity: 'common',
+      goalType: newGoalType,
     };
 
     const updated = [next, ...customAchievements];
@@ -268,8 +351,182 @@ export function Achievements() {
     setNewTitle('');
     setNewDescription('');
     setNewTotal('1');
-    setNewCategory('custom');
+    setNewCategory('personal');
+    setNewGoalType('gym');
+    setMoneyGoalKind('saving');
+    setMoneyCurrentAmount('0');
+    setMoneyTargetAmount('1000');
     setShowCreateModal(false);
+  };
+
+  const addPersonalGoalFromTab = () => {
+    const title = goalTitle.trim();
+    const description = goalDescription.trim();
+    const progress = Math.max(0, Math.min(100, Number(goalProgress) || 0));
+    if (!title || !description) return;
+
+    const next: Achievement = {
+      id: `goal-${Date.now()}`,
+      title,
+      description,
+      icon: 'target',
+      category: 'personal',
+      progress,
+      total: 100,
+      unlocked: progress >= 100,
+      points: 0,
+      rarity: 'common',
+      goalType: 'custom',
+      goalCategory,
+      whyItMatters: goalWhyItMatters.trim(),
+      targetOutcome: goalTargetOutcome.trim(),
+      startDate: goalStartDate || undefined,
+      targetDate: goalTargetDate || undefined,
+      priority: goalPriority,
+      progressStatus: progress >= 100 ? 'Achieved' : progress > 0 ? 'In Progress' : 'Not Started',
+      checkInFrequency: goalCheckInFrequency,
+      reminderEnabled: goalReminderEnabled,
+      actionSteps: goalActionSteps.trim(),
+      moodTag: goalMoodTag,
+      supportType: goalSupportType,
+      notes: goalNotes.trim(),
+    };
+
+    saveCustomAchievements([next, ...customAchievements]);
+    setGoalTitle('');
+    setGoalCategory('Mental');
+    setGoalDescription('');
+    setGoalWhyItMatters('');
+    setGoalTargetOutcome('');
+    setGoalPriority('Medium');
+    setGoalStartDate('');
+    setGoalTargetDate('');
+    setGoalProgress('0');
+    setGoalCheckInFrequency('Daily');
+    setGoalActionSteps('');
+    setGoalMoodTag('Stress');
+    setGoalSupportType('Encouragement');
+    setGoalNotes('');
+    setGoalReminderEnabled(true);
+    setShowCreateModal(false);
+  };
+
+  const addPersonalAchievementFromTab = () => {
+    const title = newTitle.trim();
+    const description = newDescription.trim();
+    if (!title || !description) return;
+
+    const next: Achievement = {
+      id: `personal-achievement-${Date.now()}`,
+      title,
+      description,
+      icon: 'trophy',
+      category: 'personal',
+      progress: 0,
+      total: 1,
+      unlocked: false,
+      points: 0,
+      rarity: 'common',
+      goalType: 'custom',
+    };
+
+    saveCustomAchievements([next, ...customAchievements]);
+    setNewTitle('');
+    setNewDescription('');
+    setShowCreateModal(false);
+  };
+
+  const personalGoals = customAchievements.filter((a) =>
+    ['personal', 'self_improvement', 'professional'].includes(a.category)
+  );
+
+  const handleDailyGoalCheckIn = (achievementId: string) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const entry = dailyCheckInInputs[achievementId] || { amount: '', note: '' };
+    const deltaAmount = Math.max(0, Number(entry.amount) || 0);
+    const note = entry.note.trim();
+
+    const updated = customAchievements.map((achievement) => {
+      if (achievement.id !== achievementId) return achievement;
+      if (achievement.lastCheckInDate === today) return achievement;
+
+      const increment = achievement.goalType === 'money_management'
+        ? (deltaAmount > 0 ? deltaAmount : 0)
+        : 1;
+      const nextProgress = Math.min(achievement.total, achievement.progress + increment);
+      const nextHistory = Array.isArray(achievement.checkInHistory)
+        ? [...achievement.checkInHistory, today]
+        : [today];
+      const nextEntries = Array.isArray(achievement.checkInEntries)
+        ? [
+            ...achievement.checkInEntries,
+            {
+              date: today,
+              amount: achievement.goalType === 'money_management' ? deltaAmount : undefined,
+              note: note || undefined,
+            },
+          ]
+        : [
+            {
+              date: today,
+              amount: achievement.goalType === 'money_management' ? deltaAmount : undefined,
+              note: note || undefined,
+            },
+          ];
+      return {
+        ...achievement,
+        progress: nextProgress,
+        unlocked: nextProgress >= achievement.total,
+        lastCheckInDate: today,
+        checkInHistory: nextHistory,
+        checkInEntries: nextEntries,
+      };
+    });
+    saveCustomAchievements(updated);
+    setDailyCheckInInputs((prev) => ({
+      ...prev,
+      [achievementId]: { amount: '', note: '' },
+    }));
+  };
+
+  const generateThirtyDayReport = () => {
+    const now = new Date();
+    const lastThirtyDaysStart = new Date(now);
+    lastThirtyDaysStart.setDate(now.getDate() - 29);
+    const startKey = lastThirtyDaysStart.toISOString().slice(0, 10);
+    const endKey = now.toISOString().slice(0, 10);
+
+    const goals = customAchievements.filter((a) =>
+      ['personal', 'self_improvement', 'professional'].includes(a.category)
+    );
+
+    const reportLines = goals.map((goal) => {
+      const history = Array.isArray(goal.checkInHistory) ? goal.checkInHistory : [];
+      const checkInsInRange = history.filter((d) => d >= startKey && d <= endKey);
+      return `- ${goal.title} (${goal.goalType ? goalTypeLabels[goal.goalType] : 'Personal Goal'}): ${checkInsInRange.length} check-ins, progress ${goal.progress}/${goal.total}${goal.unlocked ? ' (completed)' : ''}`;
+    });
+
+    const generated = [
+      '30-Day Personal Goals Report',
+      `Period: ${lastThirtyDaysStart.toLocaleDateString()} - ${now.toLocaleDateString()}`,
+      '',
+      `Total goals tracked: ${goals.length}`,
+      `Completed goals: ${goals.filter((g) => g.unlocked).length}`,
+      '',
+      'Goal details:',
+      ...(reportLines.length ? reportLines : ['- No personal goals added yet.']),
+    ].join('\n');
+
+    setReportText(generated);
+  };
+
+  const copyReport = async () => {
+    if (!reportText.trim()) return;
+    try {
+      await navigator.clipboard.writeText(reportText);
+    } catch (error) {
+      console.error('Failed to copy report', error);
+    }
   };
 
   return (
@@ -286,28 +543,27 @@ export function Achievements() {
               Back to Settings
             </Link>
             
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center">
-                <Trophy className="w-6 h-6 text-white" />
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center">
+                  <Trophy className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Achievements</h1>
+                  <p className="text-gray-600 dark:text-slate-400">Your journey and milestones</p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Achievements</h1>
-                <p className="text-gray-600 dark:text-slate-400">Your journey and milestones</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold hover:opacity-95 w-fit"
+              >
+                Add Achievement
+              </button>
             </div>
             <p className="text-sm text-gray-600 dark:text-slate-400">
               Achievements are activity-based milestones. They unlock as you complete sessions, check-ins, journals, and community goals.
             </p>
-          </div>
-
-          <div className="mb-8">
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold hover:opacity-95"
-            >
-              Add Achievement
-            </button>
           </div>
 
           {/* Stats Cards */}
@@ -373,7 +629,7 @@ export function Achievements() {
               {categories.map((category) => {
                 const Icon = category.icon;
                 const isActive = selectedCategory === category.id;
-                return (
+                const categoryButton = (
                   <motion.button
                     key={category.id}
                     whileHover={{ scale: 1.05 }}
@@ -389,8 +645,120 @@ export function Achievements() {
                     {category.label}
                   </motion.button>
                 );
+                return (
+                  <React.Fragment key={category.id}>
+                    {categoryButton}
+                  </React.Fragment>
+                );
               })}
             </div>
+          </div>
+
+          {/* Daily Goal Check-in */}
+          <div className="mb-8 bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-5">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Daily Goal Check-in</h2>
+            <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
+              Track personal goals from your daily report (one check-in per goal each day).
+            </p>
+            {personalGoals.length === 0 ? (
+              <p className="text-sm text-gray-600 dark:text-slate-400">
+                Add a personal achievement/goal first, then check in here daily.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {personalGoals.map((goal) => {
+                  const checkedToday = goal.lastCheckInDate === new Date().toISOString().slice(0, 10);
+                  const inputState = dailyCheckInInputs[goal.id] || { amount: '', note: '' };
+                  return (
+                    <div
+                      key={goal.id}
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40"
+                    >
+                      <div className="w-full">
+                        <p className="font-semibold text-gray-900 dark:text-white">{goal.title}</p>
+                        <p className="text-xs text-gray-600 dark:text-slate-400">
+                          {goal.goalType ? goalTypeLabels[goal.goalType] : 'Personal Goal'} • {goal.progress}/{goal.total}
+                        </p>
+                        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {goal.goalType === 'money_management' && (
+                            <input
+                              type="number"
+                              min={0}
+                              value={inputState.amount}
+                              onChange={(e) =>
+                                setDailyCheckInInputs((prev) => ({
+                                  ...prev,
+                                  [goal.id]: { ...inputState, amount: e.target.value },
+                                }))
+                              }
+                              placeholder="Amount added today ($)"
+                              disabled={checkedToday}
+                              className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-white disabled:opacity-60"
+                            />
+                          )}
+                          <input
+                            type="text"
+                            value={inputState.note}
+                            onChange={(e) =>
+                              setDailyCheckInInputs((prev) => ({
+                                ...prev,
+                                [goal.id]: { ...inputState, note: e.target.value },
+                              }))
+                            }
+                            placeholder="Daily check-in note (optional)"
+                            disabled={checkedToday}
+                            className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-white disabled:opacity-60"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDailyGoalCheckIn(goal.id)}
+                        disabled={checkedToday || (goal.goalType === 'money_management' && !(Number(inputState.amount) > 0))}
+                        className="px-3 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-emerald-500 to-teal-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {checkedToday ? 'Checked Today' : 'Daily Check-in'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 30 Day Report */}
+          <div className="mb-8 bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">30-Day Report</h2>
+                <p className="text-sm text-gray-600 dark:text-slate-400">
+                  Generate your last 30 days personal goals report.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={generateThirtyDayReport}
+                  className="px-3 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-indigo-500 to-purple-500 text-white"
+                >
+                  Generate Report
+                </button>
+                <button
+                  type="button"
+                  onClick={copyReport}
+                  disabled={!reportText}
+                  className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+            <textarea
+              value={reportText}
+              readOnly
+              placeholder="Generate report to view your 30-day summary."
+              className="w-full min-h-40 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-4 py-3 text-sm text-gray-800 dark:text-slate-200"
+            />
           </div>
 
           {/* Achievements Grid */}
@@ -435,6 +803,11 @@ export function Achievements() {
 
                       <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{achievement.title}</h3>
                       <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">{achievement.description}</p>
+                      {achievement.goalType && (
+                        <p className="text-xs text-gray-600 dark:text-slate-400 mb-3">
+                          Goal: {goalTypeLabels[achievement.goalType]}
+                        </p>
+                      )}
 
                       {/* Progress Bar */}
                       <div className="mb-3">
@@ -507,50 +880,70 @@ export function Achievements() {
                 Close
               </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input
-                type="text"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Achievement title"
-                className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
-              />
-              <input
-                type="text"
-                value={newDescription}
-                onChange={(e) => setNewDescription(e.target.value)}
-                placeholder="Achievement description"
-                className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
-              />
-              <input
-                type="number"
-                min={1}
-                value={newTotal}
-                onChange={(e) => setNewTotal(e.target.value)}
-                placeholder="Goal target"
-                className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/30"
-              />
-              <select
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value as Achievement['category'])}
-                className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+            <div className="mb-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveAddTab('personal_goals')}
+                className={`px-3 py-2 rounded-lg text-sm font-semibold ${activeAddTab === 'personal_goals' ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300'}`}
               >
-                <option value="custom">Custom</option>
-                <option value="sessions">Sessions</option>
-                <option value="mood">Mood</option>
-                <option value="journal">Journal</option>
-                <option value="wellness">Wellness</option>
-                <option value="streak">Streak</option>
-                <option value="community">Community</option>
-              </select>
+                Personal Goals
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveAddTab('personal_achievements')}
+                className={`px-3 py-2 rounded-lg text-sm font-semibold ${activeAddTab === 'personal_achievements' ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300'}`}
+              >
+                Personal Achievements
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={addCustomAchievement}
-              className="mt-4 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold hover:opacity-95"
-            >
-              Save Achievement
-            </button>
+
+            {activeAddTab === 'personal_goals' ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input type="text" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} placeholder="Goal Title" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  <select value={goalCategory} onChange={(e) => setGoalCategory(e.target.value as NonNullable<Achievement['goalCategory']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
+                    <option value="Mental">Mental</option><option value="Emotional">Emotional</option><option value="Productivity">Productivity</option><option value="Relationships">Relationships</option><option value="Wellness">Wellness</option>
+                  </select>
+                  <input type="text" value={goalDescription} onChange={(e) => setGoalDescription(e.target.value)} placeholder="Goal Description" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  <input type="text" value={goalWhyItMatters} onChange={(e) => setGoalWhyItMatters(e.target.value)} placeholder="Why This Goal Matters" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  <input type="text" value={goalTargetOutcome} onChange={(e) => setGoalTargetOutcome(e.target.value)} placeholder="Target Outcome" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  <select value={goalPriority} onChange={(e) => setGoalPriority(e.target.value as NonNullable<Achievement['priority']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
+                    <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option>
+                  </select>
+                  <input type="date" value={goalStartDate} onChange={(e) => setGoalStartDate(e.target.value)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  <input type="date" value={goalTargetDate} onChange={(e) => setGoalTargetDate(e.target.value)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  <input type="number" min={0} max={100} value={goalProgress} onChange={(e) => setGoalProgress(e.target.value)} placeholder="Current Progress (0-100)" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  <select value={goalCheckInFrequency} onChange={(e) => setGoalCheckInFrequency(e.target.value as NonNullable<Achievement['checkInFrequency']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
+                    <option value="Daily">Daily</option><option value="Weekly">Weekly</option><option value="Custom">Custom</option>
+                  </select>
+                  <input type="text" value={goalActionSteps} onChange={(e) => setGoalActionSteps(e.target.value)} placeholder="Small Action Steps" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  <select value={goalMoodTag} onChange={(e) => setGoalMoodTag(e.target.value as NonNullable<Achievement['moodTag']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
+                    <option value="Stress">Stress</option><option value="Sadness">Sadness</option><option value="Fear">Fear</option><option value="Confidence">Confidence</option><option value="Motivation">Motivation</option>
+                  </select>
+                  <select value={goalSupportType} onChange={(e) => setGoalSupportType(e.target.value as NonNullable<Achievement['supportType']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
+                    <option value="Encouragement">Encouragement</option><option value="Accountability">Accountability</option><option value="Reflection">Reflection</option><option value="Coping Help">Coping Help</option>
+                  </select>
+                  <input type="text" value={goalNotes} onChange={(e) => setGoalNotes(e.target.value)} placeholder="Notes / Journal Entry" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                </div>
+                <label className="mt-3 flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
+                  <input type="checkbox" checked={goalReminderEnabled} onChange={(e) => setGoalReminderEnabled(e.target.checked)} />
+                  Reminder Enabled
+                </label>
+                <button type="button" onClick={addPersonalGoalFromTab} className="mt-4 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold hover:opacity-95">
+                  Save Personal Goal
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-3">
+                  <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Achievement Title" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  <input type="text" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="Achievement Description" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                </div>
+                <button type="button" onClick={addPersonalAchievementFromTab} className="mt-4 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold hover:opacity-95">
+                  Save Personal Achievement
+                </button>
+              </>
+            )}
           </motion.div>
         </motion.div>
       )}

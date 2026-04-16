@@ -10,8 +10,13 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { user, profile, isLoading, hasRole } = useAuth();
   const location = useLocation();
+  const isOnboardingRoute = location.pathname.startsWith('/onboarding');
 
   if (isLoading) {
+    // Keep onboarding blocked even during initial auth/profile hydration.
+    if (user && isOnboardingRoute) {
+      return <Navigate to="/app/dashboard" replace />;
+    }
     // If we already have a signed-in user, never unmount the entire route tree.
     // Background auth refreshes (often triggered by tab switching) should be silent.
     if (user) {
@@ -49,16 +54,17 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const signupType = (profile?.signup_type as 'trial' | 'plan' | undefined) ?? (profile?.subscription_plan === 'trial' ? 'trial' : 'plan');
   const onboardingStartRoute =
     signupType === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome';
-  const isOnboardingRoute = location.pathname.startsWith('/onboarding');
   const isAppRoute = location.pathname.startsWith('/app');
+
+  // Product rule: authenticated users cannot access onboarding routes directly.
+  if (isOnboardingRoute) {
+    return <Navigate to="/app/dashboard" replace />;
+  }
 
   // Trial flow rule (per spec):
   // - trial users must NEVER be redirected to any /onboarding/* route
   // - trial users may access session lobby + dashboard + user profile
   if (signupType === 'trial') {
-    if (isOnboardingRoute) {
-      return <Navigate to="/app/dashboard" replace />;
-    }
     if (
       location.pathname === '/app/dashboard' ||
       location.pathname === '/app/user-profile' ||
@@ -79,7 +85,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     const isTrialUserProfileRoute =
       location.pathname === "/app/user-profile" ||
       location.pathname.startsWith("/app/user-profile?");
-    if (signupType === "trial" && (isDashboardRoute || isTrialUserProfileRoute)) {
+    if (isDashboardRoute || (signupType === "trial" && isTrialUserProfileRoute)) {
       return <>{children}</>;
     }
     return <Navigate to={onboardingStartRoute} replace />;

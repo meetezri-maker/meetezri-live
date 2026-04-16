@@ -93,11 +93,23 @@ export async function getSessionTranscriptHandler(
 }
 
 export async function getSessionsHandler(
-  request: FastifyRequest<{ Querystring: { status?: string } }>,
+  request: FastifyRequest<{ Querystring: { status?: string; limit?: number | string } }>,
   reply: FastifyReply
 ) {
   const user = request.user as UserPayload;
-  const sessions = await getSessions(user.sub, request.query.status);
+  const rawLimit = request.query.limit;
+  const parsedLimit =
+    typeof rawLimit === 'string'
+      ? Number.parseInt(rawLimit, 10)
+      : typeof rawLimit === 'number'
+        ? rawLimit
+        : undefined;
+  const limit =
+    typeof parsedLimit === 'number' && Number.isFinite(parsedLimit)
+      ? Math.min(200, Math.max(1, parsedLimit))
+      : undefined;
+
+  const sessions = await getSessions(user.sub, request.query.status, limit);
   return reply.send(sessions);
 }
 

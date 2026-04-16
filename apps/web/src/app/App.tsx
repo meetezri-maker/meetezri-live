@@ -205,6 +205,17 @@ function NetworkWatcher() {
   return null;
 }
 
+function OnboardingAccessGuard({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const location = useLocation();
+
+  if (user) {
+    return <Navigate to="/app/dashboard" replace />;
+  }
+
+  return <Navigate to="/login" state={{ from: location }} replace />;
+}
+
 // (Removed temporary reload/route persistence helpers; the actual fix is in AuthContext + ProtectedRoute.)
 
 export default function App() {
@@ -343,7 +354,7 @@ export default function App() {
           <Route element={<ProtectedRoute><Outlet /></ProtectedRoute>}>
             <Route element={<OnboardingProvider><Outlet /></OnboardingProvider>}>
               {/* Onboarding Routes */}
-              <Route path="/onboarding">
+              <Route path="/onboarding" element={<OnboardingAccessGuard><Outlet /></OnboardingAccessGuard>}>
                 <Route index element={<Navigate to="/onboarding/welcome" replace />} />
                 <Route path="welcome" element={<OnboardingWelcome />} />
                 <Route path="profile-setup" element={<OnboardingProfileSetup />} />
