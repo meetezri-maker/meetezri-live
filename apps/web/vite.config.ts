@@ -22,6 +22,14 @@ export default defineConfig({
     headers: {
       'Cache-Control': 'no-store, max-age=0',
     },
+    // Same-origin `/api/*` in dev so admin pages (e.g. engagement metrics) work without CORS issues.
+    // Override target with VITE_DEV_API_PROXY_TARGET if the API listens elsewhere.
+    proxy: {
+      '/api': {
+        target: process.env.VITE_DEV_API_PROXY_TARGET || 'http://127.0.0.1:3001',
+        changeOrigin: true,
+      },
+    },
   },
   preview: {
     headers: {

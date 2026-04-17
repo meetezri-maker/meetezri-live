@@ -314,7 +314,9 @@ export async function linkSubscriptionToUser(userId: string, sessionId: string) 
     data: { stripe_customer_id: customerId },
   });
 
-  const stripeSub = await stripe.subscriptions.retrieve(subscriptionId);
+  const stripeSub = await stripe.subscriptions.retrieve(subscriptionId, {
+    expand: ['items.data.price'],
+  });
   const priceId = stripeSub.items.data[0]?.price?.id;
   if (!priceId) return;
 

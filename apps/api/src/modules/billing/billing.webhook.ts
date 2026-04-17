@@ -359,7 +359,9 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
   }
 
   const subscriptionId = session.subscription as string;
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+    expand: ['items.data.price'],
+  });
   const mrrUsd = stripeSubscriptionMrrUsd(subscription as any);
   const amountPatch = mrrUsd != null ? { amount: mrrUsd } : {};
 
@@ -527,7 +529,9 @@ async function handleInvoicePaymentSucceeded(invoice: any, request: FastifyReque
   const subscriptionId = invoice.subscription;
   if (!subscriptionId) return;
 
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId as string);
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId as string, {
+    expand: ['items.data.price'],
+  });
 
   const existingSub = await prisma.subscriptions.findFirst({
     where: { stripe_sub_id: subscription.id },

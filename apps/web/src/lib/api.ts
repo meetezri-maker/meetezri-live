@@ -1,9 +1,10 @@
 import { supabase } from './supabase';
 
+/** Base path for REST calls (no trailing slash). In local dev, defaults to `/api` and Vite proxies to the API server — see `apps/web/vite.config.ts`. */
 const API_URL =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.DEV
-    ? 'http://localhost:3001/api'
+    ? '/api'
     : 'https://meetezri-live-api.vercel.app/api');
 
 async function getHeaders(accessToken?: string) {

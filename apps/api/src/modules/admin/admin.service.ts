@@ -207,7 +207,6 @@ export async function getDashboardStats(
 
   const [
     countsResult,
-    revenueResult,
     hourlyStats,
     dailyStatsRange,
     avatarRows,
@@ -235,14 +234,17 @@ export async function getDashboardStats(
         (SELECT count(*)::bigint FROM profiles WHERE created_at >= timezone('utc', now()) - interval '14 days' AND created_at < timezone('utc', now()) - interval '7 days') as signups_prev_7d,
         (SELECT count(*)::bigint FROM app_sessions WHERE started_at >= timezone('utc', now()) - interval '1 hour') as sessions_1h,
         (SELECT COALESCE(SUM(amount), 0)::bigint FROM payment_transactions WHERE status = 'completed' AND created_at >= date_trunc('month', timezone('utc', now())) AND created_at < date_trunc('month', timezone('utc', now())) + interval '1 month') as pay_cents_this_month,
-        (SELECT COALESCE(SUM(amount), 0)::bigint FROM payment_transactions WHERE status = 'completed' AND created_at >= date_trunc('month', timezone('utc', now())) - interval '1 month' AND created_at < date_trunc('month', timezone('utc', now()))) as pay_cents_prev_month
+        (SELECT COALESCE(SUM(amount), 0)::bigint FROM payment_transactions WHERE status = 'completed' AND created_at >= date_trunc('month', timezone('utc', now())) - interval '1 month' AND created_at < date_trunc('month', timezone('utc', now()))) as pay_cents_prev_month,
+        (SELECT COALESCE(SUM(COALESCE(amount, 0)), 0)::numeric
+          FROM subscriptions
+          WHERE LOWER(TRIM(COALESCE(status, ''))) IN ('active', 'trialing', 'past_due')
+        ) as subscription_mrr_sum_usd,
+        (SELECT COALESCE(SUM(amount::numeric), 0) / 100.0
+          FROM payment_transactions
+          WHERE LOWER(TRIM(COALESCE(status, ''))) IN ('completed', 'succeeded')
+        ) as payment_completed_sum_usd
     `,
-    // 2. MRR ≈ sum of monthly amounts on subscriptions still in a paying/trial state (amount is set from Stripe price on webhook/sync)
-    prisma.subscriptions.aggregate({
-      _sum: { amount: true },
-      where: { status: { in: ['active', 'trialing'] } },
-    }),
-    // 3. Hourly distribution across the selected date range
+    // 2. Hourly distribution across the selected date range
     prisma.$queryRaw`
       SELECT 
         EXTRACT(HOUR FROM started_at) as hour,
@@ -359,7 +361,10 @@ export async function getDashboardStats(
   const wellnessProgressCount = Number(counts.wellness_progress || 0);
   const crisisEventsCount = Number(counts.total_crisis || 0);
 
-  const revenue = revenueResult._sum.amount?.toNumber() || 0;
+  const subscriptionMrrSumUsd = Number(counts.subscription_mrr_sum_usd ?? 0);
+  const paymentCompletedSumUsd = Number(counts.payment_completed_sum_usd ?? 0);
+  /** Subscriptions (USD/month stored on row) + completed checkout volume (amount is cents). */
+  const revenue = Math.round((subscriptionMrrSumUsd + paymentCompletedSumUsd) * 100) / 100;
 
   const startDay = utcDayStart(rangeStart);
   const endDay = utcDayStart(rangeEnd);
@@ -625,7 +630,8 @@ export async function getDashboardStats(
       paymentVolumeThisMonthCents: payCentsThisMonth,
       paymentVolumePrevMonthCents: payCentsPrevMonth,
       paymentMomPct,
-      subscriptionMrrApprox: Math.round(revenue * 100) / 100,
+      subscriptionMrrApprox: Math.round(subscriptionMrrSumUsd * 100) / 100,
+      completedPaymentsUsdApprox: Math.round(paymentCompletedSumUsd * 100) / 100,
     },
     processHealth: {
       databaseConnected: procHealth.databaseConnected,

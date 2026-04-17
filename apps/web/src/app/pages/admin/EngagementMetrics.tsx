@@ -37,6 +37,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../lib/api";
 import { Card } from "@/app/components/ui/card";
+import { Button } from "@/app/components/ui/button";
 import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
 import { buildStatsQuery, datesForPreset, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
 
@@ -273,6 +274,10 @@ export function EngagementMetrics() {
   }
 
   if (error) {
+    const looksLikeNetwork =
+      /failed to fetch|networkerror|load failed|network request failed/i.test(
+        error
+      );
     return (
       <AdminLayoutNew>
         <div className="max-w-2xl mx-auto py-16">
@@ -282,7 +287,26 @@ export function EngagementMetrics() {
           <p className="text-gray-600 mb-4">
             Failed to load engagement metrics. Please try again later.
           </p>
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-red-600 mb-4">{error}</p>
+          {looksLikeNetwork && (
+            <div className="mb-6 p-4 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-950 space-y-2">
+              <p className="font-medium">This usually means the browser could not reach the API.</p>
+              <ul className="list-disc list-inside space-y-1 text-amber-900">
+                <li>
+                  Start the API server (default port <code className="px-1 bg-amber-100 rounded">3001</code>).
+                </li>
+                <li>
+                  With the Vite dev server, requests go to <code className="px-1 bg-amber-100 rounded">/api</code> and are proxied to the API — restart <code className="px-1 bg-amber-100 rounded">npm run dev</code> for the web app after pulling changes.
+                </li>
+                <li>
+                  Or set <code className="px-1 bg-amber-100 rounded">VITE_API_URL</code> in <code className="px-1 bg-amber-100 rounded">apps/web/.env</code> to your full API base (must end with <code className="px-1 bg-amber-100 rounded">/api</code>).
+                </li>
+              </ul>
+            </div>
+          )}
+          <Button type="button" onClick={() => void loadStats(true)}>
+            Retry
+          </Button>
         </div>
       </AdminLayoutNew>
     );

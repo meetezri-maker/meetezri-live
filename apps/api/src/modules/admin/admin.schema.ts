@@ -89,6 +89,7 @@ export const dashboardStatsSchema = z.object({
       paymentVolumePrevMonthCents: z.number(),
       paymentMomPct: z.number(),
       subscriptionMrrApprox: z.number(),
+      completedPaymentsUsdApprox: z.number(),
     })
     .optional(),
   processHealth: z
