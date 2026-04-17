@@ -65,6 +65,42 @@ function clampStatsYear(y: number): number {
   return Math.min(Math.max(y, MIN_STATS_YEAR), maxY);
 }
 
+/** Full calendar year in UTC-friendly YYYY-MM-DD (used for default range). */
+function fullYearRange(y: number): { from: string; to: string } {
+  const yy = clampStatsYear(y);
+  return { from: `${yy}-01-01`, to: `${yy}-12-31` };
+}
+
+function formatYmdLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function parseYmdLocal(s: string): Date {
+  const parts = s.split("-").map((x) => parseInt(x, 10));
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) {
+    return new Date();
+  }
+  return new Date(parts[0]!, parts[1]! - 1, parts[2]!);
+}
+
+function formatReadableRangeDate(isoYmd: string): string {
+  const d = parseYmdLocal(isoYmd);
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function anchorYearFromRange(range: { from: string }): number {
+  const y = parseInt(range.from.slice(0, 4), 10);
+  return Number.isFinite(y) ? y : new Date().getUTCFullYear();
+}
+
 function formatTimeAgo(iso: string) {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
   if (s < 60) return `${s}s ago`;
@@ -170,17 +206,22 @@ export function SuperAdminDashboard() {
   const [canPoll, setCanPoll] = useState(false);
   const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
   const [sessionWeekOffset, setSessionWeekOffset] = useState(0);
-  const [statsYear, setStatsYear] = useState(() => clampStatsYear(new Date().getUTCFullYear()));
+  const [yearRange, setYearRange] = useState(() =>
+    fullYearRange(clampStatsYear(new Date().getUTCFullYear()))
+  );
   const [yearPickerOpen, setYearPickerOpen] = useState(false);
+  const [openRangeDraft, setOpenRangeDraft] = useState<{
+    from?: Date;
+    to?: Date;
+  }>({});
   const isFirstDashboardLoad = useRef(true);
 
   const statsQuery = useMemo(() => {
     if (chartPeriod === "year") {
-      const y = clampStatsYear(statsYear);
       return {
         chartPeriod: "year" as const,
-        dateFrom: `${y}-01-01`,
-        dateTo: `${y}-12-31`,
+        dateFrom: yearRange.from,
+        dateTo: yearRange.to,
       };
     }
     return {
@@ -188,7 +229,7 @@ export function SuperAdminDashboard() {
       rangeDays: PERIOD_RANGE_DAYS[chartPeriod],
       sessionWeekOffset: chartPeriod === "week" ? sessionWeekOffset : 0,
     };
-  }, [chartPeriod, statsYear, sessionWeekOffset]);
+  }, [chartPeriod, yearRange, sessionWeekOffset]);
 
   useEffect(() => {
     if (chartPeriod !== "week" && sessionWeekOffset !== 0) {
@@ -286,16 +327,16 @@ export function SuperAdminDashboard() {
   const trendSubtitle = useMemo(() => {
     if (chartPeriod === "week") return "New signups per week (last 12 weeks)";
     if (chartPeriod === "year")
-      return `New signups by year — calendar year ${clampStatsYear(statsYear)} (UTC)`;
+      return `New signups by year — ${yearRange.from} → ${yearRange.to}`;
     return "Total users over time (monthly)";
-  }, [chartPeriod, statsYear]);
+  }, [chartPeriod, yearRange]);
 
   const revenueSubtitle = useMemo(() => {
     if (chartPeriod === "week") return "Payment volume by week (Stripe)";
     if (chartPeriod === "year")
-      return `Payment volume by year (Stripe) — ${clampStatsYear(statsYear)}`;
+      return `Payment volume (Stripe) — ${yearRange.from} → ${yearRange.to}`;
     return "Payment volume by month (Stripe)";
-  }, [chartPeriod, statsYear]);
+  }, [chartPeriod, yearRange]);
 
   const sessionChartTitle = useMemo(() => {
     if (chartPeriod === "week") return "Weekly Session Activity";
@@ -308,9 +349,9 @@ export function SuperAdminDashboard() {
       return `Sessions per day (UTC week) — offset ${sessionWeekOffset || "current"}`;
     }
     if (chartPeriod === "year")
-      return `Sessions per day — calendar year ${clampStatsYear(statsYear)} (UTC)`;
+      return `Sessions per day — ${yearRange.from} → ${yearRange.to}`;
     return "Sessions per day for the last 30 days";
-  }, [chartPeriod, sessionWeekOffset, statsYear]);
+  }, [chartPeriod, sessionWeekOffset, yearRange]);
 
   const sessionLoadingText = useMemo(() => {
     if (chartPeriod === "week") return "Loading week…";
@@ -552,51 +593,112 @@ export function SuperAdminDashboard() {
               {chartPeriod === "year" && (
                 <>
                   <div className="hidden h-6 w-px bg-border sm:block" aria-hidden />
-                  <span className="text-sm text-muted-foreground">Calendar year</span>
+                  <span className="text-sm text-muted-foreground">Date range</span>
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
                     className="h-8 w-8 shrink-0"
-                    disabled={chartsLoading || clampStatsYear(statsYear) <= MIN_STATS_YEAR}
-                    onClick={() =>
-                      setStatsYear((prev) => {
-                        const c = clampStatsYear(prev);
-                        return c <= MIN_STATS_YEAR ? c : c - 1;
-                      })
+                    disabled={
+                      chartsLoading || anchorYearFromRange(yearRange) <= MIN_STATS_YEAR
                     }
-                    aria-label="Previous year"
+                    onClick={() =>
+                      setYearRange(
+                        fullYearRange(anchorYearFromRange(yearRange) - 1)
+                      )
+                    }
+                    aria-label="Previous calendar year"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <Popover open={yearPickerOpen} onOpenChange={setYearPickerOpen}>
+                  <Popover
+                    open={yearPickerOpen}
+                    onOpenChange={(open) => {
+                      setYearPickerOpen(open);
+                      if (open) {
+                        setOpenRangeDraft({
+                          from: parseYmdLocal(yearRange.from),
+                          to: parseYmdLocal(yearRange.to),
+                        });
+                      }
+                    }}
+                  >
                     <PopoverTrigger asChild>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         disabled={chartsLoading}
-                        className="gap-2 tabular-nums font-medium"
+                        className="gap-2 font-medium"
                       >
                         <CalendarDays className="h-4 w-4 shrink-0" aria-hidden />
-                        {clampStatsYear(statsYear)}
+                        <span className="hidden max-w-[min(18rem,55vw)] truncate text-left sm:inline">
+                          {yearRange.from} → {yearRange.to}
+                        </span>
+                        <span className="tabular-nums sm:hidden">Range</span>
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        key={clampStatsYear(statsYear)}
-                        mode="single"
-                        selected={new Date(Date.UTC(clampStatsYear(statsYear), 5, 15))}
-                        onSelect={(d) => {
-                          if (!d) return;
-                          setStatsYear(clampStatsYear(d.getFullYear()));
-                          setYearPickerOpen(false);
-                        }}
-                        defaultMonth={new Date(Date.UTC(clampStatsYear(statsYear), 0, 1))}
-                        initialFocus
-                        fromDate={new Date(Date.UTC(MIN_STATS_YEAR, 0, 1))}
-                        toDate={new Date(Date.UTC(new Date().getUTCFullYear(), 11, 31))}
-                      />
+                    <PopoverContent
+                      className="w-auto max-w-[min(100vw-1rem,720px)] p-0"
+                      align="start"
+                    >
+                      <div className="space-y-2 border-b border-border px-4 py-3">
+                        <div className="flex items-center justify-between gap-4 text-sm">
+                          <span className="text-muted-foreground shrink-0">Start</span>
+                          <span className="font-medium tabular-nums text-right">
+                            {openRangeDraft.from
+                              ? formatReadableRangeDate(
+                                  formatYmdLocal(openRangeDraft.from)
+                                )
+                              : "—"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-4 text-sm">
+                          <span className="text-muted-foreground shrink-0">End</span>
+                          <span className="font-medium tabular-nums text-right">
+                            {openRangeDraft.to
+                              ? formatReadableRangeDate(
+                                  formatYmdLocal(openRangeDraft.to)
+                                )
+                              : openRangeDraft.from
+                                ? "Choose end date"
+                                : "—"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-snug">
+                          Click two days to set start and end. Use ◀ ▶ for a full Jan–Dec
+                          year.
+                        </p>
+                      </div>
+                      <div className="overflow-x-auto p-2">
+                        <Calendar
+                          mode="range"
+                          numberOfMonths={2}
+                          selected={
+                            openRangeDraft.from
+                              ? {
+                                  from: openRangeDraft.from,
+                                  to: openRangeDraft.to,
+                                }
+                              : undefined
+                          }
+                          onSelect={(range) => {
+                            const next = range ?? {};
+                            setOpenRangeDraft(next);
+                            if (next.from && next.to) {
+                              let from = formatYmdLocal(next.from);
+                              let to = formatYmdLocal(next.to);
+                              if (from > to) [from, to] = [to, from];
+                              setYearRange({ from, to });
+                              setYearPickerOpen(false);
+                            }
+                          }}
+                          defaultMonth={parseYmdLocal(yearRange.from)}
+                          initialFocus
+                          fromDate={new Date(MIN_STATS_YEAR, 0, 1)}
+                          toDate={new Date()}
+                        />
+                      </div>
                     </PopoverContent>
                   </Popover>
                   <Button
@@ -606,21 +708,19 @@ export function SuperAdminDashboard() {
                     className="h-8 w-8 shrink-0"
                     disabled={
                       chartsLoading ||
-                      clampStatsYear(statsYear) >= new Date().getUTCFullYear()
+                      anchorYearFromRange(yearRange) >= new Date().getUTCFullYear()
                     }
                     onClick={() =>
-                      setStatsYear((prev) => {
-                        const c = clampStatsYear(prev);
-                        const maxY = new Date().getUTCFullYear();
-                        return c >= maxY ? c : c + 1;
-                      })
+                      setYearRange(
+                        fullYearRange(anchorYearFromRange(yearRange) + 1)
+                      )
                     }
-                    aria-label="Next year"
+                    aria-label="Next calendar year"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
-                  <span className="text-xs text-muted-foreground">
-                    Jan 1–Dec 31, {clampStatsYear(statsYear)} (UTC)
+                  <span className="text-xs text-muted-foreground max-w-[12rem] truncate sm:max-w-none">
+                    {yearRange.from} → {yearRange.to}
                   </span>
                 </>
               )}

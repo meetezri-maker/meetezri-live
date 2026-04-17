@@ -1,6 +1,12 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { createWellnessTool, createWellnessChallenge, deleteWellnessTool, getWellnessToolById, getWellnessTools, updateWellnessTool, trackWellnessProgress, getUserWellnessProgress, startWellnessSession, completeWellnessSession, getWellnessStats, getWellnessChallengesWithStats, getWellnessChallengesForUserDashboard, toggleWellnessToolFavorite } from './wellness.service';
-import { CreateWellnessToolInput, UpdateWellnessToolInput, TrackProgressInput, createWellnessChallengeSchema } from './wellness.schema';
+import {
+  CreateWellnessChallengeInput,
+  CreateWellnessToolInput,
+  UpdateWellnessToolInput,
+  TrackProgressInput,
+  createWellnessChallengeSchema,
+} from './wellness.schema';
 
 export async function createWellnessToolHandler(
   request: FastifyRequest<{ Body: CreateWellnessToolInput }>,
@@ -186,7 +192,7 @@ export async function createWellnessChallengeHandler(
   reply: FastifyReply
 ) {
   try {
-    const body = createWellnessChallengeSchema.parse(request.body);
+    const body: CreateWellnessChallengeInput = createWellnessChallengeSchema.parse(request.body);
     const created = await createWellnessChallenge(body);
     return reply.code(201).send(created);
   } catch (error: any) {

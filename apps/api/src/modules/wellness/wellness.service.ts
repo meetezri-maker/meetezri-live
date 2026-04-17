@@ -1,5 +1,9 @@
 import prisma from '../../lib/prisma';
-import { CreateWellnessToolInput, UpdateWellnessToolInput } from './wellness.schema';
+import {
+  CreateWellnessChallengeInput,
+  CreateWellnessToolInput,
+  UpdateWellnessToolInput,
+} from './wellness.schema';
 
 const PROGRESS_CACHE_TTL = 30 * 1000; // 30 seconds
 const progressCache = new Map<string, { data: any[]; timestamp: number }>();
@@ -69,15 +73,7 @@ export async function createWellnessTool(data: CreateWellnessToolInput & { creat
   return created;
 }
 
-export async function createWellnessChallenge(data: {
-  title: string;
-  description?: string | null;
-  category?: string | null;
-  start_date: string;
-  end_date: string;
-  reward_points?: number | null;
-  goal_criteria?: unknown | null;
-}) {
+export async function createWellnessChallenge(data: CreateWellnessChallengeInput) {
   const start = new Date(data.start_date);
   const end = new Date(data.end_date);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {

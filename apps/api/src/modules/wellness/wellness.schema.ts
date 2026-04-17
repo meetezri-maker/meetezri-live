@@ -104,8 +104,11 @@ export const createWellnessChallengeSchema = z.object({
   start_date: z.string().min(1),
   end_date: z.string().min(1),
   reward_points: z.number().int().min(0).optional().nullable(),
-  goal_criteria: z.any().optional().nullable(),
+  goal_criteria: z.unknown().optional().nullable(),
 });
+
+/** Same shape as validated POST /wellness/challenges body — use for service + controller typing. */
+export type CreateWellnessChallengeInput = z.infer<typeof createWellnessChallengeSchema>;
 
 export type CreateWellnessToolInput = z.infer<typeof createWellnessToolSchema>;
 export type UpdateWellnessToolInput = z.infer<typeof updateWellnessToolSchema>;
