@@ -12,7 +12,7 @@ import {
   AlertTriangle,
   DollarSign,
   Crown,
-  ArrowUpRight,
+  CalendarDays,
   CheckCircle2,
   Clock,
   Settings,
@@ -32,6 +32,8 @@ import { Link } from "react-router-dom";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { Skeleton } from "../../components/ui/skeleton";
+import { Calendar } from "../../components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import {
   Line,
   Area,
@@ -48,6 +50,20 @@ import {
   Legend,
   ComposedChart,
 } from "recharts";
+
+const PERIOD_OPTIONS = ["week", "month", "year"] as const;
+const PERIOD_RANGE_DAYS: Record<(typeof PERIOD_OPTIONS)[number], number> = {
+  week: 7,
+  month: 30,
+  year: 365,
+};
+
+const MIN_STATS_YEAR = 2020;
+
+function clampStatsYear(y: number): number {
+  const maxY = new Date().getUTCFullYear();
+  return Math.min(Math.max(y, MIN_STATS_YEAR), maxY);
+}
 
 function formatTimeAgo(iso: string) {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -154,7 +170,31 @@ export function SuperAdminDashboard() {
   const [canPoll, setCanPoll] = useState(false);
   const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
   const [sessionWeekOffset, setSessionWeekOffset] = useState(0);
+  const [statsYear, setStatsYear] = useState(() => clampStatsYear(new Date().getUTCFullYear()));
+  const [yearPickerOpen, setYearPickerOpen] = useState(false);
   const isFirstDashboardLoad = useRef(true);
+
+  const statsQuery = useMemo(() => {
+    if (chartPeriod === "year") {
+      const y = clampStatsYear(statsYear);
+      return {
+        chartPeriod: "year" as const,
+        dateFrom: `${y}-01-01`,
+        dateTo: `${y}-12-31`,
+      };
+    }
+    return {
+      chartPeriod,
+      rangeDays: PERIOD_RANGE_DAYS[chartPeriod],
+      sessionWeekOffset: chartPeriod === "week" ? sessionWeekOffset : 0,
+    };
+  }, [chartPeriod, statsYear, sessionWeekOffset]);
+
+  useEffect(() => {
+    if (chartPeriod !== "week" && sessionWeekOffset !== 0) {
+      setSessionWeekOffset(0);
+    }
+  }, [chartPeriod, sessionWeekOffset]);
 
   useEffect(() => {
     let cancelled = false;
@@ -169,8 +209,7 @@ export function SuperAdminDashboard() {
 
       try {
         const data = await api.admin.getStats({
-          chartPeriod,
-          sessionWeekOffset,
+          ...statsQuery,
           refresh: true,
         });
         if (cancelled) return;
@@ -202,17 +241,14 @@ export function SuperAdminDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [chartPeriod, sessionWeekOffset]);
+  }, [statsQuery]);
 
   useEffect(() => {
     if (!canPoll) return;
 
     const id = setInterval(async () => {
       try {
-        const data = await api.admin.getStats({
-          chartPeriod,
-          sessionWeekOffset,
-        });
+        const data = await api.admin.getStats(statsQuery);
         setStats(data);
         const recent = await api.admin.getRecentActivity();
         setActivityFeed(buildActivityFeedFromRecent(recent));
@@ -223,14 +259,13 @@ export function SuperAdminDashboard() {
     }, 30000);
 
     return () => clearInterval(id);
-  }, [canPoll, chartPeriod, sessionWeekOffset]);
+  }, [canPoll, statsQuery]);
 
   const exportReport = () => {
     try {
       const payload = {
         exportedAt: new Date().toISOString(),
-        chartPeriod,
-        sessionWeekOffset,
+        ...statsQuery,
         stats,
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -250,14 +285,37 @@ export function SuperAdminDashboard() {
 
   const trendSubtitle = useMemo(() => {
     if (chartPeriod === "week") return "New signups per week (last 12 weeks)";
-    if (chartPeriod === "year") return "New signups by year";
+    if (chartPeriod === "year")
+      return `New signups by year — calendar year ${clampStatsYear(statsYear)} (UTC)`;
     return "Total users over time (monthly)";
-  }, [chartPeriod]);
+  }, [chartPeriod, statsYear]);
 
   const revenueSubtitle = useMemo(() => {
     if (chartPeriod === "week") return "Payment volume by week (Stripe)";
-    if (chartPeriod === "year") return "Payment volume by year (Stripe)";
+    if (chartPeriod === "year")
+      return `Payment volume by year (Stripe) — ${clampStatsYear(statsYear)}`;
     return "Payment volume by month (Stripe)";
+  }, [chartPeriod, statsYear]);
+
+  const sessionChartTitle = useMemo(() => {
+    if (chartPeriod === "week") return "Weekly Session Activity";
+    if (chartPeriod === "year") return "Yearly Session Activity";
+    return "Monthly Session Activity";
+  }, [chartPeriod]);
+
+  const sessionChartSubtitle = useMemo(() => {
+    if (chartPeriod === "week") {
+      return `Sessions per day (UTC week) — offset ${sessionWeekOffset || "current"}`;
+    }
+    if (chartPeriod === "year")
+      return `Sessions per day — calendar year ${clampStatsYear(statsYear)} (UTC)`;
+    return "Sessions per day for the last 30 days";
+  }, [chartPeriod, sessionWeekOffset, statsYear]);
+
+  const sessionLoadingText = useMemo(() => {
+    if (chartPeriod === "week") return "Loading week…";
+    if (chartPeriod === "year") return "Loading year…";
+    return "Loading month…";
   }, [chartPeriod]);
 
   if (loading && !stats) {
@@ -463,6 +521,151 @@ export function SuperAdminDashboard() {
           </motion.div>
         </div>
 
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+        >
+          <Card className="p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-medium text-foreground">Charts</span>
+                {chartsLoading && (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden />
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {PERIOD_OPTIONS.map((p) => (
+                  <Button
+                    key={p}
+                    variant={chartPeriod === p ? "default" : "outline"}
+                    size="sm"
+                    type="button"
+                    disabled={chartsLoading}
+                    onClick={() => setChartPeriod(p)}
+                  >
+                    {p === "week" ? "Week" : p === "month" ? "Month" : "Year"}
+                  </Button>
+                ))}
+              </div>
+
+              {chartPeriod === "year" && (
+                <>
+                  <div className="hidden h-6 w-px bg-border sm:block" aria-hidden />
+                  <span className="text-sm text-muted-foreground">Calendar year</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    disabled={chartsLoading || clampStatsYear(statsYear) <= MIN_STATS_YEAR}
+                    onClick={() =>
+                      setStatsYear((prev) => {
+                        const c = clampStatsYear(prev);
+                        return c <= MIN_STATS_YEAR ? c : c - 1;
+                      })
+                    }
+                    aria-label="Previous year"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Popover open={yearPickerOpen} onOpenChange={setYearPickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={chartsLoading}
+                        className="gap-2 tabular-nums font-medium"
+                      >
+                        <CalendarDays className="h-4 w-4 shrink-0" aria-hidden />
+                        {clampStatsYear(statsYear)}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        key={clampStatsYear(statsYear)}
+                        mode="single"
+                        selected={new Date(Date.UTC(clampStatsYear(statsYear), 5, 15))}
+                        onSelect={(d) => {
+                          if (!d) return;
+                          setStatsYear(clampStatsYear(d.getFullYear()));
+                          setYearPickerOpen(false);
+                        }}
+                        defaultMonth={new Date(Date.UTC(clampStatsYear(statsYear), 0, 1))}
+                        initialFocus
+                        fromDate={new Date(Date.UTC(MIN_STATS_YEAR, 0, 1))}
+                        toDate={new Date(Date.UTC(new Date().getUTCFullYear(), 11, 31))}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    disabled={
+                      chartsLoading ||
+                      clampStatsYear(statsYear) >= new Date().getUTCFullYear()
+                    }
+                    onClick={() =>
+                      setStatsYear((prev) => {
+                        const c = clampStatsYear(prev);
+                        const maxY = new Date().getUTCFullYear();
+                        return c >= maxY ? c : c + 1;
+                      })
+                    }
+                    aria-label="Next year"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Jan 1–Dec 31, {clampStatsYear(statsYear)} (UTC)
+                  </span>
+                </>
+              )}
+
+              {chartPeriod === "week" && (
+                <>
+                  <div className="hidden h-6 w-px bg-border sm:block" aria-hidden />
+                  <span className="text-sm text-muted-foreground">Week</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={chartsLoading}
+                    onClick={() => setSessionWeekOffset((o) => Math.min(52, o + 1))}
+                    aria-label="Older week"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={chartsLoading}
+                    onClick={() => setSessionWeekOffset(0)}
+                  >
+                    This week
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={chartsLoading || sessionWeekOffset <= 0}
+                    onClick={() => setSessionWeekOffset((o) => Math.max(0, o - 1))}
+                    aria-label="Newer week"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </>
+              )}
+            </div>
+          </Card>
+        </motion.div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* User Growth Chart - Takes 2 columns */}
           <motion.div
@@ -472,30 +675,13 @@ export function SuperAdminDashboard() {
             className="lg:col-span-2"
           >
             <Card className="p-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="mb-6">
                 <div>
                   <h2 className="font-bold text-xl flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-purple-500" />
                     User Growth Trend
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">{trendSubtitle}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {chartsLoading && (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden />
-                  )}
-                  {(["week", "month", "year"] as const).map((p) => (
-                    <Button
-                      key={p}
-                      variant={chartPeriod === p ? "default" : "outline"}
-                      size="sm"
-                      type="button"
-                      disabled={chartsLoading}
-                      onClick={() => setChartPeriod(p)}
-                    >
-                      {p === "week" ? "Week" : p === "month" ? "Month" : "Year"}
-                    </Button>
-                  ))}
                 </div>
               </div>
               <div className="relative min-h-[300px]">
@@ -672,51 +858,13 @@ export function SuperAdminDashboard() {
             transition={{ delay: 0.6 }}
           >
             <Card className="p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+              <div className="mb-6">
                 <div>
                   <h2 className="font-bold text-xl flex items-center gap-2">
                     <BarChart3 className="w-5 h-5 text-cyan-500" />
-                    Weekly Session Activity
+                    {sessionChartTitle}
                   </h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Sessions per day (UTC week) — offset {sessionWeekOffset || "current"}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  {chartsLoading && (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" aria-hidden />
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    disabled={chartsLoading}
-                    onClick={() => setSessionWeekOffset((o) => Math.min(52, o + 1))}
-                    aria-label="Previous week"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={chartsLoading}
-                    onClick={() => setSessionWeekOffset(0)}
-                  >
-                    This week
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    disabled={chartsLoading || sessionWeekOffset <= 0}
-                    onClick={() => setSessionWeekOffset((o) => Math.max(0, o - 1))}
-                    aria-label="Next week"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
+                  <p className="text-sm text-muted-foreground mt-1">{sessionChartSubtitle}</p>
                 </div>
               </div>
               <div className="relative min-h-[280px]">
@@ -765,7 +913,7 @@ export function SuperAdminDashboard() {
                   <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-xl border border-border/40 bg-background/75 backdrop-blur-[2px]">
                     <Loader2 className="h-9 w-9 animate-spin text-primary" aria-hidden />
                     <Skeleton className="h-3 w-36 rounded-full" />
-                    <span className="text-xs text-muted-foreground">Loading week…</span>
+                    <span className="text-xs text-muted-foreground">{sessionLoadingText}</span>
                   </div>
                 )}
               </div>

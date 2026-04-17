@@ -286,7 +286,8 @@ export async function getDashboardStats(
         COALESCE(SUM(amount), 0)::bigint AS revenue
       FROM payment_transactions
       WHERE status = 'completed'
-        AND created_at >= timezone('utc', now()) - interval '12 months'
+        AND created_at >= ${rangeStart}
+        AND created_at <= ${rangeEnd}
       GROUP BY date_trunc('month', timezone('utc'::text, created_at))
       ORDER BY date_trunc('month', timezone('utc'::text, created_at))
     `,
@@ -296,7 +297,8 @@ export async function getDashboardStats(
         COALESCE(SUM(amount), 0)::bigint AS revenue
       FROM payment_transactions
       WHERE status = 'completed'
-        AND created_at >= timezone('utc', now()) - interval '12 weeks'
+        AND created_at >= ${rangeStart}
+        AND created_at <= ${rangeEnd}
       GROUP BY date_trunc('week', timezone('utc'::text, created_at))
       ORDER BY date_trunc('week', timezone('utc'::text, created_at))
     `,
@@ -306,7 +308,8 @@ export async function getDashboardStats(
         COALESCE(SUM(amount), 0)::bigint AS revenue
       FROM payment_transactions
       WHERE status = 'completed'
-        AND created_at >= timezone('utc', now()) - interval '6 years'
+        AND created_at >= ${rangeStart}
+        AND created_at <= ${rangeEnd}
       GROUP BY date_trunc('year', timezone('utc'::text, created_at))
       ORDER BY date_trunc('year', timezone('utc'::text, created_at))
     `

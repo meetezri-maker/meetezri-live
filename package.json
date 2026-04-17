@@ -2,7 +2,7 @@
   "name": "meetezri-monorepo",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@9.1.1",
+  "packageManager": "pnpm@10.33.0",
   "pnpm": {
     "overrides": {
       "vite": "6.3.5",
