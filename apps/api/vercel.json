@@ -4,11 +4,5 @@
   "buildCommand": "pnpm run build",
   "rewrites": [
     { "source": "/(.*)", "destination": "/api/index" }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/streak-reminders",
-      "schedule": "0 * * * *"
-    }
   ]
 }
