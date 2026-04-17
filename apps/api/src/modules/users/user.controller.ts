@@ -480,6 +480,18 @@ export async function getCreditsHandler(
   return credits;
 }
 
+export async function getRecentActivityHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const query = (request.query || {}) as { limit?: string | number };
+  const parsedLimit = Number(query.limit);
+  const limit = Number.isFinite(parsedLimit) ? parsedLimit : 25;
+  const activity = await userService.getRecentActivity(user.sub, limit);
+  return activity;
+}
+
 export async function getKnowledgeTwoFactorStatusHandler(
   request: FastifyRequest,
   reply: FastifyReply

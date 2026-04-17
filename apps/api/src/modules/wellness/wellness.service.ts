@@ -674,12 +674,14 @@ export async function getWellnessStats(userId: string) {
   sixMonthsAgo.setMonth(today.getMonth() - 5); 
   sixMonthsAgo.setDate(1); 
 
-  // Helper to group by week
+  const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+
+  // Helper to group by week (4 buckets covering the last 28 days; clamp so day 28 lands in week 4 → bucket 3)
   const getWeekNumber = (date: Date) => {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
     const diff = d.getTime() - fourWeeksAgo.getTime();
-    return Math.floor(diff / (7 * 24 * 60 * 60 * 1000));
+    return Math.min(3, Math.floor(diff / oneWeekMs));
   };
 
   // Run independent queries in parallel
@@ -691,7 +693,8 @@ export async function getWellnessStats(userId: string) {
     avgMoodResult,
     sleepEntries,
     postsCount,
-    commentsCount
+    commentsCount,
+    wellnessDurationLast4Weeks,
   ] = await Promise.all([
     // Sessions (Last 6 Months)
     prisma.app_sessions.findMany({
@@ -746,7 +749,17 @@ export async function getWellnessStats(userId: string) {
 
     // Social Counts (Total)
     prisma.community_posts.count({ where: { user_id: userId } }),
-    prisma.community_comments.count({ where: { user_id: userId } })
+    prisma.community_comments.count({ where: { user_id: userId } }),
+
+    // Physical score: wellness exercise time in the last 4 weeks (seconds)
+    prisma.user_wellness_progress.aggregate({
+      where: {
+        user_id: userId,
+        completed_at: { gte: fourWeeksAgo },
+        duration_spent: { gt: 0 },
+      },
+      _sum: { duration_spent: true },
+    }),
   ]);
 
   // --- Process Results ---
@@ -847,8 +860,13 @@ export async function getWellnessStats(userId: string) {
   const mentalCount = recentJournals + recentSessions + recentWellness;
   const mentalScore = Math.min((mentalCount / 5) * 100, 100);
 
-  // Physical: Placeholder
-  const physicalScore = 65; 
+  // Physical: time spent on wellness exercises in the last 4 weeks (~90 min total = 100%)
+  const physicalSeconds = Number(wellnessDurationLast4Weeks._sum.duration_spent ?? 0) || 0;
+  const physicalTargetSeconds = 90 * 60;
+  const physicalScore = Math.min(
+    100,
+    Math.round((physicalSeconds / physicalTargetSeconds) * 100)
+  );
 
   const wellnessScore = [
     { subject: 'Emotional', A: Math.round(emotionalScore), fullMark: 100 },

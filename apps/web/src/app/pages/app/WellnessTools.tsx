@@ -243,6 +243,14 @@ export function WellnessTools() {
   const { profile, user } = useAuth();
   const navigate = useNavigate();
 
+  const brainFocusMode =
+    Boolean(
+      profile &&
+        typeof profile.brain_health_settings === "object" &&
+        profile.brain_health_settings !== null &&
+        (profile.brain_health_settings as { focusModeEnabled?: boolean }).focusModeEnabled === true
+    );
+
   // Feature Gate for Trial Users
   if (profile?.subscription_plan === 'trial') {
     return (
@@ -983,25 +991,29 @@ export function WellnessTools() {
                       </Button>
                     </motion.div>
                   )}
-                  {/* Decorative glows — behind all copy (z-0); scaled breathing uses z-10 so it stays under text rows */}
-                  <motion.div
-                    aria-hidden
-                    animate={{
-                      scale: [1, 1.2, 1],
-                      opacity: [0.3, 0.5, 0.3]
-                    }}
-                    transition={{ duration: 4, repeat: Infinity }}
-                    className="pointer-events-none absolute -top-20 -right-20 z-0 h-60 w-60 rounded-full bg-white/20 blur-3xl"
-                  />
-                  <motion.div
-                    aria-hidden
-                    animate={{
-                      scale: [1, 1.3, 1],
-                      opacity: [0.2, 0.4, 0.2]
-                    }}
-                    transition={{ duration: 5, repeat: Infinity }}
-                    className="pointer-events-none absolute -bottom-20 -left-20 z-0 h-60 w-60 rounded-full bg-white/20 blur-3xl"
-                  />
+                  {/* Decorative glows — hidden in Brain Health → Focus mode */}
+                  {!brainFocusMode && (
+                    <>
+                      <motion.div
+                        aria-hidden
+                        animate={{
+                          scale: [1, 1.2, 1],
+                          opacity: [0.3, 0.5, 0.3]
+                        }}
+                        transition={{ duration: 4, repeat: Infinity }}
+                        className="pointer-events-none absolute -top-20 -right-20 z-0 h-60 w-60 rounded-full bg-white/20 blur-3xl"
+                      />
+                      <motion.div
+                        aria-hidden
+                        animate={{
+                          scale: [1, 1.3, 1],
+                          opacity: [0.2, 0.4, 0.2]
+                        }}
+                        transition={{ duration: 5, repeat: Infinity }}
+                        className="pointer-events-none absolute -bottom-20 -left-20 z-0 h-60 w-60 rounded-full bg-white/20 blur-3xl"
+                      />
+                    </>
+                  )}
 
                   <div className="relative isolate z-10 flex-1">
                     <motion.button

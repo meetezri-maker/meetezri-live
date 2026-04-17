@@ -447,6 +447,7 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "purchased_credits" INTEGER DEFAULT 0,
     "purchased_credits_seconds" INTEGER DEFAULT 0,
     "privacy_settings" JSONB,
+    "brain_health_settings" JSONB,
     "account_status" TEXT DEFAULT 'active',
 
     CONSTRAINT "profiles_pkey" PRIMARY KEY ("id")

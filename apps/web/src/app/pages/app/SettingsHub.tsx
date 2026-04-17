@@ -325,8 +325,8 @@ export function SettingsHub() {
       route: "/app/settings/resource-analytics"
     },
     {
-      id: "notification-history",
-      title: "Notification History",
+      id: "Crisis Notification",
+      title: "Crisis Notification ",
       description: "See all notifications sent",
       icon: History,
       color: "from-blue-500 to-cyan-600",

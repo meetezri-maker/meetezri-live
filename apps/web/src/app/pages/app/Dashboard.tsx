@@ -7,6 +7,7 @@ import { Link, useLocation } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { Video, Heart, BookOpen, TrendingUp, Calendar, Sparkles, ArrowRight, Award, Target, Flame, Clock, Zap, Mail } from "lucide-react";
 import { useState, useEffect } from "react";
+import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { WellnessChallenges } from "../../components/WellnessChallenges";
 import { PWAInstallPrompt } from "../../components/PWAInstallPrompt";
 import { useAuth } from "@/app/contexts/AuthContext";
@@ -41,6 +42,9 @@ export function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [confirmEmailDismissed, setConfirmEmailDismissed] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+  const [activityFeed, setActivityFeed] = useState<
+    Array<{ id: string; type: string; text: string; time: string; emoji: string }>
+  >([]);
 
   const rawSignupType =
     (user as any)?.user_metadata?.signup_type ??
@@ -262,14 +266,54 @@ export function Dashboard() {
     }
   ];
 
-  const recentActivities = profile?.mood_entries?.slice(0, 4).map((entry: any) => ({
+  const moodBasedFallbackActivities = profile?.mood_entries?.slice(0, 4).map((entry: any) => ({
+    id: `mood:${entry.id ?? entry.created_at}`,
     type: "mood",
     text: `Logged ${entry.mood} (${entry.intensity}/10)`,
     time: formatDistanceToNow(new Date(entry.created_at), { addSuffix: true }),
     emoji: getMoodEmoji(entry.mood)
   })) || [
-    { type: "system", text: "Welcome to MeetEzri!", time: "Just now", emoji: "👋" }
+    { id: "system:welcome", type: "system", text: "Welcome to MeetEzri!", time: "Just now", emoji: "👋" }
   ];
+
+  useEffect(() => {
+    const emojiForActivityType = (type: string) => {
+      if (type === "mood") return "😊";
+      if (type === "journal") return "📓";
+      if (type === "session") return "🎥";
+      if (type === "event") return "⚡";
+      return "📝";
+    };
+
+    const loadRecentActivity = async () => {
+      try {
+        const rows = (await api.getRecentActivity(20)) as Array<{
+          id: string;
+          type: string;
+          text: string;
+          created_at: string;
+          mood?: string;
+        }>;
+        const mapped = rows.slice(0, 10).map((row) => ({
+          id: row.id,
+          type: row.type,
+          text: row.text,
+          time: formatDistanceToNow(new Date(row.created_at), { addSuffix: true }),
+          emoji:
+            row.type === "mood" && row.mood
+              ? getMoodEmoji(row.mood)
+              : emojiForActivityType(row.type),
+        }));
+        setActivityFeed(mapped);
+      } catch (error) {
+        setActivityFeed([]);
+      }
+    };
+
+    void loadRecentActivity();
+  }, [user?.id]);
+
+  const recentActivities = activityFeed.length > 0 ? activityFeed : moodBasedFallbackActivities;
 
   const insights = [
     {
@@ -291,6 +335,26 @@ export function Dashboard() {
       color: "text-blue-500"
     }
   ];
+
+  const insightDistributionData = [
+    {
+      name: "Sessions",
+      value: Number(profile?.stats?.completed_sessions ?? 0),
+      color: "#8b5cf6",
+    },
+    {
+      name: "Mood Check-ins",
+      value: Number(profile?.stats?.total_checkins ?? 0),
+      color: "#06b6d4",
+    },
+    {
+      name: "Journals",
+      value: Number(profile?.stats?.total_journals ?? 0),
+      color: "#f59e0b",
+    },
+  ];
+  const insightDistributionChartData = insightDistributionData.filter((item) => item.value > 0);
+  const insightDistributionTotal = insightDistributionData.reduce((sum, item) => sum + item.value, 0);
 
   if (isLoading) {
     return (
@@ -590,12 +654,55 @@ export function Dashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Insights */}
+        
+
+          {/* Recent Activity */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.7 }}
+            className="h-full"
+          >
+            <Card className="p-6 shadow-xl h-full lg:h-[760px] flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Recent Activity</h2>
+                <Link to="/app/mood-history">
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="text-primary hover:underline text-sm font-medium"
+                  >
+                    View History
+                  </motion.button>
+                </Link>
+              </div>
+              <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+                {recentActivities.map((activity: any, index: number) => (
+                  <motion.div
+                    key={activity.id || index}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.8 + index * 0.05 }}
+                    whileHover={{ x: 5 }}
+                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                  >
+                    <span className="text-2xl">{activity.emoji}</span>
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{activity.text}</p>
+                      <p className="text-xs text-muted-foreground">{activity.time}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </Card>
+          </motion.div>
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.6 }}
+            className="h-full"
           >
-            <Card className="p-6 shadow-xl">
+            <Card className="p-6 shadow-xl h-full lg:h-[760px] flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold">Your Insights</h2>
                 <Link to="/app/progress">
@@ -608,6 +715,7 @@ export function Dashboard() {
                   </motion.button>
                 </Link>
               </div>
+             
               <div className="space-y-4">
                 {insights.map((insight, index) => {
                   const Icon = insight.icon;
@@ -631,45 +739,51 @@ export function Dashboard() {
                   );
                 })}
               </div>
-            </Card>
-          </motion.div>
-
-          {/* Recent Activity */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.7 }}
-          >
-            <Card className="p-6 shadow-xl">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">Recent Activity</h2>
-                <Link to="/app/mood-history">
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    className="text-primary hover:underline text-sm font-medium"
-                  >
-                    View History
-                  </motion.button>
-                </Link>
-              </div>
-              <div className="space-y-3">
-                {recentActivities.map((activity: any, index: number) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.8 + index * 0.05 }}
-                    whileHover={{ x: 5 }}
-                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-                  >
-                    <span className="text-2xl">{activity.emoji}</span>
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">{activity.text}</p>
-                      <p className="text-xs text-muted-foreground">{activity.time}</p>
+              <div className="mb-4 rounded-xl border border-border/60 p-3">
+                <div className="h-52 w-full">
+                  {insightDistributionChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsPie>
+                        <Pie
+                          data={insightDistributionChartData}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={48}
+                          outerRadius={74}
+                          paddingAngle={2}
+                          strokeWidth={0}
+                        >
+                          {insightDistributionChartData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value: number, name: string) => [value, name]}
+                          contentStyle={{ borderRadius: 12, borderColor: "hsl(var(--border))" }}
+                        />
+                      </RechartsPie>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                      Complete sessions, mood check-ins, or journals to populate insights.
                     </div>
-                  </motion.div>
-                ))}
+                  )}
+                </div>
+                <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Total tracked activities</span>
+                  <span className="font-semibold text-foreground">{insightDistributionTotal}</span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                  {insightDistributionData.map((item) => (
+                    <span key={item.name} className="inline-flex items-center gap-1.5 text-muted-foreground">
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      {item.name}: {item.value}
+                    </span>
+                  ))}
+                </div>
               </div>
             </Card>
           </motion.div>

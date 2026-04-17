@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { createSessionHandler, getSessionsHandler, getSessionHandler, endSessionHandler, createMessageHandler, getSessionTranscriptHandler, scheduleSessionHandler, getUserSessionsHandler, toggleSessionFavoriteHandler, heartbeatSessionHandler } from './sessions.controller';
-import { createSessionSchema, endSessionSchema, createMessageSchema, heartbeatSessionSchema } from './sessions.schema';
+import { createSessionHandler, getSessionsHandler, getSessionHandler, endSessionHandler, createMessageHandler, getSessionTranscriptHandler, scheduleSessionHandler, getUserSessionsHandler, toggleSessionFavoriteHandler, heartbeatSessionHandler, cancelScheduledSessionHandler, updateScheduledSessionHandler } from './sessions.controller';
+import { createSessionSchema, endSessionSchema, createMessageSchema, heartbeatSessionSchema, updateScheduledSessionSchema } from './sessions.schema';
 
 export async function sessionRoutes(app: FastifyInstance) {
   app.get(
@@ -69,6 +69,25 @@ export async function sessionRoutes(app: FastifyInstance) {
       preHandler: [app.authenticate],
     },
     heartbeatSessionHandler
+  );
+
+  app.delete(
+    '/:id/schedule',
+    {
+      preHandler: [app.authenticate],
+    },
+    cancelScheduledSessionHandler
+  );
+
+  app.patch(
+    '/:id/schedule',
+    {
+      schema: {
+        body: updateScheduledSessionSchema,
+      },
+      preHandler: [app.authenticate],
+    },
+    updateScheduledSessionHandler
   );
 
   app.post(

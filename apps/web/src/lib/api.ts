@@ -483,6 +483,19 @@ export const api = {
     return getCreditsInFlight;
   },
 
+  async getRecentActivity(limit = 25) {
+    const headers = await getHeaders();
+    const res = await fetch(
+      `${API_URL}/users/activity?${new URLSearchParams({ limit: String(limit) })}`,
+      {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      }
+    );
+    return handleResponse(res, 'Failed to fetch recent activity');
+  },
+
   async updateSetting(key: string, value: any, description?: string) {
     const headers = await getHeaders();
     const res = await fetch(`${API_URL}/system-settings`, {
@@ -1115,6 +1128,26 @@ export const api = {
         body: JSON.stringify(data),
       });
       return handleResponse(res, 'Failed to schedule session');
+    },
+    async cancelScheduled(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/sessions/${id}/schedule`, {
+        method: 'DELETE',
+        headers,
+      });
+      return handleResponse(res, 'Failed to cancel scheduled session');
+    },
+    async updateScheduled(
+      id: string,
+      data: { duration_minutes?: number; scheduled_at?: string; config?: any }
+    ) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/sessions/${id}/schedule`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to update scheduled session');
     },
 
     async list(params?: { status?: string; limit?: number }) {

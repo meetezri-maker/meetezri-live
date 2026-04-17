@@ -13,9 +13,10 @@ import {
   Coffee,
   Activity,
   Brain,
-  Heart,
   Zap,
-  X
+  X,
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
@@ -24,10 +25,19 @@ import { useAuth } from "../../contexts/AuthContext";
 import { format, differenceInMinutes, parseISO } from "date-fns";
 import { Skeleton } from "../../components/ui/skeleton";
 
+type SleepEntry = {
+  id: string;
+  bed_time: string;
+  wake_time: string;
+  quality_rating: number | null;
+  notes: string | null;
+};
+
 export function SleepTracker() {
   const { session } = useAuth();
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [showLogModal, setShowLogModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [modalFeedback, setModalFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
   const [sleepFormData, setSleepFormData] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
     bedTime: "",
@@ -36,36 +46,47 @@ export function SleepTracker() {
     notes: ""
   });
   
-  const [sleepEntries, setSleepEntries] = useState<any[]>([]);
+  const [sleepEntries, setSleepEntries] = useState<SleepEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchSleepEntries();
   }, [session]);
 
-  const fetchSleepEntries = async () => {
-    if (!session) return;
+  const fetchSleepEntries = async (options?: { silent?: boolean }) => {
+    if (!session) {
+      setSleepEntries([]);
+      setIsLoading(false);
+      return;
+    }
+    const silent = options?.silent === true;
     try {
-      setIsLoading(true);
-      const data = await api.sleep.getEntries();
-      setSleepEntries(data);
+      if (!silent) setIsLoading(true);
+      const data = (await api.sleep.getEntries()) as SleepEntry[];
+      setSleepEntries(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to fetch sleep entries", error);
+      setSleepEntries([]);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   const handleLogSleep = async () => {
+    setModalFeedback(null);
+    if (!sleepFormData.bedTime || !sleepFormData.wakeTime) {
+      setModalFeedback({
+        kind: "error",
+        message: "Please set both bedtime and wake time.",
+      });
+      return;
+    }
+
+    setIsSaving(true);
     try {
-      // Construct ISO strings for bed time and wake time
-      // Assuming bedTime and wakeTime are HH:MM strings and date is YYYY-MM-DD
-      // Handle overnight sleep where wake date might be next day
-      
       const bedDateTimeStr = `${sleepFormData.date}T${sleepFormData.bedTime}:00`;
       let wakeDateTimeStr = `${sleepFormData.date}T${sleepFormData.wakeTime}:00`;
-      
-      // If wake time is earlier than bed time, assume it's next day
+
       if (sleepFormData.wakeTime < sleepFormData.bedTime) {
         const nextDate = new Date(sleepFormData.date);
         nextDate.setDate(nextDate.getDate() + 1);
@@ -75,77 +96,84 @@ export function SleepTracker() {
       await api.sleep.createEntry({
         bed_time: new Date(bedDateTimeStr).toISOString(),
         wake_time: new Date(wakeDateTimeStr).toISOString(),
-        quality_rating: parseInt(sleepFormData.quality),
-        notes: sleepFormData.notes
+        quality_rating: parseInt(sleepFormData.quality, 10),
+        notes: sleepFormData.notes || undefined,
       });
-      
-      // Reset form
+
       setSleepFormData({
         date: format(new Date(), 'yyyy-MM-dd'),
         bedTime: "",
         wakeTime: "",
         quality: "85",
-        notes: ""
+        notes: "",
       });
-      
-      // Close modal
-      setShowLogModal(false);
-      
-      // Refresh data
-      fetchSleepEntries();
-      
-      // Show success feedback
-      alert("Sleep data logged successfully!");
+
+      setModalFeedback({
+        kind: "success",
+        message: "Your sleep entry was saved. You can log another night or close this window.",
+      });
+      await fetchSleepEntries({ silent: true });
     } catch (error) {
       console.error("Failed to log sleep", error);
-      alert("Failed to log sleep data. Please try again.");
+      const message =
+        error instanceof Error ? error.message : "Could not save your sleep entry. Please try again.";
+      setModalFeedback({ kind: "error", message });
+    } finally {
+      setIsSaving(false);
     }
+  };
+
+  const closeLogModal = () => {
+    if (isSaving) return;
+    setShowLogModal(false);
+    setModalFeedback(null);
   };
 
   // Calculate stats from real data
   const calculateStats = () => {
-    if (sleepEntries.length === 0) return { avgDuration: "0.0", avgQuality: 0, avgDeepSleep: "0.0h", streak: 0 };
-    
+    if (sleepEntries.length === 0)
+      return { avgDuration: "0.0", avgQuality: 0, avgDeepSleep: "N/A", streak: 0 };
+
     let totalDurationMinutes = 0;
-    let totalQuality = 0;
-    
-    sleepEntries.forEach(entry => {
+    let qualitySum = 0;
+    let qualityCount = 0;
+
+    sleepEntries.forEach((entry) => {
       const duration = differenceInMinutes(parseISO(entry.wake_time), parseISO(entry.bed_time));
       totalDurationMinutes += duration;
-      totalQuality += entry.quality_rating || 0;
+      if (entry.quality_rating != null) {
+        qualitySum += entry.quality_rating;
+        qualityCount += 1;
+      }
     });
-    
+
     const avgDuration = (totalDurationMinutes / sleepEntries.length / 60).toFixed(1);
-    // Scale quality back to 100 if it was 1-5, assuming input was 1-100 but schema is 1-5? 
-    // Wait, schema says 1-5. Frontend input defaults to 85. Let's adjust frontend to 1-100 or schema to 1-100.
-    // Schema said min(1).max(5). But frontend has 85. Let's update schema or assume frontend sends 1-5 mapped.
-    // Let's assume for now we store what we get, but validation might fail. 
-    // Actually, let's fix the validation in backend schema if needed, or adjust frontend.
-    // Frontend `quality` state default "85".
-    // Let's assume we want 0-100 for quality.
-    // I should probably update the backend schema to allow 0-100.
-    
-    const avgQualityVal = Math.round(totalQuality / sleepEntries.length);
-    
+    const avgQualityVal =
+      qualityCount > 0 ? Math.round(qualitySum / qualityCount) : 0;
+
     return {
       avgDuration,
       avgQuality: avgQualityVal,
-      avgDeepSleep: "N/A", // Not tracking deep sleep yet
-      streak: sleepEntries.length // Simple streak logic
+      avgDeepSleep: "N/A",
+      streak: sleepEntries.length,
     };
   };
 
   const stats = calculateStats();
 
-  // Prepare chart data
-  const chartData = sleepEntries.slice(0, 7).reverse().map(entry => {
-    const duration = differenceInMinutes(parseISO(entry.wake_time), parseISO(entry.bed_time)) / 60;
-    return {
-      day: format(parseISO(entry.bed_time), 'EEE'),
-      hours: parseFloat(duration.toFixed(1)),
-      quality: entry.quality_rating
-    };
-  });
+  // API returns entries newest-first; chart shows up to 7 most recent nights, oldest → newest on the X axis
+  const chartData = sleepEntries
+    .slice(0, 7)
+    .reverse()
+    .map((entry) => {
+      const duration =
+        differenceInMinutes(parseISO(entry.wake_time), parseISO(entry.bed_time)) / 60;
+      return {
+        day: format(parseISO(entry.bed_time), "EEE"),
+        hours: parseFloat(duration.toFixed(1)),
+        quality: entry.quality_rating ?? 0,
+      };
+    });
 
   if (isLoading) {
     return (
@@ -200,7 +228,13 @@ export function SleepTracker() {
                 Monitor your sleep patterns and improve sleep quality
               </p>
             </div>
-            <Button className="gap-2" onClick={() => setShowLogModal(true)}>
+            <Button
+              className="gap-2"
+              onClick={() => {
+                setModalFeedback(null);
+                setShowLogModal(true);
+              }}
+            >
               <Plus className="w-4 h-4" />
               Log Sleep
             </Button>
@@ -333,9 +367,9 @@ export function SleepTracker() {
                 </h3>
               </div>
               <div className="space-y-4">
-                {sleepEntries.slice(0, 5).map((log, index) => (
+                {sleepEntries.slice(0, 5).map((log) => (
                   <div
-                    key={index}
+                    key={log.id}
                     className="p-4 rounded-xl border border-border hover:border-primary/50 transition-colors"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
@@ -354,7 +388,7 @@ export function SleepTracker() {
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-medium">
-                          {log.quality_rating}% Quality
+                          {log.quality_rating != null ? `${log.quality_rating}% quality` : "Quality not set"}
                         </div>
                       </div>
                     </div>
@@ -425,7 +459,7 @@ export function SleepTracker() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setShowLogModal(false)}
+              onClick={closeLogModal}
               className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
             />
             <motion.div
@@ -441,12 +475,32 @@ export function SleepTracker() {
                     Log Sleep
                   </h3>
                   <button
-                    onClick={() => setShowLogModal(false)}
-                    className="text-gray-400 hover:text-gray-600"
+                    type="button"
+                    onClick={closeLogModal}
+                    disabled={isSaving}
+                    className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
+
+                {modalFeedback && (
+                  <div
+                    role="status"
+                    className={`mb-4 flex gap-2 rounded-lg border px-3 py-2.5 text-sm ${
+                      modalFeedback.kind === "success"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100"
+                        : "border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100"
+                    }`}
+                  >
+                    {modalFeedback.kind === "success" ? (
+                      <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" aria-hidden />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden />
+                    )}
+                    <span>{modalFeedback.message}</span>
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   <div>
@@ -457,8 +511,9 @@ export function SleepTracker() {
                     <input
                       type="date"
                       value={sleepFormData.date}
+                      disabled={isSaving}
                       onChange={(e) => setSleepFormData({ ...sleepFormData, date: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
                     />
                   </div>
 
@@ -471,8 +526,9 @@ export function SleepTracker() {
                       <input
                         type="time"
                         value={sleepFormData.bedTime}
+                        disabled={isSaving}
                         onChange={(e) => setSleepFormData({ ...sleepFormData, bedTime: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
                       />
                     </div>
 
@@ -484,8 +540,9 @@ export function SleepTracker() {
                       <input
                         type="time"
                         value={sleepFormData.wakeTime}
+                        disabled={isSaving}
                         onChange={(e) => setSleepFormData({ ...sleepFormData, wakeTime: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
                       />
                     </div>
                   </div>
@@ -500,8 +557,9 @@ export function SleepTracker() {
                       min="0"
                       max="100"
                       value={sleepFormData.quality}
+                      disabled={isSaving}
                       onChange={(e) => setSleepFormData({ ...sleepFormData, quality: e.target.value })}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-60"
                     />
                     <div className="flex justify-between text-xs text-gray-500 mt-1">
                       <span>Poor</span>
@@ -516,9 +574,10 @@ export function SleepTracker() {
                     </label>
                     <textarea
                       value={sleepFormData.notes}
+                      disabled={isSaving}
                       onChange={(e) => setSleepFormData({ ...sleepFormData, notes: e.target.value })}
                       placeholder="How did you feel? Any factors affecting your sleep?"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
                       rows={3}
                     />
                   </div>
@@ -526,16 +585,20 @@ export function SleepTracker() {
                   <div className="flex gap-3 pt-4">
                     <Button
                       variant="outline"
-                      onClick={() => setShowLogModal(false)}
+                      type="button"
+                      onClick={closeLogModal}
+                      disabled={isSaving}
                       className="flex-1"
                     >
-                      Cancel
+                      {modalFeedback?.kind === "success" ? "Close" : "Cancel"}
                     </Button>
                     <Button
+                      type="button"
                       onClick={handleLogSleep}
+                      isLoading={isSaving}
                       className="flex-1 bg-indigo-500 hover:bg-indigo-600"
                     >
-                      <Plus className="w-4 h-4 mr-2" />
+                      {!isSaving && <Plus className="w-4 h-4" />}
                       Log Sleep
                     </Button>
                   </div>

@@ -36,7 +36,7 @@ import {
   Cell
 } from "recharts";
 import { useAuth } from "@/app/contexts/AuthContext";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { Skeleton } from "../../components/ui/skeleton";
 import {
@@ -45,6 +45,18 @@ import {
 } from "@/lib/wellnessLocalProgress";
 
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+
+function escapeCsvCell(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const s = String(value);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function csvLine(cells: unknown[]): string {
+  return cells.map(escapeCsvCell).join(",");
+}
 
 export function Progress() {
   const { profile } = useAuth();
@@ -74,49 +86,87 @@ export function Progress() {
 
   const [wellnessProgress, setWellnessProgress] = useState<any[]>([]);
   const [isLoadingWellness, setIsLoadingWellness] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [statsData, setStatsData] = useState<{ 
     weeklyProgress: any[], 
     wellnessScore: any[],
     monthlyActivity: any[] 
   } | null>(null);
 
-  useEffect(() => {
-    Promise.all([
-      api.wellness.getProgress(),
-      api.wellness.getStats()
-    ])
+  const loadWellness = useCallback(() => {
+    setLoadError(false);
+    setIsLoadingWellness(true);
+    Promise.all([api.wellness.getProgress(), api.wellness.getStats()])
       .then(([progress, stats]) => {
-        setWellnessProgress(progress);
-        setStatsData(stats);
+        setWellnessProgress(Array.isArray(progress) ? progress : []);
+        setStatsData(stats ?? null);
       })
-      .catch(err => console.error("Failed to load wellness data:", err))
+      .catch((err) => {
+        console.error("Failed to load wellness data:", err);
+        setLoadError(true);
+        setStatsData(null);
+      })
       .finally(() => setIsLoadingWellness(false));
   }, []);
 
-  // Use fetched data or fallbacks
-  const weeklyProgress = statsData?.weeklyProgress || [
-    { name: "Week 1", sessions: 0, mood: 0, wellness: 0 },
-    { name: "Week 2", sessions: 0, mood: 0, wellness: 0 },
-    { name: "Week 3", sessions: 0, mood: 0, wellness: 0 },
-    { name: "Week 4", sessions: 0, mood: 0, wellness: 0 },
-  ];
+  useEffect(() => {
+    loadWellness();
+  }, [loadWellness]);
 
-  const wellnessScore = statsData?.wellnessScore || [
-    { subject: 'Emotional', A: 0, fullMark: 100 },
-    { subject: 'Mental', A: 0, fullMark: 100 },
-    { subject: 'Physical', A: 0, fullMark: 100 },
-    { subject: 'Social', A: 0, fullMark: 100 },
-    { subject: 'Sleep', A: 0, fullMark: 100 },
-  ];
+  /** From API: per-week counts for sessions, mood check-ins, and wellness completions. */
+  const weeklyProgress = useMemo(() => {
+    const w = statsData?.weeklyProgress;
+    if (!Array.isArray(w) || w.length === 0) return [];
+    return w.map((row: Record<string, unknown>) => ({
+      name: String(row.name ?? row.week ?? ""),
+      sessions: Number(row.sessions) || 0,
+      mood: Number(row.mood) || 0,
+      wellness: Number(row.wellness) || 0,
+    }));
+  }, [statsData]);
 
-  const monthlyActivity = statsData?.monthlyActivity || [
-    { month: "Jan", value: 0 },
-    { month: "Feb", value: 0 },
-    { month: "Mar", value: 0 },
-    { month: "Apr", value: 0 },
-    { month: "May", value: 0 },
-    { month: "Jun", value: 0 }
-  ];
+  const wellnessScore = useMemo(() => {
+    const w = statsData?.wellnessScore;
+    if (!Array.isArray(w) || w.length === 0) return [];
+    return w.map((row: Record<string, unknown>) => ({
+      subject: String(row.subject ?? ""),
+      A: Math.max(0, Math.min(100, Number(row.A) || 0)),
+      fullMark: Number(row.fullMark) || 100,
+    }));
+  }, [statsData]);
+
+  /** Last 6 calendar months: combined activity count from the API. */
+  const monthlyActivity = useMemo(() => {
+    const m = statsData?.monthlyActivity;
+    if (!Array.isArray(m) || m.length === 0) return [];
+    return m.map((row: Record<string, unknown>) => ({
+      month: String(row.month ?? ""),
+      value: Number(row.value) || 0,
+    }));
+  }, [statsData]);
+
+  const monthlyInsight = useMemo(() => {
+    if (monthlyActivity.length < 1) {
+      return {
+        body: "Log sessions, moods, journals, and wellness tools to build your trend.",
+        chip1: null as string | null,
+      };
+    }
+    const curr = monthlyActivity[monthlyActivity.length - 1]?.value ?? 0;
+    const prev =
+      monthlyActivity.length >= 2
+        ? monthlyActivity[monthlyActivity.length - 2]?.value ?? 0
+        : 0;
+    const delta =
+      prev > 0 ? Math.round(((curr - prev) / prev) * 100) : null;
+    return {
+      body: `This month you logged ${curr} activities (AI sessions, mood check-ins, journals, and wellness completions combined).`,
+      chip1:
+        prev > 0 && delta !== null
+          ? `${delta >= 0 ? "+" : ""}${delta}% vs prior month`
+          : null,
+    };
+  }, [monthlyActivity]);
 
   const achievements = [
     {
@@ -140,13 +190,12 @@ export function Progress() {
       unlocked: true,
       color: "from-purple-400 to-pink-500"
     },
-     {
+    {
       icon: Wind,
-      label: "Wellness Exercises",
-      value: "24",
-      change: "+6 this week",
-      color: "text-cyan-500",
-      bgColor: "bg-cyan-50"
+      title: "Breathing basics",
+      description: "Try a guided breathing exercise",
+      unlocked: false,
+      color: "from-cyan-400 to-teal-500"
     },
     {
       icon: Zap,
@@ -173,48 +222,165 @@ export function Progress() {
 
   const totalWellnessSessions = wellnessProgress.reduce((acc, curr) => acc + curr.sessionsCompleted, 0);
 
-  const stats = [
-    {
-      icon: Video,
-      label: "AI Sessions",
-      value: profile?.stats?.completed_sessions?.toString() || "0",
-      change: "Total sessions",
-      color: "text-blue-500",
-      bgColor: "bg-blue-50"
-    },
-    {
-      icon: Heart,
-      label: "Mood Check-ins",
-      value: profile?.stats?.total_checkins?.toString() || "0",
-      change: "Total check-ins",
-      color: "text-pink-500",
-      bgColor: "bg-pink-50"
-    },
-    {
-      icon: BookOpen,
-      label: "Journal Entries",
-      value: profile?.stats?.total_journals?.toString() || "0",
-      change: "Total entries",
-      color: "text-purple-500",
-      bgColor: "bg-purple-50"
-    },
-     {
-    icon: Wind,
-    label: "Wellness Exercises",
-    value: totalWellnessSessions.toString(),
-    change: "+6 this week",
-    color: "text-cyan-500",
-    bgColor: "bg-cyan-50"
-  },
-    {
-      icon: Flame,
-      label: "Current Streak",
-      value: `${profile?.streak_days || 0} days`,
-      change: "Keep it up!",
-      color: "text-orange-500",
-      bgColor: "bg-orange-50"
+  const handleExportReport = () => {
+    try {
+      const sections: string[] = [];
+
+      sections.push("Summary");
+      sections.push(
+        csvLine(["Metric", "Value"]),
+        csvLine([
+          "AI sessions (total)",
+          profile?.stats?.completed_sessions ?? 0,
+        ]),
+        csvLine([
+          "Mood check-ins (total)",
+          profile?.stats?.total_checkins ?? 0,
+        ]),
+        csvLine([
+          "Journal entries (total)",
+          profile?.stats?.total_journals ?? 0,
+        ]),
+        csvLine([
+          "Wellness exercise completions (total)",
+          totalWellnessSessions,
+        ]),
+        csvLine(["Current streak (days)", profile?.streak_days ?? 0]),
+        ""
+      );
+
+      sections.push("Weekly progress");
+      if (weeklyProgress.length > 0) {
+        const keys = Object.keys(weeklyProgress[0] as object);
+        sections.push(csvLine(keys));
+        for (const row of weeklyProgress) {
+          sections.push(
+            csvLine(keys.map((k) => (row as Record<string, unknown>)[k]))
+          );
+        }
+      } else {
+        sections.push("(no data)");
+      }
+      sections.push("");
+
+      sections.push("Wellness score (radar)");
+      if (wellnessScore.length > 0) {
+        const wKeys = Object.keys(wellnessScore[0] as object);
+        sections.push(csvLine(wKeys));
+        for (const row of wellnessScore) {
+          sections.push(
+            csvLine(wKeys.map((k) => (row as Record<string, unknown>)[k]))
+          );
+        }
+      } else {
+        sections.push("(no data)");
+      }
+      sections.push("");
+
+      sections.push("Monthly activity");
+      if (monthlyActivity.length > 0) {
+        const mKeys = Object.keys(monthlyActivity[0] as object);
+        sections.push(csvLine(mKeys));
+        for (const row of monthlyActivity) {
+          sections.push(
+            csvLine(mKeys.map((k) => (row as Record<string, unknown>)[k]))
+          );
+        }
+      } else {
+        sections.push("(no data)");
+      }
+      sections.push("");
+
+      sections.push("Wellness tools");
+      sections.push(
+        csvLine([
+          "Tool ID",
+          "Title",
+          "Sessions completed",
+          "Total time (seconds)",
+        ])
+      );
+      if (wellnessProgress.length === 0) {
+        sections.push("(no rows)");
+      } else {
+        for (const p of wellnessProgress) {
+          sections.push(
+            csvLine([
+              p.toolId,
+              p.toolTitle,
+              p.sessionsCompleted,
+              wellnessProgressTotalSeconds(p),
+            ])
+          );
+        }
+      }
+
+      const csv = "\uFEFF" + sections.join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ezri-progress-report-${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success("Progress report downloaded");
+    } catch (e) {
+      console.error(e);
+      toast.error("Could not export report");
     }
-  ];
+  };
+
+  const stats = useMemo(() => {
+    const lastWeek = weeklyProgress[weeklyProgress.length - 1];
+    const latestWellness = lastWeek ? Number(lastWeek.wellness) || 0 : 0;
+    return [
+      {
+        icon: Video,
+        label: "AI Sessions",
+        value: profile?.stats?.completed_sessions?.toString() || "0",
+        change: "Total sessions",
+        color: "text-blue-500",
+        bgColor: "bg-blue-50"
+      },
+      {
+        icon: Heart,
+        label: "Mood Check-ins",
+        value: profile?.stats?.total_checkins?.toString() || "0",
+        change: "Total check-ins",
+        color: "text-pink-500",
+        bgColor: "bg-pink-50"
+      },
+      {
+        icon: BookOpen,
+        label: "Journal Entries",
+        value: profile?.stats?.total_journals?.toString() || "0",
+        change: "Total entries",
+        color: "text-purple-500",
+        bgColor: "bg-purple-50"
+      },
+      {
+        icon: Wind,
+        label: "Wellness Exercises",
+        value: totalWellnessSessions.toString(),
+        change:
+          weeklyProgress.length > 0
+            ? `${latestWellness} completions in latest week`
+            : "Per-week stats load with charts",
+        color: "text-cyan-500",
+        bgColor: "bg-cyan-50"
+      },
+      {
+        icon: Flame,
+        label: "Current Streak",
+        value: `${profile?.streak_days || 0} days`,
+        change: "Keep it up!",
+        color: "text-orange-500",
+        bgColor: "bg-orange-50"
+      }
+    ];
+  }, [profile, totalWellnessSessions, weeklyProgress]);
 
   if (isLoadingWellness) {
     return (
@@ -269,9 +435,12 @@ export function Progress() {
               </p>
             </div>
             <motion.button
+              type="button"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="hidden sm:flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+              onClick={handleExportReport}
+              className="hidden sm:flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 cursor-pointer"
+              aria-label="Export progress report as CSV"
             >
               <Download className="w-4 h-4" />
               Export Report
@@ -301,80 +470,107 @@ export function Progress() {
           })}
         </div>
 
-        {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Weekly Progress */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Card className="p-6 shadow-xl">
-              <h2 className="text-xl font-bold mb-4">Weekly Progress</h2>
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={weeklyProgress}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="week" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px"
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="mood"
-                    stroke="#6366f1"
-                    strokeWidth={3}
-                    name="Mood Score"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="sessions"
-                    stroke="#ec4899"
-                    strokeWidth={3}
-                    name="Sessions"
-                  />
-                   <Line
-                    type="monotone"
-                    dataKey="wellness"
-                    stroke="#06b6d4"
-                    strokeWidth={3}
-                    name="Wellness Exercises"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+        {/* Charts Section — data from GET /wellness/stats */}
+        {loadError ? (
+          <div className="grid grid-cols-1 mb-8">
+            <Card className="p-6 shadow-xl border-destructive/30">
+              <p className="text-muted-foreground mb-4">
+                Charts could not be loaded. Your summary numbers above may still be up to date.
+              </p>
+              <Button type="button" variant="outline" onClick={loadWellness}>
+                Retry charts
+              </Button>
             </Card>
-          </motion.div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Weekly Progress */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <Card className="p-6 shadow-xl">
+                <h2 className="text-xl font-bold mb-1">Weekly Progress</h2>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Counts per week: mood check-ins, completed AI sessions, wellness exercises
+                </p>
+                {weeklyProgress.length === 0 ? (
+                  <p className="text-muted-foreground text-sm py-12 text-center">No weekly data yet.</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <LineChart data={weeklyProgress}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis dataKey="name" stroke="#6b7280" />
+                      <YAxis stroke="#6b7280" allowDecimals={false} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "white",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: "8px"
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="mood"
+                        stroke="#6366f1"
+                        strokeWidth={3}
+                        name="Mood check-ins"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="sessions"
+                        stroke="#ec4899"
+                        strokeWidth={3}
+                        name="AI sessions"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="wellness"
+                        stroke="#06b6d4"
+                        strokeWidth={3}
+                        name="Wellness exercises"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </Card>
+            </motion.div>
 
-          {/* Wellness Score */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.4 }}
-          >
-            <Card className="p-6 shadow-xl">
-              <h2 className="text-xl font-bold mb-4">Wellness Score</h2>
-              <ResponsiveContainer width="100%" height={280}>
-                <RadarChart data={wellnessScore}>
-                  <PolarGrid stroke="#e5e7eb" />
-                  <PolarAngleAxis dataKey="subject" stroke="#6b7280" />
-                  <PolarRadiusAxis stroke="#6b7280" />
-                  <Radar
-                    name="Score"
-                    dataKey="A"
-                    stroke="#6366f1"
-                    fill="#6366f1"
-                    fillOpacity={0.6}
-                  />
-                  <Tooltip />
-                </RadarChart>
-              </ResponsiveContainer>
-            </Card>
-          </motion.div>
-        </div>
+            {/* Wellness Score */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Card className="p-6 shadow-xl">
+                <h2 className="text-xl font-bold mb-1">Wellness Score</h2>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Derived from your mood, sleep, community activity, engagement, and exercise time
+                </p>
+                {wellnessScore.length === 0 ? (
+                  <p className="text-muted-foreground text-sm py-12 text-center">No score data yet.</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <RadarChart data={wellnessScore}>
+                      <PolarGrid stroke="#e5e7eb" />
+                      <PolarAngleAxis dataKey="subject" stroke="#6b7280" />
+                      <PolarRadiusAxis domain={[0, 100]} stroke="#6b7280" />
+                      <Radar
+                        name="Score"
+                        dataKey="A"
+                        stroke="#6366f1"
+                        fill="#6366f1"
+                        fillOpacity={0.6}
+                      />
+                      <Tooltip formatter={(value: number) => [`${value}`, "Score"]} />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                )}
+              </Card>
+            </motion.div>
+          </div>
+        )}
 
         {/* Wellness Tools Report */}
         <motion.div
@@ -420,6 +616,7 @@ export function Progress() {
         </motion.div>
 
         {/* Monthly Activity */}
+        {!loadError && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -427,31 +624,40 @@ export function Progress() {
           className="mb-8"
         >
           <Card className="p-6 shadow-xl">
-            <h2 className="text-xl font-bold mb-4">Monthly Activity</h2>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={monthlyActivity}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="month" stroke="#6b7280" />
-                <YAxis stroke="#6b7280" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "white",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "8px"
-                  }}
-                />
-                <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                  {monthlyActivity.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={["#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#06b6d4", "#10b981"][index % 6]}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <h2 className="text-xl font-bold mb-1">Monthly Activity</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Total activities per month (sessions, moods, journals, wellness)
+            </p>
+            {monthlyActivity.length === 0 ? (
+              <p className="text-muted-foreground text-sm py-12 text-center">No monthly data yet.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={monthlyActivity}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="month" stroke="#6b7280" />
+                  <YAxis stroke="#6b7280" allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "white",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: "8px"
+                    }}
+                    formatter={(value: number) => [value, "Activities"]}
+                  />
+                  <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                    {monthlyActivity.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={["#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#06b6d4", "#10b981"][index % 6]}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </Card>
         </motion.div>
+        )}
 
         {/* Achievements */}
         <motion.div
@@ -536,17 +742,14 @@ export function Progress() {
               <Trophy className="w-8 h-8 flex-shrink-0 mt-1" />
               <div>
                 <h3 className="font-bold text-lg mb-2">You're Doing Great! 🎉</h3>
-                <p className="text-white/90 mb-4">
-                  You've completed 78% of your wellness goals this month. Keep up the amazing work!
-                </p>
-                <div className="flex gap-3">
-                  <div className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-sm font-medium">
-                    +15% vs last month
+                <p className="text-white/90 mb-4">{monthlyInsight.body}</p>
+                {monthlyInsight.chip1 && (
+                  <div className="flex flex-wrap gap-3">
+                    <div className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-sm font-medium">
+                      {monthlyInsight.chip1}
+                    </div>
                   </div>
-                  <div className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-sm font-medium">
-                    Top 10% of users
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </Card>
