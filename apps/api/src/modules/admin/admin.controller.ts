@@ -137,13 +137,11 @@ function resolveWebBaseUrl(request: FastifyRequest): string {
   );
 }
 
-export async function createUserHandler(
-  request: FastifyRequest<{ Body: z.infer<typeof createAdminUserSchema> }>,
-  reply: FastifyReply
-) {
+export async function createUserHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
     const webBaseUrl = resolveWebBaseUrl(request);
-    const user = await createUserByAdmin(request.body, webBaseUrl);
+    const body = createAdminUserSchema.parse(request.body);
+    const user = await createUserByAdmin(body, webBaseUrl);
     return reply.code(201).send(user);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to create user';

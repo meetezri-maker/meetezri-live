@@ -138,3 +138,6 @@ export const createAdminUserSchema = z.object({
   status: z.enum(['active', 'suspended', 'inactive']).optional(),
   subscription: z.enum(['trial', 'core', 'pro']).optional(),
 });
+
+/** Output after validation/transform — use for services (not raw request body input). */
+export type CreateAdminUserInput = z.output<typeof createAdminUserSchema>;

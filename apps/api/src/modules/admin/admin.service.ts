@@ -1,7 +1,7 @@
 
 import prisma from '../../lib/prisma';
 import { Prisma, $Enums } from '@prisma/client';
-import { DashboardStats } from './admin.schema';
+import { CreateAdminUserInput, DashboardStats } from './admin.schema';
 import { endSession } from '../sessions/sessions.service';
 import { notificationsService } from '../notifications/notifications.service';
 import { emailService } from '../email/email.service';
@@ -825,15 +825,7 @@ export async function getUserById(id: string) {
   };
 }
 
-export async function createUserByAdmin(
-  input: {
-    email: string;
-    full_name: string;
-    status?: 'active' | 'suspended' | 'inactive';
-    subscription?: 'trial' | 'core' | 'pro';
-  },
-  webBaseUrl: string
-) {
+export async function createUserByAdmin(input: CreateAdminUserInput, webBaseUrl: string) {
   const emailNorm = input.email.trim().toLowerCase();
   if (!emailNorm) {
     throw new Error('Email is required');
