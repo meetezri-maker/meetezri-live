@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AdminLayoutNew } from '@/app/components/AdminLayoutNew';
 import { api } from '@/lib/api';
-import { LOBBY_AVATARS, findLobbyAvatar } from '@/lib/avatar/lobbyAvatars';
+import { findLobbyAvatar, isPlaceholderAvatarName } from '@/lib/avatar/lobbyAvatars';
+import { resolveCompanionPortraitUrl } from '@/lib/avatar/companionModelUrl';
 import { 
   Brain, 
   Plus, 
@@ -130,10 +131,30 @@ export function AIAvatarManager() {
     avgRating: avatars.length > 0 ? (avatars.reduce((sum, a) => sum + a.rating, 0) / avatars.length).toFixed(1) : "0.0"
   };
 
-  const filteredAvatars = avatars.filter(avatar =>
-    avatar.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    avatar.specialty.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredAvatars = avatars.filter(
+    (avatar) =>
+      avatar.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      avatar.specialty.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  /** Active DB companions — same names users see in Session Lobby (portrait from lobby assets or URL). */
+  const inAppCompanionChips = useMemo(() => {
+    return avatars
+      .filter((a) => a.isActive && !isPlaceholderAvatarName(a.name))
+      .map((a) => {
+        const lobby = findLobbyAvatar(a.name);
+        const raw = a.image?.trim() ?? "";
+        const src =
+          lobby?.cardImage ??
+          (/^https?:\/\//i.test(raw) ? raw : null) ??
+          resolveCompanionPortraitUrl(a.name);
+        const emoji =
+          raw && !/^https?:\/\//i.test(raw)
+            ? raw
+            : lobby?.emoji ?? "👤";
+        return { id: a.id, name: a.name, src, emoji };
+      });
+  }, [avatars]);
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
@@ -318,35 +339,6 @@ export function AIAvatarManager() {
               className="w-full bg-white border border-gray-300 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:border-purple-500 transition-all"
             />
           </div>
-
-          {/* Same companions as Session Lobby (public/avatars) */}
-          <div className="mt-8 rounded-2xl border border-gray-200 bg-gradient-to-br from-slate-50 to-white p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-1">Companions in app</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Lobby portraits and names members see when starting a session. Database rows that use the same name show this artwork in the cards below.
-            </p>
-            <div className="flex flex-wrap gap-4 justify-start">
-              {LOBBY_AVATARS.map((a) => (
-                <div
-                  key={a.id}
-                  className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm min-w-[7.5rem]"
-                >
-                  {a.cardImage ? (
-                    <img
-                      src={a.cardImage}
-                      alt=""
-                      className="w-16 h-16 rounded-xl object-cover border border-gray-100"
-                    />
-                  ) : (
-                    <span className="text-4xl" aria-hidden>
-                      {a.emoji}
-                    </span>
-                  )}
-                  <span className="text-sm font-semibold text-gray-900 text-center leading-tight">{a.name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Avatars List */}
@@ -489,6 +481,44 @@ export function AIAvatarManager() {
             <p className="text-gray-600">Try adjusting your search or create a new avatar</p>
           </div>
         )}
+
+        {/* Same companions users see in Session Lobby — active DB rows + lobby artwork (bottom of page) */}
+        <div className="mt-10 rounded-2xl border border-gray-200 bg-gradient-to-br from-slate-50 to-white p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Companions in app</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Active avatars from the database whose names match lobby assets in{" "}
+            <code className="text-xs bg-gray-100 px-1 rounded">public/avatars</code>. These are the faces and
+            labels members pick in the session lobby.
+          </p>
+          {inAppCompanionChips.length === 0 ? (
+            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+              No active companions yet, or none match lobby file names. Activate avatars in the list above and use
+              names like &quot;Alex Rivera&quot; or &quot;Sarah Mitchell&quot; so portraits resolve.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-4 justify-start">
+              {inAppCompanionChips.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm min-w-[7.5rem]"
+                >
+                  {a.src ? (
+                    <img
+                      src={a.src}
+                      alt=""
+                      className="w-16 h-16 rounded-xl object-cover border border-gray-100"
+                    />
+                  ) : (
+                    <span className="text-4xl" aria-hidden>
+                      {a.emoji}
+                    </span>
+                  )}
+                  <span className="text-sm font-semibold text-gray-900 text-center leading-tight">{a.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Create/Edit Modal */}
         <AnimatePresence>

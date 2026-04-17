@@ -141,6 +141,7 @@ export function UserSegmentation() {
   const [viewingSegment, setViewingSegment] = useState<Segment | null>(null);
   const [creatingSegment, setCreatingSegment] = useState(false);
   const [deletingSegmentId, setDeletingSegmentId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const segmentsFirstLoad = useRef(true);
 
   // Form State
@@ -154,6 +155,7 @@ export function UserSegmentation() {
   const fetchSegments = async () => {
     try {
       if (segmentsFirstLoad.current) setIsLoading(true);
+      setLoadError(null);
       const data = await api.admin.getUserSegments() as {
         segments?: unknown[];
         platform?: SegmentationPlatform;
@@ -183,6 +185,10 @@ export function UserSegmentation() {
       setPlatform(plat);
     } catch (error) {
       console.error("Failed to fetch segments", error);
+      const msg =
+        error instanceof Error ? error.message : "Failed to load segmentation data.";
+      setLoadError(msg);
+      toast.error(msg);
     } finally {
       if (segmentsFirstLoad.current) {
         setIsLoading(false);
@@ -216,7 +222,7 @@ export function UserSegmentation() {
       toast.success("Segment created.");
       setShowCreateModal(false);
       setFormData({ name: '', description: '', criteria: [], color: '#3b82f6' });
-      fetchSegments();
+      await fetchSegments();
     } catch (error) {
       console.error("Failed to create segment", error);
       const msg = error instanceof Error ? error.message : "Failed to create segment";
@@ -302,6 +308,22 @@ export function UserSegmentation() {
           </motion.button>
         </motion.div>
 
+        {loadError ? (
+          <div
+            className="flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 sm:flex-row sm:items-center sm:justify-between"
+            role="alert"
+          >
+            <span>{loadError}</span>
+            <button
+              type="button"
+              className="shrink-0 rounded-md border border-red-300 bg-white px-3 py-1.5 font-medium text-red-800 hover:bg-red-100"
+              onClick={() => void fetchSegments()}
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
+
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <motion.div
@@ -314,8 +336,9 @@ export function UserSegmentation() {
                 <Users className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Total end users</p>
+                <p className="text-gray-600 text-sm">Total profiles</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.totalEndUsers.toLocaleString()}</p>
+                <p className="text-xs text-gray-500 mt-1">Matches main admin “Total Users”</p>
               </div>
             </div>
           </motion.div>
@@ -367,6 +390,7 @@ export function UserSegmentation() {
               <div>
                 <p className="text-gray-600 text-sm">Premium users</p>
                 <p className="text-2xl font-bold text-blue-600">{stats.premiumUsers.toLocaleString()}</p>
+                <p className="text-xs text-gray-500 mt-1">Core / Pro, active or trialing</p>
               </div>
             </div>
           </motion.div>

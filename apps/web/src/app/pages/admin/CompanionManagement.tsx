@@ -15,6 +15,7 @@ import {
   CheckCircle,
   Clock,
   Loader2,
+  X,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "../../../lib/api";
@@ -46,6 +47,38 @@ function parseCommaList(s: string): string[] {
     .filter(Boolean);
 }
 
+/** ISO / date string → value for `input type="datetime-local"` (local timezone). */
+function isoToDateTimeLocal(raw: string | undefined): string {
+  if (!raw || raw === "—") return "";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatAvailabilityDisplay(raw: string): string {
+  if (!raw || raw === "—") return "—";
+  const d = new Date(raw);
+  if (!Number.isNaN(d.getTime())) return d.toLocaleString();
+  return raw;
+}
+
+const COMPANION_LANGUAGES: { value: string; label: string }[] = [
+  { value: "", label: "Select language" },
+  { value: "English", label: "English" },
+  { value: "Spanish", label: "Spanish" },
+  { value: "French", label: "French" },
+  { value: "German", label: "German" },
+  { value: "Italian", label: "Italian" },
+  { value: "Portuguese", label: "Portuguese" },
+  { value: "Chinese", label: "Chinese" },
+  { value: "Japanese", label: "Japanese" },
+  { value: "Korean", label: "Korean" },
+  { value: "Arabic", label: "Arabic" },
+  { value: "Hindi", label: "Hindi" },
+  { value: "Other", label: "Other" },
+];
+
 export function CompanionManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -66,8 +99,8 @@ export function CompanionManagement() {
     phone: "",
     license: "",
     specializations: "",
-    languages: "",
-    availability: "",
+    language: "",
+    availabilityAt: "",
   });
 
   const [editForm, setEditForm] = useState({
@@ -75,8 +108,9 @@ export function CompanionManagement() {
     phone: "",
     license: "",
     specializations: "",
-    languages: "",
-    availability: "",
+    language: "",
+    availabilityAt: "",
+    availabilityLegacy: "",
     verified: false,
     account_status: "active",
   });
@@ -140,13 +174,16 @@ export function CompanionManagement() {
 
   const openEdit = (c: Companion) => {
     setSelectedCompanion(c);
+    const rawAvail = c.availability === "—" ? "" : c.availability;
+    const dtLocal = isoToDateTimeLocal(rawAvail);
     setEditForm({
       name: c.name,
       phone: normalizeStoredPhoneForInput(c.phone || ""),
       license: c.license,
       specializations: c.specialization.join(", "),
-      languages: c.languages.join(", "),
-      availability: c.availability === "—" ? "" : c.availability,
+      language: c.languages[0] ?? "",
+      availabilityAt: dtLocal,
+      availabilityLegacy: dtLocal ? "" : rawAvail,
       verified: c.verified,
       account_status: c.status === "inactive" ? "inactive" : "active",
     });
@@ -164,14 +201,18 @@ export function CompanionManagement() {
     }
     setSaving(true);
     try {
+      const availabilityPayload =
+        createForm.availabilityAt.trim() !== ""
+          ? new Date(createForm.availabilityAt).toISOString()
+          : undefined;
       const list = (await api.admin.createCompanion({
         full_name: createForm.name.trim(),
         email: createForm.email.trim(),
         phone: createForm.phone.trim() || undefined,
         license_number: createForm.license.trim() || undefined,
         specializations: parseCommaList(createForm.specializations),
-        languages: parseCommaList(createForm.languages),
-        availability: createForm.availability.trim() || undefined,
+        languages: createForm.language ? [createForm.language] : [],
+        availability: availabilityPayload,
       })) as Companion[];
       setCompanions(Array.isArray(list) ? list : companions);
       toast.success("Companion saved. New accounts receive an invite email when needed.");
@@ -182,8 +223,8 @@ export function CompanionManagement() {
         phone: "",
         license: "",
         specializations: "",
-        languages: "",
-        availability: "",
+        language: "",
+        availabilityAt: "",
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to create companion";
@@ -201,13 +242,19 @@ export function CompanionManagement() {
     }
     setSaving(true);
     try {
+      const availabilityOut =
+        editForm.availabilityAt.trim() !== ""
+          ? new Date(editForm.availabilityAt).toISOString()
+          : editForm.availabilityLegacy.trim() !== ""
+            ? editForm.availabilityLegacy.trim()
+            : undefined;
       const list = (await api.admin.updateCompanion(selectedCompanion.id, {
         full_name: editForm.name.trim(),
         phone: editForm.phone.trim() || undefined,
         license_number: editForm.license.trim() || undefined,
         specializations: parseCommaList(editForm.specializations),
-        languages: parseCommaList(editForm.languages),
-        availability: editForm.availability.trim() || undefined,
+        languages: editForm.language ? [editForm.language] : [],
+        availability: availabilityOut,
         is_verified: editForm.verified,
         account_status: editForm.account_status,
       })) as Companion[];
@@ -499,7 +546,9 @@ export function CompanionManagement() {
                         </div>
                         <div>
                           <p className="text-gray-600">Availability</p>
-                          <p className="font-bold text-gray-900 text-xs break-words">{companion.availability}</p>
+                          <p className="font-bold text-gray-900 text-xs break-words">
+                            {formatAvailabilityDisplay(companion.availability)}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -566,12 +615,23 @@ export function CompanionManagement() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl border border-gray-100"
             >
-              <h3 className="text-2xl font-bold text-gray-900 mb-6">Add New Companion</h3>
+              <div className="flex items-start justify-between gap-4 mb-6">
+                <h3 className="text-2xl font-bold text-gray-900">Add New Companion</h3>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  disabled={saving}
+                  onClick={() => setShowCreateModal(false)}
+                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors disabled:opacity-50"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                     <input
@@ -579,7 +639,7 @@ export function CompanionManagement() {
                       value={createForm.name}
                       onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
                       placeholder="Dr. Jane Smith"
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
                     />
                   </div>
                   <div>
@@ -589,11 +649,11 @@ export function CompanionManagement() {
                       value={createForm.license}
                       onChange={(e) => setCreateForm((f) => ({ ...f, license: e.target.value }))}
                       placeholder="LCSW-12345"
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                     <input
@@ -601,12 +661,12 @@ export function CompanionManagement() {
                       value={createForm.email}
                       onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
                       placeholder="companion@example.com"
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Phone (optional)</label>
-                    <p className="text-xs text-muted-foreground mb-1">Country code + number (max 12 digits total).</p>
+                    <p className="text-xs text-gray-500 mb-1.5">Country code + number (max 12 digits total).</p>
                     <PhoneInput
                       value={createForm.phone}
                       onChange={(v) => setCreateForm((f) => ({ ...f, phone: v }))}
@@ -621,28 +681,34 @@ export function CompanionManagement() {
                     value={createForm.specializations}
                     onChange={(e) => setCreateForm((f) => ({ ...f, specializations: e.target.value }))}
                     placeholder="Anxiety, Depression, Trauma"
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Languages</label>
-                  <input
-                    type="text"
-                    value={createForm.languages}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, languages: e.target.value }))}
-                    placeholder="English, Spanish"
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Availability</label>
-                  <input
-                    type="text"
-                    value={createForm.availability}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, availability: e.target.value }))}
-                    placeholder="Mon–Fri, 9AM–5PM"
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Languages</label>
+                    <select
+                      value={createForm.language}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, language: e.target.value }))}
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none bg-white"
+                    >
+                      {COMPANION_LANGUAGES.map((opt, i) => (
+                        <option key={opt.value || `lang-${i}`} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Availability</label>
+                    <input
+                      type="datetime-local"
+                      value={createForm.availabilityAt}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, availabilityAt: e.target.value }))}
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
+                    />
+                    <p className="text-xs text-gray-500 mt-1.5">Date and time for next availability (optional).</p>
+                  </div>
                 </div>
               </div>
 
@@ -735,18 +801,29 @@ export function CompanionManagement() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl border border-gray-100"
             >
-              <h3 className="text-2xl font-bold text-gray-900 mb-6">Edit Companion</h3>
+              <div className="flex items-start justify-between gap-4 mb-6">
+                <h3 className="text-2xl font-bold text-gray-900">Edit Companion</h3>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  disabled={saving}
+                  onClick={() => setShowEditModal(false)}
+                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors disabled:opacity-50"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                     <input
                       type="text"
                       value={editForm.name}
                       onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
                     />
                   </div>
                   <div>
@@ -755,13 +832,13 @@ export function CompanionManagement() {
                       type="text"
                       value={editForm.license}
                       onChange={(e) => setEditForm((f) => ({ ...f, license: e.target.value }))}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
                     />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Phone (optional)</label>
-                  <p className="text-xs text-muted-foreground mb-1">Country code + number (max 12 digits total).</p>
+                  <p className="text-xs text-gray-500 mb-1.5">Country code + number (max 12 digits total).</p>
                   <PhoneInput
                     value={editForm.phone}
                     onChange={(v) => setEditForm((f) => ({ ...f, phone: v }))}
@@ -774,26 +851,47 @@ export function CompanionManagement() {
                     type="text"
                     value={editForm.specializations}
                     onChange={(e) => setEditForm((f) => ({ ...f, specializations: e.target.value }))}
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Languages (comma-separated)</label>
-                  <input
-                    type="text"
-                    value={editForm.languages}
-                    onChange={(e) => setEditForm((f) => ({ ...f, languages: e.target.value }))}
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Availability</label>
-                  <input
-                    type="text"
-                    value={editForm.availability}
-                    onChange={(e) => setEditForm((f) => ({ ...f, availability: e.target.value }))}
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Languages</label>
+                    <select
+                      value={editForm.language}
+                      onChange={(e) => setEditForm((f) => ({ ...f, language: e.target.value }))}
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none bg-white"
+                    >
+                      {COMPANION_LANGUAGES.map((opt, i) => (
+                        <option key={opt.value || `lang-${i}`} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Availability</label>
+                    <input
+                      type="datetime-local"
+                      value={editForm.availabilityAt}
+                      onChange={(e) =>
+                        setEditForm((f) => ({
+                          ...f,
+                          availabilityAt: e.target.value,
+                          availabilityLegacy: e.target.value ? "" : f.availabilityLegacy,
+                        }))
+                      }
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
+                    />
+                    <p className="text-xs text-gray-500 mt-1.5">Date and time for next availability (optional).</p>
+                    {editForm.availabilityLegacy ? (
+                      <p className="text-xs text-amber-700 mt-1.5 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
+                        Previously saved as text: {editForm.availabilityLegacy}
+                        <br />
+                        Set a date above to replace, or save to keep this text.
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <input

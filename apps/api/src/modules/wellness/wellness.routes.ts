@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { createWellnessToolSchema, updateWellnessToolSchema, wellnessToolResponseSchema, trackProgressSchema, progressResponseSchema, wellnessChallengeResponseSchema, createWellnessChallengeSchema } from './wellness.schema';
-import { createWellnessToolHandler, createWellnessChallengeHandler, deleteWellnessToolHandler, getWellnessToolByIdHandler, getWellnessToolsHandler, updateWellnessToolHandler, trackWellnessProgressHandler, getUserWellnessProgressHandler, startWellnessSessionHandler, completeWellnessSessionHandler, getWellnessStatsHandler, getWellnessChallengesHandler, getWellnessChallengesMeHandler, toggleWellnessToolFavoriteHandler } from './wellness.controller';
+import { createWellnessToolHandler, createWellnessChallengeHandler, deleteWellnessToolHandler, getWellnessToolByIdHandler, getWellnessToolsHandler, updateWellnessToolHandler, trackWellnessProgressHandler, getUserWellnessProgressHandler, startWellnessSessionHandler, completeWellnessSessionHandler, getWellnessStatsHandler, getWellnessChallengesHandler, getWellnessChallengesMeHandler, toggleWellnessToolFavoriteHandler, updateWellnessChallengeHandler } from './wellness.controller';
 import { z } from 'zod';
 
 export async function wellnessRoutes(app: FastifyInstance) {
@@ -54,6 +54,14 @@ export async function wellnessRoutes(app: FastifyInstance) {
       preHandler: [app.authenticate, app.authorize(['super_admin', 'org_admin'])],
     },
     createWellnessChallengeHandler
+  );
+
+  app.patch(
+    '/challenges/:id',
+    {
+      preHandler: [app.authenticate, app.authorize(['super_admin', 'org_admin'])],
+    },
+    updateWellnessChallengeHandler
   );
 
   app.get(

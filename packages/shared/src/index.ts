@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export { canonicalCompanionDisplayName, mergeCompanionAvatarCounts } from './companions';
+
 export const UserProfileSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),

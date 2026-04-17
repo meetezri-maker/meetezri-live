@@ -1,18 +1,18 @@
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
-import { 
+import {
   Mail,
   Plus,
   Edit,
   Trash2,
   Eye,
   Send,
-  Copy,
-  Save,
   Code,
   Type,
-  Image as ImageIcon,
-  Search
+  Search,
+  Code,
+  AlignLeft,
+  Braces,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { api } from "../../../lib/api";
@@ -54,6 +54,7 @@ export function EmailTemplates() {
   const [formHtmlContent, setFormHtmlContent] = useState("");
   const [formTextContent, setFormTextContent] = useState("");
   const [formVariables, setFormVariables] = useState("");
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
 
   useEffect(() => {
     fetchTemplates();
@@ -201,6 +202,7 @@ export function EmailTemplates() {
       variables,
     };
 
+    setIsSavingTemplate(true);
     try {
       if (editMode === "create") {
         const created = await api.admin.createEmailTemplate(payload);
@@ -222,6 +224,8 @@ export function EmailTemplates() {
       resetForm();
     } catch (error: any) {
       toast.error(error.message || "Failed to save template");
+    } finally {
+      setIsSavingTemplate(false);
     }
   };
 
@@ -569,105 +573,197 @@ export function EmailTemplates() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {editMode === "create" ? "New Email Template" : "Edit Email Template"}
-            </DialogTitle>
-            <DialogDescription>
-              Define the content and variables for this email template.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="template-name">Template Name</Label>
-              <Input
-                id="template-name"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="Welcome Email"
-              />
+      <Dialog
+        open={showEditModal}
+        onOpenChange={(open) => {
+          if (!open && isSavingTemplate) return;
+          setShowEditModal(open);
+          if (!open) {
+            setIsEditing(false);
+            resetForm();
+          }
+        }}
+      >
+        <DialogContent
+          className="max-w-2xl gap-0 overflow-hidden rounded-2xl border border-slate-200/90 p-0 shadow-2xl shadow-fuchsia-950/15 sm:max-w-2xl [&>button]:top-5 [&>button]:right-5 [&>button]:rounded-full [&>button]:p-2 [&>button]:text-white [&>button]:opacity-90 [&>button]:ring-1 [&>button]:ring-white/20 [&>button]:hover:bg-white/15 [&>button]:hover:opacity-100"
+          onPointerDownOutside={(e) => isSavingTemplate && e.preventDefault()}
+          onEscapeKeyDown={(e) => isSavingTemplate && e.preventDefault()}
+        >
+          <div className="relative bg-gradient-to-br from-fuchsia-600 via-purple-600 to-indigo-700 px-6 pb-8 pt-10 text-white">
+            <div className="flex gap-4 pr-10">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 shadow-inner ring-1 ring-white/25 backdrop-blur-sm">
+                <Mail className="h-7 w-7 text-white" strokeWidth={1.75} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                  {editMode === "create" ? "New Email Template" : "Edit Email Template"}
+                </DialogTitle>
+                <DialogDescription className="mt-2 text-sm leading-relaxed text-fuchsia-100/95">
+                  Define subject, category, and HTML or plain text. Use{" "}
+                  <code className="rounded bg-white/15 px-1.5 py-0.5 font-mono text-xs text-white">
+                    {"{{variable}}"}
+                  </code>{" "}
+                  placeholders—list variable names below.
+                </DialogDescription>
+              </div>
             </div>
+            <div
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent"
+              aria-hidden
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="template-subject">Subject</Label>
-              <Input
-                id="template-subject"
-                value={formSubject}
-                onChange={(e) => setFormSubject(e.target.value)}
-                placeholder="Welcome to Ezri"
-              />
-            </div>
+          <div className="max-h-[min(62vh,560px)] overflow-y-auto px-6 py-6">
+            <div className="space-y-5">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label
+                    htmlFor="template-name"
+                    className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                  >
+                    Template name
+                  </Label>
+                  <Input
+                    id="template-name"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder="Welcome Email"
+                    disabled={isSavingTemplate}
+                    className="h-11 rounded-xl border-slate-200 bg-white shadow-sm transition-colors placeholder:text-slate-400 focus-visible:border-fuchsia-400 focus-visible:ring-fuchsia-500/25"
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="template-category">Category</Label>
-              <select
-                id="template-category"
-                value={formCategory}
-                onChange={(e) =>
-                  setFormCategory(e.target.value as EmailTemplate["category"])
-                }
-                className="w-full px-3 py-2 rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="welcome">Welcome</option>
-                <option value="notification">Notification</option>
-                <option value="marketing">Marketing</option>
-                <option value="system">System</option>
-                <option value="crisis">Crisis</option>
-              </select>
-            </div>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="template-subject"
+                    className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                  >
+                    Subject
+                  </Label>
+                  <Input
+                    id="template-subject"
+                    value={formSubject}
+                    onChange={(e) => setFormSubject(e.target.value)}
+                    placeholder="Welcome to Ezri"
+                    disabled={isSavingTemplate}
+                    className="h-11 rounded-xl border-slate-200 bg-white shadow-sm transition-colors focus-visible:border-fuchsia-400 focus-visible:ring-fuchsia-500/25"
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="template-html">HTML Content</Label>
-              <textarea
-                id="template-html"
-                value={formHtmlContent}
-                onChange={(e) => setFormHtmlContent(e.target.value)}
-                rows={8}
-                placeholder="<p>Hello {{user_name}}, welcome to Ezri...</p>"
-                className="w-full px-3 py-2 rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="template-category"
+                    className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                  >
+                    Category
+                  </Label>
+                  <div className="relative">
+                    <select
+                      id="template-category"
+                      value={formCategory}
+                      onChange={(e) =>
+                        setFormCategory(e.target.value as EmailTemplate["category"])
+                      }
+                      disabled={isSavingTemplate}
+                      className="h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 pr-10 text-sm shadow-sm transition-colors focus:border-fuchsia-400 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/25 disabled:opacity-60"
+                    >
+                      <option value="welcome">Welcome</option>
+                      <option value="notification">Notification</option>
+                      <option value="marketing">Marketing</option>
+                      <option value="system">System</option>
+                      <option value="crisis">Crisis</option>
+                    </select>
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                      ▼
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="template-text">Text Content (optional)</Label>
-              <textarea
-                id="template-text"
-                value={formTextContent}
-                onChange={(e) => setFormTextContent(e.target.value)}
-                rows={4}
-                placeholder="Hello {{user_name}}, welcome to Ezri..."
-                className="w-full px-3 py-2 rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              />
-            </div>
+              <div className="space-y-2">
+                <Label
+                  htmlFor="template-html"
+                  className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  <Code className="h-3.5 w-3.5 text-fuchsia-600" />
+                  HTML content
+                </Label>
+                <textarea
+                  id="template-html"
+                  value={formHtmlContent}
+                  onChange={(e) => setFormHtmlContent(e.target.value)}
+                  rows={7}
+                  placeholder="<p>Hello {{user_name}}, welcome to Ezri...</p>"
+                  disabled={isSavingTemplate}
+                  spellCheck={false}
+                  className="w-full resize-y rounded-xl border border-slate-200 bg-slate-950 px-4 py-3 font-mono text-sm leading-relaxed text-emerald-100 shadow-inner placeholder:text-slate-500 focus:border-fuchsia-500/50 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/30 disabled:opacity-60"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="template-variables">
-                Variables (comma separated, without curly braces)
-              </Label>
-              <Input
-                id="template-variables"
-                value={formVariables}
-                onChange={(e) => setFormVariables(e.target.value)}
-                placeholder="user_name, app_url, reset_url"
-              />
+              <div className="space-y-2">
+                <Label
+                  htmlFor="template-text"
+                  className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  <AlignLeft className="h-3.5 w-3.5 text-indigo-600" />
+                  Plain text (optional)
+                </Label>
+                <textarea
+                  id="template-text"
+                  value={formTextContent}
+                  onChange={(e) => setFormTextContent(e.target.value)}
+                  rows={4}
+                  placeholder="Hello {{user_name}}, welcome to Ezri..."
+                  disabled={isSavingTemplate}
+                  className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm leading-relaxed text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-fuchsia-400 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/20 disabled:opacity-60"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label
+                  htmlFor="template-variables"
+                  className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  <Braces className="h-3.5 w-3.5 text-violet-600" />
+                  Variables
+                </Label>
+                <Input
+                  id="template-variables"
+                  value={formVariables}
+                  onChange={(e) => setFormVariables(e.target.value)}
+                  placeholder="user_name, app_url, reset_url"
+                  disabled={isSavingTemplate}
+                  className="h-11 rounded-xl border-slate-200 bg-white font-mono text-sm shadow-sm focus-visible:border-fuchsia-400 focus-visible:ring-fuchsia-500/25"
+                />
+                <p className="text-xs leading-relaxed text-slate-500">
+                  Comma-separated names only—no curly braces. These power autocomplete and validation when sending.
+                </p>
+              </div>
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-3 border-t border-slate-100 bg-gradient-to-b from-slate-50/90 to-slate-100/80 px-6 py-4 sm:justify-end">
             <Button
+              type="button"
               variant="outline"
+              disabled={isSavingTemplate}
               onClick={() => {
                 setShowEditModal(false);
                 setIsEditing(false);
+                resetForm();
               }}
+              className="h-11 rounded-xl border-slate-200 bg-white px-5"
             >
               Cancel
             </Button>
-            <Button onClick={handleSaveTemplate}>
-              {editMode === "create" ? "Create Template" : "Save Changes"}
+            <Button
+              type="button"
+              disabled={isSavingTemplate}
+              isLoading={isSavingTemplate}
+              onClick={() => void handleSaveTemplate()}
+              className="h-11 min-w-[160px] rounded-xl bg-gradient-to-r from-fuchsia-600 to-purple-600 px-6 font-semibold text-white shadow-lg shadow-fuchsia-600/25 hover:from-fuchsia-500 hover:to-purple-500"
+            >
+              {editMode === "create" ? "Create template" : "Save changes"}
             </Button>
           </DialogFooter>
         </DialogContent>

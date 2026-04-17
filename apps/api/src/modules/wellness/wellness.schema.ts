@@ -107,8 +107,23 @@ export const createWellnessChallengeSchema = z.object({
   goal_criteria: z.unknown().optional().nullable(),
 });
 
+export const updateWellnessChallengeSchema = z
+  .object({
+    title: z.string().min(1).optional(),
+    description: z.string().nullable().optional(),
+    category: z.string().nullable().optional(),
+    start_date: z.string().min(1).optional(),
+    end_date: z.string().min(1).optional(),
+    reward_points: z.number().int().min(0).nullable().optional(),
+    goal_criteria: z.unknown().optional().nullable(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'At least one field is required for update',
+  });
+
 /** Same shape as validated POST /wellness/challenges body — use for service + controller typing. */
 export type CreateWellnessChallengeInput = z.infer<typeof createWellnessChallengeSchema>;
+export type UpdateWellnessChallengeInput = z.infer<typeof updateWellnessChallengeSchema>;
 
 export type CreateWellnessToolInput = z.infer<typeof createWellnessToolSchema>;
 export type UpdateWellnessToolInput = z.infer<typeof updateWellnessToolSchema>;

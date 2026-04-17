@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, type ChangeEventHandler } from "react";
+import { toast } from "sonner";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -21,6 +22,8 @@ import {
   Heart,
   Lightbulb,
   X,
+  Download,
+  Upload,
 } from "lucide-react";
 
 const LS_PROMPTS = "ezri-admin-content-prompts";
@@ -64,6 +67,39 @@ interface Resource {
   rating: number;
 }
 
+const CONTENT_EXPORT_VERSION = 1 as const;
+
+type ContentExportPayload = {
+  version: typeof CONTENT_EXPORT_VERSION;
+  exportedAt: string;
+  prompts: Prompt[];
+  resources: Resource[];
+  exercises: Exercise[];
+};
+
+function isPromptRow(x: unknown): x is Prompt {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  return (
+    typeof o.id === "string" &&
+    typeof o.text === "string" &&
+    typeof o.category === "string" &&
+    typeof o.uses === "number"
+  );
+}
+
+function isResourceRow(x: unknown): x is Resource {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  return (
+    typeof o.id === "string" &&
+    typeof o.title === "string" &&
+    typeof o.type === "string" &&
+    typeof o.views === "number" &&
+    typeof o.rating === "number"
+  );
+}
+
 export function ContentManagement() {
   const [activeTab, setActiveTab] = useState<"exercises" | "prompts" | "resources">(
     "exercises"
@@ -101,18 +137,25 @@ export function ContentManagement() {
     type: "Article",
   });
 
+  const importInputRef = useRef<HTMLInputElement>(null);
+
   const fetchExercises = async () => {
     try {
       setIsLoading(true);
-      const [toolsRes, progressRes] = await Promise.all([
+      const [toolsRes, usageRes] = await Promise.all([
         api.wellness.getAll(),
-        api.wellness.getProgress(),
+        api.admin.getWellnessToolUsage().catch((e) => {
+          console.warn("Wellness tool usage unavailable:", e);
+          return null;
+        }),
       ]);
-      const progressMap = new Map(
-        (Array.isArray(progressRes) ? progressRes : []).map((p: any) => [
-          p.toolId,
-          p.sessionsCompleted,
-        ])
+      const usageMap = new Map<string, number>(
+        Array.isArray(usageRes)
+          ? usageRes.map((r: { toolId: string; sessionsCompleted: number }) => [
+              r.toolId,
+              r.sessionsCompleted,
+            ])
+          : []
       );
       const apiList = Array.isArray(toolsRes) ? toolsRes : [];
       const builtinRows: Exercise[] = WELLNESS_BUILTIN_TOOLS_ADMIN.map((b) => ({
@@ -129,7 +172,7 @@ export function ContentManagement() {
         name: t.title,
         category: t.category,
         duration: t.duration_minutes ? `${t.duration_minutes} min` : "∞",
-        uses: progressMap.get(t.id) ?? 0,
+        uses: usageMap.get(t.id) ?? 0,
         status: (t.status as string) || "draft",
         isBuiltin: false,
       }));
@@ -249,6 +292,68 @@ export function ContentManagement() {
     } catch {
       /* ignore */
     }
+  };
+
+  const handleExportContent = () => {
+    const payload: ContentExportPayload = {
+      version: CONTENT_EXPORT_VERSION,
+      exportedAt: new Date().toISOString(),
+      prompts,
+      resources,
+      exercises,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `content-management-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Export downloaded.");
+  };
+
+  const handleImportFile: ChangeEventHandler<HTMLInputElement> = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result as string) as unknown;
+        if (!parsed || typeof parsed !== "object") {
+          toast.error("Invalid file.");
+          return;
+        }
+        const rec = parsed as Record<string, unknown>;
+        if (rec.version !== CONTENT_EXPORT_VERSION) {
+          toast.error("Unsupported export version. Re-export from this page and try again.");
+          return;
+        }
+        const nextPrompts = rec.prompts;
+        const nextResources = rec.resources;
+        if (!Array.isArray(nextPrompts) || !Array.isArray(nextResources)) {
+          toast.error("File must include prompts and resources arrays.");
+          return;
+        }
+        const validPrompts = nextPrompts.filter(isPromptRow);
+        const validResources = nextResources.filter(isResourceRow);
+        if (validPrompts.length === 0 && validResources.length === 0) {
+          toast.error("No valid prompt or resource rows found.");
+          return;
+        }
+        if (validPrompts.length > 0) persistPrompts(validPrompts);
+        if (validResources.length > 0) persistResources(validResources);
+        toast.success(
+          "Imported saved prompts and/or resources. Wellness exercises are managed in the database."
+        );
+        void fetchExercises();
+      } catch {
+        toast.error("Could not read that file.");
+      }
+    };
+    reader.readAsText(file);
   };
 
   // Confirm Add
@@ -445,8 +550,8 @@ export function ContentManagement() {
           transition={{ delay: 0.2 }}
         >
           <Card className="p-4">
-            <div className="flex gap-4">
-              <div className="flex-1 relative">
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex-1 min-w-[200px] relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="Search content..."
@@ -455,10 +560,38 @@ export function ContentManagement() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <Button className="gap-2" onClick={handleAddNew}>
-                <Plus className="w-4 h-4" />
-                Add New
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={handleExportContent}
+                >
+                  <Download className="w-4 h-4" />
+                  Export
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => importInputRef.current?.click()}
+                >
+                  <Upload className="w-4 h-4" />
+                  Import
+                </Button>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  aria-hidden
+                  onChange={handleImportFile}
+                />
+                <Button className="gap-2" onClick={handleAddNew}>
+                  <Plus className="w-4 h-4" />
+                  Add New
+                </Button>
+              </div>
             </div>
           </Card>
         </motion.div>

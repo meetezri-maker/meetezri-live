@@ -9,7 +9,7 @@ import {
   getEmailTemplatesHandler, createEmailTemplateHandler, updateEmailTemplateHandler, deleteEmailTemplateHandler,
   getPushCampaignsHandler, createPushCampaignHandler, updatePushCampaignHandler, deletePushCampaignHandler,
   getSupportTicketsHandler, updateSupportTicketHandler,
-  getCommunityStatsHandler, getCommunityGroupsHandler, getContentPerformanceHandler,
+  getCommunityStatsHandler, getCommunityGroupsHandler, getContentPerformanceHandler, getWellnessToolUsageHandler,
   getCommunityPostsHandler, patchCommunityPostHandler, deleteCommunityPostHandler,
   patchCommunityGroupHandler, deleteCommunityGroupHandler, getCommunityGroupMembersHandler,
   dispatchPushCampaignHandler,
@@ -27,7 +27,6 @@ import {
   getBrandingConfigHandler, putBrandingConfigHandler,
 } from './admin.controller';
 import {
-  dashboardStatsSchema,
   userListSchema,
   userSchema,
   updateUserSchema,
@@ -41,11 +40,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
     '/stats',
     {
       preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])],
-      schema: {
-        response: {
-          200: dashboardStatsSchema,
-        },
-      },
+      // Intentionally no response schema: dashboard payload is large and evolves; strict Zod serialization
+      // was surfacing as 500s ("Failed to fetch dashboard stats") when output drifted slightly from schema.
     },
     getDashboardStatsHandler
   );
@@ -240,6 +236,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
     '/content-performance',
     { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] },
     getContentPerformanceHandler
+  );
+
+  fastify.get(
+    '/wellness-tools/usage',
+    { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] },
+    getWellnessToolUsageHandler
   );
 
   // Community

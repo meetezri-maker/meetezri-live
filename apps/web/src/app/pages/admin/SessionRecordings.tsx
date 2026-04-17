@@ -27,10 +27,35 @@ interface SessionRecording {
   topics: string[];
   sentiment: "positive" | "neutral" | "negative" | "crisis";
   flaggedIssues?: string[];
-  qualityScore: number;
+  /** 0–100 when present; null if not scored */
+  qualityScore: number | null;
   transcriptAvailable: boolean;
   reviewedBy?: string;
   reviewNotes?: string;
+}
+
+function parseQualityScoreFromConfig(config: Record<string, unknown>): number | null {
+  const q = config.quality_score;
+  if (typeof q !== "number" || !Number.isFinite(q) || q <= 0) return null;
+  if (q <= 1) return Math.round(q * 100);
+  return Math.round(Math.min(100, Math.max(0, q)));
+}
+
+/** Prefer crisis when risk/flags indicate safety concern even if sentiment was normalized to neutral. */
+function deriveRecordingSentiment(config: Record<string, unknown>): SessionRecording["sentiment"] {
+  const raw = String(config.sentiment || "neutral").toLowerCase();
+  const risk = String(config.risk_level || "").toLowerCase();
+  const flagged = Array.isArray(config.flagged_issues) ? (config.flagged_issues as string[]) : [];
+
+  if (raw === "crisis") return "crisis";
+  if (risk === "critical" || risk === "high") return "crisis";
+  if (config.crisis === true || config.crisis_flag === true) return "crisis";
+  if (typeof config.crisis_score === "number" && config.crisis_score > 0) return "crisis";
+  if (flagged.some((f) => /crisis|self[\s-]?harm|suicid/i.test(String(f)))) return "crisis";
+
+  if (raw === "positive") return "positive";
+  if (raw === "negative") return "negative";
+  return "neutral";
 }
 
 interface TranscriptMessage {
@@ -45,50 +70,72 @@ export function SessionRecordings() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [selectedRecording, setSelectedRecording] = useState<SessionRecording | null>(null);
   const [recordings, setRecordings] = useState<SessionRecording[]>([]);
+  /** Total ended sessions (from API); not limited to the loaded page size. */
+  const [totalRecordingCount, setTotalRecordingCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [transcripts, setTranscripts] = useState<Record<string, TranscriptMessage[]>>({});
   const [transcriptLoadingId, setTranscriptLoadingId] = useState<string | null>(null);
   const [transcriptErrorId, setTranscriptErrorId] = useState<string | null>(null);
 
   useEffect(() => {
+    const PAGE_SIZE = 500;
+    const MAX_PAGES = 200;
+
+    const mapSession = (session: any): SessionRecording => {
+      const config = (session.config || {}) as Record<string, unknown>;
+
+      let status: SessionRecording["status"] = "completed";
+      if (config.reviewed_at || config.status === "reviewed") {
+        status = "reviewed";
+      } else if (config.admin_flagged) {
+        status = "flagged";
+      } else if (
+        typeof config.status === "string" &&
+        ["completed", "flagged", "reviewed", "escalated"].includes(config.status)
+      ) {
+        status = config.status as SessionRecording["status"];
+      }
+
+      const topics = Array.isArray(config.topics) ? (config.topics as string[]) : [];
+      const qualityScore = parseQualityScoreFromConfig(config);
+      const transcriptCount = session._count?.session_messages ?? 0;
+
+      return {
+        id: session.id,
+        userId: session.user_id,
+        userName: session.profiles?.full_name || "Unknown User",
+        sessionDate: new Date(session.started_at || session.created_at),
+        duration: session.duration_minutes || 0,
+        status,
+        aiCompanion: (typeof config.ai_name === "string" && config.ai_name) || "AI Assistant",
+        topics,
+        sentiment: deriveRecordingSentiment(config),
+        flaggedIssues: config.flagged_issues as string[] | undefined,
+        qualityScore,
+        transcriptAvailable: transcriptCount > 0,
+        reviewedBy: config.reviewed_by as string | undefined,
+        reviewNotes: config.review_notes as string | undefined,
+      };
+    };
+
     const fetchRecordings = async (showSpinner: boolean) => {
       try {
         if (showSpinner) setIsLoading(true);
-        const data = await api.admin.getSessionRecordings({ limit: 100, page: 1 });
-        const mappedRecordings: SessionRecording[] = data.map((session: any) => {
-          const config = session.config || {};
-
-          let status: SessionRecording["status"] = "completed";
-          if (config.reviewed_at || config.status === "reviewed") {
-            status = "reviewed";
-          } else if (config.admin_flagged) {
-            status = "flagged";
-          } else if (config.status && ["completed", "flagged", "reviewed", "escalated"].includes(config.status)) {
-            status = config.status;
+        const all: any[] = [];
+        let total = 0;
+        for (let page = 1; page <= MAX_PAGES; page += 1) {
+          const res = await api.admin.getSessionRecordings({ limit: PAGE_SIZE, page });
+          const payload = res as { items?: any[]; total?: number };
+          const batch = Array.isArray(res) ? res : payload.items ?? [];
+          if (page === 1 && typeof payload.total === "number") {
+            total = payload.total;
           }
-
-          const topics = Array.isArray(config.topics) ? config.topics : [];
-          const qualityScore = typeof config.quality_score === "number" ? config.quality_score : 0;
-          const transcriptCount = session._count?.session_messages ?? 0;
-
-          return {
-            id: session.id,
-            userId: session.user_id,
-            userName: session.profiles?.full_name || "Unknown User",
-            sessionDate: new Date(session.started_at || session.created_at),
-            duration: session.duration_minutes || 0,
-            status,
-            aiCompanion: config.ai_name || "AI Assistant",
-            topics,
-            sentiment: (config.sentiment || "neutral") as any,
-            flaggedIssues: config.flagged_issues,
-            qualityScore,
-            transcriptAvailable: transcriptCount > 0,
-            reviewedBy: config.reviewed_by,
-            reviewNotes: config.review_notes,
-          };
-        });
-        setRecordings(mappedRecordings);
+          all.push(...batch);
+          if (batch.length < PAGE_SIZE) break;
+        }
+        if (total === 0 && all.length > 0) total = all.length;
+        setTotalRecordingCount(total);
+        setRecordings(all.map(mapSession));
       } catch (error) {
         console.error("Failed to fetch session recordings:", error);
       } finally {
@@ -139,13 +186,17 @@ export function SessionRecordings() {
   };
 
   const stats = {
-    totalRecordings: recordings.length,
-    flaggedSessions: recordings.filter(r => r.status === "flagged").length,
-    escalatedSessions: recordings.filter(r => r.status === "escalated").length,
-    avgQualityScore:
-      recordings.length === 0
-        ? 0
-        : Math.round(recordings.reduce((sum, r) => sum + r.qualityScore, 0) / recordings.length)
+    totalRecordings: totalRecordingCount || recordings.length,
+    flaggedSessions: recordings.filter((r) => r.status === "flagged").length,
+    escalatedSessions: recordings.filter((r) => r.status === "escalated").length,
+    avgQualityScore: (() => {
+      const scored = recordings.filter(
+        (r): r is SessionRecording & { qualityScore: number } =>
+          r.qualityScore != null && r.qualityScore > 0
+      );
+      if (scored.length === 0) return null as number | null;
+      return Math.round(scored.reduce((sum, r) => sum + r.qualityScore, 0) / scored.length);
+    })(),
   };
 
   const loadTranscript = (recording: SessionRecording) => {
@@ -320,7 +371,10 @@ export function SessionRecordings() {
               </div>
               <div>
                 <p className="text-gray-600 text-sm">Avg Quality</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.avgQualityScore}/100</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {stats.avgQualityScore == null ? "—" : `${stats.avgQualityScore}/100`}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">Among sessions with a score</p>
               </div>
             </div>
           </motion.div>
@@ -409,7 +463,7 @@ export function SessionRecordings() {
                           <StatusIcon className="w-3 h-3" />
                           {recording.status}
                         </span>
-                        <span className={`text-xs font-medium ${getSentimentColor(recording.sentiment)}`}>
+                        <span className={`text-xs font-medium capitalize ${getSentimentColor(recording.sentiment)}`}>
                           {recording.sentiment}
                         </span>
                       </div>
@@ -429,7 +483,7 @@ export function SessionRecordings() {
                         </div>
                         <div className="flex items-center gap-1">
                           <Star className="w-4 h-4" />
-                          {recording.qualityScore}/100
+                          {recording.qualityScore == null ? "—" : `${recording.qualityScore}/100`}
                         </div>
                       </div>
 

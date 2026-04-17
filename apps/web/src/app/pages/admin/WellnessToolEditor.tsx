@@ -102,7 +102,9 @@ const EDITOR_ICON_NAMES = new Set([
 export function WellnessToolEditor() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const editId = searchParams.get("id");
+  /** Treat `?id=` (empty) as missing so save uses create/update correctly. */
+  const rawIdParam = searchParams.get("id");
+  const editId = rawIdParam && rawIdParam.trim() !== "" ? rawIdParam.trim() : null;
   const categoryFromQuery = searchParams.get("category");
   const [resolvedEditId, setResolvedEditId] = useState<string | null>(null);
   const [isResolvingCategory, setIsResolvingCategory] = useState(false);
@@ -315,20 +317,40 @@ export function WellnessToolEditor() {
   };
 
   const handleSave = async (status: "draft" | "published") => {
+    if (!formData.title.trim()) {
+      alert("Please enter a tool title.");
+      return;
+    }
+    /** Match visible MM:SS field — duration was only committed on blur before, so Save could run with stale seconds. */
+    const durationFromUi =
+      parseFlexibleDurationInput(sessionDurationText.trim()) ?? formData.sessionDurationSeconds;
+    const ds = Math.max(60, durationFromUi);
+    const scriptStepsSafe = formData.scriptSteps.map((s) => ({
+      ...s,
+      duration:
+        typeof s.duration === "number" && Number.isFinite(s.duration) && s.duration >= 0
+          ? s.duration
+          : 60,
+      instruction: typeof s.instruction === "string" ? s.instruction : "",
+    }));
+
     try {
       setIsSaving(true);
-      const ds = Math.max(60, formData.sessionDurationSeconds);
+      setSessionDurationText(formatSecondsAsMmSs(ds));
+      setFormData((prev) => ({ ...prev, sessionDurationSeconds: ds }));
+      lastSyncedSecondsRef.current = ds;
+
       const payload = {
-        title: formData.title,
+        title: formData.title.trim(),
         category: formData.category,
-        description: formData.description,
+        description: formData.description.trim() || undefined,
         duration_seconds: ds,
         duration_minutes: Math.max(1, Math.round(ds / 60)),
         difficulty: formData.difficulty,
         icon: formData.icon,
         status: status,
         content: JSON.stringify({
-          scriptSteps: formData.scriptSteps,
+          scriptSteps: scriptStepsSafe,
           tags: formData.tags,
           enabledForGuidedMode: formData.enabledForGuidedMode,
           audioEnabled: formData.audioEnabled,
@@ -345,7 +367,8 @@ export function WellnessToolEditor() {
       navigate("/admin/wellness-tools-cms");
     } catch (error) {
       console.error("Failed to save tool:", error);
-      alert("Failed to save tool. Please try again.");
+      const msg = error instanceof Error ? error.message : "Please try again.";
+      alert(`Failed to save tool. ${msg}`);
     } finally {
       setIsSaving(false);
     }
@@ -375,6 +398,7 @@ export function WellnessToolEditor() {
         >
           <div className="flex items-center gap-4">
             <Button
+              type="button"
               variant="ghost"
               onClick={() => navigate("/admin/wellness-tools-cms")}
               className="text-gray-600 hover:text-gray-900"
@@ -393,27 +417,51 @@ export function WellnessToolEditor() {
 
           <div className="flex items-center gap-3">
             <Button
+              type="button"
               variant="outline"
               onClick={() => setShowPreview(!showPreview)}
+              disabled={isSaving}
               className="border-gray-300 text-gray-700 hover:bg-gray-500"
             >
               <Eye className="w-4 h-4 mr-2" />
               {showPreview ? "Hide" : "Show"} Preview
             </Button>
             <Button
+              type="button"
               variant="outline"
-              onClick={handleSaveDraft}
+              onClick={() => void handleSaveDraft()}
+              disabled={isSaving}
               className="border-gray-300 text-gray-700 hover:bg-gray-500"
             >
-              <Save className="w-4 h-4 mr-2" />
-              Save Draft
+              {isSaving ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  Saving…
+                </span>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Draft
+                </>
+              )}
             </Button>
             <Button
-              onClick={handlePublish}
+              type="button"
+              onClick={() => void handlePublish()}
+              disabled={isSaving}
               className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white"
             >
-              <CheckCircle2 className="w-4 h-4 mr-2" />
-              Publish Tool
+              {isSaving ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Saving…
+                </span>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Publish Tool
+                </>
+              )}
             </Button>
           </div>
         </motion.div>
@@ -529,6 +577,7 @@ export function WellnessToolEditor() {
                   <div className="flex gap-3">
                     {["Beginner", "Intermediate", "Advanced"].map((level) => (
                       <button
+                        type="button"
                         key={level}
                         onClick={() =>
                           setFormData({ ...formData, difficulty: level as any })
@@ -558,6 +607,7 @@ export function WellnessToolEditor() {
                 <div className="grid grid-cols-4 gap-3">
                   {iconOptions.map((option) => (
                     <button
+                      type="button"
                       key={option.name}
                       onClick={() =>
                         setFormData({ ...formData, icon: option.name })
@@ -604,6 +654,7 @@ export function WellnessToolEditor() {
                     className="flex-1 px-4 py-2 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                   <Button
+                    type="button"
                     onClick={handleAddTag}
                     className="bg-purple-500 hover:bg-purple-600"
                   >
@@ -618,6 +669,7 @@ export function WellnessToolEditor() {
                     >
                       {tag}
                       <button
+                        type="button"
                         onClick={() => handleRemoveTag(tag)}
                         className="hover:text-purple-900"
                       >
@@ -696,6 +748,7 @@ export function WellnessToolEditor() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl font-bold text-gray-900">Guided Script</h3>
                   <Button
+                    type="button"
                     onClick={handleAddStep}
                     size="sm"
                     className="bg-purple-500 hover:bg-purple-600"
@@ -717,6 +770,7 @@ export function WellnessToolEditor() {
                         </span>
                         {formData.scriptSteps.length > 1 && (
                           <button
+                            type="button"
                             onClick={() => handleRemoveStep(step.id)}
                             className="text-red-600 hover:text-red-700"
                           >
@@ -732,13 +786,14 @@ export function WellnessToolEditor() {
                         <input
                           type="number"
                           value={step.duration}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const v = parseInt(e.target.value, 10);
                             handleUpdateStep(
                               step.id,
                               "duration",
-                              parseInt(e.target.value)
-                            )
-                          }
+                              Number.isFinite(v) && v >= 0 ? v : 0
+                            );
+                          }}
                           min="1"
                           className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                         />

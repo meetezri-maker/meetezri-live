@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AdminLayoutNew } from '@/app/components/AdminLayoutNew';
 import { api } from '@/lib/api';
+import { toast } from 'sonner';
 import {
   MessageSquare,
   Search,
@@ -12,11 +13,11 @@ import {
   Flag,
   AlertTriangle,
   Clock,
-  Eye,
-  EyeOff,
   X,
   Info,
-  Inbox,
+  Save,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 
 interface Message {
@@ -92,6 +93,12 @@ function mapApiSessionToTranscript(session: any): Transcript {
   };
 }
 
+function csvEscapeCell(value: string | number | boolean): string {
+  const s = String(value ?? "");
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
 function mapDbMessagesToMessages(rows: any[]): Message[] {
   return rows.map((m) => {
     const role = (m.role || '').toLowerCase();
@@ -117,13 +124,24 @@ export function ConversationTranscripts() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterSentiment, setFilterSentiment] = useState<string>('all');
   const [filterFlagged, setFilterFlagged] = useState<boolean | null>(null);
+  const [savingAdminNotes, setSavingAdminNotes] = useState(false);
+  const [exportingList, setExportingList] = useState(false);
 
+  /** Loads all ended sessions in pages (API allows up to 5k per page). */
   const fetchSessions = useCallback(async () => {
+    const PAGE_SIZE = 500;
+    const MAX_PAGES = 200;
     try {
       setLoadError(null);
       setIsLoading(true);
-      const data = await api.admin.getSessionRecordings({ limit: 100, page: 1 });
-      setTranscripts((data as any[]).map(mapApiSessionToTranscript));
+      const all: unknown[] = [];
+      for (let page = 1; page <= MAX_PAGES; page += 1) {
+        const data = await api.admin.getSessionRecordings({ limit: PAGE_SIZE, page });
+        const batch = Array.isArray(data) ? data : (data as { items: unknown[]; total: number }).items ?? [];
+        all.push(...batch);
+        if (batch.length < PAGE_SIZE) break;
+      }
+      setTranscripts((all as any[]).map(mapApiSessionToTranscript));
     } catch (e) {
       console.error(e);
       setLoadError('Failed to load session transcripts.');
@@ -201,7 +219,6 @@ export function ConversationTranscripts() {
     total: transcripts.length,
     flagged: transcripts.filter((t) => t.isFlagged).length,
     crisis: transcripts.filter((t) => t.sentiment === 'crisis').length,
-    needsReview: transcripts.filter((t) => t.isFlagged && !t.isReviewed).length,
   };
 
   const filteredTranscripts = transcripts.filter((transcript) => {
@@ -220,6 +237,61 @@ export function ConversationTranscripts() {
     return matchesSearch && matchesSentiment && matchesFlagged;
   });
 
+  /** CSV of filtered rows (metadata). Per-session full transcript: use row Download. Batch AI-assisted export planned. */
+  const handleExportListCsv = () => {
+    const rows = filteredTranscripts;
+    if (rows.length === 0) {
+      toast.info("No sessions to export");
+      return;
+    }
+    setExportingList(true);
+    try {
+      const header = [
+        "session_id",
+        "user",
+        "email",
+        "avatar",
+        "started",
+        "duration_min",
+        "messages",
+        "sentiment",
+        "flagged",
+        "topics",
+        "admin_notes_preview",
+      ];
+      const lines = [header.join(",")];
+      for (const t of rows) {
+        lines.push(
+          [
+            csvEscapeCell(t.id),
+            csvEscapeCell(t.userName),
+            csvEscapeCell(t.userEmail ?? ""),
+            csvEscapeCell(t.avatarName),
+            csvEscapeCell(t.sessionDate),
+            csvEscapeCell(t.sessionDuration),
+            csvEscapeCell(t.messageCount),
+            csvEscapeCell(t.sentiment),
+            csvEscapeCell(t.isFlagged ? "yes" : "no"),
+            csvEscapeCell(t.topics.join("; ")),
+            csvEscapeCell(t.adminNotes.replace(/\s+/g, " ").slice(0, 500)),
+          ].join(",")
+        );
+      }
+      const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `conversation_sessions_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${rows.length} session row(s)`);
+    } finally {
+      setExportingList(false);
+    }
+  };
+
   const getSentimentColor = (sentiment: string) => {
     switch (sentiment) {
       case 'positive':
@@ -235,15 +307,6 @@ export function ConversationTranscripts() {
     }
   };
 
-  const handleMarkReviewed = async (id: string) => {
-    try {
-      const updated = await api.admin.markSessionRecordingReviewed(id);
-      mergeSessionUpdate(id, updated);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   const handleToggleFlag = async (id: string, current: boolean) => {
     try {
       const updated = await api.admin.updateSessionRecording(id, { admin_flagged: !current });
@@ -253,12 +316,42 @@ export function ConversationTranscripts() {
     }
   };
 
-  const saveAdminNotes = async (id: string, notes: string) => {
+  const persistAdminNotes = async (id: string, notes: string) => {
+    const updated = await api.admin.updateSessionRecording(id, { review_notes: notes });
+    mergeSessionUpdate(id, updated);
+  };
+
+  const handleSaveAdminNotes = async () => {
+    if (!transcriptModal) return;
+    setSavingAdminNotes(true);
     try {
-      const updated = await api.admin.updateSessionRecording(id, { review_notes: notes });
-      mergeSessionUpdate(id, updated);
+      await persistAdminNotes(transcriptModal.id, transcriptModal.adminNotes);
+      toast.success('Admin note saved');
     } catch (e) {
       console.error(e);
+      toast.error('Could not save admin note');
+    } finally {
+      setSavingAdminNotes(false);
+    }
+  };
+
+  const handleRemoveAdminNote = async () => {
+    if (!transcriptModal) return;
+    const hasContent = transcriptModal.adminNotes.trim().length > 0;
+    if (!hasContent) {
+      toast.info('No note to remove');
+      return;
+    }
+    if (!window.confirm('Remove this admin note from this session?')) return;
+    setSavingAdminNotes(true);
+    try {
+      await persistAdminNotes(transcriptModal.id, '');
+      toast.success('Admin note removed');
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not remove admin note');
+    } finally {
+      setSavingAdminNotes(false);
     }
   };
 
@@ -274,7 +367,6 @@ Date: ${transcript.sessionDate}
 Duration: ${transcript.sessionDuration} minutes
 Sentiment: ${transcript.sentiment}
 Flagged: ${transcript.isFlagged ? 'Yes' : 'No'}
-Reviewed: ${transcript.isReviewed ? 'Yes' : 'No'}
 
 TOPICS DISCUSSED
 ================
@@ -336,21 +428,39 @@ Ezri Mental Health Platform - Admin Dashboard
     <AdminLayoutNew>
       <div className="p-8">
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
-              <MessageSquare className="w-6 h-6 text-white" />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                <MessageSquare className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Conversation Transcripts</h1>
+                <p className="text-gray-600">
+                  Review and monitor user–AI therapy sessions. All ended sessions are loaded in batches (not capped at 100).
+                  Full message export per session uses each card&apos;s download; batch AI-assisted exports can be added later.
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Conversation Transcripts</h1>
-              <p className="text-gray-600">Review and monitor user–AI therapy sessions (from stored session data)</p>
-            </div>
+            <button
+              type="button"
+              onClick={() => handleExportListCsv()}
+              disabled={exportingList || filteredTranscripts.length === 0}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50 disabled:pointer-events-none disabled:opacity-50"
+            >
+              {exportingList ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              Export list (CSV)
+            </button>
           </div>
 
           {loadError && (
             <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{loadError}</div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <MessageSquare className="w-8 h-8 text-blue-600" />
@@ -373,14 +483,6 @@ Ezri Mental Health Platform - Admin Dashboard
                 <span className="text-2xl font-bold text-gray-900">{stats.crisis}</span>
               </div>
               <p className="text-sm text-gray-600">Crisis Sessions</p>
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <Inbox className="w-8 h-8 text-purple-600" />
-                <span className="text-2xl font-bold text-gray-900">{stats.needsReview}</span>
-              </div>
-              <p className="text-sm text-gray-600">Needs Review</p>
             </div>
           </div>
 
@@ -445,27 +547,8 @@ Ezri Mental Health Platform - Admin Dashboard
                         Flagged
                       </span>
                     )}
-                    {!transcript.isReviewed && transcript.isFlagged && (
-                      <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full">Needs Review</span>
-                    )}
                     <span className={`px-2 py-1 text-xs font-bold rounded-full ${getSentimentColor(transcript.sentiment)}`}>
                       {transcript.sentiment.charAt(0).toUpperCase() + transcript.sentiment.slice(1)}
-                    </span>
-                    <span
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600"
-                      title={transcript.isReviewed ? 'Reviewed' : 'Not reviewed'}
-                    >
-                      {transcript.isReviewed ? (
-                        <>
-                          <Eye className="w-4 h-4 text-green-600" aria-hidden />
-                          <span className="text-green-700">Reviewed</span>
-                        </>
-                      ) : (
-                        <>
-                          <EyeOff className="w-4 h-4 text-gray-400" aria-hidden />
-                          <span className="text-gray-500">Not reviewed</span>
-                        </>
-                      )}
                     </span>
                   </div>
 
@@ -655,25 +738,6 @@ Ezri Mental Health Platform - Admin Dashboard
                     <dd className="text-gray-900">{detailsModal.messageCount}</dd>
                   </div>
                   <div>
-                    <dt className="text-gray-500">Review</dt>
-                    <dd className="flex items-center gap-2 text-gray-900">
-                      {detailsModal.isReviewed ? (
-                        <>
-                          <Eye className="w-4 h-4 text-green-600" />
-                          Reviewed
-                          {detailsModal.reviewedAt && (
-                            <span className="text-gray-500">· {new Date(detailsModal.reviewedAt).toLocaleString()}</span>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <EyeOff className="w-4 h-4 text-gray-400" />
-                          Not reviewed
-                        </>
-                      )}
-                    </dd>
-                  </div>
-                  <div>
                     <dt className="text-gray-500">Flagged</dt>
                     <dd className="text-gray-900">{detailsModal.isFlagged ? 'Yes' : 'No'}</dd>
                   </div>
@@ -727,19 +791,6 @@ Ezri Mental Health Platform - Admin Dashboard
                         <Calendar className="w-4 h-4" />
                         <span>{new Date(transcriptModal.sessionDate).toLocaleString()}</span>
                       </div>
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-600">
-                        {transcriptModal.isReviewed ? (
-                          <>
-                            <Eye className="w-4 h-4 text-green-600" />
-                            Reviewed
-                          </>
-                        ) : (
-                          <>
-                            <EyeOff className="w-4 h-4 text-gray-400" />
-                            Not reviewed
-                          </>
-                        )}
-                      </span>
                     </div>
                   </div>
 
@@ -815,6 +866,10 @@ Ezri Mental Health Platform - Admin Dashboard
 
                 <div className="mb-6">
                   <h4 className="text-sm font-bold text-gray-700 mb-2">Admin notes</h4>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Draft is kept locally until you save. Use <strong>Save note</strong> to store it on the session, or{" "}
+                    <strong>Remove note</strong> to delete the saved note.
+                  </p>
                   <textarea
                     value={transcriptModal.adminNotes}
                     onChange={(e) => {
@@ -824,31 +879,41 @@ Ezri Mental Health Platform - Admin Dashboard
                         prev.map((t) => (t.id === transcriptModal.id ? { ...t, adminNotes: v } : t))
                       );
                     }}
-                    onBlur={() => {
-                      if (transcriptModal) void saveAdminNotes(transcriptModal.id, transcriptModal.adminNotes);
-                    }}
-                    rows={3}
+                    rows={4}
                     className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
-                    placeholder="Notes are saved when you leave this field…"
+                    placeholder="Add an internal note for your team…"
                   />
-                </div>
-
-                <div className="flex gap-3 flex-wrap">
-                  {transcriptModal.isFlagged && !transcriptModal.isReviewed && (
+                  <div className="flex flex-wrap gap-2 mt-3">
                     <motion.button
                       type="button"
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => {
-                        void handleMarkReviewed(transcriptModal.id);
-                      }}
-                      className="flex-1 min-w-[200px] px-4 py-3 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium flex items-center justify-center gap-2"
+                      disabled={savingAdminNotes}
+                      onClick={() => void handleSaveAdminNotes()}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium disabled:opacity-50 disabled:pointer-events-none"
                     >
-                      <Eye className="w-5 h-5" />
-                      Mark as reviewed
+                      {savingAdminNotes ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      Save note
                     </motion.button>
-                  )}
+                    <motion.button
+                      type="button"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      disabled={savingAdminNotes || !transcriptModal.adminNotes.trim()}
+                      onClick={() => void handleRemoveAdminNote()}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-800 text-sm font-medium hover:bg-red-100 disabled:opacity-50 disabled:pointer-events-none"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Remove note
+                    </motion.button>
+                  </div>
+                </div>
 
+                <div className="flex gap-3 flex-wrap">
                   <motion.button
                     type="button"
                     whileHover={{ scale: 1.02 }}

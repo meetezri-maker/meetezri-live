@@ -6,30 +6,40 @@ import {
   Edit,
   Trash2,
   Eye,
-  Calendar,
   Tag,
   FileText,
-  Image as ImageIcon,
   Video,
   BookOpen,
   Lightbulb,
   Activity,
   Download,
-  Filter,
-  MoreVertical,
   CheckCircle2,
-  Clock,
-  XCircle,
   Copy,
   X,
   Save,
+  Loader2,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence } from "motion/react";
-import { WELLNESS_TOOL_CATEGORIES } from "../../../lib/wellnessToolCategories";
+import {
+  WELLNESS_TOOL_CATEGORIES,
+  type WellnessToolCategory,
+} from "../../../lib/wellnessToolCategories";
+import { api } from "../../../lib/api";
+import {
+  mergeApiBuiltinsForAdmin,
+  mergeWellnessToolsForAdminDisplay,
+  placeholderWellnessToolId,
+  isWellnessPlaceholderId,
+} from "../../../lib/mergeAdminWellnessTools";
+import {
+  WELLNESS_BUILTIN_TOOLS_ADMIN,
+  isBuiltinWellnessListId,
+  type WellnessBuiltinToolMeta,
+} from "../../../lib/wellnessBuiltinToolsMetadata";
 
 interface ContentItem {
   id: string;
@@ -39,7 +49,7 @@ interface ContentItem {
   description: string;
   content: string;
   tags: string[];
-  status: "published" | "draft" | "scheduled";
+  status: "published" | "draft" | "scheduled" | "archived";
   scheduledDate?: string;
   author: string;
   views: number;
@@ -47,6 +57,83 @@ interface ContentItem {
   shares: number;
   createdAt: string;
   updatedAt: string;
+  /** Built-in catalog row (not persisted). */
+  isBuiltin?: boolean;
+}
+
+function mapBuiltinMetaToItem(meta: WellnessBuiltinToolMeta): ContentItem {
+  return {
+    id: `builtin:${meta.id}`,
+    title: meta.title,
+    type: meta.category === "Exercise" ? "activity" : "article",
+    category: meta.category,
+    description: meta.description,
+    content: "Built-in wellness content (ships with the app).",
+    tags: [meta.category],
+    status: "published",
+    author: "Ezri app",
+    views: 0,
+    likes: 0,
+    shares: 0,
+    createdAt: "Built-in",
+    updatedAt: "Built-in",
+    isBuiltin: true,
+  };
+}
+
+function mapApiToolToItem(t: Record<string, unknown>): ContentItem {
+  const category = String(t.category ?? "");
+  const statusRaw = String(t.status ?? "draft").toLowerCase();
+  const status: ContentItem["status"] =
+    statusRaw === "published"
+      ? "published"
+      : statusRaw === "archived"
+        ? "archived"
+        : "draft";
+  const profiles = t.profiles as { full_name?: string | null } | null | undefined;
+  const updated = t.updated_at ? new Date(String(t.updated_at)) : null;
+  const created = t.created_at ? new Date(String(t.created_at)) : null;
+  const updatedAt = updated ? updated.toLocaleDateString() : "—";
+  const createdAt = created ? created.toLocaleDateString() : updatedAt;
+  const desc = t.description != null ? String(t.description) : "";
+  const body = t.content_url != null ? String(t.content_url) : "";
+  const type: ContentItem["type"] =
+    category === "Exercise" ? "activity" : "article";
+  return {
+    id: String(t.id),
+    title: String(t.title ?? ""),
+    type,
+    category,
+    description: desc.trim() || "Wellness tool",
+    content: body.trim() || "—",
+    tags: [category].filter(Boolean),
+    status,
+    author: profiles?.full_name?.trim() || "Admin",
+    views: 0,
+    likes: 0,
+    shares: 0,
+    createdAt,
+    updatedAt,
+  };
+}
+
+function placeholderItem(cat: WellnessToolCategory): ContentItem {
+  return {
+    id: placeholderWellnessToolId(cat),
+    title: `${cat}: add a tool`,
+    type: "article",
+    category: cat,
+    description: "Create a wellness tool in Wellness Content CMS or from Create Content.",
+    content: "—",
+    tags: [cat],
+    status: "draft",
+    author: "—",
+    views: 0,
+    likes: 0,
+    shares: 0,
+    createdAt: "—",
+    updatedAt: "—",
+  };
 }
 
 export function WellnessContentLibrary() {
@@ -55,143 +142,74 @@ export function WellnessContentLibrary() {
   const [selectedType, setSelectedType] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  
+
+  const [contentItems, setContentItems] = useState<ContentItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
   // Modal states
   const [viewModalContent, setViewModalContent] = useState<ContentItem | null>(null);
   const [editModalContent, setEditModalContent] = useState<ContentItem | null>(null);
   const [deleteModalContent, setDeleteModalContent] = useState<ContentItem | null>(null);
 
-  const contentItems: ContentItem[] = [
-    {
-      id: "1",
-      title: "5 Morning Habits for Better Mental Health",
-      type: "article",
-      category: "Mental Wellness",
-      description: "Start your day right with these science-backed habits",
-      content: "Full article content here...",
-      tags: ["morning routine", "habits", "mental health"],
-      status: "published",
-      author: "Dr. Sarah Chen",
-      views: 3456,
-      likes: 289,
-      shares: 45,
-      createdAt: "2024-01-15",
-      updatedAt: "2024-01-15",
-    },
-    {
-      id: "2",
-      title: "Quick Desk Stretch Routine",
-      type: "activity",
-      category: "Exercise",
-      description: "5-minute stretches to do at your desk",
-      content: "Activity instructions...",
-      tags: ["stretching", "desk work", "quick"],
-      status: "published",
-      author: "Emma Wilson",
-      views: 2134,
-      likes: 198,
-      shares: 32,
-      createdAt: "2024-01-14",
-      updatedAt: "2024-01-16",
-    },
-    {
-      id: "3",
-      title: "Deep Breathing Benefits",
-      type: "tip",
-      category: "Relaxation",
-      description: "Why deep breathing is essential for stress management",
-      content: "Tip content...",
-      tags: ["breathing", "stress", "quick tip"],
-      status: "published",
-      author: "Dr. Michael Ross",
-      views: 1876,
-      likes: 156,
-      shares: 28,
-      createdAt: "2024-01-13",
-      updatedAt: "2024-01-13",
-    },
-    {
-      id: "4",
-      title: "Meditation for Beginners",
-      type: "video",
-      category: "Meditation",
-      description: "10-minute guided meditation introduction",
-      content: "Video URL...",
-      tags: ["meditation", "beginner", "guided"],
-      status: "scheduled",
-      scheduledDate: "2024-01-25",
-      author: "Sarah Chen",
-      views: 0,
-      likes: 0,
-      shares: 0,
-      createdAt: "2024-01-17",
-      updatedAt: "2024-01-17",
-    },
-    {
-      id: "5",
-      title: "Sleep Hygiene Checklist",
-      type: "article",
-      category: "Sleep Health",
-      description: "Complete guide to better sleep habits",
-      content: "Article content...",
-      tags: ["sleep", "hygiene", "checklist"],
-      status: "draft",
-      author: "Emma Wilson",
-      views: 0,
-      likes: 0,
-      shares: 0,
-      createdAt: "2024-01-18",
-      updatedAt: "2024-01-18",
-    },
-    {
-      id: "6",
-      title: "Gratitude Journaling Prompts",
-      type: "activity",
-      category: "Mindfulness",
-      description: "30 daily prompts for gratitude practice",
-      content: "Activity prompts...",
-      tags: ["gratitude", "journaling", "mindfulness"],
-      status: "published",
-      author: "Dr. Michael Ross",
-      views: 2987,
-      likes: 245,
-      shares: 67,
-      createdAt: "2024-01-12",
-      updatedAt: "2024-01-14",
-    },
-    {
-      id: "7",
-      title: "Managing Work Stress",
-      type: "tip",
-      category: "Stress Management",
-      description: "Quick strategies to reduce workplace stress",
-      content: "Tip content...",
-      tags: ["stress", "work", "productivity"],
-      status: "published",
-      author: "Sarah Chen",
-      views: 1654,
-      likes: 134,
-      shares: 23,
-      createdAt: "2024-01-11",
-      updatedAt: "2024-01-11",
-    },
-    {
-      id: "8",
-      title: "Anxiety Relief Techniques",
-      type: "article",
-      category: "Anxiety Management",
-      description: "Evidence-based methods to calm anxiety",
-      content: "Article content...",
-      tags: ["anxiety", "relief", "techniques"],
-      status: "published",
-      author: "Dr. Michael Ross",
-      views: 4123,
-      likes: 378,
-      shares: 89,
-      createdAt: "2024-01-10",
-      updatedAt: "2024-01-15",
-    },
-  ];
+  const [editForm, setEditForm] = useState<{
+    title: string;
+    type: ContentItem["type"];
+    category: WellnessToolCategory;
+    description: string;
+    content: string;
+    status: ContentItem["status"];
+  }>({
+    title: "",
+    type: "article",
+    category: WELLNESS_TOOL_CATEGORIES[0],
+    description: "",
+    content: "",
+    status: "draft",
+  });
+
+  const loadContent = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    const builtins = WELLNESS_BUILTIN_TOOLS_ADMIN.map(mapBuiltinMetaToItem);
+    try {
+      const raw = (await api.wellness.getAll()) as Record<string, unknown>[];
+      const apiRows = Array.isArray(raw) ? raw.map(mapApiToolToItem) : [];
+      const merged = mergeApiBuiltinsForAdmin(builtins, apiRows);
+      setContentItems(mergeWellnessToolsForAdminDisplay(merged, placeholderItem));
+    } catch (e) {
+      console.error(e);
+      setLoadError(
+        "Could not load the library from the server. Showing the built-in catalog only."
+      );
+      const merged = mergeApiBuiltinsForAdmin(builtins, []);
+      setContentItems(mergeWellnessToolsForAdminDisplay(merged, placeholderItem));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadContent();
+  }, [loadContent]);
+
+  useEffect(() => {
+    if (!editModalContent) return;
+    const cat = (WELLNESS_TOOL_CATEGORIES as readonly string[]).includes(
+      editModalContent.category
+    )
+      ? (editModalContent.category as WellnessToolCategory)
+      : WELLNESS_TOOL_CATEGORIES[0];
+    setEditForm({
+      title: editModalContent.title,
+      type: editModalContent.type,
+      category: cat,
+      description: editModalContent.description,
+      content: editModalContent.content,
+      status: editModalContent.status,
+    });
+  }, [editModalContent]);
 
   const filteredContent = contentItems.filter((item) => {
     const matchesSearch =
@@ -208,34 +226,76 @@ export function WellnessContentLibrary() {
     return matchesSearch && matchesType && matchesStatus && matchesCategory;
   });
 
-  const stats = [
-    {
-      label: "Total Content",
-      value: contentItems.length.toString(),
-      color: "from-purple-500 to-pink-600",
-      icon: BookOpen,
-    },
-    {
-      label: "Published",
-      value: contentItems.filter((i) => i.status === "published").length.toString(),
-      color: "from-green-500 to-emerald-600",
-      icon: CheckCircle2,
-    },
-    {
-      label: "Total Views",
-      value: contentItems.reduce((sum, i) => sum + i.views, 0).toLocaleString(),
-      color: "from-blue-500 to-cyan-600",
-      icon: Eye,
-    },
-    {
-      label: "Total Engagement",
-      value: contentItems
-        .reduce((sum, i) => sum + i.likes + i.shares, 0)
-        .toLocaleString(),
-      color: "from-orange-500 to-red-600",
-      icon: Activity,
-    },
-  ];
+  const stats = useMemo(
+    () => [
+      {
+        label: "Total Content",
+        value: contentItems.length.toString(),
+        color: "from-purple-500 to-pink-600",
+        icon: BookOpen,
+      },
+      {
+        label: "Published",
+        value: contentItems.filter((i) => i.status === "published").length.toString(),
+        color: "from-green-500 to-emerald-600",
+        icon: CheckCircle2,
+      },
+      {
+        label: "Total Views",
+        value: contentItems.reduce((sum, i) => sum + i.views, 0).toLocaleString(),
+        color: "from-blue-500 to-cyan-600",
+        icon: Eye,
+      },
+      {
+        label: "Total Engagement",
+        value: contentItems
+          .reduce((sum, i) => sum + i.likes + i.shares, 0)
+          .toLocaleString(),
+        color: "from-orange-500 to-red-600",
+        icon: Activity,
+      },
+    ],
+    [contentItems]
+  );
+
+  const handleExportCsv = () => {
+    const rows = filteredContent;
+    const header = [
+      "id",
+      "title",
+      "type",
+      "category",
+      "status",
+      "author",
+      "description",
+      "updatedAt",
+    ];
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const lines = [
+      header.join(","),
+      ...rows.map((r) =>
+        [
+          r.id,
+          r.title,
+          r.type,
+          r.category,
+          r.status,
+          r.author,
+          r.description,
+          r.updatedAt,
+        ]
+          .map((c) => escape(String(c)))
+          .join(",")
+      ),
+    ];
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `wellness-content-library-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -267,21 +327,118 @@ export function WellnessContentLibrary() {
     }
   };
 
-  // Handle content actions
   const handleViewContent = (item: ContentItem) => {
     setViewModalContent(item);
   };
 
-  const handleCopyContent = (item: ContentItem) => {
-    alert(`Copied: ${item.title}\n\nThis would create a duplicate of this content that you can modify and publish as a new version.`);
+  const handleCopyContent = async (item: ContentItem) => {
+    if (item.isBuiltin || isBuiltinWellnessListId(item.id) || isWellnessPlaceholderId(item.id)) {
+      alert(
+        "Built-in and placeholder rows are not stored in the database. Add a new tool from Create Content or Wellness Content CMS."
+      );
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.wellness.create({
+        title: `${item.title.trim()} (copy)`,
+        category: item.category as WellnessToolCategory,
+        description: item.description || undefined,
+        content: item.content !== "—" ? item.content : undefined,
+        duration_minutes: item.type === "activity" ? 10 : 5,
+        status: "draft",
+        difficulty: "Beginner",
+        is_premium: false,
+        icon: "Heart",
+      });
+      await loadContent();
+    } catch (e) {
+      console.error(e);
+      alert("Could not duplicate. Check that you are signed in as admin.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleEditContent = (item: ContentItem) => {
+    if (item.isBuiltin || isBuiltinWellnessListId(item.id)) {
+      alert(
+        "Built-in tools ship with the app. Edit catalog code or add a parallel tool in Wellness Content CMS."
+      );
+      return;
+    }
+    if (isWellnessPlaceholderId(item.id)) {
+      alert("This row is a placeholder. Create a real wellness tool first.");
+      return;
+    }
     setEditModalContent(item);
   };
 
   const handleDeleteContent = (item: ContentItem) => {
     setDeleteModalContent(item);
+  };
+
+  const confirmEditSave = async (publish: boolean) => {
+    if (!editModalContent) return;
+    if (
+      editModalContent.isBuiltin ||
+      isBuiltinWellnessListId(editModalContent.id) ||
+      isWellnessPlaceholderId(editModalContent.id)
+    ) {
+      setEditModalContent(null);
+      return;
+    }
+    setSaving(true);
+    try {
+      const apiStatus =
+        publish || editForm.status === "published"
+          ? "published"
+          : editForm.status === "archived"
+            ? "archived"
+            : editForm.status === "scheduled"
+              ? "draft"
+              : "draft";
+      await api.wellness.update(editModalContent.id, {
+        title: editForm.title.trim(),
+        category: editForm.category,
+        description: editForm.description.trim() || undefined,
+        content: editForm.content.trim() || undefined,
+        status: apiStatus,
+      });
+      setEditModalContent(null);
+      await loadContent();
+    } catch (e) {
+      console.error(e);
+      alert("Failed to save changes.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteModalContent) return;
+    const item = deleteModalContent;
+    if (item.isBuiltin || isBuiltinWellnessListId(item.id)) {
+      alert("Built-in content cannot be deleted.");
+      setDeleteModalContent(null);
+      return;
+    }
+    if (isWellnessPlaceholderId(item.id)) {
+      alert("Placeholders are not stored; add a real tool to replace this row.");
+      setDeleteModalContent(null);
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.wellness.delete(item.id);
+      setDeleteModalContent(null);
+      await loadContent();
+    } catch (e) {
+      console.error(e);
+      alert("Failed to delete.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -298,24 +455,39 @@ export function WellnessContentLibrary() {
               Wellness Content Library
             </h1>
             <p className="text-gray-600">
-              Manage tips, articles, activities, and resources
+              Manage tips, articles, activities, and resources—synced with the wellness tools API (same data as
+              Wellness Content CMS). Per-item views are not recorded in admin yet, so engagement stats may show
+              zero.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             <Button
+              type="button"
               variant="outline"
               className="border-gray-300 text-gray-700 hover:bg-gray-500"
+              onClick={handleExportCsv}
+              disabled={loading || saving || filteredContent.length === 0}
             >
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
-            <Button className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white">
+            <Button
+              type="button"
+              className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white"
+              onClick={() => navigate("/admin/wellness-content-cms")}
+            >
               <Plus className="w-4 h-4 mr-2" />
               Create Content
             </Button>
           </div>
         </motion.div>
+
+        {loadError && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {loadError}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -386,6 +558,7 @@ export function WellnessContentLibrary() {
                 <option value="published">Published</option>
                 <option value="draft">Draft</option>
                 <option value="scheduled">Scheduled</option>
+                <option value="archived">Archived</option>
               </select>
 
               {/* Category Filter */}
@@ -407,7 +580,13 @@ export function WellnessContentLibrary() {
 
         {/* Content List */}
         <div className="space-y-4">
-          {filteredContent.map((item, index) => {
+          {loading && (
+            <div className="flex justify-center py-20">
+              <Loader2 className="h-10 w-10 animate-spin text-purple-600" aria-label="Loading" />
+            </div>
+          )}
+          {!loading &&
+            filteredContent.map((item, index) => {
             const TypeIcon = getTypeIcon(item.type);
             const typeColor = getTypeColor(item.type);
 
@@ -445,12 +624,14 @@ export function WellnessContentLibrary() {
                               item.status === "published"
                                 ? "bg-green-100 text-green-700"
                                 : item.status === "draft"
-                                ? "bg-orange-100 text-orange-700"
-                                : "bg-blue-100 text-blue-700"
+                                  ? "bg-orange-100 text-orange-700"
+                                  : item.status === "archived"
+                                    ? "bg-gray-200 text-gray-800"
+                                    : "bg-blue-100 text-blue-700"
                             }`}
                           >
                             {item.status === "scheduled"
-                              ? `Scheduled ${item.scheduledDate}`
+                              ? `Scheduled ${item.scheduledDate ?? ""}`
                               : item.status}
                           </span>
                         </div>
@@ -496,6 +677,7 @@ export function WellnessContentLibrary() {
                       <Button
                         size="sm"
                         variant="ghost"
+                        disabled={saving}
                         onClick={() => handleViewContent(item)}
                         className="text-gray-600 hover:text-gray-900"
                       >
@@ -504,7 +686,8 @@ export function WellnessContentLibrary() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => handleCopyContent(item)}
+                        disabled={saving}
+                        onClick={() => void handleCopyContent(item)}
                         className="text-gray-600 hover:text-gray-900"
                       >
                         <Copy className="w-4 h-4" />
@@ -512,6 +695,7 @@ export function WellnessContentLibrary() {
                       <Button
                         size="sm"
                         variant="ghost"
+                        disabled={saving}
                         onClick={() => handleEditContent(item)}
                         className="text-blue-600 hover:text-blue-700"
                       >
@@ -520,6 +704,7 @@ export function WellnessContentLibrary() {
                       <Button
                         size="sm"
                         variant="ghost"
+                        disabled={saving}
                         onClick={() => handleDeleteContent(item)}
                         className="text-red-600 hover:text-red-700"
                       >
@@ -534,7 +719,7 @@ export function WellnessContentLibrary() {
         </div>
 
         {/* Empty State */}
-        {filteredContent.length === 0 && (
+        {!loading && filteredContent.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -546,7 +731,11 @@ export function WellnessContentLibrary() {
               <p className="text-gray-600 mb-6">
                 Try adjusting your filters or create new content
               </p>
-              <Button className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white">
+              <Button
+                type="button"
+                className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white"
+                onClick={() => navigate("/admin/wellness-content-cms")}
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Create Content
               </Button>
@@ -592,8 +781,10 @@ export function WellnessContentLibrary() {
                             viewModalContent.status === "published"
                               ? "bg-green-100 text-green-700"
                               : viewModalContent.status === "draft"
-                              ? "bg-orange-100 text-orange-700"
-                              : "bg-blue-100 text-blue-700"
+                                ? "bg-orange-100 text-orange-700"
+                                : viewModalContent.status === "archived"
+                                  ? "bg-gray-200 text-gray-800"
+                                  : "bg-blue-100 text-blue-700"
                           }`}
                         >
                           {viewModalContent.status}
@@ -680,8 +871,9 @@ export function WellnessContentLibrary() {
                       variant="outline"
                       className="flex-1"
                       onClick={() => {
+                        const item = viewModalContent;
                         setViewModalContent(null);
-                        setEditModalContent(viewModalContent);
+                        handleEditContent(item);
                       }}
                     >
                       <Edit className="w-4 h-4 mr-2" />
@@ -741,7 +933,8 @@ export function WellnessContentLibrary() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
                     <input
                       type="text"
-                      defaultValue={editModalContent.title}
+                      value={editForm.title}
+                      onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
                       className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
                   </div>
@@ -749,9 +942,17 @@ export function WellnessContentLibrary() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-                      <select 
-                        className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500" 
-                        defaultValue={editModalContent.type}
+                      <select
+                        className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        value={editForm.type}
+                        onChange={(e) => {
+                          const v = e.target.value as ContentItem["type"];
+                          setEditForm((f) => ({
+                            ...f,
+                            type: v,
+                            category: v === "activity" ? "Exercise" : f.category,
+                          }));
+                        }}
                       >
                         <option value="article">Article</option>
                         <option value="tip">Tip</option>
@@ -763,7 +964,13 @@ export function WellnessContentLibrary() {
                       <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
                       <select
                         className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        defaultValue={editModalContent.category}
+                        value={editForm.category}
+                        onChange={(e) =>
+                          setEditForm((f) => ({
+                            ...f,
+                            category: e.target.value as WellnessToolCategory,
+                          }))
+                        }
                       >
                         {WELLNESS_TOOL_CATEGORIES.map((cat) => (
                           <option key={cat} value={cat}>
@@ -779,68 +986,77 @@ export function WellnessContentLibrary() {
                     <textarea
                       className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                       rows={3}
-                      defaultValue={editModalContent.description}
+                      value={editForm.description}
+                      onChange={(e) =>
+                        setEditForm((f) => ({ ...f, description: e.target.value }))
+                      }
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Content</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Content / script</label>
                     <textarea
                       className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                       rows={6}
-                      defaultValue={editModalContent.content}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Tags (comma-separated)</label>
-                    <input
-                      type="text"
-                      defaultValue={editModalContent.tags.join(", ")}
-                      placeholder="e.g., wellness, mindfulness, stress"
-                      className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      value={editForm.content}
+                      onChange={(e) => setEditForm((f) => ({ ...f, content: e.target.value }))}
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                    <select 
-                      className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500" 
-                      defaultValue={editModalContent.status}
+                    <select
+                      className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      value={editForm.status}
+                      onChange={(e) =>
+                        setEditForm((f) => ({
+                          ...f,
+                          status: e.target.value as ContentItem["status"],
+                        }))
+                      }
                     >
                       <option value="published">Published</option>
                       <option value="draft">Draft</option>
                       <option value="scheduled">Scheduled</option>
+                      <option value="archived">Archived</option>
                     </select>
                   </div>
 
                   <div className="flex gap-3 pt-4">
                     <Button
+                      type="button"
                       variant="outline"
                       className="flex-1"
+                      disabled={saving}
                       onClick={() => setEditModalContent(null)}
                     >
                       Cancel
                     </Button>
                     <Button
+                      type="button"
                       variant="outline"
                       className="flex-1"
-                      onClick={() => {
-                        alert(`Saved changes to: ${editModalContent.title}`);
-                        setEditModalContent(null);
-                      }}
+                      disabled={saving}
+                      onClick={() => void confirmEditSave(false)}
                     >
-                      <Save className="w-4 h-4 mr-2" />
+                      {saving ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4 mr-2" />
+                      )}
                       Save Changes
                     </Button>
                     <Button
+                      type="button"
                       className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                      onClick={() => {
-                        alert(`Published: ${editModalContent.title}`);
-                        setEditModalContent(null);
-                      }}
+                      disabled={saving}
+                      onClick={() => void confirmEditSave(true)}
                     >
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                      {saving ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                      )}
                       Publish
                     </Button>
                   </div>
@@ -891,13 +1107,16 @@ export function WellnessContentLibrary() {
                     Cancel
                   </Button>
                   <Button
+                    type="button"
                     className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-                    onClick={() => {
-                      alert(`Deleted: ${deleteModalContent.title}`);
-                      setDeleteModalContent(null);
-                    }}
+                    disabled={saving}
+                    onClick={() => void confirmDelete()}
                   >
-                    <Trash2 className="w-4 h-4 mr-2" />
+                    {saving ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4 mr-2" />
+                    )}
                     Delete
                   </Button>
                 </div>

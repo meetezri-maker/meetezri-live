@@ -212,9 +212,12 @@ export function AdminDashboard() {
                         {mood.mood} • Intensity: {mood.intensity}/10
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(mood.created_at).toLocaleDateString()}
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-medium text-foreground">
+                        {new Date(mood.created_at).toLocaleString(undefined, {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
                       </p>
                     </div>
                   </motion.div>

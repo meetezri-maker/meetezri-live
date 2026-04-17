@@ -42,6 +42,14 @@ import { api } from "@/lib/api";
 type PerfRange = "7d" | "30d" | "90d";
 
 type ContentPerformancePayload = {
+  rangeDays?: number;
+  generatedAt?: string;
+  counts?: {
+    wellnessCompletions: number;
+    journalEntries: number;
+    catalogTools: number;
+    sessionsWithRating: number;
+  };
   summary: {
     totalViews: number;
     totalEngagement: number;
@@ -114,7 +122,7 @@ export function ContentPerformance() {
       setData(res);
     } catch (e) {
       console.error(e);
-      setError("Could not load analytics. Check admin sign-in and API.");
+      setError("Could not load analytics. Check admin sign-in and that the API is reachable.");
       setData(null);
     } finally {
       setLoading(false);
@@ -131,21 +139,40 @@ export function ContentPerformance() {
     : [{ date: "—", views: 0, likes: 0, shares: 0, completions: 0 }];
   const topContent = data?.topTools ?? [];
   const contentTypeData =
-    data?.contentTypeData?.length > 0
+    data != null &&
+    Array.isArray(data.contentTypeData) &&
+    data.contentTypeData.length > 0
       ? data.contentTypeData
       : [{ name: "No wellness tools yet", value: 100, count: 0, color: "#94a3b8" }];
   const categoryEngagement =
-    data?.categoryEngagement?.length > 0
+    data != null &&
+    Array.isArray(data.categoryEngagement) &&
+    data.categoryEngagement.length > 0
       ? data.categoryEngagement
       : [{ category: "—", engagement: 0, views: 0 }];
   const completionRates =
-    data?.completionRates?.length > 0
+    data != null &&
+    Array.isArray(data.completionRates) &&
+    data.completionRates.length > 0
       ? data.completionRates
       : [{ type: "—", started: 0, completed: 0, rate: 0 }];
   const trendingData =
-    data?.trending?.length > 0
+    data != null && Array.isArray(data.trending) && data.trending.length > 0
       ? data.trending
       : [{ week: "—", trending: 0, views: 0 }];
+
+  const counts = data?.counts;
+  const noWellnessActivity =
+    data?.counts != null &&
+    data.counts.wellnessCompletions === 0 &&
+    data.counts.journalEntries === 0;
+
+  const trendMax = Math.max(
+    1,
+    ...performanceData.map((d) => Math.max(d.views, d.likes, d.shares, d.completions))
+  );
+  const lineTrendMaxLeft = Math.max(1, ...trendingData.map((d) => d.trending));
+  const lineTrendMaxRight = Math.max(1, ...trendingData.map((d) => d.views));
 
   const stats = summary
     ? [
@@ -206,8 +233,19 @@ export function ContentPerformance() {
           <div>
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Content Performance</h1>
             <p className="text-gray-600">
-              Wellness session completions, journal activity, and tool feedback (live data)
+              Wellness session completions (<code className="text-xs bg-gray-100 px-1 rounded">user_wellness_progress</code>
+              ), journal volume, and star ratings from completed sessions. Charts are empty when no events exist in
+              the selected range—not placeholder data.
             </p>
+            {data?.generatedAt && (
+              <p className="text-xs text-gray-500 mt-1">
+                Last computed: {new Date(data.generatedAt).toLocaleString()}
+                {data.rangeDays != null ? ` · range: ${data.rangeDays} days` : ""}
+                {counts != null
+                  ? ` · ${counts.wellnessCompletions} wellness completions · ${counts.journalEntries} journal entries · ${counts.catalogTools} tools in catalog`
+                  : ""}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -254,6 +292,14 @@ export function ContentPerformance() {
 
         {error && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</div>
+        )}
+
+        {data && noWellnessActivity && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-3 text-sm text-blue-950">
+            <strong>No activity in this window.</strong> Metrics require completed wellness sessions and/or journal
+            entries with timestamps in the selected range. Complete a session in the user app (or seed test data) and
+            refresh—pie slices still reflect CMS tool counts if tools exist.
+          </div>
         )}
 
         {loading && !data ? (
@@ -328,7 +374,7 @@ export function ContentPerformance() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis dataKey="date" stroke="#9ca3af" />
-                    <YAxis stroke="#9ca3af" />
+                    <YAxis stroke="#9ca3af" domain={[0, trendMax]} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "#1f2937",
@@ -455,7 +501,9 @@ export function ContentPerformance() {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ name, value }) => `${name}: ${value}%`}
+                        label={(props: { name?: string; value?: number }) =>
+                          `${props.name ?? ""}: ${props.value ?? 0}%`
+                        }
                         outerRadius={100}
                         fill="#8884d8"
                         dataKey="value"
@@ -507,7 +555,7 @@ export function ContentPerformance() {
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={categoryEngagement} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis type="number" stroke="#6b7280" />
+                      <XAxis type="number" stroke="#6b7280" domain={[0, 100]} />
                       <YAxis dataKey="category" type="category" stroke="#6b7280" width={120} />
                       <Tooltip
                         contentStyle={{
@@ -582,8 +630,8 @@ export function ContentPerformance() {
                   <LineChart data={trendingData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis dataKey="week" stroke="#6b7280" />
-                    <YAxis yAxisId="left" stroke="#6b7280" />
-                    <YAxis yAxisId="right" orientation="right" stroke="#6b7280" />
+                    <YAxis yAxisId="left" stroke="#6b7280" domain={[0, lineTrendMaxLeft]} />
+                    <YAxis yAxisId="right" orientation="right" stroke="#6b7280" domain={[0, lineTrendMaxRight]} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "#1f2937",

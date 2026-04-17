@@ -4,7 +4,8 @@ import { StatsCard } from "../../components/StatsCard";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
-import { buildStatsQuery, datesForPreset, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
+import { datesForPreset, downloadCsv } from "@/lib/adminAnalytics";
+import { mergeCompanionAvatarCountsClient } from "@/lib/avatar/adminAvatarAnalytics";
 import {
   MessageSquare,
   Clock,
@@ -29,10 +30,28 @@ import {
 import { api } from "../../../lib/api";
 import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 
+const COMPANION_PIE_COLOR: Record<string, string> = {
+  "Not set": "#94a3b8",
+  "Alex Rivera": "#3b82f6",
+  "Sarah Mitchell": "#ec4899",
+  "Jordan Taylor": "#10b981",
+  "Maya Chen": "#8b5cf6",
+  Other: "#64748b",
+};
+const PIE_FALLBACK = ["#0ea5e9", "#f97316", "#a855f7", "#14b8a6", "#eab308"];
+
+function formatAnalyticsRangeLabel(from: string, to: string): string {
+  try {
+    const a = new Date(`${from}T12:00:00Z`);
+    const b = new Date(`${to}T12:00:00Z`);
+    const o: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+    return `${a.toLocaleDateString(undefined, o)} – ${b.toLocaleDateString(undefined, o)}`;
+  } catch {
+    return `${from} – ${to}`;
+  }
+}
+
 export function SessionAnalytics() {
-  const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
-  const [rangePreset, setRangePreset] = useState<DashboardTimePreset>("30d");
-  const [useCustomRange, setUseCustomRange] = useState(false);
   const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
   const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
 
@@ -45,15 +64,13 @@ export function SessionAnalytics() {
     setIsLoading(true);
     setError(null);
     try {
-      const q = buildStatsQuery({
-        chartPeriod,
-        rangePreset,
-        useCustomRange,
-        dateFrom,
-        dateTo,
-      });
       const [stats, recent] = await Promise.all([
-        api.admin.getStats({ ...q, ...(forceRefresh ? { refresh: true } : {}) }),
+        api.admin.getStats({
+          chartPeriod: "month",
+          dateFrom,
+          dateTo,
+          ...(forceRefresh ? { refresh: true } : {}),
+        }),
         api.admin.getRecentActivity(),
       ]);
       setStatsData(stats);
@@ -64,27 +81,41 @@ export function SessionAnalytics() {
     } finally {
       setIsLoading(false);
     }
-  }, [chartPeriod, rangePreset, useCustomRange, dateFrom, dateTo]);
+  }, [dateFrom, dateTo]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
 
-  const totalSessions = statsData?.totalSessions || 0;
   const totalUsers = statsData?.totalUsers || 0;
-  const avgSessionLength = statsData?.avgSessionLength || 0;
 
-  const sessionActivity = (statsData?.sessionActivity || []) as any[];
+  const sessionActivity = (statsData?.sessionActivity || []) as Array<{
+    day: string;
+    sessions: number;
+    duration: number;
+  }>;
 
-  const sessionTrendData = sessionActivity.map((item: any) => ({
+  const sessionsInRange = sessionActivity.reduce(
+    (sum, item) => sum + (Number(item.sessions) || 0),
+    0
+  );
+  const dayCount = Math.max(1, sessionActivity.length);
+  const avgDurationInRange =
+    sessionsInRange > 0
+      ? Math.round(
+          sessionActivity.reduce(
+            (sum, item) =>
+              sum + (Number(item.sessions) || 0) * (Number(item.duration) || 0),
+            0
+          ) / sessionsInRange
+        )
+      : 0;
+  const avgDailySessions = Math.round(sessionsInRange / dayCount);
+
+  const sessionTrendData = sessionActivity.map((item) => ({
     date: item.day,
     sessions: item.sessions,
   }));
-
-  const sessionsThisWeek = sessionActivity.reduce(
-    (sum, item: any) => sum + item.sessions,
-    0
-  );
 
   const hourlyActivity = (statsData?.hourlyActivity || []) as any[];
 
@@ -96,7 +127,7 @@ export function SessionAnalytics() {
   const statsCards = [
     {
       title: "Total Sessions",
-      value: totalSessions.toLocaleString(),
+      value: sessionsInRange.toLocaleString(),
       change: "0.0%",
       changeType: "positive",
       icon: MessageSquare,
@@ -105,7 +136,7 @@ export function SessionAnalytics() {
     },
     {
       title: "Avg Duration",
-      value: `${avgSessionLength} min`,
+      value: `${avgDurationInRange} min`,
       change: "0.0",
       changeType: "positive",
       icon: Clock,
@@ -113,7 +144,7 @@ export function SessionAnalytics() {
       delay: 0.1,
     },
     {
-      title: "Active Users",
+      title: "Registered users",
       value: totalUsers.toLocaleString(),
       change: "0.0%",
       changeType: "positive",
@@ -122,8 +153,8 @@ export function SessionAnalytics() {
       delay: 0.2,
     },
     {
-      title: "Sessions This Week",
-      value: sessionsThisWeek.toLocaleString(),
+      title: "Avg daily sessions",
+      value: avgDailySessions.toLocaleString(),
       change: "0.0%",
       changeType: "positive",
       icon: TrendingUp,
@@ -132,15 +163,25 @@ export function SessionAnalytics() {
     },
   ];
 
-  const avatarUsageData: { name: string; value: number; color: string }[] = (
-    statsData?.avatarDistribution?.length
-      ? statsData.avatarDistribution
-      : [{ name: "No data", value: 100, color: "#94a3b8" }]
-  ).map((a: { name: string; value: number; color: string }) => ({
-    name: a.name,
-    value: a.value,
-    color: a.color,
-  }));
+  const avatarUsageData: { name: string; value: number; count: number; color: string }[] = (() => {
+    const raw = statsData?.avatarDistribution as
+      | Array<{ name: string; value?: number; count?: number; color?: string }>
+      | undefined;
+    if (!raw?.length) {
+      return [{ name: "No data", value: 100, count: 0, color: "#94a3b8" }];
+    }
+    const merged = mergeCompanionAvatarCountsClient(
+      raw.map((r) => ({ name: r.name, c: Number(r.count ?? 0) }))
+    );
+    const total = merged.reduce((s, r) => s + r.count, 0);
+    return merged.map((r, i) => {
+      const name = r.name;
+      const count = r.count;
+      const value = total > 0 ? Math.round((count / total) * 100) : 0;
+      const color = COMPANION_PIE_COLOR[name] ?? PIE_FALLBACK[i % PIE_FALLBACK.length];
+      return { name, value, count, color };
+    });
+  })();
 
   const topicDistributionData = sessionActivity.map((item: any) => ({
     topic: item.day,
@@ -205,16 +246,19 @@ export function SessionAnalytics() {
           <div>
             <h1 className="text-3xl font-bold mb-2">Session Analytics</h1>
             <p className="text-muted-foreground">
-              Monitor AI session usage patterns and metrics
+              {formatAnalyticsRangeLabel(dateFrom, dateTo)} · KPIs and charts use this period (session trend matches
+              totals).
             </p>
           </div>
           <AdminAnalyticsToolbar
-            chartPeriod={chartPeriod}
-            onChartPeriodChange={setChartPeriod}
-            rangePreset={rangePreset}
-            onRangePresetChange={setRangePreset}
-            useCustomRange={useCustomRange}
-            onUseCustomRangeChange={setUseCustomRange}
+            showChartPeriod={false}
+            showRangePreset={false}
+            chartPeriod="month"
+            onChartPeriodChange={() => {}}
+            rangePreset="30d"
+            onRangePresetChange={() => {}}
+            useCustomRange
+            onUseCustomRangeChange={() => {}}
             dateFrom={dateFrom}
             dateTo={dateTo}
             onDateFromChange={setDateFrom}
@@ -269,11 +313,20 @@ export function SessionAnalytics() {
           >
             <Card className="p-6">
               <h2 className="text-xl font-bold mb-6">Session trend (selected range)</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={sessionTrendData}>
+              <ResponsiveContainer width="100%" height={340}>
+                <LineChart data={sessionTrendData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="date" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
+                  <XAxis
+                    dataKey="date"
+                    stroke="#6b7280"
+                    tick={{ fontSize: 11 }}
+                    angle={-40}
+                    textAnchor="end"
+                    height={72}
+                    interval="preserveStartEnd"
+                    minTickGap={28}
+                  />
+                  <YAxis stroke="#6b7280" tick={{ fontSize: 11 }} width={40} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "white",
@@ -304,9 +357,9 @@ export function SessionAnalytics() {
             <Card className="p-6">
               <h2 className="text-xl font-bold mb-2">Companion avatar (profile selection)</h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Share of users by <span className="font-medium">selected_avatar</span> on their profile
+                Grouped to the same four companions as Session Lobby; unrecognized values go to &quot;Other&quot;.
               </p>
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={260}>
                 <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
                   <Pie
                     data={avatarUsageData}
@@ -314,31 +367,44 @@ export function SessionAnalytics() {
                     cy="45%"
                     labelLine={false}
                     label={false}
+                    isAnimationActive={false}
                     outerRadius={88}
                     fill="#8884d8"
                     dataKey="value"
                     paddingAngle={2}
                   >
                     {avatarUsageData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                      <Cell key={`cell-${entry.name}-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number) => [`${value}%`, "Share"]}
+                    formatter={(value: number, _n: string, item: { payload?: { name?: string; count?: number } }) => [
+                      `${item.payload?.count ?? "—"} profiles (${value}%)`,
+                      item.payload?.name ?? "",
+                    ]}
                     contentStyle={{
                       backgroundColor: "white",
                       border: "1px solid #e5e7eb",
                       borderRadius: "8px",
                     }}
                   />
-                  <Legend
-                    layout="horizontal"
-                    verticalAlign="bottom"
-                    align="center"
-                    wrapperStyle={{ fontSize: 11, lineHeight: 1.4 }}
-                  />
                 </PieChart>
               </ResponsiveContainer>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+                {avatarUsageData.map((a) => (
+                  <div key={a.name} className="flex items-start gap-2 text-sm">
+                    <div
+                      className="w-3 h-3 rounded-full mt-1 shrink-0"
+                      style={{ backgroundColor: a.color }}
+                    />
+                    <span className="text-muted-foreground">
+                      <span className="font-medium text-foreground">{a.name}</span>
+                      <span className="mx-1">·</span>
+                      {a.count} profiles ({a.value}%)
+                    </span>
+                  </div>
+                ))}
+              </div>
             </Card>
           </motion.div>
         </div>
@@ -353,11 +419,18 @@ export function SessionAnalytics() {
           >
             <Card className="p-6">
               <h2 className="text-xl font-bold mb-6">Popular Topics</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={topicDistributionData} layout="vertical">
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={topicDistributionData} layout="vertical" margin={{ left: 8, right: 12 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis type="number" stroke="#6b7280" />
-                  <YAxis dataKey="topic" type="category" stroke="#6b7280" width={72} tick={{ fontSize: 11 }} />
+                  <XAxis type="number" stroke="#6b7280" tick={{ fontSize: 11 }} />
+                  <YAxis
+                    dataKey="topic"
+                    type="category"
+                    stroke="#6b7280"
+                    width={88}
+                    tick={{ fontSize: 10 }}
+                    interval={0}
+                  />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "white",
@@ -379,11 +452,20 @@ export function SessionAnalytics() {
           >
             <Card className="p-6">
               <h2 className="text-xl font-bold mb-6">Session Duration Distribution</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={sessionDurationData}>
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={sessionDurationData} margin={{ bottom: 16, left: 4, right: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="range" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
+                  <XAxis
+                    dataKey="range"
+                    stroke="#6b7280"
+                    tick={{ fontSize: 10 }}
+                    angle={-35}
+                    textAnchor="end"
+                    height={64}
+                    interval="preserveStartEnd"
+                    minTickGap={8}
+                  />
+                  <YAxis stroke="#6b7280" tick={{ fontSize: 11 }} width={36} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "white",

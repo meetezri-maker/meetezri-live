@@ -17,7 +17,7 @@ import {
   FormLabel,
   FormMessage,
 } from "../../components/ui/form";
-import { companionCardImageUrl } from "@/lib/avatar/companionModelUrl";
+import { companionCardImageUrl, resolveCompanionPortraitUrl } from "@/lib/avatar/companionModelUrl";
 
 interface AIAvatar {
   id: string;
@@ -111,7 +111,7 @@ export function OnboardingAvatarPreferences() {
       specialty: ["Grief", "Family Issues", "Chronic Illness"],
       description: "A wise and nurturing presence with deep empathy. Sarah brings years of life experience in supporting people through challenging times.",
       image: "👩‍🦳",
-      imageUrl: companionCardImageUrl("Sara Mitchell.png"),
+      imageUrl: resolveCompanionPortraitUrl("Sarah Mitchell"),
       voiceType: "Gentle & Maternal",
       accentType: "British",
       rating: 4.9,

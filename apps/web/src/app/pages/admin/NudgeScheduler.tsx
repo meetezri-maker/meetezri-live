@@ -34,12 +34,36 @@ import { Input } from "@/app/components/ui/input";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
+/** ISO string → value for `input type="datetime-local"` (local timezone). */
+function isoToDateTimeLocal(iso: string | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const CAMPAIGN_LANGUAGES: { value: string; label: string }[] = [
+  { value: "en", label: "English" },
+  { value: "es", label: "Spanish" },
+  { value: "fr", label: "French" },
+  { value: "de", label: "German" },
+  { value: "it", label: "Italian" },
+  { value: "pt", label: "Portuguese" },
+  { value: "zh-Hans", label: "Chinese (Simplified)" },
+  { value: "ja", label: "Japanese" },
+  { value: "ko", label: "Korean" },
+  { value: "ar", label: "Arabic" },
+  { value: "hi", label: "Hindi" },
+];
+
 interface NudgeCampaign {
   id: string;
   name: string;
   template: string;
   type: "time-based" | "event-based" | "behavior-based";
   status: "active" | "paused" | "scheduled" | "completed";
+  language: string;
   audience: {
     segment: string;
     count: number;
@@ -52,6 +76,8 @@ interface NudgeCampaign {
     startDate: string;
     endDate?: string;
     frequency: string;
+    /** ISO 8601 datetime when the campaign is available / scheduled to run. */
+    availabilityAt?: string;
   };
   performance: {
     sent: number;
@@ -88,7 +114,8 @@ export function NudgeScheduler() {
   const [triggerType, setTriggerType] = useState("");
   const [triggerValue, setTriggerValue] = useState("");
   const [frequency, setFrequency] = useState("");
-  const [startDate, setStartDate] = useState("");
+  const [availabilityDateTime, setAvailabilityDateTime] = useState("");
+  const [campaignLanguage, setCampaignLanguage] = useState("en");
   const [targetAudience, setTargetAudience] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
@@ -102,12 +129,25 @@ export function NudgeScheduler() {
     const performance = metrics.performance || {};
     const abTest = metrics.abTest;
     const createdAt = c.created_at ? new Date(c.created_at) : new Date();
+    const availabilityFromMetrics =
+      typeof schedule.availabilityAt === "string" ? schedule.availabilityAt : undefined;
+    const availabilityFromScheduled = c.scheduled_at
+      ? new Date(c.scheduled_at).toISOString()
+      : undefined;
+    const availabilityAt = availabilityFromMetrics || availabilityFromScheduled;
     const start =
-      schedule.startDate ||
+      (typeof schedule.startDate === "string" && schedule.startDate
+        ? String(schedule.startDate).slice(0, 10)
+        : undefined) ||
+      (availabilityAt ? new Date(availabilityAt).toISOString().slice(0, 10) : undefined) ||
       (c.scheduled_at ? new Date(c.scheduled_at).toISOString().slice(0, 10) : createdAt.toISOString().slice(0, 10));
     const lastRun =
       metrics.lastRun ||
       (c.sent_at ? new Date(c.sent_at).toLocaleString() : "Not yet run");
+    const lang =
+      typeof metrics.language === "string" && metrics.language
+        ? metrics.language
+        : "en";
 
     return {
       id: c.id,
@@ -115,6 +155,7 @@ export function NudgeScheduler() {
       template: metrics.template || "",
       type: (metrics.type as NudgeCampaign["type"]) || "time-based",
       status: (c.status as NudgeCampaign["status"]) || "scheduled",
+      language: lang,
       audience: {
         segment: audience.segment || "All users",
         count: typeof audience.count === "number" ? audience.count : 0,
@@ -127,6 +168,7 @@ export function NudgeScheduler() {
         startDate: start,
         endDate: schedule.endDate,
         frequency: schedule.frequency || "Once",
+        ...(availabilityAt ? { availabilityAt } : {}),
       },
       performance: {
         sent: performance.sent ?? 0,
@@ -184,10 +226,14 @@ export function NudgeScheduler() {
     try {
       setIsSaving(true);
       const selectedTemplate = templates.find((t) => t.id === campaignTemplateId);
+      const availabilityIso = availabilityDateTime
+        ? new Date(availabilityDateTime).toISOString()
+        : null;
       const metrics = {
         templateId: campaignTemplateId || null,
         template: selectedTemplate?.name || "",
         type: campaignType,
+        language: campaignLanguage,
         audience: {
           segment: targetAudience || "All users",
           count: 0,
@@ -197,8 +243,11 @@ export function NudgeScheduler() {
           value: triggerValue || "",
         },
         schedule: {
-          startDate: startDate || new Date().toISOString().slice(0, 10),
+          startDate: availabilityDateTime
+            ? availabilityDateTime.slice(0, 10)
+            : new Date().toISOString().slice(0, 10),
           frequency: frequency || "Once",
+          ...(availabilityIso ? { availabilityAt: availabilityIso } : {}),
         },
         performance: {
           sent: 0,
@@ -214,6 +263,7 @@ export function NudgeScheduler() {
         message: "",
         status: campaignStatus,
         target_segment_id: null,
+        scheduled_at: availabilityIso,
         metrics,
       };
 
@@ -227,7 +277,8 @@ export function NudgeScheduler() {
       setTriggerType("");
       setTriggerValue("");
       setFrequency("");
-      setStartDate("");
+      setAvailabilityDateTime("");
+      setCampaignLanguage("en");
       setTargetAudience("");
       toast.success("Campaign created");
     } catch (error: any) {
@@ -271,6 +322,7 @@ export function NudgeScheduler() {
         name: editDraft.name,
         template: editDraft.template,
         type: editDraft.type,
+        language: editDraft.language,
         audience: editDraft.audience,
         trigger: editDraft.trigger,
         schedule: editDraft.schedule,
@@ -279,9 +331,15 @@ export function NudgeScheduler() {
         createdBy: editModalCampaign.createdBy,
         lastRun: editModalCampaign.lastRun,
       };
+      const rawAvail = editDraft.schedule.availabilityAt;
+      const scheduledAt =
+        rawAvail && !Number.isNaN(new Date(rawAvail).getTime())
+          ? new Date(rawAvail).toISOString()
+          : null;
       const updated = await api.admin.updatePushCampaign(editModalCampaign.id, {
         title: editDraft.name,
         status: editDraft.status,
+        scheduled_at: scheduledAt,
         metrics,
       });
       const mapped = mapApiCampaign(updated);
@@ -922,6 +980,14 @@ export function NudgeScheduler() {
                     </div>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">Language</label>
+                    <p className="font-medium text-gray-900">
+                      {CAMPAIGN_LANGUAGES.find((l) => l.value === viewModalCampaign.language)?.label ??
+                        viewModalCampaign.language}
+                    </p>
+                  </div>
+
                   <div className="border-t pt-4">
                     <h3 className="font-bold text-lg mb-3">Audience</h3>
                     <div className="p-4 bg-gray-50 rounded-lg">
@@ -943,7 +1009,11 @@ export function NudgeScheduler() {
                       <div className="p-3 bg-gray-50 rounded-lg">
                         <p className="text-sm text-gray-600 mb-1">Frequency</p>
                         <p className="font-medium text-gray-900">{viewModalCampaign.schedule.frequency}</p>
-                        <p className="text-xs text-gray-600 mt-1">Since {viewModalCampaign.schedule.startDate}</p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {viewModalCampaign.schedule.availabilityAt
+                            ? `Available ${new Date(viewModalCampaign.schedule.availabilityAt).toLocaleString()}`
+                            : `Since ${viewModalCampaign.schedule.startDate}`}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -1081,6 +1151,21 @@ export function NudgeScheduler() {
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Language</label>
+                    <select
+                      className="w-full px-3 py-2 border rounded-lg"
+                      value={editDraft.language}
+                      onChange={(e) => setEditDraft({ ...editDraft, language: e.target.value })}
+                    >
+                      {CAMPAIGN_LANGUAGES.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Trigger Type</label>
@@ -1122,16 +1207,31 @@ export function NudgeScheduler() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-2">Start Date</label>
+                      <label className="block text-sm font-medium mb-2">Availability</label>
                       <Input
-                        type="date"
-                        value={editDraft.schedule.startDate}
-                        onChange={(e) =>
+                        type="datetime-local"
+                        value={isoToDateTimeLocal(editDraft.schedule.availabilityAt)}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (!v) {
+                            const restSched = { ...editDraft.schedule };
+                            delete restSched.availabilityAt;
+                            setEditDraft({
+                              ...editDraft,
+                              schedule: restSched,
+                            });
+                            return;
+                          }
+                          const iso = new Date(v).toISOString();
                           setEditDraft({
                             ...editDraft,
-                            schedule: { ...editDraft.schedule, startDate: e.target.value },
-                          })
-                        }
+                            schedule: {
+                              ...editDraft.schedule,
+                              startDate: v.slice(0, 10),
+                              availabilityAt: iso,
+                            },
+                          });
+                        }}
                       />
                     </div>
                   </div>
@@ -1442,6 +1542,21 @@ export function NudgeScheduler() {
                     </select>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Language</label>
+                    <select
+                      className="w-full px-3 py-2 border rounded-lg"
+                      value={campaignLanguage}
+                      onChange={(e) => setCampaignLanguage(e.target.value)}
+                    >
+                      {CAMPAIGN_LANGUAGES.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Trigger Type</label>
@@ -1465,15 +1580,17 @@ export function NudgeScheduler() {
                       <Input
                         value={frequency}
                         onChange={(e) => setFrequency(e.target.value)}
+                        placeholder="e.g. Once, Daily"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-2">Start Date</label>
+                      <label className="block text-sm font-medium mb-2">Availability</label>
                       <Input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
+                        type="datetime-local"
+                        value={availabilityDateTime}
+                        onChange={(e) => setAvailabilityDateTime(e.target.value)}
                       />
+                      <p className="text-xs text-gray-500 mt-1">When this campaign is available; also sets the server schedule time.</p>
                     </div>
                   </div>
 

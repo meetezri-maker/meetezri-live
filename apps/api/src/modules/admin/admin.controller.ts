@@ -22,6 +22,7 @@ import {
   getBackupRecoveryDashboard, createLogicalBackup, createDataExportRecord, requestRestoreFromBackup,
   getBackupRecordJsonForDownload,
   getContentPerformanceAnalytics,
+  getWellnessToolUsageAggregates,
 } from './admin.service';
 import {
   listFeatureFlags,
@@ -579,6 +580,16 @@ export async function getContentPerformanceHandler(
   }
 }
 
+export async function getWellnessToolUsageHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const data = await getWellnessToolUsageAggregates();
+    return reply.code(200).send(data);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to fetch wellness tool usage' });
+  }
+}
+
 export async function getCommunityGroupsHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
     const groups = await getCommunityGroups();
@@ -751,8 +762,8 @@ export async function getSessionRecordingsHandler(request: FastifyRequest, reply
     const query = (request.query || {}) as any;
     const page = query.page && !isNaN(parseInt(query.page, 10)) ? parseInt(query.page, 10) : 1;
     const limit = query.limit && !isNaN(parseInt(query.limit, 10)) ? parseInt(query.limit, 10) : 20;
-    const recordings = await getSessionRecordings(page, limit);
-    return reply.code(200).send(recordings);
+    const { items, total } = await getSessionRecordings(page, limit);
+    return reply.code(200).send({ items, total });
   } catch (error) {
     request.log.error(error);
     return reply.code(500).send({ message: 'Failed to fetch recordings' });

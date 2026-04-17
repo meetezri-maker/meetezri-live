@@ -3,6 +3,12 @@ export const STRIPE_PRICE_IDS = {
   pro: 'price_1T45gWBt6JG9FijPOV0hXeF3',
 } as const;
 
+/** Monthly list price (USD) — used when `subscriptions.amount` was never backfilled from Stripe. Keep aligned with `SUBSCRIPTION_PLANS` in apps/web. */
+export const PLAN_MONTHLY_LIST_PRICE_USD = {
+  core: 25,
+  pro: 49,
+} as const;
+
 export const PLAN_LIMITS = {
   trial: {
     credits: 30, // 30 minutes hard cap

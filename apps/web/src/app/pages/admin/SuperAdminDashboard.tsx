@@ -35,6 +35,7 @@ import { downloadCsv } from "../../../lib/adminAnalytics";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Calendar } from "../../components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
+import { ToggleGroup, ToggleGroupItem } from "../../components/ui/toggle-group";
 import {
   Line,
   Area,
@@ -52,12 +53,11 @@ import {
   ComposedChart,
 } from "recharts";
 
-const PERIOD_OPTIONS = ["week", "month", "year"] as const;
-const PERIOD_RANGE_DAYS: Record<(typeof PERIOD_OPTIONS)[number], number> = {
+const PERIOD_RANGE_DAYS = {
   week: 7,
   month: 30,
   year: 365,
-};
+} as const;
 
 const MIN_STATS_YEAR = 2020;
 
@@ -100,6 +100,43 @@ function formatReadableRangeDate(isoYmd: string): string {
 function anchorYearFromRange(range: { from: string }): number {
   const y = parseInt(range.from.slice(0, 4), 10);
   return Number.isFinite(y) ? y : new Date().getUTCFullYear();
+}
+
+const MAX_MONTH_OFFSET = 120;
+
+/** Rolling 30-day window in UTC, shifted back by `monthOffset` blocks (aligned with dashboard stats). */
+function rolling30DayRangeUtc(monthOffset: number): { dateFrom: string; dateTo: string } {
+  const end = new Date(
+    Date.UTC(
+      new Date().getUTCFullYear(),
+      new Date().getUTCMonth(),
+      new Date().getUTCDate(),
+      0,
+      0,
+      0,
+      0
+    )
+  );
+  end.setUTCDate(end.getUTCDate() - monthOffset * 30);
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - 29);
+  return {
+    dateFrom: start.toISOString().slice(0, 10),
+    dateTo: end.toISOString().slice(0, 10),
+  };
+}
+
+/** Compact UTC range for chart labels (API returns ISO instants). */
+function formatUtcRangeCaption(isoStart: string, isoEnd: string): string {
+  const s = new Date(isoStart);
+  const e = new Date(isoEnd);
+  const o: Intl.DateTimeFormatOptions = {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  };
+  return `${s.toLocaleDateString(undefined, o)} → ${e.toLocaleDateString(undefined, o)}`;
 }
 
 type CsvRow = {
@@ -346,6 +383,7 @@ export function SuperAdminDashboard() {
   const [canPoll, setCanPoll] = useState(false);
   const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
   const [sessionWeekOffset, setSessionWeekOffset] = useState(0);
+  const [monthOffset, setMonthOffset] = useState(0);
   const [yearRange, setYearRange] = useState(() =>
     fullYearRange(clampStatsYear(new Date().getUTCFullYear()))
   );
@@ -364,18 +402,32 @@ export function SuperAdminDashboard() {
         dateTo: yearRange.to,
       };
     }
+    if (chartPeriod === "month") {
+      const { dateFrom, dateTo } = rolling30DayRangeUtc(monthOffset);
+      return {
+        chartPeriod: "month" as const,
+        dateFrom,
+        dateTo,
+      };
+    }
     return {
-      chartPeriod,
-      rangeDays: PERIOD_RANGE_DAYS[chartPeriod],
-      sessionWeekOffset: chartPeriod === "week" ? sessionWeekOffset : 0,
+      chartPeriod: "week" as const,
+      rangeDays: PERIOD_RANGE_DAYS.week,
+      sessionWeekOffset,
     };
-  }, [chartPeriod, yearRange, sessionWeekOffset]);
+  }, [chartPeriod, yearRange, sessionWeekOffset, monthOffset]);
 
   useEffect(() => {
     if (chartPeriod !== "week" && sessionWeekOffset !== 0) {
       setSessionWeekOffset(0);
     }
   }, [chartPeriod, sessionWeekOffset]);
+
+  useEffect(() => {
+    if (chartPeriod !== "month" && monthOffset !== 0) {
+      setMonthOffset(0);
+    }
+  }, [chartPeriod, monthOffset]);
 
   useEffect(() => {
     let cancelled = false;
@@ -459,34 +511,51 @@ export function SuperAdminDashboard() {
     }
   };
 
+  const activeUtcRange =
+    stats?.rangeStart && stats?.rangeEnd
+      ? formatUtcRangeCaption(stats.rangeStart, stats.rangeEnd)
+      : null;
+
   const trendSubtitle = useMemo(() => {
-    if (chartPeriod === "week") return "New signups per week (last 12 weeks)";
+    if (chartPeriod === "week") {
+      return activeUtcRange
+        ? `Cumulative signups by week · chart range ${activeUtcRange} (UTC)`
+        : "Cumulative signups by ISO week · rolling 7-day chart range";
+    }
     if (chartPeriod === "year")
-      return `New signups by year — ${yearRange.from} → ${yearRange.to}`;
-    return "Total users over time (monthly)";
-  }, [chartPeriod, yearRange]);
+      return `New signups by calendar year — ${yearRange.from} → ${yearRange.to} (UTC)`;
+    return activeUtcRange
+      ? `Cumulative total users by month · ${activeUtcRange} (UTC)`
+      : "Cumulative total users by calendar month";
+  }, [chartPeriod, yearRange, activeUtcRange]);
 
   const revenueSubtitle = useMemo(() => {
-    if (chartPeriod === "week") return "Payment volume by week (Stripe)";
+    if (chartPeriod === "week") {
+      return activeUtcRange
+        ? `Stripe volume by week · ${activeUtcRange} (UTC)`
+        : "Stripe payment volume by week (chart range)";
+    }
     if (chartPeriod === "year")
-      return `Payment volume (Stripe) — ${yearRange.from} → ${yearRange.to}`;
-    return "Payment volume by month (Stripe)";
-  }, [chartPeriod, yearRange]);
+      return `Stripe volume by calendar year — ${yearRange.from} → ${yearRange.to} (UTC)`;
+    return activeUtcRange
+      ? `Stripe volume by calendar month · ${activeUtcRange} (UTC)`
+      : "Stripe payment volume by calendar month";
+  }, [chartPeriod, yearRange, activeUtcRange]);
 
   const sessionChartTitle = useMemo(() => {
-    if (chartPeriod === "week") return "Weekly Session Activity";
-    if (chartPeriod === "year") return "Yearly Session Activity";
-    return "Monthly Session Activity";
+    if (chartPeriod === "week") return "Weekly session activity";
+    if (chartPeriod === "year") return "Yearly session activity";
+    return "Monthly session activity";
   }, [chartPeriod]);
 
   const sessionChartSubtitle = useMemo(() => {
-    if (chartPeriod === "week") {
-      return `Sessions per day (UTC week) — offset ${sessionWeekOffset || "current"}`;
-    }
     if (chartPeriod === "year")
-      return `Sessions per day — ${yearRange.from} → ${yearRange.to}`;
-    return "Sessions per day for the last 30 days";
-  }, [chartPeriod, sessionWeekOffset, yearRange]);
+      return `Sessions per day · ${yearRange.from} → ${yearRange.to} (UTC)`;
+    if (activeUtcRange) return `Sessions per day · ${activeUtcRange} (UTC)`;
+    if (chartPeriod === "week")
+      return `UTC week view · offset ${sessionWeekOffset === 0 ? "current" : sessionWeekOffset}`;
+    return "Last 30 days (UTC) · daily buckets";
+  }, [chartPeriod, sessionWeekOffset, yearRange, activeUtcRange]);
 
   const sessionLoadingText = useMemo(() => {
     if (chartPeriod === "week") return "Loading week…";
@@ -703,28 +772,50 @@ export function SuperAdminDashboard() {
           transition={{ delay: 0.35 }}
         >
           <Card className="p-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="font-medium text-foreground">Charts</span>
-                {chartsLoading && (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden />
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {PERIOD_OPTIONS.map((p) => (
-                  <Button
-                    key={p}
-                    variant={chartPeriod === p ? "default" : "outline"}
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <BarChart3 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="font-medium text-foreground">Charts</span>
+                    {chartsLoading && (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden />
+                    )}
+                  </div>
+                  <ToggleGroup
+                    type="single"
+                    value={chartPeriod}
+                    onValueChange={(v) => {
+                      if (v === "week" || v === "month" || v === "year") setChartPeriod(v);
+                    }}
+                    variant="outline"
                     size="sm"
-                    type="button"
                     disabled={chartsLoading}
-                    onClick={() => setChartPeriod(p)}
+                    className="gap-0 rounded-lg border border-input bg-muted/45 p-0.5 shadow-none"
+                    aria-label="Chart time period"
                   >
-                    {p === "week" ? "Week" : p === "month" ? "Month" : "Year"}
-                  </Button>
-                ))}
-              </div>
+                    <ToggleGroupItem
+                      value="week"
+                      className="rounded-md px-3 text-xs sm:text-sm data-[state=on]:border-transparent data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90"
+                    >
+                      Week
+                    </ToggleGroupItem>
+                    <ToggleGroupItem
+                      value="month"
+                      className="rounded-md px-3 text-xs sm:text-sm data-[state=on]:border-transparent data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90"
+                    >
+                      Month
+                    </ToggleGroupItem>
+                    <ToggleGroupItem
+                      value="year"
+                      className="rounded-md px-3 text-xs sm:text-sm data-[state=on]:border-transparent data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90"
+                    >
+                      Year
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
 
+                <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3 lg:border-t-0 lg:pt-0 lg:pl-4 xl:border-l xl:pl-5">
               {chartPeriod === "year" && (
                 <>
                   <div className="hidden h-6 w-px bg-border sm:block" aria-hidden />
@@ -860,10 +951,54 @@ export function SuperAdminDashboard() {
                 </>
               )}
 
+              {chartPeriod === "month" && (
+                <>
+                  <div className="hidden h-6 w-px bg-border sm:block" aria-hidden />
+                  <span className="text-sm text-muted-foreground">30 days</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    disabled={chartsLoading || monthOffset >= MAX_MONTH_OFFSET}
+                    onClick={() =>
+                      setMonthOffset((o) => Math.min(MAX_MONTH_OFFSET, o + 1))
+                    }
+                    aria-label="Earlier 30-day window"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={chartsLoading}
+                    onClick={() => setMonthOffset(0)}
+                  >
+                    Current
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    disabled={chartsLoading || monthOffset <= 0}
+                    onClick={() => setMonthOffset((o) => Math.max(0, o - 1))}
+                    aria-label="More recent 30-day window"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                  <span className="hidden text-xs text-muted-foreground tabular-nums xl:inline">
+                    {rolling30DayRangeUtc(monthOffset).dateFrom} →{" "}
+                    {rolling30DayRangeUtc(monthOffset).dateTo}
+                  </span>
+                </>
+              )}
+
               {chartPeriod === "week" && (
                 <>
                   <div className="hidden h-6 w-px bg-border sm:block" aria-hidden />
-                  <span className="text-sm text-muted-foreground">Week</span>
+                  <span className="text-sm text-muted-foreground">7 days</span>
                   <Button
                     type="button"
                     variant="outline"
@@ -871,7 +1006,7 @@ export function SuperAdminDashboard() {
                     className="h-8 w-8"
                     disabled={chartsLoading}
                     onClick={() => setSessionWeekOffset((o) => Math.min(52, o + 1))}
-                    aria-label="Older week"
+                    aria-label="Earlier week"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
@@ -891,12 +1026,21 @@ export function SuperAdminDashboard() {
                     className="h-8 w-8"
                     disabled={chartsLoading || sessionWeekOffset <= 0}
                     onClick={() => setSessionWeekOffset((o) => Math.max(0, o - 1))}
-                    aria-label="Newer week"
+                    aria-label="More recent week"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </Button>
                 </>
               )}
+                </div>
+              </div>
+
+              {activeUtcRange ? (
+                <p className="border-t border-border/70 pt-3 text-xs leading-snug text-muted-foreground">
+                  <span className="font-medium text-foreground/90">Data range (UTC) </span>
+                  {activeUtcRange}
+                </p>
+              ) : null}
             </div>
           </Card>
         </motion.div>
@@ -1457,10 +1601,13 @@ export function SuperAdminDashboard() {
                           {mood.activities?.length || 0} selected
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Date</span>
-                        <span className="font-bold text-xs">
-                          {new Date(mood.created_at).toLocaleDateString()}
+                      <div className="flex items-center justify-between text-sm gap-2">
+                        <span className="text-muted-foreground shrink-0">Date & time</span>
+                        <span className="font-bold text-xs text-right leading-tight">
+                          {new Date(mood.created_at).toLocaleString(undefined, {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })}
                         </span>
                       </div>
                     </div>

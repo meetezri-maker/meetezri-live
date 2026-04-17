@@ -146,26 +146,61 @@ const getDifficultyColor = (difficulty: string) => {
   }
 };
 
+/** Align admin UI status with dates and stored goal_criteria.status (draft / publish). */
+const deriveChallengeStatus = (
+  goalCriteria: unknown,
+  start: Date,
+  end: Date,
+  now: Date = new Date()
+): Challenge["status"] => {
+  const gc =
+    goalCriteria && typeof goalCriteria === "object"
+      ? (goalCriteria as Record<string, unknown>)
+      : {};
+  const explicit = typeof gc.status === "string" ? gc.status : "";
+  if (explicit === "draft") return "draft";
+  if (explicit === "completed") return "completed";
+  if (explicit === "scheduled") {
+    if (now < start) return "scheduled";
+    if (now > end) return "completed";
+    return "active";
+  }
+  if (explicit === "active") {
+    if (now > end) return "completed";
+    return "active";
+  }
+  if (now < start) return "scheduled";
+  if (now > end) return "completed";
+  return "active";
+};
+
 const mapApiChallenge = (apiChallenge: any): Challenge => {
-  const meta = (apiChallenge.goal_criteria || {}) as any;
+  const meta = (apiChallenge.goal_criteria || {}) as Record<string, unknown>;
+  const startDate = new Date(apiChallenge.start_date);
+  const endDate = new Date(apiChallenge.end_date);
+  const rawCat = String(apiChallenge.category || "mindfulness").toLowerCase();
+  const category = (
+    ["mindfulness", "exercise", "sleep", "journaling", "social", "habits"].includes(rawCat)
+      ? rawCat
+      : "mindfulness"
+  ) as Challenge["category"];
   return {
     id: apiChallenge.id,
     name: apiChallenge.title,
     description: apiChallenge.description || "",
-    category:
-      (apiChallenge.category as Challenge["category"]) || "mindfulness",
-    status: (meta.status as Challenge["status"]) || "active",
-    startDate: new Date(apiChallenge.start_date),
-    endDate: new Date(apiChallenge.end_date),
+    category,
+    status: deriveChallengeStatus(apiChallenge.goal_criteria, startDate, endDate),
+    startDate,
+    endDate,
     participants: apiChallenge.participants ?? 0,
     completionRate: apiChallenge.completionRate ?? 0,
-    goal: meta.goal || "",
+    goal: typeof meta.goal === "string" ? meta.goal : "",
     difficulty: (meta.difficulty as Challenge["difficulty"]) || "easy",
     rewards: {
       points: apiChallenge.reward_points ?? 0,
-      badge: meta.badge || undefined,
+      badge: typeof meta.badge === "string" ? meta.badge : undefined,
     },
-    dailyTasks: Array.isArray(meta.dailyTasks) ? meta.dailyTasks : [],
+    dailyTasks: Array.isArray(meta.dailyTasks) ? (meta.dailyTasks as string[]) : [],
   };
 };
 
@@ -190,28 +225,129 @@ export function WellnessChallenges() {
   const [createGoal, setCreateGoal] = useState("");
   const [createDailyTasks, setCreateDailyTasks] = useState("");
   const [isCreatingChallenge, setIsCreatingChallenge] = useState(false);
+  const [enrollmentTrend, setEnrollmentTrend] = useState<
+    { month: string; participants: number }[]
+  >([]);
+  const [challengeActionId, setChallengeActionId] = useState<string | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  type EditFormState = {
+    name: string;
+    description: string;
+    category: Challenge["category"];
+    difficulty: Challenge["difficulty"];
+    status: Challenge["status"];
+    rewardPoints: number;
+    badge: string;
+    goal: string;
+    startDate: string;
+    endDate: string;
+    dailyTasks: string;
+  };
+  const [editForm, setEditForm] = useState<EditFormState | null>(null);
+
+  const loadChallenges = async () => {
+    try {
+      setIsLoading(true);
+      const data = await api.wellness.getChallenges();
+      let list: unknown[] = [];
+      let trend: { month: string; participants: number }[] = [];
+      if (Array.isArray(data)) {
+        list = data;
+      } else if (data && typeof data === "object") {
+        const o = data as {
+          challenges?: unknown[];
+          enrollmentTrend?: { month: string; participants: number }[];
+        };
+        if (Array.isArray(o.challenges)) list = o.challenges;
+        if (Array.isArray(o.enrollmentTrend)) trend = o.enrollmentTrend;
+      }
+      const mapped: Challenge[] = list.map(mapApiChallenge);
+      setChallenges(mapped);
+      setEnrollmentTrend(trend);
+    } catch (error: unknown) {
+      console.error("Failed to fetch wellness challenges", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to fetch wellness challenges"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchChallenges = async () => {
-      try {
-        setIsLoading(true);
-        const data = await api.wellness.getChallenges();
-        const mapped: Challenge[] = Array.isArray(data)
-          ? data.map(mapApiChallenge)
-          : [];
-        setChallenges(mapped);
-      } catch (error: any) {
-        console.error("Failed to fetch wellness challenges", error);
-        toast.error(
-          error?.message || "Failed to fetch wellness challenges"
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchChallenges();
+    void loadChallenges();
   }, []);
+
+  useEffect(() => {
+    if (!editModal) {
+      setEditForm(null);
+      return;
+    }
+    setEditForm({
+      name: editModal.name,
+      description: editModal.description,
+      category: editModal.category,
+      difficulty: editModal.difficulty,
+      status: editModal.status,
+      rewardPoints: editModal.rewards.points,
+      badge: editModal.rewards.badge || "",
+      goal: editModal.goal,
+      startDate: editModal.startDate.toISOString().slice(0, 10),
+      endDate: editModal.endDate.toISOString().slice(0, 10),
+      dailyTasks: editModal.dailyTasks.join("\n"),
+    });
+  }, [editModal]);
+
+  const handleSaveEdit = async () => {
+    if (!editModal || !editForm) return;
+    const start = new Date(editForm.startDate);
+    const end = new Date(editForm.endDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      toast.error("Invalid start or end date");
+      return;
+    }
+    if (end < start) {
+      toast.error("End date must be on or after start date");
+      return;
+    }
+    if (!editForm.name.trim()) {
+      toast.error("Challenge name is required");
+      return;
+    }
+    setIsSavingEdit(true);
+    try {
+      const dailyTasks = editForm.dailyTasks
+        .split("\n")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const raw = await api.wellness.updateChallenge(editModal.id, {
+        title: editForm.name.trim(),
+        description: editForm.description.trim() || null,
+        category: editForm.category,
+        start_date: start.toISOString(),
+        end_date: end.toISOString(),
+        reward_points: editForm.rewardPoints,
+        goal_criteria: {
+          status: editForm.status,
+          difficulty: editForm.difficulty,
+          goal: editForm.goal.trim(),
+          dailyTasks,
+          ...(editForm.badge.trim()
+            ? { badge: editForm.badge.trim() }
+            : { badge: null }),
+        },
+      });
+      const next = mapApiChallenge(raw);
+      setChallenges((prev) => prev.map((c) => (c.id === editModal.id ? next : c)));
+      toast.success("Challenge updated");
+      setEditModal(null);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to save changes");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   const resetCreateForm = () => {
     const today = new Date();
@@ -295,41 +431,36 @@ export function WellnessChallenges() {
     totalBadgesEarned: challenges.filter((c) => c.rewards.badge).length,
   };
 
-  const participationTrend = useMemo(() => {
-    const map = new Map<string, { month: string; participants: number }>();
+  /** Fallback when no enrollment rows exist yet (legacy / empty DB). */
+  const participationTrendFallback = useMemo(() => {
+    const map = new Map<string, { month: string; participants: number; sortKey: string }>();
     challenges.forEach((challenge) => {
       const d = challenge.startDate;
-      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      const sortKey = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`;
       const label = d.toLocaleString("default", { month: "short" });
-      const existing = map.get(key) || { month: label, participants: 0 };
+      const existing = map.get(sortKey) || { month: label, participants: 0, sortKey };
       existing.participants += challenge.participants;
-      map.set(key, existing);
+      existing.month = label;
+      map.set(sortKey, existing);
     });
-    return Array.from(map.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([, value]) => value);
+    return Array.from(map.values())
+      .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+      .map(({ month, participants }) => ({ month, participants }));
   }, [challenges]);
 
+  const participationLineData =
+    enrollmentTrend.length > 0 ? enrollmentTrend : participationTrendFallback;
+
   const categoryData = useMemo(() => {
-    const map = new Map<
-      string,
-      { category: string; totalRate: number; count: number }
-    >();
+    const map = new Map<string, { category: string; participants: number }>();
     challenges.forEach((challenge) => {
       const key = challenge.category;
       const label = getCategoryDisplayName(challenge.category);
-      const existing =
-        map.get(key) || { category: label, totalRate: 0, count: 0 };
-      existing.totalRate += challenge.completionRate;
-      existing.count += 1;
+      const existing = map.get(key) || { category: label, participants: 0 };
+      existing.participants += challenge.participants;
       map.set(key, existing);
     });
-    return Array.from(map.values()).map((value) => ({
-      category: value.category,
-      rate: value.count
-        ? Math.round(value.totalRate / value.count)
-        : 0,
-    }));
+    return Array.from(map.values());
   }, [challenges]);
 
   return (
@@ -441,7 +572,7 @@ export function WellnessChallenges() {
           >
             <h2 className="text-xl font-bold text-gray-900 mb-6">Participation Growth</h2>
             <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={participationTrend}>
+              <LineChart data={participationLineData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis dataKey="month" stroke="#6b7280" />
                 <YAxis stroke="#6b7280" />
@@ -469,7 +600,7 @@ export function WellnessChallenges() {
             transition={{ delay: 0.4 }}
             className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
           >
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Completion Rates by Category</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-6">Participants by Category</h2>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={categoryData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -482,7 +613,7 @@ export function WellnessChallenges() {
                     borderRadius: '12px' 
                   }}
                 />
-                <Bar dataKey="rate" fill="#10b981" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="participants" fill="#10b981" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </motion.div>
@@ -610,14 +741,31 @@ export function WellnessChallenges() {
                             <motion.button
                               whileHover={{ scale: 1.02 }}
                               whileTap={{ scale: 0.98 }}
-                              onClick={(e) => {
+                              disabled={challengeActionId === challenge.id}
+                              onClick={async (e) => {
                                 e.stopPropagation();
-                                alert(`Paused: ${challenge.name}`);
+                                setChallengeActionId(challenge.id);
+                                try {
+                                  const raw = await api.wellness.updateChallenge(challenge.id, {
+                                    goal_criteria: { status: "draft" },
+                                  });
+                                  const next = mapApiChallenge(raw);
+                                  setChallenges((prev) =>
+                                    prev.map((c) => (c.id === challenge.id ? next : c))
+                                  );
+                                  toast.success("Challenge unpublished");
+                                } catch (err: unknown) {
+                                  toast.error(
+                                    err instanceof Error ? err.message : "Could not update challenge"
+                                  );
+                                } finally {
+                                  setChallengeActionId(null);
+                                }
                               }}
-                              className="flex-1 px-3 py-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium flex items-center justify-center gap-1"
+                              className="flex-1 px-3 py-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium flex items-center justify-center gap-1 disabled:opacity-60"
                             >
                               <Pause className="w-4 h-4" />
-                              Pause
+                              Unpublish
                             </motion.button>
 
                             <motion.button
@@ -639,11 +787,28 @@ export function WellnessChallenges() {
                           <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
-                            onClick={(e) => {
+                            disabled={challengeActionId === challenge.id}
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              alert(`Started early: ${challenge.name}`);
+                              setChallengeActionId(challenge.id);
+                              try {
+                                const raw = await api.wellness.updateChallenge(challenge.id, {
+                                  goal_criteria: { status: "active" },
+                                });
+                                const next = mapApiChallenge(raw);
+                                setChallenges((prev) =>
+                                  prev.map((c) => (c.id === challenge.id ? next : c))
+                                );
+                                toast.success("Challenge is now active");
+                              } catch (err: unknown) {
+                                toast.error(
+                                  err instanceof Error ? err.message : "Could not update challenge"
+                                );
+                              } finally {
+                                setChallengeActionId(null);
+                              }
                             }}
-                            className="flex-1 px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium flex items-center justify-center gap-1"
+                            className="flex-1 px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium flex items-center justify-center gap-1 disabled:opacity-60"
                           >
                             <Play className="w-4 h-4" />
                             Start Early
@@ -654,14 +819,31 @@ export function WellnessChallenges() {
                           <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
-                            onClick={(e) => {
+                            disabled={challengeActionId === challenge.id}
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              alert(`Published: ${challenge.name}`);
+                              setChallengeActionId(challenge.id);
+                              try {
+                                const raw = await api.wellness.updateChallenge(challenge.id, {
+                                  goal_criteria: { status: "active" },
+                                });
+                                const next = mapApiChallenge(raw);
+                                setChallenges((prev) =>
+                                  prev.map((c) => (c.id === challenge.id ? next : c))
+                                );
+                                toast.success(`Published: ${challenge.name}`);
+                              } catch (err: unknown) {
+                                toast.error(
+                                  err instanceof Error ? err.message : "Could not publish challenge"
+                                );
+                              } finally {
+                                setChallengeActionId(null);
+                              }
                             }}
-                            className="flex-1 px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium flex items-center justify-center gap-1"
+                            className="flex-1 px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium flex items-center justify-center gap-1 disabled:opacity-60"
                           >
                             <Play className="w-4 h-4" />
-                            Publish
+                            {challengeActionId === challenge.id ? "Publishing…" : "Publish"}
                           </motion.button>
                         )}
 
@@ -945,7 +1127,7 @@ export function WellnessChallenges() {
 
         {/* Edit Modal */}
         <AnimatePresence>
-          {editModal && (
+          {editModal && editForm && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -970,13 +1152,17 @@ export function WellnessChallenges() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Challenge Name</label>
-                    <Input defaultValue={editModal.name} />
+                    <Input
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                     <textarea
-                      defaultValue={editModal.description}
+                      value={editForm.description}
+                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                       rows={3}
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                     />
@@ -985,9 +1171,15 @@ export function WellnessChallenges() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                      <select 
+                      <select
                         className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        defaultValue={editModal.category}
+                        value={editForm.category}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            category: e.target.value as Challenge["category"],
+                          })
+                        }
                       >
                         <option value="mindfulness">Mindfulness</option>
                         <option value="exercise">Exercise</option>
@@ -1000,9 +1192,15 @@ export function WellnessChallenges() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
-                      <select 
+                      <select
                         className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        defaultValue={editModal.difficulty}
+                        value={editForm.difficulty}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            difficulty: e.target.value as Challenge["difficulty"],
+                          })
+                        }
                       >
                         <option value="easy">Easy</option>
                         <option value="medium">Medium</option>
@@ -1014,9 +1212,15 @@ export function WellnessChallenges() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                      <select 
+                      <select
                         className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        defaultValue={editModal.status}
+                        value={editForm.status}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            status: e.target.value as Challenge["status"],
+                          })
+                        }
                       >
                         <option value="active">Active</option>
                         <option value="scheduled">Scheduled</option>
@@ -1027,23 +1231,73 @@ export function WellnessChallenges() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Reward Points</label>
-                      <Input type="number" defaultValue={editModal.rewards.points} />
+                      <Input
+                        type="number"
+                        min={0}
+                        value={editForm.rewardPoints}
+                        onChange={(e) =>
+                          setEditForm({
+                            ...editForm,
+                            rewardPoints: Number(e.target.value) || 0,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Start date</label>
+                      <input
+                        type="date"
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={editForm.startDate}
+                        onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">End date</label>
+                      <input
+                        type="date"
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={editForm.endDate}
+                        onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })}
+                      />
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Badge Name</label>
-                    <Input defaultValue={editModal.rewards.badge} />
+                    <Input
+                      value={editForm.badge}
+                      onChange={(e) => setEditForm({ ...editForm, badge: e.target.value })}
+                    />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Goal</label>
-                    <Input defaultValue={editModal.goal} />
+                    <Input
+                      value={editForm.goal}
+                      onChange={(e) => setEditForm({ ...editForm, goal: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Daily tasks (one per line)
+                    </label>
+                    <textarea
+                      value={editForm.dailyTasks}
+                      onChange={(e) => setEditForm({ ...editForm, dailyTasks: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                    />
                   </div>
                 </div>
 
                 <div className="flex gap-3 mt-6">
                   <motion.button
+                    type="button"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => setEditModal(null)}
@@ -1053,16 +1307,15 @@ export function WellnessChallenges() {
                   </motion.button>
 
                   <motion.button
+                    type="button"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      alert(`Saved changes to: ${editModal.name}`);
-                      setEditModal(null);
-                    }}
-                    className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
+                    disabled={isSavingEdit}
+                    onClick={() => void handleSaveEdit()}
+                    className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium disabled:opacity-60"
                   >
                     <Save className="w-4 h-4 inline mr-2" />
-                    Save Changes
+                    {isSavingEdit ? "Saving…" : "Save Changes"}
                   </motion.button>
                 </div>
               </motion.div>

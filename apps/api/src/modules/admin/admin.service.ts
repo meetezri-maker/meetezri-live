@@ -1,5 +1,7 @@
 
 import prisma from '../../lib/prisma';
+import { mergeCompanionAvatarCounts } from '../../lib/companionDisplayName';
+import { PLAN_LIMITS, PLAN_MONTHLY_LIST_PRICE_USD } from '../billing/billing.constants';
 import { Prisma, $Enums } from '@prisma/client';
 import { CreateAdminUserInput, DashboardStats } from './admin.schema';
 import { endSession } from '../sessions/sessions.service';
@@ -106,6 +108,10 @@ let manualNotificationsCache: { data: any[]; timestamp: number } | null = null;
 
 const NUDGE_TEMPLATES_CACHE_TTL = 120 * 1000; // 120 seconds
 let nudgeTemplatesCache: { data: any[]; timestamp: number } | null = null;
+
+function clearNudgeTemplatesCache() {
+  nudgeTemplatesCache = null;
+}
 
 const COMMUNITY_STATS_CACHE_TTL = 60 * 1000; // 60 seconds
 let communityStatsCache: { data: any; timestamp: number } | null = null;
@@ -235,9 +241,17 @@ export async function getDashboardStats(
         (SELECT count(*)::bigint FROM app_sessions WHERE started_at >= timezone('utc', now()) - interval '1 hour') as sessions_1h,
         (SELECT COALESCE(SUM(amount), 0)::bigint FROM payment_transactions WHERE status = 'completed' AND created_at >= date_trunc('month', timezone('utc', now())) AND created_at < date_trunc('month', timezone('utc', now())) + interval '1 month') as pay_cents_this_month,
         (SELECT COALESCE(SUM(amount), 0)::bigint FROM payment_transactions WHERE status = 'completed' AND created_at >= date_trunc('month', timezone('utc', now())) - interval '1 month' AND created_at < date_trunc('month', timezone('utc', now()))) as pay_cents_prev_month,
-        (SELECT COALESCE(SUM(COALESCE(amount, 0)), 0)::numeric
-          FROM subscriptions
-          WHERE LOWER(TRIM(COALESCE(status, ''))) IN ('active', 'trialing', 'past_due')
+        (SELECT COALESCE(SUM(sub.mrr_usd::numeric), 0)::numeric
+          FROM (
+            SELECT
+              CASE LOWER(TRIM(COALESCE(s.plan_type, '')))
+                WHEN 'core' THEN COALESCE(s.amount::numeric, ${PLAN_MONTHLY_LIST_PRICE_USD.core}::numeric)
+                WHEN 'pro' THEN COALESCE(s.amount::numeric, ${PLAN_MONTHLY_LIST_PRICE_USD.pro}::numeric)
+                ELSE COALESCE(s.amount::numeric, 0::numeric)
+              END AS mrr_usd
+            FROM subscriptions s
+            WHERE LOWER(TRIM(COALESCE(s.status, ''))) IN ('active', 'trialing', 'past_due')
+          ) sub
         ) as subscription_mrr_sum_usd,
         (SELECT COALESCE(SUM(amount::numeric), 0) / 100.0
           FROM payment_transactions
@@ -267,7 +281,7 @@ export async function getDashboardStats(
       FROM profiles
       GROUP BY 1
       ORDER BY c DESC
-      LIMIT 12
+      LIMIT 48
     `,
     prisma.$queryRaw<Array<{ d: Date; signups: bigint; completions: bigint }>>`
       SELECT 
@@ -364,7 +378,13 @@ export async function getDashboardStats(
   const subscriptionMrrSumUsd = Number(counts.subscription_mrr_sum_usd ?? 0);
   const paymentCompletedSumUsd = Number(counts.payment_completed_sum_usd ?? 0);
   /** Subscriptions (USD/month stored on row) + completed checkout volume (amount is cents). */
-  const revenue = Math.round((subscriptionMrrSumUsd + paymentCompletedSumUsd) * 100) / 100;
+  const revenueRaw =
+    Math.round(
+      ((Number.isFinite(subscriptionMrrSumUsd) ? subscriptionMrrSumUsd : 0) +
+        (Number.isFinite(paymentCompletedSumUsd) ? paymentCompletedSumUsd : 0)) *
+        100
+    ) / 100;
+  const revenue = Number.isFinite(revenueRaw) ? revenueRaw : 0;
 
   const startDay = utcDayStart(rangeStart);
   const endDay = utcDayStart(rangeEnd);
@@ -429,11 +449,9 @@ export async function getDashboardStats(
     };
   });
 
-  const avatarTotal = (avatarRows as Array<{ name: string; c: bigint }>).reduce(
-    (s, r) => s + Number(r.c),
-    0
-  );
-  const avatarDistribution = (avatarRows as Array<{ name: string; c: bigint }>).map((r, i) => ({
+  const mergedAvatarRows = mergeCompanionAvatarCounts(avatarRows as Array<{ name: string; c: bigint }>);
+  const avatarTotal = mergedAvatarRows.reduce((s, r) => s + Number(r.c), 0);
+  const avatarDistribution = mergedAvatarRows.map((r, i) => ({
     name: r.name,
     value: avatarTotal > 0 ? Math.round((Number(r.c) / avatarTotal) * 100) : 0,
     count: Number(r.c),
@@ -528,10 +546,14 @@ export async function getDashboardStats(
   const revFromTx = (
     rows: Array<{ label: string; revenue: bigint }>
   ): { month: string; revenue: number }[] =>
-    rows.map((r) => ({
-      month: r.label,
-      revenue: Math.max(0, Math.round(Number(r.revenue) / 100)),
-    }));
+    rows.map((r) => {
+      const raw = Number(r.revenue);
+      const cents = Number.isFinite(raw) ? raw : 0;
+      return {
+        month: String(r.label ?? '—'),
+        revenue: Math.max(0, Math.round(cents / 100)),
+      };
+    });
 
   const revMonth = revFromTx(revenueMonthly as Array<{ label: string; revenue: bigint }>);
   const revWeek = revFromTx(revenueWeekly as Array<{ label: string; revenue: bigint }>);
@@ -912,6 +934,22 @@ export async function createUserByAdmin(input: CreateAdminUserInput, webBaseUrl:
         },
       });
     }
+    // createProfile() always seeds trial minutes (30). Align wallet with chosen paid plan.
+    const planCredits =
+      subscription === 'core'
+        ? PLAN_LIMITS.core.credits
+        : subscription === 'pro'
+          ? PLAN_LIMITS.pro.credits
+          : PLAN_LIMITS.trial.credits;
+    await prisma.profiles.update({
+      where: { id: userId },
+      data: {
+        credits: planCredits,
+        credits_seconds: planCredits * 60,
+        signup_type: 'plan',
+      },
+    });
+    userService.invalidateUserProfileCache(userId);
   }
 
   usersCache.clear();
@@ -1041,13 +1079,31 @@ function extractSegmentRules(criteria: unknown): SegmentRule[] {
   return [];
 }
 
-/** End-users only (exclude admin roles). */
+/** DB may store either canonical roles (`super_admin`) or legacy short keys (`super`) from older clients. */
+const STAFF_ROLES = [
+  'super_admin',
+  'org_admin',
+  'team_admin',
+  'super',
+  'org',
+  'team',
+] as const;
+
+/** End-users only (exclude admin / staff roles). */
 function endUserWhere(): Prisma.profilesWhereInput {
   return {
     OR: [
       { role: null },
-      { role: { notIn: ['super_admin', 'org_admin', 'team_admin'] } },
+      { role: { notIn: [...STAFF_ROLES] } },
     ],
+  };
+}
+
+/** Paid subscription plans (monthly MRR-style), excluding trial. */
+function paidSubscriptionSome(): Prisma.subscriptionsWhereInput {
+  return {
+    status: { in: ['active', 'trialing'] },
+    plan_type: { in: ['core', 'pro'] },
   };
 }
 
@@ -1096,38 +1152,37 @@ export async function getUserSegmentationDashboard() {
     orderBy: { created_at: 'desc' },
   });
 
-  const [totalEndUsers, premiumUsers, sessionAgg, engagementBucketsRaw] = await Promise.all([
-    prisma.profiles.count({ where: endUserWhere() }),
-    prisma.profiles.count({
-      where: {
-        AND: [
-          endUserWhere(),
-          {
-            subscriptions: {
-              some: {
-                status: 'active',
-                plan_type: { not: 'trial' },
+  const [totalProfiles, endUserProfileCount, premiumUsers, sessionAgg, engagementBucketsRaw] =
+    await Promise.all([
+      prisma.profiles.count(),
+      prisma.profiles.count({ where: endUserWhere() }),
+      prisma.profiles.count({
+        where: {
+          AND: [
+            endUserWhere(),
+            {
+              subscriptions: {
+                some: paidSubscriptionSome(),
               },
             },
-          },
-        ],
-      },
-    }),
-    prisma.app_sessions.aggregate({
-      _avg: { duration_minutes: true },
-      where: {
-        profiles: endUserWhere(),
-        duration_minutes: { not: null },
-      },
-    }),
-    prisma.$queryRaw<Array<{ id: string; c: bigint }>>`
+          ],
+        },
+      }),
+      prisma.app_sessions.aggregate({
+        _avg: { duration_minutes: true },
+        where: {
+          profiles: endUserWhere(),
+          duration_minutes: { not: null },
+        },
+      }),
+      prisma.$queryRaw<Array<{ id: string; c: bigint }>>`
       SELECT p.id, COUNT(s.id)::bigint AS c
       FROM profiles p
       LEFT JOIN app_sessions s ON s.user_id = p.id AND s.started_at >= ${thirtyDaysAgo}
-      WHERE COALESCE(p.role, 'user') NOT IN ('super_admin', 'org_admin', 'team_admin')
+      WHERE COALESCE(p.role, 'user') NOT IN ('super_admin', 'org_admin', 'team_admin', 'super', 'org', 'team')
       GROUP BY p.id
     `,
-  ]);
+    ]);
 
   const buckets = [0, 0, 0, 0, 0];
   const labels = [
@@ -1152,7 +1207,9 @@ export async function getUserSegmentationDashboard() {
 
   const usersWithSessions30d = buckets.slice(1).reduce((a, b) => a + b, 0);
   const avgEngagementPct =
-    totalEndUsers > 0 ? Math.round((usersWithSessions30d / totalEndUsers) * 100) : 0;
+    endUserProfileCount > 0
+      ? Math.round((usersWithSessions30d / endUserProfileCount) * 100)
+      : 0;
 
   const enrichedSegments = await Promise.all(
     segments.map(async (seg) => {
@@ -1179,10 +1236,7 @@ export async function getUserSegmentationDashboard() {
               where,
               {
                 subscriptions: {
-                  some: {
-                    status: 'active',
-                    plan_type: { not: 'trial' },
-                  },
+                  some: paidSubscriptionSome(),
                 },
               },
             ],
@@ -1215,7 +1269,8 @@ export async function getUserSegmentationDashboard() {
   const payload = {
     segments: enrichedSegments,
     platform: {
-      total_end_users: totalEndUsers,
+      /** All profiles — matches Super Admin “Total Users” (not only non-staff). */
+      total_end_users: totalProfiles,
       total_segments: segments.length,
       avg_engagement_pct: avgEngagementPct,
       premium_users: premiumUsers,
@@ -2452,7 +2507,7 @@ export async function getNudgeTemplates() {
 }
 
 export async function createNudgeTemplate(data: any, createdBy?: string) {
-  return prisma.nudge_templates.create({
+  const row = await prisma.nudge_templates.create({
     data: {
       name: data.name,
       category: data.category,
@@ -2467,10 +2522,12 @@ export async function createNudgeTemplate(data: any, createdBy?: string) {
       last_used: data.last_used ?? null,
     },
   });
+  clearNudgeTemplatesCache();
+  return row;
 }
 
 export async function updateNudgeTemplate(id: string, data: any) {
-  return prisma.nudge_templates.update({
+  const row = await prisma.nudge_templates.update({
     where: { id },
     data: {
       name: data.name,
@@ -2485,12 +2542,16 @@ export async function updateNudgeTemplate(id: string, data: any) {
       last_used: data.last_used,
     },
   });
+  clearNudgeTemplatesCache();
+  return row;
 }
 
 export async function deleteNudgeTemplate(id: string) {
-  return prisma.nudge_templates.delete({
+  const row = await prisma.nudge_templates.delete({
     where: { id },
   });
+  clearNudgeTemplatesCache();
+  return row;
 }
 
 // 3. Email Templates
@@ -2765,6 +2826,22 @@ function pctChange(cur: number, prev: number): number {
   return Math.round(((cur - prev) / prev) * 1000) / 10;
 }
 
+/** Platform-wide session completion counts per tool (matches user progress query: completed + duration > 0). */
+export async function getWellnessToolUsageAggregates() {
+  const rows = await prisma.user_wellness_progress.groupBy({
+    by: ['tool_id'],
+    where: {
+      completed_at: { not: null },
+      duration_spent: { gt: 0 },
+    },
+    _count: { _all: true },
+  });
+  return rows.map((r) => ({
+    toolId: r.tool_id,
+    sessionsCompleted: r._count._all,
+  }));
+}
+
 /** Aggregates wellness session completions, journal volume, and tool/category breakdowns for admin analytics. */
 export async function getContentPerformanceAnalytics(rangeDays: 7 | 30 | 90) {
   const ms = rangeDays * 24 * 60 * 60 * 1000;
@@ -2935,6 +3012,13 @@ export async function getContentPerformanceAnalytics(rangeDays: 7 | 30 | 90) {
   return {
     rangeDays,
     generatedAt: new Date().toISOString(),
+    /** Raw inputs so admin UI can explain empty charts vs. API errors. */
+    counts: {
+      wellnessCompletions: totalCompletions,
+      journalEntries: journalCount,
+      catalogTools: totalTools,
+      sessionsWithRating: ratings.length,
+    },
     summary: {
       totalViews: activityScore,
       totalEngagement: positiveRatings + Math.min(journalCount, Math.floor(activityScore * 0.2)),
@@ -3053,27 +3137,35 @@ export async function getActivityLogs(page: number = 1, limit: number = 25) {
   return result;
 }
 
+/** Max rows per request for admin session list (Conversation Transcripts loads in pages up to this size). */
+const SESSION_RECORDINGS_MAX_PAGE_SIZE = 5000;
+
 // 9. Session Recordings / History
 export async function getSessionRecordings(page: number = 1, limit: number = 20) {
   const skip = Math.max(0, (page - 1) * limit);
-  const take = Math.min(Math.max(limit, 1), 100);
-  return prisma.app_sessions.findMany({
-    where: {
-      started_at: { not: null },
-      ended_at: { not: null }
-    },
-    orderBy: { created_at: 'desc' },
-    skip,
-    take,
-    include: {
-      profiles: {
-        select: { full_name: true, email: true }
+  const take = Math.min(Math.max(limit, 1), SESSION_RECORDINGS_MAX_PAGE_SIZE);
+  const where = {
+    started_at: { not: null },
+    ended_at: { not: null },
+  };
+  const [items, total] = await prisma.$transaction([
+    prisma.app_sessions.findMany({
+      where,
+      orderBy: { created_at: 'desc' },
+      skip,
+      take,
+      include: {
+        profiles: {
+          select: { full_name: true, email: true },
+        },
+        _count: {
+          select: { session_messages: true },
+        },
       },
-      _count: {
-        select: { session_messages: true }
-      }
-    }
-  });
+    }),
+    prisma.app_sessions.count({ where }),
+  ]);
+  return { items, total };
 }
 //
 export async function getSessionRecordingTranscript(sessionId: string) {
@@ -3112,14 +3204,22 @@ export async function getAdminSystemHealth() {
   } catch {
     databaseConnected = false;
   }
-  const [activeSessions, errors24h] = await Promise.all([
-    prisma.app_sessions.count({
+  let activeSessions = 0;
+  try {
+    activeSessions = await prisma.app_sessions.count({
       where: { ended_at: null, started_at: { not: null } },
-    }),
-    prisma.error_logs.count({
+    });
+  } catch {
+    activeSessions = 0;
+  }
+  let errors24h = 0;
+  try {
+    errors24h = await prisma.error_logs.count({
       where: { created_at: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
-    }),
-  ]);
+    });
+  } catch {
+    errors24h = 0;
+  }
   return {
     timestamp: new Date().toISOString(),
     uptimeSeconds: uptime,

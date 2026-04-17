@@ -871,6 +871,27 @@ export const api = {
       return handleResponse(res, 'Failed to create wellness challenge');
     },
 
+    async updateChallenge(
+      id: string,
+      data: {
+        title?: string;
+        description?: string | null;
+        category?: string | null;
+        start_date?: string;
+        end_date?: string;
+        reward_points?: number | null;
+        goal_criteria?: unknown | null;
+      }
+    ) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/wellness/challenges/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to update wellness challenge');
+    },
+
     async create(data: any) {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/wellness`, {
@@ -1740,6 +1761,17 @@ export const api = {
         cache: 'no-store',
       });
       return handleResponse(res, 'Failed to fetch content performance');
+    },
+
+    /** Platform-wide completion counts per wellness tool id (admin). */
+    async getWellnessToolUsage() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/wellness-tools/usage`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch wellness tool usage');
     },
 
     // Community

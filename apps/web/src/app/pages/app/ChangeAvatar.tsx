@@ -4,7 +4,8 @@ import { AppLayout } from '@/app/components/AppLayout';
 import { Brain, CheckCircle, Star, Users, Volume2, Heart, ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
 import { AnimatedCard } from '@/app/components/AnimatedCard';
 import { Link } from 'react-router-dom';
-import { companionCardImageUrl } from '@/lib/avatar/companionModelUrl';
+import { resolveCompanionPortraitUrl } from '@/lib/avatar/companionModelUrl';
+import { findLobbyAvatar, isPlaceholderAvatarName, LOBBY_AVATARS } from '@/lib/avatar/lobbyAvatars';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -27,99 +28,152 @@ interface AIAvatar {
   totalUsers: number;
 }
 
+function mapApiRowToChangeAvatar(row: Record<string, unknown>): AIAvatar {
+  const name = String(row.name ?? "");
+  const lobby = findLobbyAvatar(name);
+  const rawUrl = typeof row.image_url === "string" ? row.image_url.trim() : "";
+  const imageUrl =
+    lobby?.cardImage ??
+    (rawUrl && /^https?:\/\//i.test(rawUrl) ? rawUrl : resolveCompanionPortraitUrl(name));
+  const image =
+    rawUrl && !/^https?:\/\//i.test(rawUrl)
+      ? rawUrl
+      : lobby?.emoji ?? "👤";
+  const specialties = Array.isArray(row.specialties) ? (row.specialties as string[]) : [];
+  return {
+    id: String(row.id ?? name),
+    name,
+    gender: String(row.gender ?? ""),
+    ageRange: String(row.age_range ?? ""),
+    personality: String(row.personality ?? ""),
+    specialty: specialties,
+    description: String(row.description ?? ""),
+    image,
+    imageUrl,
+    voiceType: String(row.voice_type ?? ""),
+    accentType: String(row.accent_type ?? ""),
+    rating: Number(row.rating) || 0,
+    totalUsers: typeof row.unique_users === "number" ? row.unique_users : 0,
+  };
+}
+
 export function ChangeAvatar() {
   const { profile, refreshProfile } = useAuth();
-  const [currentAvatarId, setCurrentAvatarId] = useState("maya");
-  const [selectedAvatarId, setSelectedAvatarId] = useState("maya");
+  const [aiAvatars, setAiAvatars] = useState<AIAvatar[]>([]);
+  const [avatarsLoading, setAvatarsLoading] = useState(true);
+  const [currentAvatarId, setCurrentAvatarId] = useState("");
+  const [selectedAvatarId, setSelectedAvatarId] = useState("");
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [switchHistory, setSwitchHistory] = useState([
-    { date: "2026-01-15", from: "Alex Rivera", to: "Maya Chen" },
-    { date: "2025-12-20", from: "Jordan Taylor", to: "Alex Rivera" }
-  ]);
-
-  const aiAvatars: AIAvatar[] = [
-    {
-      id: "maya",
-      name: "Maya Chen",
-      gender: "Female",
-      ageRange: "35-40",
-      personality: "Warm, Empathetic, Supportive",
-      specialty: ["Anxiety", "Depression", "Stress Management"],
-      description: "A compassionate AI companion with a warm presence. Maya specializes in helping with anxiety, stress, and building emotional resilience through mindfulness.",
-      image: "👩‍💼",
-      imageUrl: companionCardImageUrl("maya chen.png"),
-      voiceType: "Warm & Soothing",
-      accentType: "Neutral American",
-      rating: 4.9,
-      totalUsers: 2456
-    },
-    {
-      id: "alex",
-      name: "Alex Rivera",
-      gender: "Male",
-      ageRange: "30-35",
-      personality: "Calm, Patient, Understanding",
-      specialty: ["PTSD", "Trauma", "Life Transitions"],
-      description: "A gentle and patient listener who creates a safe space for healing. Alex focuses on trauma recovery and navigating life's big changes.",
-      image: "👨‍💼",
-      imageUrl: companionCardImageUrl("Alex.png"),
-      voiceType: "Deep & Calming",
-      accentType: "Neutral American",
-      rating: 4.8,
-      totalUsers: 1893
-    },
-    {
-      id: "jordan",
-      name: "Jordan Taylor",
-      gender: "Non-binary",
-      ageRange: "28-32",
-      personality: "Energetic, Positive, Supportive",
-      specialty: ["Self-Esteem", "Relationships", "Personal Growth"],
-      description: "An uplifting companion who helps you discover your strengths. Jordan specializes in building confidence and personal development.",
-      image: "🧑‍💼",
-      imageUrl: companionCardImageUrl("jordan Taylor.png"),
-      voiceType: "Bright & Encouraging",
-      accentType: "Neutral American",
-      rating: 4.7,
-      totalUsers: 1654
-    },
-    {
-      id: "sarah",
-      name: "Sarah Mitchell",
-      gender: "Female",
-      ageRange: "45-50",
-      personality: "Wise, Grounded, Nurturing",
-      specialty: ["Grief", "Family Issues", "Chronic Illness"],
-      description: "A wise and nurturing presence with deep empathy. Sarah brings years of life experience in supporting people through challenging times.",
-      image: "👩‍🦳",
-      imageUrl: companionCardImageUrl("Sara Mitchell.png"),
-      voiceType: "Gentle & Maternal",
-      accentType: "British",
-      rating: 4.9,
-      totalUsers: 2103
-    }
-  ];
-
-  const avatarIdByName = useMemo<Record<string, string>>(
-    () => ({
-      "maya chen": "maya",
-      "alex rivera": "alex",
-      "jordan taylor": "jordan",
-      "sarah mitchell": "sarah",
-    }),
-    []
-  );
+  const [switchHistory, setSwitchHistory] = useState<{ date: string; from: string; to: string }[]>([]);
 
   useEffect(() => {
-    const selectedFromProfile = (profile?.selected_avatar || "Maya Chen").trim().toLowerCase();
-    const nextAvatarId = avatarIdByName[selectedFromProfile] || "maya";
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await api.aiAvatars.getAll();
+        if (!Array.isArray(rows) || rows.length === 0) {
+          const fallback = LOBBY_AVATARS.map((lobby) => ({
+            id: lobby.id,
+            name: lobby.name,
+            gender: "",
+            ageRange: "",
+            personality: "",
+            specialty: [] as string[],
+            description: lobby.description,
+            image: lobby.emoji,
+            imageUrl: lobby.cardImage ?? resolveCompanionPortraitUrl(lobby.name),
+            voiceType: "",
+            accentType: "",
+            rating: 0,
+            totalUsers: 0,
+          }));
+          if (!cancelled) setAiAvatars(fallback);
+          return;
+        }
+        const mapped = rows
+          .filter(
+            (r: Record<string, unknown>) =>
+              r.is_active !== false && typeof r.name === "string" && !isPlaceholderAvatarName(String(r.name))
+          )
+          .map((r: Record<string, unknown>) => mapApiRowToChangeAvatar(r));
+        if (!cancelled) {
+          setAiAvatars(mapped.length > 0 ? mapped : LOBBY_AVATARS.map((lobby) => ({
+            id: lobby.id,
+            name: lobby.name,
+            gender: "",
+            ageRange: "",
+            personality: "",
+            specialty: [] as string[],
+            description: lobby.description,
+            image: lobby.emoji,
+            imageUrl: lobby.cardImage ?? resolveCompanionPortraitUrl(lobby.name),
+            voiceType: "",
+            accentType: "",
+            rating: 0,
+            totalUsers: 0,
+          })));
+        }
+      } catch {
+        if (!cancelled) {
+          setAiAvatars(
+            LOBBY_AVATARS.map((lobby) => ({
+              id: lobby.id,
+              name: lobby.name,
+              gender: "",
+              ageRange: "",
+              personality: "",
+              specialty: [] as string[],
+              description: lobby.description,
+              image: lobby.emoji,
+              imageUrl: lobby.cardImage ?? resolveCompanionPortraitUrl(lobby.name),
+              voiceType: "",
+              accentType: "",
+              rating: 0,
+              totalUsers: 0,
+            }))
+          );
+        }
+      } finally {
+        if (!cancelled) setAvatarsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const avatarIdByName = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const a of aiAvatars) {
+      m[a.name.trim().toLowerCase()] = a.id;
+    }
+    return m;
+  }, [aiAvatars]);
+
+  useEffect(() => {
+    if (aiAvatars.length === 0) return;
+    const selectedFromProfile = (profile?.selected_avatar || aiAvatars[0]?.name || "").trim().toLowerCase();
+    const nextAvatarId = avatarIdByName[selectedFromProfile] || aiAvatars[0].id;
     setCurrentAvatarId(nextAvatarId);
     setSelectedAvatarId(nextAvatarId);
-  }, [profile?.selected_avatar, avatarIdByName]);
+  }, [profile?.selected_avatar, avatarIdByName, aiAvatars]);
 
-  const currentAvatar = aiAvatars.find(a => a.id === currentAvatarId);
-  const selectedAvatar = aiAvatars.find(a => a.id === selectedAvatarId);
+  const currentAvatar = aiAvatars.find((a) => a.id === currentAvatarId);
+  const selectedAvatar = aiAvatars.find((a) => a.id === selectedAvatarId);
+
+  if (avatarsLoading || aiAvatars.length === 0) {
+    return (
+      <AppLayout>
+        <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-gray-600 dark:text-slate-400">
+            <RefreshCw className="w-10 h-10 animate-spin text-purple-500" />
+            <p>Loading companions…</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   const handleConfirmChange = async () => {
     if (!selectedAvatar || isSaving) return;

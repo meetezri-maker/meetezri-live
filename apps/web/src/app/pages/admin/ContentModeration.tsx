@@ -277,7 +277,10 @@ export function ContentModeration() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Content Moderation</h1>
-              <p className="text-gray-600 mt-1">Flagged community posts and crisis events (live data)</p>
+              <p className="text-gray-600 mt-1">
+                Live data: community posts with <code className="text-xs bg-gray-100 px-1 rounded">flag_count &gt; 0</code>{" "}
+                or locks, plus crisis events. Empty queue means nothing matched those rules—not demo data.
+              </p>
             </div>
             <button
               type="button"
@@ -530,8 +533,26 @@ export function ContentModeration() {
 
           {!loading && filteredItems.length === 0 && (
             <div className="text-center py-12">
-              <CheckCircle className="w-16 h-16 text-green-300 mx-auto mb-4" />
-              <p className="text-gray-600">No items match your filters</p>
+              {items.length === 0 ? (
+                <>
+                  <Flag className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-900 font-medium mb-2">Nothing in the moderation queue</p>
+                  <p className="text-sm text-gray-600 max-w-lg mx-auto">
+                    There are no flagged or locked community posts and no crisis events returned by the API. This is
+                    expected on a quiet or new environment.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-16 h-16 text-green-300 mx-auto mb-4" />
+                  <p className="text-gray-600">No items match your filters</p>
+                  {filter === "pending" && (
+                    <p className="text-sm text-gray-500 mt-2 max-w-md mx-auto">
+                      Try <strong>All Status</strong> to include resolved crisis events and cleared posts.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           )}
         </motion.div>

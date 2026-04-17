@@ -7,7 +7,7 @@ import {
   Trash2,
   Copy,
   Eye,
-  Filter,
+  Upload,
   Bell,
   MessageSquare,
   Heart,
@@ -24,7 +24,7 @@ import {
   Send,
   AlertCircle,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -63,7 +63,8 @@ export function NudgeTemplates() {
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const importInputRef = useRef<HTMLInputElement>(null);
+  /** Prevents double-submit before React re-renders `isCreating`. */
+  const createInFlightRef = useRef(false);
 
   const mapApiTemplate = (t: any): NudgeTemplate => {
     const baseIcon = (() => {
@@ -108,12 +109,20 @@ export function NudgeTemplates() {
       icon: baseIcon,
       iconColor,
       usage: typeof t.usage === "number" ? t.usage : 0,
-      rating:
-        typeof t.rating === "number"
-          ? t.rating
-          : typeof t.rating === "string"
-          ? parseFloat(t.rating)
-          : 0,
+      rating: (() => {
+        const r = t.rating;
+        if (r == null) return 0;
+        if (typeof r === "number") return r;
+        if (typeof r === "string") return parseFloat(r) || 0;
+        if (typeof r === "object" && r !== null && "toNumber" in r && typeof (r as { toNumber: () => number }).toNumber === "function") {
+          try {
+            return (r as { toNumber: () => number }).toNumber();
+          } catch {
+            return parseFloat(String(r)) || 0;
+          }
+        }
+        return parseFloat(String(r)) || 0;
+      })(),
       status: (t.status as NudgeTemplate["status"]) || "active",
       createdBy: t.profiles?.full_name || "System",
       lastUsed,
@@ -129,16 +138,20 @@ export function NudgeTemplates() {
           ? data.map((t: any) => mapApiTemplate(t))
           : [];
         setTemplates(mapped);
+      } catch (e: unknown) {
+        console.error(e);
+        toast.error(e instanceof Error ? e.message : "Failed to load nudge templates");
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadTemplates();
+    void loadTemplates();
   }, []);
 
-  const createNewTemplate = async () => {
-    if (isCreating) return;
+  const createNewTemplate = useCallback(async () => {
+    if (createInFlightRef.current) return;
+    createInFlightRef.current = true;
     setIsCreating(true);
     try {
       const base = {
@@ -151,14 +164,18 @@ export function NudgeTemplates() {
         status: "draft" as const,
       };
       const created = await api.admin.createNudgeTemplate(base);
-      setTemplates((prev) => [mapApiTemplate(created), ...prev]);
-      toast.success("Template created");
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to create template");
+      const mapped = mapApiTemplate(created);
+      setTemplates((prev) => [mapped, ...prev]);
+      setEditModalTemplate(mapped);
+      toast.success("Template created — customize in the editor");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to create template";
+      toast.error(msg);
     } finally {
+      createInFlightRef.current = false;
       setIsCreating(false);
     }
-  };
+  }, []);
 
   const handleImportTemplates = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -167,24 +184,28 @@ export function NudgeTemplates() {
     setIsImporting(true);
     try {
       const text = await file.text();
-      const parsed = JSON.parse(text);
-      const items: any[] = Array.isArray(parsed)
+      const parsed = JSON.parse(text) as unknown;
+      const items: unknown[] = Array.isArray(parsed)
         ? parsed
-        : parsed && Array.isArray(parsed.templates)
-          ? parsed.templates
+        : parsed &&
+            typeof parsed === "object" &&
+            parsed !== null &&
+            Array.isArray((parsed as { templates?: unknown[] }).templates)
+          ? (parsed as { templates: unknown[] }).templates
           : [parsed];
       let count = 0;
-      for (const item of items) {
-        const name = String(item.name || item.title || "").trim();
-        const message = String(item.message || "").trim();
+      for (const raw of items) {
+        const item = raw as Record<string, unknown>;
+        const name = String(item.name ?? item.title ?? "").trim();
+        const message = String(item.message ?? "").trim();
         if (!name || !message) continue;
         const created = await api.admin.createNudgeTemplate({
           name,
-          category: String(item.category || "Engagement"),
+          category: String(item.category ?? "Engagement"),
           type: (item.type as NudgeTemplate["type"]) || "push",
-          title: String(item.title || name),
+          title: String(item.title ?? name),
           message,
-          variables: Array.isArray(item.variables) ? item.variables : [],
+          variables: Array.isArray(item.variables) ? (item.variables as string[]) : [],
           status: (item.status as NudgeTemplate["status"]) || "draft",
         });
         setTemplates((prev) => [mapApiTemplate(created), ...prev]);
@@ -193,10 +214,12 @@ export function NudgeTemplates() {
       if (count > 0) {
         toast.success(`Imported ${count} template(s)`);
       } else {
-        toast.error("No valid templates in file (need name/title and message)");
+        toast.error(
+          "No valid templates in file. Each entry needs name (or title) and message. JSON can be an array or { \"templates\": [...] }."
+        );
       }
-    } catch (err: any) {
-      toast.error(err?.message || "Import failed");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Import failed — check JSON format");
     } finally {
       setIsImporting(false);
     }
@@ -281,31 +304,30 @@ export function NudgeTemplates() {
           </div>
 
           <div className="flex items-center gap-3">
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".json"
-              className="hidden"
-              onChange={handleImportTemplates}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-500"
-              disabled={isImporting}
-              onClick={() => importInputRef.current?.click()}
+            <label
+              className={`inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 ${
+                isImporting ? "pointer-events-none opacity-60" : ""
+              }`}
             >
-              <Filter className="w-4 h-4 mr-2" />
+              <input
+                type="file"
+                accept=".json,application/json"
+                className="sr-only"
+                disabled={isImporting}
+                onChange={(e) => void handleImportTemplates(e)}
+              />
+              <Upload className="h-4 w-4 shrink-0" aria-hidden />
               {isImporting ? "Importing…" : "Import"}
-            </Button>
+            </label>
             <Button
               type="button"
               className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white"
               disabled={isCreating}
-              onClick={createNewTemplate}
+              isLoading={isCreating}
+              onClick={() => void createNewTemplate()}
             >
-              <Plus className="w-4 h-4 mr-2" />
-              {isCreating ? "Creating…" : "Create Template"}
+              {!isCreating && <Plus className="w-4 h-4 mr-2" />}
+              Create Template
             </Button>
           </div>
         </motion.div>
@@ -571,10 +593,11 @@ export function NudgeTemplates() {
                 type="button"
                 className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white"
                 disabled={isCreating}
-                onClick={createNewTemplate}
+                isLoading={isCreating}
+                onClick={() => void createNewTemplate()}
               >
-                <Plus className="w-4 h-4 mr-2" />
-                {isCreating ? "Creating…" : "Create Template"}
+                {!isCreating && <Plus className="w-4 h-4 mr-2" />}
+                Create Template
               </Button>
             </Card>
           </motion.div>

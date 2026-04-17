@@ -17,9 +17,12 @@ import {
   Clock,
   AlertCircle,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import type { RefObject } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
+import { Input } from "@/app/components/ui/input";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -47,6 +50,95 @@ interface Segment {
   name: string;
   count: number;
 }
+
+/** API returns segmentation dashboard `{ segments, platform }`, not a bare array. */
+function parseUserSegmentsPayload(res: unknown): unknown[] {
+  if (Array.isArray(res)) return res;
+  if (res && typeof res === "object") {
+    const o = res as Record<string, unknown>;
+    if (Array.isArray(o.segments)) return o.segments;
+    const data = o.data;
+    if (data && typeof data === "object") {
+      const d = data as Record<string, unknown>;
+      if (Array.isArray(d.segments)) return d.segments;
+    }
+  }
+  return [];
+}
+
+const MESSAGE_MAX = 200;
+
+/** Inserts at cursor when possible; enforces MESSAGE_MAX. */
+function useMessageInserter(
+  message: string,
+  setMessage: (s: string) => void,
+  textareaRef: RefObject<HTMLTextAreaElement | null>
+) {
+  return useCallback(
+    (insert: string) => {
+      if (!insert) return;
+      const el = textareaRef.current;
+      if (!el) {
+        const next = `${message}${insert}`;
+        if (next.length > MESSAGE_MAX) {
+          toast.error(`Message is limited to ${MESSAGE_MAX} characters.`);
+          return;
+        }
+        setMessage(next);
+        return;
+      }
+      const start = el.selectionStart ?? message.length;
+      const end = el.selectionEnd ?? message.length;
+      const before = message.slice(0, start);
+      const after = message.slice(end);
+      const next = before + insert + after;
+      if (next.length > MESSAGE_MAX) {
+        toast.error(`Message is limited to ${MESSAGE_MAX} characters.`);
+        return;
+      }
+      setMessage(next);
+      requestAnimationFrame(() => {
+        el.focus();
+        const pos = start + insert.length;
+        el.setSelectionRange(pos, pos);
+      });
+    },
+    [message, setMessage, textareaRef]
+  );
+}
+
+const QUICK_EMOJIS = [
+  "😀",
+  "😊",
+  "😂",
+  "🥰",
+  "😍",
+  "🤗",
+  "👍",
+  "🙏",
+  "👏",
+  "🎉",
+  "✨",
+  "🔥",
+  "❤️",
+  "💙",
+  "💪",
+  "🌟",
+  "☀️",
+  "🌈",
+  "✅",
+  "📌",
+  "💬",
+  "🔔",
+  "🙌",
+  "🙂",
+];
+
+const BUILTIN_SEGMENTS: { id: string; name: string; audience: "active" | "premium" | "trial" }[] = [
+  { id: "__builtin_active", name: "Active users (sessions in last 30 days)", audience: "active" },
+  { id: "__builtin_premium", name: "Premium subscribers", audience: "premium" },
+  { id: "__builtin_trial", name: "Trial users", audience: "trial" },
+];
 
 interface AudienceCounts {
   all: number;
@@ -82,9 +174,39 @@ export function ManualNotifications() {
     trial: 0,
   });
 
+  const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const attachFileInputRef = useRef<HTMLInputElement>(null);
+  const imageFileInputRef = useRef<HTMLInputElement>(null);
+  const [emojiPopoverOpen, setEmojiPopoverOpen] = useState(false);
+  const [imagePopoverOpen, setImagePopoverOpen] = useState(false);
+  const [imageUrlDraft, setImageUrlDraft] = useState("");
+
+  const insertMessage = useMessageInserter(message, setMessage, messageTextareaRef);
+
+  const segmentChoices = useMemo((): Segment[] => {
+    const quick: Segment[] = BUILTIN_SEGMENTS.map((b) => ({
+      id: b.id,
+      name: b.name,
+      count:
+        b.audience === "active"
+          ? audienceCounts.active
+          : b.audience === "premium"
+            ? audienceCounts.premium
+            : audienceCounts.trial,
+    }));
+    return [...quick, ...segments];
+  }, [audienceCounts.active, audienceCounts.premium, audienceCounts.trial, segments]);
+
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (audienceType !== "segment" || segmentChoices.length === 0) return;
+    setSelectedSegment((prev) =>
+      segmentChoices.some((s) => s.id === prev) ? prev : segmentChoices[0].id
+    );
+  }, [audienceType, segmentChoices]);
 
   const fetchData = async () => {
     try {
@@ -97,21 +219,17 @@ export function ManualNotifications() {
           api.admin.getUsers(),
         ]);
 
-      const segmentsData = Array.isArray(segmentsRes)
-        ? segmentsRes
-        : (segmentsRes as { segments?: unknown[] }).segments ?? [];
+      const segmentsData = parseUserSegmentsPayload(segmentsRes);
 
       setSegments(
-        segmentsData.map((s: any) => ({
-          id: s.id,
-          name: s.name,
-          count: s.user_count ?? 0,
-        }))
+        segmentsData
+          .map((s: any) => ({
+            id: String(s?.id ?? "").trim(),
+            name: String(s?.name ?? "Untitled segment").trim() || "Untitled segment",
+            count: Number(s?.user_count ?? 0),
+          }))
+          .filter((s) => s.id.length > 0)
       );
-
-      if (segmentsData.length > 0) {
-        setSelectedSegment((segmentsData[0] as { id: string }).id);
-      }
 
       setAudienceCounts({
         all: countsData.all || 0,
@@ -166,7 +284,7 @@ export function ManualNotifications() {
     }
   };
 
-  const selectedSegmentData = segments.find((s) => s.id === selectedSegment);
+  const selectedSegmentData = segmentChoices.find((s) => s.id === selectedSegment);
 
   const getChannelIcon = (ch: string) => {
     switch (ch) {
@@ -204,6 +322,11 @@ export function ManualNotifications() {
       return;
     }
 
+    if (audienceType === "segment" && !selectedSegment) {
+      toast.error("Please select a segment or audience");
+      return;
+    }
+
     if (scheduleType === "scheduled" && (!scheduledDate || !scheduledTime)) {
       toast.error("Please select date and time for scheduled notifications");
       return;
@@ -217,6 +340,8 @@ export function ManualNotifications() {
         scheduledFor = new Date(`${scheduledDate}T${scheduledTime}`).toISOString();
       }
 
+      const builtin = BUILTIN_SEGMENTS.find((b) => b.id === selectedSegment);
+
       await api.admin.createManualNotification({
         title,
         message,
@@ -224,10 +349,13 @@ export function ManualNotifications() {
         target_audience:
           audienceType === "all"
             ? "all"
-            : audienceType === "segment"
-            ? "segment"
-            : "specific",
-        segment_id: audienceType === "segment" ? selectedSegment : undefined,
+            : audienceType === "specific"
+              ? "specific"
+              : builtin
+                ? builtin.audience
+                : "segment",
+        segment_id:
+          audienceType === "segment" && !builtin ? selectedSegment : undefined,
         userIds: audienceType === "specific" ? specificUsers : undefined,
         scheduled_for: scheduledFor,
       });
@@ -365,14 +493,44 @@ export function ManualNotifications() {
                     <select
                       value={selectedSegment}
                       onChange={(e) => setSelectedSegment(e.target.value)}
-                      className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      disabled={isLoading || segmentChoices.length === 0}
+                      className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-60"
                     >
-                      {segments.map((seg) => (
-                        <option key={seg.id} value={seg.id} className="text-gray-900">
-                          {seg.name} ({seg.count.toLocaleString()} users)
+                      {segmentChoices.length === 0 ? (
+                        <option value="">
+                          {isLoading ? "Loading…" : "No audiences available"}
                         </option>
-                      ))}
+                      ) : (
+                        <>
+                          <optgroup label="Quick audiences">
+                            {BUILTIN_SEGMENTS.map((b) => {
+                              const row = segmentChoices.find((s) => s.id === b.id);
+                              if (!row) return null;
+                              return (
+                                <option key={b.id} value={b.id}>
+                                  {row.name} ({row.count.toLocaleString()} users)
+                                </option>
+                              );
+                            })}
+                          </optgroup>
+                          {segments.length > 0 ? (
+                            <optgroup label="Saved segments (User Segmentation)">
+                              {segments.map((seg) => (
+                                <option key={seg.id} value={seg.id}>
+                                  {seg.name} ({seg.count.toLocaleString()} users)
+                                </option>
+                              ))}
+                            </optgroup>
+                          ) : null}
+                        </>
+                      )}
                     </select>
+                    {!isLoading && segments.length === 0 && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        No custom segments yet. Create rule-based segments under{" "}
+                        <span className="font-medium text-gray-700">User Segmentation</span> to target them here.
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -490,6 +648,7 @@ export function ManualNotifications() {
                   <input
                     type="text"
                     value={title}
+                    maxLength={60}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="Enter notification title..."
                     className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -505,47 +664,162 @@ export function ManualNotifications() {
                     Message *
                   </label>
                   <textarea
+                    ref={messageTextareaRef}
                     value={message}
+                    maxLength={MESSAGE_MAX}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Enter your message..."
                     rows={6}
                     className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    {message.length} / 200 characters
+                    {message.length} / {MESSAGE_MAX} characters
                   </p>
                 </div>
 
+                <input
+                  ref={attachFileInputRef}
+                  type="file"
+                  className="hidden"
+                  tabIndex={-1}
+                  aria-hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!f) return;
+                    insertMessage(`📎 ${f.name} `);
+                  }}
+                />
+                <input
+                  ref={imageFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  tabIndex={-1}
+                  aria-hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!f) return;
+                    insertMessage(`🖼 ${f.name} `);
+                    setImagePopoverOpen(false);
+                  }}
+                />
+
                 {/* Toolbar */}
-                <div className="flex items-center gap-2 mb-4">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
                   <Button
                     size="sm"
                     variant="ghost"
                     type="button"
                     className="text-gray-600 hover:text-gray-900"
-                    onClick={() => toast.info("File attachments are not supported here—paste a link in the message instead.")}
+                    title="Insert file name"
+                    onClick={() => attachFileInputRef.current?.click()}
                   >
                     <Paperclip className="w-4 h-4" />
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    type="button"
-                    className="text-gray-600 hover:text-gray-900"
-                    onClick={() => toast.info("Inline images are not supported in this composer—use links or HTML email templates.")}
-                  >
-                    <ImageIcon className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    type="button"
-                    className="text-gray-600 hover:text-gray-900"
-                    onClick={() => toast.info("Emoji picker is not available in this editor.")}
-                  >
-                    <Smile className="w-4 h-4" />
-                  </Button>
+
+                  <Popover open={imagePopoverOpen} onOpenChange={setImagePopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        type="button"
+                        className="text-gray-600 hover:text-gray-900"
+                        title="Image URL or file name"
+                      >
+                        <ImageIcon className="w-4 h-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 sm:w-96" align="start">
+                      <p className="text-sm font-medium text-gray-900 mb-2">Add image to message</p>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Notifications are plain text. Paste a public image URL, or insert a file name as a reminder to
+                        add a link elsewhere.
+                      </p>
+                      <div className="flex gap-2 mb-3">
+                        <Input
+                          type="url"
+                          placeholder="https://…"
+                          value={imageUrlDraft}
+                          onChange={(e) => setImageUrlDraft(e.target.value)}
+                          className="flex-1"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const u = imageUrlDraft.trim();
+                              if (!u) return;
+                              insertMessage(`${u} `);
+                              setImageUrlDraft("");
+                              setImagePopoverOpen(false);
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            const u = imageUrlDraft.trim();
+                            if (!u) {
+                              toast.error("Enter a URL or choose a file.");
+                              return;
+                            }
+                            insertMessage(`${u} `);
+                            setImageUrlDraft("");
+                            setImagePopoverOpen(false);
+                          }}
+                        >
+                          Insert
+                        </Button>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => imageFileInputRef.current?.click()}
+                      >
+                        Choose image file (inserts file name only)
+                      </Button>
+                    </PopoverContent>
+                  </Popover>
+
+                  <Popover open={emojiPopoverOpen} onOpenChange={setEmojiPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        type="button"
+                        className="text-gray-600 hover:text-gray-900"
+                        title="Insert emoji"
+                      >
+                        <Smile className="w-4 h-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72" align="start">
+                      <p className="text-xs text-muted-foreground mb-2">Insert at cursor</p>
+                      <div className="grid grid-cols-6 gap-1">
+                        {QUICK_EMOJIS.map((emo) => (
+                          <button
+                            key={emo}
+                            type="button"
+                            className="text-xl p-2 rounded-md hover:bg-gray-100 transition-colors"
+                            onClick={() => {
+                              insertMessage(emo);
+                              setEmojiPopoverOpen(false);
+                            }}
+                          >
+                            {emo}
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
+                <p className="text-xs text-gray-500 mb-4">
+                  File and image picks insert text into your message (they are not uploaded). Use a hosted URL for
+                  images in email/HTML where needed.
+                </p>
 
                 {/* Preview */}
                 <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">

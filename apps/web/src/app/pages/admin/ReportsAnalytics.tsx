@@ -202,9 +202,13 @@ ${(d?.hourlyActivity || [])
             transition={{ delay: 0.4 }}
           >
             <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6">User growth</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={userData.length ? userData : [{ month: "—", users: 0 }]}>
+              <h2 className="text-xl font-bold mb-2">User growth</h2>
+              <p className="text-sm text-muted-foreground mb-4">Cumulative profiles by period (admin stats series)</p>
+              <ResponsiveContainer width="100%" height={320}>
+                <AreaChart
+                  data={userData.length ? userData : [{ month: "—", users: 0 }]}
+                  margin={{ top: 8, right: 12, left: 8, bottom: 8 }}
+                >
                   <defs>
                     <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#9b87f5" stopOpacity={0.3} />
@@ -212,8 +216,23 @@ ${(d?.hourlyActivity || [])
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="month" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
+                  <XAxis
+                    dataKey="month"
+                    stroke="#6b7280"
+                    tick={{ fontSize: 11 }}
+                    angle={-40}
+                    textAnchor="end"
+                    height={68}
+                    interval="preserveStartEnd"
+                    minTickGap={28}
+                  />
+                  <YAxis
+                    stroke="#6b7280"
+                    tick={{ fontSize: 11 }}
+                    width={48}
+                    domain={[0, "auto"]}
+                    tickMargin={8}
+                  />
                   <Tooltip />
                   <Area
                     type="monotone"
@@ -233,19 +252,41 @@ ${(d?.hourlyActivity || [])
             transition={{ delay: 0.5 }}
           >
             <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6">Sessions by day (current window)</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={engagementData.length ? engagementData : [{ week: "—", engagement: 0 }]}>
+              <h2 className="text-xl font-bold mb-2">Sessions by day (current window)</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Daily session counts — labels angle automatically; hover for exact dates.
+              </p>
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart
+                  data={engagementData.length ? engagementData : [{ week: "—", engagement: 0 }]}
+                  margin={{ top: 8, right: 12, left: 8, bottom: 4 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="week" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
+                  <XAxis
+                    dataKey="week"
+                    stroke="#6b7280"
+                    tick={{ fontSize: 10 }}
+                    angle={-55}
+                    textAnchor="end"
+                    height={78}
+                    interval="preserveStartEnd"
+                    minTickGap={32}
+                  />
+                  <YAxis
+                    stroke="#6b7280"
+                    tick={{ fontSize: 11 }}
+                    width={44}
+                    domain={[0, "auto"]}
+                    tickMargin={10}
+                  />
                   <Tooltip />
                   <Line
                     type="monotone"
                     dataKey="engagement"
                     stroke="#7c3aed"
-                    strokeWidth={3}
-                    dot={{ fill: "#7c3aed", r: 4 }}
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 5 }}
                     name="Sessions"
                   />
                 </LineChart>

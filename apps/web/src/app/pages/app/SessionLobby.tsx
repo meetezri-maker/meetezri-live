@@ -29,7 +29,7 @@ import {
   companionSessionUses3dModel,
   resolveCompanionModelUrl,
 } from "@/lib/avatar/companionModelUrl";
-import { LOBBY_AVATARS, lobbyAvatarByName } from "@/lib/avatar/lobbyAvatars";
+import { LOBBY_AVATARS, lobbyAvatarByName, lobbyAvatarsFromApiRows } from "@/lib/avatar/lobbyAvatars";
 
 interface BackendSession {
   id: string;
@@ -480,7 +480,28 @@ export function SessionLobby() {
     { id: "voice4", name: "Voice 4", description: "Gentle and soothing", gender: "Male" }
   ];
 
-  const avatars = LOBBY_AVATARS;
+  const [sessionAvatarList, setSessionAvatarList] = useState(LOBBY_AVATARS);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await api.aiAvatars.getAll();
+        if (!Array.isArray(rows) || rows.length === 0) return;
+        const mapped = lobbyAvatarsFromApiRows(rows);
+        if (!cancelled && mapped.length > 0) {
+          setSessionAvatarList(mapped);
+        }
+      } catch {
+        /* keep static LOBBY_AVATARS */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const avatars = sessionAvatarList;
 
   const selectedCompanionPreview = useMemo(
     () => lobbyAvatarByName(selectedAvatar),

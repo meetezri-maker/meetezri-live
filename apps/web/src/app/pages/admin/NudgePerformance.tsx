@@ -43,18 +43,13 @@ interface NudgeNotification {
 
 interface PerformanceTrendPoint {
   date: string;
+  /** Estimated recipients (from notification metadata) for that day. */
   sent: number;
-  opened: number;
-  clicked: number;
-  converted: number;
 }
 
 interface CampaignPerformanceItem {
   name: string;
   sent: number;
-  openRate: number;
-  clickRate: number;
-  conversionRate: number;
 }
 
 interface NudgeCampaignAggregate {
@@ -105,10 +100,16 @@ export function NudgePerformance() {
               channelRaw === "sms"
                 ? channelRaw
                 : "push";
-            const count =
+            const delivered =
+              typeof metadata.delivered_count === "number"
+                ? metadata.delivered_count
+                : undefined;
+            const targeted =
               typeof metadata.target_count === "number"
                 ? metadata.target_count
-                : 1;
+                : undefined;
+            const count =
+              delivered ?? targeted ?? 1;
             const createdAt = new Date(n.sent_at || n.created_at);
             const audienceRaw = metadata.target_audience as string | undefined;
             let audience = "Targeted";
@@ -221,9 +222,6 @@ export function NudgePerformance() {
         ({
           date: key,
           sent: 0,
-          opened: 0,
-          clicked: 0,
-          converted: 0,
         } as PerformanceTrendPoint);
       existing.sent += c.recipients;
       map.set(key, existing);
@@ -239,9 +237,6 @@ export function NudgePerformance() {
         ({
           name: c.name,
           sent: 0,
-          openRate: 0,
-          clickRate: 0,
-          conversionRate: 0,
         } as CampaignPerformanceItem);
       existing.sent += c.recipients;
       map.set(c.name, existing);
@@ -287,22 +282,32 @@ export function NudgePerformance() {
     }));
   }, [campaignAggregates]);
 
-  const topTemplates = useMemo(
-    () =>
-      campaignPerformance.slice(0, 4).map((c, index) => ({
-        id: String(index),
-        name: c.name,
-        sent: c.sent,
-        openRate: c.openRate,
-        clickRate: c.clickRate,
-        conversionRate: c.conversionRate,
-      })),
-    [campaignPerformance]
-  );
+  const topCampaignsByReach = useMemo(() => {
+    const byName = new Map<
+      string,
+      { name: string; recipients: number; channel: string; audience: string }
+    >();
+    campaignAggregates.forEach((c) => {
+      const prev = byName.get(c.name);
+      if (!prev || c.recipients > prev.recipients) {
+        const ch =
+          c.channel === "in-app"
+            ? "In-app"
+            : c.channel.charAt(0).toUpperCase() + c.channel.slice(1);
+        byName.set(c.name, {
+          name: c.name,
+          recipients: c.recipients,
+          channel: ch,
+          audience: c.audience,
+        });
+      }
+    });
+    return Array.from(byName.values()).sort((a, b) => b.recipients - a.recipients).slice(0, 4);
+  }, [campaignAggregates]);
 
   const stats = [
     {
-      label: "Total Nudges Sent",
+      label: "Estimated recipient reach",
       value: totalSent.toLocaleString(),
       change: "N/A",
       trend: "up" as const,
@@ -349,7 +354,8 @@ export function NudgePerformance() {
               Nudge Performance
             </h1>
             <p className="text-gray-600">
-              Campaign analytics and engagement metrics
+              Delivery volume from manual nudges and broadcast campaigns (opens and
+              clicks are not tracked yet).
             </p>
           </div>
 
@@ -419,14 +425,14 @@ export function NudgePerformance() {
               onClick={() => {
                 const rows: string[][] = [
                   ["Metric", "Value"],
-                  ["Total Nudges Sent", totalSent.toString()],
+                  ["Estimated recipient reach", totalSent.toString()],
                   ["Nudge Campaigns", distinctCampaigns.toString()],
                   ["Channels Used", distinctChannels.toString()],
                   ["Avg Recipients per Nudge", avgRecipients.toFixed(1)],
                   ["Period", `${rangeStart.toISOString().slice(0, 10)} – ${rangeEnd.toISOString().slice(0, 10)}`],
                   [],
                   ["Campaign Performance"],
-                  ["Campaign", "Sent"],
+                  ["Campaign", "Recipients (est.)"],
                   ...campaignPerformance.map((c) => [
                     csvEscapeCell(c.name),
                     c.sent.toString(),
@@ -464,6 +470,12 @@ export function NudgePerformance() {
             </Button>
           </div>
         </motion.div>
+
+        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+          Charts show estimated recipients from notification metadata only. Open,
+          click, and conversion rates require event tracking and are not available
+          in this build.
+        </p>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -513,10 +525,10 @@ export function NudgePerformance() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h3 className="text-xl font-bold text-white mb-1">
-                  Performance Funnel Trend
+                  Delivery volume over time
                 </h3>
                 <p className="text-sm text-gray-400">
-                  Sent, opened, clicked, and converted over time
+                  Sum of estimated recipients per day in this period
                 </p>
               </div>
               <TrendingUp className="w-5 h-5 text-green-400" />
@@ -528,18 +540,6 @@ export function NudgePerformance() {
                   <linearGradient id="colorSent" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
                     <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorOpened" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorClicked" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorConverted" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
@@ -560,31 +560,7 @@ export function NudgePerformance() {
                   stroke="#3b82f6"
                   fillOpacity={1}
                   fill="url(#colorSent)"
-                  name="Sent"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="opened"
-                  stroke="#10b981"
-                  fillOpacity={1}
-                  fill="url(#colorOpened)"
-                  name="Opened"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="clicked"
-                  stroke="#f59e0b"
-                  fillOpacity={1}
-                  fill="url(#colorClicked)"
-                  name="Clicked"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="converted"
-                  stroke="#8b5cf6"
-                  fillOpacity={1}
-                  fill="url(#colorConverted)"
-                  name="Converted"
+                  name="Recipients (est.)"
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -603,9 +579,11 @@ export function NudgePerformance() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-xl font-bold text-white mb-1">
-                    Campaign Comparison
+                    Campaign comparison
                   </h3>
-                  <p className="text-sm text-gray-400">Open rates by campaign</p>
+                  <p className="text-sm text-gray-400">
+                    Estimated recipients by campaign title
+                  </p>
                 </div>
                 <Target className="w-5 h-5 text-purple-400" />
               </div>
@@ -613,7 +591,17 @@ export function NudgePerformance() {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={campaignPerformance} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                  <XAxis type="number" stroke="#9ca3af" />
+                  <XAxis
+                    type="number"
+                    stroke="#9ca3af"
+                    label={{
+                      value: "Recipients (est.)",
+                      position: "insideBottom",
+                      offset: -4,
+                      fill: "#9ca3af",
+                      fontSize: 12,
+                    }}
+                  />
                   <YAxis dataKey="name" type="category" stroke="#9ca3af" width={150} />
                   <Tooltip
                     contentStyle={{
@@ -623,7 +611,12 @@ export function NudgePerformance() {
                       color: "#fff",
                     }}
                   />
-                  <Bar dataKey="sent" fill="#10b981" radius={[0, 8, 8, 0]} name="Sent" />
+                  <Bar
+                    dataKey="sent"
+                    fill="#10b981"
+                    radius={[0, 8, 8, 0]}
+                    name="Recipients (est.)"
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -641,7 +634,9 @@ export function NudgePerformance() {
                   <h3 className="text-xl font-bold text-white mb-1">
                     Channel Distribution
                   </h3>
-                  <p className="text-sm text-gray-400">Messages by channel</p>
+                  <p className="text-sm text-gray-400">
+                    Share of estimated recipients by channel
+                  </p>
                 </div>
                 <Bell className="w-5 h-5 text-blue-400" />
               </div>
@@ -701,40 +696,42 @@ export function NudgePerformance() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-xl font-bold text-white mb-1">
-                    Top Performing Templates
+                    Largest campaigns by reach
                   </h3>
-                  <p className="text-sm text-gray-400">Best engagement rates</p>
+                  <p className="text-sm text-gray-400">
+                    Ranked by estimated recipients (metadata)
+                  </p>
                 </div>
                 <Award className="w-5 h-5 text-yellow-400" />
               </div>
 
               <div className="space-y-4">
-                {topTemplates.map((template, index) => (
-                  <div
-                    key={template.id}
-                    className="flex items-center gap-3 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-all"
-                  >
-                    <span className="text-2xl font-bold text-purple-400">
-                      #{index + 1}
-                    </span>
-                    <div className="flex-1">
-                      <h4 className="text-white font-medium text-sm">
-                        {template.name}
-                      </h4>
-                      <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
-                        <span>{template.sent.toLocaleString()} sent</span>
-                        <span>{template.openRate}% open</span>
-                        <span>{template.clickRate}% click</span>
+                {topCampaignsByReach.length === 0 ? (
+                  <p className="text-sm text-gray-400">
+                    No campaigns in this period.
+                  </p>
+                ) : (
+                  topCampaignsByReach.map((row, index) => (
+                    <div
+                      key={`${row.name}-${index}`}
+                      className="flex items-center gap-3 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-all"
+                    >
+                      <span className="text-2xl font-bold text-purple-400">
+                        #{index + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-white font-medium text-sm truncate">
+                          {row.name}
+                        </h4>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400 mt-1">
+                          <span>{row.recipients.toLocaleString()} recipients</span>
+                          <span>{row.channel}</span>
+                          <span className="truncate">{row.audience}</span>
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-green-400">
-                        {template.conversionRate}%
-                      </p>
-                      <p className="text-xs text-gray-500">conversion</p>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </Card>
           </motion.div>

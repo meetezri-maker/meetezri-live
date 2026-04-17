@@ -18,6 +18,10 @@ type Props = {
   exportLabel?: string;
   showExport?: boolean;
   isLoading?: boolean;
+  /** When false, hides the Week/Month/Year chart bucket control (e.g. date-only analytics pages). Default true. */
+  showChartPeriod?: boolean;
+  /** When false, hides the Last 7/30/… preset control. Default true. */
+  showRangePreset?: boolean;
 };
 
 export function AdminAnalyticsToolbar({
@@ -36,49 +40,58 @@ export function AdminAnalyticsToolbar({
   exportLabel = 'Export',
   showExport = true,
   isLoading = false,
+  showChartPeriod = true,
+  showRangePreset = true,
 }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-        <span className="hidden sm:inline">Charts:</span>
-        <select
-          value={chartPeriod}
-          onChange={(e) => onChartPeriodChange(e.target.value as 'week' | 'month' | 'year')}
-          className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 text-sm"
-        >
-          <option value="week">Week</option>
-          <option value="month">Month</option>
-          <option value="year">Year</option>
-        </select>
-      </div>
+      {showChartPeriod && (
+        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+          <span className="hidden sm:inline">Charts:</span>
+          <select
+            value={chartPeriod}
+            onChange={(e) => onChartPeriodChange(e.target.value as 'week' | 'month' | 'year')}
+            className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 text-sm"
+          >
+            <option value="week">Week</option>
+            <option value="month">Month</option>
+            <option value="year">Year</option>
+          </select>
+        </div>
+      )}
 
-      <div className="flex items-center gap-1">
-        <span className="hidden sm:inline text-sm text-muted-foreground">Range:</span>
-        <select
-          value={useCustomRange ? 'custom' : rangePreset}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v === 'custom') {
-              onUseCustomRangeChange(true);
-            } else {
-              onUseCustomRangeChange(false);
-              onRangePresetChange(v as DashboardTimePreset);
-              const d = datesForPreset(v as DashboardTimePreset);
-              onDateFromChange(d.dateFrom);
-              onDateToChange(d.dateTo);
-            }
-          }}
-          className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 text-sm"
-        >
-          <option value="7d">Last 7 days</option>
-          <option value="30d">Last 30 days</option>
-          <option value="90d">Last 90 days</option>
-          <option value="1y">Last year</option>
-          <option value="custom">Custom range</option>
-        </select>
-      </div>
+      {showRangePreset && (
+        <div className="flex items-center gap-1">
+          <span className="hidden sm:inline text-sm text-muted-foreground">Range:</span>
+          <select
+            value={useCustomRange ? 'custom' : rangePreset}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === 'custom') {
+                onUseCustomRangeChange(true);
+              } else {
+                onUseCustomRangeChange(false);
+                onRangePresetChange(v as DashboardTimePreset);
+                const d = datesForPreset(v as DashboardTimePreset);
+                onDateFromChange(d.dateFrom);
+                onDateToChange(d.dateTo);
+              }
+            }}
+            className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 text-sm"
+          >
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+            <option value="1y">Last year</option>
+            <option value="custom">Custom range</option>
+          </select>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
+        {!showRangePreset && (
+          <span className="hidden sm:inline text-sm text-muted-foreground">Period:</span>
+        )}
         <input
           type="date"
           value={dateFrom}

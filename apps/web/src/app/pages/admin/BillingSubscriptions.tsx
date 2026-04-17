@@ -19,7 +19,6 @@ import {
   CheckCircle,
   AlertCircle,
   Clock,
-  ArrowUpRight,
   ArrowDownRight,
   Package,
   Star,
@@ -54,7 +53,6 @@ export function BillingSubscriptions() {
   const [filterPlan, setFilterPlan] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"overview" | "subscriptions" | "transactions">("overview");
-  const [showProcessPaymentModal, setShowProcessPaymentModal] = useState(false);
   const [showManageSubscriptionModal, setShowManageSubscriptionModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -219,7 +217,6 @@ export function BillingSubscriptions() {
   const stats = useMemo(() => {
     const now = new Date();
     const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const twoMonthsAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
 
     const sumInvoices = (start: Date, end: Date) =>
       invoices.reduce((sum, inv) => {
@@ -229,11 +226,6 @@ export function BillingSubscriptions() {
       }, 0);
 
     const invoiceRevenue30d = sumInvoices(monthAgo, now);
-    const invoiceRevenuePrev30d = sumInvoices(twoMonthsAgo, monthAgo);
-    const growth =
-      invoiceRevenuePrev30d > 0
-        ? ((invoiceRevenue30d - invoiceRevenuePrev30d) / invoiceRevenuePrev30d) * 100
-        : 0;
 
     const activeSubscriptions = subscriptions.filter((s) => s.status === "active").length;
     const canceledSubscriptions = subscriptions.filter((s) => s.status === "cancelled").length;
@@ -244,7 +236,6 @@ export function BillingSubscriptions() {
       totalMRR: subscriptions.reduce((sum, sub) => sum + sub.mrr, 0),
       activeSubscriptions,
       totalSubscriptions: subscriptions.length,
-      growth,
       churnRate,
       invoiceRevenue30d,
     };
@@ -332,10 +323,6 @@ export function BillingSubscriptions() {
                 <Download className="w-4 h-4" />
                 Export
               </Button>
-              <Button className="gap-2" onClick={() => setShowProcessPaymentModal(true)}>
-                <CreditCard className="w-4 h-4" />
-                Process Payment
-              </Button>
             </div>
           </div>
         </motion.div>
@@ -362,11 +349,12 @@ export function BillingSubscriptions() {
                 <DollarSign className="w-5 h-5 text-green-600" />
               </div>
               <p className="text-3xl font-bold mb-1">${stats.totalMRR.toLocaleString()}</p>
-              <div className="flex items-center gap-1 text-sm">
-                <ArrowUpRight className="w-4 h-4 text-green-600" />
-                <span className="text-green-600 font-medium">{stats.growth}%</span>
-                <span className="text-muted-foreground">invoice revenue vs prior 30 days</span>
-              </div>
+              <p
+                className="text-sm text-muted-foreground"
+                title="Sum of estimated monthly recurring revenue from each subscription’s plan. Stripe invoice or cash totals can differ (timing, proration, one-time charges)."
+              >
+                Estimated from plans (not Stripe cash)
+              </p>
             </Card>
           </motion.div>
 
@@ -709,118 +697,6 @@ export function BillingSubscriptions() {
         )}
         </>
       </div>
-
-      {/* Process Payment Modal */}
-      {showProcessPaymentModal && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onClick={() => setShowProcessPaymentModal(false)}
-        >
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl p-6 max-w-lg w-full"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold">Process Payment</h2>
-                  <p className="text-sm text-muted-foreground">Manual payment processing</p>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowProcessPaymentModal(false)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Organization</label>
-                <select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary">
-                  <option value="">Select organization</option>
-                  {subscriptions.map((sub) => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.organization} - {sub.plan}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Amount</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                  <Input
-                    type="number"
-                    placeholder="0.00"
-                    className="pl-8"
-                    step="0.01"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Payment Method</label>
-                <select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary">
-                  <option value="credit_card">Credit Card</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="paypal">PayPal</option>
-                  <option value="wire">Wire Transfer</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Notes (Optional)</label>
-                <textarea
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary resize-none"
-                  rows={3}
-                  placeholder="Add any notes about this payment..."
-                />
-              </div>
-
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-amber-700 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-amber-900">Not wired to Stripe</p>
-                  <p className="text-xs text-amber-800">
-                    Use the customer billing portal or Stripe Dashboard to charge customers.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setShowProcessPaymentModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
-                  onClick={() => {
-                    setShowProcessPaymentModal(false);
-                  }}
-                >
-                  Close
-                </Button>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
 
       {/* Manage Subscription Modal */}
       {showManageSubscriptionModal && selectedSubscription && (

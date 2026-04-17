@@ -39,12 +39,20 @@ import { api } from "../../../lib/api";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
-import { buildStatsQuery, datesForPreset, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
+import { datesForPreset, downloadCsv } from "@/lib/adminAnalytics";
+
+function formatAnalyticsRangeLabel(from: string, to: string): string {
+  try {
+    const a = new Date(`${from}T12:00:00Z`);
+    const b = new Date(`${to}T12:00:00Z`);
+    const o: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+    return `${a.toLocaleDateString(undefined, o)} – ${b.toLocaleDateString(undefined, o)}`;
+  } catch {
+    return `${from} – ${to}`;
+  }
+}
 
 export function EngagementMetrics() {
-  const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
-  const [rangePreset, setRangePreset] = useState<DashboardTimePreset>("30d");
-  const [useCustomRange, setUseCustomRange] = useState(false);
   const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
   const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
 
@@ -56,14 +64,12 @@ export function EngagementMetrics() {
     setIsLoading(true);
     setError(null);
     try {
-      const q = buildStatsQuery({
-        chartPeriod,
-        rangePreset,
-        useCustomRange,
+      const data = await api.admin.getStats({
+        chartPeriod: "month",
         dateFrom,
         dateTo,
+        ...(forceRefresh ? { refresh: true } : {}),
       });
-      const data = await api.admin.getStats({ ...q, ...(forceRefresh ? { refresh: true } : {}) });
       setStatsData(data);
     } catch (err: any) {
       console.error("Failed to fetch engagement metrics", err);
@@ -71,7 +77,7 @@ export function EngagementMetrics() {
     } finally {
       setIsLoading(false);
     }
-  }, [chartPeriod, rangePreset, useCustomRange, dateFrom, dateTo]);
+  }, [dateFrom, dateTo]);
 
   useEffect(() => {
     void loadStats();
@@ -101,8 +107,8 @@ export function EngagementMetrics() {
     totalUsers > 0 ? sessionsThisPeriod / totalUsers : 0;
 
   const formattedAvgSessionFrequency = avgSessionFrequency
-    ? `${avgSessionFrequency.toFixed(1)}x/week`
-    : "0x/week";
+    ? avgSessionFrequency.toFixed(1)
+    : "0";
 
   const adoptionRate = featureUsage.length
     ? Math.round(
@@ -319,7 +325,7 @@ export function EngagementMetrics() {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between"
+          className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between"
         >
           <div>
             <h1 className="text-4xl font-bold text-gray-900 mb-2">
@@ -328,15 +334,20 @@ export function EngagementMetrics() {
             <p className="text-gray-600">
               User engagement scores, session frequency, and behavioral insights
             </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              {formatAnalyticsRangeLabel(dateFrom, dateTo)} · KPIs and charts use this period.
+            </p>
           </div>
 
           <AdminAnalyticsToolbar
-            chartPeriod={chartPeriod}
-            onChartPeriodChange={setChartPeriod}
-            rangePreset={rangePreset}
-            onRangePresetChange={setRangePreset}
-            useCustomRange={useCustomRange}
-            onUseCustomRangeChange={setUseCustomRange}
+            showChartPeriod={false}
+            showRangePreset={false}
+            chartPeriod="month"
+            onChartPeriodChange={() => {}}
+            rangePreset="30d"
+            onRangePresetChange={() => {}}
+            useCustomRange
+            onUseCustomRangeChange={() => {}}
             dateFrom={dateFrom}
             dateTo={dateTo}
             onDateFromChange={setDateFrom}
@@ -415,7 +426,10 @@ export function EngagementMetrics() {
             </div>
 
             <ResponsiveContainer width="100%" height={350}>
-              <ComposedChart data={engagementTrendData}>
+              <ComposedChart
+                data={engagementTrendData}
+                margin={{ top: 8, right: 12, left: 0, bottom: 8 }}
+              >
                 <defs>
                   <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#ec4899" stopOpacity={0.8} />
@@ -423,9 +437,24 @@ export function EngagementMetrics() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                <XAxis dataKey="date" stroke="#9ca3af" />
-                <YAxis yAxisId="left" stroke="#9ca3af" />
-                <YAxis yAxisId="right" orientation="right" stroke="#9ca3af" />
+                <XAxis
+                  dataKey="date"
+                  stroke="#9ca3af"
+                  tick={{ fontSize: 11 }}
+                  angle={-40}
+                  textAnchor="end"
+                  height={72}
+                  interval="preserveStartEnd"
+                  minTickGap={28}
+                />
+                <YAxis yAxisId="left" stroke="#9ca3af" tick={{ fontSize: 11 }} width={44} />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="#9ca3af"
+                  tick={{ fontSize: 11 }}
+                  width={44}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "#1f2937",
@@ -609,10 +638,16 @@ export function EngagementMetrics() {
               </div>
 
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={returnRateData}>
+                <LineChart data={returnRateData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                  <XAxis dataKey="day" stroke="#9ca3af" />
-                  <YAxis stroke="#9ca3af" />
+                  <XAxis
+                    dataKey="day"
+                    stroke="#9ca3af"
+                    tick={{ fontSize: 11 }}
+                    interval="preserveStartEnd"
+                    minTickGap={16}
+                  />
+                  <YAxis stroke="#9ca3af" tick={{ fontSize: 11 }} width={40} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "#1f2937",
@@ -655,11 +690,26 @@ export function EngagementMetrics() {
             </div>
 
             <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={timeOfDayEngagement}>
+              <ComposedChart
+                data={timeOfDayEngagement}
+                margin={{ top: 8, right: 12, left: 0, bottom: 8 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                <XAxis dataKey="time" stroke="#9ca3af" />
-                <YAxis yAxisId="left" stroke="#9ca3af" />
-                <YAxis yAxisId="right" orientation="right" stroke="#9ca3af" />
+                <XAxis
+                  dataKey="time"
+                  stroke="#9ca3af"
+                  tick={{ fontSize: 11 }}
+                  interval="preserveStartEnd"
+                  minTickGap={20}
+                />
+                <YAxis yAxisId="left" stroke="#9ca3af" tick={{ fontSize: 11 }} width={44} />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="#9ca3af"
+                  tick={{ fontSize: 11 }}
+                  width={44}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "#1f2937",
