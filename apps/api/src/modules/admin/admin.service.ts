@@ -649,6 +649,7 @@ export async function getRecentActivity() {
       include: { profiles: { select: { full_name: true, email: true } } }
     }),
     prisma.app_sessions.findMany({
+      where: { started_at: { not: null } },
       take: 5,
       orderBy: { started_at: 'desc' },
       include: { profiles: { select: { full_name: true, email: true } } }

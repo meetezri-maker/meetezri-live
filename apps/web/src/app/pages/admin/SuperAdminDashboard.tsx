@@ -101,8 +101,16 @@ function anchorYearFromRange(range: { from: string }): number {
   return Number.isFinite(y) ? y : new Date().getUTCFullYear();
 }
 
-function formatTimeAgo(iso: string) {
-  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+/** Avoid bogus "20,000d ago" when dates are null/epoch (JS treats `new Date(null)` as 1970). */
+function formatTimeAgo(iso: string | null | undefined) {
+  if (iso == null || iso === "") return "—";
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "—";
+  const year2000 = Date.UTC(2000, 0, 1);
+  if (t < year2000) {
+    return new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  }
+  const s = Math.floor((Date.now() - t) / 1000);
   if (s < 60) return `${s}s ago`;
   const m = Math.floor(s / 60);
   if (m < 60) return `${m}m ago`;
@@ -142,12 +150,13 @@ function buildActivityFeedFromRecent(recent: any) {
   }[] = [];
 
   for (const s of recent.sessions || []) {
+    const sessionAt = s.started_at ?? s.created_at;
     feed.push({
       action: "Session activity",
       user: s.profiles?.full_name || s.profiles?.email || "User",
-      time: formatTimeAgo(s.started_at),
+      time: formatTimeAgo(sessionAt),
       type: "session",
-      at: new Date(s.started_at).getTime(),
+      at: new Date(sessionAt).getTime(),
     });
   }
   for (const m of recent.moodEntries || []) {
@@ -186,10 +195,19 @@ function mapCrisisAlertsFromRecent(recent: any) {
   }));
 }
 
-function filterTodaysMoods(moods: any[]) {
+/** Most recent check-ins in the last N days (not “today only,” which often looks empty). */
+function filterRecentMoods(moods: any[], maxDays = 30, limit = 25) {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
-  return (moods || []).filter((m: any) => new Date(m.created_at) >= start);
+  start.setDate(start.getDate() - maxDays);
+  return [...(moods || [])]
+    .filter((m: any) => m?.created_at && !Number.isNaN(new Date(m.created_at).getTime()))
+    .filter((m: any) => new Date(m.created_at) >= start)
+    .sort(
+      (a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )
+    .slice(0, limit);
 }
 
 export function SuperAdminDashboard() {
@@ -262,7 +280,7 @@ export function SuperAdminDashboard() {
             api.admin.getRecentActivity(),
           ]);
           if (cancelled) return;
-          setRecentMoods(filterTodaysMoods(moods));
+          setRecentMoods(filterRecentMoods(moods));
           setActivityFeed(buildActivityFeedFromRecent(recent));
           setCrisisAlerts(mapCrisisAlertsFromRecent(recent));
           isFirstDashboardLoad.current = false;
@@ -291,9 +309,13 @@ export function SuperAdminDashboard() {
       try {
         const data = await api.admin.getStats(statsQuery);
         setStats(data);
-        const recent = await api.admin.getRecentActivity();
+        const [recent, moods] = await Promise.all([
+          api.admin.getRecentActivity(),
+          api.moods.getAllMoods(),
+        ]);
         setActivityFeed(buildActivityFeedFromRecent(recent));
         setCrisisAlerts(mapCrisisAlertsFromRecent(recent));
+        setRecentMoods(filterRecentMoods(moods));
       } catch {
         /* background refresh — ignore */
       }
@@ -1281,7 +1303,7 @@ export function SuperAdminDashboard() {
                   Recent Mood Check-ins
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Today&apos;s mood check-ins (all recorded today)
+                  Latest check-ins from the last 30 days (up to 25)
                 </p>
               </div>
             </div>
@@ -1289,7 +1311,7 @@ export function SuperAdminDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               {recentMoods.length === 0 ? (
                 <div className="col-span-full text-center py-8 text-muted-foreground">
-                  No mood entries recorded yet.
+                  No mood check-ins in the last 30 days.
                 </div>
               ) : (
                 recentMoods.map((mood, index) => (
