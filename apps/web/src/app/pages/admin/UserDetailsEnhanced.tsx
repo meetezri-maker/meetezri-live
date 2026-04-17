@@ -181,9 +181,9 @@ export function UserDetailsEnhanced() {
           const html = `<p>Hello ${userData.name},</p><p>An admin has requested a password reset for your Ezri account. If this was not you, please contact support.</p>`;
           await api.sendEmail(userData.email, subject, html, text);
         } else if (action === "send-message") {
-          const subject = "Message from Ezri Admin";
-          const text = `Hello ${userData.name},\n\nYou have received a message from the Ezri admin team.`;
-          const html = `<p>Hello ${userData.name},</p><p>You have received a message from the Ezri admin team.</p>`;
+          const subject = "Message from Solace Admin";
+          const text = `Hello ${userData.name},\n\nYou have received a message from the Solace Admin team.`;
+          const html = `<p>Hello ${userData.name},</p><p>You have received a message from the Solace Admin team.</p>`;
           await api.sendEmail(userData.email, subject, html, text);
         } else if (action === "export-data") {
           const { blob, filename, contentType } = await api.exportUserData();

@@ -31,6 +31,7 @@ import {
 import { Link } from "react-router-dom";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
+import { downloadCsv } from "../../../lib/adminAnalytics";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Calendar } from "../../components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
@@ -99,6 +100,127 @@ function formatReadableRangeDate(isoYmd: string): string {
 function anchorYearFromRange(range: { from: string }): number {
   const y = parseInt(range.from.slice(0, 4), 10);
   return Number.isFinite(y) ? y : new Date().getUTCFullYear();
+}
+
+type CsvRow = {
+  section: string;
+  category: string;
+  label: string;
+  value1: string;
+  value2: string;
+  value3: string;
+};
+
+function cell(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
+function buildSuperAdminCsvRows(
+  statsData: Record<string, unknown> | null,
+  query: Record<string, unknown>
+): CsvRow[] {
+  const rows: CsvRow[] = [];
+  const push = (section: string, category: string, label: string, v1 = "", v2 = "", v3 = "") => {
+    rows.push({ section, category, label, value1: v1, value2: v2, value3: v3 });
+  };
+
+  push("Meta", "export", "exportedAt", new Date().toISOString());
+  for (const [k, v] of Object.entries(query)) {
+    push("Meta", "query", k, cell(v));
+  }
+
+  if (!statsData) {
+    push("Meta", "note", "stats", "empty");
+    return rows;
+  }
+
+  const s = statsData as Record<string, unknown>;
+  const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? String(x) : cell(x));
+
+  push("Summary", "totals", "totalUsers", num(s.totalUsers));
+  push("Summary", "totals", "activeSessions", num(s.activeSessions));
+  push("Summary", "totals", "totalSessions", num(s.totalSessions));
+  push("Summary", "totals", "avgSessionLength", num(s.avgSessionLength));
+  push("Summary", "totals", "crisisAlerts", num(s.crisisAlerts));
+  push("Summary", "totals", "revenue", num(s.revenue));
+  if (s.rangeStart != null) push("Summary", "range", "rangeStart", cell(s.rangeStart));
+  if (s.rangeEnd != null) push("Summary", "range", "rangeEnd", cell(s.rangeEnd));
+  if (s.rangeDays != null) push("Summary", "range", "rangeDays", num(s.rangeDays));
+
+  const kpi = s.kpi as Record<string, unknown> | undefined;
+  if (kpi && typeof kpi === "object") {
+    for (const [k, v] of Object.entries(kpi)) {
+      push("KPI", "kpi", k, cell(v));
+    }
+  }
+
+  const ph = s.processHealth as Record<string, unknown> | undefined;
+  if (ph && typeof ph === "object") {
+    for (const [k, v] of Object.entries(ph)) {
+      push("ProcessHealth", "process", k, cell(v));
+    }
+  }
+
+  const mocked = s.mockedSections as string[] | undefined;
+  if (mocked?.length) {
+    push("Notes", "warning", "mockedSections", mocked.join("; "));
+  }
+
+  for (const r of (s.userGrowth as any[]) || []) {
+    push(
+      "UserGrowth",
+      "series",
+      cell(r?.month),
+      num(r?.users),
+      num(r?.orgs)
+    );
+  }
+
+  for (const r of (s.sessionActivity as any[]) || []) {
+    push(
+      "SessionActivity",
+      "daily",
+      cell(r?.day),
+      num(r?.sessions),
+      num(r?.duration)
+    );
+  }
+
+  for (const r of (s.revenueData as any[]) || []) {
+    push("Revenue", "series", cell(r?.month), num(r?.revenue));
+  }
+
+  for (const r of (s.systemHealth as any[]) || []) {
+    push(
+      "SystemHealth",
+      "metric",
+      cell(r?.name),
+      cell(r?.value),
+      cell(r?.status),
+      num(r?.percentage)
+    );
+  }
+
+  for (const r of (s.platformDistribution as any[]) || []) {
+    push(
+      "PlatformDistribution",
+      "share",
+      cell(r?.name),
+      num(r?.value),
+      cell(r?.color)
+    );
+  }
+
+  const hr = s.hourlyActivity as any[] | undefined;
+  if (hr?.length) {
+    for (const r of hr) {
+      push("HourlyActivity", "hour", cell(r?.hour), num(r?.sessions));
+    }
+  }
+
+  return rows;
 }
 
 /** Avoid bogus "20,000d ago" when dates are null/epoch (JS treats `new Date(null)` as 1970). */
@@ -326,21 +448,12 @@ export function SuperAdminDashboard() {
 
   const exportReport = () => {
     try {
-      const payload = {
-        exportedAt: new Date().toISOString(),
-        ...statsQuery,
-        stats,
-      };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `ezri-super-admin-report-${Date.now()}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success("Report downloaded.");
+      const rows = buildSuperAdminCsvRows(
+        stats != null ? (stats as Record<string, unknown>) : null,
+        statsQuery as Record<string, unknown>
+      );
+      downloadCsv(`ezri-super-admin-report-${Date.now()}.csv`, rows as Record<string, unknown>[]);
+      toast.success("CSV report downloaded.");
     } catch {
       toast.error("Export failed.");
     }

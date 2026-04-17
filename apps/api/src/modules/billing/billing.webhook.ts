@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { stripe } from '../../config/stripe';
 import prisma from '../../lib/prisma';
 import { PLAN_LIMITS, STRIPE_PRICE_IDS } from './billing.constants';
+import { stripeSubscriptionMrrUsd } from './stripe-mrr';
 import { addSubscriptionAllowanceMinutes } from './credit-balance.service';
 
 function getStripeWebhookSecret(): string | undefined {
@@ -359,6 +360,8 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
 
   const subscriptionId = session.subscription as string;
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const mrrUsd = stripeSubscriptionMrrUsd(subscription as any);
+  const amountPatch = mrrUsd != null ? { amount: mrrUsd } : {};
 
   const existingByStripeId = await prisma.subscriptions.findFirst({
     where: { stripe_sub_id: subscription.id },
@@ -390,6 +393,7 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
         start_date: new Date(subscription.current_period_start * 1000),
         end_date: new Date(subscription.current_period_end * 1000),
         next_billing_at: new Date(subscription.current_period_end * 1000),
+        ...amountPatch,
       },
     });
   } else if (pendingCandidate) {
@@ -402,6 +406,7 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
         start_date: new Date(subscription.current_period_start * 1000),
         end_date: new Date(subscription.current_period_end * 1000),
         next_billing_at: new Date(subscription.current_period_end * 1000),
+        ...amountPatch,
       },
     });
   } else {
@@ -414,6 +419,7 @@ async function handleCheckoutSessionCompleted(session: any, request: FastifyRequ
         start_date: new Date(subscription.current_period_start * 1000),
         end_date: new Date(subscription.current_period_end * 1000),
         next_billing_at: new Date(subscription.current_period_end * 1000),
+        ...amountPatch,
       },
     });
   }
@@ -480,6 +486,9 @@ async function handleSubscriptionUpdated(subscription: any) {
     }
   }
 
+  const mrrUsd = stripeSubscriptionMrrUsd(subscription as any);
+  const amountPatch = mrrUsd != null ? { amount: mrrUsd } : {};
+
   await prisma.subscriptions.update({
     where: { id: existingSub.id },
     data: {
@@ -487,6 +496,7 @@ async function handleSubscriptionUpdated(subscription: any) {
       ...(planChanged && newPlanType ? { plan_type: newPlanType } : {}),
       end_date: new Date(subscription.current_period_end * 1000),
       next_billing_at: new Date(subscription.current_period_end * 1000),
+      ...amountPatch,
     },
   });
 }
@@ -524,12 +534,16 @@ async function handleInvoicePaymentSucceeded(invoice: any, request: FastifyReque
   });
 
   if (existingSub) {
+    const mrrUsd = stripeSubscriptionMrrUsd(subscription as any);
+    const amountPatch = mrrUsd != null ? { amount: mrrUsd } : {};
+
     await prisma.subscriptions.update({
       where: { id: existingSub.id },
       data: {
         status: subscription.status,
         end_date: new Date(subscription.current_period_end * 1000),
         next_billing_at: new Date(subscription.current_period_end * 1000),
+        ...amountPatch,
       },
     });
 

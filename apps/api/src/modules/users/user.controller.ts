@@ -135,6 +135,7 @@ export async function signupHandler(
           user_metadata: {
             first_name: firstName,
             last_name: lastName,
+            signup_source: 'app',
           },
         });
 
@@ -462,7 +463,7 @@ export async function initProfileHandler(
   }
 
   try {
-    const profile = await userService.createProfile(user.sub, email);
+    const profile = await userService.createProfile(user.sub, email, undefined, undefined, 'app');
     request.log.info({ profile }, 'Profile initialized successfully');
     return sanitizeSelfProfileResponse(profile as any);
   } catch (error) {

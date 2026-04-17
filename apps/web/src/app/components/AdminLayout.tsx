@@ -370,7 +370,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 <Heart className="w-6 h-6 text-white" fill="white" />
               </motion.div>
               <div>
-                <h1 className="font-bold text-lg">Ezri Admin</h1>
+                <h1 className="font-bold text-lg">Solace Admin</h1>
                 <p className="text-xs text-muted-foreground">{currentRoleInfo.name}</p>
               </div>
             </Link>

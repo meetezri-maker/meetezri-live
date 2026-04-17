@@ -117,6 +117,9 @@ export const userSchema = z.object({
   last_active: z.date().nullable().optional(),
   risk_level: z.string().optional(),
   organization: z.string().optional(),
+  signup_type: z.string().nullable().optional(),
+  /** app | admin_user | admin_companion | admin_org */
+  signup_source: z.string().nullable().optional(),
 });
 
 export const userListSchema = z.array(userSchema);

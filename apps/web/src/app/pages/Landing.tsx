@@ -31,12 +31,24 @@ export function Landing() {
     // 1. Immediate redirect if auth params are present (Implicit or PKCE)
     const hash = location.hash;
     const search = location.search;
-    
+
+    // Invite magic links sometimes land on Site URL `/` with type=invite in the hash — send them to the password page.
     if (
-      (hash && (hash.includes('access_token') || hash.includes('type=recovery') || hash.includes('error='))) ||
+      hash &&
+      hash.includes('type=invite') &&
+      (hash.includes('access_token') || hash.includes('error='))
+    ) {
+      navigate(`/invite/create-password${search}${hash}`);
+      return;
+    }
+
+    if (
+      (hash &&
+        (hash.includes('access_token') ||
+          hash.includes('type=recovery') ||
+          hash.includes('error='))) ||
       (search && (search.includes('code=') || search.includes('error=')))
     ) {
-      // Forward to auth callback handler immediately
       navigate(`/auth/callback${search}${hash}`);
       return;
     }
@@ -47,8 +59,11 @@ export function Landing() {
   }, [user, isLoading, navigate, location]);
 
   // Show loader if we are about to redirect (auth params present)
-  const isAuthRedirect = 
-    (location.hash && (location.hash.includes('access_token') || location.hash.includes('type=recovery'))) ||
+  const isAuthRedirect =
+    (location.hash &&
+      (location.hash.includes('access_token') ||
+        location.hash.includes('type=recovery') ||
+        location.hash.includes('type=invite'))) ||
     (location.search && location.search.includes('code='));
 
   if (isAuthRedirect) {

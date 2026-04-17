@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AdminLayoutNew } from '@/app/components/AdminLayoutNew';
 import { api } from '@/lib/api';
+import { LOBBY_AVATARS, findLobbyAvatar } from '@/lib/avatar/lobbyAvatars';
 import { 
   Brain, 
   Plus, 
@@ -13,9 +14,7 @@ import {
   Star, 
   Users, 
   Clock, 
-  TrendingUp,
   Search,
-  Filter,
   Save,
   X,
   Volume2,
@@ -23,6 +22,31 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
+
+/** Same card portraits as Session Lobby when the name matches a companion. */
+function AdminAvatarVisual({ name, imageFallback }: { name: string; imageFallback: string }) {
+  const lobby = findLobbyAvatar(name);
+  if (lobby?.cardImage) {
+    return (
+      <div className="flex-shrink-0 w-28 h-28 rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm bg-gray-50">
+        <img src={lobby.cardImage} alt={name} className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+  const raw = imageFallback?.trim() ?? '';
+  if (/^https?:\/\//i.test(raw)) {
+    return (
+      <div className="flex-shrink-0 w-28 h-28 rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm bg-gray-50">
+        <img src={raw} alt={name} className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+  return (
+    <div className="flex-shrink-0 w-28 h-28 flex items-center justify-center rounded-2xl border-2 border-gray-100 bg-gray-50 text-6xl leading-none">
+      {raw || '👤'}
+    </div>
+  );
+}
 
 interface AIAvatar {
   id: string;
@@ -294,6 +318,35 @@ export function AIAvatarManager() {
               className="w-full bg-white border border-gray-300 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:border-purple-500 transition-all"
             />
           </div>
+
+          {/* Same companions as Session Lobby (public/avatars) */}
+          <div className="mt-8 rounded-2xl border border-gray-200 bg-gradient-to-br from-slate-50 to-white p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-1">Companions in app</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Lobby portraits and names members see when starting a session. Database rows that use the same name show this artwork in the cards below.
+            </p>
+            <div className="flex flex-wrap gap-4 justify-start">
+              {LOBBY_AVATARS.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm min-w-[7.5rem]"
+                >
+                  {a.cardImage ? (
+                    <img
+                      src={a.cardImage}
+                      alt=""
+                      className="w-16 h-16 rounded-xl object-cover border border-gray-100"
+                    />
+                  ) : (
+                    <span className="text-4xl" aria-hidden>
+                      {a.emoji}
+                    </span>
+                  )}
+                  <span className="text-sm font-semibold text-gray-900 text-center leading-tight">{a.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Avatars List */}
@@ -311,7 +364,7 @@ export function AIAvatarManager() {
               {/* Header */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-start gap-4">
-                  <div className="text-6xl">{avatar.image}</div>
+                  <AdminAvatarVisual name={avatar.name} imageFallback={avatar.image} />
                   <div>
                     <h3 className="text-xl font-bold text-gray-900 mb-1">{avatar.name}</h3>
                     <p className="text-sm text-gray-600 mb-2">{avatar.gender} • {avatar.ageRange} years</p>
@@ -482,7 +535,9 @@ export function AIAvatarManager() {
                       <div className="mb-4">
                         <p className="text-xs font-medium text-gray-500 mb-2">Existing avatars — click to reuse</p>
                         <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1 rounded-lg border border-gray-100 bg-gray-50/80">
-                          {avatars.map((a) => (
+                          {avatars.map((a) => {
+                            const lobby = findLobbyAvatar(a.name);
+                            return (
                             <button
                               key={a.id}
                               type="button"
@@ -494,10 +549,21 @@ export function AIAvatarManager() {
                               }`}
                               title={a.name}
                             >
-                              <span className="text-2xl leading-none">{a.image}</span>
+                              <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-100 flex items-center justify-center bg-gray-50">
+                                {lobby?.cardImage ? (
+                                  <img
+                                    src={lobby.cardImage}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="text-2xl leading-none">{a.image}</span>
+                                )}
+                              </div>
                               <span className="text-[10px] font-medium text-gray-700 truncate max-w-[5rem]">{a.name}</span>
                             </button>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}

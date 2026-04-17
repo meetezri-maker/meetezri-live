@@ -49,6 +49,16 @@ function addUtcDays(d: Date, n: number): Date {
   return x;
 }
 
+/**
+ * Supabase appends ?code= (PKCE) or #access_token (implicit) to this URL.
+ * Do not use /auth/callback?next=… — Supabase often strips query params on redirect,
+ * which dropped `next` and sent users to onboarding instead of password setup.
+ */
+function getInviteEmailRedirectUrl(webBaseUrl: string): string {
+  const base = webBaseUrl.replace(/\/$/, '');
+  return `${base}/invite/create-password`;
+}
+
 function utcDayStart(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
 }
@@ -227,10 +237,10 @@ export async function getDashboardStats(
         (SELECT COALESCE(SUM(amount), 0)::bigint FROM payment_transactions WHERE status = 'completed' AND created_at >= date_trunc('month', timezone('utc', now())) AND created_at < date_trunc('month', timezone('utc', now())) + interval '1 month') as pay_cents_this_month,
         (SELECT COALESCE(SUM(amount), 0)::bigint FROM payment_transactions WHERE status = 'completed' AND created_at >= date_trunc('month', timezone('utc', now())) - interval '1 month' AND created_at < date_trunc('month', timezone('utc', now()))) as pay_cents_prev_month
     `,
-    // 2. Calculate MRR (Monthly Recurring Revenue) from active subscriptions
+    // 2. MRR ≈ sum of monthly amounts on subscriptions still in a paying/trial state (amount is set from Stripe price on webhook/sync)
     prisma.subscriptions.aggregate({
       _sum: { amount: true },
-      where: { status: 'active' }
+      where: { status: { in: ['active', 'trialing'] } },
     }),
     // 3. Hourly distribution across the selected date range
     prisma.$queryRaw`
@@ -689,6 +699,8 @@ export async function getAllUsers(page: number = 1, limit: number = 20) {
       created_at: true,
       updated_at: true,
       role: true,
+      signup_type: true,
+      signup_source: true,
       _count: {
         select: {
           app_sessions: {
@@ -768,6 +780,8 @@ export async function getAllUsers(page: number = 1, limit: number = 20) {
       created_at: user.created_at,
       updated_at: user.updated_at,
       role: user.role,
+      signup_type: user.signup_type ?? 'trial',
+      signup_source: user.signup_source ?? null,
       status,
       subscription: user.subscriptions[0]?.plan_type || 'trial',
       session_count: sessionCount,
@@ -840,12 +854,15 @@ export async function createUserByAdmin(input: CreateAdminUserInput, webBaseUrl:
     throw new Error('A profile with this email already exists');
   }
 
-  const base = webBaseUrl.replace(/\/$/, '');
-  const redirectTo = `${base}/login`;
+  const redirectTo = getInviteEmailRedirectUrl(webBaseUrl);
 
   const { data: invited, error: inviteError } =
     await supabaseAdmin.auth.admin.inviteUserByEmail(emailNorm, {
-      data: { full_name: input.full_name },
+      data: {
+        full_name: input.full_name,
+        invite_flow: 'admin_user_management',
+        signup_source: 'admin_user',
+      },
       redirectTo,
     });
 
@@ -857,7 +874,7 @@ export async function createUserByAdmin(input: CreateAdminUserInput, webBaseUrl:
     throw new Error('Invite did not return a user id');
   }
 
-  await userService.createProfile(userId, emailNorm, input.full_name, 'trial');
+  await userService.createProfile(userId, emailNorm, input.full_name, 'trial', 'admin_user');
 
   const status = input.status ?? 'active';
   const subscription = input.subscription ?? 'trial';
@@ -1383,13 +1400,16 @@ export async function createCompanionByAdmin(
     return listCompanionsForAdmin();
   }
 
-  const base = webBaseUrl.replace(/\/$/, '');
-  const redirectTo = `${base}/login`;
+  const redirectTo = getInviteEmailRedirectUrl(webBaseUrl);
 
   const { data: invited, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
     emailNorm,
     {
-      data: { full_name: nameTrim },
+      data: {
+        full_name: nameTrim,
+        invite_flow: 'admin_companion',
+        signup_source: 'admin_companion',
+      },
       redirectTo,
     }
   );
@@ -1402,7 +1422,7 @@ export async function createCompanionByAdmin(
     throw new Error('Invite did not return a user id');
   }
 
-  await userService.createProfile(userId, emailNorm, nameTrim, 'trial');
+  await userService.createProfile(userId, emailNorm, nameTrim, 'trial', 'admin_companion');
   await prisma.profiles.update({
     where: { id: userId },
     data: {
@@ -1768,11 +1788,14 @@ export async function addOrgTeamMember(
     return getOrgTeamMembers(callerId, callerRole, orgId);
   }
 
-  const base = webBaseUrl.replace(/\/$/, '');
-  const redirectTo = `${base}/login`;
+  const redirectTo = getInviteEmailRedirectUrl(webBaseUrl);
 
   const { data: invited, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(emailNorm, {
-    data: { full_name: nameTrim },
+    data: {
+      full_name: nameTrim,
+      invite_flow: 'admin_org_team',
+      signup_source: 'admin_org',
+    },
     redirectTo,
   });
 
@@ -1780,7 +1803,7 @@ export async function addOrgTeamMember(
   const newId = invited?.user?.id;
   if (!newId) throw new Error('Invite did not return a user id');
 
-  await userService.createProfile(newId, emailNorm, nameTrim, 'trial');
+  await userService.createProfile(newId, emailNorm, nameTrim, 'trial', 'admin_org');
   await prisma.profiles.update({
     where: { id: newId },
     data: {

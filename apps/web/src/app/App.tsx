@@ -30,6 +30,7 @@ import { VerifyEmail } from '@/app/pages/VerifyEmail';
 import { AuthCallback } from '@/app/pages/AuthCallback';
 import { ForgotPassword } from '@/app/pages/ForgotPassword';
 import { ResetPassword } from '@/app/pages/ResetPassword';
+import { InviteCreatePassword } from '@/app/pages/InviteCreatePassword';
 
 // Coming Soon Page
 import { ComingSoon } from '@/app/pages/onboarding/ComingSoon';
@@ -346,6 +347,7 @@ export default function App() {
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/invite/create-password" element={<InviteCreatePassword />} />
           
           {/* Admin Routes - Public */}
           <Route path="/admin/login" element={<AdminLogin />} />

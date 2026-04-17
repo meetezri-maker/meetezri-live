@@ -1052,6 +1052,8 @@ model profiles {
   // - trial user flow (trial onboarding after verification)
   // - plan buyer flow (pricing->signup->verification->onboarding, no billing in onboarding)
   signup_type                                          String?                        // 'trial' | 'plan' | null
+  /// How the account was created: `app` = self-serve signup; `admin_*` = invited/provisioned by admin.
+  signup_source                                        String?                        // 'app' | 'admin_user' | 'admin_companion' | 'admin_org'
   age                                                   String?
   current_mood                                          String?
   bio                                                   String? // About-me (Account Settings); separate from current_mood

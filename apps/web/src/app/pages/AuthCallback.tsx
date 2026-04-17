@@ -100,6 +100,14 @@ export function AuthCallback() {
         return;
       }
 
+      // Invite emails use redirectTo=/invite/create-password, but old links or edge cases
+      // may land here without `next` (PKCE strips query). User metadata is set on invite.
+      const inviteFlow = sessionUser?.user_metadata?.invite_flow;
+      if (typeof inviteFlow === 'string' && inviteFlow.startsWith('admin_')) {
+        navigate('/invite/create-password', { replace: true });
+        return;
+      }
+
       try {
         const me = await api.getMe();
         console.log("AuthCallback: api.getMe after verification", {
@@ -129,7 +137,11 @@ export function AuthCallback() {
     // Check if we are in the middle of an auth flow (Code Exchange or Implicit Flow)
     const searchParams = new URLSearchParams(location.search);
     const hasCode = searchParams.get('code');
-    const hasHash = location.hash.includes('access_token') || location.hash.includes('error') || location.hash.includes('type=recovery');
+    const hasHash =
+      location.hash.includes('access_token') ||
+      location.hash.includes('error') ||
+      location.hash.includes('type=recovery') ||
+      location.hash.includes('type=invite');
 
     // If there is a code or hash, we MUST wait for handleCallback to process the new session
     // DO NOT redirect based on potential stale user session
@@ -146,7 +158,8 @@ export function AuthCallback() {
       const hasHash =
         location.hash.includes('access_token') ||
         location.hash.includes('error') ||
-        location.hash.includes('type=recovery');
+        location.hash.includes('type=recovery') ||
+        location.hash.includes('type=invite');
 
       if (hasCode || hasHash) return;
 

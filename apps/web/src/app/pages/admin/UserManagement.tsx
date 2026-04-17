@@ -151,9 +151,9 @@ export function UserManagement() {
           if (!user) {
             throw new Error("User not found");
           }
-          const subject = "Message from Ezri Admin";
-          const text = `Hello ${user.name},\n\nYou have received a message from the Ezri admin team.`;
-          const html = `<p>Hello ${user.name},</p><p>You have received a message from the Ezri admin team.</p>`;
+          const subject = "Message from Solace Admin";
+          const text = `Hello ${user.name},\n\nYou have received a message from the Solace Admin team.`;
+          const html = `<p>Hello ${user.name},</p><p>You have received a message from the Solace Admin team.</p>`;
           await api.sendEmail(user.email, subject, html, text);
         }
         setConfirmationModal((prev) => ({ ...prev, isOpen: false }));
@@ -350,9 +350,9 @@ export function UserManagement() {
           const usersToEmail = users.filter((u) => selectedUsers.includes(u.id));
           await Promise.all(
             usersToEmail.map((user) => {
-              const subject = "Message from Ezri Admin";
-              const text = `Hello ${user.name},\n\nYou have received a message from the Ezri admin team.`;
-              const html = `<p>Hello ${user.name},</p><p>You have received a message from the Ezri admin team.</p>`;
+              const subject = "Message from Solace Admin";
+              const text = `Hello ${user.name},\n\nYou have received a message from the Solace Admin team.`;
+              const html = `<p>Hello ${user.name},</p><p>You have received a message from the Solace Admin team.</p>`;
               return api.sendEmail(user.email, subject, html, text);
             })
           );

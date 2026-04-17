@@ -221,6 +221,7 @@ export function Signup() {
               last_name: data.lastName,
               email_verification_required: true,
               signup_type: 'trial',
+              signup_source: 'app',
             },
           },
         });

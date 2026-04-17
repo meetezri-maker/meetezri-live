@@ -1,6 +1,7 @@
 import prisma from '../../../lib/prisma';
 import { stripe } from '../../../config/stripe';
 import { STRIPE_PRICE_IDS, PLAN_LIMITS } from '../billing.constants';
+import { stripeSubscriptionMrrUsd } from '../stripe-mrr';
 import { CreateSubscriptionInput, UpdateSubscriptionInput, CreateCreditPurchaseInput } from '../billing.schema';
 import { CLIENT_URL } from '../billing.config';
 import {
@@ -376,6 +377,7 @@ export async function syncSubscriptionWithStripe(userId: string) {
     (existingByStripeId?.plan_type || pendingCandidate?.plan_type || null) as string | null;
 
   let updatedSub: any;
+  const mrrUsd = stripeSubscriptionMrrUsd(activeSub as any);
   const subData: any = {
     stripe_sub_id: activeSub.id,
     status: activeSub.status,
@@ -384,6 +386,7 @@ export async function syncSubscriptionWithStripe(userId: string) {
     end_date: new Date(activeSub.current_period_end * 1000),
     next_billing_at: new Date(activeSub.current_period_end * 1000),
     updated_at: new Date(),
+    ...(mrrUsd != null ? { amount: mrrUsd } : {}),
   };
 
   if (existingByStripeId) {

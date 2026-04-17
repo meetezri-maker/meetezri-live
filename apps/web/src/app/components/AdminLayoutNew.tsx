@@ -353,7 +353,7 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
                 <Heart className="w-4 h-4 text-white" fill="white" />
               </div>
               <div>
-                <h1 className="font-semibold text-sm">Ezri Admin</h1>
+                <h1 className="font-semibold text-sm">Solace Admin</h1>
                 <p className="text-xs text-gray-500">{currentRoleInfo.name}</p>
               </div>
             </Link>

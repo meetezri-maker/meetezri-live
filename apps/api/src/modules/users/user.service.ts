@@ -671,11 +671,15 @@ export async function setSignupTypeForProfile(userId: string, signupType: 'trial
   }
 }
 
+/** Where the account was created (distinct from signup_type = trial vs plan). */
+export type SignupSource = 'app' | 'admin_user' | 'admin_companion' | 'admin_org';
+
 export async function createProfile(
   userId: string,
   email: string,
   fullName?: string,
-  signupType?: 'trial' | 'plan' | null
+  signupType?: 'trial' | 'plan' | null,
+  signupSource?: SignupSource | null
 ) {
   // If signupType isn't explicitly provided, infer from Supabase auth metadata.
   const resolvedSignupType =
@@ -694,6 +698,7 @@ export async function createProfile(
         onboarding_completed: false,
         onboarding_completed_at: null,
         signup_type: resolvedSignupType,
+        ...(signupSource != null ? { signup_source: signupSource } : {}),
       },
       update: {
         email,
@@ -701,6 +706,7 @@ export async function createProfile(
         onboarding_completed: false,
         onboarding_completed_at: null,
         ...(resolvedSignupType ? { signup_type: resolvedSignupType } : {}),
+        ...(signupSource !== undefined ? { signup_source: signupSource } : {}),
       },
     });
   } catch {
@@ -747,7 +753,8 @@ export async function createProfileForPaidSignup(
   userId: string,
   email: string,
   fullName?: string,
-  signupType?: 'trial' | 'plan' | null
+  signupType?: 'trial' | 'plan' | null,
+  signupSource: SignupSource = 'app'
 ) {
   const resolvedSignupType = normalizeSignupType(signupType) ?? 'plan';
   try {
@@ -763,6 +770,7 @@ export async function createProfileForPaidSignup(
         onboarding_completed: false,
         onboarding_completed_at: null,
         signup_type: resolvedSignupType,
+        signup_source: signupSource,
       },
       update: {
         email,
@@ -770,6 +778,7 @@ export async function createProfileForPaidSignup(
         onboarding_completed: false,
         onboarding_completed_at: null,
         ...(resolvedSignupType ? { signup_type: resolvedSignupType } : {}),
+        signup_source: signupSource,
       },
     });
   } catch {

@@ -28,8 +28,8 @@ import { preloadAvatarModel } from "@/lib/avatar/preloadAvatarModel";
 import {
   companionSessionUses3dModel,
   resolveCompanionModelUrl,
-  companionCardImageUrl,
 } from "@/lib/avatar/companionModelUrl";
+import { LOBBY_AVATARS, lobbyAvatarByName } from "@/lib/avatar/lobbyAvatars";
 
 interface BackendSession {
   id: string;
@@ -68,55 +68,6 @@ function environmentLabel(value: string | undefined | null): string {
   if (!value) return "Default";
   const found = SESSION_ENVIRONMENTS.find((e) => e.value === value);
   return found?.label ?? value;
-}
-
-/** Lobby companion list — card portraits from `public/avatars/` via companionCardImageUrl */
-const LOBBY_AVATARS: {
-  id: string;
-  name: string;
-  emoji: string;
-  description: string;
-  cardImage?: string;
-}[] = [
-  {
-    id: "Alex Rivera",
-    name: "Alex Rivera",
-    emoji: "👨‍⚕️",
-    description: "Supportive and empathetic",
-    cardImage: companionCardImageUrl("Alex.png"),
-  },
-  {
-    id: "Sarah Mitchell",
-    name: "Sarah Mitchell",
-    emoji: "👩‍⚕️",
-    description: "Warm and understanding",
-    cardImage: companionCardImageUrl("sarah mitchell.png"),
-  },
-  {
-    id: "Jordan Taylor",
-    name: "Jordan Taylor",
-    emoji: "👨‍💼",
-    description: "Professional and attentive",
-    cardImage: companionCardImageUrl("jordan Taylor.png"),
-  },
-  {
-    id: "Maya chen",
-    name: "Maya Chen",
-    emoji: "👩‍🦰",
-    description: "Kind and patient",
-    cardImage: companionCardImageUrl("maya chen.png"),
-  },
-];
-
-function lobbyAvatarByName(name: string) {
-  const n = name.trim().toLowerCase();
-  if (!n) return LOBBY_AVATARS[0];
-  return (
-    LOBBY_AVATARS.find((a) => a.name.toLowerCase() === n) ??
-    LOBBY_AVATARS.find((a) => a.id.toLowerCase() === n) ??
-    LOBBY_AVATARS.find((a) => a.name.split(/\s+/)[0]?.toLowerCase() === n) ??
-    LOBBY_AVATARS[0]
-  );
 }
 
 export function SessionLobby() {
