@@ -1,7 +1,7 @@
 import prisma from '../../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { emailService } from '../email/email.service';
-import { CreateSessionInput, CreateMessageInput } from './sessions.schema';
+import { CreateSessionInput, CreateMessageInput, UpdateScheduledSessionInput } from './sessions.schema';
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -357,6 +357,48 @@ export async function getSessionById(userId: string, sessionId: string) {
     where: {
       id: sessionId,
       user_id: userId,
+    },
+  });
+}
+
+export async function cancelScheduledSession(userId: string, sessionId: string) {
+  const session = await getSessionById(userId, sessionId);
+  if (!session) throw new Error('Session not found');
+  if (session.status !== 'scheduled') {
+    throw new Error('Only scheduled sessions can be canceled');
+  }
+
+  return prisma.app_sessions.update({
+    where: { id: sessionId },
+    data: {
+      status: 'canceled',
+      ended_at: new Date(),
+    },
+  });
+}
+
+export async function updateScheduledSession(
+  userId: string,
+  sessionId: string,
+  input: UpdateScheduledSessionInput
+) {
+  const session = await getSessionById(userId, sessionId);
+  if (!session) throw new Error('Session not found');
+  if (session.status !== 'scheduled') {
+    throw new Error('Only scheduled sessions can be edited');
+  }
+
+  return prisma.app_sessions.update({
+    where: { id: sessionId },
+    data: {
+      ...(typeof input.duration_minutes === 'number'
+        ? { duration_minutes: input.duration_minutes }
+        : {}),
+      ...(typeof input.scheduled_at === 'string'
+        ? { scheduled_at: new Date(input.scheduled_at) }
+        : {}),
+      ...(input.config ? { config: input.config as any } : {}),
+      updated_at: new Date(),
     },
   });
 }

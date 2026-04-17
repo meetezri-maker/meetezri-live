@@ -6,6 +6,7 @@ import {
   deleteUserHandler,
   exportUserDataHandler,
   getCreditsHandler,
+  getRecentActivityHandler,
   initProfileHandler,
   getAllUsersHandler,
   getUserProfileAdminHandler,
@@ -78,6 +79,14 @@ export async function userRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate],
     },
     getCreditsHandler
+  );
+
+  fastify.get(
+    '/activity',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    getRecentActivityHandler
   );
 
   fastify.get(

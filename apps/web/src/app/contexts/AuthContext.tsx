@@ -93,11 +93,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
 
       if (session?.user) {
+        lastUserIdRef.current = session.user.id;
+        setIsLoading(true);
         if (window.location.hash && window.location.hash.includes('error=')) {
           window.history.replaceState(null, '', window.location.pathname);
         }
         applyAppearanceForUser(session.user);
-        void maybeClearEmailVerificationRequired(session.user);
+        maybeClearEmailVerificationRequired(session.user).finally(() => {
+          void fetchProfile();
+        });
       } else {
         handleAuthErrors();
         setIsLoading(false);
@@ -117,10 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         lastUserIdRef.current = incomingUserId;
 
         // Token refresh does not change profile; refetching here caused duplicate /users/me traffic.
-        const shouldLoadProfile =
-          event === 'INITIAL_SESSION' ||
-          event === 'SIGNED_IN' ||
-          event === 'USER_UPDATED';
+        const shouldLoadProfile = event === 'SIGNED_IN' || event === 'USER_UPDATED';
 
         if (shouldLoadProfile) {
           if (!isSameUser || !profileRef.current) {

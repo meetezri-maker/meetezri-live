@@ -966,36 +966,29 @@ export async function getProfile(userId: string) {
   result.credits_total = result.total_minutes;
   result.credits_total_seconds = totalAccountSeconds;
 
-  // Always fetch fresh email verification status from Supabase.
+  // Resolve email verification from local auth mirror (`auth.users` exposed via prisma.users)
+  // to keep GET /users/me fast and avoid remote Supabase Admin API latency on dashboard load.
   // IMPORTANT: default to `false` when we cannot verify, so UI doesn't incorrectly
   // treat users as verified (which breaks the trial verification popup).
   let emailVerified = false;
   try {
-    const { data: authData } = await supabaseAdmin.auth.admin.getUserById(
-      userId,
-    );
-    const user = authData?.user;
-    const isConfirmed = !!user?.email_confirmed_at;
-    // Check custom metadata flag we set during trial signup
-    const verificationRequired = user?.user_metadata?.email_verification_required === true;
+    const authUser = await prisma.users.findUnique({
+      where: { id: userId },
+      select: {
+        email_confirmed_at: true,
+        raw_user_meta_data: true,
+      },
+    });
+    const isConfirmed = !!authUser?.email_confirmed_at;
+    const rawMeta = (authUser?.raw_user_meta_data ?? {}) as Record<string, any>;
+    // Check custom metadata flag we set during trial signup.
+    const verificationRequired = rawMeta?.email_verification_required === true;
 
     // Trial-only consistency:
-    // If Supabase confirms the email, clear the legacy trial flag so downstream
-    // `email_verified` becomes true. This is required when the verification link
-    // redirects directly to `/app/user-profile` (skipping `/auth/callback`).
+    // If email is confirmed, treat verification_required as cleared logically.
+    // (The callback flow may clear it later; we avoid write-side effects in GET /users/me.)
     const signupType = (result as any)?.signup_type;
     const isTrial = signupType === 'trial' || (result?.subscription_plan === 'trial');
-    if (isTrial && isConfirmed && verificationRequired) {
-      try {
-        await supabaseAdmin.auth.admin.updateUserById(userId, {
-          user_metadata: { ...(user?.user_metadata as any), email_verification_required: false },
-        });
-      } catch {
-        // best-effort; we'll still compute verified from current values below
-      }
-    }
-
-    // Recompute verificationRequired in case it was cleared successfully.
     const verificationRequiredAfter =
       isTrial && isConfirmed && verificationRequired
         ? false
@@ -1007,8 +1000,8 @@ export async function getProfile(userId: string) {
   // Debug visibility: explain why `email_verified` was computed.
   console.log("[emailVerified debug]", {
     userId,
-    email_confirmed_at: user?.email_confirmed_at ?? null,
-    email_verification_required: user?.user_metadata?.email_verification_required ?? null,
+    email_confirmed_at: authUser?.email_confirmed_at ?? null,
+    email_verification_required: rawMeta?.email_verification_required ?? null,
     verificationRequired,
     computedEmailVerified: emailVerified,
     subscription_plan: result?.subscription_plan ?? null,
@@ -1106,12 +1099,120 @@ export async function getCredits(userId: string) {
   };
 }
 
+export async function getRecentActivity(userId: string, limit: number = 25) {
+  const safeLimit = Math.min(Math.max(limit, 1), 100);
+  const normalizeSessionTypeLabel = (value: string | null | undefined) => {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw) return 'session';
+    if (raw === 'instant' || raw === 'scheduled') return raw;
+    return 'session';
+  };
+
+  const [activityEvents, moodEntries, journalEntries, sessions] = await Promise.all([
+    prisma.activity_events.findMany({
+      where: { user_id: userId },
+      orderBy: { timestamp: 'desc' },
+      take: safeLimit,
+      select: {
+        id: true,
+        timestamp: true,
+        app_name: true,
+        window_title: true,
+        metadata: true,
+      },
+    }),
+    prisma.mood_entries.findMany({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+      take: safeLimit,
+      select: {
+        id: true,
+        mood: true,
+        intensity: true,
+        created_at: true,
+      },
+    }),
+    prisma.journal_entries.findMany({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+      take: safeLimit,
+      select: {
+        id: true,
+        title: true,
+        created_at: true,
+      },
+    }),
+    prisma.app_sessions.findMany({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+      take: safeLimit,
+      select: {
+        id: true,
+        status: true,
+        type: true,
+        duration_minutes: true,
+        created_at: true,
+      },
+    }),
+  ]);
+
+  const merged = [
+    ...activityEvents.map((event) => ({
+      id: `event:${event.id}`,
+      type: 'event',
+      text:
+        event.window_title ||
+        event.app_name ||
+        ((event.metadata as Record<string, any> | null)?.action as string | undefined) ||
+        'Used the app',
+      created_at: event.timestamp.toISOString(),
+      metadata: event.metadata,
+    })),
+    ...moodEntries.map((entry) => ({
+      id: `mood:${entry.id}`,
+      type: 'mood',
+      text: `Logged ${entry.mood} (${entry.intensity}/10)`,
+      created_at: entry.created_at.toISOString(),
+      mood: entry.mood,
+    })),
+    ...journalEntries.map((entry) => ({
+      id: `journal:${entry.id}`,
+      type: 'journal',
+      text: `Wrote a journal entry${entry.title ? `: ${entry.title}` : ''}`,
+      created_at: entry.created_at.toISOString(),
+    })),
+    ...sessions.map((session) => ({
+      id: `session:${session.id}`,
+      type: 'session',
+      text: (() => {
+        const typeLabel = normalizeSessionTypeLabel(session.type);
+        if (session.status === 'completed') {
+          return `Completed ${typeLabel} session${session.duration_minutes ? ` (${session.duration_minutes} min)` : ''}`;
+        }
+        if (session.status === 'scheduled') {
+          return typeLabel === 'scheduled'
+            ? 'Scheduled session'
+            : `Scheduled ${typeLabel} session`;
+        }
+        return `Session ${session.status}`;
+      })(),
+      created_at: session.created_at.toISOString(),
+      status: session.status,
+    })),
+  ];
+
+  return merged
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, safeLimit);
+}
+
 export async function updateProfile(userId: string, data: UpdateProfileInput) {
   const {
     emergency_contact_name,
     emergency_contact_phone,
     emergency_contact_relationship,
     bio,
+    brain_health_settings,
     ...profileForPrisma
   } = data;
 
@@ -1155,6 +1256,11 @@ export async function updateProfile(userId: string, data: UpdateProfileInput) {
         ? null
         : bio;
 
+  const brainHealthDbValue =
+    brain_health_settings === undefined
+      ? undefined
+      : JSON.stringify(brain_health_settings);
+
   // `bio` is written via raw SQL so profile saves work even when the generated Prisma
   // client is stale (e.g. dev server locks query_engine during `prisma generate`).
   const updated = await prisma.$transaction(async (tx) => {
@@ -1167,12 +1273,23 @@ export async function updateProfile(userId: string, data: UpdateProfileInput) {
         Prisma.sql`UPDATE public.profiles SET bio = ${bioDbValue} WHERE id = ${userId}::uuid`
       );
     }
+    if (brainHealthDbValue !== undefined) {
+      await tx.$executeRaw(
+        Prisma.sql`UPDATE public.profiles SET brain_health_settings = ${brainHealthDbValue}::jsonb WHERE id = ${userId}::uuid`
+      );
+    }
     return row;
   });
 
   invalidateUserProfileCache(userId);
-  if (bioDbValue !== undefined) {
-    return { ...updated, bio: bioDbValue };
+  if (bioDbValue !== undefined || brainHealthDbValue !== undefined) {
+    return {
+      ...updated,
+      ...(bioDbValue !== undefined ? { bio: bioDbValue } : {}),
+      ...(brainHealthDbValue !== undefined
+        ? { brain_health_settings: brain_health_settings }
+        : {}),
+    };
   }
   return updated;
 }

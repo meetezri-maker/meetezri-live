@@ -1076,6 +1076,7 @@ model profiles {
   purchased_credits                                     Int?                           @default(0)
   purchased_credits_seconds                             Int?                           @default(0)
   privacy_settings                                      Json?
+  brain_health_settings                                 Json?
   account_status                                        String?                        @default("active")
   // Single source of truth for onboarding completion.
   // Nullable for backwards-compatibility: older rows may not have this column yet.

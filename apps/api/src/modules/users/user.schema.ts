@@ -138,6 +138,7 @@ export const updateProfileSchema = z.object({
   emergency_contact_relationship: z.string().optional(),
   notification_preferences: z.record(z.any()).optional(),
   privacy_settings: z.record(z.any()).optional(),
+  brain_health_settings: z.record(z.any()).optional(),
 }).superRefine((values, ctx) => {
   const name = values.emergency_contact_name?.trim() ?? '';
   const phone = values.emergency_contact_phone?.trim() ?? '';
