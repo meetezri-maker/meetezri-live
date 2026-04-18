@@ -1,11 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { AppLayout } from '@/app/components/AppLayout';
-import { Brain, CheckCircle, Star, Users, Volume2, Heart, ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
+import { Brain, CheckCircle, Star, Users, Volume2, Heart, ArrowLeft, RefreshCw, AlertCircle, User } from 'lucide-react';
 import { AnimatedCard } from '@/app/components/AnimatedCard';
 import { Link } from 'react-router-dom';
-import { resolveCompanionPortraitUrl } from '@/lib/avatar/companionModelUrl';
-import { findLobbyAvatar, isPlaceholderAvatarName, LOBBY_AVATARS } from '@/lib/avatar/lobbyAvatars';
+import { DEFAULT_AI_COMPANIONS } from '@meetezri/shared';
+import {
+  companionCardImageUrl,
+  effectiveAvatarImageUrlFromDb,
+  tryResolveCompanionPortraitUrl,
+} from '@/lib/avatar/companionModelUrl';
+import { findLobbyAvatar, isPlaceholderAvatarName } from '@/lib/avatar/lobbyAvatars';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -18,9 +23,7 @@ interface AIAvatar {
   personality: string;
   specialty: string[];
   description: string;
-  /** Emoji fallback when `imageUrl` is not set */
-  image: string;
-  /** Optional portrait from `public/avatars/` */
+  /** Portrait from DB URL/path or `public/avatars/<Name>.png` */
   imageUrl?: string;
   voiceType: string;
   accentType: string;
@@ -29,16 +32,17 @@ interface AIAvatar {
 }
 
 function mapApiRowToChangeAvatar(row: Record<string, unknown>): AIAvatar {
-  const name = String(row.name ?? "");
+  const name = String(row.name ?? "").trim();
   const lobby = findLobbyAvatar(name);
-  const rawUrl = typeof row.image_url === "string" ? row.image_url.trim() : "";
-  const imageUrl =
-    lobby?.cardImage ??
-    (rawUrl && /^https?:\/\//i.test(rawUrl) ? rawUrl : resolveCompanionPortraitUrl(name));
-  const image =
-    rawUrl && !/^https?:\/\//i.test(rawUrl)
-      ? rawUrl
-      : lobby?.emoji ?? "👤";
+  const rawUrl =
+    typeof row.image_url === "string"
+      ? effectiveAvatarImageUrlFromDb(row.image_url.trim())
+      : "";
+
+  const imageUrl = rawUrl
+    ? rawUrl
+    : lobby?.cardImage ?? tryResolveCompanionPortraitUrl(name) ?? undefined;
+
   const specialties = Array.isArray(row.specialties) ? (row.specialties as string[]) : [];
   return {
     id: String(row.id ?? name),
@@ -48,13 +52,29 @@ function mapApiRowToChangeAvatar(row: Record<string, unknown>): AIAvatar {
     personality: String(row.personality ?? ""),
     specialty: specialties,
     description: String(row.description ?? ""),
-    image,
     imageUrl,
     voiceType: String(row.voice_type ?? ""),
     accentType: String(row.accent_type ?? ""),
     rating: Number(row.rating) || 0,
     totalUsers: typeof row.unique_users === "number" ? row.unique_users : 0,
   };
+}
+
+function fallbackAiAvatarsFromDefaults(): AIAvatar[] {
+  return DEFAULT_AI_COMPANIONS.map((c) => ({
+    id: c.name,
+    name: c.name,
+    gender: c.gender,
+    ageRange: c.age_range,
+    personality: c.personality,
+    specialty: [...c.specialties],
+    description: c.description,
+    imageUrl: companionCardImageUrl(c.portraitPng),
+    voiceType: c.voice_type,
+    accentType: c.accent_type,
+    rating: c.rating,
+    totalUsers: 0,
+  }));
 }
 
 export function ChangeAvatar() {
@@ -73,22 +93,7 @@ export function ChangeAvatar() {
       try {
         const rows = await api.aiAvatars.getAll();
         if (!Array.isArray(rows) || rows.length === 0) {
-          const fallback = LOBBY_AVATARS.map((lobby) => ({
-            id: lobby.id,
-            name: lobby.name,
-            gender: "",
-            ageRange: "",
-            personality: "",
-            specialty: [] as string[],
-            description: lobby.description,
-            image: lobby.emoji,
-            imageUrl: lobby.cardImage ?? resolveCompanionPortraitUrl(lobby.name),
-            voiceType: "",
-            accentType: "",
-            rating: 0,
-            totalUsers: 0,
-          }));
-          if (!cancelled) setAiAvatars(fallback);
+          if (!cancelled) setAiAvatars(fallbackAiAvatarsFromDefaults());
           return;
         }
         const mapped = rows
@@ -98,42 +103,10 @@ export function ChangeAvatar() {
           )
           .map((r: Record<string, unknown>) => mapApiRowToChangeAvatar(r));
         if (!cancelled) {
-          setAiAvatars(mapped.length > 0 ? mapped : LOBBY_AVATARS.map((lobby) => ({
-            id: lobby.id,
-            name: lobby.name,
-            gender: "",
-            ageRange: "",
-            personality: "",
-            specialty: [] as string[],
-            description: lobby.description,
-            image: lobby.emoji,
-            imageUrl: lobby.cardImage ?? resolveCompanionPortraitUrl(lobby.name),
-            voiceType: "",
-            accentType: "",
-            rating: 0,
-            totalUsers: 0,
-          })));
+          setAiAvatars(mapped.length > 0 ? mapped : fallbackAiAvatarsFromDefaults());
         }
       } catch {
-        if (!cancelled) {
-          setAiAvatars(
-            LOBBY_AVATARS.map((lobby) => ({
-              id: lobby.id,
-              name: lobby.name,
-              gender: "",
-              ageRange: "",
-              personality: "",
-              specialty: [] as string[],
-              description: lobby.description,
-              image: lobby.emoji,
-              imageUrl: lobby.cardImage ?? resolveCompanionPortraitUrl(lobby.name),
-              voiceType: "",
-              accentType: "",
-              rating: 0,
-              totalUsers: 0,
-            }))
-          );
-        }
+        if (!cancelled) setAiAvatars(fallbackAiAvatarsFromDefaults());
       } finally {
         if (!cancelled) setAvatarsLoading(false);
       }
@@ -242,7 +215,9 @@ export function ChangeAvatar() {
                       className="h-28 w-28 shrink-0 rounded-2xl object-cover border-2 border-purple-200/80 dark:border-purple-700/80 shadow-md"
                     />
                   ) : (
-                    <div className="text-7xl">{currentAvatar.image}</div>
+                    <div className="h-28 w-28 shrink-0 rounded-2xl border-2 border-purple-200/80 dark:border-purple-700/80 bg-muted flex items-center justify-center">
+                      <User className="h-14 w-14 text-muted-foreground" aria-hidden />
+                    </div>
                   )}
                   <div className="flex-1">
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{currentAvatar.name}</h3>
@@ -344,7 +319,9 @@ export function ChangeAvatar() {
                               className="h-24 w-24 shrink-0 rounded-xl object-cover border border-gray-200 dark:border-slate-600"
                             />
                           ) : (
-                            <div className="text-6xl">{avatar.image}</div>
+                            <div className="h-24 w-24 shrink-0 rounded-xl border border-gray-200 dark:border-slate-600 bg-muted flex items-center justify-center">
+                              <User className="h-12 w-12 text-muted-foreground" aria-hidden />
+                            </div>
                           )}
                           <div className="flex-1">
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">{avatar.name}</h3>

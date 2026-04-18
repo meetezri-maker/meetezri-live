@@ -21,7 +21,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../../lib/api";
 import { Skeleton } from "../../components/ui/skeleton";
-import { companionCardImageUrl } from "@/lib/avatar/companionModelUrl";
+import {
+  companionCardImageUrl,
+  tryResolveCompanionPortraitUrl,
+} from "@/lib/avatar/companionModelUrl";
+import { findLobbyAvatar } from "@/lib/avatar/lobbyAvatars";
 
 interface SessionData {
   id: string;
@@ -68,21 +72,21 @@ interface BackendSession {
   };
 }
 
-const HISTORY_AVATARS: { name: string; image: string }[] = [
-  { name: "Alex Rivera", image: companionCardImageUrl("Alex.png") },
-  { name: "Sarah Mitchell", image: companionCardImageUrl("Sara Mitchell.png") },
-  { name: "Jordan Taylor", image: companionCardImageUrl("jordan Taylor.png") },
-  { name: "Maya Chen", image: companionCardImageUrl("maya chen.png") },
-];
+const DEFAULT_HISTORY_AVATAR = {
+  name: "Alex",
+  image: companionCardImageUrl("Alex.png"),
+};
 
 function resolveHistoryAvatar(name: string | undefined | null) {
-  const normalized = (name ?? "").trim().toLowerCase();
-  if (!normalized) return HISTORY_AVATARS[0];
-  return (
-    HISTORY_AVATARS.find((a) => a.name.toLowerCase() === normalized) ??
-    HISTORY_AVATARS.find((a) => a.name.split(/\s+/)[0]?.toLowerCase() === normalized) ??
-    HISTORY_AVATARS[0]
-  );
+  const raw = (name ?? "").trim();
+  if (!raw) return DEFAULT_HISTORY_AVATAR;
+  const lobby = findLobbyAvatar(raw);
+  if (lobby?.cardImage) {
+    return { name: lobby.name, image: lobby.cardImage };
+  }
+  const img = tryResolveCompanionPortraitUrl(raw);
+  if (img) return { name: raw, image: img };
+  return DEFAULT_HISTORY_AVATAR;
 }
 
 const SESSION_ENVIRONMENT_LABELS: Record<string, string> = {
@@ -593,7 +597,7 @@ export function SessionHistory() {
                   <div className="flex items-center gap-4 p-4 sm:p-5">
                     <div className="h-16 w-16 rounded-full overflow-hidden border-2 border-white dark:border-gray-900 shadow-md shrink-0">
                       <img
-                        src={session.avatarImage || HISTORY_AVATARS[0].image}
+                        src={session.avatarImage || DEFAULT_HISTORY_AVATAR.image}
                         alt={session.avatarName || "Companion avatar"}
                         className="h-full w-full object-cover object-top"
                       />

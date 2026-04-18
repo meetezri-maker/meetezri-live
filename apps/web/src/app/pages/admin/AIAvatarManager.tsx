@@ -1,10 +1,18 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AdminLayoutNew } from '@/app/components/AdminLayoutNew';
+import { useAuth } from '@/app/contexts/AuthContext';
 import { api } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
+import { DEFAULT_AI_COMPANIONS } from '@meetezri/shared';
 import { findLobbyAvatar, isPlaceholderAvatarName } from '@/lib/avatar/lobbyAvatars';
-import { resolveCompanionPortraitUrl } from '@/lib/avatar/companionModelUrl';
+import {
+  effectiveAvatarImageUrlFromDb,
+  tryResolveCompanionPortraitUrl,
+} from '@/lib/avatar/companionModelUrl';
+
 import { 
   Brain, 
   Plus, 
@@ -21,30 +29,33 @@ import {
   Volume2,
   Heart,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  User,
+  Upload,
+  Loader2,
 } from 'lucide-react';
 
-/** Same card portraits as Session Lobby when the name matches a companion. */
+/** Portrait: optional URL/path from DB, else `public/avatars/<Name>.png`. */
 function AdminAvatarVisual({ name, imageFallback }: { name: string; imageFallback: string }) {
-  const lobby = findLobbyAvatar(name);
-  if (lobby?.cardImage) {
-    return (
-      <div className="flex-shrink-0 w-28 h-28 rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm bg-gray-50">
-        <img src={lobby.cardImage} alt={name} className="w-full h-full object-cover" />
-      </div>
-    );
-  }
-  const raw = imageFallback?.trim() ?? '';
-  if (/^https?:\/\//i.test(raw)) {
+  const raw = effectiveAvatarImageUrlFromDb(imageFallback?.trim() ?? "");
+  if (raw) {
     return (
       <div className="flex-shrink-0 w-28 h-28 rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm bg-gray-50">
         <img src={raw} alt={name} className="w-full h-full object-cover" />
       </div>
     );
   }
+  const portrait = tryResolveCompanionPortraitUrl(name);
+  if (portrait) {
+    return (
+      <div className="flex-shrink-0 w-28 h-28 rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm bg-gray-50">
+        <img src={portrait} alt={name} className="w-full h-full object-cover" />
+      </div>
+    );
+  }
   return (
-    <div className="flex-shrink-0 w-28 h-28 flex items-center justify-center rounded-2xl border-2 border-gray-100 bg-gray-50 text-6xl leading-none">
-      {raw || '👤'}
+    <div className="flex-shrink-0 w-28 h-28 flex items-center justify-center rounded-2xl border-2 border-gray-100 bg-gray-50">
+      <User className="w-14 h-14 text-gray-400" aria-hidden />
     </div>
   );
 }
@@ -66,11 +77,75 @@ interface AIAvatar {
   avgSessionLength: number;
   isActive: boolean;
   createdAt: string;
+  /** Shown when API returned no rows — previews only until you seed or create in the database */
+  isLocalDefault?: boolean;
+}
+
+/** Upload to Supabase `avatars` bucket; path must start with `userId/` per RLS. */
+async function uploadCompanionPortraitFile(
+  file: File,
+  userId: string,
+  companionName: string
+): Promise<string> {
+  const slug =
+    companionName
+      .trim()
+      .replace(/[^a-zA-Z0-9._\s-]+/g, "")
+      .replace(/\s+/g, "-")
+      .slice(0, 64) || "companion";
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  const safeExt =
+    ext && ["jpg", "jpeg", "png", "webp", "gif"].includes(ext) ? ext : "png";
+  const path = `${userId}/ai-companions/${slug}/${Date.now()}.${safeExt}`;
+  const contentType =
+    file.type ||
+    (safeExt === "jpg" || safeExt === "jpeg"
+      ? "image/jpeg"
+      : safeExt === "png"
+        ? "image/png"
+        : safeExt === "webp"
+          ? "image/webp"
+          : "image/gif");
+  const { error } = await supabase.storage.from("avatars").upload(path, file, {
+    contentType,
+    upsert: true,
+  });
+  if (error) throw error;
+  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+  return data.publicUrl;
+}
+
+function buildLocalDefaultAvatars(): AIAvatar[] {
+  return DEFAULT_AI_COMPANIONS.map((c) => ({
+    id: `local:${c.name}`,
+    name: c.name,
+    gender: c.gender,
+    ageRange: c.age_range,
+    personality: c.personality,
+    specialty: [...c.specialties],
+    description: c.description,
+    image: "",
+    voiceType: c.voice_type,
+    accentType: c.accent_type,
+    rating: c.rating,
+    totalUsers: 0,
+    totalSessions: 0,
+    avgSessionLength: 0,
+    isActive: true,
+    createdAt: "",
+    isLocalDefault: true,
+  }));
 }
 
 export function AIAvatarManager() {
+  const { user } = useAuth();
   const [avatars, setAvatars] = useState<AIAvatar[]>([]);
+  /** When false, the list is filled from `DEFAULT_AI_COMPANIONS` only (database is empty). */
+  const [usingDbRows, setUsingDbRows] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const [portraitFile, setPortraitFile] = useState<File | null>(null);
+  const [portraitPreviewUrl, setPortraitPreviewUrl] = useState<string | null>(null);
+  const [isSavingAvatar, setIsSavingAvatar] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -85,7 +160,7 @@ export function AIAvatarManager() {
     personality: '',
     specialty: [] as string[],
     description: '',
-    image: '👤',
+    image: '',
     voiceType: '',
     accentType: ''
   });
@@ -94,7 +169,8 @@ export function AIAvatarManager() {
     try {
       setIsLoading(true);
       const data = await api.aiAvatars.getAll();
-      const mapped = data.map((item: any) => ({
+      const rows = Array.isArray(data) ? data : [];
+      const mapped = rows.map((item: any) => ({
         id: item.id,
         name: item.name,
         gender: item.gender,
@@ -102,7 +178,9 @@ export function AIAvatarManager() {
         personality: item.personality,
         specialty: item.specialties || [],
         description: item.description,
-        image: item.image_url,
+        image: effectiveAvatarImageUrlFromDb(
+          typeof item.image_url === "string" ? item.image_url : ""
+        ),
         voiceType: item.voice_type,
         accentType: item.accent_type,
         rating: Number(item.rating) || 5.0,
@@ -112,9 +190,17 @@ export function AIAvatarManager() {
         isActive: item.is_active,
         createdAt: item.created_at
       }));
-      setAvatars(mapped);
+      if (mapped.length > 0) {
+        setAvatars(mapped);
+        setUsingDbRows(true);
+      } else {
+        setAvatars(buildLocalDefaultAvatars());
+        setUsingDbRows(false);
+      }
     } catch (error) {
       console.error("Failed to fetch avatars", error);
+      setAvatars(buildLocalDefaultAvatars());
+      setUsingDbRows(false);
     } finally {
       setIsLoading(false);
     }
@@ -124,12 +210,25 @@ export function AIAvatarManager() {
     fetchAvatars();
   }, []);
 
-  const stats = {
-    totalAvatars: avatars.length,
-    activeAvatars: avatars.filter(a => a.isActive).length,
-    totalSessionUsage: avatars.reduce((sum, a) => sum + a.totalSessions, 0),
-    avgRating: avatars.length > 0 ? (avatars.reduce((sum, a) => sum + a.rating, 0) / avatars.length).toFixed(1) : "0.0"
-  };
+  const stats = useMemo(() => {
+    if (!usingDbRows) {
+      return {
+        totalAvatars: 0,
+        activeAvatars: 0,
+        totalSessionUsage: 0,
+        avgRating: "0.0",
+      };
+    }
+    return {
+      totalAvatars: avatars.length,
+      activeAvatars: avatars.filter((a) => a.isActive).length,
+      totalSessionUsage: avatars.reduce((sum, a) => sum + a.totalSessions, 0),
+      avgRating:
+        avatars.length > 0
+          ? (avatars.reduce((sum, a) => sum + a.rating, 0) / avatars.length).toFixed(1)
+          : "0.0",
+    };
+  }, [avatars, usingDbRows]);
 
   const filteredAvatars = avatars.filter(
     (avatar) =>
@@ -140,23 +239,25 @@ export function AIAvatarManager() {
   /** Active DB companions — same names users see in Session Lobby (portrait from lobby assets or URL). */
   const inAppCompanionChips = useMemo(() => {
     return avatars
-      .filter((a) => a.isActive && !isPlaceholderAvatarName(a.name))
+      .filter(
+        (a) =>
+          !a.isLocalDefault && a.isActive && !isPlaceholderAvatarName(a.name)
+      )
       .map((a) => {
-        const lobby = findLobbyAvatar(a.name);
-        const raw = a.image?.trim() ?? "";
+        const raw = effectiveAvatarImageUrlFromDb(a.image?.trim() ?? "");
         const src =
-          lobby?.cardImage ??
-          (/^https?:\/\//i.test(raw) ? raw : null) ??
-          resolveCompanionPortraitUrl(a.name);
-        const emoji =
-          raw && !/^https?:\/\//i.test(raw)
-            ? raw
-            : lobby?.emoji ?? "👤";
-        return { id: a.id, name: a.name, src, emoji };
+          raw || tryResolveCompanionPortraitUrl(a.name) || undefined;
+        return { id: a.id, name: a.name, src };
       });
   }, [avatars]);
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
+    if (id.startsWith("local:")) {
+      toast.message("Save companions to the database first", {
+        description: "Run the API seed script or use Create / Add to database.",
+      });
+      return;
+    }
     try {
       await api.aiAvatars.update(id, { is_active: !currentStatus });
       fetchAvatars();
@@ -166,6 +267,12 @@ export function AIAvatarManager() {
   };
 
   const handleDelete = async (id: string) => {
+    if (id.startsWith("local:")) {
+      toast.message("Nothing to delete yet", {
+        description: "These previews are not stored in the database.",
+      });
+      return;
+    }
     try {
       await api.aiAvatars.delete(id);
       setShowDeleteConfirm(false);
@@ -176,7 +283,24 @@ export function AIAvatarManager() {
   };
 
   const handleCreate = async () => {
+    if (!formData.name.trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    if (portraitFile && !user?.id) {
+      toast.error("Sign in to upload a portrait");
+      return;
+    }
+    setIsSavingAvatar(true);
     try {
+      let imageUrl: string | null = formData.image.trim() || null;
+      if (portraitFile && user?.id) {
+        imageUrl = await uploadCompanionPortraitFile(
+          portraitFile,
+          user.id,
+          formData.name
+        );
+      }
       const payload = {
         name: formData.name,
         gender: formData.gender,
@@ -184,23 +308,46 @@ export function AIAvatarManager() {
         personality: formData.personality,
         specialties: formData.specialty,
         description: formData.description,
-        image_url: formData.image,
+        image_url: imageUrl,
         voice_type: formData.voiceType,
         accent_type: formData.accentType,
         is_active: true
       };
       await api.aiAvatars.create(payload);
+      toast.success("Avatar created — portrait URL saved on the record");
       setShowCreateModal(false);
       resetForm();
       fetchAvatars();
     } catch (error) {
       console.error("Failed to create avatar", error);
+      toast.error(
+        error instanceof Error ? error.message : "Could not create avatar"
+      );
+    } finally {
+      setIsSavingAvatar(false);
     }
   };
 
   const handleEdit = async () => {
     if (selectedAvatar) {
+      if (!formData.name.trim()) {
+        toast.error("Name is required");
+        return;
+      }
+      if (portraitFile && !user?.id) {
+        toast.error("Sign in to upload a portrait");
+        return;
+      }
+      setIsSavingAvatar(true);
       try {
+        let imageUrl: string | null = formData.image.trim() || null;
+        if (portraitFile && user?.id) {
+          imageUrl = await uploadCompanionPortraitFile(
+            portraitFile,
+            user.id,
+            formData.name
+          );
+        }
         const payload = {
           name: formData.name,
           gender: formData.gender,
@@ -208,22 +355,29 @@ export function AIAvatarManager() {
           personality: formData.personality,
           specialties: formData.specialty,
           description: formData.description,
-          image_url: formData.image,
+          image_url: imageUrl,
           voice_type: formData.voiceType,
           accent_type: formData.accentType
         };
         await api.aiAvatars.update(selectedAvatar.id, payload);
+        toast.success("Avatar updated");
         setShowEditModal(false);
         setSelectedAvatar(null);
         resetForm();
         fetchAvatars();
       } catch (error) {
         console.error("Failed to update avatar", error);
+        toast.error(
+          error instanceof Error ? error.message : "Could not update avatar"
+        );
+      } finally {
+        setIsSavingAvatar(false);
       }
     }
   };
 
   const openEditModal = (avatar: AIAvatar) => {
+    clearPortraitPick();
     setSelectedAvatar(avatar);
     setFormData({
       name: avatar.name,
@@ -239,7 +393,34 @@ export function AIAvatarManager() {
     setShowEditModal(true);
   };
 
+  /** Pre-filled create flow for a default preview row (database empty). */
+  const openCreateFromDefault = (avatar: AIAvatar) => {
+    clearPortraitPick();
+    setSelectedAvatar(null);
+    setFormData({
+      name: avatar.name,
+      gender: avatar.gender,
+      ageRange: avatar.ageRange,
+      personality: avatar.personality,
+      specialty: avatar.specialty,
+      description: avatar.description,
+      image: "",
+      voiceType: avatar.voiceType,
+      accentType: avatar.accentType,
+    });
+    setShowCreateModal(true);
+  };
+
+  const clearPortraitPick = useCallback(() => {
+    setPortraitPreviewUrl((prev) => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setPortraitFile(null);
+  }, []);
+
   const resetForm = () => {
+    clearPortraitPick();
     setFormData({
       name: '',
       gender: '',
@@ -247,13 +428,44 @@ export function AIAvatarManager() {
       personality: '',
       specialty: [],
       description: '',
-      image: '👤',
+      image: '',
       voiceType: '',
       accentType: ''
     });
   };
 
-  const emojiOptions = ['👨‍⚕️', '👩‍⚕️', '🧑‍⚕️', '👨‍💼', '👩‍💼', '👨', '👩', '🧑', '👴', '👵', '👩‍🦳', '👨‍🦳'];
+  const onPortraitFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!f.type.startsWith("image/")) {
+      toast.error("Choose an image file");
+      return;
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      toast.error("Image must be 5 MB or smaller");
+      return;
+    }
+    setPortraitFile(f);
+    setPortraitPreviewUrl((old) => {
+      if (old?.startsWith("blob:")) URL.revokeObjectURL(old);
+      return URL.createObjectURL(f);
+    });
+  };
+
+  const modalPortraitPreview = useMemo(() => {
+    if (portraitPreviewUrl) return portraitPreviewUrl;
+    const raw = formData.image.trim();
+    if (raw) {
+      const eff = effectiveAvatarImageUrlFromDb(raw);
+      if (eff) return eff;
+      if (/^https?:\/\//i.test(raw) || raw.startsWith("/")) return raw;
+    }
+    if (formData.name.trim()) {
+      return tryResolveCompanionPortraitUrl(formData.name) ?? undefined;
+    }
+    return undefined;
+  }, [portraitPreviewUrl, formData.image, formData.name]);
 
   if (isLoading) {
     return (
@@ -284,7 +496,10 @@ export function AIAvatarManager() {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => {
+                resetForm();
+                setShowCreateModal(true);
+              }}
               className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl text-white font-semibold flex items-center gap-2 hover:shadow-lg"
             >
               <Plus className="w-5 h-5" />
@@ -341,6 +556,17 @@ export function AIAvatarManager() {
           </div>
         </div>
 
+        {!usingDbRows && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <p className="font-medium">No companion rows in the database yet</p>
+            <p className="text-amber-900/90 mt-1">
+              The cards below are previews from product defaults. Stats stay at 0 until you seed or create
+              records. Use <span className="font-semibold">Add to database</span> on a card (or{" "}
+              <span className="font-semibold">Create New Avatar</span>) to save them.
+            </p>
+          </div>
+        )}
+
         {/* Avatars List */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {filteredAvatars.map((avatar, index) => (
@@ -350,9 +576,18 @@ export function AIAvatarManager() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
               className={`bg-white rounded-2xl border-2 p-6 shadow-lg transition-all ${
-                avatar.isActive ? 'border-green-200' : 'border-gray-200 opacity-60'
+                avatar.isLocalDefault
+                  ? "border-dashed border-amber-200"
+                  : avatar.isActive
+                    ? "border-green-200"
+                    : "border-gray-200 opacity-60"
               }`}
             >
+              {avatar.isLocalDefault && (
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-amber-800">
+                  Preview — not in database
+                </p>
+              )}
               {/* Header */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-start gap-4">
@@ -374,18 +609,24 @@ export function AIAvatarManager() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => handleToggleActive(avatar.id, avatar.isActive)}
-                    className={`p-2 rounded-lg transition-all ${
-                      avatar.isActive
-                        ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                        : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                    }`}
-                  >
-                    {avatar.isActive ? <Power className="w-5 h-5" /> : <PowerOff className="w-5 h-5" />}
-                  </motion.button>
+                  {avatar.isLocalDefault ? (
+                    <span className="text-xs text-amber-700 font-medium px-2 py-1 rounded-lg bg-amber-100">
+                      DB pending
+                    </span>
+                  ) : (
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => handleToggleActive(avatar.id, avatar.isActive)}
+                      className={`p-2 rounded-lg transition-all ${
+                        avatar.isActive
+                          ? "bg-green-100 text-green-600 hover:bg-green-200"
+                          : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                      }`}
+                    >
+                      {avatar.isActive ? <Power className="w-5 h-5" /> : <PowerOff className="w-5 h-5" />}
+                    </motion.button>
+                  )}
                 </div>
               </div>
 
@@ -450,34 +691,38 @@ export function AIAvatarManager() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => openEditModal(avatar)}
+                  onClick={() =>
+                    avatar.isLocalDefault ? openCreateFromDefault(avatar) : openEditModal(avatar)
+                  }
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
                 >
                   <Edit className="w-4 h-4" />
-                  Edit
+                  {avatar.isLocalDefault ? "Add to database" : "Edit"}
                 </motion.button>
 
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => {
-                    setSelectedAvatar(avatar);
-                    setShowDeleteConfirm(true);
-                  }}
-                  className="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-all"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </motion.button>
+                {!avatar.isLocalDefault && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => {
+                      setSelectedAvatar(avatar);
+                      setShowDeleteConfirm(true);
+                    }}
+                    className="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </motion.button>
+                )}
               </div>
             </motion.div>
           ))}
         </div>
 
-        {/* Empty State */}
+        {/* Empty State (e.g. search has no matches) */}
         {filteredAvatars.length === 0 && (
           <div className="text-center py-16">
             <Brain className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">No avatars found</h3>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">No matches</h3>
             <p className="text-gray-600">Try adjusting your search or create a new avatar</p>
           </div>
         )}
@@ -493,7 +738,10 @@ export function AIAvatarManager() {
           {inAppCompanionChips.length === 0 ? (
             <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
               No active companions yet, or none match lobby file names. Activate avatars in the list above and use
-              names like &quot;Alex Rivera&quot; or &quot;Sarah Mitchell&quot; so portraits resolve.
+              names that match PNG files in{" "}
+              <code className="text-xs bg-gray-100 px-1 rounded">public/avatars</code> (e.g.{" "}
+              <code className="text-xs">Alex</code>, <code className="text-xs">Jordan Taylor</code>,{" "}
+              <code className="text-xs">maya chen</code>, <code className="text-xs">Sara Mitchell</code>).
             </p>
           ) : (
             <div className="flex flex-wrap gap-4 justify-start">
@@ -509,9 +757,12 @@ export function AIAvatarManager() {
                       className="w-16 h-16 rounded-xl object-cover border border-gray-100"
                     />
                   ) : (
-                    <span className="text-4xl" aria-hidden>
-                      {a.emoji}
-                    </span>
+                    <div
+                      className="w-16 h-16 rounded-xl border border-gray-100 bg-gray-50 flex items-center justify-center"
+                      aria-hidden
+                    >
+                      <User className="w-8 h-8 text-gray-400" />
+                    </div>
                   )}
                   <span className="text-sm font-semibold text-gray-900 text-center leading-tight">{a.name}</span>
                 </div>
@@ -558,61 +809,108 @@ export function AIAvatarManager() {
                 </div>
 
                 <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                  {/* Image Selection */}
+                  {/* Portrait: upload (stored in Supabase + URL saved on row) or URL / bundled PNG */}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Avatar Image</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Portrait
+                    </label>
+                    <p className="text-xs text-gray-500 mb-3">
+                      <span className="font-medium text-gray-700">Upload</span> saves the file to Supabase
+                      Storage and stores the public URL in <code className="text-xs bg-gray-100 px-1 rounded">image_url</code>.
+                      Or leave upload empty and use a URL, or rely on{" "}
+                      <code className="text-xs bg-gray-100 px-1 rounded">public/avatars/&lt;Name&gt;.png</code> when
+                      both are empty.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3 mb-3">
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        <Upload className="h-4 w-4" />
+                        Choose image
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          className="sr-only"
+                          onChange={onPortraitFileChange}
+                        />
+                      </label>
+                      {portraitFile && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            clearPortraitPick();
+                          }}
+                          className="text-sm text-red-600 hover:underline"
+                        >
+                          Remove upload
+                        </button>
+                      )}
+                    </div>
+                    {modalPortraitPreview && (
+                      <div className="mb-3 flex items-center gap-3">
+                        <img
+                          src={modalPortraitPreview}
+                          alt=""
+                          className="h-20 w-20 rounded-full object-cover object-top border border-gray-200 shadow-sm"
+                        />
+                        <span className="text-xs text-gray-500">
+                          {portraitFile ? "New upload (will be saved on create/update)" : "Preview"}
+                        </span>
+                      </div>
+                    )}
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Optional image URL (used if you do not upload)
+                    </label>
+                    <input
+                      type="url"
+                      value={formData.image}
+                      onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                      className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500 text-sm"
+                      placeholder="https://… or /path/to/image.png (optional)"
+                    />
                     {showCreateModal && avatars.length > 0 && (
-                      <div className="mb-4">
-                        <p className="text-xs font-medium text-gray-500 mb-2">Existing avatars — click to reuse</p>
+                      <div className="mt-4">
+                        <p className="text-xs font-medium text-gray-500 mb-2">
+                          Existing avatars — click to copy optional URL (or clear field for folder PNG only)
+                        </p>
                         <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1 rounded-lg border border-gray-100 bg-gray-50/80">
                           {avatars.map((a) => {
-                            const lobby = findLobbyAvatar(a.name);
+                            const eff = effectiveAvatarImageUrlFromDb(a.image?.trim() ?? "");
+                            const thumbSrc =
+                              eff ||
+                              tryResolveCompanionPortraitUrl(a.name) ||
+                              findLobbyAvatar(a.name)?.cardImage ||
+                              undefined;
                             return (
-                            <button
-                              key={a.id}
-                              type="button"
-                              onClick={() => setFormData({ ...formData, image: a.image || '👤' })}
-                              className={`flex flex-col items-center gap-1 px-2 py-2 rounded-lg border-2 text-left transition-all min-w-[4.5rem] ${
-                                formData.image === a.image
-                                  ? 'border-purple-500 bg-purple-50'
-                                  : 'border-gray-200 hover:border-purple-300 bg-white'
-                              }`}
-                              title={a.name}
-                            >
-                              <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-100 flex items-center justify-center bg-gray-50">
-                                {lobby?.cardImage ? (
-                                  <img
-                                    src={lobby.cardImage}
-                                    alt=""
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <span className="text-2xl leading-none">{a.image}</span>
-                                )}
-                              </div>
-                              <span className="text-[10px] font-medium text-gray-700 truncate max-w-[5rem]">{a.name}</span>
-                            </button>
+                              <button
+                                key={a.id}
+                                type="button"
+                                onClick={() => setFormData({ ...formData, image: eff })}
+                                className={`flex flex-col items-center gap-1 px-2 py-2 rounded-lg border-2 text-left transition-all min-w-[4.5rem] ${
+                                  formData.image === eff && eff !== ""
+                                    ? "border-purple-500 bg-purple-50"
+                                    : "border-gray-200 hover:border-purple-300 bg-white"
+                                }`}
+                                title={a.name}
+                              >
+                                <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-100 flex items-center justify-center bg-gray-50">
+                                  {thumbSrc ? (
+                                    <img
+                                      src={thumbSrc}
+                                      alt=""
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <User className="w-6 h-6 text-gray-400" />
+                                  )}
+                                </div>
+                                <span className="text-[10px] font-medium text-gray-700 truncate max-w-[5rem]">
+                                  {a.name}
+                                </span>
+                              </button>
                             );
                           })}
                         </div>
                       </div>
                     )}
-                    <p className="text-xs font-medium text-gray-500 mb-2">Preset icons</p>
-                    <div className="flex flex-wrap gap-2">
-                      {emojiOptions.map((emoji) => (
-                        <button
-                          key={emoji}
-                          onClick={() => setFormData({ ...formData, image: emoji })}
-                          className={`text-4xl p-3 rounded-xl border-2 transition-all ${
-                            formData.image === emoji
-                              ? 'border-purple-500 bg-purple-50'
-                              : 'border-gray-200 hover:border-purple-300'
-                          }`}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
                   </div>
 
                   {/* Name */}
@@ -623,7 +921,7 @@ export function AIAvatarManager() {
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
-                      placeholder="e.g., Maya Chen"
+                      placeholder="e.g., maya chen"
                     />
                   </div>
 
@@ -719,12 +1017,13 @@ export function AIAvatarManager() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
+                    disabled={isSavingAvatar}
                     onClick={() => {
                       setShowCreateModal(false);
                       setShowEditModal(false);
                       resetForm();
                     }}
-                    className="flex-1 px-4 py-3 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
+                    className="flex-1 px-4 py-3 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium disabled:opacity-60"
                   >
                     Cancel
                   </motion.button>
@@ -732,11 +1031,20 @@ export function AIAvatarManager() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
+                    disabled={isSavingAvatar}
                     onClick={showCreateModal ? handleCreate : handleEdit}
-                    className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium flex items-center justify-center gap-2 disabled:opacity-60"
                   >
-                    <Save className="w-5 h-5" />
-                    {showCreateModal ? 'Create Avatar' : 'Save Changes'}
+                    {isSavingAvatar ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Save className="w-5 h-5" />
+                    )}
+                    {isSavingAvatar
+                      ? "Saving…"
+                      : showCreateModal
+                        ? "Create Avatar"
+                        : "Save Changes"}
                   </motion.button>
                 </div>
               </motion.div>

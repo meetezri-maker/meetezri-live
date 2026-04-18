@@ -47,7 +47,6 @@ interface UpcomingSession {
   id: string;
   avatarName: string;
   avatarImage?: string;
-  avatarEmoji: string;
   type: string;
   date: string;
   duration: string;
@@ -322,7 +321,7 @@ export function SessionLobby() {
       const mappedSessions: UpcomingSession[] = (sessions as BackendSession[]).map((session) => {
         const scheduledDate = session.scheduled_at ? new Date(session.scheduled_at) : null;
         const isExpired = !!scheduledDate && scheduledDate.getTime() < now.getTime() && session.status === "scheduled";
-        const avatarName = session.config?.avatar || selectedAvatar || "Alex Rivera";
+        const avatarName = session.config?.avatar || selectedAvatar || "Alex";
         const avatarPreview = lobbyAvatarByName(avatarName);
         const date = scheduledDate
           ? scheduledDate.toLocaleString("en-US", {
@@ -340,7 +339,6 @@ export function SessionLobby() {
           id: session.id,
           avatarName: avatarPreview.name,
           avatarImage: avatarPreview.cardImage,
-          avatarEmoji: avatarPreview.emoji,
           type: session.type === "instant" ? "Instant" : "Scheduled",
           date,
           duration: session.duration_minutes ? `${session.duration_minutes} min` : "N/A",
@@ -874,9 +872,7 @@ export function SessionLobby() {
                           className="h-full w-full object-cover object-top"
                         />
                       ) : (
-                        <span className="text-4xl leading-none">
-                          {selectedCompanionPreview.emoji}
-                        </span>
+                        <User className="h-10 w-10 text-white/90" aria-hidden />
                       )}
                     </motion.div>
                     <div>
@@ -1117,8 +1113,8 @@ export function SessionLobby() {
                               className="h-full w-full object-cover object-top"
                             />
                           ) : (
-                            <div className="h-full w-full flex items-center justify-center text-xl">
-                              {session.avatarEmoji}
+                            <div className="h-full w-full flex items-center justify-center">
+                              <User className="h-5 w-5 text-muted-foreground" aria-hidden />
                             </div>
                           )}
                         </div>
@@ -1291,7 +1287,9 @@ export function SessionLobby() {
                                   className="mx-auto mb-2 h-16 w-16 rounded-full object-cover"
                                 />
                               ) : (
-                                <div className="text-4xl mb-2">{avatar.emoji}</div>
+                                <div className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                                  <User className="h-8 w-8 text-muted-foreground" aria-hidden />
+                                </div>
                               )}
                               <div className="font-bold mb-1">{avatar.name}</div>
                               <div className="text-xs text-muted-foreground">

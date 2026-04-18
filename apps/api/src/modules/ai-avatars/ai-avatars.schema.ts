@@ -8,7 +8,7 @@ export const createAvatarSchema = z.object({
   personality: z.string().optional(),
   specialties: z.array(z.string()).default([]),
   description: z.string().optional(),
-  image_url: z.string().optional(),
+  image_url: z.string().nullish(),
   voice_type: z.string().optional(),
   accent_type: z.string().optional(),
   is_active: z.boolean().default(true),

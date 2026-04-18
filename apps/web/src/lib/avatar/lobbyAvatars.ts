@@ -1,4 +1,10 @@
-import { companionCardImageUrl, resolveCompanionPortraitUrl } from "./companionModelUrl";
+import { DEFAULT_AI_COMPANIONS } from "@meetezri/shared";
+
+import {
+  companionCardImageUrl,
+  effectiveAvatarImageUrlFromDb,
+  tryResolveCompanionPortraitUrl,
+} from "./companionModelUrl";
 
 /** Lobby companion list — card portraits from `public/avatars/` (same as Session Lobby). */
 export type LobbyAvatar = {
@@ -35,66 +41,61 @@ export function lobbyAvatarsFromApiRows(
     (r) => r.is_active !== false && r.name && !isPlaceholderAvatarName(r.name)
   );
   return active.map((r) => {
+    const name = r.name.trim();
     const lobby = findLobbyAvatar(r.name);
-    const rawUrl = typeof r.image_url === "string" ? r.image_url.trim() : "";
-    const cardImage =
-      lobby?.cardImage ??
-      (rawUrl && /^https?:\/\//i.test(rawUrl) ? rawUrl : resolveCompanionPortraitUrl(r.name));
-    const emoji =
-      rawUrl && !/^https?:\/\//i.test(rawUrl)
-        ? rawUrl
-        : lobby?.emoji ?? "👤";
+    const rawUrl =
+      typeof r.image_url === "string"
+        ? effectiveAvatarImageUrlFromDb(r.image_url.trim())
+        : "";
+
+    const cardImage: string | undefined = rawUrl
+      ? rawUrl
+      : lobby?.cardImage ?? tryResolveCompanionPortraitUrl(r.name) ?? undefined;
+
     return {
       id: r.id ?? r.name,
       name: r.name,
-      emoji,
+      emoji: "",
       description: (r.description || lobby?.description || "").slice(0, 160),
       cardImage,
     };
   });
 }
 
-export const LOBBY_AVATARS: LobbyAvatar[] = [
-  {
-    id: "Alex Rivera",
-    name: "Alex Rivera",
-    emoji: "👨‍⚕️",
-    description: "Supportive and empathetic",
-    cardImage: companionCardImageUrl("Alex.png"),
-  },
-  {
-    id: "Sarah Mitchell",
-    name: "Sarah Mitchell",
-    emoji: "👩‍⚕️",
-    description: "Warm and understanding",
-    /** File on disk is `Sara Mitchell.png` (see companionModelUrl). */
-    cardImage: companionCardImageUrl("Sara Mitchell.png"),
-  },
-  {
-    id: "Jordan Taylor",
-    name: "Jordan Taylor",
-    emoji: "👨‍💼",
-    description: "Professional and attentive",
-    cardImage: companionCardImageUrl("jordan Taylor.png"),
-  },
-  {
-    id: "Maya chen",
-    name: "Maya Chen",
-    emoji: "👩‍🦰",
-    description: "Kind and patient",
-    cardImage: companionCardImageUrl("maya chen.png"),
-  },
-];
+/** Default lobby list — same four companions as DB seed and `DEFAULT_AI_COMPANIONS` in `@meetezri/shared`. */
+export const LOBBY_AVATARS: LobbyAvatar[] = DEFAULT_AI_COMPANIONS.map((c) => ({
+  id: c.id,
+  name: c.name,
+  emoji: "",
+  description: c.lobbyTagline,
+  cardImage: companionCardImageUrl(c.portraitPng),
+}));
 
-/** Match DB / profile name to a lobby companion without falling back to a default. */
+/** Older profile/session labels → canonical `LOBBY_AVATARS.name` after the PNG rename. */
+const LEGACY_LOBBY_NAME: Record<string, string> = {
+  "alex rivera": "Alex",
+  "sarah mitchell": "Sara Mitchell",
+  "sara mitchell": "Sara Mitchell",
+  "maya chen": "maya chen",
+};
+
+/** Match DB / profile name to a lobby companion (exact id/name, then legacy full names). */
 export function findLobbyAvatar(name: string | null | undefined): LobbyAvatar | undefined {
   const n = (name ?? "").trim().toLowerCase();
   if (!n) return undefined;
-  return (
+  const direct =
     LOBBY_AVATARS.find((a) => a.name.toLowerCase() === n) ??
-    LOBBY_AVATARS.find((a) => a.id.toLowerCase() === n) ??
-    LOBBY_AVATARS.find((a) => a.name.split(/\s+/)[0]?.toLowerCase() === n)
-  );
+    LOBBY_AVATARS.find((a) => a.id.toLowerCase() === n);
+  if (direct) return direct;
+  const mapped = LEGACY_LOBBY_NAME[n];
+  if (mapped) {
+    const m = mapped.toLowerCase();
+    return (
+      LOBBY_AVATARS.find((a) => a.name.toLowerCase() === m) ??
+      LOBBY_AVATARS.find((a) => a.id.toLowerCase() === m)
+    );
+  }
+  return undefined;
 }
 
 /** Same resolution as Session Lobby — unknown labels map to first companion for preview. */

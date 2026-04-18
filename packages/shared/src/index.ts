@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
 export { canonicalCompanionDisplayName, mergeCompanionAvatarCounts } from './companions';
+export {
+  DEFAULT_AI_COMPANIONS,
+  type DefaultAiCompanionDefinition,
+} from './defaultAiCompanions';
 
 export const UserProfileSchema = z.object({
   id: z.string().uuid(),

@@ -14,6 +14,8 @@ export default defineConfig({
     alias: {
       // Alias @ to the src directory
       '@': path.resolve(__dirname, './src'),
+      // Monorepo package: npm dev does not link workspace:*; resolve source directly
+      '@meetezri/shared': path.resolve(__dirname, '../../packages/shared/src/index.ts'),
     },
   },
   // Prevent aggressive browser caching during local development and preview,

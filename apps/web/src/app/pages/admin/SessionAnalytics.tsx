@@ -32,9 +32,12 @@ import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleto
 
 const COMPANION_PIE_COLOR: Record<string, string> = {
   "Not set": "#94a3b8",
+  Alex: "#3b82f6",
   "Alex Rivera": "#3b82f6",
+  "Sara Mitchell": "#ec4899",
   "Sarah Mitchell": "#ec4899",
   "Jordan Taylor": "#10b981",
+  "maya chen": "#8b5cf6",
   "Maya Chen": "#8b5cf6",
   Other: "#64748b",
 };

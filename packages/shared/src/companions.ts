@@ -3,13 +3,14 @@
  * Maps arbitrary `profiles.selected_avatar` values to one official display name or "Not set" / "Other".
  */
 
-const LOBBY_AVATARS_MIN: Array<{ id: string; name: string }> = [
-  { id: 'Alex Rivera', name: 'Alex Rivera' },
-  { id: 'Sarah Mitchell', name: 'Sarah Mitchell' },
-  { id: 'Jordan Taylor', name: 'Jordan Taylor' },
-  /** Card id matches `lobbyAvatars.ts` (lowercase "chen"). */
-  { id: 'Maya chen', name: 'Maya Chen' },
-];
+import { DEFAULT_AI_COMPANIONS } from './defaultAiCompanions';
+
+const LEGACY_AVATAR_LABEL: Record<string, string> = {
+  'alex rivera': 'Alex',
+  'sarah mitchell': 'Sara Mitchell',
+  'sara mitchell': 'Sara Mitchell',
+  'maya chen': 'maya chen',
+};
 
 function normalizeAvatarRaw(raw: string): string {
   return raw
@@ -24,11 +25,15 @@ function findLobbyCompanionName(raw: string): string | undefined {
   const n = normalizeAvatarRaw(raw).toLowerCase();
   if (!n) return undefined;
 
-  return (
-    LOBBY_AVATARS_MIN.find((a) => a.name.toLowerCase() === n) ??
-    LOBBY_AVATARS_MIN.find((a) => a.id.toLowerCase() === n) ??
-    LOBBY_AVATARS_MIN.find((a) => a.name.split(/\s+/)[0]?.toLowerCase() === n)
-  )?.name;
+  const direct =
+    DEFAULT_AI_COMPANIONS.find((a) => a.name.toLowerCase() === n) ??
+    DEFAULT_AI_COMPANIONS.find((a) => a.id.toLowerCase() === n);
+  if (direct) return direct.name;
+
+  const legacy = LEGACY_AVATAR_LABEL[n];
+  if (legacy) return legacy;
+
+  return undefined;
 }
 
 /**

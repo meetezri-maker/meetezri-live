@@ -2499,7 +2499,7 @@ export function ActiveSession() {
   }, [ezriConfig, ezriUserid, sessionId, hasSessionEnded, companionAvatarLabel, ezriTtsVoiceId]);
 
   const currentAvatar = {
-    name: config?.avatar || "Maya Chen",
+    name: config?.avatar || "maya chen",
     status: "listening",
   };
 

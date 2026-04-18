@@ -3,8 +3,10 @@ import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Label } from "../../components/ui/label";
 import { Link, useNavigate } from "react-router-dom";
+import { useMemo } from "react";
 import { motion } from "motion/react";
-import { ArrowRight, ArrowLeft, Sparkles, Volume2, Palette, Heart, Brain, Users, Star, CheckCircle } from "lucide-react";
+import { DEFAULT_AI_COMPANIONS } from "@meetezri/shared";
+import { ArrowRight, ArrowLeft, Sparkles, Volume2, Palette, Heart, Brain, Users, Star, CheckCircle, User } from "lucide-react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,7 +19,20 @@ import {
   FormLabel,
   FormMessage,
 } from "../../components/ui/form";
-import { companionCardImageUrl, resolveCompanionPortraitUrl } from "@/lib/avatar/companionModelUrl";
+import { companionCardImageUrl } from "@/lib/avatar/companionModelUrl";
+
+/** Older onboarding stored short ids (e.g. `maya`); profile uses canonical display names. */
+function normalizeOnboardingAvatarName(raw: string | undefined): string {
+  const t = (raw ?? "").trim();
+  if (!t) return "";
+  const legacy: Record<string, string> = {
+    maya: "maya chen",
+    alex: "Alex",
+    jordan: "Jordan Taylor",
+    sarah: "Sara Mitchell",
+  };
+  return legacy[t.toLowerCase()] ?? t;
+}
 
 interface AIAvatar {
   id: string;
@@ -27,9 +42,7 @@ interface AIAvatar {
   personality: string;
   specialty: string[];
   description: string;
-  /** Emoji fallback when `imageUrl` is not set */
-  image: string;
-  /** Optional portrait from `public/avatars/` */
+  /** Portrait from `public/avatars/` */
   imageUrl?: string;
   voiceType: string;
   accentType: string;
@@ -51,73 +64,29 @@ export function OnboardingAvatarPreferences() {
   const form = useForm<AvatarPreferencesValues>({
     resolver: zodResolver(avatarPreferencesSchema),
     defaultValues: {
-      selectedAvatar: data.selectedAvatar || "",
+      selectedAvatar: normalizeOnboardingAvatarName(data.selectedAvatar),
       selectedEnvironment: data.selectedEnvironment || "",
     },
   });
 
-  const aiAvatars: AIAvatar[] = [
-    {
-      id: "maya",
-      name: "Maya Chen",
-      gender: "Female",
-      ageRange: "35-40",
-      personality: "Warm, Empathetic, Supportive",
-      specialty: ["Anxiety", "Depression", "Stress Management"],
-      description: "A compassionate AI companion with a warm presence. Maya specializes in helping with anxiety, stress, and building emotional resilience through mindfulness.",
-      image: "👩‍💼",
-      imageUrl: companionCardImageUrl("maya chen.png"),
-      voiceType: "Warm & Soothing",
-      accentType: "Neutral American",
-      rating: 4.9,
-      totalUsers: 2456
-    },
-    {
-      id: "alex",
-      name: "Alex Rivera",
-      gender: "Male",
-      ageRange: "30-35",
-      personality: "Calm, Patient, Understanding",
-      specialty: ["PTSD", "Trauma", "Life Transitions"],
-      description: "A gentle and patient listener who creates a safe space for healing. Alex focuses on trauma recovery and navigating life's big changes.",
-      image: "👨‍💼",
-      imageUrl: companionCardImageUrl("Alex.png"),
-      voiceType: "Deep & Calming",
-      accentType: "Neutral American",
-      rating: 4.8,
-      totalUsers: 1893
-    },
-    {
-      id: "jordan",
-      name: "Jordan Taylor",
-      gender: "Non-binary",
-      ageRange: "28-32",
-      personality: "Energetic, Positive, Supportive",
-      specialty: ["Self-Esteem", "Relationships", "Personal Growth"],
-      description: "An uplifting companion who helps you discover your strengths. Jordan specializes in building confidence and personal development.",
-      image: "🧑‍💼",
-      imageUrl: companionCardImageUrl("jordan Taylor.png"),
-      voiceType: "Bright & Encouraging",
-      accentType: "Neutral American",
-      rating: 4.7,
-      totalUsers: 1654
-    },
-    {
-      id: "sarah",
-      name: "Sarah Mitchell",
-      gender: "Female",
-      ageRange: "45-50",
-      personality: "Wise, Grounded, Nurturing",
-      specialty: ["Grief", "Family Issues", "Chronic Illness"],
-      description: "A wise and nurturing presence with deep empathy. Sarah brings years of life experience in supporting people through challenging times.",
-      image: "👩‍🦳",
-      imageUrl: resolveCompanionPortraitUrl("Sarah Mitchell"),
-      voiceType: "Gentle & Maternal",
-      accentType: "British",
-      rating: 4.9,
-      totalUsers: 2103
-    }
-  ];
+  const aiAvatars: AIAvatar[] = useMemo(
+    () =>
+      DEFAULT_AI_COMPANIONS.map((c) => ({
+        id: c.id,
+        name: c.name,
+        gender: c.gender,
+        ageRange: c.age_range,
+        personality: c.personality,
+        specialty: [...c.specialties],
+        description: c.description,
+        imageUrl: companionCardImageUrl(c.portraitPng),
+        voiceType: c.voice_type,
+        accentType: c.accent_type,
+        rating: c.rating,
+        totalUsers: 0,
+      })),
+    []
+  );
 
   const environments = [
     { value: "beach", label: "Beach Sunset", emoji: "🏖️", gradient: "from-orange-300 to-blue-400" },
@@ -187,22 +156,22 @@ export function OnboardingAvatarPreferences() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {aiAvatars.map((avatar, index) => (
                         <motion.button
-                          key={avatar.id}
+                          key={avatar.name}
                           type="button"
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: 0.3 + index * 0.1 }}
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={() => field.onChange(avatar.id)}
+                          onClick={() => field.onChange(avatar.name)}
                           className={`relative rounded-2xl border-2 transition-all overflow-hidden ${
-                            field.value === avatar.id
+                            field.value === avatar.name
                               ? "border-primary bg-primary/5 shadow-xl"
                               : "border-border hover:border-primary/50 bg-white"
                           }`}
                         >
                           {/* Selected Indicator */}
-                          {field.value === avatar.id && (
+                          {field.value === avatar.name && (
                             <motion.div
                               initial={{ scale: 0 }}
                               animate={{ scale: 1 }}
@@ -222,7 +191,9 @@ export function OnboardingAvatarPreferences() {
                                   className="h-24 w-24 shrink-0 rounded-xl object-cover border border-gray-200"
                                 />
                               ) : (
-                                <div className="text-6xl">{avatar.image}</div>
+                                <div className="h-24 w-24 shrink-0 rounded-xl border border-gray-200 bg-muted flex items-center justify-center">
+                                  <User className="h-12 w-12 text-muted-foreground" aria-hidden />
+                                </div>
                               )}
                               <div className="flex-1">
                                 <h3 className="text-lg font-bold text-gray-900 mb-1">{avatar.name}</h3>
