@@ -11,7 +11,7 @@ import {
   Filter,
   Download,
   MoreVertical,
-  Eye,
+  Info,
   Mail,
   Ban,
   CheckCircle2,
@@ -886,13 +886,15 @@ export function UserManagement() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             className="gap-2"
+                            aria-label="User info"
+                            title="User info"
                             onClick={() => navigate(`/admin/user-details-enhanced/${user.id}`)}
                           >
-                            <Eye className="w-4 h-4" />
+                            <Info className="w-4 h-4" />
                           </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>

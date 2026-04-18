@@ -11,7 +11,7 @@ import {
   BarChart3,
   Edit,
   Trash2,
-  Eye,
+  Info,
   CheckCircle,
   Clock,
   Loader2,
@@ -572,7 +572,7 @@ export function CompanionManagement() {
                         }}
                         className="p-2 rounded-lg hover:bg-blue-50 text-blue-600"
                       >
-                        <Eye className="w-4 h-4" />
+                        <Info className="w-4 h-4" />
                       </motion.button>
 
                       <motion.button
