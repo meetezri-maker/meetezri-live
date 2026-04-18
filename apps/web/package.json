@@ -2,10 +2,9 @@
   "name": "@figma/my-make-file",
   "private": true,
   "version": "0.0.1",
-  "packageManager": "pnpm@10.33.0",
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter @meetezri/shared run build && vite build",
+    "build": "vite build",
     "dev": "vite",
     "preview": "vite preview",
     "test": "vitest run",
