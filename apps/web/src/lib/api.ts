@@ -1563,6 +1563,18 @@ export const api = {
       const res = await fetch(`${API_URL}/admin/user-segments/${id}`, { method: 'DELETE', headers });
       return handleResponse(res, 'Failed to delete segment');
     },
+    async getUserSegmentUsers(id: string, query?: { page?: number; limit?: number }) {
+      const headers = await getHeaders();
+      const sp = new URLSearchParams();
+      if (query?.page != null) sp.set('page', String(query.page));
+      if (query?.limit != null) sp.set('limit', String(query.limit));
+      const qs = sp.toString();
+      const res = await fetch(
+        `${API_URL}/admin/user-segments/${id}/users${qs ? `?${qs}` : ''}`,
+        { method: 'GET', headers, cache: 'no-store' }
+      );
+      return handleResponse(res, 'Failed to fetch segment users');
+    },
 
     async getCompanions() {
       const headers = await getHeaders();

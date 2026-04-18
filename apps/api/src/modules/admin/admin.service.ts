@@ -1068,6 +1068,27 @@ export async function getUserSegments() {
 
 type SegmentRule = { type: string; operator: string; value: string };
 
+/** Subscriptions that count as “current” for plan-based segments (matches billing-style paid checks). */
+const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing'] as const;
+
+function subscriptionSomePlan(planType: string): Prisma.subscriptionsWhereInput {
+  return {
+    status: { in: [...ACTIVE_SUBSCRIPTION_STATUSES] },
+    plan_type: planType,
+  };
+}
+
+/** `profiles.age` is stored as a string (e.g. "24"); expand numeric ranges for Prisma `in` filters. */
+function expandNumericAgeStrings(minAge: number, maxAge: number): string[] {
+  const lo = Math.max(13, Math.min(minAge, maxAge));
+  const hi = Math.min(120, Math.max(minAge, maxAge));
+  const out: string[] = [];
+  for (let n = lo; n <= hi; n++) {
+    out.push(String(n));
+  }
+  return out;
+}
+
 function extractSegmentRules(criteria: unknown): SegmentRule[] {
   if (criteria && typeof criteria === 'object' && !Array.isArray(criteria) && 'rules' in criteria) {
     const rules = (criteria as { rules?: unknown }).rules;
@@ -1115,23 +1136,152 @@ function buildProfileWhereFromRules(rules: SegmentRule[]): Prisma.profilesWhereI
   for (const r of rules) {
     if (!r?.type || !r?.operator) continue;
     const v = String(r.value ?? '').trim();
+
+    if (r.type === 'signup_type' && r.operator === 'equals') {
+      if (v === '__unset__') {
+        parts.push({ signup_type: null });
+      } else if (v) {
+        parts.push({ signup_type: v });
+      }
+      continue;
+    }
+
+    if (r.type === 'onboarding_completed' && r.operator === 'equals') {
+      if (v === 'true' || v === '1') {
+        parts.push({ onboarding_completed: true });
+      } else if (v === 'false' || v === '0') {
+        parts.push({
+          OR: [{ onboarding_completed: false }, { onboarding_completed: null }],
+        });
+      }
+      continue;
+    }
+
     if (!v) continue;
+
     if (r.type === 'role' && r.operator === 'equals') {
       parts.push({ role: v });
     } else if (r.type === 'account_status' && r.operator === 'equals') {
       parts.push({ account_status: v });
     } else if (r.type === 'subscription' && r.operator === 'equals') {
-      parts.push({
-        subscriptions: {
-          some: { status: 'active', plan_type: v },
-        },
-      });
+      if (v === 'none') {
+        parts.push({
+          NOT: {
+            subscriptions: {
+              some: {
+                status: { in: [...ACTIVE_SUBSCRIPTION_STATUSES] },
+              },
+            },
+          },
+        });
+      } else {
+        parts.push({
+          subscriptions: { some: subscriptionSomePlan(v) },
+        });
+      }
+    } else if (r.type === 'subscription' && r.operator === 'in') {
+      const plans = v
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (plans.length === 1) {
+        parts.push({
+          subscriptions: { some: subscriptionSomePlan(plans[0]) },
+        });
+      } else if (plans.length > 1) {
+        parts.push({
+          OR: plans.map((plan) => ({
+            subscriptions: { some: subscriptionSomePlan(plan) },
+          })),
+        });
+      }
+    } else if (r.type === 'age' && r.operator === 'equals') {
+      const n = parseInt(v, 10);
+      if (!Number.isNaN(n)) {
+        parts.push({ age: String(n) });
+      }
+    } else if (r.type === 'age' && r.operator === 'gte') {
+      const n = parseInt(v, 10);
+      if (!Number.isNaN(n)) {
+        parts.push({ age: { in: expandNumericAgeStrings(n, 120) } });
+      }
+    } else if (r.type === 'age' && r.operator === 'lte') {
+      const n = parseInt(v, 10);
+      if (!Number.isNaN(n)) {
+        parts.push({ age: { in: expandNumericAgeStrings(13, n) } });
+      }
+    } else if (r.type === 'age' && r.operator === 'between') {
+      const [a, b] = v.split(',').map((x) => parseInt(x.trim(), 10));
+      if (!Number.isNaN(a) && !Number.isNaN(b)) {
+        parts.push({ age: { in: expandNumericAgeStrings(a, b) } });
+      }
     }
   }
   if (parts.length === 0) {
     return endUserWhere();
   }
   return { AND: [endUserWhere(), ...parts] };
+}
+
+export async function getUserSegmentUsers(
+  segmentId: string,
+  opts: { page?: number; limit?: number } = {}
+) {
+  const page = Math.max(1, opts.page ?? 1);
+  const limit = Math.min(100, Math.max(1, opts.limit ?? 25));
+  const seg = await prisma.user_segments.findUnique({ where: { id: segmentId } });
+  if (!seg) {
+    const err = new Error('Segment not found');
+    (err as Error & { statusCode?: number }).statusCode = 404;
+    throw err;
+  }
+  const rules = extractSegmentRules(seg.criteria);
+  const where = buildProfileWhereFromRules(rules);
+  const skip = (page - 1) * limit;
+  const [rows, total] = await Promise.all([
+    prisma.profiles.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { created_at: 'desc' },
+      select: {
+        id: true,
+        full_name: true,
+        email: true,
+        age: true,
+        created_at: true,
+        signup_type: true,
+        onboarding_completed: true,
+        subscriptions: {
+          where: { status: { in: [...ACTIVE_SUBSCRIPTION_STATUSES] } },
+          take: 1,
+          orderBy: { updated_at: 'desc' },
+          select: { plan_type: true, status: true },
+        },
+      },
+    }),
+    prisma.profiles.count({ where }),
+  ]);
+  return {
+    users: rows.map((u) => {
+      const sub = u.subscriptions[0];
+      return {
+        id: u.id,
+        full_name: u.full_name,
+        email: u.email,
+        age: u.age,
+        created_at: u.created_at,
+        signup_type: u.signup_type,
+        onboarding_completed: u.onboarding_completed,
+        plan_type: sub?.plan_type ?? null,
+        subscription_status: sub?.status ?? null,
+      };
+    }),
+    total,
+    page,
+    limit,
+    pages: Math.max(1, Math.ceil(total / limit)),
+  };
 }
 
 const SEGMENTATION_CACHE_TTL = 45 * 1000;

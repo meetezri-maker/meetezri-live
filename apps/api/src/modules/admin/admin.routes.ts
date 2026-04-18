@@ -2,7 +2,7 @@
 import { FastifyInstance } from 'fastify';
 import { 
   getDashboardStatsHandler, getUsersHandler, createUserHandler, getUserHandler, updateUserHandler, deleteUserHandler, getUserAuditLogsHandler, getRecentActivityHandler,
-  getUserSegmentsHandler, createUserSegmentHandler, deleteUserSegmentHandler,
+  getUserSegmentsHandler, createUserSegmentHandler, deleteUserSegmentHandler, getUserSegmentUsersHandler,
   getManualNotificationsHandler, createManualNotificationHandler, getNotificationAudienceCountsHandler,
   getNudgesHandler, createNudgeHandler, updateNudgeHandler, deleteNudgeHandler,
   getNudgeTemplatesHandler, createNudgeTemplateHandler, updateNudgeTemplateHandler, deleteNudgeTemplateHandler,
@@ -195,6 +195,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // User Segmentation
   fastify.get('/user-segments', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getUserSegmentsHandler);
+  fastify.get('/user-segments/:id/users', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getUserSegmentUsersHandler);
   fastify.post('/user-segments', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, createUserSegmentHandler);
   fastify.delete('/user-segments/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, deleteUserSegmentHandler);
 

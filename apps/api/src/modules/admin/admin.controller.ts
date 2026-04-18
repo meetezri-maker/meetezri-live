@@ -2,7 +2,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { 
   getDashboardStats, getAllUsers, getUserById, createUserByAdmin, updateUser, deleteUser, getUserAuditLogs, getRecentActivity,
-  getUserSegmentationDashboard, createUserSegment, deleteUserSegment,
+  getUserSegmentationDashboard, createUserSegment, deleteUserSegment, getUserSegmentUsers,
   getManualNotifications, createManualNotification, getNotificationAudienceCounts,
   getNudges, createNudge, updateNudge, deleteNudge,
   getNudgeTemplates, createNudgeTemplate, updateNudgeTemplate, deleteNudgeTemplate,
@@ -304,6 +304,33 @@ export async function deleteUserSegmentHandler(request: FastifyRequest<{ Params:
   } catch (error) {
     request.log.error(error);
     return reply.code(500).send({ message: 'Failed to delete segment' });
+  }
+}
+
+export async function getUserSegmentUsersHandler(
+  request: FastifyRequest<{
+    Params: { id: string };
+    Querystring: { page?: string; limit?: string };
+  }>,
+  reply: FastifyReply
+) {
+  try {
+    const { id } = request.params;
+    const q = (request.query || {}) as { page?: string; limit?: string };
+    const page = q.page && !Number.isNaN(parseInt(q.page, 10)) ? parseInt(q.page, 10) : 1;
+    const limit = q.limit && !Number.isNaN(parseInt(q.limit, 10)) ? parseInt(q.limit, 10) : 25;
+    const data = await getUserSegmentUsers(id, { page, limit });
+    return reply.code(200).send(data);
+  } catch (error: unknown) {
+    const sc =
+      error && typeof error === 'object' && 'statusCode' in error
+        ? (error as { statusCode?: number }).statusCode
+        : undefined;
+    if (sc === 404) {
+      return reply.code(404).send({ message: 'Segment not found' });
+    }
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to fetch segment users' });
   }
 }
 

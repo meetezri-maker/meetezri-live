@@ -94,6 +94,118 @@ function normalizeCriteriaFromApi(
   };
 }
 
+type SegmentRuleRow = { type: string; operator: string; value: string };
+
+const AGE_PRESETS = [
+  { id: "any" as const, label: "Any age" },
+  { id: "13-17" as const, label: "13–17" },
+  { id: "18-24" as const, label: "18–24" },
+  { id: "25-34" as const, label: "25–34" },
+  { id: "35-44" as const, label: "35–44" },
+  { id: "45-54" as const, label: "45–54" },
+  { id: "55-64" as const, label: "55–64" },
+  { id: "65+" as const, label: "65+" },
+  { id: "custom" as const, label: "Custom range" },
+];
+
+type AgePresetId = (typeof AGE_PRESETS)[number]["id"];
+
+const PRESET_AGE_BETWEEN: Record<string, [number, number]> = {
+  "13-17": [13, 17],
+  "18-24": [18, 24],
+  "25-34": [25, 34],
+  "35-44": [35, 44],
+  "45-54": [45, 54],
+  "55-64": [55, 64],
+  "65+": [65, 120],
+};
+
+function buildSegmentRulesFromCreateFilters(f: {
+  agePreset: AgePresetId;
+  ageCustomMin: string;
+  ageCustomMax: string;
+  planMode: "any" | "none" | "specific";
+  plans: { trial: boolean; core: boolean; pro: boolean };
+  signupType: "any" | "trial" | "plan" | "__unset__";
+  onboarding: "any" | "true" | "false";
+}): SegmentRuleRow[] {
+  const rules: SegmentRuleRow[] = [];
+  if (f.agePreset !== "any") {
+    if (f.agePreset === "custom") {
+      const lo = parseInt(f.ageCustomMin, 10);
+      const hi = parseInt(f.ageCustomMax, 10);
+      if (!Number.isNaN(lo) && !Number.isNaN(hi) && lo <= hi) {
+        rules.push({ type: "age", operator: "between", value: `${lo},${hi}` });
+      }
+    } else if (PRESET_AGE_BETWEEN[f.agePreset]) {
+      const [a, b] = PRESET_AGE_BETWEEN[f.agePreset];
+      rules.push({ type: "age", operator: "between", value: `${a},${b}` });
+    }
+  }
+  if (f.planMode === "none") {
+    rules.push({ type: "subscription", operator: "equals", value: "none" });
+  } else if (f.planMode === "specific") {
+    const chosen: string[] = [];
+    if (f.plans.trial) chosen.push("trial");
+    if (f.plans.core) chosen.push("core");
+    if (f.plans.pro) chosen.push("pro");
+    if (chosen.length === 1) {
+      rules.push({ type: "subscription", operator: "equals", value: chosen[0] });
+    } else if (chosen.length > 1) {
+      rules.push({ type: "subscription", operator: "in", value: chosen.join(",") });
+    }
+  }
+  if (f.signupType !== "any") {
+    rules.push({ type: "signup_type", operator: "equals", value: f.signupType });
+  }
+  if (f.onboarding !== "any") {
+    rules.push({ type: "onboarding_completed", operator: "equals", value: f.onboarding });
+  }
+  return rules;
+}
+
+function formatSegmentRuleLabel(c: SegmentRuleRow): string {
+  if (c.type === "age" && c.operator === "between") {
+    const [a, b] = c.value.split(",").map((x) => x.trim());
+    return `Age ${a}–${b}`;
+  }
+  if (c.type === "age" && c.operator === "equals") return `Age is ${c.value}`;
+  if (c.type === "age" && (c.operator === "gte" || c.operator === "lte")) {
+    return c.operator === "gte" ? `Age ≥ ${c.value}` : `Age ≤ ${c.value}`;
+  }
+  if (c.type === "subscription" && c.operator === "equals") {
+    if (c.value === "none") return "No active or trialing subscription";
+    const m: Record<string, string> = { trial: "Trial", core: "Core", pro: "Pro" };
+    return `Plan: ${m[c.value] ?? c.value}`;
+  }
+  if (c.type === "subscription" && c.operator === "in") {
+    const m: Record<string, string> = { trial: "Trial", core: "Core", pro: "Pro" };
+    return `Plan: ${c.value.split(",").map((x) => m[x.trim()] ?? x.trim()).join(", ")}`;
+  }
+  if (c.type === "signup_type" && c.operator === "equals") {
+    if (c.value === "__unset__") return "Signup: not set";
+    if (c.value === "trial") return "Signup: trial path";
+    if (c.value === "plan") return "Signup: plan path";
+    return `Signup: ${c.value}`;
+  }
+  if (c.type === "onboarding_completed" && c.operator === "equals") {
+    return c.value === "true" ? "Onboarding complete" : "Onboarding incomplete";
+  }
+  if (c.type === "role" && c.operator === "equals") return `Role: ${c.value}`;
+  if (c.type === "account_status" && c.operator === "equals") return `Account: ${c.value}`;
+  return `${c.type} ${c.operator} ${c.value}`;
+}
+
+const defaultCreateFilters = () => ({
+  agePreset: "any" as AgePresetId,
+  ageCustomMin: "25",
+  ageCustomMax: "44",
+  planMode: "any" as "any" | "none" | "specific",
+  plans: { trial: false, core: false, pro: false },
+  signupType: "any" as "any" | "trial" | "plan" | "__unset__",
+  onboarding: "any" as "any" | "true" | "false",
+});
+
 interface Segment {
   id: string;
   name: string;
@@ -144,13 +256,30 @@ export function UserSegmentation() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const segmentsFirstLoad = useRef(true);
 
-  // Form State
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    criteria: [] as any[],
-    color: '#3b82f6'
+    name: "",
+    description: "",
+    color: "#3b82f6",
   });
+  const [createFilters, setCreateFilters] = useState(defaultCreateFilters);
+
+  const [segmentUsersLoading, setSegmentUsersLoading] = useState(false);
+  const [segmentUsersError, setSegmentUsersError] = useState<string | null>(null);
+  const [segmentUsersPage, setSegmentUsersPage] = useState(1);
+  const [segmentUsersPayload, setSegmentUsersPayload] = useState<{
+    users: Array<{
+      id: string;
+      full_name: string | null;
+      email: string | null;
+      age: string | null;
+      plan_type: string | null;
+      subscription_status: string | null;
+      created_at: string;
+    }>;
+    total: number;
+    page: number;
+    pages: number;
+  } | null>(null);
 
   const fetchSegments = async () => {
     try {
@@ -201,27 +330,84 @@ export function UserSegmentation() {
     fetchSegments();
   }, []);
 
+  useEffect(() => {
+    if (!showViewUsersModal || !viewingSegment?.id) return;
+    let cancelled = false;
+    (async () => {
+      setSegmentUsersLoading(true);
+      setSegmentUsersError(null);
+      try {
+        const data = (await api.admin.getUserSegmentUsers(viewingSegment.id, {
+          page: segmentUsersPage,
+          limit: 20,
+        })) as {
+          users: Array<{
+            id: string;
+            full_name: string | null;
+            email: string | null;
+            age: string | null;
+            plan_type: string | null;
+            subscription_status: string | null;
+            created_at: string;
+          }>;
+          total: number;
+          page: number;
+          pages: number;
+        };
+        if (!cancelled) setSegmentUsersPayload(data);
+      } catch (e) {
+        if (!cancelled) {
+          setSegmentUsersError(e instanceof Error ? e.message : "Failed to load users");
+          setSegmentUsersPayload(null);
+        }
+      } finally {
+        if (!cancelled) setSegmentUsersLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showViewUsersModal, viewingSegment?.id, segmentUsersPage]);
+
   const handleCreate = async () => {
     const name = formData.name.trim();
     if (!name) {
       toast.error("Please enter a segment name.");
       return;
     }
+    if (createFilters.planMode === "specific") {
+      const anyPlan =
+        createFilters.plans.trial || createFilters.plans.core || createFilters.plans.pro;
+      if (!anyPlan) {
+        toast.error("Select at least one plan (Trial, Core, or Pro), or change the subscription filter.");
+        return;
+      }
+    }
+    if (createFilters.agePreset === "custom") {
+      const lo = parseInt(createFilters.ageCustomMin, 10);
+      const hi = parseInt(createFilters.ageCustomMax, 10);
+      if (Number.isNaN(lo) || Number.isNaN(hi) || lo > hi || lo < 13 || hi > 120) {
+        toast.error("Enter a valid age range (13–120, min ≤ max).");
+        return;
+      }
+    }
     if (creatingSegment) return;
     setCreatingSegment(true);
     try {
+      const rules = buildSegmentRulesFromCreateFilters(createFilters);
       await api.admin.createUserSegment({
         name,
         description: formData.description.trim() || undefined,
         criteria: {
           color: formData.color,
-          rules: formData.criteria,
+          rules,
         },
         user_count: 0,
       });
       toast.success("Segment created.");
       setShowCreateModal(false);
-      setFormData({ name: '', description: '', criteria: [], color: '#3b82f6' });
+      setFormData({ name: "", description: "", color: "#3b82f6" });
+      setCreateFilters(defaultCreateFilters());
       await fetchSegments();
     } catch (error) {
       console.error("Failed to create segment", error);
@@ -300,7 +486,11 @@ export function UserSegmentation() {
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => {
+            setCreateFilters(defaultCreateFilters());
+            setFormData({ name: "", description: "", color: "#3b82f6" });
+            setShowCreateModal(true);
+          }}
             className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg"
           >
             <Plus className="w-4 h-4" />
@@ -535,7 +725,7 @@ export function UserSegmentation() {
                               <div key={idx} className="flex items-center gap-2 text-sm">
                                 <Filter className="w-3 h-3 text-gray-500" />
                                 <span className="text-gray-700">
-                                  <span className="font-medium">{criterion.type}</span> {criterion.operator} <span className="font-medium">{criterion.value}</span>
+                                  {formatSegmentRuleLabel(criterion)}
                                 </span>
                               </div>
                             ))}
@@ -559,6 +749,8 @@ export function UserSegmentation() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setViewingSegment(segment);
+                            setSegmentUsersPage(1);
+                            setSegmentUsersPayload(null);
                             setShowViewUsersModal(true);
                           }}
                         >
@@ -646,10 +838,164 @@ export function UserSegmentation() {
                   />
                 </div>
 
-                {/* Simplified Criteria UI for now */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Filter Criteria</label>
-                  <p className="text-sm text-gray-500 mb-2">Adding complex filters will be available in the next update. For now, you can create named segments.</p>
+                <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-4 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-800 mb-2">Age</label>
+                    <select
+                      value={createFilters.agePreset}
+                      onChange={(e) =>
+                        setCreateFilters((prev) => ({
+                          ...prev,
+                          agePreset: e.target.value as AgePresetId,
+                        }))
+                      }
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                    >
+                      {AGE_PRESETS.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                    {createFilters.agePreset === "custom" ? (
+                      <div className="flex gap-3 mt-2 items-center">
+                        <label className="text-xs text-gray-600 shrink-0">Min</label>
+                        <input
+                          type="number"
+                          min={13}
+                          max={120}
+                          value={createFilters.ageCustomMin}
+                          onChange={(e) =>
+                            setCreateFilters((prev) => ({ ...prev, ageCustomMin: e.target.value }))
+                          }
+                          className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm"
+                        />
+                        <label className="text-xs text-gray-600 shrink-0">Max</label>
+                        <input
+                          type="number"
+                          min={13}
+                          max={120}
+                          value={createFilters.ageCustomMax}
+                          onChange={(e) =>
+                            setCreateFilters((prev) => ({ ...prev, ageCustomMax: e.target.value }))
+                          }
+                          className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm"
+                        />
+                      </div>
+                    ) : null}
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      Uses the age stored on each profile (from onboarding). Users without age are excluded when an age filter applies.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-800 mb-2">Subscription plan</label>
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="planMode"
+                          checked={createFilters.planMode === "any"}
+                          onChange={() =>
+                            setCreateFilters((prev) => ({ ...prev, planMode: "any" }))
+                          }
+                          className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        Any (no plan filter)
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="planMode"
+                          checked={createFilters.planMode === "none"}
+                          onChange={() =>
+                            setCreateFilters((prev) => ({ ...prev, planMode: "none" }))
+                          }
+                          className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        No active or trialing subscription
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="planMode"
+                          checked={createFilters.planMode === "specific"}
+                          onChange={() =>
+                            setCreateFilters((prev) => ({ ...prev, planMode: "specific" }))
+                          }
+                          className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        Specific plans (active or trialing)
+                      </label>
+                    </div>
+                    {createFilters.planMode === "specific" ? (
+                      <div className="flex flex-wrap gap-3 mt-3 pl-6">
+                        {(
+                          [
+                            ["trial", "Trial"],
+                            ["core", "Core"],
+                            ["pro", "Pro"],
+                          ] as const
+                        ).map(([key, label]) => (
+                          <label
+                            key={key}
+                            className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={createFilters.plans[key]}
+                              onChange={(e) =>
+                                setCreateFilters((prev) => ({
+                                  ...prev,
+                                  plans: { ...prev.plans, [key]: e.target.checked },
+                                }))
+                              }
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-800 mb-2">Signup path</label>
+                      <select
+                        value={createFilters.signupType}
+                        onChange={(e) =>
+                          setCreateFilters((prev) => ({
+                            ...prev,
+                            signupType: e.target.value as typeof prev.signupType,
+                          }))
+                        }
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                      >
+                        <option value="any">Any</option>
+                        <option value="trial">Trial signup</option>
+                        <option value="plan">Plan signup</option>
+                        <option value="__unset__">Not recorded</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-800 mb-2">Onboarding</label>
+                      <select
+                        value={createFilters.onboarding}
+                        onChange={(e) =>
+                          setCreateFilters((prev) => ({
+                            ...prev,
+                            onboarding: e.target.value as typeof prev.onboarding,
+                          }))
+                        }
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                      >
+                        <option value="any">Any</option>
+                        <option value="true">Completed</option>
+                        <option value="false">Not completed</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
                 <div>
@@ -721,13 +1067,109 @@ export function UserSegmentation() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-md w-full text-center"
+              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col shadow-xl"
             >
-              <h3 className="text-xl font-bold mb-2">Users in {viewingSegment.name}</h3>
-              <p className="text-gray-600 mb-6">User list viewing is coming soon.</p>
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Users in {viewingSegment.name}</h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {segmentUsersPayload != null
+                      ? `${segmentUsersPayload.total.toLocaleString()} matching user${segmentUsersPayload.total === 1 ? "" : "s"}`
+                      : "Loading…"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowViewUsersModal(false)}
+                  className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {segmentUsersError ? (
+                <p className="text-sm text-red-600 py-4">{segmentUsersError}</p>
+              ) : null}
+
+              <div className="flex-1 overflow-y-auto min-h-[200px] border border-gray-100 rounded-xl">
+                {segmentUsersLoading && !segmentUsersPayload ? (
+                  <div className="flex items-center justify-center py-16 text-gray-500 gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Loading users…
+                  </div>
+                ) : segmentUsersPayload && segmentUsersPayload.users.length === 0 ? (
+                  <p className="text-center text-gray-500 py-12 px-4">No users match this segment.</p>
+                ) : segmentUsersPayload ? (
+                  <table className="w-full text-sm text-left">
+                    <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 text-gray-600">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">Name</th>
+                        <th className="px-4 py-3 font-medium">Email</th>
+                        <th className="px-4 py-3 font-medium">Age</th>
+                        <th className="px-4 py-3 font-medium">Plan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {segmentUsersPayload.users.map((u) => (
+                        <tr key={u.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/80">
+                          <td className="px-4 py-2.5 text-gray-900">
+                            {u.full_name?.trim() || "—"}
+                          </td>
+                          <td className="px-4 py-2.5 text-gray-700 break-all">{u.email || "—"}</td>
+                          <td className="px-4 py-2.5 text-gray-700">{u.age ?? "—"}</td>
+                          <td className="px-4 py-2.5 text-gray-700">
+                            {u.plan_type
+                              ? u.plan_type === "pro"
+                                ? "Pro"
+                                : u.plan_type === "core"
+                                  ? "Core"
+                                  : u.plan_type === "trial"
+                                    ? "Trial"
+                                    : u.plan_type
+                              : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : null}
+              </div>
+
+              {segmentUsersPayload && segmentUsersPayload.pages > 1 ? (
+                <div className="flex items-center justify-between gap-3 mt-4 pt-4 border-t border-gray-100">
+                  <span className="text-xs text-gray-500">
+                    Page {segmentUsersPayload.page} of {segmentUsersPayload.pages}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={segmentUsersPage <= 1 || segmentUsersLoading}
+                      onClick={() => setSegmentUsersPage((p) => Math.max(1, p - 1))}
+                      className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      type="button"
+                      disabled={
+                        segmentUsersLoading ||
+                        !segmentUsersPayload ||
+                        segmentUsersPage >= segmentUsersPayload.pages
+                      }
+                      onClick={() => setSegmentUsersPage((p) => p + 1)}
+                      className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
               <button
+                type="button"
                 onClick={() => setShowViewUsersModal(false)}
-                className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+                className="mt-4 w-full px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium text-sm"
               >
                 Close
               </button>
