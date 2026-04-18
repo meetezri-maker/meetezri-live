@@ -23,7 +23,7 @@ export function PublicNav() {
               whileTap={{ scale: 0.95 }}
               className="flex items-center justify-center"
             >
-              <BrandLogo heightClass="h-24" />
+              <BrandLogo heightClass="h-10" />
             </motion.div>
             {/* <span className="text-xl font-semibold">Solace</span> */}
           </Link>
