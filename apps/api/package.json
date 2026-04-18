@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "predev": "prisma generate",
     "dev": "ts-node-dev --respawn --transpile-only src/app.ts",

@@ -652,31 +652,30 @@ export function Dashboard() {
           </div>
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Insights */}
-        
-
+        {/* Flex row stretches both columns to the same height (grid + h-full was unreliable with motion.div). */}
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-stretch">
           {/* Recent Activity */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.7 }}
-            className="h-full"
+            className="flex min-h-0 w-full flex-col lg:min-w-0 lg:flex-1"
           >
-            <Card className="p-6 shadow-xl h-full lg:h-[760px] flex flex-col">
-              <div className="flex items-center justify-between mb-4">
+            <Card className="flex min-h-0 flex-col gap-4 p-6 shadow-xl lg:flex-1">
+              <div className="flex shrink-0 items-center justify-between">
                 <h2 className="text-xl font-bold">Recent Activity</h2>
                 <Link to="/app/mood-history">
                   <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
-                    className="text-primary hover:underline text-sm font-medium"
+                    className="text-sm font-medium text-primary hover:underline"
                   >
                     View History
                   </motion.button>
                 </Link>
               </div>
-              <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+              {/* Equal-height rows fill the card; cells center content so the block does not look “stuck” at the top. */}
+              <div className="grid min-h-0 flex-1 grid-cols-2 gap-2 auto-rows-fr overflow-y-auto pr-1 sm:gap-3">
                 {recentActivities.map((activity: any, index: number) => (
                   <motion.div
                     key={activity.id || index}
@@ -684,63 +683,66 @@ export function Dashboard() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.8 + index * 0.05 }}
                     whileHover={{ x: 5 }}
-                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                    className="flex min-h-0 min-w-0 items-center gap-2 rounded-lg border border-transparent p-2 transition-colors hover:border-border/60 hover:bg-muted/40 sm:gap-3 sm:p-3"
                   >
-                    <span className="text-2xl">{activity.emoji}</span>
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">{activity.text}</p>
-                      <p className="text-xs text-muted-foreground">{activity.time}</p>
+                    <span className="shrink-0 text-xl sm:text-2xl">{activity.emoji}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium leading-snug sm:text-sm">{activity.text}</p>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground sm:text-xs">{activity.time}</p>
                     </div>
                   </motion.div>
                 ))}
               </div>
             </Card>
           </motion.div>
+
+          {/* Your Insights */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.6 }}
-            className="h-full"
+            className="flex min-h-0 w-full flex-col lg:min-w-0 lg:flex-1"
           >
-            <Card className="p-6 shadow-xl h-full lg:h-[760px] flex flex-col">
-              <div className="flex items-center justify-between mb-4">
+            <Card className="flex min-h-0 flex-col gap-4 p-6 shadow-xl lg:flex-1">
+              <div className="flex shrink-0 items-center justify-between">
                 <h2 className="text-xl font-bold">Your Insights</h2>
                 <Link to="/app/progress">
                   <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
-                    className="text-primary hover:underline text-sm font-medium"
+                    className="text-sm font-medium text-primary hover:underline"
                   >
                     View All
                   </motion.button>
                 </Link>
               </div>
-             
-              <div className="space-y-4">
-                {insights.map((insight, index) => {
-                  const Icon = insight.icon;
-                  return (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.7 + index * 0.1 }}
-                      whileHover={{ x: 5 }}
-                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-                    >
-                      <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-800 ${insight.color}`}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold mb-1">{insight.title}</h3>
-                        <p className="text-sm text-muted-foreground">{insight.description}</p>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-              <div className="mb-4 rounded-xl border border-border/60 p-3">
-                <div className="h-52 w-full">
+
+              <div className="flex min-h-0 flex-1 flex-col gap-4">
+                <div className="shrink-0 space-y-4">
+                  {insights.map((insight, index) => {
+                    const Icon = insight.icon;
+                    return (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.7 + index * 0.1 }}
+                        whileHover={{ x: 5 }}
+                        className="flex items-start gap-3 rounded-lg p-3 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                      >
+                        <div className={`rounded-lg bg-gray-100 p-2 dark:bg-gray-800 ${insight.color}`}>
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="mb-1 font-semibold">{insight.title}</h3>
+                          <p className="text-sm text-muted-foreground">{insight.description}</p>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+                <div className="flex min-h-[220px] flex-1 flex-col rounded-xl border border-border/60 p-3">
+                <div className="h-52 w-full min-h-[13rem] flex-1">
                   {insightDistributionChartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <RechartsPie>
@@ -783,6 +785,7 @@ export function Dashboard() {
                       {item.name}: {item.value}
                     </span>
                   ))}
+                </div>
                 </div>
               </div>
             </Card>
