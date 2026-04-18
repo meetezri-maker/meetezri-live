@@ -84,7 +84,12 @@ export async function getAllPaygTransactions() {
   const userIds = [...new Set(txs.map((t) => t.user_id))];
   const profiles = await prisma.profiles.findMany({
     where: { id: { in: userIds } },
-    select: { id: true, email: true, full_name: true },
+    select: {
+      id: true,
+      email: true,
+      full_name: true,
+      users: { select: { email: true } },
+    },
   });
   const profileById = new Map(profiles.map((p) => [p.id, p]));
 
@@ -95,6 +100,10 @@ export async function getAllPaygTransactions() {
       (meta.plan_type as string | undefined) ||
       'credits';
 
+    const p = profileById.get(tx.user_id);
+    const email = p?.email?.trim() || p?.users?.email?.trim() || null;
+    const name = p?.full_name?.trim() || null;
+
     return {
       id: tx.stripe_session_id,
       status: tx.status,
@@ -102,8 +111,8 @@ export async function getAllPaygTransactions() {
       currency: tx.currency,
       created: tx.created_at.toISOString(),
       user_id: tx.user_id,
-      user_email: profileById.get(tx.user_id)?.email ?? null,
-      user_name: profileById.get(tx.user_id)?.full_name ?? null,
+      user_email: email,
+      user_name: name,
       minutes_purchased: tx.credits_amount,
       payment_method: 'Card',
       plan_type: planType,

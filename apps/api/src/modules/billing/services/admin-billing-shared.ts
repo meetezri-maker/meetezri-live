@@ -53,6 +53,15 @@ export function mapStripeInvoiceToAdminRow(
   const amountUsd =
     (invoice.amount_paid || invoice.amount_due || 0) / 100;
 
+  const stripeEmail =
+    typeof invoice.customer_email === 'string' && invoice.customer_email.trim()
+      ? invoice.customer_email.trim()
+      : null;
+  const stripeName =
+    typeof invoice.customer_name === 'string' && invoice.customer_name.trim()
+      ? invoice.customer_name.trim()
+      : null;
+
   return {
     id: invoice.id,
     status: invoice.status,
@@ -63,8 +72,8 @@ export function mapStripeInvoiceToAdminRow(
     invoice_pdf: invoice.invoice_pdf || null,
     description: invoice.description || null,
     user_id: profile?.id || null,
-    user_email: profile?.email || null,
-    user_name: profile?.full_name || null,
+    user_email: profile?.email?.trim() || stripeEmail,
+    user_name: profile?.full_name?.trim() || stripeName,
     metadata: invoice.metadata || {},
   };
 }
@@ -102,6 +111,15 @@ export function mapStripeInvoiceToPaygRow(
       )
       .find((value) => !!value);
 
+  const stripeEmail =
+    typeof invoice.customer_email === 'string' && invoice.customer_email.trim()
+      ? invoice.customer_email.trim()
+      : null;
+  const stripeName =
+    typeof invoice.customer_name === 'string' && invoice.customer_name.trim()
+      ? invoice.customer_name.trim()
+      : null;
+
   return {
     id: invoice.id,
     status: invoice.status,
@@ -113,7 +131,7 @@ export function mapStripeInvoiceToPaygRow(
     payment_method: invoice.payment_intent ? 'Card' : null,
     plan_type: planTypeFromMetadata || 'credits',
     user_id: profile?.id || null,
-    user_email: profile?.email || null,
-    user_name: profile?.full_name || null,
+    user_email: profile?.email?.trim() || stripeEmail,
+    user_name: profile?.full_name?.trim() || stripeName,
   };
 }
