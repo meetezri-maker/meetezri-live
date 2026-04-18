@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "installCommand": "cd \"$VERCEL_GIT_REPO_ROOT\" && pnpm install --frozen-lockfile",
+  "installCommand": "corepack enable && corepack prepare pnpm@10.33.0 --activate && cd \"$VERCEL_GIT_REPO_ROOT\" && pnpm install --no-frozen-lockfile",
   "buildCommand": "pnpm run build",
   "headers": [
     {
