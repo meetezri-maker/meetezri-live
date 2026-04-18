@@ -5,23 +5,7 @@ import { Skeleton } from "../../components/ui/skeleton";
 import { motion } from "motion/react";
 import { Link, useLocation } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
-import {
-  Video,
-  Heart,
-  BookOpen,
-  TrendingUp,
-  Calendar,
-  Sparkles,
-  ArrowRight,
-  Award,
-  Target,
-  Flame,
-  Clock,
-  Zap,
-  Mail,
-  History,
-  BarChart3,
-} from "lucide-react";
+import { Video, Heart, BookOpen, TrendingUp, Calendar, Sparkles, ArrowRight, Award, Target, Flame, Clock, Zap, Mail } from "lucide-react";
 import { useState, useEffect } from "react";
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { WellnessChallenges } from "../../components/WellnessChallenges";
@@ -668,162 +652,141 @@ export function Dashboard() {
           </div>
         </motion.div>
 
-        {/* Activity + insights: separate full-width sections (no shared row / height coupling). */}
-        <div className="mt-10 space-y-10">
-          <motion.section
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.65, duration: 0.35 }}
-            aria-labelledby="dashboard-recent-activity-heading"
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Insights */}
+        
+
+          {/* Recent Activity */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.7 }}
+            className="h-full"
           >
-            <Card className="gap-0 overflow-hidden rounded-2xl border p-0 shadow-md ring-1 ring-border/50">
-              <div className="flex flex-col gap-4 border-b border-border/60 bg-gradient-to-r from-rose-50/90 via-background to-background px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6 dark:from-rose-950/25">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400">
-                    <History className="h-5 w-5" aria-hidden />
-                  </div>
-                  <div>
-                    <h2
-                      id="dashboard-recent-activity-heading"
-                      className="text-lg font-semibold tracking-tight text-foreground"
-                    >
-                      Recent activity
-                    </h2>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                      Mood check-ins, sessions, and journals — newest first
-                    </p>
-                  </div>
-                </div>
-                <Button variant="outline" size="sm" className="shrink-0 border-rose-200/80 bg-background/80 hover:bg-rose-50 dark:border-rose-900/50 dark:hover:bg-rose-950/30" asChild>
-                  <Link to="/app/mood-history">View history</Link>
-                </Button>
+            <Card className="p-6 shadow-xl h-full lg:h-[760px] flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Recent Activity</h2>
+                <Link to="/app/mood-history">
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="text-primary hover:underline text-sm font-medium"
+                  >
+                    View History
+                  </motion.button>
+                </Link>
               </div>
-              <div className="p-5 sm:p-6">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-x-5 sm:gap-y-3">
-                  {recentActivities.map((activity: any, index: number) => (
-                    <div
-                      key={activity.id || index}
-                      className="flex gap-3 rounded-xl border border-border/60 bg-muted/15 p-4 transition-colors hover:bg-muted/30 dark:bg-muted/5"
-                    >
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-background text-xl shadow-sm ring-1 ring-border/40">
-                        <span aria-hidden>{activity.emoji}</span>
-                      </div>
-                      <div className="min-w-0 flex-1 pt-0.5">
-                        <p className="text-sm font-medium leading-snug text-foreground">{activity.text}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">{activity.time}</p>
-                      </div>
+              <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+                {recentActivities.map((activity: any, index: number) => (
+                  <motion.div
+                    key={activity.id || index}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.8 + index * 0.05 }}
+                    whileHover={{ x: 5 }}
+                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                  >
+                    <span className="text-2xl">{activity.emoji}</span>
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{activity.text}</p>
+                      <p className="text-xs text-muted-foreground">{activity.time}</p>
                     </div>
+                  </motion.div>
+                ))}
+              </div>
+            </Card>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.6 }}
+            className="h-full"
+          >
+            <Card className="p-6 shadow-xl h-full lg:h-[760px] flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Your Insights</h2>
+                <Link to="/app/progress">
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="text-primary hover:underline text-sm font-medium"
+                  >
+                    View All
+                  </motion.button>
+                </Link>
+              </div>
+             
+              <div className="space-y-4">
+                {insights.map((insight, index) => {
+                  const Icon = insight.icon;
+                  return (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.7 + index * 0.1 }}
+                      whileHover={{ x: 5 }}
+                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                    >
+                      <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-800 ${insight.color}`}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold mb-1">{insight.title}</h3>
+                        <p className="text-sm text-muted-foreground">{insight.description}</p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+              <div className="mb-4 rounded-xl border border-border/60 p-3">
+                <div className="h-52 w-full">
+                  {insightDistributionChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsPie>
+                        <Pie
+                          data={insightDistributionChartData}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={48}
+                          outerRadius={74}
+                          paddingAngle={2}
+                          strokeWidth={0}
+                        >
+                          {insightDistributionChartData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value: number, name: string) => [value, name]}
+                          contentStyle={{ borderRadius: 12, borderColor: "hsl(var(--border))" }}
+                        />
+                      </RechartsPie>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                      Complete sessions, mood check-ins, or journals to populate insights.
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Total tracked activities</span>
+                  <span className="font-semibold text-foreground">{insightDistributionTotal}</span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                  {insightDistributionData.map((item) => (
+                    <span key={item.name} className="inline-flex items-center gap-1.5 text-muted-foreground">
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      {item.name}: {item.value}
+                    </span>
                   ))}
                 </div>
               </div>
             </Card>
-          </motion.section>
-
-          <motion.section
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.75, duration: 0.35 }}
-            aria-labelledby="dashboard-insights-heading"
-          >
-            <Card className="gap-0 overflow-hidden rounded-2xl border p-0 shadow-md ring-1 ring-border/50">
-              <div className="flex flex-col gap-4 border-b border-border/60 bg-gradient-to-r from-violet-50/90 via-background to-background px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6 dark:from-violet-950/25">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-950/50 dark:text-violet-400">
-                    <BarChart3 className="h-5 w-5" aria-hidden />
-                  </div>
-                  <div>
-                    <h2
-                      id="dashboard-insights-heading"
-                      className="text-lg font-semibold tracking-tight text-foreground"
-                    >
-                      Your insights
-                    </h2>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                      Highlights and how your time breaks down across the app
-                    </p>
-                  </div>
-                </div>
-                <Button variant="outline" size="sm" className="shrink-0 border-violet-200/80 bg-background/80 hover:bg-violet-50 dark:border-violet-900/50 dark:hover:bg-violet-950/30" asChild>
-                  <Link to="/app/progress">View all</Link>
-                </Button>
-              </div>
-              <div className="p-5 sm:p-6">
-                <div className="grid gap-8 lg:grid-cols-2 lg:gap-10 lg:items-start">
-                  <ul className="space-y-3">
-                    {insights.map((insight, index) => {
-                      const Icon = insight.icon;
-                      return (
-                        <li
-                          key={index}
-                          className="flex gap-3 rounded-xl border border-border/50 bg-muted/10 p-4 dark:bg-muted/5"
-                        >
-                          <div
-                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-background shadow-sm ring-1 ring-border/40 ${insight.color}`}
-                          >
-                            <Icon className="h-5 w-5" aria-hidden />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium leading-tight text-foreground">{insight.title}</p>
-                            <p className="mt-1 text-sm text-muted-foreground">{insight.description}</p>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  <div className="rounded-2xl border border-border/60 bg-muted/10 p-5 dark:bg-muted/5">
-                    <p className="mb-4 text-center text-sm font-medium text-muted-foreground">
-                      Activity mix
-                    </p>
-                    <div className="mx-auto h-52 w-full max-w-[280px]">
-                      {insightDistributionChartData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <RechartsPie>
-                            <Pie
-                              data={insightDistributionChartData}
-                              dataKey="value"
-                              nameKey="name"
-                              innerRadius={52}
-                              outerRadius={78}
-                              paddingAngle={2}
-                              strokeWidth={0}
-                            >
-                              {insightDistributionChartData.map((entry) => (
-                                <Cell key={entry.name} fill={entry.color} />
-                              ))}
-                            </Pie>
-                            <Tooltip
-                              formatter={(value: number, name: string) => [value, name]}
-                              contentStyle={{ borderRadius: 12, borderColor: "hsl(var(--border))" }}
-                            />
-                          </RechartsPie>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="flex h-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
-                          Complete sessions, mood check-ins, or journals to see your mix here.
-                        </div>
-                      )}
-                    </div>
-                    <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-4 text-sm">
-                      <span className="text-muted-foreground">Total tracked</span>
-                      <span className="font-semibold tabular-nums text-foreground">{insightDistributionTotal}</span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-                      {insightDistributionData.map((item) => (
-                        <span key={item.name} className="inline-flex items-center gap-1.5">
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-full"
-                            style={{ backgroundColor: item.color }}
-                          />
-                          <span>{item.name}</span>
-                          <span className="font-medium text-foreground tabular-nums">{item.value}</span>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </motion.section>
+          </motion.div>
         </div>
 
         {/* Motivational Quote */}

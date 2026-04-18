@@ -6,7 +6,7 @@
   "scripts": {
     "predev": "prisma generate",
     "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
-    "build": "prisma generate && tsc",
+    "build": "pnpm --filter @meetezri/shared run build && prisma generate && tsc",
     "start": "node dist/src/app.js",
     "lint": "eslint src --ext .ts",
     "test": "jest",
