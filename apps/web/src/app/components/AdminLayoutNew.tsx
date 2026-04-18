@@ -32,6 +32,7 @@ import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "./ui/button";
+import { BrandLogo } from "./BrandLogo";
 import { useAuth } from "../contexts/AuthContext";
 import { Navigate } from "react-router-dom";
 import {
@@ -349,9 +350,7 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
           {/* Header - Compact */}
           <div className="px-5 py-4 border-b border-gray-200/60">
             <Link to={`/admin/super-admin-dashboard`} className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
-                <Heart className="w-4 h-4 text-white" fill="white" />
-              </div>
+              <BrandLogo heightClass="h-8" />
               <div>
                 <h1 className="font-semibold text-sm">Solace Admin</h1>
                 <p className="text-xs text-gray-500">{currentRoleInfo.name}</p>

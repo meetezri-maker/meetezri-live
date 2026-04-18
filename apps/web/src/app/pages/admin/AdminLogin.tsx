@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { Heart, ArrowRight, Shield, Crown, Building2, Users, Home, ArrowLeft, Lock } from "lucide-react";
+import { ArrowRight, Shield, Crown, Building2, Users, Home, ArrowLeft, Lock } from "lucide-react";
+import { BrandLogo } from "../../components/BrandLogo";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -299,9 +300,9 @@ export function AdminLogin() {
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl"
+            className="flex items-center justify-center mx-auto mb-4"
           >
-            <Heart className="w-8 h-8 text-white" fill="white" />
+            <BrandLogo heightClass="h-16" />
           </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 10 }}

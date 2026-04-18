@@ -277,8 +277,22 @@ export async function getDashboardStats(
       GROUP BY DATE(started_at AT TIME ZONE 'UTC')
     `,
     prisma.$queryRaw<Array<{ name: string; c: bigint }>>`
-      SELECT COALESCE(NULLIF(TRIM(selected_avatar), ''), 'Not set') AS name, COUNT(*)::bigint AS c
-      FROM profiles
+      SELECT
+        COALESCE(
+          NULLIF(TRIM(p.selected_avatar), ''),
+          (
+            SELECT NULLIF(TRIM(s.config->>'avatar'), '')
+            FROM app_sessions s
+            WHERE s.user_id = p.id
+              AND s.config IS NOT NULL
+              AND NULLIF(TRIM(s.config->>'avatar'), '') IS NOT NULL
+            ORDER BY COALESCE(s.started_at, s.created_at) DESC NULLS LAST
+            LIMIT 1
+          ),
+          'Not set'
+        ) AS name,
+        COUNT(*)::bigint AS c
+      FROM profiles p
       GROUP BY 1
       ORDER BY c DESC
       LIMIT 48

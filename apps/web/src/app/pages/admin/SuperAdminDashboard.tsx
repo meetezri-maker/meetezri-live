@@ -1504,7 +1504,9 @@ export function SuperAdminDashboard() {
                     Avatar selection
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Share of users by chosen profile avatar (from profiles)
+                    Uses the companion saved on the profile when present; otherwise the avatar from the user&apos;s
+                    most recent session. Labels match Session Lobby: Alex Rivera, Maya Chen, Jordan Taylor, and Sara
+                    Mitchell.
                   </p>
                 </div>
               </div>

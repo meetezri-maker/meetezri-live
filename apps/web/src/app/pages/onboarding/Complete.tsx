@@ -3,7 +3,8 @@ import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { Heart, Sparkles, Video, MessageSquare, TrendingUp, ArrowRight, Loader2 } from "lucide-react";
+import { Sparkles, Video, MessageSquare, TrendingUp, ArrowRight, Loader2 } from "lucide-react";
+import { BrandLogo } from "../../components/BrandLogo";
 import { FloatingElement } from "../../components/FloatingElement";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
 import { useAuth } from "@/app/contexts/AuthContext";
@@ -77,8 +78,8 @@ export function OnboardingComplete() {
         >
           <FloatingElement yOffset={15} duration={3}>
             <div className="relative">
-              <div className="w-32 h-32 bg-gradient-to-br from-primary via-accent to-secondary rounded-3xl flex items-center justify-center shadow-2xl">
-                <Heart className="w-16 h-16 text-white" fill="white" />
+              <div className="flex items-center justify-center py-2">
+                <BrandLogo heightClass="h-28" />
               </div>
               
               {/* Sparkles around the heart */}

@@ -50,6 +50,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { Button } from "./ui/button";
+import { BrandLogo } from "./BrandLogo";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -365,9 +366,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               <motion.div
                 whileHover={{ rotate: 360, scale: 1.1 }}
                 transition={{ duration: 0.5 }}
-                className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center shadow-lg"
+                className="flex items-center justify-center"
               >
-                <Heart className="w-6 h-6 text-white" fill="white" />
+                <BrandLogo heightClass="h-10" />
               </motion.div>
               <div>
                 <h1 className="font-bold text-lg">Solace Admin</h1>

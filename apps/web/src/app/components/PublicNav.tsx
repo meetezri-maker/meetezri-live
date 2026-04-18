@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { Button } from "./ui/button";
-import { Heart, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
+import { BrandLogo } from "./BrandLogo";
 import { motion } from "motion/react";
 import { useState } from "react";
 
@@ -18,13 +19,13 @@ export function PublicNav() {
         <div className="flex justify-between items-center h-16">
           <Link to="/" className="flex items-center gap-2">
             <motion.div
-              whileHover={{ scale: 1.1, rotate: 5 }}
+              whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center"
+              className="flex items-center justify-center"
             >
-              <Heart className="w-5 h-5 text-white" fill="white" />
+              <BrandLogo heightClass="h-24" />
             </motion.div>
-            <span className="text-xl font-semibold">Solace</span>
+            {/* <span className="text-xl font-semibold">Solace</span> */}
           </Link>
           
           <div className="hidden md:flex items-center gap-8">

@@ -19,6 +19,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { MobileBottomNav } from "./MobileBottomNav";
+import { BrandLogo } from "./BrandLogo";
 import { useAuth } from "../contexts/AuthContext";
 import { useNotifications } from "../contexts/NotificationsContext";
 import { toast } from "sonner";
@@ -263,7 +264,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         animate={{ y: 0 }}
         className="bg-white/80 dark:bg-slate-900/90 backdrop-blur-lg border-b border-gray-200 dark:border-slate-700 sticky top-0 z-40 shadow-sm"
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div className=" mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <motion.div
               animate={{ 
@@ -275,23 +276,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                 repeat: Infinity,
                 repeatDelay: 5
               }}
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
-                useGradientUI
-                  ? "bg-gradient-to-br from-primary to-accent"
-                  : "bg-primary"
-              }`}
+              className="flex items-center justify-center"
             >
-              E
+              <BrandLogo heightClass="h-9" />
             </motion.div>
-            <h1
-              className={`font-bold text-xl ${
-                useGradientUI
-                  ? "bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"
-                  : "text-primary"
-              }`}
-            >
-              Ezri
-            </h1>
           </div>
 
           <div className="flex items-center gap-2">

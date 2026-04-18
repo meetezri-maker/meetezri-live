@@ -2,6 +2,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { PublicNav } from "../components/PublicNav";
+import { BrandLogo } from "../components/BrandLogo";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { AnimatedCard } from "../components/AnimatedCard";
@@ -657,10 +658,8 @@ export function Landing() {
                 whileHover={{ scale: 1.05 }}
                 className="flex items-center gap-2 mb-4"
               >
-                <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
-                  <Heart className="w-5 h-5 text-white" fill="white" />
-                </div>
-                <span className="text-xl font-semibold">Solace</span>
+                <BrandLogo heightClass="h-16" />
+                {/* <span className="text-xl font-semibold">Solace</span> */}
               </motion.div>
               <p className="text-sm text-muted-foreground">
                 Your AI-powered wellness companion, available 24/7

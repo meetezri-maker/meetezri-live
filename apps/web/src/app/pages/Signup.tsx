@@ -5,7 +5,8 @@ import { PhoneInput } from "../components/ui/phone-input";
 import { Card } from "../components/ui/card";
 import { Label } from "../components/ui/label";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Heart, CheckCircle2, ArrowRight, Sparkles, Loader2 } from "lucide-react";
+import { CheckCircle2, ArrowRight, Sparkles, Loader2 } from "lucide-react";
+import { BrandLogo } from "../components/BrandLogo";
 import { motion } from "motion/react";
 import { FloatingElement } from "../components/FloatingElement";
 import { PublicNav } from "../components/PublicNav";
@@ -334,9 +335,9 @@ export function Signup() {
               initial={{ scale: 0, rotate: -180 }}
               animate={{ scale: 1, rotate: 0 }}
               transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.2 }}
-              className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center mb-6 shadow-xl"
+              className="flex items-center justify-center mb-6"
             >
-              <Heart className="w-8 h-8 text-white" fill="white" />
+              <BrandLogo heightClass="h-16" />
             </motion.div>
             
             <motion.div

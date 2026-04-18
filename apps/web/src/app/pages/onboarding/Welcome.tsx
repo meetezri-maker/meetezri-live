@@ -5,6 +5,7 @@ import { AnimatedCard } from "../../components/AnimatedCard";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { Sparkles, Heart, Clock, Shield, ArrowRight } from "lucide-react";
+import { BrandLogo } from "../../components/BrandLogo";
 
 export function OnboardingWelcome() {
   const features = [
@@ -40,8 +41,8 @@ export function OnboardingWelcome() {
           className="flex justify-center"
         >
           <div className="relative">
-            <div className="w-24 h-24 bg-gradient-to-br from-primary via-accent to-secondary rounded-3xl flex items-center justify-center shadow-2xl">
-              <Heart className="w-12 h-12 text-white" fill="white" />
+            <div className="flex items-center justify-center py-2">
+              <BrandLogo heightClass="h-24" />
             </div>
             <motion.div
               animate={{ 

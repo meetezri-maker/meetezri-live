@@ -86,11 +86,22 @@ const LEGACY_LOBBY_NAME: Record<string, string> = {
   "sarah mitchell": "Sara Mitchell",
   "sara mitchell": "Sara Mitchell",
   "maya chen": "maya chen",
+  /** Short ids from older onboarding / clients */
+  maya: "maya chen",
+  alex: "Alex",
+  jordan: "Jordan Taylor",
+  sarah: "Sara Mitchell",
+  sara: "Sara Mitchell",
 };
 
 /** Match DB / profile name to a lobby companion (exact id/name, then legacy full names). */
 export function findLobbyAvatar(name: string | null | undefined): LobbyAvatar | undefined {
-  const n = (name ?? "").trim().toLowerCase();
+  const n = (name ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\.png$/i, "")
+    .replace(/[-_]+/g, " ")
+    .trim();
   if (!n) return undefined;
   const direct =
     LOBBY_AVATARS.find((a) => a.name.toLowerCase() === n) ??

@@ -4,7 +4,8 @@ import { Input } from "../components/ui/input";
 import { Card } from "../components/ui/card";
 import { Label } from "../components/ui/label";
 import { Link, useNavigate } from "react-router-dom";
-import { Heart, ArrowRight, Loader2, Lock } from "lucide-react";
+import { ArrowRight, Loader2, Lock } from "lucide-react";
+import { BrandLogo } from "../components/BrandLogo";
 import { motion } from "motion/react";
 import { FloatingElement } from "../components/FloatingElement";
 import { PublicNav } from "../components/PublicNav";
@@ -342,9 +343,9 @@ export function Login() {
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl"
+            className="flex items-center justify-center mx-auto mb-4"
           >
-            <Heart className="w-8 h-8 text-white" fill="white" />
+            <BrandLogo heightClass="h-16" />
           </motion.div>
           <motion.h1
             initial={{ opacity: 0, y: 10 }}
