@@ -1292,8 +1292,10 @@ export function SessionLobby() {
                                 </div>
                               )}
                               <div className="font-bold mb-1">{avatar.name}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {avatar.description}
+                              <div className="text-xs text-muted-foreground line-clamp-3">
+                                {avatar.personality?.trim() ||
+                                  avatar.description?.trim() ||
+                                  "No personality description available"}
                               </div>
                             </motion.button>
                           ))}

@@ -8,6 +8,7 @@ import {
 
 /** Lobby companion list — card portraits from `public/avatars/` (same as Session Lobby). */
 export type LobbyAvatar = {
+  personality: string;
   id: string;
   name: string;
   emoji: string;
@@ -35,6 +36,7 @@ export function lobbyAvatarsFromApiRows(
     is_active?: boolean | null;
     image_url?: string | null;
     description?: string | null;
+    personality?: string | null;
   }>
 ): LobbyAvatar[] {
   const active = rows.filter(
@@ -52,10 +54,16 @@ export function lobbyAvatarsFromApiRows(
       ? rawUrl
       : lobby?.cardImage ?? tryResolveCompanionPortraitUrl(r.name) ?? undefined;
 
+    const personalityFromDb =
+      typeof r.personality === "string" && r.personality.trim()
+        ? r.personality.trim()
+        : lobby?.personality?.trim() || "";
+
     return {
       id: r.id ?? r.name,
       name: r.name,
       emoji: "",
+      personality: personalityFromDb.slice(0, 280),
       description: (r.description || lobby?.description || "").slice(0, 160),
       cardImage,
     };
@@ -68,6 +76,7 @@ export const LOBBY_AVATARS: LobbyAvatar[] = DEFAULT_AI_COMPANIONS.map((c) => ({
   name: c.name,
   emoji: "",
   description: c.lobbyTagline,
+  personality: c.personality,
   cardImage: companionCardImageUrl(c.portraitPng),
 }));
 
