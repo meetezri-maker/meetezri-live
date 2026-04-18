@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AdminLayoutNew } from '@/app/components/AdminLayoutNew';
 import { api } from '@/lib/api';
@@ -19,6 +19,7 @@ import {
   Trash2,
   Loader2,
 } from 'lucide-react';
+import { AdminPaginationBar } from '@/app/components/admin/AdminPaginationBar';
 
 interface Message {
   id: string;
@@ -126,6 +127,8 @@ export function ConversationTranscripts() {
   const [filterFlagged, setFilterFlagged] = useState<boolean | null>(null);
   const [savingAdminNotes, setSavingAdminNotes] = useState(false);
   const [exportingList, setExportingList] = useState(false);
+  const [listPage, setListPage] = useState(1);
+  const [listPageSize, setListPageSize] = useState(10);
 
   /** Loads all ended sessions in pages (API allows up to 5k per page). */
   const fetchSessions = useCallback(async () => {
@@ -221,21 +224,45 @@ export function ConversationTranscripts() {
     crisis: transcripts.filter((t) => t.sentiment === 'crisis').length,
   };
 
-  const filteredTranscripts = transcripts.filter((transcript) => {
-    const matchesSearch =
-      transcript.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      transcript.avatarName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      transcript.topics.some((x) => x.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredTranscripts = useMemo(() => {
+    return transcripts.filter((transcript) => {
+      const matchesSearch =
+        transcript.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        transcript.avatarName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        transcript.topics.some((x) => x.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const matchesSentiment =
-      filterSentiment === 'all' ||
-      transcript.sentiment === filterSentiment ||
-      (filterSentiment === 'concerning' && transcript.sentiment === 'concerning');
+      const matchesSentiment =
+        filterSentiment === 'all' ||
+        transcript.sentiment === filterSentiment ||
+        (filterSentiment === 'concerning' && transcript.sentiment === 'concerning');
 
-    const matchesFlagged = filterFlagged === null || transcript.isFlagged === filterFlagged;
+      const matchesFlagged = filterFlagged === null || transcript.isFlagged === filterFlagged;
 
-    return matchesSearch && matchesSentiment && matchesFlagged;
-  });
+      return matchesSearch && matchesSentiment && matchesFlagged;
+    });
+  }, [transcripts, searchQuery, filterSentiment, filterFlagged]);
+
+  useEffect(() => {
+    setListPage(1);
+  }, [searchQuery, filterSentiment, filterFlagged]);
+
+  useEffect(() => {
+    const tp = Math.max(1, Math.ceil(filteredTranscripts.length / listPageSize) || 1);
+    setListPage((p) => (p > tp ? tp : p));
+  }, [filteredTranscripts.length, listPageSize]);
+
+  const transcriptListTotalPages = Math.max(
+    1,
+    Math.ceil(filteredTranscripts.length / listPageSize) || 1
+  );
+  const transcriptSafePage = Math.min(
+    Math.max(1, listPage),
+    transcriptListTotalPages
+  );
+  const paginatedTranscripts = filteredTranscripts.slice(
+    (transcriptSafePage - 1) * listPageSize,
+    transcriptSafePage * listPageSize
+  );
 
   /** CSV of filtered rows (metadata). Per-session full transcript: use row Download. Batch AI-assisted export planned. */
   const handleExportListCsv = () => {
@@ -523,7 +550,7 @@ Ezri Mental Health Platform - Admin Dashboard
         </div>
 
         <div className="space-y-4">
-          {filteredTranscripts.map((transcript, index) => (
+          {paginatedTranscripts.map((transcript, index) => (
             <motion.div
               key={transcript.id}
               initial={{ opacity: 0, y: 20 }}
@@ -671,6 +698,17 @@ Ezri Mental Health Platform - Admin Dashboard
             </motion.div>
           ))}
         </div>
+
+        {filteredTranscripts.length > 0 && (
+          <AdminPaginationBar
+            total={filteredTranscripts.length}
+            page={listPage}
+            pageSize={listPageSize}
+            onPageChange={setListPage}
+            onPageSizeChange={setListPageSize}
+            selectId="conversation-transcripts-page-size"
+          />
+        )}
 
         {filteredTranscripts.length === 0 && (
           <div className="text-center py-16">

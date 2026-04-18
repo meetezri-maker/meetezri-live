@@ -7,6 +7,7 @@ import { Input } from "../../components/ui/input";
 import { motion, AnimatePresence } from "motion/react";
 import { api } from "../../../lib/api";
 import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
+import { AdminPaginationBar } from "../../components/admin/AdminPaginationBar";
 import { mergeApiBuiltinsForAdmin } from "../../../lib/mergeAdminWellnessTools";
 import {
   WELLNESS_BUILTIN_TOOLS_ADMIN,
@@ -106,6 +107,8 @@ export function ContentManagement() {
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [tablePage, setTablePage] = useState(1);
+  const [tablePageSize, setTablePageSize] = useState(10);
 
   // State for content items
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -235,6 +238,34 @@ export function ContentManagement() {
       resource.type.toLowerCase().includes(searchQueryLower)
     );
   });
+
+  const listForPagination =
+    activeTab === "exercises"
+      ? filteredExercises
+      : activeTab === "prompts"
+        ? filteredPrompts
+        : filteredResources;
+  const listTotal = listForPagination.length;
+
+  useEffect(() => {
+    setTablePage(1);
+  }, [activeTab, searchQuery]);
+
+  useEffect(() => {
+    const tp = Math.max(1, Math.ceil(listTotal / tablePageSize) || 1);
+    setTablePage((p) => (p > tp ? tp : p));
+  }, [listTotal, tablePageSize]);
+
+  const tableTotalPages = Math.max(1, Math.ceil(listTotal / tablePageSize) || 1);
+  const tableSafePage = Math.min(Math.max(1, tablePage), tableTotalPages);
+  const sliceStart = (tableSafePage - 1) * tablePageSize;
+  const sliceEnd = tableSafePage * tablePageSize;
+  const paginatedExercises =
+    activeTab === "exercises" ? filteredExercises.slice(sliceStart, sliceEnd) : filteredExercises;
+  const paginatedPrompts =
+    activeTab === "prompts" ? filteredPrompts.slice(sliceStart, sliceEnd) : filteredPrompts;
+  const paginatedResources =
+    activeTab === "resources" ? filteredResources.slice(sliceStart, sliceEnd) : filteredResources;
 
   // Handle Add New
   const handleAddNew = () => {
@@ -641,7 +672,7 @@ export function ContentManagement() {
                         </td>
                       </tr>
                     ) : (
-                      filteredExercises.map((exercise) => (
+                      paginatedExercises.map((exercise) => (
                         <tr key={exercise.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 font-medium">
                             {exercise.name}
@@ -698,7 +729,7 @@ export function ContentManagement() {
                 {filteredPrompts.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No prompts found.</p>
                 ) : (
-                  filteredPrompts.map((prompt) => (
+                  paginatedPrompts.map((prompt) => (
                     <div
                       key={prompt.id}
                       className="p-4 border border-gray-200 rounded-lg hover:border-primary transition-colors"
@@ -759,7 +790,7 @@ export function ContentManagement() {
                         </td>
                       </tr>
                     ) : (
-                      filteredResources.map((resource) => (
+                      paginatedResources.map((resource) => (
                         <tr key={resource.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 font-medium">{resource.title}</td>
                           <td className="px-6 py-4 text-sm">
@@ -789,6 +820,17 @@ export function ContentManagement() {
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {listTotal > 0 && (
+              <AdminPaginationBar
+                total={listTotal}
+                page={tablePage}
+                pageSize={tablePageSize}
+                onPageChange={setTablePage}
+                onPageSizeChange={setTablePageSize}
+                selectId="content-management-page-size"
+              />
             )}
           </Card>
         </motion.div>

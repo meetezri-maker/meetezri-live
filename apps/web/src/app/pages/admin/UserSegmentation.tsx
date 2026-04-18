@@ -26,6 +26,7 @@ import { useState, useEffect, useRef } from "react";
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
+import { AdminPaginationBar } from "../../components/admin/AdminPaginationBar";
 
 const SEGMENT_COLOR_PALETTE = [
   "#3b82f6",
@@ -256,6 +257,9 @@ export function UserSegmentation() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const segmentsFirstLoad = useRef(true);
 
+  const [segmentsListPage, setSegmentsListPage] = useState(1);
+  const [segmentsListPageSize, setSegmentsListPageSize] = useState(10);
+
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -417,6 +421,24 @@ export function UserSegmentation() {
       setCreatingSegment(false);
     }
   };
+
+  useEffect(() => {
+    const tp = Math.max(1, Math.ceil(segments.length / segmentsListPageSize) || 1);
+    setSegmentsListPage((p) => (p > tp ? tp : p));
+  }, [segments.length, segmentsListPageSize]);
+
+  const segmentsTotalPages = Math.max(
+    1,
+    Math.ceil(segments.length / segmentsListPageSize) || 1
+  );
+  const segmentsSafePage = Math.min(
+    Math.max(1, segmentsListPage),
+    segmentsTotalPages
+  );
+  const paginatedSegments = segments.slice(
+    (segmentsSafePage - 1) * segmentsListPageSize,
+    segmentsSafePage * segmentsListPageSize
+  );
 
   const handleDelete = async (id: string) => {
     if (deletingSegmentId) return;
@@ -654,13 +676,14 @@ export function UserSegmentation() {
           {segments.length === 0 ? (
             <p className="text-center text-gray-500 py-8">No segments found. Create one to get started!</p>
           ) : (
+            <>
             <div className="space-y-4">
-              {segments.map((segment, index) => (
+              {paginatedSegments.map((segment, index) => (
                 <motion.div
                   key={segment.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.6 + index * 0.05 }}
+                  transition={{ delay: 0.05 + index * 0.03 }}
                   onClick={() => setSelectedSegment(selectedSegment?.id === segment.id ? null : segment)}
                   className={`border-2 rounded-xl p-5 cursor-pointer transition-all ${
                     selectedSegment?.id === segment.id
@@ -795,6 +818,15 @@ export function UserSegmentation() {
                 </motion.div>
               ))}
             </div>
+            <AdminPaginationBar
+              total={segments.length}
+              page={segmentsListPage}
+              pageSize={segmentsListPageSize}
+              onPageChange={setSegmentsListPage}
+              onPageSizeChange={setSegmentsListPageSize}
+              selectId="user-segmentation-list-page-size"
+            />
+            </>
           )}
         </motion.div>
         </div>
