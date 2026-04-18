@@ -31,7 +31,7 @@ type Companion = {
   phone: string;
   specialization: string[];
   license: string;
-  status: "active" | "inactive" | "pending";
+  status: "active" | "inactive" | "pending" | "suspended";
   verified: boolean;
   joinedDate: string;
   sessionsCount: number;
@@ -153,6 +153,8 @@ export function CompanionManagement() {
         return "bg-gray-100 text-gray-700";
       case "pending":
         return "bg-yellow-100 text-yellow-700";
+      case "suspended":
+        return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-700";
     }
@@ -185,7 +187,12 @@ export function CompanionManagement() {
       availabilityAt: dtLocal,
       availabilityLegacy: dtLocal ? "" : rawAvail,
       verified: c.verified,
-      account_status: c.status === "inactive" ? "inactive" : "active",
+      account_status:
+        c.status === "suspended"
+          ? "suspended"
+          : c.status === "inactive"
+            ? "inactive"
+            : "active",
     });
     setShowEditModal(true);
   };
@@ -453,6 +460,7 @@ export function CompanionManagement() {
               <option value="all">All Status</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
+              <option value="suspended">Suspended</option>
               <option value="pending">Pending</option>
             </select>
           </div>

@@ -1325,9 +1325,9 @@ function mapProfileToCompanionStatus(p: {
   email: string | null;
   account_status: string | null;
   role: string | null;
-}): 'active' | 'inactive' | 'pending' {
+}): 'active' | 'inactive' | 'pending' | 'suspended' {
   if (!p.email) return 'pending';
-  if (p.role === 'suspended' || p.account_status === 'suspended') return 'inactive';
+  if (p.role === 'suspended' || p.account_status === 'suspended') return 'suspended';
   if (p.account_status === 'inactive') return 'inactive';
   return 'active';
 }
@@ -1532,7 +1532,15 @@ export async function updateCompanionByAdmin(
   const profUpdate: Prisma.profilesUpdateInput = {};
   if (data.full_name !== undefined) profUpdate.full_name = data.full_name.trim() || null;
   if (data.phone !== undefined) profUpdate.phone = data.phone.trim() || null;
-  if (data.account_status !== undefined) profUpdate.account_status = data.account_status;
+  if (data.account_status !== undefined) {
+    profUpdate.account_status = data.account_status;
+    // Keep security suspension in sync with app access (ProtectedRoute checks `role === 'suspended'`).
+    if (data.account_status === 'suspended') {
+      profUpdate.role = 'suspended';
+    } else if (data.account_status === 'active' || data.account_status === 'inactive') {
+      profUpdate.role = 'therapist';
+    }
+  }
 
   if (Object.keys(profUpdate).length > 0) {
     await prisma.profiles.update({

@@ -10,7 +10,6 @@ import {
   Code,
   Type,
   Search,
-  Code,
   AlignLeft,
   Braces,
 } from "lucide-react";
