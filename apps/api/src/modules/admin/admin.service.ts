@@ -450,12 +450,12 @@ export async function getDashboardStats(
   });
 
   const mergedAvatarRows = mergeCompanionAvatarCounts(avatarRows as Array<{ name: string; c: bigint }>);
-  const avatarTotal = mergedAvatarRows.reduce((s, r) => s + Number(r.c), 0);
-  const avatarDistribution = mergedAvatarRows.map((r, i) => ({
-    name: r.name,
-    value: avatarTotal > 0 ? Math.round((Number(r.c) / avatarTotal) * 100) : 0,
-    count: Number(r.c),
-    color: AVATAR_COLORS[i % AVATAR_COLORS.length],
+  const avatarTotal = mergedAvatarRows.reduce<number>((sum, row) => sum + Number(row.c), 0);
+  const avatarDistribution = mergedAvatarRows.map((row, index) => ({
+    name: row.name,
+    value: avatarTotal > 0 ? Math.round((Number(row.c) / avatarTotal) * 100) : 0,
+    count: Number(row.c),
+    color: AVATAR_COLORS[index % AVATAR_COLORS.length],
   }));
 
   const inactiveRow = (inactiveBuckets as any[])[0] || { d30: 0, d60: 0, d90: 0 };
