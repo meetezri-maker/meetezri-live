@@ -111,7 +111,9 @@ export function PayAsYouGoManager() {
       });
     }
 
-    return filtered;
+    return [...filtered].sort(
+      (a, b) => new Date(b.created).getTime() - new Date(a.created).getTime()
+    );
   }, [transactions, searchQuery, selectedPlan, timeFilter]);
 
   // Calculate statistics

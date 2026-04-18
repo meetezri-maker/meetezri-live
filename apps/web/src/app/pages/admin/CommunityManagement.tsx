@@ -183,14 +183,18 @@ export function CommunityManagement() {
     return ["all", ...Array.from(s).sort()];
   }, [forumPosts]);
 
-  const filteredPosts = forumPosts.filter((post) => {
-    const matchesSearch =
-      post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      post.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      post.author.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = filterCategory === "all" || post.category === filterCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const filteredPosts = useMemo(() => {
+    return forumPosts
+      .filter((post) => {
+        const matchesSearch =
+          post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          post.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          post.author.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesCategory = filterCategory === "all" || post.category === filterCategory;
+        return matchesSearch && matchesCategory;
+      })
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }, [forumPosts, searchQuery, filterCategory]);
 
   const flaggedPosts = forumPosts.filter((post) => post.flagged);
 

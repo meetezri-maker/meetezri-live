@@ -142,12 +142,16 @@ export function SupportTickets() {
 
   const filteredTickets = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return tickets;
-    return tickets.filter(
-      (t) =>
-        t.subject.toLowerCase().includes(q) ||
-        t.user.toLowerCase().includes(q) ||
-        t.id.toLowerCase().includes(q)
+    const list = !q
+      ? tickets
+      : tickets.filter(
+          (t) =>
+            t.subject.toLowerCase().includes(q) ||
+            t.user.toLowerCase().includes(q) ||
+            t.id.toLowerCase().includes(q)
+        );
+    return [...list].sort(
+      (a, b) => new Date(b.updatedAtIso).getTime() - new Date(a.updatedAtIso).getTime()
     );
   }, [tickets, searchQuery]);
 

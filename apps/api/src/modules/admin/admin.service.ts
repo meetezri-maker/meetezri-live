@@ -2720,7 +2720,7 @@ export async function getEmailTemplates() {
   }
 
   const existingTemplates = await prisma.email_templates.findMany({
-    orderBy: { name: 'asc' }
+    orderBy: { created_at: 'desc' }
   });
 
   if (existingTemplates.length === 0) {
@@ -2734,7 +2734,7 @@ export async function getEmailTemplates() {
   }
 
   const result = await prisma.email_templates.findMany({
-    orderBy: { name: 'asc' }
+    orderBy: { created_at: 'desc' }
   });
 
   emailTemplatesCache = { data: result, timestamp: Date.now() };
@@ -2891,6 +2891,7 @@ export async function getCommunityGroups() {
   }
 
   const result = await prisma.community_groups.findMany({
+    orderBy: { created_at: 'desc' },
     include: {
       _count: {
         select: { community_group_members: true, community_posts: true }
@@ -2961,6 +2962,7 @@ export async function deleteCommunityGroupAdmin(id: string) {
 export async function getCommunityGroupMembersAdmin(groupId: string) {
   return prisma.community_group_members.findMany({
     where: { group_id: groupId },
+    orderBy: { joined_at: 'desc' },
     include: {
       profiles: { select: { full_name: true, email: true } },
     },
@@ -3309,7 +3311,7 @@ export async function getSessionRecordings(page: number = 1, limit: number = 20)
   const [items, total] = await prisma.$transaction([
     prisma.app_sessions.findMany({
       where,
-      orderBy: { created_at: 'desc' },
+      orderBy: { started_at: 'desc' },
       skip,
       take,
       include: {

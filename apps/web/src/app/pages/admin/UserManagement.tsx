@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -21,6 +21,8 @@ import {
   UserX,
   Shield,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   SlidersHorizontal,
   X,
   RefreshCw,
@@ -70,9 +72,10 @@ export function UserManagement() {
   const [subscriptionFilter, setSubscriptionFilter] = useState<SubscriptionFilter>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [sortField, setSortField] = useState<SortField>("name");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [sortField, setSortField] = useState<SortField>("joinDate");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [addUserSubmitting, setAddUserSubmitting] = useState(false);
   const [confirmationModal, setConfirmationModal] = useState<{
@@ -99,7 +102,7 @@ export function UserManagement() {
     subscription: "trial",
     organization: "",
   });
-  const usersPerPage = 10;
+  const usersPerPage = pageSize;
   const usersFirstLoad = useRef(true);
 
   const fetchUsers = async () => {
@@ -183,40 +186,58 @@ export function UserManagement() {
     });
   };
 
-  // Filter users
-  let filteredUsers = users.filter((user) => {
-    const matchesSearch =
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "all" || user.status === statusFilter;
-    const matchesRisk = riskFilter === "all" || user.riskLevel === riskFilter;
-    const matchesSubscription = subscriptionFilter === "all" || user.subscription === subscriptionFilter;
-    
-    return matchesSearch && matchesStatus && matchesRisk && matchesSubscription;
-  });
+  const filteredUsers = useMemo(() => {
+    const filtered = users.filter((user) => {
+      const matchesSearch =
+        user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === "all" || user.status === statusFilter;
+      const matchesRisk = riskFilter === "all" || user.riskLevel === riskFilter;
+      const matchesSubscription =
+        subscriptionFilter === "all" || user.subscription === subscriptionFilter;
 
-  // Sort users
-  filteredUsers.sort((a, b) => {
-    let aVal: any = a[sortField];
-    let bVal: any = b[sortField];
+      return matchesSearch && matchesStatus && matchesRisk && matchesSubscription;
+    });
 
-    if (sortField === "joinDate" || sortField === "lastActive") {
-      if (sortField === "joinDate") {
-        aVal = new Date(a.joinDate).getTime();
-        bVal = new Date(b.joinDate).getTime();
-      } else {
-        aVal = new Date(a.lastActive).getTime();
-        bVal = new Date(b.lastActive).getTime();
+    return [...filtered].sort((a, b) => {
+      let aVal: any = a[sortField];
+      let bVal: any = b[sortField];
+
+      if (sortField === "joinDate" || sortField === "lastActive") {
+        if (sortField === "joinDate") {
+          aVal = new Date(a.joinDate).getTime();
+          bVal = new Date(b.joinDate).getTime();
+        } else {
+          aVal = new Date(a.lastActive).getTime();
+          bVal = new Date(b.lastActive).getTime();
+        }
       }
-    }
 
-    if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
-    if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
-    return 0;
-  });
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [
+    users,
+    searchQuery,
+    statusFilter,
+    riskFilter,
+    subscriptionFilter,
+    sortField,
+    sortDirection,
+  ]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, riskFilter, subscriptionFilter]);
+
+  useEffect(() => {
+    const tp = Math.max(1, Math.ceil(filteredUsers.length / pageSize) || 1);
+    setCurrentPage((p) => (p > tp ? tp : p));
+  }, [filteredUsers.length, pageSize]);
 
   // Pagination
-  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+  const totalPages = Math.ceil(filteredUsers.length / usersPerPage) || 1;
   const paginatedUsers = filteredUsers.slice(
     (currentPage - 1) * usersPerPage,
     currentPage * usersPerPage
@@ -289,7 +310,9 @@ export function UserManagement() {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
-      setSortDirection("asc");
+      setSortDirection(
+        field === "joinDate" || field === "lastActive" ? "desc" : "asc"
+      );
     }
   };
 
@@ -909,41 +932,53 @@ export function UserManagement() {
               </table>
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="border-t px-4 py-3 flex items-center justify-between">
-                <div className="text-sm text-muted-foreground">
-                  Showing {(currentPage - 1) * usersPerPage + 1} to{" "}
-                  {Math.min(currentPage * usersPerPage, filteredUsers.length)} of{" "}
-                  {filteredUsers.length} users
+            {/* Pagination: page size + range + prev/next (compact) */}
+            {filteredUsers.length > 0 && (
+              <div className="border-t px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <label htmlFor="user-page-size" className="sr-only">
+                    Records per page
+                  </label>
+                  <select
+                    id="user-page-size"
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 pr-9 text-sm font-medium text-blue-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 cursor-pointer"
+                  >
+                    {[10, 25, 50, 100].map((n) => (
+                      <option key={n} value={n}>
+                        {n} Records per page
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
+                <div className="flex items-center justify-center gap-2 sm:justify-end">
+                  <button
+                    type="button"
+                    aria-label="Previous page"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
+                    disabled={currentPage <= 1}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
                   >
-                    Previous
-                  </Button>
-                  {[...Array(totalPages)].map((_, i) => (
-                    <Button
-                      key={i}
-                      variant={currentPage === i + 1 ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentPage(i + 1)}
-                    >
-                      {i + 1}
-                    </Button>
-                  ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="min-w-[9rem] text-center text-sm tabular-nums text-gray-600">
+                    {(currentPage - 1) * usersPerPage + 1} to{" "}
+                    {Math.min(currentPage * usersPerPage, filteredUsers.length)} of{" "}
+                    {filteredUsers.length}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Next page"
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
+                    disabled={currentPage >= totalPages}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
                   >
-                    Next
-                  </Button>
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
             )}
