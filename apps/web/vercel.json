@@ -1,6 +1,6 @@
 {
-  "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm run build",
+  "installCommand": "npx --yes pnpm@10.33.0 install --frozen-lockfile",
+  "buildCommand": "npx --yes pnpm@10.33.0 run build",
   "headers": [
     {
       "source": "/index.html",
