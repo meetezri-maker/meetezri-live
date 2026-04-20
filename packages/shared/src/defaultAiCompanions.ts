@@ -39,7 +39,7 @@ export const DEFAULT_AI_COMPANIONS: readonly DefaultAiCompanionDefinition[] = [
   {
     id: "Jordan Taylor",
     name: "Jordan Taylor",
-    portraitPng: "Jordan Taylor.png",
+    portraitPng: "jordan Taylor.png",
     lobbyTagline: "Professional and attentive",
     gender: "Non-binary",
     age_range: "28-32",

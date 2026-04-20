@@ -140,6 +140,7 @@ export function CompanionManagement() {
 
   const [editForm, setEditForm] = useState({
     name: "",
+    email: "",
     phone: "",
     license: "",
     specializations: "",
@@ -215,6 +216,7 @@ export function CompanionManagement() {
     const dtLocal = isoToDateTimeLocal(rawAvail);
     setEditForm({
       name: c.name,
+      email: c.email ?? "",
       phone: normalizeStoredPhoneForInput(c.phone || ""),
       license: c.license,
       specializations: c.specialization[0] ?? "",
@@ -282,6 +284,10 @@ export function CompanionManagement() {
 
   const handleSaveEdit = async () => {
     if (!selectedCompanion) return;
+    if (!editForm.name.trim() || !editForm.email.trim()) {
+      toast.error("Name and email are required");
+      return;
+    }
     if (!isValidOptionalLicense(editForm.license)) {
       toast.error("License format must be like LCSW-12345");
       return;
@@ -300,6 +306,7 @@ export function CompanionManagement() {
             : undefined;
       const list = (await api.admin.updateCompanion(selectedCompanion.id, {
         full_name: editForm.name.trim(),
+        email: editForm.email.trim(),
         phone: editForm.phone.trim() || undefined,
         license_number: editForm.license.trim() || undefined,
         specializations: parseCommaList(editForm.specializations),
@@ -880,6 +887,7 @@ export function CompanionManagement() {
                       type="text"
                       value={editForm.name}
                       onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="Dr. Jane Smith"
                       className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
                     />
                   </div>
@@ -896,14 +904,26 @@ export function CompanionManagement() {
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone (optional)</label>
-                  <p className="text-xs text-gray-500 mb-1.5">Country code + number (exactly 12 digits total).</p>
-                  <PhoneInput
-                    value={editForm.phone}
-                    onChange={(v) => setEditForm((f) => ({ ...f, phone: v }))}
-                    placeholder="Phone number"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                    <input
+                      type="email"
+                      value={editForm.email}
+                      onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+                      placeholder="companion@example.com"
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone (optional)</label>
+                    <p className="text-xs text-gray-500 mb-1.5">Country code + number (exactly 12 digits total).</p>
+                    <PhoneInput
+                      value={editForm.phone}
+                      onChange={(v) => setEditForm((f) => ({ ...f, phone: v }))}
+                      placeholder="Phone number"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Specializations</label>

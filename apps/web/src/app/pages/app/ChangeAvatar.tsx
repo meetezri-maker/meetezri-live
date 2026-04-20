@@ -41,7 +41,7 @@ function mapApiRowToChangeAvatar(row: Record<string, unknown>): AIAvatar {
 
   const imageUrl = rawUrl
     ? rawUrl
-    : lobby?.cardImage ?? tryResolveCompanionPortraitUrl(name) ?? undefined;
+    : tryResolveCompanionPortraitUrl(name) ?? lobby?.cardImage ?? undefined;
 
   const specialties = Array.isArray(row.specialties) ? (row.specialties as string[]) : [];
   return {

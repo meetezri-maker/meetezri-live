@@ -1614,6 +1614,7 @@ export const api = {
       id: string,
       body: {
         full_name?: string;
+        email?: string;
         phone?: string;
         license_number?: string;
         specializations?: string[];

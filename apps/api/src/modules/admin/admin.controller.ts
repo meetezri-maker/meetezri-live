@@ -1054,6 +1054,7 @@ export async function patchCompanionHandler(
   try {
     const body = (request.body || {}) as {
       full_name?: string;
+      email?: string;
       phone?: string;
       license_number?: string;
       specializations?: string[];

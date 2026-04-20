@@ -1766,6 +1766,7 @@ export async function updateCompanionByAdmin(
   companionUserId: string,
   data: {
     full_name?: string;
+    email?: string;
     phone?: string;
     license_number?: string;
     specializations?: string[];
@@ -1777,7 +1778,7 @@ export async function updateCompanionByAdmin(
 ) {
   const row = await prisma.companion_profiles.findUnique({
     where: { id: companionUserId },
-    include: { profiles: { select: { role: true } } },
+    include: { profiles: { select: { role: true, email: true } } },
   });
   if (!row) {
     throw new Error('Companion not found');
@@ -1785,6 +1786,32 @@ export async function updateCompanionByAdmin(
 
   const profUpdate: Prisma.profilesUpdateInput = {};
   if (data.full_name !== undefined) profUpdate.full_name = data.full_name.trim() || null;
+  if (data.email !== undefined) {
+    const emailNorm = data.email.trim().toLowerCase();
+    if (!emailNorm) {
+      throw new Error('Email is required');
+    }
+    const currentEmail = (row.profiles.email ?? '').trim().toLowerCase();
+    if (emailNorm !== currentEmail) {
+      const taken = await prisma.profiles.findFirst({
+        where: {
+          email: { equals: emailNorm, mode: 'insensitive' },
+          NOT: { id: companionUserId },
+        },
+        select: { id: true },
+      });
+      if (taken) {
+        throw new Error('Another account already uses this email');
+      }
+      const { error: authEmailError } = await supabaseAdmin.auth.admin.updateUserById(companionUserId, {
+        email: emailNorm,
+      });
+      if (authEmailError) {
+        throw new Error(authEmailError.message || 'Failed to update login email');
+      }
+      profUpdate.email = emailNorm;
+    }
+  }
   if (data.phone !== undefined) profUpdate.phone = data.phone.trim() || null;
   if (data.account_status !== undefined) {
     profUpdate.account_status = data.account_status;

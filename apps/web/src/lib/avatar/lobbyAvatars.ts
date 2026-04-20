@@ -52,7 +52,7 @@ export function lobbyAvatarsFromApiRows(
 
     const cardImage: string | undefined = rawUrl
       ? rawUrl
-      : lobby?.cardImage ?? tryResolveCompanionPortraitUrl(r.name) ?? undefined;
+      : tryResolveCompanionPortraitUrl(r.name) ?? lobby?.cardImage ?? undefined;
 
     const personalityFromDb =
       typeof r.personality === "string" && r.personality.trim()
