@@ -160,8 +160,16 @@ import { ChangeAvatar } from './pages/app/ChangeAvatar';
 import { Achievements } from './pages/app/Achievements';
 import { NotificationHistory } from './pages/app/NotificationHistory';
 import { RecentActivityHistory } from './pages/app/RecentActivityHistory';
-import { GoalsList } from './pages/app/GoalsList';
+// import { GoalsList } from './pages/app/GoalsList';
 import { GoalDetails } from './pages/app/GoalDetails';
+import { BrainHealth } from './pages/app/BrainHealth';
+import { Resources } from './pages/app/Resources';
+import { Community } from './pages/app/Community';
+import { CrisisResources } from './pages/app/CrisisResources';
+import { ResourceAnalyticsPage } from './pages/app/ResourceAnalytics';
+import { CooldownScreen } from './pages/app/CooldownScreen';
+import { HelpSupport } from './pages/app/HelpSupport';
+import { Progress } from './pages/app/Progress';
 // import { Community } from './pages/app/Community';
 
 function NetworkWatcher() {
@@ -398,21 +406,28 @@ export default function App() {
             <Route path = "/app/settings/change-avatar" element={<ChangeAvatar />} />
             <Route path = "/app/settings/achievements" element={<Achievements />} />
             {/* <Route path = "/app/settings/goals" element={<GoalsList />} /> */}
-            <Route path = "/app/settings/goals/:goalId" element={<GoalDetails />} />
+            {/* <Route path = "/app/settings/goals/:goalId" element={<GoalDetails />} /> */}
             <Route path = "/app/settings/notification-history" element={<NotificationHistory />} />
             <Route path="/app/recent-activity-history" element={<RecentActivityHistory />} />
             <Route path="/app/profile/:userId" element={<MemberProfileView />} />
             <Route path="/profile/:userId" element={<MemberProfileView />} />
             <Route path="/app/profile" element={<Navigate to="/app/user-profile" replace />} />
             <Route path="/app/user-profile" element={<UserProfile />} />
+            <Route path="/app/crisis-resources" element={<CrisisResources />} />
+            <Route path="/app/settings/resource-analytics" element={<ResourceAnalyticsPage />} />
+            <Route path ="/app/settings/cooldown-screen" element={<CooldownScreen />} />
+            <Route path = "/app/settings/help-support" element={<HelpSupport />} />
+            <Route path="/app/progress" element={<Progress />} />
             {/* <Route path="/app/settings/community" element={<Community />} /> */}
             <Route path="/app/billing" element={<Billing />} />
             <Route path="/app/sleep-tracker" element={<SleepTracker />} />
             <Route path="/app/habit-tracker" element={<HabitTracker />} />
             <Route path="/app/settings/notifications" element={<Notifications />} />
-            
+            <Route path="/app/settings/brain-health" element={<BrainHealth />} />
+            <Route path="/app/settings/resources" element={<Resources />} />
             <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />
-            
+            <Route path="/app/settings" element={<SettingsHub />} />
+            <Route path="/app/settings/community" element={<Community />} />
             {/* Admin Routes - Protected and role-gated */}
             <Route
               element={
