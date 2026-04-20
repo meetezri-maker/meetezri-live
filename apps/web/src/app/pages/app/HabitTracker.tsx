@@ -43,6 +43,39 @@ interface Habit {
   habit_logs?: HabitLog[];
 }
 
+const habitCategories = [
+  "Health",
+  "Daily life",
+  "Sleep",
+  "Nutrition",
+  "Physical activity",
+  "Mental wellbeing",
+  "Focus & productivity",
+  "Time management",
+  "Social life",
+  "Digital habits",
+  "+ Custom"
+] as const;
+
+const habitEmojiOptions = [
+  "🎯",
+  "💪",
+  "🏃",
+  "🧘",
+  "💤",
+  "🥗",
+  "📚",
+  "🧠",
+  "⏰",
+  "🧴",
+  "🚰",
+  "📝",
+  "🎵",
+  "😊",
+  "🔥",
+  "⭐"
+] as const;
+
 export function HabitTracker() {
   const { session } = useAuth();
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -51,6 +84,7 @@ export function HabitTracker() {
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [showNewHabit, setShowNewHabit] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+  const [customCategory, setCustomCategory] = useState("");
   const [habitFormData, setHabitFormData] = useState({
     name: "",
     icon: "🎯",
@@ -184,6 +218,7 @@ export function HabitTracker() {
   };
 
   const resetForm = () => {
+    setCustomCategory("");
     setHabitFormData({
       name: "",
       icon: "🎯",
@@ -196,20 +231,25 @@ export function HabitTracker() {
 
   const handleEditHabit = (habit: Habit) => {
     setEditingHabit(habit);
+    const isPresetCategory = habitCategories
+      .filter((category) => category !== "+ Custom")
+      .includes(habit.category as (typeof habitCategories)[number]);
+
+    setCustomCategory(isPresetCategory ? "" : habit.category);
     setHabitFormData({
       name: habit.name,
       icon: habit.icon,
-      category: habit.category,
+      category: isPresetCategory ? habit.category : "+ Custom",
       frequency: habit.frequency,
       color: habit.color
     });
     setShowNewHabit(true);
   };
 
-  const handleCreateHabit = async () => {
+  const handleCreateHabit = async (payload = habitFormData) => {
     try {
       setIsSaving(true);
-      await api.habits.create(habitFormData);
+      await api.habits.create(payload);
       fetchHabits();
       setShowNewHabit(false);
       resetForm();
@@ -222,12 +262,12 @@ export function HabitTracker() {
     }
   };
 
-  const handleUpdateHabit = async () => {
+  const handleUpdateHabit = async (payload = habitFormData) => {
     if (!editingHabit) return;
     
     try {
       setIsSaving(true);
-      await api.habits.update(editingHabit.id, habitFormData);
+      await api.habits.update(editingHabit.id, payload);
       fetchHabits();
       setShowNewHabit(false);
       resetForm();
@@ -256,11 +296,11 @@ export function HabitTracker() {
     }
   };
 
-  const handleSaveHabit = () => {
+  const handleSaveHabit = (payload = habitFormData) => {
     if (editingHabit) {
-      handleUpdateHabit();
+      handleUpdateHabit(payload);
     } else {
-      handleCreateHabit();
+      handleCreateHabit(payload);
     }
   };
 
@@ -722,13 +762,17 @@ export function HabitTracker() {
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           Icon (Emoji)
                         </label>
-                        <input
-                          type="text"
+                        <select
                           value={habitFormData.icon}
                           onChange={(e) => setHabitFormData({ ...habitFormData, icon: e.target.value })}
-                          placeholder="🎯"
-                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-2xl text-center bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                        />
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                        >
+                          {habitEmojiOptions.map((emoji) => (
+                            <option key={emoji} value={emoji}>
+                              {emoji}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       <div>
@@ -750,13 +794,29 @@ export function HabitTracker() {
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Category
                       </label>
-                      <input
-                        type="text"
+                      <select
                         value={habitFormData.category}
                         onChange={(e) => setHabitFormData({ ...habitFormData, category: e.target.value })}
-                        placeholder="e.g., Physical, Mental, Social"
                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                      />
+                      >
+                        <option value="" disabled>
+                          Select a category
+                        </option>
+                        {habitCategories.map((category) => (
+                          <option key={category} value={category}>
+                            {category}
+                          </option>
+                        ))}
+                      </select>
+                      {habitFormData.category === "+ Custom" && (
+                        <input
+                          type="text"
+                          value={customCategory}
+                          onChange={(e) => setCustomCategory(e.target.value)}
+                          placeholder="Type your custom category"
+                          className="w-full mt-2 px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                        />
+                      )}
                     </div>
 
                     <div>
@@ -803,10 +863,23 @@ export function HabitTracker() {
                       <Button
                         onClick={(e) => {
                           e.preventDefault();
+                          if (habitFormData.category === "+ Custom") {
+                            const trimmedCategory = customCategory.trim();
+                            if (!trimmedCategory) {
+                              toast.error("Please enter a custom category");
+                              return;
+                            }
+                            handleSaveHabit({ ...habitFormData, category: trimmedCategory });
+                            return;
+                          }
                           handleSaveHabit();
                         }}
                         className="flex-1"
-                        disabled={!habitFormData.name || !habitFormData.category}
+                        disabled={
+                          !habitFormData.name ||
+                          !habitFormData.category ||
+                          (habitFormData.category === "+ Custom" && !customCategory.trim())
+                        }
                         isLoading={isSaving}
                       >
                         <Check className="w-4 h-4 mr-2" />

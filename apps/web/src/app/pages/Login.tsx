@@ -376,7 +376,7 @@ export function Login() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.45 }}
-              className="mb-6"
+              className="mb-2"
             >
               <Button
                 type="button"
@@ -405,7 +405,7 @@ export function Login() {
                 <span className="text-base text-black">Continue with Google</span>
               </Button>
 
-              <div className="relative my-6">
+              <div className="relative mt-6">
                 <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t border-muted-foreground/20" />
                 </div>

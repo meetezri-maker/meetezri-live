@@ -54,8 +54,8 @@ import { MemberProfileView } from '@/app/pages/app/MemberProfileView';
 import { SessionLobby } from '@/app/pages/app/SessionLobby';
 import { ActiveSession } from '@/app/pages/app/ActiveSession';
 import { Billing } from '@/app/pages/app/Billing';
-// import { SleepTracker } from '@/app/pages/app/SleepTracker';
-// import { HabitTracker } from '@/app/pages/app/HabitTracker';
+import { SleepTracker } from '@/app/pages/app/SleepTracker';
+import { HabitTracker } from '@/app/pages/app/HabitTracker';
 
 // Admin Pages
 import { SuperAdminDashboard } from '@/app/pages/admin/SuperAdminDashboard';
@@ -407,8 +407,8 @@ export default function App() {
             <Route path="/app/user-profile" element={<UserProfile />} />
             {/* <Route path="/app/settings/community" element={<Community />} /> */}
             <Route path="/app/billing" element={<Billing />} />
-            {/* <Route path="/app/sleep-tracker" element={<SleepTracker />} />
-            <Route path="/app/habit-tracker" element={<HabitTracker />} /> */}
+            <Route path="/app/sleep-tracker" element={<SleepTracker />} />
+            <Route path="/app/habit-tracker" element={<HabitTracker />} />
             <Route path="/app/settings/notifications" element={<Notifications />} />
             
             <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />

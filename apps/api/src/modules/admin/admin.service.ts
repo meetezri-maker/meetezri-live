@@ -1237,6 +1237,28 @@ function buildProfileWhereFromRules(rules: SegmentRule[]): Prisma.profilesWhereI
   return { AND: [endUserWhere(), ...parts] };
 }
 
+function isMissingProfileColumnError(error: unknown, column: 'signup_type' | 'onboarding_completed'): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const maybe = error as { code?: string; message?: string; meta?: unknown };
+  if (maybe.code !== 'P2022') return false;
+  const msg = String(maybe.message ?? '').toLowerCase();
+  const meta = JSON.stringify(maybe.meta ?? '').toLowerCase();
+  return msg.includes(column) || meta.includes(column);
+}
+
+function isSegmentationRuleColumnMissingError(error: unknown): boolean {
+  return (
+    isMissingProfileColumnError(error, 'signup_type') ||
+    isMissingProfileColumnError(error, 'onboarding_completed')
+  );
+}
+
+function stripUnsupportedSegmentationRules(rules: SegmentRule[]): SegmentRule[] {
+  return rules.filter(
+    (r) => r.type !== 'signup_type' && r.type !== 'onboarding_completed'
+  );
+}
+
 export async function getUserSegmentUsers(
   segmentId: string,
   opts: { page?: number; limit?: number } = {}
@@ -1251,31 +1273,69 @@ export async function getUserSegmentUsers(
   }
   const rules = extractSegmentRules(seg.criteria);
   const where = buildProfileWhereFromRules(rules);
+  const fallbackWhere = buildProfileWhereFromRules(stripUnsupportedSegmentationRules(rules));
   const skip = (page - 1) * limit;
-  const [rows, total] = await Promise.all([
-    prisma.profiles.findMany({
-      where,
-      skip,
-      take: limit,
-      orderBy: { created_at: 'desc' },
-      select: {
-        id: true,
-        full_name: true,
-        email: true,
-        age: true,
-        created_at: true,
-        signup_type: true,
-        onboarding_completed: true,
-        subscriptions: {
-          where: { status: { in: [...ACTIVE_SUBSCRIPTION_STATUSES] } },
-          take: 1,
-          orderBy: { updated_at: 'desc' },
-          select: { plan_type: true, status: true },
+  let rows: Array<{
+    id: string;
+    full_name: string | null;
+    email: string | null;
+    age: string | null;
+    created_at: Date;
+    signup_type?: string | null;
+    onboarding_completed?: boolean | null;
+    subscriptions: Array<{ plan_type: string | null; status: string | null }>;
+  }> = [];
+  let total = 0;
+  try {
+    [rows, total] = await Promise.all([
+      prisma.profiles.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { created_at: 'desc' },
+        select: {
+          id: true,
+          full_name: true,
+          email: true,
+          age: true,
+          created_at: true,
+          signup_type: true,
+          onboarding_completed: true,
+          subscriptions: {
+            where: { status: { in: [...ACTIVE_SUBSCRIPTION_STATUSES] } },
+            take: 1,
+            orderBy: { updated_at: 'desc' },
+            select: { plan_type: true, status: true },
+          },
         },
-      },
-    }),
-    prisma.profiles.count({ where }),
-  ]);
+      }),
+      prisma.profiles.count({ where }),
+    ]);
+  } catch (error) {
+    if (!isSegmentationRuleColumnMissingError(error)) throw error;
+    [rows, total] = await Promise.all([
+      prisma.profiles.findMany({
+        where: fallbackWhere,
+        skip,
+        take: limit,
+        orderBy: { created_at: 'desc' },
+        select: {
+          id: true,
+          full_name: true,
+          email: true,
+          age: true,
+          created_at: true,
+          subscriptions: {
+            where: { status: { in: [...ACTIVE_SUBSCRIPTION_STATUSES] } },
+            take: 1,
+            orderBy: { updated_at: 'desc' },
+            select: { plan_type: true, status: true },
+          },
+        },
+      }),
+      prisma.profiles.count({ where: fallbackWhere }),
+    ]);
+  }
   return {
     users: rows.map((u) => {
       const sub = u.subscriptions[0];
@@ -1379,41 +1439,55 @@ export async function getUserSegmentationDashboard() {
     segments.map(async (seg) => {
       const rules = extractSegmentRules(seg.criteria);
       const where = buildProfileWhereFromRules(rules);
+      const fallbackWhere = buildProfileWhereFromRules(stripUnsupportedSegmentationRules(rules));
 
-      const [userCount, engagedInSegment, paidInSegment, avgDur] = await Promise.all([
-        prisma.profiles.count({ where }),
-        prisma.profiles.count({
-          where: {
-            AND: [
-              where,
-              {
-                app_sessions: {
-                  some: { started_at: { gte: thirtyDaysAgo } },
+      const runMetrics = async (metricsWhere: Prisma.profilesWhereInput) =>
+        Promise.all([
+          prisma.profiles.count({ where: metricsWhere }),
+          prisma.profiles.count({
+            where: {
+              AND: [
+                metricsWhere,
+                {
+                  app_sessions: {
+                    some: { started_at: { gte: thirtyDaysAgo } },
+                  },
                 },
-              },
-            ],
-          },
-        }),
-        prisma.profiles.count({
-          where: {
-            AND: [
-              where,
-              {
-                subscriptions: {
-                  some: paidSubscriptionSome(),
+              ],
+            },
+          }),
+          prisma.profiles.count({
+            where: {
+              AND: [
+                metricsWhere,
+                {
+                  subscriptions: {
+                    some: paidSubscriptionSome(),
+                  },
                 },
-              },
-            ],
-          },
-        }),
-        prisma.app_sessions.aggregate({
-          _avg: { duration_minutes: true },
-          where: {
-            profiles: where,
-            duration_minutes: { not: null },
-          },
-        }),
-      ]);
+              ],
+            },
+          }),
+          prisma.app_sessions.aggregate({
+            _avg: { duration_minutes: true },
+            where: {
+              profiles: metricsWhere,
+              duration_minutes: { not: null },
+            },
+          }),
+        ]);
+
+      let userCount: number;
+      let engagedInSegment: number;
+      let paidInSegment: number;
+      let avgDur: { _avg: { duration_minutes: number | null } };
+      try {
+        [userCount, engagedInSegment, paidInSegment, avgDur] = await runMetrics(where);
+      } catch (error) {
+        if (!isSegmentationRuleColumnMissingError(error)) throw error;
+        [userCount, engagedInSegment, paidInSegment, avgDur] =
+          await runMetrics(fallbackWhere);
+      }
 
       const engagementPct =
         userCount > 0 ? Math.round((engagedInSegment / userCount) * 100) : 0;
