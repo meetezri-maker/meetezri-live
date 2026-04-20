@@ -19,6 +19,14 @@ import { formatDistanceToNow } from "date-fns";
 
 export function Notifications() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, isLoading } = useNotifications();
+  const safeNotifications = Array.isArray(notifications) ? notifications : [];
+
+  const getRelativeTime = (value: string | null | undefined) => {
+    if (!value) return "Just now";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Just now";
+    return formatDistanceToNow(date, { addSuffix: true });
+  };
 
   // Helper to map type to UI properties
   const getNotificationStyle = (type: string) => {
@@ -119,7 +127,7 @@ export function Notifications() {
         </motion.div>
 
         <div className="space-y-3">
-          {notifications.length === 0 ? (
+          {safeNotifications.length === 0 ? (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -132,7 +140,7 @@ export function Notifications() {
               </p>
             </motion.div>
           ) : (
-            notifications.map((notification, index) => {
+            safeNotifications.map((notification, index) => {
               const style = getNotificationStyle(notification.type);
               const Icon = style.icon;
               
@@ -170,7 +178,7 @@ export function Notifications() {
                             {notification.message}
                           </p>
                           <p className="mt-2 text-xs text-gray-400 dark:text-slate-500">
-                            {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
+                            {getRelativeTime(notification.created_at)}
                           </p>
                         </div>
 
@@ -198,14 +206,14 @@ export function Notifications() {
         </div>
 
         {/* Footer Info */}
-        {notifications.length > 0 && (
+        {safeNotifications.length > 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
             className="mt-8 text-center text-sm text-gray-500 dark:text-slate-400"
           >
-            Showing {notifications.length} notification{notifications.length !== 1 ? 's' : ''}
+            Showing {safeNotifications.length} notification{safeNotifications.length !== 1 ? 's' : ''}
           </motion.div>
         )}
       </div>

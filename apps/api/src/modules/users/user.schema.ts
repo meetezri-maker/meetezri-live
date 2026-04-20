@@ -37,12 +37,12 @@ const ageSchemaCoerced = z.preprocess(
 const emergencyPhoneSchema = z
   .string()
   .transform((value) => value.replace(/[^\d+]/g, ''))
-  .refine((value) => /^\+?\d{7,12}$/.test(value), 'Emergency contact phone must be valid (max 12 digits)');
+  .refine((value) => /^\+\d{12}$/.test(value), 'Emergency contact phone must include country code and exactly 12 digits total');
 
 const optionalPhoneSchema = z
   .string()
   .transform((value) => value.replace(/[^\d+]/g, ''))
-  .refine((value) => /^\+?\d{7,12}$/.test(value), 'Phone must be valid (max 12 digits)');
+  .refine((value) => /^\+\d{12}$/.test(value), 'Phone must include country code and exactly 12 digits total');
 
 /** Treat "" as omitted so partial clears don't fail validation. */
 const optionalEmergencyPhoneSchema = z.preprocess(

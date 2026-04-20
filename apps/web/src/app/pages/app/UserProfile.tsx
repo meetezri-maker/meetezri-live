@@ -225,8 +225,8 @@ const profileSchema = z.object({
     .string()
     .optional()
     .or(z.literal(""))
-    .refine((v) => !v || /^\+?[\d\s\-().]+$/.test(v), "Invalid phone")
-    .refine((v) => !v || countPhoneDigits(v) <= MAX_PHONE_DIGITS, "Max 12 digits"),
+    .refine((v) => !v || /^\+[\d\s\-().]+$/.test(v), "Phone must include country code")
+    .refine((v) => !v || countPhoneDigits(v) === MAX_PHONE_DIGITS, "Use exactly 12 digits total"),
   birthday: z.string().optional(),
   pronouns: z.string().optional(),
   location: z.string().optional(),
@@ -238,8 +238,8 @@ const profileSchema = z.object({
     .string()
     .optional()
     .or(z.literal(""))
-    .refine((v) => !v || /^\+?[\d\s\-().]+$/.test(v), "Invalid phone")
-    .refine((v) => !v || countPhoneDigits(v) <= MAX_PHONE_DIGITS, "Max 12 digits"),
+    .refine((v) => !v || /^\+[\d\s\-().]+$/.test(v), "Phone must include country code")
+    .refine((v) => !v || countPhoneDigits(v) === MAX_PHONE_DIGITS, "Use exactly 12 digits total"),
   emergency_contact_relationship: z.string().optional(),
 });
 type ProfileFormValues = z.infer<typeof profileSchema>;

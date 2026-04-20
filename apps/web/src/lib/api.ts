@@ -274,6 +274,16 @@ export const api = {
     return handleResponse(res, 'Failed to like post');
   },
 
+  async addCommunityPostComment(postId: string, content: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/posts/${postId}/comments`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ content }),
+    });
+    return handleResponse(res, 'Failed to add comment');
+  },
+
   async getCommunityMemberProfile(userId: string) {
     const headers = await getHeaders();
     const res = await fetch(`${API_URL}/community/members/${encodeURIComponent(userId)}`, {

@@ -86,7 +86,7 @@ export function EmergencyContacts() {
       return;
     }
     if (!isValidOptionalAppPhone(formData.phone)) {
-      toast.error("Enter a valid phone with country code (7–12 digits total), or leave blank");
+      toast.error("Enter a valid phone with country code and exactly 12 digits total, or leave blank");
       return;
     }
 
@@ -129,7 +129,7 @@ export function EmergencyContacts() {
       return;
     }
     if (!isValidOptionalAppPhone(formData.phone)) {
-      toast.error("Enter a valid phone with country code (7–12 digits total), or leave blank");
+      toast.error("Enter a valid phone with country code and exactly 12 digits total, or leave blank");
       return;
     }
 
@@ -431,7 +431,7 @@ export function EmergencyContacts() {
                       Phone number
                     </label>
                     <p className="text-xs text-muted-foreground mb-2">
-                      Choose country code, then number (max 12 digits including code).
+                      Choose country code, then number (exactly 12 digits including code).
                     </p>
                     <PhoneInput
                       value={formData.phone}
@@ -482,3 +482,4 @@ export function EmergencyContacts() {
     </AppLayout>
   );
 }
+

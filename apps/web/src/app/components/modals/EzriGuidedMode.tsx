@@ -3,7 +3,7 @@ import { X, Volume2, VolumeX, Sparkles, Heart, CheckCircle2, Star, MessageCircle
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
-  ambientKindForExerciseId,
+  ambientKindForExercise,
   startWellnessAmbient,
   stopWellnessAmbient,
 } from "../../../lib/wellnessAmbientAudio";
@@ -12,7 +12,7 @@ import { parseWellnessDurationLabelToSeconds } from "../../../lib/wellnessCatego
 interface EzriGuidedModeProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Built-in id (e.g. rain-sounds, box-breathing) for ambient + messaging. */
+  /** Built-in id or API id; ambient lookup also falls back to title/category. */
   exerciseId?: string;
   exerciseTitle: string;
   exerciseDescription: string;
@@ -68,7 +68,10 @@ export function EzriGuidedMode({
       stopWellnessAmbient();
       return;
     }
-    const kind = exerciseId ? ambientKindForExerciseId(exerciseId) : null;
+    const kind = ambientKindForExercise({
+      id: exerciseId,
+      title: exerciseTitle,
+    });
     if (!kind) return;
     void startWellnessAmbient(kind).catch(() => {
       /* autoplay / context may fail silently */

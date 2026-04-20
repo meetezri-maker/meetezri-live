@@ -217,7 +217,7 @@ export function TeamRoleManagement() {
       return;
     }
     if (!isValidOptionalAppPhone(newMember.phone)) {
-      toast.error("Enter a valid phone with country code (7–12 digits), or leave blank");
+      toast.error("Enter a valid phone with country code and exactly 12 digits, or leave blank");
       return;
     }
     setSaving(true);
@@ -244,7 +244,7 @@ export function TeamRoleManagement() {
   const handleSaveEdit = async () => {
     if (!selectedMember) return;
     if (!isValidOptionalAppPhone(editForm.phone)) {
-      toast.error("Enter a valid phone with country code (7–12 digits), or leave blank");
+      toast.error("Enter a valid phone with country code and exactly 12 digits, or leave blank");
       return;
     }
     setSaving(true);
@@ -663,7 +663,7 @@ export function TeamRoleManagement() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">Phone (optional)</label>
-                    <p className="text-xs text-muted-foreground mb-1">Country code + number (max 12 digits total).</p>
+                    <p className="text-xs text-muted-foreground mb-1">Country code + number (exactly 12 digits total).</p>
                     <PhoneInput
                       value={newMember.phone}
                       onChange={(v) => setNewMember((p) => ({ ...p, phone: v }))}
@@ -836,7 +836,7 @@ export function TeamRoleManagement() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-2">Phone</label>
-                    <p className="text-xs text-muted-foreground mb-1">Country code + number (max 12 digits total).</p>
+                    <p className="text-xs text-muted-foreground mb-1">Country code + number (exactly 12 digits total).</p>
                     <PhoneInput
                       value={editForm.phone}
                       onChange={(v) => setEditForm((f) => ({ ...f, phone: v }))}
@@ -900,3 +900,4 @@ export function TeamRoleManagement() {
     </AdminLayoutNew>
   );
 }
+

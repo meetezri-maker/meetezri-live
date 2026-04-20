@@ -15,9 +15,11 @@ export function countPhoneDigits(value: string): number {
   return (value.match(/\d/g) || []).length;
 }
 
-/** Empty is allowed; otherwise same rules as PhoneInput (7–12 digits total including country code). */
+export const REQUIRED_PHONE_DIGITS = 12;
+
+/** Empty is allowed; otherwise require +country code and exactly 12 digits total. */
 export function isValidOptionalAppPhone(value: string | undefined | null): boolean {
   const t = (value ?? "").trim();
   if (!t) return true;
-  return t.startsWith("+") && countPhoneDigits(t) >= 7 && countPhoneDigits(t) <= 12;
+  return t.startsWith("+") && countPhoneDigits(t) === REQUIRED_PHONE_DIGITS;
 }

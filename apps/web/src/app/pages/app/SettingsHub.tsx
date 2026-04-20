@@ -26,8 +26,7 @@ import {
   BarChart3,
   History,
   Wind,
-  CreditCard,
-  Target
+  CreditCard
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
@@ -77,12 +76,23 @@ export function SettingsHub() {
     return `ezri_appearance_settings_${user.id}`;
   }, [user?.id]);
 
+  const readAppearanceSettings = () => {
+    try {
+      const raw = localStorage.getItem(appearanceStorageKey);
+      if (!raw) return {} as Record<string, any>;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {} as Record<string, any>;
+    }
+  };
+
   // Sync state from profile and localStorage
   useEffect(() => {
     const syncSettings = () => {
       // 1. Appearance (LocalStorage)
-      const savedAppearance = localStorage.getItem(appearanceStorageKey);
-      const isDarkMode = savedAppearance ? JSON.parse(savedAppearance).theme === 'dark' : false;
+      const appearanceSettings = readAppearanceSettings();
+      const isDarkMode = appearanceSettings.theme === "dark";
 
       // 2. Notifications (Profile)
       const prefs = profile?.notification_preferences || {};
@@ -123,8 +133,7 @@ export function SettingsHub() {
     try {
         if (key === 'darkMode') {
             // Handle Appearance
-            const savedAppearance = localStorage.getItem(appearanceStorageKey);
-            const currentSettings = savedAppearance ? JSON.parse(savedAppearance) : {};
+            const currentSettings = readAppearanceSettings();
             const newTheme = currentSettings.theme === 'dark' ? 'light' : 'dark';
             
             const newSettings = { ...currentSettings, theme: newTheme };
@@ -247,14 +256,6 @@ export function SettingsHub() {
       icon: Trophy,
       color: "from-yellow-500 to-amber-600",
       route: "/app/settings/achievements"
-    },
-    {
-      id: "goals",
-      title: "Personal Goals",
-      description: "Create, track, and review your personal goals",
-      icon: Target,
-      color: "from-purple-500 to-indigo-600",
-      route: "/app/settings/goals"
     },
     {
       id: "community",
@@ -455,7 +456,7 @@ export function SettingsHub() {
                 return (
                   <div key={section.id}>
                 <Link
-                  to={section.route}
+                  to={section.route || "/app/settings"}
                   className="block bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all hover:scale-[1.01] active:scale-[0.99]"
                 >
                       <div className="flex items-start gap-4">

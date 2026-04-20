@@ -45,9 +45,9 @@ const emergencyContactSchema = z.object({
     })
     .refine((v) => {
       const n = countPhoneDigits(v);
-      return n >= 7 && n <= 12;
+      return n === 12;
     }, {
-      message: "Use 7–12 digits total including country code",
+      message: "Use country code and exactly 12 digits total",
     }),
   emergencyRelationship: z
     .string()
@@ -185,7 +185,7 @@ export function OnboardingEmergencyContact() {
                       <FormItem>
                         <FormLabel>Phone number</FormLabel>
                         <p className="text-xs text-muted-foreground -mt-1 mb-1">
-                          Select country code, then number (max 12 digits including code).
+                          Select country code, then number (exactly 12 digits including code).
                         </p>
                         <FormControl>
                           <PhoneInput

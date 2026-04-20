@@ -63,6 +63,27 @@ function formatAvailabilityDisplay(raw: string): string {
   return raw;
 }
 
+const LICENSE_PATTERN = /^[A-Z]{2,10}-\d{3,10}$/;
+
+function formatLicenseInput(raw: string): string {
+  const cleaned = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const prefixMatch = cleaned.match(/^[A-Z]+/);
+  const prefix = (prefixMatch?.[0] ?? "").slice(0, 10);
+  const digits = cleaned
+    .slice(prefix.length)
+    .replace(/[A-Z]/g, "")
+    .slice(0, 10);
+  if (!prefix) return digits;
+  if (!digits) return prefix;
+  return `${prefix}-${digits}`;
+}
+
+function isValidOptionalLicense(license: string): boolean {
+  const normalized = formatLicenseInput(license.trim());
+  if (!normalized) return true;
+  return LICENSE_PATTERN.test(normalized);
+}
+
 const COMPANION_LANGUAGES: { value: string; label: string }[] = [
   { value: "", label: "Select language" },
   { value: "English", label: "English" },
@@ -76,6 +97,20 @@ const COMPANION_LANGUAGES: { value: string; label: string }[] = [
   { value: "Korean", label: "Korean" },
   { value: "Arabic", label: "Arabic" },
   { value: "Hindi", label: "Hindi" },
+  { value: "Other", label: "Other" },
+];
+
+const COMPANION_SPECIALIZATIONS: { value: string; label: string }[] = [
+  { value: "", label: "Select specialization" },
+  { value: "Anxiety", label: "Anxiety" },
+  { value: "Depression", label: "Depression" },
+  { value: "Trauma", label: "Trauma" },
+  { value: "Stress Management", label: "Stress Management" },
+  { value: "Relationship Counseling", label: "Relationship Counseling" },
+  { value: "Family Therapy", label: "Family Therapy" },
+  { value: "Child & Adolescent Therapy", label: "Child & Adolescent Therapy" },
+  { value: "Substance Abuse", label: "Substance Abuse" },
+  { value: "Grief Counseling", label: "Grief Counseling" },
   { value: "Other", label: "Other" },
 ];
 
@@ -182,7 +217,7 @@ export function CompanionManagement() {
       name: c.name,
       phone: normalizeStoredPhoneForInput(c.phone || ""),
       license: c.license,
-      specializations: c.specialization.join(", "),
+      specializations: c.specialization[0] ?? "",
       language: c.languages[0] ?? "",
       availabilityAt: dtLocal,
       availabilityLegacy: dtLocal ? "" : rawAvail,
@@ -202,8 +237,12 @@ export function CompanionManagement() {
       toast.error("Name and email are required");
       return;
     }
+    if (!isValidOptionalLicense(createForm.license)) {
+      toast.error("License format must be like LCSW-12345");
+      return;
+    }
     if (!isValidOptionalAppPhone(createForm.phone)) {
-      toast.error("Enter a valid phone with country code (7–12 digits), or leave blank");
+      toast.error("Enter a valid phone with country code and exactly 12 digits, or leave blank");
       return;
     }
     setSaving(true);
@@ -243,8 +282,12 @@ export function CompanionManagement() {
 
   const handleSaveEdit = async () => {
     if (!selectedCompanion) return;
+    if (!isValidOptionalLicense(editForm.license)) {
+      toast.error("License format must be like LCSW-12345");
+      return;
+    }
     if (!isValidOptionalAppPhone(editForm.phone)) {
-      toast.error("Enter a valid phone with country code (7–12 digits), or leave blank");
+      toast.error("Enter a valid phone with country code and exactly 12 digits, or leave blank");
       return;
     }
     setSaving(true);
@@ -655,7 +698,9 @@ export function CompanionManagement() {
                     <input
                       type="text"
                       value={createForm.license}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, license: e.target.value }))}
+                      onChange={(e) => setCreateForm((f) => ({ ...f, license: formatLicenseInput(e.target.value) }))}
+                      pattern="[A-Z]{2,10}-[0-9]{3,10}"
+                      title="Use format like LCSW-12345"
                       placeholder="LCSW-12345"
                       className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
                     />
@@ -674,7 +719,7 @@ export function CompanionManagement() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Phone (optional)</label>
-                    <p className="text-xs text-gray-500 mb-1.5">Country code + number (max 12 digits total).</p>
+                    <p className="text-xs text-gray-500 mb-1.5">Country code + number (exactly 12 digits total).</p>
                     <PhoneInput
                       value={createForm.phone}
                       onChange={(v) => setCreateForm((f) => ({ ...f, phone: v }))}
@@ -684,13 +729,17 @@ export function CompanionManagement() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Specializations</label>
-                  <input
-                    type="text"
+                  <select
                     value={createForm.specializations}
                     onChange={(e) => setCreateForm((f) => ({ ...f, specializations: e.target.value }))}
-                    placeholder="Anxiety, Depression, Trauma"
-                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
-                  />
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none bg-white"
+                  >
+                    {COMPANION_SPECIALIZATIONS.map((opt, i) => (
+                      <option key={opt.value || `spec-${i}`} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -839,14 +888,17 @@ export function CompanionManagement() {
                     <input
                       type="text"
                       value={editForm.license}
-                      onChange={(e) => setEditForm((f) => ({ ...f, license: e.target.value }))}
+                      onChange={(e) => setEditForm((f) => ({ ...f, license: formatLicenseInput(e.target.value) }))}
+                      pattern="[A-Z]{2,10}-[0-9]{3,10}"
+                      title="Use format like LCSW-12345"
+                      placeholder="LCSW-12345"
                       className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
                     />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Phone (optional)</label>
-                  <p className="text-xs text-gray-500 mb-1.5">Country code + number (max 12 digits total).</p>
+                  <p className="text-xs text-gray-500 mb-1.5">Country code + number (exactly 12 digits total).</p>
                   <PhoneInput
                     value={editForm.phone}
                     onChange={(v) => setEditForm((f) => ({ ...f, phone: v }))}
@@ -854,13 +906,18 @@ export function CompanionManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Specializations (comma-separated)</label>
-                  <input
-                    type="text"
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Specializations</label>
+                  <select
                     value={editForm.specializations}
                     onChange={(e) => setEditForm((f) => ({ ...f, specializations: e.target.value }))}
-                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
-                  />
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none bg-white"
+                  >
+                    {COMPANION_SPECIALIZATIONS.map((opt, i) => (
+                      <option key={opt.value || `spec-edit-${i}`} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -1000,3 +1057,4 @@ export function CompanionManagement() {
     </AdminLayoutNew>
   );
 }
+

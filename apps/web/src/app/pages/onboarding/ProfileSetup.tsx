@@ -44,8 +44,8 @@ const profileSetupSchema = z.object({
         const t = v.trim();
         if (!t) return true;
         const n = countPhoneDigits(t);
-        return n >= 7 && n <= 12;
-      }, { message: "Use 7–12 digits total including country code" })
+        return n === 12;
+      }, { message: "Use country code and exactly 12 digits total" })
   ),
   age: z.string().refine((val) => {
     const num = parseInt(val);
@@ -406,7 +406,7 @@ export function OnboardingProfileSetup() {
                   <FormItem>
                     <FormLabel>Phone (optional)</FormLabel>
                     <p className="text-xs text-muted-foreground -mt-1 mb-1">
-                      Country code and number (max 12 digits including code).
+                      Country code and number (exactly 12 digits including code).
                     </p>
                     <FormControl>
                       <PhoneInput

@@ -5,7 +5,6 @@ import { AppLayout } from "@/app/components/AppLayout";
 import {
   Users,
   MessageCircle,
-  Heart,
   Share2,
   Plus,
   TrendingUp,
@@ -38,6 +37,7 @@ type FeedPost = {
   content: string;
   category: string;
   createdAt: string;
+  views: number;
   likes: number;
   comments: number;
   tags: string[];
@@ -64,8 +64,8 @@ type Overview = {
 };
 
 type PrivacyCommunity = {
-  communityEnabled?: boolean;
   showDisplayNameInCommunity?: boolean;
+  showAvatarInCommunity?: boolean;
 };
 
 export function Community() {
@@ -86,8 +86,8 @@ export function Community() {
   const [groupActionId, setGroupActionId] = useState<string | null>(null);
 
   const privacy = (profile?.privacy_settings || {}) as PrivacyCommunity;
-  const communityEnabled = privacy.communityEnabled !== false;
   const showDisplayName = privacy.showDisplayNameInCommunity !== false;
+  const showAvatar = privacy.showAvatarInCommunity !== false;
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -181,6 +181,20 @@ export function Community() {
     }
   };
 
+  const handleCommentPost = async (postId: string) => {
+    const content = window.prompt("Write your comment");
+    if (!content || !content.trim()) return;
+    try {
+      const res = (await api.addCommunityPostComment(postId, content.trim())) as { comments: number };
+      setPostsData((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, comments: res.comments } : p))
+      );
+      toast.success("Comment posted");
+    } catch {
+      toast.error("Could not post comment");
+    }
+  };
+
   const handleSharePost = async (postId: string) => {
     const url = `${window.location.origin}/app/settings/community#post-${postId}`;
     try {
@@ -192,10 +206,6 @@ export function Community() {
   };
 
   const handleCreatePost = async () => {
-    if (!communityEnabled) {
-      toast.error("Enable community participation in settings below.");
-      return;
-    }
     if (!newPostContent.trim()) {
       toast.error("Write something before posting.");
       return;
@@ -292,8 +302,7 @@ export function Community() {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                disabled={!communityEnabled}
-                className="px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl text-white font-semibold flex items-center gap-2 hover:shadow-lg hover:shadow-purple-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl text-white font-semibold flex items-center gap-2 hover:shadow-lg hover:shadow-purple-500/50 transition-all"
                 onClick={() => setShowNewPostModal(true)}
               >
                 <Plus className="w-5 h-5" />
@@ -315,15 +324,17 @@ export function Community() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 dark:bg-slate-800/50 p-3">
                   <div>
-                    <Label htmlFor="comm-enabled" className="text-sm font-medium">
-                      Participate in community
+                    <Label htmlFor="comm-avatar" className="text-sm font-medium">
+                      Show my profile picture
                     </Label>
-                    <p className="text-xs text-muted-foreground">Turn off to hide posting (you can still browse).</p>
+                    <p className="text-xs text-muted-foreground">
+                      When off, your avatar is hidden in community posts and member profile.
+                    </p>
                   </div>
                   <Switch
-                    id="comm-enabled"
-                    checked={communityEnabled}
-                    onCheckedChange={(v) => persistPrivacy({ communityEnabled: v })}
+                    id="comm-avatar"
+                    checked={showAvatar}
+                    onCheckedChange={(v) => persistPrivacy({ showAvatarInCommunity: v })}
                   />
                 </div>
                 <div className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 dark:bg-slate-800/50 p-3">
@@ -340,11 +351,6 @@ export function Community() {
                   />
                 </div>
               </div>
-              {!communityEnabled && (
-                <p className="mt-3 text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 rounded-lg px-3 py-2">
-                  Posting is turned off. Turn “Participate in community” on to create posts.
-                </p>
-              )}
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -430,8 +436,9 @@ export function Community() {
             </motion.button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
+          {/* items-start: avoid stretching feed column to sidebar height (AnimatedCard uses h-full). */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
+            <div className="lg:col-span-2 space-y-6 min-w-0">
               {activeTab === "feed" &&
                 (filteredPosts.length === 0 ? (
                   <div className="text-center py-16 text-gray-500 dark:text-slate-400 rounded-2xl border border-dashed border-gray-200 dark:border-slate-700">
@@ -517,37 +524,30 @@ export function Community() {
                         <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-slate-800">
                           <div className="flex items-center gap-6 text-sm text-gray-600 dark:text-slate-400">
                             <div className="flex items-center gap-2">
-                              <Eye className="w-4 h-4" />—
+                              <Eye className="w-4 h-4" />
+                              {post.views}
                             </div>
-                            <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                              onClick={() => handleLikePost(post.id)}
+                              aria-label="Like post"
+                            >
                               <ThumbsUp className="w-4 h-4" />
                               {post.likes}
-                            </div>
-                            <div className="flex items-center gap-2">
+                            </button>
+                            <button
+                              type="button"
+                              className="flex items-center gap-2 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                              onClick={() => handleCommentPost(post.id)}
+                              aria-label="Comment on post"
+                            >
                               <MessageSquare className="w-4 h-4" />
                               {post.comments}
-                            </div>
+                            </button>
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                              className="p-2 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-all"
-                              onClick={() => handleLikePost(post.id)}
-                              type="button"
-                            >
-                              <Heart className="w-5 h-5" />
-                            </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                              className="p-2 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:text-purple-600 dark:hover:text-purple-400 transition-all"
-                              type="button"
-                              onClick={() => toast.info("Comments open in a future update.")}
-                            >
-                              <MessageCircle className="w-5 h-5" />
-                            </motion.button>
                             <motion.button
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}

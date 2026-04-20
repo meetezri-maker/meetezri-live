@@ -1,4 +1,5 @@
 import prisma from '../../lib/prisma';
+import { Prisma } from '@prisma/client';
 import { invalidateCommunityCaches } from '../admin/admin.service';
 import { calculateStreak } from '../users/user.service';
 
@@ -152,6 +153,39 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
     );
   }
 
+  const postIds = posts.map((p) => p.id);
+  const viewsByPost = new Map<string, number>();
+  if (postIds.length > 0) {
+    await prisma.$executeRaw`
+      CREATE TABLE IF NOT EXISTS public.community_post_views (
+        post_id uuid NOT NULL REFERENCES public.community_posts(id) ON DELETE CASCADE,
+        user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+        viewed_at timestamptz NOT NULL DEFAULT timezone('utc'::text, now()),
+        PRIMARY KEY (post_id, user_id)
+      )
+    `;
+
+    for (const postId of postIds) {
+      await prisma.$executeRaw`
+        INSERT INTO public.community_post_views (post_id, user_id)
+        VALUES (${postId}::uuid, ${userId}::uuid)
+        ON CONFLICT (post_id, user_id) DO NOTHING
+      `;
+    }
+
+    const viewRows = await prisma.$queryRaw<Array<{ post_id: string; views: bigint }>>(
+      Prisma.sql`
+        SELECT post_id, COUNT(*)::bigint AS views
+        FROM public.community_post_views
+        WHERE post_id IN (${Prisma.join(postIds.map((id) => Prisma.sql`${id}::uuid`))})
+        GROUP BY post_id
+      `
+    );
+    for (const row of viewRows) {
+      viewsByPost.set(row.post_id, Number(row.views || 0));
+    }
+  }
+
   return posts.map((p) => {
     const profile = p.profiles;
     const displayName = resolveAuthorDisplayName(profile?.full_name, profile?.privacy_settings);
@@ -182,6 +216,7 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
       content: p.content,
       category,
       createdAt: p.created_at.toISOString(),
+      views: viewsByPost.get(p.id) || 0,
       likes: p.likes_count || 0,
       comments: p._count.community_comments,
       tags: p.tags || [],
@@ -405,4 +440,30 @@ export async function incrementPostLike(postId: string) {
   });
   invalidateCommunityCaches();
   return { likes: updated.likes_count || 0 };
+}
+
+export async function addPostComment(userId: string, postId: string, content: string) {
+  const post = await prisma.community_posts.findFirst({
+    where: { id: postId, deleted_at: null },
+    select: { id: true },
+  });
+  if (!post) {
+    const err = new Error('Post not found');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+
+  await prisma.community_comments.create({
+    data: {
+      post_id: postId,
+      user_id: userId,
+      content: content.trim(),
+    },
+  });
+
+  const comments = await prisma.community_comments.count({
+    where: { post_id: postId },
+  });
+  invalidateCommunityCaches();
+  return { comments };
 }

@@ -32,7 +32,7 @@ const portraitPngGlobKeys = Object.keys(
 /** Canonical portrait files — names in admin / DB should match the stem (e.g. `Alex` ↔ Alex.png). */
 const FALLBACK_AVATAR_PORTRAIT_PNG_FILES = [
   "Alex.png",
-  "Jordan Taylor.png",
+  "jordan Taylor.png",
   "maya chen.png",
   "Sara Mitchell.png",
 ] as const;
@@ -94,7 +94,7 @@ export function tryResolveCompanionPortraitUrl(
     case "maya":
       return companionCardImageUrl("maya chen.png");
     case "jordan":
-      return companionCardImageUrl("Jordan Taylor.png");
+      return companionCardImageUrl("jordan Taylor.png");
     default:
       return null;
   }

@@ -42,7 +42,7 @@ import {
   WELLNESS_CATEGORY_ICONS,
 } from "../../../lib/wellnessCategoryIcons";
 import {
-  ambientKindForExerciseId,
+  ambientKindForExercise,
   startWellnessAmbient,
   stopWellnessAmbient,
 } from "../../../lib/wellnessAmbientAudio";
@@ -409,7 +409,7 @@ export function WellnessTools() {
 
     const ex = exercises.find((x) => x.id === exerciseId);
     activeExerciseSourceRef.current = ex?.source === "builtin" ? "builtin" : "api";
-    const ambientKind = ambientKindForExerciseId(exerciseId);
+    const ambientKind = ambientKindForExercise(ex);
     if (ambientKind) {
       // Run from direct user gesture to avoid autoplay blocks.
       void startWellnessAmbient(ambientKind).catch((err) =>
@@ -617,7 +617,7 @@ export function WellnessTools() {
   const handleTogglePlay = () => {
     setIsPlaying((prev) => {
       const next = !prev;
-      const ambientKind = activeExercise ? ambientKindForExerciseId(activeExercise) : null;
+      const ambientKind = ambientKindForExercise(activeExerciseData);
       if (ambientKind) {
         if (next) {
           // Play/resume from user click for reliable media start.
@@ -633,7 +633,7 @@ export function WellnessTools() {
   };
 
   useEffect(() => {
-    const kind = activeExercise ? ambientKindForExerciseId(activeExercise) : null;
+    const kind = ambientKindForExercise(activeExerciseData);
     if (!isPlaying || !kind || sessionTimeComplete) {
       stopWellnessAmbient();
       return;
@@ -644,7 +644,7 @@ export function WellnessTools() {
     return () => {
       stopWellnessAmbient();
     };
-  }, [isPlaying, activeExercise, sessionTimeComplete]);
+  }, [isPlaying, activeExerciseData, sessionTimeComplete]);
 
   const nearEndNudge = useMemo(() => {
     if (!activeExerciseData || !isPlaying || sessionTimeComplete) return false;

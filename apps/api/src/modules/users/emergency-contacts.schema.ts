@@ -3,11 +3,11 @@ import { z } from 'zod';
 const emergencyContactPhoneInner = z
   .string()
   .transform((value) => value.replace(/[^\d+]/g, ''))
-  .refine((value) => /^\+?\d{7,12}$/.test(value), {
-    message: 'Phone must include country code (7–12 digits total)',
+  .refine((value) => /^\+\d{12}$/.test(value), {
+    message: 'Phone must include country code and exactly 12 digits total',
   });
 
-/** Same rules as profile `phone`: omit or valid E.164-style (7–12 digits). */
+/** Same rules as profile `phone`: omit or include country code with exactly 12 digits. */
 const emergencyContactPhoneField = z.preprocess(
   (val) => (val === '' || val === null || val === undefined ? undefined : val),
   emergencyContactPhoneInner.optional()

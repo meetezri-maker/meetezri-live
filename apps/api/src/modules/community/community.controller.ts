@@ -114,3 +114,20 @@ export async function likePostHandler(
     return reply.code(code).send({ message: err?.message || 'Failed to like post' });
   }
 }
+
+export async function addCommentHandler(
+  request: FastifyRequest<{ Params: { postId: string }; Body: { content: string } }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const content = request.body?.content;
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    return reply.code(400).send({ message: 'Comment content is required' });
+  }
+  try {
+    return await communityService.addPostComment(user.sub, request.params.postId, content);
+  } catch (err: any) {
+    const code = err?.statusCode === 404 ? 404 : 500;
+    return reply.code(code).send({ message: err?.message || 'Failed to add comment' });
+  }
+}

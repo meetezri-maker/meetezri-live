@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import {
+  addCommentHandler,
   createPostHandler,
   getGroupsHandler,
   getMemberProfileHandler,
@@ -50,5 +51,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
     '/posts/:postId/like',
     { preHandler: [fastify.authenticate] },
     likePostHandler
+  );
+  fastify.post(
+    '/posts/:postId/comments',
+    { preHandler: [fastify.authenticate] },
+    addCommentHandler
   );
 }

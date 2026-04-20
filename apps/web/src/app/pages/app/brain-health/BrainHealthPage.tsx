@@ -417,7 +417,7 @@ export function BrainHealthPage() {
               <Link
                 to="/app/settings"
                 onPointerDown={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-2 rounded-full border border-border/50 bg-background/50 px-3 py-2 text-[14px] font-medium text-muted-foreground backdrop-blur-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex items-center gap-2   px-3 py-2 text-[14px] font-medium text-muted-foreground backdrop-blur-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ArrowLeft className="h-4 w-4" aria-hidden />
                 Back to Settings

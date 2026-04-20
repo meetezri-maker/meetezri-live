@@ -1259,7 +1259,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   Phone number
                 </label>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Country code and number (max 12 digits including code).
+                  Country code and number (exactly 12 digits including code).
                 </p>
                 <PhoneInput
                   value={profileData.phone}

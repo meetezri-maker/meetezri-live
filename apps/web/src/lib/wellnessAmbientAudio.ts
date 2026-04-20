@@ -289,3 +289,49 @@ export function ambientKindForExerciseId(exerciseId: string): WellnessAmbientKin
   if (exerciseId === "gratitude") return "selfcare_music";
   return null;
 }
+
+type AmbientExerciseLike = {
+  id?: string | null;
+  title?: string | null;
+  category?: string | null;
+};
+
+function normalizeAmbientKeyPart(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+/**
+ * Resolve ambient kind for both shipped built-ins and CMS/API-backed versions.
+ * API tools can replace built-ins and get a new UUID, so we fall back to
+ * title/category matching to preserve existing ambient behavior.
+ */
+export function ambientKindForExercise(exercise: AmbientExerciseLike | null | undefined): WellnessAmbientKind | null {
+  if (!exercise) return null;
+  const byId = ambientKindForExerciseId(exercise.id ?? "");
+  if (byId) return byId;
+
+  const title = normalizeAmbientKeyPart(exercise.title);
+  const category = normalizeAmbientKeyPart(exercise.category);
+  const key = `${title}|${category}`;
+
+  if (key === "rain & thunder|relaxation") return "rain";
+  if (key === "box breathing|relaxation") return "relaxation_music";
+  if (key === "tension release scan|stress management") return "stress_management_music";
+  if (key === "grounding 5-4-3-2-1|anxiety management") return "anxiety_management_music";
+  if (key === "compassion pause|depression support") return "depression_support_music";
+  if (key === "mindful anchor breath|mindfulness") return "mindfulness_music";
+  if (key === "body scan meditation|meditation") return "meditation_music";
+  if (key === "sleep meditation|sleep health") return "sleephealth_music";
+  if (key === "gratitude reflection|self-care") return "selfcare_music";
+  if (title === "rain & thunder") return "rain";
+  if (title === "box breathing") return "relaxation_music";
+  if (title === "tension release scan") return "stress_management_music";
+  if (title === "grounding 5-4-3-2-1") return "anxiety_management_music";
+  if (title === "compassion pause") return "depression_support_music";
+  if (title === "mindful anchor breath") return "mindfulness_music";
+  if (title === "body scan meditation") return "meditation_music";
+  if (title === "sleep meditation") return "sleephealth_music";
+  if (title === "gratitude reflection") return "selfcare_music";
+
+  return null;
+}

@@ -55,8 +55,9 @@ export function Signup() {
   });
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [trialDetailsLoading, setTrialDetailsLoading] = useState(false);
+  const isExactContactPhone = (value: string) => /^\+\d{12}$/.test(value.trim());
   const contactValid = trialContact.name.trim().length >= 2 
-    && /^\+?\d{7,}$/.test(trialContact.phone.trim())
+    && isExactContactPhone(trialContact.phone)
     && trialContact.relationship.trim().length >= 2;
 
   const form = useForm<SignupFormValues>({
@@ -633,8 +634,8 @@ export function Signup() {
                         onChange={(value) => setTrialContact({ ...trialContact, phone: value || '' })}
                         placeholder="Phone number"
                       />
-                      {trialContact.phone && !/^\+?\d{7,}$/.test(trialContact.phone.trim()) && (
-                        <p className="text-xs text-red-600 mt-1">Enter a valid phone number</p>
+                      {trialContact.phone && !isExactContactPhone(trialContact.phone) && (
+                        <p className="text-xs text-red-600 mt-1">Use country code and exactly 12 digits total</p>
                       )}
                     </div>
                     <div className="space-y-2">
@@ -677,7 +678,7 @@ export function Signup() {
                           if (!contactValid) {
                             const errors = [];
                             if (trialContact.name.trim().length < 2) errors.push("name (minimum 2 characters)");
-                            if (!/^\+?\d{7,}$/.test(trialContact.phone.trim())) errors.push("phone (minimum 7 digits)");
+                            if (!isExactContactPhone(trialContact.phone)) errors.push("phone (country code + exactly 12 digits)");
                             if (trialContact.relationship.trim().length < 2) errors.push("relationship (minimum 2 characters)");
                             toast.error(`Please complete emergency contact details correctly: ${errors.join(", ")}`);
                             return;

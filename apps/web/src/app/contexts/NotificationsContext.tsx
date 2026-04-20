@@ -34,6 +34,17 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const computeUnreadCount = (items: Notification[]) =>
     items.reduce((count, item) => count + (item.is_read ? 0 : 1), 0);
 
+  const normalizeNotifications = (payload: unknown): Notification[] => {
+    if (Array.isArray(payload)) return payload as Notification[];
+
+    if (payload && typeof payload === 'object') {
+      const maybeItems = (payload as { notifications?: unknown }).notifications;
+      if (Array.isArray(maybeItems)) return maybeItems as Notification[];
+    }
+
+    return [];
+  };
+
   const syncUnreadCount = async () => {
     try {
       const result = await api.notifications.getUnreadCount();
@@ -50,10 +61,13 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     if (!user) return;
     try {
       const data = await api.notifications.getAll();
-      setNotifications(data);
-      setUnreadCount(computeUnreadCount(data));
+      const normalized = normalizeNotifications(data);
+      setNotifications(normalized);
+      setUnreadCount(computeUnreadCount(normalized));
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
+      setNotifications([]);
+      setUnreadCount(0);
     } finally {
       setIsLoading(false);
     }
@@ -76,6 +90,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
           },
           async (payload) => {
             const newNotification = payload.new as Notification;
+            if (!newNotification || !newNotification.id) return;
             setNotifications((prev) => {
               // Realtime can replay inserts on reconnect; dedupe by id.
               if (prev.some((item) => item.id === newNotification.id)) {
