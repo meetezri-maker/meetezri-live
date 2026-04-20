@@ -267,9 +267,10 @@ export async function getUserSegmentsHandler(request: FastifyRequest, reply: Fas
   try {
     const dashboard = await getUserSegmentationDashboard();
     return reply.code(200).send(dashboard);
-  } catch (error) {
+  } catch (error: unknown) {
     request.log.error(error);
-    return reply.code(500).send({ message: 'Failed to fetch segments' });
+    const detail = error instanceof Error ? error.message : String(error);
+    return reply.code(500).send({ message: `Failed to fetch segments: ${detail}` });
   }
 }
 

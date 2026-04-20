@@ -1484,9 +1484,25 @@ export async function getUserSegmentationDashboard() {
       try {
         [userCount, engagedInSegment, paidInSegment, avgDur] = await runMetrics(where);
       } catch (error) {
-        if (!isSegmentationRuleColumnMissingError(error)) throw error;
-        [userCount, engagedInSegment, paidInSegment, avgDur] =
-          await runMetrics(fallbackWhere);
+        if (!isSegmentationRuleColumnMissingError(error)) {
+          try {
+            [userCount, engagedInSegment, paidInSegment, avgDur] =
+              await runMetrics(fallbackWhere);
+          } catch (fallbackError) {
+            console.error('Segmentation metrics failed for segment', {
+              segmentId: seg.id,
+              error,
+              fallbackError,
+            });
+            userCount = 0;
+            engagedInSegment = 0;
+            paidInSegment = 0;
+            avgDur = { _avg: { duration_minutes: 0 } };
+          }
+        } else {
+          [userCount, engagedInSegment, paidInSegment, avgDur] =
+            await runMetrics(fallbackWhere);
+        }
       }
 
       const engagementPct =

@@ -129,10 +129,13 @@ export function SleepTracker() {
     setModalFeedback(null);
   };
 
+  const safeNumber = (value: number, fallback = 0) =>
+    Number.isFinite(value) ? value : fallback;
+
   // Calculate stats from real data
   const calculateStats = () => {
     if (sleepEntries.length === 0)
-      return { avgDuration: "0.0", avgQuality: 0, avgDeepSleep: "N/A", streak: 0 };
+      return { avgDuration: "0.0", avgQuality: 0, avgDeepSleep: "0", streak: 0 };
 
     let totalDurationMinutes = 0;
     let qualitySum = 0;
@@ -140,21 +143,21 @@ export function SleepTracker() {
 
     sleepEntries.forEach((entry) => {
       const duration = differenceInMinutes(parseISO(entry.wake_time), parseISO(entry.bed_time));
-      totalDurationMinutes += duration;
+      totalDurationMinutes += safeNumber(duration);
       if (entry.quality_rating != null) {
-        qualitySum += entry.quality_rating;
+        qualitySum += safeNumber(entry.quality_rating);
         qualityCount += 1;
       }
     });
 
-    const avgDuration = (totalDurationMinutes / sleepEntries.length / 60).toFixed(1);
+    const avgDuration = safeNumber(totalDurationMinutes / sleepEntries.length / 60).toFixed(1);
     const avgQualityVal =
-      qualityCount > 0 ? Math.round(qualitySum / qualityCount) : 0;
+      qualityCount > 0 ? safeNumber(Math.round(qualitySum / qualityCount)) : 0;
 
     return {
       avgDuration,
       avgQuality: avgQualityVal,
-      avgDeepSleep: "N/A",
+      avgDeepSleep: "0",
       streak: sleepEntries.length,
     };
   };
@@ -170,8 +173,8 @@ export function SleepTracker() {
         differenceInMinutes(parseISO(entry.wake_time), parseISO(entry.bed_time)) / 60;
       return {
         day: format(parseISO(entry.bed_time), "EEE"),
-        hours: parseFloat(duration.toFixed(1)),
-        quality: entry.quality_rating ?? 0,
+        hours: safeNumber(parseFloat(duration.toFixed(1))),
+        quality: safeNumber(entry.quality_rating ?? 0),
       };
     });
 

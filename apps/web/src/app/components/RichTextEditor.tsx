@@ -31,6 +31,9 @@ interface RichTextEditorProps {
 export function RichTextEditor({ value, onChange, placeholder = "Start writing...", className, hideMoodSelector = false }: RichTextEditorProps) {
   const [selectedMood, setSelectedMood] = useState<string>("");
   const editorRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const selectionRef = useRef<Range | null>(null);
 
   const moods = [
     { emoji: "😊", label: "Happy", color: "text-green-500" },
@@ -41,14 +44,19 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
     { emoji: "😡", label: "Angry", color: "text-red-500" }
   ];
 
-  const toolbarButtons = [
+  const toolbarButtons: Array<{
+    icon: any;
+    label: string;
+    action?: string;
+    value?: string;
+  }> = [
     { icon: Bold, label: "Bold", action: "bold" },
     { icon: Italic, label: "Italic", action: "italic" },
     { icon: Underline, label: "Underline", action: "underline" },
     { icon: null, label: "divider" },
     { icon: List, label: "Bullet List", action: "insertUnorderedList" },
     { icon: ListOrdered, label: "Numbered List", action: "insertOrderedList" },
-    { icon: Quote, label: "Quote", action: "formatBlock" },
+    { icon: Quote, label: "Quote", action: "formatBlock", value: "<blockquote>" },
     { icon: null, label: "divider" },
     { icon: AlignLeft, label: "Align Left", action: "justifyLeft" },
     { icon: AlignCenter, label: "Align Center", action: "justifyCenter" },
@@ -61,11 +69,66 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
     }
   }, [value]);
 
-  const handleFormat = (action: string) => {
-    document.execCommand(action, false);
+  const saveSelection = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    selectionRef.current = sel.getRangeAt(0).cloneRange();
+  };
+
+  const restoreSelection = () => {
+    const sel = window.getSelection();
+    if (!sel) return;
+    sel.removeAllRanges();
+    if (selectionRef.current) {
+      sel.addRange(selectionRef.current);
+    }
+  };
+
+  const focusEditor = () => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    restoreSelection();
+  };
+
+  const handleFormat = (action: string, value?: string) => {
+    focusEditor();
+    const ok = document.execCommand(action, false, value ?? null);
+    if (!ok) {
+      // Fallback for browsers where some execCommand actions are flaky.
+      const selectedText = (window.getSelection()?.toString() || "").trim();
+      if (action === "insertUnorderedList") {
+        const item = selectedText || "List item";
+        document.execCommand("insertHTML", false, `<ul><li>${item}</li></ul>`);
+      } else if (action === "insertOrderedList") {
+        const item = selectedText || "List item";
+        document.execCommand("insertHTML", false, `<ol><li>${item}</li></ol>`);
+      } else if (action === "formatBlock" && (value === "blockquote" || value === "<blockquote>")) {
+        const content = selectedText || "Quote";
+        document.execCommand("insertHTML", false, `<blockquote>${content}</blockquote>`);
+      }
+    }
     if (editorRef.current) {
       onChange(editorRef.current.innerHTML);
     }
+  };
+
+  const handleImageInsert = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const src = typeof reader.result === "string" ? reader.result : "";
+      if (!src) return;
+      focusEditor();
+      document.execCommand("insertImage", false, src);
+      if (editorRef.current) onChange(editorRef.current.innerHTML);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileAttach = (file: File) => {
+    const url = URL.createObjectURL(file);
+    focusEditor();
+    document.execCommand("insertHTML", false, `<a href="${url}" target="_blank" rel="noopener noreferrer">${file.name}</a>`);
+    if (editorRef.current) onChange(editorRef.current.innerHTML);
   };
 
   return (
@@ -85,7 +148,7 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => handleFormat(button.action!)}
+                onClick={() => handleFormat(button.action!, button.value)}
                 className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                 title={button.label}
               >
@@ -101,7 +164,7 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => document.execCommand("undo")}
+            onClick={() => handleFormat("undo")}
             className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             title="Undo"
           >
@@ -111,7 +174,7 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => document.execCommand("redo")}
+            onClick={() => handleFormat("redo")}
             className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             title="Redo"
           >
@@ -125,6 +188,7 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onMouseDown={(e) => e.preventDefault()}
+            onClick={() => imageInputRef.current?.click()}
             className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             title="Insert Image"
           >
@@ -134,6 +198,7 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onMouseDown={(e) => e.preventDefault()}
+            onClick={() => fileInputRef.current?.click()}
             className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             title="Attach File"
           >
@@ -175,9 +240,37 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
         ref={editorRef}
         contentEditable
         suppressContentEditableWarning
-        onInput={(e) => onChange(e.currentTarget.innerHTML)}
+        onInput={(e) => {
+          saveSelection();
+          onChange(e.currentTarget.innerHTML);
+        }}
+        onKeyUp={saveSelection}
+        onMouseUp={saveSelection}
+        onFocus={saveSelection}
         className="min-h-[300px] p-4 focus:outline-none text-gray-900 dark:text-gray-100 empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 dark:empty:before:text-gray-500"
         data-placeholder={placeholder}
+      />
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleImageInsert(file);
+          e.currentTarget.value = "";
+        }}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFileAttach(file);
+          e.currentTarget.value = "";
+        }}
       />
 
       {/* Footer Stats */}
