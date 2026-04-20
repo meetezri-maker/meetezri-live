@@ -8,7 +8,17 @@ type PrivacyJson = {
   showDisplayNameInCommunity?: boolean;
   /** When false, avatar is hidden from community feed and public member profile for others. */
   showAvatarInCommunity?: boolean;
+  /** When private/friends, other members cannot open this user's profile from community (see Privacy Settings). */
+  profileVisibility?: string;
 } | null;
+
+/** True when another member may open this user's community profile (not private). */
+function isProfileVisibleToCommunityOthers(privacy: unknown): boolean {
+  const ps = privacy as PrivacyJson;
+  const v = ps?.profileVisibility;
+  if (v === 'private' || v === 'friends') return false;
+  return true;
+}
 
 function resolveCommunityAvatarUrl(
   avatarUrl: string | null | undefined,
@@ -250,8 +260,13 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
       },
       /** True when this post belongs to the requesting user. */
       isByCurrentUser: p.user_id === userId,
-      /** Set when the author is not anonymous — use for “view profile” links. */
-      authorUserId: displayName === 'Anonymous' ? null : p.user_id,
+      /** Set when the author is not anonymous and allows profile discovery — use for “view profile” links. */
+      authorUserId:
+        displayName === 'Anonymous'
+          ? null
+          : p.user_id === userId || isProfileVisibleToCommunityOthers(profile?.privacy_settings)
+            ? p.user_id
+            : null,
       content: p.content,
       category,
       createdAt: p.created_at.toISOString(),
@@ -406,6 +421,16 @@ export async function getCommunityMemberPublicProfile(
     throw err;
   }
 
+  const isSelf = viewerUserId === memberUserId;
+  if (!isSelf) {
+    const pv = (profile.privacy_settings as PrivacyJson)?.profileVisibility;
+    if (pv === 'private' || pv === 'friends') {
+      const err = new Error('This profile is private');
+      (err as any).statusCode = 404;
+      throw err;
+    }
+  }
+
   const sessions = profile._count.app_sessions;
   const checkins = profile._count.mood_entries;
   const streakDays = calculateStreak(profile.mood_entries);
@@ -418,8 +443,6 @@ export async function getCommunityMemberPublicProfile(
 
   let authorRole: 'member' | 'moderator' | 'companion' = 'member';
   if (profile.role === 'therapist') authorRole = 'companion';
-
-  const isSelf = viewerUserId === memberUserId;
 
   const milestones = [
     { id: 'join', label: 'Joined MeetEzri', unlocked: Boolean(profile.created_at) },
