@@ -92,10 +92,33 @@ export function AppearanceSettings() {
     const handler = (event: Event) => {
       const custom = event as CustomEvent<any>;
       const detail = custom.detail || {};
-      // Only update if different to avoid loops
-      setSettings(prev => {
-        if (JSON.stringify(prev) === JSON.stringify(detail)) return prev;
-        return { ...prev, ...detail };
+      setSettings((prev) => {
+        const next: AppearanceSettingsState = {
+          theme:
+            typeof detail.theme === "string" ? detail.theme : prev.theme,
+          accentColor:
+            typeof detail.accentColor === "string"
+              ? detail.accentColor
+              : prev.accentColor,
+          backgroundStyle:
+            typeof detail.backgroundStyle === "string"
+              ? detail.backgroundStyle
+              : prev.backgroundStyle,
+          animations:
+            typeof detail.animations === "boolean"
+              ? detail.animations
+              : prev.animations,
+          compactMode:
+            typeof detail.compactMode === "boolean"
+              ? detail.compactMode
+              : prev.compactMode,
+          showAvatars:
+            typeof detail.showAvatars === "boolean"
+              ? detail.showAvatars
+              : prev.showAvatars,
+        };
+        if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+        return next;
       });
     };
 
@@ -185,31 +208,37 @@ export function AppearanceSettings() {
     { value: "pattern", label: "Pattern", preview: "bg-blue-50" }
   ];
 
+  const dense = settings.compactMode;
+
   return (
     <AppLayout>
       <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div
+          className={`max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 ${dense ? "py-4" : "py-8"}`}
+        >
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-8"
+            className={dense ? "mb-4" : "mb-8"}
           >
             <Link
               to="/app/settings"
-              className="inline-flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white mb-6 transition-colors font-medium"
+              className={`inline-flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors font-medium ${
+                dense ? "mb-3 text-sm" : "mb-6"
+              }`}
             >
               <ArrowLeft className="w-5 h-5" />
               Back to Settings
             </Link>
 
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-pink-500 to-rose-600">
-                <Palette className="w-6 h-6 text-white" />
+            <div className={`flex items-center gap-3 ${dense ? "mb-1" : "mb-2"}`}>
+              <div className={dense ? "p-2 rounded-lg bg-gradient-to-br from-pink-500 to-rose-600" : "p-3 rounded-xl bg-gradient-to-br from-pink-500 to-rose-600"}>
+                <Palette className={dense ? "w-5 h-5 text-white" : "w-6 h-6 text-white"} />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Appearance</h1>
-                <p className="text-gray-600 dark:text-gray-400">Customize your visual experience</p>
+                <h1 className={dense ? "text-2xl font-bold text-gray-900 dark:text-gray-100" : "text-3xl font-bold text-gray-900 dark:text-gray-100"}>Appearance</h1>
+                <p className={dense ? "text-sm text-gray-600 dark:text-gray-400" : "text-gray-600 dark:text-gray-400"}>Customize your visual experience</p>
               </div>
             </div>
           </motion.div>
@@ -219,11 +248,13 @@ export function AppearanceSettings() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 mb-6"
+            className={`bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 ${
+              dense ? "p-4 mb-4" : "p-6 mb-6"
+            }`}
           >
-            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Theme</h2>
+            <h2 className={dense ? "text-lg font-bold text-gray-900 dark:text-gray-100 mb-3" : "text-xl font-bold text-gray-900 dark:text-gray-100 mb-6"}>Theme</h2>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className={`grid grid-cols-3 ${dense ? "gap-2" : "gap-4"}`}>
               {themes.map((theme) => {
                 const Icon = theme.icon;
                 return (
@@ -232,14 +263,18 @@ export function AppearanceSettings() {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => updateSetting('theme', theme.value)}
-                    className={`relative p-6 rounded-xl border-2 transition-all ${
+                    className={`relative rounded-xl border-2 transition-all ${
+                      dense ? "p-4" : "p-6"
+                    } ${
                       settings.theme === theme.value
                         ? "border-blue-500 bg-blue-50 dark:bg-slate-800"
                         : "border-gray-200 bg-gray-50 dark:bg-slate-900 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-500"
                     }`}
                   >
-                    <div className={`hc-preserve-color w-12 h-12 rounded-full bg-gradient-to-br ${theme.color} flex items-center justify-center mx-auto mb-3`}>
-                      <Icon className="w-6 h-6 text-white" />
+                    <div className={`hc-preserve-color rounded-full bg-gradient-to-br ${theme.color} flex items-center justify-center mx-auto ${
+                      dense ? "w-10 h-10 mb-2" : "w-12 h-12 mb-3"
+                    }`}>
+                      <Icon className={dense ? "w-5 h-5 text-white" : "w-6 h-6 text-white"} />
                     </div>
                     <p className="font-medium text-gray-900 dark:text-gray-100">{theme.label}</p>
                     {settings.theme === theme.value && (
@@ -262,11 +297,13 @@ export function AppearanceSettings() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 mb-6"
+            className={`bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 ${
+              dense ? "p-4 mb-4" : "p-6 mb-6"
+            }`}
           >
-            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Accent Color</h2>
+            <h2 className={dense ? "text-lg font-bold text-gray-900 dark:text-gray-100 mb-3" : "text-xl font-bold text-gray-900 dark:text-gray-100 mb-6"}>Accent Color</h2>
 
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            <div className={`grid grid-cols-3 sm:grid-cols-6 ${dense ? "gap-2" : "gap-3"}`}>
               {accentColors.map((color) => (
                 <motion.button
                   key={color.value}
@@ -298,24 +335,30 @@ export function AppearanceSettings() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 mb-6"
+            className={`bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 ${
+              dense ? "p-4 mb-4" : "p-6 mb-6"
+            }`}
           >
-            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Background Style</h2>
+            <h2 className={dense ? "text-lg font-bold text-gray-900 dark:text-gray-100 mb-3" : "text-xl font-bold text-gray-900 dark:text-gray-100 mb-6"}>Background Style</h2>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className={`grid grid-cols-3 ${dense ? "gap-2" : "gap-4"}`}>
               {backgroundStyles.map((style) => (
                 <motion.button
                   key={style.value}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => updateSetting('backgroundStyle', style.value)}
-                  className={`relative p-4 rounded-xl border-2 transition-all ${
+                  className={`relative rounded-xl border-2 transition-all ${
+                    dense ? "p-3" : "p-4"
+                  } ${
                     settings.backgroundStyle === style.value
                       ? "border-pink-500 bg-pink-50 dark:bg-slate-800"
                       : "border-gray-200 bg-gray-50 dark:bg-slate-900 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-500"
                   }`}
                 >
-                  <div className={`hc-preserve-color w-full h-20 rounded-lg ${style.preview} mb-3 border border-gray-200 dark:border-slate-700`} />
+                  <div className={`hc-preserve-color w-full rounded-lg ${style.preview} border border-gray-200 dark:border-slate-700 ${
+                    dense ? "h-14 mb-2" : "h-20 mb-3"
+                  }`} />
                   <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{style.label}</p>
                   {settings.backgroundStyle === style.value && (
                     <motion.div
@@ -336,14 +379,16 @@ export function AppearanceSettings() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 mb-6"
+            className={`bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 ${
+              dense ? "p-4 mb-4" : "p-6 mb-6"
+            }`}
           >
-            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Visual Preferences</h2>
+            <h2 className={dense ? "text-lg font-bold text-gray-900 dark:text-gray-100 mb-3" : "text-xl font-bold text-gray-900 dark:text-gray-100 mb-6"}>Visual Preferences</h2>
 
-            <div className="space-y-4">
+            <div className={dense ? "space-y-2" : "space-y-4"}>
               {/* Animations */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-xl">
-                <div className="flex items-center gap-3">
+              <div className={`flex items-center justify-between bg-gray-50 dark:bg-slate-800 rounded-xl ${dense ? "p-3 gap-2" : "p-4"}`}>
+                <div className={`flex items-center ${dense ? "gap-2" : "gap-3"}`}>
                   <Sparkles className="w-5 h-5 text-purple-600" />
                   <div>
                     <p className="font-medium text-gray-900 dark:text-gray-100">Smooth Animations</p>
@@ -365,8 +410,8 @@ export function AppearanceSettings() {
               </div>
 
               {/* Compact Mode */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-xl">
-                <div className="flex items-center gap-3">
+              <div className={`flex items-center justify-between bg-gray-50 dark:bg-slate-800 rounded-xl ${dense ? "p-3 gap-2" : "p-4"}`}>
+                <div className={`flex items-center ${dense ? "gap-2" : "gap-3"}`}>
                   <Layout className="w-5 h-5 text-blue-600" />
                   <div>
                     <p className="font-medium text-gray-900 dark:text-gray-100">Compact Mode</p>
@@ -388,8 +433,8 @@ export function AppearanceSettings() {
               </div>
 
               {/* Show Avatars */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-xl">
-                <div className="flex items-center gap-3">
+              <div className={`flex items-center justify-between bg-gray-50 dark:bg-slate-800 rounded-xl ${dense ? "p-3 gap-2" : "p-4"}`}>
+                <div className={`flex items-center ${dense ? "gap-2" : "gap-3"}`}>
                   <ImageIcon className="w-5 h-5 text-green-600" />
                   <div>
                     <p className="font-medium text-gray-900 dark:text-gray-100">Show Avatars</p>
@@ -417,11 +462,13 @@ export function AppearanceSettings() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-950 dark:to-rose-900 border-2 border-pink-200 dark:border-pink-700 rounded-2xl p-6"
+            className={`bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-950 dark:to-rose-900 border-2 border-pink-200 dark:border-pink-700 rounded-2xl ${
+              dense ? "p-4" : "p-6"
+            }`}
           >
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-white dark:bg-slate-900 rounded-xl shadow-md">
-                <Sparkles className="w-6 h-6 text-pink-600" />
+            <div className={`flex items-start ${dense ? "gap-3" : "gap-4"}`}>
+              <div className={dense ? "p-2 bg-white dark:bg-slate-900 rounded-lg shadow-md" : "p-3 bg-white dark:bg-slate-900 rounded-xl shadow-md"}>
+                <Sparkles className={dense ? "w-5 h-5 text-pink-600" : "w-6 h-6 text-pink-600"} />
               </div>
               <div className="flex-1">
                 <h3 className="font-bold text-pink-900 dark:text-pink-200 mb-2">Live Preview</h3>

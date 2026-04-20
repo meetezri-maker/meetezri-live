@@ -27,6 +27,7 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { toast } from "sonner";
 import { Switch } from "@/app/components/ui/switch";
 import { Label } from "@/app/components/ui/label";
+import { cn } from "@/app/components/ui/utils";
 
 type FeedPost = {
   id: string;
@@ -39,6 +40,8 @@ type FeedPost = {
   createdAt: string;
   views: number;
   likes: number;
+  /** True when the signed-in user has liked this post (one reaction per user). */
+  likedByMe?: boolean;
   comments: number;
   tags: string[];
 };
@@ -172,9 +175,11 @@ export function Community() {
 
   const handleLikePost = async (postId: string) => {
     try {
-      const res = (await api.likeCommunityPost(postId)) as { likes: number };
+      const res = (await api.likeCommunityPost(postId)) as { likes: number; likedByMe: boolean };
       setPostsData((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, likes: res.likes } : p))
+        prev.map((p) =>
+          p.id === postId ? { ...p, likes: res.likes, likedByMe: res.likedByMe } : p
+        )
       );
     } catch {
       toast.error("Could not update like");
@@ -529,11 +534,22 @@ export function Community() {
                             </div>
                             <button
                               type="button"
-                              className="flex items-center gap-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                              className={cn(
+                                "flex items-center gap-2 transition-colors rounded-md px-0.5 -mx-0.5",
+                                post.likedByMe
+                                  ? "text-blue-600 dark:text-blue-400"
+                                  : "text-gray-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
+                              )}
                               onClick={() => handleLikePost(post.id)}
-                              aria-label="Like post"
+                              aria-label={post.likedByMe ? "Unlike post" : "Like post"}
+                              aria-pressed={Boolean(post.likedByMe)}
                             >
-                              <ThumbsUp className="w-4 h-4" />
+                              <ThumbsUp
+                                className={cn(
+                                  "w-4 h-4 shrink-0",
+                                  post.likedByMe && "fill-current"
+                                )}
+                              />
                               {post.likes}
                             </button>
                             <button

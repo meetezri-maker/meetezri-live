@@ -164,6 +164,7 @@ import { RecentActivityHistory } from './pages/app/RecentActivityHistory';
 import { GoalDetails } from './pages/app/GoalDetails';
 import { BrainHealth } from './pages/app/BrainHealth';
 import { Resources } from './pages/app/Resources';
+import { ResourceArticlePage } from './pages/app/ResourceArticlePage';
 import { Community } from './pages/app/Community';
 import { CrisisResources } from './pages/app/CrisisResources';
 import { ResourceAnalyticsPage } from './pages/app/ResourceAnalytics';
@@ -426,6 +427,7 @@ export default function App() {
             <Route path="/app/settings/notifications" element={<Notifications />} />
             <Route path="/app/settings/brain-health" element={<BrainHealth />} />
             <Route path="/app/settings/resources" element={<Resources />} />
+            <Route path="/app/settings/resources/article/:articleId" element={<ResourceArticlePage />} />
             <Route path="/app/settings/community" element={<Community />} />
             <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />
             <Route path ="/app/settings/safety-plan" element={<SafetyPlan />} />

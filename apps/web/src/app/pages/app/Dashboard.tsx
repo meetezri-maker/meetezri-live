@@ -108,9 +108,14 @@ export function Dashboard() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const sessions = await api.sessions.list({ status: "scheduled" });
+        const sessionsRaw = await api.sessions.list({ status: "scheduled" });
+        const sessions = Array.isArray(sessionsRaw)
+          ? (sessionsRaw as BackendSession[])
+          : Array.isArray((sessionsRaw as { sessions?: unknown })?.sessions)
+            ? ((sessionsRaw as { sessions: BackendSession[] }).sessions)
+            : [];
         const now = new Date();
-        const nonExpired = (sessions as BackendSession[]).filter((session) => {
+        const nonExpired = sessions.filter((session) => {
           const scheduledDate = session.scheduled_at ? new Date(session.scheduled_at) : null;
           if (!scheduledDate) return false;
           return scheduledDate.getTime() >= now.getTime() && session.status === "scheduled";
@@ -272,15 +277,29 @@ export function Dashboard() {
     }
   ];
 
-  const moodBasedFallbackActivities = profile?.mood_entries?.slice(0, 4).map((entry: any) => ({
-    id: `mood:${entry.id ?? entry.created_at}`,
-    type: "mood",
-    text: `Logged ${entry.mood} (${entry.intensity}/10)`,
-    time: formatDistanceToNow(new Date(entry.created_at), { addSuffix: true }),
-    emoji: getMoodEmoji(entry.mood)
-  })) || [
-    { id: "system:welcome", type: "system", text: "Welcome to MeetEzri!", time: "Just now", emoji: "👋" }
-  ];
+  const moodEntriesSafe = Array.isArray(profile?.mood_entries) ? profile.mood_entries : [];
+  const moodBasedFallbackActivities =
+    moodEntriesSafe.length > 0
+      ? moodEntriesSafe.slice(0, 4).map((entry: any) => {
+          const created = entry?.created_at ? new Date(entry.created_at) : null;
+          const timeOk = created && !Number.isNaN(created.getTime());
+          return {
+            id: `mood:${entry?.id ?? entry?.created_at ?? String(Math.random())}`,
+            type: "mood",
+            text: `Logged ${entry?.mood ?? "?"} (${entry?.intensity ?? "-"}/10)`,
+            time: timeOk ? formatDistanceToNow(created!, { addSuffix: true }) : "Recently",
+            emoji: getMoodEmoji(String(entry?.mood ?? "")),
+          };
+        })
+      : [
+          {
+            id: "system:welcome",
+            type: "system",
+            text: "Welcome to MeetEzri!",
+            time: "Just now",
+            emoji: "👋",
+          },
+        ];
 
   useEffect(() => {
     const emojiForActivityType = (type: string) => {
@@ -293,23 +312,27 @@ export function Dashboard() {
 
     const loadRecentActivity = async () => {
       try {
-        const rows = (await api.getRecentActivity(20)) as Array<{
-          id: string;
-          type: string;
-          text: string;
-          created_at: string;
-          mood?: string;
-        }>;
-        const mapped = rows.slice(0, 10).map((row) => ({
-          id: row.id,
-          type: row.type,
-          text: row.text,
-          time: formatDistanceToNow(new Date(row.created_at), { addSuffix: true }),
-          emoji:
-            row.type === "mood" && row.mood
-              ? getMoodEmoji(row.mood)
-              : emojiForActivityType(row.type),
-        }));
+        const raw = (await api.getRecentActivity(20)) as unknown;
+        const rows = Array.isArray(raw)
+          ? (raw as Array<{ id: string; type: string; text: string; created_at: string; mood?: string }>)
+          : Array.isArray((raw as { items?: unknown })?.items)
+            ? ((raw as { items: Array<{ id: string; type: string; text: string; created_at: string; mood?: string }> })
+                .items)
+            : [];
+        const mapped = rows.slice(0, 10).map((row) => {
+          const created = row.created_at ? new Date(row.created_at) : null;
+          const timeOk = created && !Number.isNaN(created.getTime());
+          return {
+            id: row.id,
+            type: row.type,
+            text: row.text,
+            time: timeOk ? formatDistanceToNow(created!, { addSuffix: true }) : "Recently",
+            emoji:
+              row.type === "mood" && row.mood
+                ? getMoodEmoji(row.mood)
+                : emojiForActivityType(row.type),
+          };
+        });
         setActivityFeed(mapped);
       } catch (error) {
         setActivityFeed([]);
@@ -320,6 +343,11 @@ export function Dashboard() {
   }, [user?.id]);
 
   const recentActivities = activityFeed.length > 0 ? activityFeed : moodBasedFallbackActivities;
+
+  const safeStat = (value: unknown) => {
+    const n = Number(value ?? 0);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  };
 
   const insights = [
     {
@@ -345,17 +373,17 @@ export function Dashboard() {
   const insightDistributionData = [
     {
       name: "Sessions",
-      value: Number(profile?.stats?.completed_sessions ?? 0),
+      value: safeStat(profile?.stats?.completed_sessions),
       color: "#8b5cf6",
     },
     {
       name: "Mood Check-ins",
-      value: Number(profile?.stats?.total_checkins ?? 0),
+      value: safeStat(profile?.stats?.total_checkins),
       color: "#06b6d4",
     },
     {
       name: "Journals",
-      value: Number(profile?.stats?.total_journals ?? 0),
+      value: safeStat(profile?.stats?.total_journals),
       color: "#f59e0b",
     },
   ];

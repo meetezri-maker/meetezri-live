@@ -50,33 +50,7 @@ import {
   WELLNESS_CATEGORY_DURATION_MMSS,
 } from "../../../lib/wellnessCategoryDurations";
 
-function parseGuidedPayloadFromContentUrl(
-  raw: string | null | undefined
-): Partial<{
-  scriptSteps: { id: string; duration: number; instruction: string }[];
-  tags: string[];
-  enabledForGuidedMode: boolean;
-  audioEnabled: boolean;
-  visualsEnabled: boolean;
-}> | null {
-  if (!raw || !raw.trim()) return null;
-  if (/^https?:\/\//i.test(raw.trim())) return null;
-  try {
-    const j = JSON.parse(raw) as Record<string, unknown>;
-    if (j && typeof j === "object" && Array.isArray((j as { scriptSteps?: unknown }).scriptSteps)) {
-      return j as Partial<{
-        scriptSteps: { id: string; duration: number; instruction: string }[];
-        tags: string[];
-        enabledForGuidedMode: boolean;
-        audioEnabled: boolean;
-        visualsEnabled: boolean;
-      }>;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
+import { parseGuidedPayloadFromContentUrl } from "../../../lib/parseGuidedWellnessContentUrl";
 
 const EDITOR_ICON_NAMES = new Set([
   "Wind",

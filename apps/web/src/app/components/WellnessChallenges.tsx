@@ -69,8 +69,8 @@ function getGradientForCategory(category: string | null | undefined): string {
   }
 }
 
-function pickIcon(category: string | null | undefined, title: string): LucideIcon {
-  const t = title.toLowerCase();
+function pickIcon(category: string | null | undefined, title: string | null | undefined): LucideIcon {
+  const t = (title ?? "").toLowerCase();
   if (t.includes("meditation")) return Star;
   if (t.includes("journal")) return Heart;
   if (t.includes("breath") || t.includes("breathing")) return Zap;
@@ -101,19 +101,32 @@ function normalizeDifficulty(d: string): "Easy" | "Medium" | "Hard" {
 }
 
 function mapPayloadToRows(data: DashboardPayload): ChallengeRow[] {
-  return (data.challenges || []).map((c) => ({
-    id: c.id,
-    title: c.title,
-    description: c.description || "",
-    progress: Math.max(0, c.progress),
-    target: Math.max(1, c.target),
-    reward: c.reward ?? 0,
-    difficulty: normalizeDifficulty(c.difficulty),
-    icon: pickIcon(c.category, c.title),
-    color: getGradientForCategory(c.category),
-    isCompleted: Boolean(c.isCompleted),
-    isLocked: Boolean(c.isLocked),
-  }));
+  try {
+    const raw = data?.challenges;
+    const list = Array.isArray(raw) ? raw : [];
+    return list
+      .filter((c): c is NonNullable<(typeof list)[number]> => c != null && typeof c === "object")
+      .map((c, index) => ({
+        id:
+          String((c as { id?: unknown }).id ?? "").trim() ||
+          `challenge-row-${index}`,
+        title: String((c as { title?: unknown }).title ?? ""),
+        description: String((c as { description?: unknown }).description ?? ""),
+        progress: Math.max(0, Number((c as { progress?: unknown }).progress) || 0),
+        target: Math.max(1, Number((c as { target?: unknown }).target) || 1),
+        reward: Number((c as { reward?: unknown }).reward) || 0,
+        difficulty: normalizeDifficulty(String((c as { difficulty?: unknown }).difficulty ?? "")),
+        icon: pickIcon(
+          (c as { category?: unknown }).category as string | null | undefined,
+          String((c as { title?: unknown }).title ?? "")
+        ),
+        color: getGradientForCategory((c as { category?: unknown }).category as string | null | undefined),
+        isCompleted: Boolean((c as { isCompleted?: unknown }).isCompleted),
+        isLocked: Boolean((c as { isLocked?: unknown }).isLocked),
+      }));
+  } catch {
+    return [];
+  }
 }
 
 export function WellnessChallenges() {

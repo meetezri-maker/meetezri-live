@@ -25,14 +25,18 @@ interface NotificationsContextType {
 
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined);
 
+function computeUnreadCount(items: Notification[]) {
+  return items.reduce((count, item) => {
+    if (!item || typeof item !== 'object') return count;
+    return count + (item.is_read === true ? 0 : 1);
+  }, 0);
+}
+
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-
-  const computeUnreadCount = (items: Notification[]) =>
-    items.reduce((count, item) => count + (item.is_read ? 0 : 1), 0);
 
   const normalizeNotifications = (payload: unknown): Notification[] => {
     if (Array.isArray(payload)) return payload as Notification[];
@@ -63,15 +67,19 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       const data = await api.notifications.getAll();
       const normalized = normalizeNotifications(data);
       setNotifications(normalized);
-      setUnreadCount(computeUnreadCount(normalized));
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
       setNotifications([]);
-      setUnreadCount(0);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Keep unread count in sync with list state. Never call setUnreadCount inside setNotifications
+  // updaters (that pattern can break batching and has caused post-hydration crashes).
+  useEffect(() => {
+    setUnreadCount(computeUnreadCount(notifications));
+  }, [notifications]);
 
   useEffect(() => {
     if (user) {
@@ -96,9 +104,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
               if (prev.some((item) => item.id === newNotification.id)) {
                 return prev;
               }
-              const next = [newNotification, ...prev];
-              setUnreadCount(computeUnreadCount(next));
-              return next;
+              return [newNotification, ...prev];
             });
             
             // Show toast
@@ -114,19 +120,14 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         supabase.removeChannel(channel);
       };
     } else {
-        setNotifications([]);
-        setUnreadCount(0);
+      setNotifications([]);
     }
   }, [user?.id]);
 
   const markAsRead = async (id: string) => {
     try {
       await api.notifications.markAsRead(id);
-      setNotifications((prev) => {
-        const next = prev.map((n) => (n.id === id ? { ...n, is_read: true } : n));
-        setUnreadCount(computeUnreadCount(next));
-        return next;
-      });
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
       await syncUnreadCount();
     } catch (error) {
       console.error('Failed to mark as read:', error);
@@ -138,7 +139,6 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     try {
       await api.notifications.markAllAsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-      setUnreadCount(0);
       await syncUnreadCount();
     } catch (error) {
       console.error('Failed to mark all as read:', error);

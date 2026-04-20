@@ -187,12 +187,18 @@ export function AppLayout({ children }: AppLayoutProps) {
     const handler = (event: Event) => {
       const custom = event as CustomEvent<any>;
       const detail = custom.detail || {};
-      setAppearance({
-        backgroundStyle: detail.backgroundStyle || "gradient",
-        compactMode: Boolean(detail.compactMode),
-        theme: detail.theme || "light",
-        accentColor: detail.accentColor || "pink"
-      });
+      // Merge so partial events (e.g. theme-only) do not wipe compactMode / accent.
+      setAppearance((prev) => ({
+        backgroundStyle:
+          typeof detail.backgroundStyle === "string"
+            ? detail.backgroundStyle
+            : prev.backgroundStyle,
+        compactMode:
+          typeof detail.compactMode === "boolean" ? detail.compactMode : prev.compactMode,
+        theme: typeof detail.theme === "string" ? detail.theme : prev.theme,
+        accentColor:
+          typeof detail.accentColor === "string" ? detail.accentColor : prev.accentColor,
+      }));
     };
 
     window.addEventListener("ezri-appearance-change", handler as EventListener);
@@ -228,8 +234,18 @@ export function AppLayout({ children }: AppLayoutProps) {
       ? { backgroundImage: accentBackgroundMap[appearance.accentColor] || accentBackgroundMap.pink }
       : undefined;
 
-  const mainPaddingClass = appearance.compactMode
-    ? "pb-12 sm:pb-4 sm:pl-64"
+  const compact = appearance.compactMode;
+  const headerHeightClass = compact ? "h-14" : "h-16";
+  const headerInnerClass = compact ? "px-3 sm:px-4" : "px-4 sm:px-6";
+  const sidebarWidthClass = compact ? "w-56" : "w-64";
+  const sidebarTopClass = compact ? "top-14" : "top-16";
+  const sidebarNavClass = compact ? "p-2 space-y-1" : "p-4 space-y-2";
+  const sidebarSectionClass = compact ? "pt-2 mt-2 space-y-1" : "pt-4 mt-4 space-y-2";
+  const navItemPadClass = compact ? "px-3 py-2 gap-2" : "px-4 py-3 gap-3";
+  const navIconClass = compact ? "w-4 h-4" : "w-5 h-5";
+  const navLabelClass = compact ? "text-sm font-medium" : "font-medium";
+  const mainPaddingClass = compact
+    ? "pb-12 sm:pb-3 sm:pl-56"
     : "pb-20 sm:pb-6 sm:pl-72";
   const useGradientUI = appearance.backgroundStyle !== "solid";
 
@@ -264,7 +280,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         animate={{ y: 0 }}
         className="bg-white/80 dark:bg-slate-900/90 backdrop-blur-lg border-b border-gray-200 dark:border-slate-700 sticky top-0 z-40 shadow-sm"
       >
-        <div className=" mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div
+          className={`mx-auto flex items-center justify-between ${headerInnerClass} ${headerHeightClass}`}
+        >
           <div className="flex items-center gap-2">
             <motion.div
               animate={{ 
@@ -278,7 +296,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               }}
               className="flex items-center justify-center"
             >
-              <BrandLogo heightClass="h-9" />
+              <BrandLogo heightClass={compact ? "h-8" : "h-9"} />
             </motion.div>
           </div>
 
@@ -345,11 +363,13 @@ export function AppLayout({ children }: AppLayoutProps) {
       </main>
 
       {/* Bottom Navigation - Mobile Only */}
-      <MobileBottomNav />
+      <MobileBottomNav compact={compact} />
 
       {/* Desktop Sidebar - Hidden on mobile */}
-      <div className="hidden sm:block fixed left-0 top-16 bottom-0 w-64 bg-white/80 dark:bg-slate-900/90 backdrop-blur-lg border-r border-gray-200 dark:border-slate-700 z-30">
-        <nav className="p-4 space-y-2">
+      <div
+        className={`hidden sm:block fixed left-0 bottom-0 ${sidebarTopClass} ${sidebarWidthClass} bg-white/80 dark:bg-slate-900/90 backdrop-blur-lg border-r border-gray-200 dark:border-slate-700 z-30`}
+      >
+        <nav className={sidebarNavClass}>
           {navItems.map((item, index) => {
             const Icon = item.icon;
             const active = isActive(item.path);
@@ -362,7 +382,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   transition={{ delay: index * 0.05 }}
                   whileHover={{ scale: 1.02, x: 5 }}
                   whileTap={{ scale: 0.98 }}
-                  className={`app-sidebar-item ${active ? "app-sidebar-item--active" : ""} flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  className={`app-sidebar-item ${active ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl transition-all ${
                     active
                       ? useGradientUI
                         ? "bg-gradient-to-r from-primary to-secondary dark:from-blue-600 dark:to-indigo-600 text-white shadow-lg"
@@ -370,86 +390,86 @@ export function AppLayout({ children }: AppLayoutProps) {
                       : "hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200"
                   }`}
                 >
-                  <Icon className="w-5 h-5" />
-                  <span className="font-medium">{item.label}</span>
+                  <Icon className={navIconClass} />
+                  <span className={navLabelClass}>{item.label}</span>
                 </motion.div>
               </Link>
             );
           })}
 
           {/* Additional Desktop Nav Items */}
-          <div className="border-t border-gray-200 dark:border-slate-700 pt-4 mt-4 space-y-2">
+          <div className={`border-t border-gray-200 dark:border-slate-700 ${sidebarSectionClass}`}>
             <Link to="/app/session-history">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
-                className={`app-sidebar-item ${isRouteActive("/app/session-history") ? "app-sidebar-item--active" : ""} flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
+                className={`app-sidebar-item ${isRouteActive("/app/session-history") ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
               >
-                <Clock className="w-5 h-5" />
-                <span className="font-medium">Session History</span>
+                <Clock className={navIconClass} />
+                <span className={navLabelClass}>Session History</span>
               </motion.div>
             </Link>
 
             <Link to="/app/wellness-tools">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
-                className={`app-sidebar-item ${isRouteActive("/app/wellness-tools") ? "app-sidebar-item--active" : ""} flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
+                className={`app-sidebar-item ${isRouteActive("/app/wellness-tools") ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
               >
-                <Sparkles className="w-5 h-5" />
-                <span className="font-medium">Wellness Tools</span>
+                <Sparkles className={navIconClass} />
+                <span className={navLabelClass}>Wellness Tools</span>
               </motion.div>
             </Link>
             
             <Link to="/app/progress">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
-                className={`app-sidebar-item ${isRouteActive("/app/progress") ? "app-sidebar-item--active" : ""} flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
+                className={`app-sidebar-item ${isRouteActive("/app/progress") ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
               >
-                <TrendingUp className="w-5 h-5" />
-                <span className="font-medium">Progress</span>
+                <TrendingUp className={navIconClass} />
+                <span className={navLabelClass}>Progress</span>
               </motion.div>
             </Link>
 
             <Link to="/app/sleep-tracker">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
-                className={`app-sidebar-item ${isRouteActive("/app/sleep-tracker") ? "app-sidebar-item--active" : ""} flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
+                className={`app-sidebar-item ${isRouteActive("/app/sleep-tracker") ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
               >
-                <Moon className="w-5 h-5" />
-                <span className="font-medium">Sleep Tracker</span>
+                <Moon className={navIconClass} />
+                <span className={navLabelClass}>Sleep Tracker</span>
               </motion.div>
             </Link>
 
             <Link to="/app/billing">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
-                className={`app-sidebar-item ${isRouteActive("/app/billing") ? "app-sidebar-item--active" : ""} flex items-center gap-3 px-4 py-3 rounded-xl text-gray-700 dark:text-gray-200 transition-all border border-transparent ${
+                className={`app-sidebar-item ${isRouteActive("/app/billing") ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl text-gray-700 dark:text-gray-200 transition-all border border-transparent ${
                   useGradientUI
                     ? "hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 dark:hover:from-emerald-900 dark:hover:to-emerald-800 hover:text-green-700 hover:border-green-200 dark:hover:border-emerald-600"
                     : "hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-primary"
                 }`}
               >
-                <CreditCard className="w-5 h-5" />
-                <span className="font-medium">Billing & Credits</span>
+                <CreditCard className={navIconClass} />
+                <span className={navLabelClass}>Billing & Credits</span>
               </motion.div>
             </Link>
 
             <Link to="/app/habit-tracker">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
-                className={`app-sidebar-item ${isRouteActive("/app/habit-tracker") ? "app-sidebar-item--active" : ""} flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
+                className={`app-sidebar-item ${isRouteActive("/app/habit-tracker") ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
               >
-                <Target className="w-5 h-5" />
-                <span className="font-medium">Habit Tracker</span>
+                <Target className={navIconClass} />
+                <span className={navLabelClass}>Habit Tracker</span>
               </motion.div>
             </Link>
 
             <motion.button
               onClick={handleLogout}
               whileHover={{ scale: 1.02, x: 5 }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/40 text-red-600 transition-all"
+              className={`w-full flex items-center ${navItemPadClass} rounded-xl hover:bg-red-50 dark:hover:bg-red-900/40 text-red-600 transition-all`}
             >
-              <LogOut className="w-5 h-5" />
-              <span className="font-medium">Logout</span>
+              <LogOut className={navIconClass} />
+              <span className={navLabelClass}>Logout</span>
             </motion.button>
           </div>
         </nav>

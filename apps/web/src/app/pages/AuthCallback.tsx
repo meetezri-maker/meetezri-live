@@ -5,6 +5,26 @@ import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+/** PKCE codes are single-use; React Strict Mode / remounts must not exchange twice. */
+const pkceExchangeInflight = new Map<string, ReturnType<typeof supabase.auth.exchangeCodeForSession>>();
+const oauthFinalizeOnceKeys = new Set<string>();
+
+function exchangeCodeForSessionDeduped(code: string) {
+  let p = pkceExchangeInflight.get(code);
+  if (!p) {
+    p = supabase.auth.exchangeCodeForSession(code).finally(() => {
+      pkceExchangeInflight.delete(code);
+    });
+    pkceExchangeInflight.set(code, p);
+  }
+  return p;
+}
+
+function shouldFinalizeOAuthOnce(key: string) {
+  if (oauthFinalizeOnceKeys.has(key)) return false;
+  oauthFinalizeOnceKeys.add(key);
+  return true;
+}
 
 export function AuthCallback() {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -150,6 +170,9 @@ export function AuthCallback() {
       return;
     }
 
+    // Avoid navigating with a stale `user` while AuthProvider is still hydrating.
+    if (isAuthLoading) return;
+
     // Immediate redirect if user is already loaded AND we are not processing
     // the auth callback tokens (code/access_token) yet.
     if (user) {
@@ -181,7 +204,7 @@ export function AuthCallback() {
       }
       navigate(getRedirectPath(), { replace: true });
     }
-  }, [user, navigate, location.search, location.hash]);
+  }, [user, navigate, location.search, location.hash, isAuthLoading]);
 
   useEffect(() => {
     console.log("AuthCallback mounted. URL:", window.location.href);
@@ -213,10 +236,12 @@ export function AuthCallback() {
       // 3. Handle Code Exchange (PKCE)
       if (code) {
         try {
-          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          const { data, error: exchangeError } = await exchangeCodeForSessionDeduped(code);
           if (exchangeError) throw exchangeError;
           
           if (data?.session) {
+            const onceKey = `pkce:${code}`;
+            if (!shouldFinalizeOAuthOnce(onceKey)) return;
             setStatus('success');
             finalizeVerification(data.session.user);
             return;
@@ -246,10 +271,18 @@ export function AuthCallback() {
           }
           
           if (data?.session) {
+            const onceKey = `implicit:${accessToken.slice(0, 24)}`;
+            if (!shouldFinalizeOAuthOnce(onceKey)) return;
             setStatus('success');
             finalizeVerification(data.session.user);
             return;
           }
+      }
+
+      // No OAuth parameters: session redirect for logged-in users is handled in the other effect.
+      // Avoid polling + double finalize when visiting /auth/callback with an empty URL.
+      if (!code && !(accessToken && refreshToken)) {
+        return;
       }
 
       // 5. Verify Session Establishment
@@ -257,8 +290,9 @@ export function AuthCallback() {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session) {
+          const onceKey = `session:${session.user.id}`;
+          if (!shouldFinalizeOAuthOnce(onceKey)) return;
           setStatus('success');
-          // Navigate immediately - user wants "nano seconds" response
           finalizeVerification(session.user);
           return;
         }

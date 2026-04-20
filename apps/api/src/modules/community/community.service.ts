@@ -21,6 +21,17 @@ function resolveCommunityAvatarUrl(
   return avatarUrl || null;
 }
 
+async function ensureCommunityPostLikesTable(): Promise<void> {
+  await prisma.$executeRaw`
+    CREATE TABLE IF NOT EXISTS public.community_post_likes (
+      post_id uuid NOT NULL REFERENCES public.community_posts(id) ON DELETE CASCADE,
+      user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+      liked_at timestamptz NOT NULL DEFAULT timezone('utc'::text, now()),
+      PRIMARY KEY (post_id, user_id)
+    )
+  `;
+}
+
 function resolveAuthorDisplayName(
   fullName: string | null | undefined,
   privacy: unknown
@@ -186,6 +197,34 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
     }
   }
 
+  const likesCountByPost = new Map<string, number>();
+  const likedByCurrentUser = new Set<string>();
+  if (postIds.length > 0) {
+    await ensureCommunityPostLikesTable();
+    const likeCountRows = await prisma.$queryRaw<Array<{ post_id: string; c: bigint }>>(
+      Prisma.sql`
+        SELECT post_id, COUNT(*)::bigint AS c
+        FROM public.community_post_likes
+        WHERE post_id IN (${Prisma.join(postIds.map((id) => Prisma.sql`${id}::uuid`))})
+        GROUP BY post_id
+      `
+    );
+    for (const row of likeCountRows) {
+      likesCountByPost.set(row.post_id, Number(row.c));
+    }
+    const likedRows = await prisma.$queryRaw<Array<{ post_id: string }>>(
+      Prisma.sql`
+        SELECT post_id
+        FROM public.community_post_likes
+        WHERE user_id = ${userId}::uuid
+          AND post_id IN (${Prisma.join(postIds.map((id) => Prisma.sql`${id}::uuid`))})
+      `
+    );
+    for (const row of likedRows) {
+      likedByCurrentUser.add(row.post_id);
+    }
+  }
+
   return posts.map((p) => {
     const profile = p.profiles;
     const displayName = resolveAuthorDisplayName(profile?.full_name, profile?.privacy_settings);
@@ -217,7 +256,8 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
       category,
       createdAt: p.created_at.toISOString(),
       views: viewsByPost.get(p.id) || 0,
-      likes: p.likes_count || 0,
+      likes: likesCountByPost.get(p.id) ?? 0,
+      likedByMe: likedByCurrentUser.has(p.id),
       comments: p._count.community_comments,
       tags: p.tags || [],
       groupId: p.group_id,
@@ -425,21 +465,57 @@ export async function getCommunityMemberPublicProfile(
   };
 }
 
-export async function incrementPostLike(postId: string) {
+/** One like per user per post; same endpoint toggles on/off. */
+export async function togglePostLike(userId: string, postId: string) {
   const post = await prisma.community_posts.findFirst({
     where: { id: postId, deleted_at: null },
+    select: { id: true },
   });
   if (!post) {
     const err = new Error('Post not found');
     (err as any).statusCode = 404;
     throw err;
   }
-  const updated = await prisma.community_posts.update({
-    where: { id: postId },
-    data: { likes_count: { increment: 1 } },
+
+  await ensureCommunityPostLikesTable();
+
+  let likedByMe = false;
+  let likesTotal = 0;
+
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.$queryRaw<Array<{ one: number }>>`
+      SELECT 1 AS one
+      FROM public.community_post_likes
+      WHERE post_id = ${postId}::uuid AND user_id = ${userId}::uuid
+      LIMIT 1
+    `;
+    if (existing.length > 0) {
+      await tx.$executeRaw`
+        DELETE FROM public.community_post_likes
+        WHERE post_id = ${postId}::uuid AND user_id = ${userId}::uuid
+      `;
+      likedByMe = false;
+    } else {
+      await tx.$executeRaw`
+        INSERT INTO public.community_post_likes (post_id, user_id)
+        VALUES (${postId}::uuid, ${userId}::uuid)
+      `;
+      likedByMe = true;
+    }
+    const countRows = await tx.$queryRaw<Array<{ c: bigint }>>`
+      SELECT COUNT(*)::bigint AS c
+      FROM public.community_post_likes
+      WHERE post_id = ${postId}::uuid
+    `;
+    likesTotal = Number(countRows[0]?.c ?? 0);
+    await tx.community_posts.update({
+      where: { id: postId },
+      data: { likes_count: likesTotal },
+    });
   });
+
   invalidateCommunityCaches();
-  return { likes: updated.likes_count || 0 };
+  return { likes: likesTotal, likedByMe };
 }
 
 export async function addPostComment(userId: string, postId: string, content: string) {

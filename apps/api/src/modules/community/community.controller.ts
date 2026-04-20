@@ -107,8 +107,9 @@ export async function likePostHandler(
   request: FastifyRequest<{ Params: { postId: string } }>,
   reply: FastifyReply
 ) {
+  const user = request.user as UserPayload;
   try {
-    return await communityService.incrementPostLike(request.params.postId);
+    return await communityService.togglePostLike(user.sub, request.params.postId);
   } catch (err: any) {
     const code = err?.statusCode === 404 ? 404 : 500;
     return reply.code(code).send({ message: err?.message || 'Failed to like post' });

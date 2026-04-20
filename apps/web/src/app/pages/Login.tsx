@@ -109,10 +109,18 @@ export function Login() {
 
   const handleGoogleLogin = async () => {
     try {
+      // Clear the current Supabase session (local + revoke refresh) so OAuth cannot
+      // silently continue as the previous user. Then force Google's account picker.
+      await supabase.auth.signOut({ scope: "global" }).catch(() => undefined);
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            prompt: "select_account",
+            access_type: "offline",
+          },
         },
       });
       if (error) throw error;
