@@ -170,6 +170,7 @@ import { ResourceAnalyticsPage } from './pages/app/ResourceAnalytics';
 import { CooldownScreen } from './pages/app/CooldownScreen';
 import { HelpSupport } from './pages/app/HelpSupport';
 import { Progress } from './pages/app/Progress';
+import { SafetyPlan } from './pages/app/SafetyPlan';
 // import { Community } from './pages/app/Community';
 
 function NetworkWatcher() {
@@ -425,9 +426,9 @@ export default function App() {
             <Route path="/app/settings/notifications" element={<Notifications />} />
             <Route path="/app/settings/brain-health" element={<BrainHealth />} />
             <Route path="/app/settings/resources" element={<Resources />} />
-            <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />
-            <Route path="/app/settings" element={<SettingsHub />} />
             <Route path="/app/settings/community" element={<Community />} />
+            <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />
+            <Route path ="/app/settings/safety-plan" element={<SafetyPlan />} />
             {/* Admin Routes - Protected and role-gated */}
             <Route
               element={

@@ -1,221 +1,256 @@
-import React, { useState } from 'react';
-import { motion } from 'motion/react';
-import { AppLayout } from '@/app/components/AppLayout';
-import { BookOpen, Video, Headphones, FileText, Search, Filter, Star, Clock, Play, Download, Bookmark, Heart, TrendingUp, Award, ArrowLeft } from 'lucide-react';
-import { AnimatedCard } from '@/app/components/AnimatedCard';
-import { Link } from 'react-router-dom';
-import { WELLNESS_TOOL_CATEGORIES } from '@/lib/wellnessToolCategories';
+import { useEffect, useMemo, useState } from "react";
+import { motion } from "motion/react";
+import { AppLayout } from "@/app/components/AppLayout";
+import {
+  BookOpen,
+  Video,
+  Headphones,
+  FileText,
+  Search,
+  Star,
+  Clock,
+  Play,
+  Download,
+  Bookmark,
+  Heart,
+  TrendingUp,
+  Award,
+  ArrowLeft,
+  Loader2,
+} from "lucide-react";
+import { AnimatedCard } from "@/app/components/AnimatedCard";
+import { Link } from "react-router-dom";
+import { WELLNESS_TOOL_CATEGORIES } from "@/lib/wellnessToolCategories";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { WELLNESS_BUILTIN_TOOLS_ADMIN } from "@/lib/wellnessBuiltinToolsMetadata";
+import { mergeApiBuiltinsForAdmin } from "@/lib/mergeAdminWellnessTools";
 
 interface Resource {
   id: string;
+  source: "api" | "builtin";
   title: string;
   description: string;
-  type: 'article' | 'video' | 'audio' | 'exercise';
+  type: "article" | "video" | "audio" | "exercise";
   category: string;
   duration: string;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  difficulty: "beginner" | "intermediate" | "advanced";
   rating: number;
   views: number;
   thumbnail: string;
   isFavorite: boolean;
   tags: string[];
+  contentUrl?: string | null;
 }
 
 export function Resources() {
-  const [selectedType, setSelectedType] = useState<string>('all');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [resourcesData, setResourcesData] = useState<Resource[]>([
-    {
-      id: '1',
-      title: 'Understanding Anxiety: A Complete Guide',
-      description: 'Learn about the science behind anxiety, common triggers, and evidence-based strategies to manage it effectively.',
-      type: 'article',
-      category: 'Anxiety Management',
-      duration: '15 min read',
-      difficulty: 'beginner',
-      rating: 4.8,
-      views: 2456,
-      thumbnail: '📚',
-      isFavorite: true,
-      tags: ['anxiety', 'mental-health', 'coping-strategies']
-    },
-    {
-      id: '2',
-      title: 'Guided Meditation for Better Sleep',
-      description: 'A calming 20-minute guided meditation designed to help you relax and prepare for restful sleep.',
-      type: 'audio',
-      category: 'Sleep Health',
-      duration: '20 min',
-      difficulty: 'beginner',
-      rating: 4.9,
-      views: 3821,
-      thumbnail: '🎧',
-      isFavorite: true,
-      tags: ['meditation', 'sleep', 'relaxation']
-    },
-    {
-      id: '3',
-      title: 'Progressive Muscle Relaxation Technique',
-      description: 'Learn and practice the progressive muscle relaxation technique to reduce physical tension and stress.',
-      type: 'video',
-      category: 'Stress Management',
-      duration: '12 min',
-      difficulty: 'beginner',
-      rating: 4.7,
-      views: 1543,
-      thumbnail: '🎥',
-      isFavorite: false,
-      tags: ['stress-relief', 'relaxation', 'physical-wellness']
-    },
-    {
-      id: '4',
-      title: '5-4-3-2-1 Grounding Exercise',
-      description: 'A quick and effective grounding technique to help manage anxiety and bring you back to the present moment.',
-      type: 'exercise',
-      category: 'Anxiety Management',
-      duration: '5 min',
-      difficulty: 'beginner',
-      rating: 4.9,
-      views: 4123,
-      thumbnail: '🧘',
-      isFavorite: true,
-      tags: ['grounding', 'anxiety-relief', 'mindfulness']
-    },
-    {
-      id: '5',
-      title: 'Building Emotional Resilience',
-      description: 'Explore strategies to develop emotional resilience and bounce back stronger from life\'s challenges.',
-      type: 'article',
-      category: 'Self-Care',
-      duration: '10 min read',
-      difficulty: 'intermediate',
-      rating: 4.6,
-      views: 1876,
-      thumbnail: '📖',
-      isFavorite: false,
-      tags: ['resilience', 'personal-growth', 'emotional-health']
-    },
-    {
-      id: '6',
-      title: 'Box Breathing for Calm',
-      description: 'Master the box breathing technique used by Navy SEALs to achieve instant calm and focus.',
-      type: 'exercise',
-      category: 'Relaxation',
-      duration: '3 min',
-      difficulty: 'beginner',
-      rating: 4.8,
-      views: 5234,
-      thumbnail: '💨',
-      isFavorite: true,
-      tags: ['breathing', 'calm', 'focus']
-    },
-    {
-      id: '7',
-      title: 'Understanding Depression: Signs & Support',
-      description: 'Comprehensive video on recognizing depression symptoms and finding appropriate support and treatment.',
-      type: 'video',
-      category: 'Depression Support',
-      duration: '25 min',
-      difficulty: 'intermediate',
-      rating: 4.7,
-      views: 2981,
-      thumbnail: '🎬',
-      isFavorite: false,
-      tags: ['depression', 'mental-health', 'support']
-    },
-    {
-      id: '8',
-      title: 'Nature Sounds for Relaxation',
-      description: 'Immerse yourself in calming nature sounds - perfect for meditation, work, or sleep.',
-      type: 'audio',
-      category: 'Relaxation',
-      duration: '60 min',
-      difficulty: 'beginner',
-      rating: 4.9,
-      views: 6543,
-      thumbnail: '🌿',
-      isFavorite: true,
-      tags: ['nature', 'ambient', 'relaxation']
-    }
-  ]);
-
-  const types = [
-    { id: 'all', label: 'All Resources', icon: BookOpen },
-    { id: 'article', label: 'Articles', icon: FileText },
-    { id: 'video', label: 'Videos', icon: Video },
-    { id: 'audio', label: 'Audio', icon: Headphones },
-    { id: 'exercise', label: 'Exercises', icon: Award }
-  ];
-
-  const categories = ['All Categories', ...WELLNESS_TOOL_CATEGORIES];
-
-  const stats = {
-    totalResources: 156,
-    favorites: 12,
-    completed: 34,
-    hoursSpent: 45
-  };
-
-  const filteredResources = resourcesData.filter(resource => {
-    const matchesType = selectedType === 'all' || resource.type === selectedType;
-    const matchesCategory = selectedCategory === 'all' || selectedCategory === 'All Categories' || resource.category === selectedCategory;
-    const matchesSearch = searchQuery === '' || 
-      resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      resource.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      resource.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
-    
-    return matchesType && matchesCategory && matchesSearch;
+  const [selectedType, setSelectedType] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [resourcesData, setResourcesData] = useState<Resource[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalResources: 0,
+    favorites: 0,
+    completed: 0,
+    hoursSpent: 0,
   });
 
+  const mapBuiltinType = (category: string): Resource["type"] => {
+    if (category === "Exercise") return "exercise";
+    if (category === "Sleep Health" || category === "Relaxation") return "audio";
+    return "article";
+  };
+
+  const mapApiType = (category: string): Resource["type"] => {
+    if (category === "Exercise") return "exercise";
+    if (category === "Sleep Health" || category === "Relaxation") return "audio";
+    return "article";
+  };
+
+  useEffect(() => {
+    const loadResources = async () => {
+      try {
+        setLoading(true);
+        const [toolsRes, progressRes, statsRes] = await Promise.all([
+          api.wellness.getAll(),
+          api.wellness.getProgress(),
+          api.wellness.getStats(),
+        ]);
+
+        const toolList = Array.isArray(toolsRes) ? toolsRes : [];
+        const publishedTools = toolList.filter((t: any) => !t.status || t.status === "published");
+
+        const builtins: Resource[] = WELLNESS_BUILTIN_TOOLS_ADMIN.map((t) => ({
+          id: `builtin:${t.id}`,
+          source: "builtin",
+          title: t.title,
+          description: t.description,
+          type: mapBuiltinType(t.category),
+          category: t.category,
+          duration: t.duration,
+          difficulty: "beginner",
+          rating: 0,
+          views: 0,
+          thumbnail: "🧠",
+          isFavorite: false,
+          tags: [t.category],
+          contentUrl: null,
+        }));
+
+        const apiItems: Resource[] = publishedTools.map((t: any) => ({
+          id: t.id,
+          source: "api",
+          title: t.title || "Untitled",
+          description: t.description || "Wellness content",
+          type: mapApiType(t.category || ""),
+          category: t.category || "General",
+          duration:
+            typeof t.duration_seconds === "number" && t.duration_seconds > 0
+              ? `${Math.max(1, Math.round(t.duration_seconds / 60))} min`
+              : t.duration_minutes
+                ? `${t.duration_minutes} min`
+                : "—",
+          difficulty:
+            String(t.difficulty || "Beginner").toLowerCase() === "advanced"
+              ? "advanced"
+              : String(t.difficulty || "Beginner").toLowerCase() === "intermediate"
+                ? "intermediate"
+                : "beginner",
+          rating: Number(t.rating) || 0,
+          views: Number(t.usage_count) || 0,
+          thumbnail: "📘",
+          isFavorite: Boolean(t.is_favorite),
+          tags: [t.category].filter(Boolean),
+          contentUrl: t.content_url || null,
+        }));
+
+        const merged = mergeApiBuiltinsForAdmin(builtins, apiItems);
+        setResourcesData(merged);
+
+        const progressList = Array.isArray(progressRes) ? progressRes : [];
+        const apiStats = (statsRes || {}) as Record<string, unknown>;
+        setStats({
+          totalResources: merged.length,
+          favorites: merged.filter((r) => r.isFavorite).length,
+          completed: progressList.length,
+          hoursSpent: Math.max(
+            0,
+            Math.round((Number(apiStats.totalDurationSeconds || 0) / 3600) * 10) / 10
+          ),
+        });
+      } catch (error) {
+        console.error(error);
+        toast.error("Failed to load resources");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadResources();
+  }, []);
+
+  const types = [
+    { id: "all", label: "All Resources", icon: BookOpen },
+    { id: "article", label: "Articles", icon: FileText },
+    { id: "video", label: "Videos", icon: Video },
+    { id: "audio", label: "Audio", icon: Headphones },
+    { id: "exercise", label: "Exercises", icon: Award },
+  ];
+
+  const categories = ["All Categories", ...WELLNESS_TOOL_CATEGORIES];
+
+  const filteredResources = useMemo(
+    () =>
+      resourcesData.filter((resource) => {
+        const matchesType = selectedType === "all" || resource.type === selectedType;
+        const matchesCategory =
+          selectedCategory === "all" ||
+          selectedCategory === "All Categories" ||
+          resource.category === selectedCategory;
+        const matchesSearch =
+          searchQuery === "" ||
+          resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          resource.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          resource.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+
+        return matchesType && matchesCategory && matchesSearch;
+      }),
+    [resourcesData, searchQuery, selectedCategory, selectedType]
+  );
+
   const getTypeIcon = (type: string) => {
-    const icons = {
+    const icons: Record<string, any> = {
       article: FileText,
       video: Video,
       audio: Headphones,
-      exercise: Award
+      exercise: Award,
     };
     return icons[type as keyof typeof icons] || BookOpen;
   };
 
   const getDifficultyColor = (difficulty: string) => {
     const colors = {
-      beginner: 'text-green-700 bg-green-100',
-      intermediate: 'text-yellow-700 bg-yellow-100',
-      advanced: 'text-red-700 bg-red-100'
+      beginner: "text-green-700 bg-green-100",
+      intermediate: "text-yellow-700 bg-yellow-100",
+      advanced: "text-red-700 bg-red-100",
     };
     return colors[difficulty as keyof typeof colors] || colors.beginner;
   };
 
-  const handleToggleFavorite = (resourceId: string) => {
-    setResourcesData(resourcesData.map(resource => {
-      if (resource.id === resourceId) {
-        return {
-          ...resource,
-          isFavorite: !resource.isFavorite
-        };
-      }
-      return resource;
-    }));
+  const handleToggleFavorite = async (resource: Resource) => {
+    if (resource.source !== "api") {
+      toast.info("Built-in resources are always available");
+      return;
+    }
+    try {
+      await api.wellness.toggleFavorite(resource.id);
+      setResourcesData((prev) =>
+        prev.map((r) => (r.id === resource.id ? { ...r, isFavorite: !r.isFavorite } : r))
+      );
+    } catch {
+      toast.error("Failed to update favorite");
+    }
   };
 
-  const handleStartResource = (resource: Resource) => {
-    alert(`Starting: ${resource.title}\n\nThis will open the ${resource.type} player.`);
+  const handleStartResource = async (resource: Resource) => {
+    if (resource.source === "api") {
+      try {
+        await api.wellness.startSession(resource.id);
+      } catch {
+        toast.error("Could not start session");
+      }
+    }
+    if (resource.contentUrl) {
+      window.open(resource.contentUrl, "_blank", "noopener,noreferrer");
+    } else {
+      toast.success(`Started: ${resource.title}`);
+    }
   };
 
   const handleBookmarkResource = (resource: Resource) => {
-    alert(`Bookmarked: ${resource.title}\n\nThis resource has been saved to your bookmarks!`);
+    void handleToggleFavorite(resource);
   };
 
   const handleDownloadResource = (resource: Resource) => {
-    alert(`Downloading: ${resource.title}\n\nThis ${resource.type} will be downloaded for offline access.`);
+    if (resource.contentUrl) {
+      window.open(resource.contentUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    toast.info("Download is available for linked resources only");
   };
 
   return (
     <AppLayout>
       <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header */}
+          {loading && (
+            <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading resources...
+            </div>
+          )}
+
           <div className="mb-8">
             <Link 
               to="/app/settings" 
@@ -355,7 +390,7 @@ export function Resources() {
                               ? 'bg-red-500 text-white'
                               : 'bg-white/80 dark:bg-slate-900/80 text-gray-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900 hover:text-red-500'
                           }`}
-                          onClick={() => handleToggleFavorite(resource.id)}
+                          onClick={() => void handleToggleFavorite(resource)}
                         >
                           <Heart className="w-5 h-5" fill={resource.isFavorite ? 'currentColor' : 'none'} />
                         </motion.button>

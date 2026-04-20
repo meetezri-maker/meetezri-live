@@ -4,6 +4,8 @@ import { motion } from "motion/react";
 import { ArrowLeft } from "lucide-react";
 import { AppLayout } from "@/app/components/AppLayout";
 import { cn } from "@/app/components/ui/utils";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { api } from "@/lib/api";
 import { AtmosphereHero } from "./AtmosphereHero";
 import { ReflectionStrip } from "./ReflectionStrip";
 import { TuneMindPanel } from "./TuneMindPanel";
@@ -27,6 +29,9 @@ type PersistedExperience = {
   signatureVariant: SignatureVariant;
   dismissed: string[];
   deepMode: boolean;
+};
+type BrainHealthRemoteSettings = PersistedExperience & {
+  updatedAt?: string;
 };
 
 type InteractionMetrics = {
@@ -63,6 +68,7 @@ const SLOW_GAP_MS = 2500;
 
 /** Brain State Engine: local-only behavior, no API. */
 export function BrainHealthPage() {
+  const { profile } = useAuth();
   const reducedMotion = usePrefersReducedMotion();
   const tuneRef = useRef<HTMLDivElement>(null);
   const signatureRef = useRef<HTMLDivElement>(null);
@@ -87,6 +93,7 @@ export function BrainHealthPage() {
   const [scrollOverlay, setScrollOverlay] = useState(false);
   const [reflectionActivityPaused, setReflectionActivityPaused] = useState(false);
   const [returnLaterState, setReturnLaterState] = useState(false);
+  const [remoteHydrated, setRemoteHydrated] = useState(false);
 
   const lastActivityAt = useRef<number>(Date.now());
   const burstTimes = useRef<number[]>([]);
@@ -97,6 +104,7 @@ export function BrainHealthPage() {
   const tuneHelperTimer = useRef<number | null>(null);
   const tuneScaleTimer = useRef<number | null>(null);
   const returnLaterTimer = useRef<number | null>(null);
+  const profileSaveTimer = useRef<number | null>(null);
 
   const reflectionPaused = userPausedReflection || reflectionActivityPaused;
 
@@ -109,6 +117,19 @@ export function BrainHealthPage() {
     if (typeof p.deepMode === "boolean") setDeepModeActive(p.deepMode);
     setStorageReady(true);
   }, []);
+
+  useEffect(() => {
+    if (remoteHydrated || !profile) return;
+    const remote = profile.brain_health_settings as BrainHealthRemoteSettings | undefined;
+    if (remote && typeof remote === "object") {
+      if (remote.tune) setBrainState(remote.tune);
+      if (typeof remote.reflectionIndex === "number") setActiveReflectionIndex(remote.reflectionIndex);
+      if (remote.signatureVariant) setSignatureVariant(remote.signatureVariant);
+      if (Array.isArray(remote.dismissed)) setDismissedThoughtBubbles(new Set(remote.dismissed));
+      if (typeof remote.deepMode === "boolean") setDeepModeActive(remote.deepMode);
+    }
+    setRemoteHydrated(true);
+  }, [profile, remoteHydrated]);
 
   const persist = useCallback(() => {
     savePersisted({
@@ -124,6 +145,33 @@ export function BrainHealthPage() {
     if (!storageReady) return;
     persist();
   }, [storageReady, persist]);
+
+  useEffect(() => {
+    if (!storageReady || !profile) return;
+    if (profileSaveTimer.current) window.clearTimeout(profileSaveTimer.current);
+    profileSaveTimer.current = window.setTimeout(() => {
+      const payload: BrainHealthRemoteSettings = {
+        tune: brainState,
+        reflectionIndex: activeReflectionIndex,
+        signatureVariant,
+        dismissed: [...dismissedThoughtBubbles],
+        deepMode: deepModeActive,
+        updatedAt: new Date().toISOString(),
+      };
+      void api.updateProfile({ brain_health_settings: payload }).catch((error) => {
+        console.error("Failed to sync brain health settings:", error);
+      });
+      profileSaveTimer.current = null;
+    }, 900);
+  }, [
+    activeReflectionIndex,
+    brainState,
+    deepModeActive,
+    dismissedThoughtBubbles,
+    profile,
+    signatureVariant,
+    storageReady,
+  ]);
 
   const scheduleReflectionResume = useCallback(() => {
     if (reflectionResumeTimer.current) window.clearTimeout(reflectionResumeTimer.current);
@@ -324,6 +372,7 @@ export function BrainHealthPage() {
       if (tuneHelperTimer.current) window.clearTimeout(tuneHelperTimer.current);
       if (tuneScaleTimer.current) window.clearTimeout(tuneScaleTimer.current);
       if (returnLaterTimer.current) window.clearTimeout(returnLaterTimer.current);
+      if (profileSaveTimer.current) window.clearTimeout(profileSaveTimer.current);
     };
   }, []);
 
