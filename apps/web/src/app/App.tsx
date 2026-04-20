@@ -54,6 +54,8 @@ import { MemberProfileView } from '@/app/pages/app/MemberProfileView';
 import { SessionLobby } from '@/app/pages/app/SessionLobby';
 import { ActiveSession } from '@/app/pages/app/ActiveSession';
 import { Billing } from '@/app/pages/app/Billing';
+// import { SleepTracker } from '@/app/pages/app/SleepTracker';
+// import { HabitTracker } from '@/app/pages/app/HabitTracker';
 
 // Admin Pages
 import { SuperAdminDashboard } from '@/app/pages/admin/SuperAdminDashboard';
@@ -80,6 +82,7 @@ import { RetentionMetrics } from '@/app/pages/admin/RetentionMetrics';
 import { FeatureAdoption } from '@/app/pages/admin/FeatureAdoption';
 import { OnboardingAnalytics } from '@/app/pages/admin/OnboardingAnalytics';
 import { ReportsAnalytics } from '@/app/pages/admin/ReportsAnalytics';
+import { AvatarSelectionAnalytics } from '@/app/pages/admin/AvatarSelectionAnalytics';
 import { ContentManagement } from '@/app/pages/admin/ContentManagement';
 import { WellnessToolsCMS } from '@/app/pages/admin/WellnessToolsCMS';
 import { WellnessContentCMS } from '@/app/pages/admin/WellnessContentCMS';
@@ -404,6 +407,8 @@ export default function App() {
             <Route path="/app/user-profile" element={<UserProfile />} />
             {/* <Route path="/app/settings/community" element={<Community />} /> */}
             <Route path="/app/billing" element={<Billing />} />
+            {/* <Route path="/app/sleep-tracker" element={<SleepTracker />} />
+            <Route path="/app/habit-tracker" element={<HabitTracker />} /> */}
             <Route path="/app/settings/notifications" element={<Notifications />} />
             
             <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />
@@ -452,6 +457,7 @@ export default function App() {
             <Route path="/admin/feature-adoption" element={<FeatureAdoption />} />
             <Route path="/admin/onboarding-analytics" element={<OnboardingAnalytics />} />
             <Route path="/admin/reports-analytics" element={<ReportsAnalytics />} />
+            <Route path="/admin/avatar-selection-analytics" element={<AvatarSelectionAnalytics />} />
 
             {/* Content */}
             <Route path="/admin/content-management" element={<ContentManagement />} />

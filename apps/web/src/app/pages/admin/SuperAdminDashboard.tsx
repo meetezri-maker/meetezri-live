@@ -294,10 +294,15 @@ function formatPctSigned(n: number) {
 
 const CHART_TOOLTIP_STYLE = {
   backgroundColor: "rgba(255, 255, 255, 0.97)",
-  border: "1px solid #e5e7eb",
-  borderRadius: "12px",
-  boxShadow: "0 10px 40px rgba(15, 23, 42, 0.08)",
+  border: "1px solid rgba(167, 139, 250, 0.28)",
+  borderRadius: "14px",
+  boxShadow: "0 16px 45px rgba(67, 56, 202, 0.16)",
+  backdropFilter: "blur(6px)",
 };
+
+const CHART_GRID_COLOR = "#e8e8ed";
+const CHART_AXIS_COLOR = "#e2e8f0";
+const CHART_TICK_STYLE = { fill: "#64748b", fontSize: 12 };
 
 function buildActivityFeedFromRecent(recent: any) {
   const feed: {
@@ -596,6 +601,9 @@ export function SuperAdminDashboard() {
   const platformDistribution = stats?.platformDistribution || [];
   const systemHealth = stats?.systemHealth || [];
   const mockedSections: string[] = stats?.mockedSections || [];
+  const showOrgGrowthSeries = userGrowthData.some(
+    (point: { orgs?: number }) => Number(point?.orgs ?? 0) > 0
+  );
 
   const mrrDisplay = kpi != null ? kpi.subscriptionMrrApprox : Number(revenue);
   const payThisMonthUsd = (kpi?.paymentVolumeThisMonthCents ?? 0) / 100;
@@ -909,7 +917,7 @@ export function SuperAdminDashboard() {
                               : undefined
                           }
                           onSelect={(range) => {
-                            const next = range ?? {};
+                            const next: { from?: Date; to?: Date } = range ?? {};
                             setOpenRangeDraft(next);
                             if (next.from && next.to) {
                               let from = formatYmdLocal(next.from);
@@ -1053,7 +1061,7 @@ export function SuperAdminDashboard() {
             transition={{ delay: 0.4 }}
             className="lg:col-span-2"
           >
-            <Card className="p-6">
+            <Card className="p-6 bg-gradient-to-br from-white via-purple-50/40 to-indigo-50/30 border-purple-100/70 shadow-sm">
               <div className="mb-6">
                 <div>
                   <h2 className="font-bold text-xl flex items-center gap-2">
@@ -1070,32 +1078,49 @@ export function SuperAdminDashboard() {
                   }
                 >
                   <ResponsiveContainer width="100%" height={300}>
-                    <ComposedChart data={userGrowthData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <ComposedChart data={userGrowthData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.45} />
                           <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.02} />
                         </linearGradient>
+                        <linearGradient id="colorOrgs" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.22} />
+                          <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.03} />
+                        </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="4 8" stroke="#e8e8ed" vertical={false} />
+                      <CartesianGrid strokeDasharray="4 8" stroke={CHART_GRID_COLOR} vertical={false} />
                       <XAxis
                         dataKey="month"
-                        tick={{ fill: "#64748b", fontSize: 12 }}
+                        tick={CHART_TICK_STYLE}
                         tickLine={false}
-                        axisLine={{ stroke: "#e2e8f0" }}
+                        axisLine={{ stroke: CHART_AXIS_COLOR }}
                       />
                       <YAxis
-                        tick={{ fill: "#64748b", fontSize: 12 }}
+                        tick={CHART_TICK_STYLE}
                         tickLine={false}
-                        axisLine={{ stroke: "#e2e8f0" }}
+                        axisLine={{ stroke: CHART_AXIS_COLOR }}
                         width={44}
                       />
                       <Tooltip
                         contentStyle={CHART_TOOLTIP_STYLE}
-                        formatter={(v: number) => [Number(v).toLocaleString(), "Users"]}
+                        formatter={(v: number, name: string) => {
+                          if (name === "Total Users") return [Number(v).toLocaleString(), name];
+                          return [Number(v).toLocaleString(), "Organizations"];
+                        }}
                         labelStyle={{ fontWeight: 600 }}
                       />
-                      <Legend wrapperStyle={{ paddingTop: 12 }} />
+                      <Legend wrapperStyle={{ paddingTop: 12, color: "#475569" }} />
+                      {showOrgGrowthSeries && (
+                        <Area
+                          type="monotone"
+                          dataKey="orgs"
+                          stroke="none"
+                          fill="url(#colorOrgs)"
+                          legendType="none"
+                          isAnimationActive={!chartsLoading}
+                        />
+                      )}
                       <Area
                         type="monotone"
                         dataKey="users"
@@ -1108,12 +1133,25 @@ export function SuperAdminDashboard() {
                         type="monotone"
                         dataKey="users"
                         stroke="#7c3aed"
-                        strokeWidth={2.5}
+                        strokeWidth={2.8}
                         dot={{ fill: "#7c3aed", strokeWidth: 2, stroke: "#fff", r: 4 }}
-                        activeDot={{ r: 6 }}
+                        activeDot={{ r: 7, strokeWidth: 2, stroke: "#ddd6fe" }}
                         name="Total Users"
                         isAnimationActive={!chartsLoading}
                       />
+                      {showOrgGrowthSeries && (
+                        <Line
+                          type="monotone"
+                          dataKey="orgs"
+                          stroke="#0891b2"
+                          strokeWidth={2.2}
+                          strokeDasharray="5 5"
+                          dot={{ fill: "#0891b2", strokeWidth: 2, stroke: "#fff", r: 3 }}
+                          activeDot={{ r: 6, strokeWidth: 2, stroke: "#bae6fd" }}
+                          name="Organizations"
+                          isAnimationActive={!chartsLoading}
+                        />
+                      )}
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -1134,7 +1172,7 @@ export function SuperAdminDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
           >
-            <Card className="p-6">
+            <Card className="p-6 bg-gradient-to-br from-white via-cyan-50/40 to-sky-50/30 border-cyan-100/60 shadow-sm">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2">
                   <Server className="w-5 h-5 text-green-500" />
@@ -1253,24 +1291,25 @@ export function SuperAdminDashboard() {
                   }
                 >
                   <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={sessionData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <BarChart data={sessionData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="barSessions" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#22d3ee" stopOpacity={1} />
-                          <stop offset="100%" stopColor="#0891b2" stopOpacity={0.95} />
+                          <stop offset="0%" stopColor="#67e8f9" stopOpacity={1} />
+                          <stop offset="65%" stopColor="#06b6d4" stopOpacity={0.96} />
+                          <stop offset="100%" stopColor="#0e7490" stopOpacity={0.92} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="4 8" stroke="#e8e8ed" vertical={false} />
+                      <CartesianGrid strokeDasharray="4 8" stroke={CHART_GRID_COLOR} vertical={false} />
                       <XAxis
                         dataKey="day"
-                        tick={{ fill: "#64748b", fontSize: 12 }}
+                        tick={CHART_TICK_STYLE}
                         tickLine={false}
-                        axisLine={{ stroke: "#e2e8f0" }}
+                        axisLine={{ stroke: CHART_AXIS_COLOR }}
                       />
                       <YAxis
-                        tick={{ fill: "#64748b", fontSize: 12 }}
+                        tick={CHART_TICK_STYLE}
                         tickLine={false}
-                        axisLine={{ stroke: "#e2e8f0" }}
+                        axisLine={{ stroke: CHART_AXIS_COLOR }}
                         width={36}
                         allowDecimals={false}
                       />
@@ -1281,10 +1320,17 @@ export function SuperAdminDashboard() {
                       <Bar
                         dataKey="sessions"
                         fill="url(#barSessions)"
-                        radius={[10, 10, 0, 0]}
-                        maxBarSize={48}
+                        radius={[12, 12, 4, 4]}
+                        maxBarSize={46}
                         isAnimationActive={!chartsLoading}
-                      />
+                      >
+                        {sessionData.map((_: any, index: number) => (
+                          <Cell
+                            key={`session-cell-${index}`}
+                            fillOpacity={Math.max(0.58, 1 - index * 0.03)}
+                          />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -1305,7 +1351,7 @@ export function SuperAdminDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.7 }}
           >
-            <Card className="p-6">
+            <Card className="p-6 bg-gradient-to-br from-white via-emerald-50/35 to-green-50/30 border-emerald-100/60 shadow-sm">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="font-bold text-xl flex items-center gap-2">
@@ -1322,24 +1368,25 @@ export function SuperAdminDashboard() {
                   }
                 >
                   <ResponsiveContainer width="100%" height={280}>
-                    <ComposedChart data={revenueData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <ComposedChart data={revenueData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                          <stop offset="0%" stopColor="#34d399" stopOpacity={0.45} />
+                          <stop offset="70%" stopColor="#10b981" stopOpacity={0.12} />
+                          <stop offset="100%" stopColor="#10b981" stopOpacity={0.03} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="4 8" stroke="#e8e8ed" vertical={false} />
+                      <CartesianGrid strokeDasharray="4 8" stroke={CHART_GRID_COLOR} vertical={false} />
                       <XAxis
                         dataKey="month"
-                        tick={{ fill: "#64748b", fontSize: 12 }}
+                        tick={CHART_TICK_STYLE}
                         tickLine={false}
-                        axisLine={{ stroke: "#e2e8f0" }}
+                        axisLine={{ stroke: CHART_AXIS_COLOR }}
                       />
                       <YAxis
-                        tick={{ fill: "#64748b", fontSize: 12 }}
+                        tick={CHART_TICK_STYLE}
                         tickLine={false}
-                        axisLine={{ stroke: "#e2e8f0" }}
+                        axisLine={{ stroke: CHART_AXIS_COLOR }}
                         width={44}
                         tickFormatter={(v) => `$${v}`}
                       />
@@ -1348,7 +1395,7 @@ export function SuperAdminDashboard() {
                         formatter={(v: number) => [formatUsd(Number(v)), "Revenue"]}
                         labelStyle={{ fontWeight: 600 }}
                       />
-                      <Legend />
+                      <Legend wrapperStyle={{ color: "#475569" }} />
                       <Area
                         type="monotone"
                         dataKey="revenue"
@@ -1361,9 +1408,9 @@ export function SuperAdminDashboard() {
                         type="monotone"
                         dataKey="revenue"
                         stroke="#059669"
-                        strokeWidth={2.5}
+                        strokeWidth={2.8}
                         dot={{ fill: "#059669", strokeWidth: 2, stroke: "#fff", r: 4 }}
-                        activeDot={{ r: 6 }}
+                        activeDot={{ r: 7, strokeWidth: 2, stroke: "#bbf7d0" }}
                         name="Revenue"
                         isAnimationActive={!chartsLoading}
                       />
@@ -1389,7 +1436,7 @@ export function SuperAdminDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8 }}
           >
-            <Card className="p-6">
+            <Card className="p-6 bg-gradient-to-br from-white via-blue-50/45 to-indigo-50/35 border-blue-100/70 shadow-sm">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2">
                   <Activity className="w-5 h-5 text-orange-500" />
@@ -1503,29 +1550,48 @@ export function SuperAdminDashboard() {
                     <Globe className="w-5 h-5 text-blue-500" />
                     Avatar selection
                   </h2>
-                  <p className="text-sm text-muted-foreground mt-1">
+                  {/* <p className="text-sm text-muted-foreground mt-1">
                     Uses the companion saved on the profile when present; otherwise the avatar from the user&apos;s
                     most recent session. Labels match Session Lobby: Alex Rivera, Maya Chen, Jordan Taylor, and Sara
                     Mitchell.
-                  </p>
+                  </p> */}
                 </div>
+                <Link to="/admin/avatar-selection-analytics">
+                  <Button variant="ghost" size="sm" type="button">
+                    View details
+                  </Button>
+                </Link>
               </div>
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
+                  <defs>
+                    <filter id="pieGlow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#1e3a8a" floodOpacity="0.12" />
+                    </filter>
+                  </defs>
                   <Pie
                     data={platformDistribution}
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
+                    innerRadius={56}
+                    outerRadius={86}
+                    paddingAngle={3}
+                    cornerRadius={8}
+                    labelLine={false}
+                    label={({ value }) => `${value}%`}
                     dataKey="value"
+                    isAnimationActive={!chartsLoading}
+                    filter="url(#pieGlow)"
                   >
                     {platformDistribution.map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip
+                    contentStyle={CHART_TOOLTIP_STYLE}
+                    formatter={(v: number, _name: string, p: any) => [String(v) + "%", p?.payload?.name || "Share"]}
+                    labelFormatter={() => "Avatar Distribution"}
+                  />
                 </PieChart>
               </ResponsiveContainer>
               <div className="mt-4 space-y-2">

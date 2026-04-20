@@ -19,6 +19,8 @@ export function UserDetailsEnhanced() {
   const [userData, setUserData] = useState<any>(null);
   const [activityTimeline, setActivityTimeline] = useState<any[]>([]);
   const [recentSessions, setRecentSessions] = useState<any[]>([]);
+  const [sleepEntries, setSleepEntries] = useState<any[]>([]);
+  const [habitEntries, setHabitEntries] = useState<any[]>([]);
   const [securityLogs, setSecurityLogs] = useState<any[]>([]);
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
@@ -87,6 +89,8 @@ export function UserDetailsEnhanced() {
         
         setUserData(processedUser);
         setRecentSessions(sessions);
+        setSleepEntries(Array.isArray(sleep) ? sleep : []);
+        setHabitEntries(Array.isArray(habits) ? habits : []);
         setSecurityLogs(auditLogs);
         
         // Build timeline
@@ -637,39 +641,93 @@ export function UserDetailsEnhanced() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
             >
-              <Card className="p-6">
-                <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-primary" />
-                  Activity Timeline
-                </h2>
-                <div className="space-y-4">
-                  {activityTimeline.length > 0 ? activityTimeline.map((activity, index) => (
-                    <motion.div
-                      key={activity.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="flex gap-4 relative"
-                    >
-                      {index !== activityTimeline.length - 1 && (
-                        <div className="absolute left-5 top-12 bottom-0 w-0.5 bg-gray-200" />
-                      )}
-                      <div className={`w-10 h-10 rounded-full ${activity.bg} flex items-center justify-center flex-shrink-0 relative z-10`}>
-                        <activity.icon className={`w-5 h-5 ${activity.color}`} />
-                      </div>
-                      <div className="flex-1 pb-6">
-                        <div className="flex items-start justify-between mb-1">
-                          <p className="font-medium">{activity.title}</p>
-                          <span className="text-xs text-muted-foreground">{activity.time}</span>
+              <div className="space-y-6">
+                <Card className="p-6">
+                  <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-primary" />
+                    Activity Timeline
+                  </h2>
+                  <div className="space-y-4">
+                    {activityTimeline.length > 0 ? activityTimeline.map((activity, index) => (
+                      <motion.div
+                        key={activity.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className="flex gap-4 relative"
+                      >
+                        {index !== activityTimeline.length - 1 && (
+                          <div className="absolute left-5 top-12 bottom-0 w-0.5 bg-gray-200" />
+                        )}
+                        <div className={`w-10 h-10 rounded-full ${activity.bg} flex items-center justify-center flex-shrink-0 relative z-10`}>
+                          <activity.icon className={`w-5 h-5 ${activity.color}`} />
                         </div>
-                        <p className="text-sm text-muted-foreground">{activity.description}</p>
-                      </div>
-                    </motion.div>
-                  )) : (
-                    <div className="text-center py-8 text-muted-foreground">No recent activity</div>
-                  )}
+                        <div className="flex-1 pb-6">
+                          <div className="flex items-start justify-between mb-1">
+                            <p className="font-medium">{activity.title}</p>
+                            <span className="text-xs text-muted-foreground">{activity.time}</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{activity.description}</p>
+                        </div>
+                      </motion.div>
+                    )) : (
+                      <div className="text-center py-8 text-muted-foreground">No recent activity</div>
+                    )}
+                  </div>
+                </Card>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  <Card className="p-6">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <Moon className="w-5 h-5 text-indigo-600" />
+                      Sleep Tracker Data
+                    </h3>
+                    <div className="space-y-3">
+                      {sleepEntries.length > 0 ? (
+                        sleepEntries.slice(0, 8).map((entry) => (
+                          <div key={entry.id} className="rounded-lg border p-3">
+                            <p className="text-sm font-medium">
+                              {entry.created_at ? new Date(entry.created_at).toLocaleDateString() : "Unknown date"}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Bed: {entry.bed_time ? new Date(entry.bed_time).toLocaleTimeString() : "N/A"} | Wake: {entry.wake_time ? new Date(entry.wake_time).toLocaleTimeString() : "N/A"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Quality: {entry.quality_rating ?? "N/A"} | Notes: {entry.notes || "None"}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No sleep tracker entries found.</p>
+                      )}
+                    </div>
+                  </Card>
+
+                  <Card className="p-6">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5 text-teal-600" />
+                      Habit Tracker Data
+                    </h3>
+                    <div className="space-y-3">
+                      {habitEntries.length > 0 ? (
+                        habitEntries.slice(0, 8).map((habit) => (
+                          <div key={habit.id} className="rounded-lg border p-3">
+                            <p className="text-sm font-medium">{habit.name || "Untitled habit"}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Category: {habit.category || "General"} | Frequency: {habit.frequency || "daily"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Created: {habit.created_at ? new Date(habit.created_at).toLocaleDateString() : "Unknown"}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No habit tracker entries found.</p>
+                      )}
+                    </div>
+                  </Card>
                 </div>
-              </Card>
+              </div>
             </motion.div>
           )}
 
