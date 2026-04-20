@@ -156,6 +156,7 @@ import { AppearanceSettings } from './pages/app/AppearanceSettings';
 import { ChangeAvatar } from './pages/app/ChangeAvatar';
 import { Achievements } from './pages/app/Achievements';
 import { NotificationHistory } from './pages/app/NotificationHistory';
+import { RecentActivityHistory } from './pages/app/RecentActivityHistory';
 import { GoalsList } from './pages/app/GoalsList';
 import { GoalDetails } from './pages/app/GoalDetails';
 // import { Community } from './pages/app/Community';
@@ -396,6 +397,7 @@ export default function App() {
             <Route path = "/app/settings/goals" element={<GoalsList />} />
             <Route path = "/app/settings/goals/:goalId" element={<GoalDetails />} />
             <Route path = "/app/settings/notification-history" element={<NotificationHistory />} />
+            <Route path="/app/recent-activity-history" element={<RecentActivityHistory />} />
             <Route path="/app/profile/:userId" element={<MemberProfileView />} />
             <Route path="/profile/:userId" element={<MemberProfileView />} />
             <Route path="/app/profile" element={<Navigate to="/app/user-profile" replace />} />

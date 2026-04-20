@@ -666,7 +666,7 @@ export function Dashboard() {
             <Card className="p-6 shadow-xl h-full lg:h-[760px] flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold">Recent Activity</h2>
-                <Link to="/app/mood-history">
+                <Link to="/app/recent-activity-history">
                   <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
