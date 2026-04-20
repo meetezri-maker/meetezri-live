@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, useAnimation, useMotionTemplate, useMotionValue } from 'framer-motion';
+import { motion, useMotionValue } from 'motion/react';
 import { Input } from '@/app/components/ui/input';
 import { Button } from '@/app/components/ui/button';
 import { Send, Sparkles, Heart, Shield, Zap, CheckCircle2, ArrowRight } from 'lucide-react';
