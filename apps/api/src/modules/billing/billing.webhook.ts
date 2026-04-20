@@ -5,6 +5,7 @@ import prisma from '../../lib/prisma';
 import { PLAN_LIMITS, STRIPE_PRICE_IDS } from './billing.constants';
 import { stripeSubscriptionMrrUsd } from './stripe-mrr';
 import { addSubscriptionAllowanceMinutes } from './credit-balance.service';
+import { emailService } from '../email/email.service';
 
 function getStripeWebhookSecret(): string | undefined {
   return process.env.STRIPE_WEBHOOK_SECRET;
@@ -577,6 +578,78 @@ async function handleInvoicePaymentSucceeded(invoice: any, request: FastifyReque
           credits_seconds: existingSeconds + planCredits * 60,
         },
       });
+
+      await sendRenewalConfirmationEmail({
+        userId: existingSub.user_id,
+        planType: String(planType),
+        invoice,
+        subscription,
+        request,
+      });
     }
+  }
+}
+
+async function sendRenewalConfirmationEmail({
+  userId,
+  planType,
+  invoice,
+  subscription,
+  request,
+}: {
+  userId: string;
+  planType: string;
+  invoice: any;
+  subscription: any;
+  request: FastifyRequest;
+}) {
+  try {
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    if (!user?.email) return;
+
+    const amountCents =
+      typeof invoice.amount_paid === 'number'
+        ? invoice.amount_paid
+        : typeof invoice.amount_due === 'number'
+          ? invoice.amount_due
+          : 0;
+    const amountUsd = (amountCents / 100).toFixed(2);
+    const currency = String(invoice.currency || 'usd').toUpperCase();
+    const nextBillingDate = subscription?.current_period_end
+      ? new Date(subscription.current_period_end * 1000).toLocaleDateString('en-US')
+      : 'N/A';
+    const invoiceUrl = invoice.hosted_invoice_url as string | undefined;
+    const billingUrl = `${process.env.CLIENT_URL || 'https://meetezri-live-web.vercel.app'}/app/billing`;
+
+    const subject = 'Your MeetEzri plan has renewed successfully';
+    const html = `
+      <p>Hi there,</p>
+      <p>Your <strong>${planType}</strong> plan has renewed successfully.</p>
+      <p><strong>Amount:</strong> ${currency} ${amountUsd}</p>
+      <p><strong>Next billing date:</strong> ${nextBillingDate}</p>
+      <p>You can review your invoices and plan details in billing.</p>
+      <p>
+        <a href="${billingUrl}" target="_blank" rel="noopener noreferrer">Open Billing</a>
+        ${invoiceUrl ? ` | <a href="${invoiceUrl}" target="_blank" rel="noopener noreferrer">View Invoice</a>` : ''}
+      </p>
+      <p>Thank you for being with MeetEzri.</p>
+    `;
+    const text = [
+      'Your MeetEzri plan has renewed successfully.',
+      `Plan: ${planType}`,
+      `Amount: ${currency} ${amountUsd}`,
+      `Next billing date: ${nextBillingDate}`,
+      `Billing: ${billingUrl}`,
+      invoiceUrl ? `Invoice: ${invoiceUrl}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    await emailService.sendEmail(user.email, subject, html, text);
+  } catch (error: any) {
+    request.log.warn({ error: error?.message || error, userId }, 'Failed to send renewal confirmation email');
   }
 }

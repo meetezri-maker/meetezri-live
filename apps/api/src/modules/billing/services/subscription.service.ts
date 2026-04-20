@@ -242,18 +242,34 @@ export async function updateSubscriptionById(id: string, data: UpdateSubscriptio
 
 export async function cancelSubscription(userId: string) {
   const sub = await prisma.subscriptions.findFirst({
-    where: { user_id: userId, status: 'active' },
+    where: {
+      user_id: userId,
+      status: { in: ['active', 'trialing', 'past_due'] },
+    },
   });
 
   if (!sub) {
     throw new Error('No active subscription found');
   }
 
+  let endDate = new Date();
+  if (sub.stripe_sub_id) {
+    try {
+      const stripeSub = await stripe.subscriptions.update(sub.stripe_sub_id, {
+        cancel_at_period_end: true,
+      });
+      endDate = new Date(stripeSub.current_period_end * 1000);
+    } catch (error) {
+      // Keep local cancellation path so users can still access billing even if Stripe call fails.
+    }
+  }
+
   return prisma.subscriptions.update({
     where: { id: sub.id },
     data: {
       status: 'canceled',
-      end_date: new Date(),
+      end_date: endDate,
+      next_billing_at: endDate,
       updated_at: new Date(),
     },
   });

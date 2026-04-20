@@ -148,6 +148,9 @@ export function Billing() {
   }, [session?.user?.id, checkoutSuccess]);
 
   const currentPlan = SUBSCRIPTION_PLANS[userSubscription.planId];
+  const canCancelSubscription = ['active', 'trialing', 'past_due'].includes(
+    String(userSubscription.status || '').toLowerCase()
+  );
   const PlanIcon =
     userSubscription.planId === 'trial'
       ? Shield
@@ -157,16 +160,33 @@ export function Billing() {
   const usagePercentage = userSubscription.creditsTotal > 0 
     ? ((userSubscription.creditsTotal - userSubscription.creditsRemaining) / userSubscription.creditsTotal) * 100
     : 0;
-  const daysUntilRenewal = Math.ceil((new Date(userSubscription.billingCycle.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+  const billingEndDate = userSubscription.billingCycle.endDate
+    ? new Date(userSubscription.billingCycle.endDate)
+    : null;
+  const billingEndIsValid = !!billingEndDate && !Number.isNaN(billingEndDate.getTime());
+  const daysUntilRenewal = billingEndIsValid
+    ? Math.ceil((billingEndDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+  const normalizedDaysUntilRenewal = daysUntilRenewal == null ? null : Math.max(0, daysUntilRenewal);
+  const renewalStatusLabel =
+    userSubscription.planId === 'trial'
+      ? normalizedDaysUntilRenewal === 0
+        ? 'Expires today'
+        : `Expires in ${normalizedDaysUntilRenewal ?? 0} days`
+      : normalizedDaysUntilRenewal === 0
+        ? 'Renews today'
+        : `Renews in ${normalizedDaysUntilRenewal ?? 0} days`;
   const recentUsageHistory = userSubscription.usageHistory.slice(0, 5);
 
   const [showPAYGModal, setShowPAYGModal] = useState(false);
   const [paygMinutes, setPaygMinutes] = useState(60);
   const [processingAction, setProcessingAction] = useState<string | null>(null);
+  const isActionLocked = processingAction !== null;
 
   const paygCost = currentPlan.payAsYouGoRate ? (currentPlan.payAsYouGoRate * paygMinutes) : 0;
 
   const handleSyncCredits = async () => {
+    if (isActionLocked) return;
     setProcessingAction('sync_credits');
     try {
       const result = await api.billing.syncCredits();
@@ -185,7 +205,7 @@ export function Billing() {
   };
 
   const handleBuyPAYG = async () => {
-    if (paygCost <= 0) return;
+    if (paygCost <= 0 || isActionLocked) return;
     setProcessingAction('buy_credits');
     try {
       const response = await api.billing.buyCredits({
@@ -202,7 +222,7 @@ export function Billing() {
   };
 
   const handleSubscribe = async (planId: PlanTier) => {
-    if (planId === 'trial') return; 
+    if (planId === 'trial' || isActionLocked) return; 
     setProcessingAction(`subscribe_${planId}`);
     try {
       const response = await api.billing.createSubscription({ plan_type: planId });
@@ -217,6 +237,7 @@ export function Billing() {
   };
 
   const handleManageBilling = async () => {
+     if (isActionLocked) return;
      setProcessingAction('manage_billing');
      try {
        const response = await api.billing.createPortalSession();
@@ -231,7 +252,7 @@ export function Billing() {
   };
 
   const handleCancelSubscription = async () => {
-    if (userSubscription.planId === 'trial') return;
+    if (isActionLocked) return;
     const confirmed = window.confirm("Are you sure you want to cancel your subscription? You will keep access until the end of the current billing period.");
     if (!confirmed) return;
     setProcessingAction('cancel_subscription');
@@ -443,7 +464,7 @@ export function Billing() {
                       variant={planId === 'pro' ? 'default' : 'outline'}
                       onClick={() => handleSubscribe(planId)}
                       isLoading={processingAction === `subscribe_${planId}`}
-                      disabled={processingAction !== null}
+                      disabled={isActionLocked}
                     >
                       {ctaLabel}
                       <ChevronRight className="w-4 h-4 ml-1" />
@@ -475,28 +496,26 @@ export function Billing() {
                   <span className="text-muted-foreground">/month</span>
                 </div>
               </div>
-              {userSubscription.planId !== 'trial' && (
-                <div className="flex flex-col gap-2 items-end">
-                  <Button 
-                    onClick={handleManageBilling}
-                    isLoading={processingAction === 'manage_billing'}
-                    disabled={processingAction !== null}
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-                  >
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    Manage Billing
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleCancelSubscription}
-                    isLoading={processingAction === 'cancel_subscription'}
-                    disabled={processingAction !== null}
-                    className="border-red-200 text-red-600 hover:bg-red-400 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/30"
-                  >
-                    Cancel Plan
-                  </Button>
-                </div>
-              )}
+              <div className="flex flex-col gap-2 items-end">
+                <Button
+                  onClick={handleManageBilling}
+                  isLoading={processingAction === 'manage_billing'}
+                  disabled={isActionLocked}
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                >
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Manage Billing
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleCancelSubscription}
+                  isLoading={processingAction === 'cancel_subscription'}
+                  disabled={isActionLocked || !canCancelSubscription}
+                  className="border-red-200 text-red-600 hover:bg-red-400 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/30"
+                >
+                  Cancel Plan
+                </Button>
+              </div>
             </div>
 
             {/* Renewal Info */}
@@ -504,12 +523,11 @@ export function Billing() {
               <Calendar className="w-4 h-4 text-purple-600 dark:text-purple-400" />
               <span className="text-sm">
                 <span className="font-medium">
-                  {userSubscription.planId === 'trial' ? 'Expires in ' : 'Renews in '} 
-                  {daysUntilRenewal} days
+                  {renewalStatusLabel}
                 </span> 
                 <span className="text-muted-foreground"> • 
                   {userSubscription.planId === 'trial' ? ' Expiry: ' : ' Next billing: '}
-                  {userSubscription.billingCycle.endDate ? new Date(userSubscription.billingCycle.endDate).toLocaleDateString() : 'N/A'}
+                  {billingEndIsValid ? billingEndDate!.toLocaleDateString() : 'N/A'}
                 </span>
               </span>
             </div>
@@ -611,7 +629,7 @@ export function Billing() {
                     size="sm"
                     className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={handleSyncCredits}
-                    disabled={processingAction === 'sync_credits'}
+                    disabled={processingAction === 'sync_credits' || isActionLocked}
                     title="Check for missing purchases"
                   >
                     <RefreshCw className={`w-3 h-3 ${processingAction === 'sync_credits' ? 'animate-spin' : ''}`} />
@@ -915,7 +933,7 @@ export function Billing() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => !processingAction && setShowPAYGModal(false)}
+            onClick={() => !isActionLocked && setShowPAYGModal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -942,7 +960,7 @@ export function Billing() {
                     <button
                       key={mins}
                       onClick={() => setPaygMinutes(mins)}
-                      disabled={processingAction !== null}
+                      disabled={isActionLocked}
                       className={`p-3 rounded-xl border-2 transition-all ${
                         paygMinutes === mins
                           ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-100'
@@ -962,7 +980,7 @@ export function Billing() {
                     max="250"
                     step="25"
                     value={paygMinutes}
-                    disabled={processingAction !== null}
+                    disabled={isActionLocked}
                     onChange={(e) => setPaygMinutes(Number(e.target.value))}
                     className="flex-1 accent-green-600 dark:accent-green-500"
                   />
@@ -992,14 +1010,14 @@ export function Billing() {
                   variant="outline"
                   onClick={() => setShowPAYGModal(false)}
                   className="flex-1"
-                  disabled={processingAction !== null}
+                  disabled={isActionLocked}
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={handleBuyPAYG}
                   isLoading={processingAction === 'buy_credits'}
-                  disabled={processingAction !== null}
+                  disabled={isActionLocked}
                   className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
                 >
                   Purchase

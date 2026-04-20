@@ -248,14 +248,7 @@ export function SettingsHub() {
       color: "from-yellow-500 to-amber-600",
       route: "/app/settings/achievements"
     },
-    {
-      id: "goals",
-      title: "Personal Goals",
-      description: "Create, track, and review your personal goals",
-      icon: Target,
-      color: "from-purple-500 to-indigo-600",
-      route: "/app/settings/goals"
-    },
+  
     {
       id: "community",
       title: "Community",

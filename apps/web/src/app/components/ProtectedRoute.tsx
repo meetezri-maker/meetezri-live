@@ -1,6 +1,18 @@
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
+import { api } from '@/lib/api';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/app/components/ui/dialog';
+import { Button } from '@/app/components/ui/button';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -10,7 +22,9 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { user, profile, isLoading, hasRole } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const isOnboardingRoute = location.pathname.startsWith('/onboarding');
+  const [isCancelling, setIsCancelling] = useState(false);
 
   if (isLoading) {
     // Keep onboarding blocked even during initial auth/profile hydration.
@@ -55,6 +69,69 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const onboardingStartRoute =
     signupType === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome';
   const isAppRoute = location.pathname.startsWith('/app');
+  const isPlanPackageExpired =
+    signupType === 'plan' &&
+    (profile?.subscription_plan === 'trial' ||
+      profile?.subscription_status === 'canceled' ||
+      profile?.subscription_status === 'cancelled' ||
+      profile?.subscription_status === 'expired');
+  const allowExpiredPlanRoutes = useMemo(
+    () => new Set(['/app/dashboard', '/app/billing']),
+    []
+  );
+
+  if (
+    isAppRoute &&
+    isPlanPackageExpired &&
+    !allowExpiredPlanRoutes.has(location.pathname)
+  ) {
+    const handleGoToBilling = () => navigate('/app/billing');
+    const handleUnsubscribe = async () => {
+      setIsCancelling(true);
+      try {
+        await api.billing.cancelSubscription();
+        toast.success('Subscription cancelled. Auto-renew has been turned off.');
+      } catch (error: any) {
+        toast.error(error?.message || 'Failed to cancel subscription');
+      } finally {
+        setIsCancelling(false);
+        navigate('/app/billing');
+      }
+    };
+
+    return (
+      <>
+        <div className="min-h-screen bg-background" />
+        <Dialog open>
+          <DialogContent
+            className="sm:max-w-md"
+            onInteractOutside={(event) => event.preventDefault()}
+          >
+            <DialogHeader>
+              <DialogTitle>Your package has ended</DialogTitle>
+              <DialogDescription>
+                This feature is locked until you renew your plan. Go to billing to renew
+                now, or unsubscribe to stop future renewals.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={handleUnsubscribe}
+                isLoading={isCancelling}
+                disabled={isCancelling}
+              >
+                Unsubscribe
+              </Button>
+              <Button onClick={handleGoToBilling} disabled={isCancelling}>
+                Go to Billing
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
 
   // Product rule: authenticated users cannot access onboarding routes directly.
   if (isOnboardingRoute) {

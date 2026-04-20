@@ -397,7 +397,7 @@ export default function App() {
             <Route path = "/app/settings/appearance" element={<AppearanceSettings />} />
             <Route path = "/app/settings/change-avatar" element={<ChangeAvatar />} />
             <Route path = "/app/settings/achievements" element={<Achievements />} />
-            <Route path = "/app/settings/goals" element={<GoalsList />} />
+            {/* <Route path = "/app/settings/goals" element={<GoalsList />} /> */}
             <Route path = "/app/settings/goals/:goalId" element={<GoalDetails />} />
             <Route path = "/app/settings/notification-history" element={<NotificationHistory />} />
             <Route path="/app/recent-activity-history" element={<RecentActivityHistory />} />

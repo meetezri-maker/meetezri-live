@@ -6,6 +6,15 @@ import { Button } from "@/app/components/ui/button";
 import { api } from "@/lib/api";
 import { DEFAULT_AI_COMPANIONS } from "@meetezri/shared";
 import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
   effectiveAvatarImageUrlFromDb,
   tryResolveCompanionPortraitUrl,
 } from "@/lib/avatar/companionModelUrl";
@@ -131,6 +140,39 @@ export function AvatarSelectionAnalytics() {
             </Button>
           </Link>
         </div>
+
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold mb-4">Avatar Usage Graph</h2>
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading usage graph…</p>
+          ) : rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No usage data available for chart.</p>
+          ) : (
+            <div className="h-[320px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 12 }}
+                    interval={0}
+                    angle={-20}
+                    textAnchor="end"
+                    height={56}
+                  />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    formatter={(value: number, key: string) => {
+                      if (key === "usagePercent") return [formatUsagePercent(value), "Usage"];
+                      return [Number(value).toLocaleString(), "Sessions"];
+                    }}
+                  />
+                  <Bar dataKey="usagePercent" name="Usage %" fill="#6366f1" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Card>
 
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-4">Most Used Avatars</h2>

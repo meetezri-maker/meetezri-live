@@ -182,6 +182,8 @@ export function SessionHistory() {
   const [filterFavorites, setFilterFavorites] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"completed" | "upcoming">("completed");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   
   const [completedSessions, setCompletedSessions] = useState<SessionData[]>([]);
   const [upcomingSessions, setUpcomingSessions] = useState<SessionData[]>([]);
@@ -366,6 +368,21 @@ export function SessionHistory() {
       session.topicsDiscussed.some((topic) => topic.toLowerCase().includes(q));
     return matchesFavorite && matchesSearch;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredSessions.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStart = (safeCurrentPage - 1) * pageSize;
+  const paginatedSessions = filteredSessions.slice(pageStart, pageStart + pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, filterFavorites, searchQuery, pageSize]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const gradientStyles: Record<string, string> = {
     "gradient-1": "from-blue-400 to-purple-500",
@@ -585,12 +602,12 @@ export function SessionHistory() {
               )}
             </Card>
           )}
-          {filteredSessions.map((session, index) => (
+          {paginatedSessions.map((session, index) => (
             <motion.div
               key={session.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
+              transition={{ delay: Math.min(index, 4) * 0.06 }}
             >
               {activeTab === "upcoming" ? (
                 <Card className="overflow-hidden border border-primary/15 bg-gradient-to-r from-white to-indigo-50/30 dark:from-gray-900 dark:to-indigo-950/20">
@@ -726,6 +743,53 @@ export function SessionHistory() {
             </motion.div>
           ))}
         </div>
+
+        {filteredSessions.length > 0 && (
+          <div className="mt-6 flex flex-col gap-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <label htmlFor="session-history-page-size" className="text-sm text-muted-foreground">
+                Rows
+              </label>
+              <select
+                id="session-history-page-size"
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm"
+              >
+                {[5, 10, 20, 50].map((size) => (
+                  <option key={size} value={size}>
+                    {size} / page
+                  </option>
+                ))}
+              </select>
+              <span className="text-sm text-muted-foreground">
+                {pageStart + 1}-{Math.min(pageStart + pageSize, filteredSessions.length)} of {filteredSessions.length}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safeCurrentPage <= 1}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Page {safeCurrentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safeCurrentPage >= totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Session Detail Modal */}
         <AnimatePresence>

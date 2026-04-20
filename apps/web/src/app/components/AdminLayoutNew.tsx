@@ -93,6 +93,7 @@ const NAVIGATION: NavSection[] = [
     roles: ["super_admin", "org_admin"],
     pages: [
       { name: "AI Avatar Manager", href: "/admin/ai-avatar-manager", icon: Brain, roles: ["super_admin", "org_admin"] },
+      { name: "Avatar Selection Analytics", href: "/admin/avatar-selection-analytics", icon: BarChart3, roles: ["super_admin", "org_admin"] },
       { name: "Conversation Transcripts", href: "/admin/conversation-transcripts", icon: MessageSquare, roles: ["super_admin", "org_admin", "team_admin"] },
     ],
   },

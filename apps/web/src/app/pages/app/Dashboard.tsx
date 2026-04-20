@@ -37,11 +37,12 @@ interface BackendSession {
 
 export function Dashboard() {
   const location = useLocation();
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [upcomingSessionsCount, setUpcomingSessionsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [confirmEmailDismissed, setConfirmEmailDismissed] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+  const [cancelSubscriptionLoading, setCancelSubscriptionLoading] = useState(false);
   const [activityFeed, setActivityFeed] = useState<
     Array<{ id: string; type: string; text: string; time: string; emoji: string }>
   >([]);
@@ -63,6 +64,11 @@ export function Dashboard() {
   // - show only when email is NOT verified
   const showConfirmEmailPopup =
     signupType === "trial" && isUnverified && !confirmEmailDismissed;
+  const canCancelSubscription =
+    signupType !== "trial" &&
+    ["active", "trialing", "past_due"].includes(
+      String(profile?.subscription_status || "").toLowerCase()
+    );
 
   const moodEmojis: Record<string, string> = {
     "Happy": "😊",
@@ -406,6 +412,25 @@ export function Dashboard() {
     }
   };
 
+  const handleCancelSubscription = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to cancel subscription auto-renew? You will keep access until the current billing period ends."
+    );
+    if (!confirmed) return;
+    setCancelSubscriptionLoading(true);
+    try {
+      await api.billing.cancelSubscription();
+      await refreshProfile();
+      toast.success("Subscription cancelled. Auto-renew has been turned off.");
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Failed to cancel subscription";
+      toast.error(message);
+    } finally {
+      setCancelSubscriptionLoading(false);
+    }
+  };
+
   return (
     <AppLayout>
       {/* Confirm email popup for free trial users who haven't verified yet */}
@@ -593,6 +618,20 @@ export function Dashboard() {
             </motion.div>
           </Link>
         </div>
+
+        {canCancelSubscription && (
+          <div className="mb-8 flex justify-end">
+            <Button
+              variant="outline"
+              onClick={handleCancelSubscription}
+              isLoading={cancelSubscriptionLoading}
+              disabled={cancelSubscriptionLoading}
+              className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              Cancel Subscription
+            </Button>
+          </div>
+        )}
 
         {/* Quick Actions */}
         <motion.div
