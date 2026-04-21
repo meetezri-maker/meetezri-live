@@ -284,6 +284,35 @@ export const api = {
     return handleResponse(res, 'Failed to add comment');
   },
 
+  async getCommunityPostComments(postId: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/posts/${postId}/comments`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+    return handleResponse(res, 'Failed to load comments');
+  },
+
+  async updateCommunityPost(postId: string, content: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/posts/${postId}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ content }),
+    });
+    return handleResponse(res, 'Failed to update post');
+  },
+
+  async deleteCommunityPost(postId: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/posts/${postId}`, {
+      method: 'DELETE',
+      headers,
+    });
+    return handleResponse(res, 'Failed to delete post');
+  },
+
   async getCommunityMemberProfile(userId: string) {
     const headers = await getHeaders();
     const res = await fetch(`${API_URL}/community/members/${encodeURIComponent(userId)}`, {

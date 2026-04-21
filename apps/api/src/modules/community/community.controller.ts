@@ -132,3 +132,46 @@ export async function addCommentHandler(
     return reply.code(code).send({ message: err?.message || 'Failed to add comment' });
   }
 }
+
+export async function getPostCommentsHandler(
+  request: FastifyRequest<{ Params: { postId: string } }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  try {
+    return await communityService.getPostCommentsForUser(user.sub, request.params.postId);
+  } catch (err: any) {
+    const code = err?.statusCode === 404 ? 404 : 500;
+    return reply.code(code).send({ message: err?.message || 'Failed to load comments' });
+  }
+}
+
+export async function updatePostHandler(
+  request: FastifyRequest<{ Params: { postId: string }; Body: { content: string } }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const content = request.body?.content;
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    return reply.code(400).send({ message: 'Content is required' });
+  }
+  try {
+    return await communityService.updateCommunityPost(user.sub, request.params.postId, content);
+  } catch (err: any) {
+    const code = err?.statusCode || 500;
+    return reply.code(code).send({ message: err?.message || 'Failed to update post' });
+  }
+}
+
+export async function deletePostHandler(
+  request: FastifyRequest<{ Params: { postId: string } }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  try {
+    return await communityService.deleteCommunityPost(user.sub, request.params.postId);
+  } catch (err: any) {
+    const code = err?.statusCode || 500;
+    return reply.code(code).send({ message: err?.message || 'Failed to delete post' });
+  }
+}

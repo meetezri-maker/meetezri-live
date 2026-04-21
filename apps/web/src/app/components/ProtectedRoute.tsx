@@ -1,5 +1,5 @@
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -18,6 +18,8 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: string[];
 }
+
+const ALLOW_EXPIRED_PLAN_ROUTES = new Set(['/app/dashboard', '/app/billing']);
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { user, profile, isLoading, hasRole } = useAuth();
@@ -75,15 +77,10 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
       profile?.subscription_status === 'canceled' ||
       profile?.subscription_status === 'cancelled' ||
       profile?.subscription_status === 'expired');
-  const allowExpiredPlanRoutes = useMemo(
-    () => new Set(['/app/dashboard', '/app/billing']),
-    []
-  );
-
   if (
     isAppRoute &&
     isPlanPackageExpired &&
-    !allowExpiredPlanRoutes.has(location.pathname)
+    !ALLOW_EXPIRED_PLAN_ROUTES.has(location.pathname)
   ) {
     const handleGoToBilling = () => navigate('/app/billing');
     const handleUnsubscribe = async () => {

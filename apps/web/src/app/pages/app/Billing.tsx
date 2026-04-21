@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "@/lib/api";
 import { 
@@ -57,7 +57,10 @@ export function Billing() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!session?.user) return;
+      if (!session?.user) {
+        setIsLoading(false);
+        return;
+      }
       
       try {
         if (checkoutSuccess) {
@@ -71,13 +74,21 @@ export function Billing() {
           }
         }
 
-        const [subData, sessionsData, historyData, invoiceData, creditsData] = await Promise.all([
+        const [subDataRaw, sessionsDataRaw, historyDataRaw, invoiceDataRaw, creditsDataRaw] = await Promise.all([
           api.billing.getSubscription(),
           api.sessions.list({ status: "completed", limit: 50 }),
           api.billing.getHistory(),
           api.billing.getInvoices(),
           api.getCredits()
         ]);
+
+        const subData = (subDataRaw && typeof subDataRaw === "object") ? subDataRaw as Record<string, any> : {};
+        const sessionsData = Array.isArray(sessionsDataRaw) ? sessionsDataRaw : [];
+        const historyData = Array.isArray(historyDataRaw) ? historyDataRaw : [];
+        const invoiceData = Array.isArray(invoiceDataRaw) ? invoiceDataRaw : [];
+        const creditsData = (creditsDataRaw && typeof creditsDataRaw === "object")
+          ? creditsDataRaw as Record<string, any>
+          : {};
 
         const rawPlanId = subData.plan_type;
         // Fallback to trial if plan type is not recognized (e.g. legacy plans)
@@ -135,8 +146,8 @@ export function Billing() {
         };
 
         setUserSubscription(subscription);
-        setBillingHistory(historyData || []);
-        setInvoices(invoiceData || []);
+        setBillingHistory(historyData);
+        setInvoices(invoiceData);
       } catch (error) {
         console.error('Failed to fetch billing data:', error);
       } finally {
@@ -147,7 +158,7 @@ export function Billing() {
     fetchData();
   }, [session?.user?.id, checkoutSuccess]);
 
-  const currentPlan = SUBSCRIPTION_PLANS[userSubscription.planId];
+  const currentPlan = SUBSCRIPTION_PLANS[userSubscription.planId] ?? SUBSCRIPTION_PLANS.trial;
   const canCancelSubscription = ['active', 'trialing', 'past_due'].includes(
     String(userSubscription.status || '').toLowerCase()
   );

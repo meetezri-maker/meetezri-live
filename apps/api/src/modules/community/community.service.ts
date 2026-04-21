@@ -566,3 +566,93 @@ export async function addPostComment(userId: string, postId: string, content: st
   invalidateCommunityCaches();
   return { comments };
 }
+
+export async function getPostCommentsForUser(viewerUserId: string, postId: string) {
+  const post = await prisma.community_posts.findFirst({
+    where: { id: postId, deleted_at: null },
+    select: { id: true },
+  });
+  if (!post) {
+    const err = new Error('Post not found');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+
+  const rows = await prisma.community_comments.findMany({
+    where: { post_id: postId },
+    orderBy: { created_at: 'asc' },
+    include: {
+      profiles: {
+        select: {
+          full_name: true,
+          avatar_url: true,
+          privacy_settings: true,
+          role: true,
+        },
+      },
+    },
+  });
+
+  return rows.map((c) => {
+    const p = c.profiles;
+    const displayName = resolveAuthorDisplayName(p?.full_name, p?.privacy_settings);
+    return {
+      id: c.id,
+      userId: c.user_id,
+      isByCurrentUser: c.user_id === viewerUserId,
+      author: {
+        name: displayName,
+        avatarUrl: resolveCommunityAvatarUrl(p?.avatar_url, p?.privacy_settings),
+        role: p?.role === 'therapist' ? 'companion' : 'member',
+      },
+      content: c.content,
+      createdAt: c.created_at.toISOString(),
+    };
+  });
+}
+
+export async function updateCommunityPost(userId: string, postId: string, content: string) {
+  const post = await prisma.community_posts.findFirst({
+    where: { id: postId, deleted_at: null },
+    select: { user_id: true },
+  });
+  if (!post) {
+    const err = new Error('Post not found');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+  if (post.user_id !== userId) {
+    const err = new Error('You can only edit your own posts');
+    (err as any).statusCode = 403;
+    throw err;
+  }
+  await prisma.community_posts.update({
+    where: { id: postId },
+    data: { content: content.trim() },
+  });
+  invalidateCommunityCaches();
+  return { ok: true };
+}
+
+export async function deleteCommunityPost(userId: string, postId: string) {
+  const post = await prisma.community_posts.findFirst({
+    where: { id: postId, deleted_at: null },
+    select: { user_id: true },
+  });
+  if (!post) {
+    const err = new Error('Post not found');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+  if (post.user_id !== userId) {
+    const err = new Error('You can only delete your own posts');
+    (err as any).statusCode = 403;
+    throw err;
+  }
+  await prisma.community_posts.update({
+    where: { id: postId },
+    data: { deleted_at: new Date() },
+  });
+  invalidateCommunityCaches();
+  return { ok: true };
+}

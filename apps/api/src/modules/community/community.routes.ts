@@ -2,6 +2,8 @@ import { FastifyInstance } from 'fastify';
 import {
   addCommentHandler,
   createPostHandler,
+  deletePostHandler,
+  getPostCommentsHandler,
   getGroupsHandler,
   getMemberProfileHandler,
   getOverviewHandler,
@@ -9,6 +11,7 @@ import {
   joinGroupHandler,
   leaveGroupHandler,
   likePostHandler,
+  updatePostHandler,
 } from './community.controller';
 
 export async function communityRoutes(fastify: FastifyInstance) {
@@ -56,5 +59,20 @@ export async function communityRoutes(fastify: FastifyInstance) {
     '/posts/:postId/comments',
     { preHandler: [fastify.authenticate] },
     addCommentHandler
+  );
+  fastify.get(
+    '/posts/:postId/comments',
+    { preHandler: [fastify.authenticate] },
+    getPostCommentsHandler
+  );
+  fastify.patch(
+    '/posts/:postId',
+    { preHandler: [fastify.authenticate] },
+    updatePostHandler
+  );
+  fastify.delete(
+    '/posts/:postId',
+    { preHandler: [fastify.authenticate] },
+    deletePostHandler
   );
 }

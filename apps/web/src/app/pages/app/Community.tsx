@@ -19,6 +19,9 @@ import {
   ArrowLeft,
   Loader2,
   Shield,
+  Pencil,
+  Trash2,
+  Send,
 } from "lucide-react";
 import { AnimatedCard } from "@/app/components/AnimatedCard";
 import { Link } from "react-router-dom";
@@ -28,6 +31,14 @@ import { toast } from "sonner";
 import { Switch } from "@/app/components/ui/switch";
 import { Label } from "@/app/components/ui/label";
 import { cn } from "@/app/components/ui/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/app/components/ui/dialog";
 
 type FeedPost = {
   id: string;
@@ -55,6 +66,15 @@ type FeedGroup = {
   category: string;
   isJoined: boolean;
   privacy: "public" | "private";
+};
+
+type PostComment = {
+  id: string;
+  userId: string;
+  isByCurrentUser: boolean;
+  author: { name: string; avatarUrl: string | null; role: "member" | "moderator" | "companion" };
+  content: string;
+  createdAt: string;
 };
 
 type Overview = {
@@ -87,6 +107,14 @@ export function Community() {
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [groupActionId, setGroupActionId] = useState<string | null>(null);
+  const [commentModalPost, setCommentModalPost] = useState<FeedPost | null>(null);
+  const [comments, setComments] = useState<PostComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [commentSending, setCommentSending] = useState(false);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
 
   const privacy = (profile?.privacy_settings || {}) as PrivacyCommunity;
   const showDisplayName = privacy.showDisplayNameInCommunity !== false;
@@ -186,17 +214,72 @@ export function Community() {
     }
   };
 
-  const handleCommentPost = async (postId: string) => {
-    const content = window.prompt("Write your comment");
-    if (!content || !content.trim()) return;
+  const openCommentsModal = async (post: FeedPost) => {
+    setCommentModalPost(post);
+    setComments([]);
+    setCommentDraft("");
+    setCommentsLoading(true);
     try {
-      const res = (await api.addCommunityPostComment(postId, content.trim())) as { comments: number };
+      const data = (await api.getCommunityPostComments(post.id)) as PostComment[];
+      setComments(Array.isArray(data) ? data : []);
+    } catch {
+      toast.error("Could not load comments");
+    } finally {
+      setCommentsLoading(false);
+    }
+  };
+
+  const handleCommentPost = async () => {
+    if (!commentModalPost) return;
+    if (!commentDraft.trim()) return;
+    setCommentSending(true);
+    try {
+      const res = (await api.addCommunityPostComment(commentModalPost.id, commentDraft.trim())) as { comments: number };
+      setCommentDraft("");
+      const latest = (await api.getCommunityPostComments(commentModalPost.id)) as PostComment[];
+      setComments(Array.isArray(latest) ? latest : []);
       setPostsData((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, comments: res.comments } : p))
+        prev.map((p) => (p.id === commentModalPost.id ? { ...p, comments: res.comments } : p))
       );
       toast.success("Comment posted");
     } catch {
       toast.error("Could not post comment");
+    } finally {
+      setCommentSending(false);
+    }
+  };
+
+  const handleDeletePost = async (post: FeedPost) => {
+    if (!window.confirm("Delete this post permanently?")) return;
+    try {
+      await api.deleteCommunityPost(post.id);
+      setPostsData((prev) => prev.filter((p) => p.id !== post.id));
+      toast.success("Post deleted");
+    } catch {
+      toast.error("Could not delete post");
+    }
+  };
+
+  const startEditPost = (post: FeedPost) => {
+    setEditingPostId(post.id);
+    setEditDraft(post.content);
+  };
+
+  const saveEditPost = async (postId: string) => {
+    if (!editDraft.trim()) return;
+    setEditSaving(true);
+    try {
+      await api.updateCommunityPost(postId, editDraft.trim());
+      setPostsData((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, content: editDraft.trim() } : p))
+      );
+      setEditingPostId(null);
+      setEditDraft("");
+      toast.success("Post updated");
+    } catch {
+      toast.error("Could not update post");
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -501,6 +584,26 @@ export function Community() {
                         id={`post-${post.id}`}
                         className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6 hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-lg transition-all"
                       >
+                        {post.isByCurrentUser && (
+                          <div className="flex items-center justify-end gap-2 mb-2">
+                            <button
+                              type="button"
+                              className="p-2 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                              onClick={() => startEditPost(post)}
+                              aria-label="Edit post"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              className="p-2 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                              onClick={() => handleDeletePost(post)}
+                              aria-label="Delete post"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                         {post.authorUserId ? (
                           <Link
                             to={`/app/profile/${post.authorUserId}`}
@@ -513,7 +616,39 @@ export function Community() {
                           <div className={authorRowStatic}>{authorHeader}</div>
                         )}
 
-                        <p className="text-gray-700 dark:text-slate-300 mb-4 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                        {editingPostId === post.id ? (
+                          <div className="mb-4">
+                            <textarea
+                              value={editDraft}
+                              onChange={(e) => setEditDraft(e.target.value)}
+                              rows={4}
+                              className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-gray-900 dark:text-white"
+                            />
+                            <div className="mt-2 flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 text-sm"
+                                onClick={() => {
+                                  setEditingPostId(null);
+                                  setEditDraft("");
+                                }}
+                                disabled={editSaving}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                className="px-3 py-1.5 rounded-lg bg-purple-600 text-white text-sm disabled:opacity-60"
+                                onClick={() => saveEditPost(post.id)}
+                                disabled={editSaving || !editDraft.trim()}
+                              >
+                                {editSaving ? "Saving..." : "Save"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-gray-700 dark:text-slate-300 mb-4 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                        )}
 
                         <div className="flex flex-wrap gap-2 mb-4">
                           {post.tags.map((tag) => (
@@ -555,7 +690,7 @@ export function Community() {
                             <button
                               type="button"
                               className="flex items-center gap-2 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-                              onClick={() => handleCommentPost(post.id)}
+                              onClick={() => openCommentsModal(post)}
                               aria-label="Comment on post"
                             >
                               <MessageSquare className="w-4 h-4" />
@@ -812,6 +947,63 @@ export function Community() {
           </motion.div>
         </motion.div>
       )}
+
+      <Dialog open={Boolean(commentModalPost)} onOpenChange={(v) => !v && setCommentModalPost(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Comments</DialogTitle>
+            <DialogDescription>
+              {commentModalPost ? `On: ${commentModalPost.content.slice(0, 80)}${commentModalPost.content.length > 80 ? "..." : ""}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[45vh] overflow-auto space-y-3 pr-1">
+            {commentsLoading ? (
+              <div className="py-8 flex items-center justify-center">
+                <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
+              </div>
+            ) : comments.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">No comments yet. Be the first one.</p>
+            ) : (
+              comments.map((c) => (
+                <div key={c.id} className="rounded-xl border border-gray-200 dark:border-slate-700 p-3 bg-gray-50 dark:bg-slate-900/40">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{c.author.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                      {(() => {
+                        try {
+                          return formatDistanceToNow(parseISO(c.createdAt), { addSuffix: true });
+                        } catch {
+                          return "recently";
+                        }
+                      })()}
+                    </p>
+                  </div>
+                  <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap">{c.content}</p>
+                </div>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <div className="w-full flex items-center gap-2">
+              <input
+                value={commentDraft}
+                onChange={(e) => setCommentDraft(e.target.value)}
+                placeholder="Write your comment..."
+                className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-purple-600 text-white text-sm disabled:opacity-60"
+                onClick={handleCommentPost}
+                disabled={commentSending || !commentDraft.trim()}
+              >
+                {commentSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                Send
+              </button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
