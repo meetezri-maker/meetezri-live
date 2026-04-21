@@ -69,6 +69,11 @@ function environmentLabel(value: string | undefined | null): string {
   return found?.label ?? value;
 }
 
+function isFemaleAvatarName(name: string | null | undefined): boolean {
+  const n = (name ?? "").trim().toLowerCase();
+  return n === "maya chen" || n === "maya" || n === "sara mitchell" || n === "sarah mitchell" || n === "sarah";
+}
+
 export function SessionLobby() {
   const { profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
@@ -107,6 +112,8 @@ export function SessionLobby() {
   const [isScheduling, setIsScheduling] = useState(false);
   const [upcomingSessions, setUpcomingSessions] = useState<UpcomingSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
+  const [playingVoiceName, setPlayingVoiceName] = useState<string | null>(null);
+  const voicePreviewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     // Only sync avatar when that specific field changes (prevents effect loops)
@@ -472,11 +479,80 @@ export function SessionLobby() {
   };
 
   const voices = [
-    { id: "voice1", name: "Voice 1", description: "Warm and friendly", gender: "Female" },
-    { id: "voice2", name: "Voice 2", description: "Calm and reassuring", gender: "Male" },
-    { id: "voice3", name: "Voice 3", description: "Professional and clear", gender: "Female" },
-    { id: "voice4", name: "Voice 4", description: "Gentle and soothing", gender: "Male" }
+    { id: "voice1", name: "Voice 1", description: "Warm and friendly", gender: "Female", demoFile: "voice1female.wav" },
+    { id: "voice2", name: "Voice 2", description: "Calm and reassuring", gender: "Male", demoFile: "voice2male.wav" },
+    { id: "voice3", name: "Voice 3", description: "Professional and clear", gender: "Female", demoFile: "voice3female.wav" },
+    { id: "voice4", name: "Voice 4", description: "Gentle and soothing", gender: "Male", demoFile: "voice4male.wav" }
   ];
+
+  const tempSelectedAvatarIsFemale = isFemaleAvatarName(tempSelectedAvatar);
+
+  const isVoiceDisabledForAvatar = (voiceGender: string): boolean => {
+    return tempSelectedAvatarIsFemale && voiceGender.toLowerCase() === "female";
+  };
+
+  const stopVoicePreview = () => {
+    const existing = voicePreviewAudioRef.current;
+    if (!existing) return;
+    existing.pause();
+    existing.currentTime = 0;
+    voicePreviewAudioRef.current = null;
+    setPlayingVoiceName(null);
+  };
+
+  const playVoicePreview = async (voiceName: string, demoFile: string) => {
+    try {
+      stopVoicePreview();
+      const base = import.meta.env.BASE_URL.endsWith("/")
+        ? import.meta.env.BASE_URL
+        : `${import.meta.env.BASE_URL}/`;
+      const audio = new Audio(`${base}avatarvoices/${encodeURIComponent(demoFile)}`);
+      voicePreviewAudioRef.current = audio;
+      setPlayingVoiceName(voiceName);
+      audio.onended = () => {
+        if (voicePreviewAudioRef.current === audio) {
+          voicePreviewAudioRef.current = null;
+          setPlayingVoiceName(null);
+        }
+      };
+      audio.onerror = () => {
+        if (voicePreviewAudioRef.current === audio) {
+          voicePreviewAudioRef.current = null;
+          setPlayingVoiceName(null);
+        }
+        toast.error("Could not play voice preview");
+      };
+      await audio.play();
+    } catch {
+      setPlayingVoiceName(null);
+      toast.error("Could not play voice preview");
+    }
+  };
+
+  const handleVoiceSelect = async (
+    voiceName: string,
+    voiceGender: string,
+    demoFile: string
+  ) => {
+    if (isVoiceDisabledForAvatar(voiceGender)) return;
+    setTempSelectedVoice(voiceName);
+    await playVoicePreview(voiceName, demoFile);
+  };
+
+  useEffect(() => {
+    return () => {
+      stopVoicePreview();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isVoiceDisabledForAvatar("Female")) return;
+    const selectedVoiceMeta = voices.find((v) => v.name === tempSelectedVoice);
+    if (selectedVoiceMeta && selectedVoiceMeta.gender.toLowerCase() === "female") {
+      const fallbackMale = voices.find((v) => v.gender.toLowerCase() === "male");
+      if (fallbackMale) setTempSelectedVoice(fallbackMale.name);
+    }
+  }, [tempSelectedAvatar, tempSelectedVoice]);
 
   const [sessionAvatarList, setSessionAvatarList] = useState(LOBBY_AVATARS);
 
@@ -1211,17 +1287,23 @@ export function SessionLobby() {
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {voices.map((voice, index) => (
+                            (() => {
+                              const isDisabled = isVoiceDisabledForAvatar(voice.gender);
+                              return (
                             <motion.button
                               key={voice.id}
                               type="button"
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.1 + index * 0.05 }}
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                              onClick={() => setTempSelectedVoice(voice.name)}
+                              whileHover={isDisabled ? undefined : { scale: 1.02 }}
+                              whileTap={isDisabled ? undefined : { scale: 0.98 }}
+                              onClick={() => void handleVoiceSelect(voice.name, voice.gender, voice.demoFile)}
+                              disabled={isDisabled}
                               className={`p-4 rounded-xl border-2 transition-all text-left relative ${
-                                tempSelectedVoice === voice.name
+                                isDisabled
+                                  ? "border-border bg-muted/40 text-muted-foreground opacity-60 cursor-not-allowed"
+                                  : tempSelectedVoice === voice.name
                                   ? "border-primary bg-primary/10 dark:bg-primary/20 shadow-lg"
                                   : "border-border hover:border-primary/50"
                               }`}
@@ -1243,7 +1325,16 @@ export function SessionLobby() {
                                 <span className="inline-block w-2 h-2 rounded-full bg-primary"></span>
                                 {voice.gender}
                               </div>
+                              <div className="mt-2 text-xs text-muted-foreground">
+                                {isDisabled
+                                  ? "Disabled for selected avatar"
+                                  : playingVoiceName === voice.name
+                                  ? "Playing demo..."
+                                  : "Click to preview"}
+                              </div>
                             </motion.button>
+                              );
+                            })()
                           ))}
                         </div>
                       </div>

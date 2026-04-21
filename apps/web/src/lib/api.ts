@@ -536,6 +536,22 @@ export const api = {
     return handleResponse(res, 'Failed to fetch recent activity');
   },
 
+  async reportCrisisEvent(data: {
+    riskLevel: 'low' | 'medium' | 'high' | 'critical';
+    eventType?: string;
+    keywords?: string[];
+    aiConfidence?: number;
+    notes?: string;
+  }) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/crisis-events`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res, 'Failed to report crisis event');
+  },
+
   async updateSetting(key: string, value: any, description?: string) {
     const headers = await getHeaders();
     const res = await fetch(`${API_URL}/system-settings`, {

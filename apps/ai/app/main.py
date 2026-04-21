@@ -82,6 +82,8 @@ class EzriChatResponse(BaseModel):
 class EzriSpeakRequest(BaseModel):
     text: str = Field(..., min_length=1)
     tts_provider: str = Field(default="pocket_tts")
+    # Optional runtime override from web client (male/female selection).
+    voice: Optional[str] = None
 
 
 def _env(name: str) -> str:
@@ -184,12 +186,12 @@ def _brain_text(prompt: str, *, userid: str, provider: str) -> tuple[str, Any]:
     raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
 
 
-def _openai_tts_bytes(text: str) -> tuple[bytes, str]:
+def _openai_tts_bytes(text: str, voice: Optional[str] = None) -> tuple[bytes, str]:
     model = (_env("OPENAI_TTS_MODEL") or "gpt-4o-mini-tts").strip()
-    voice = (_env("OPENAI_TTS_VOICE") or "coral").strip()
+    resolved_voice = (voice or _env("OPENAI_TTS_VOICE") or "coral").strip()
     response_format = (_env("OPENAI_TTS_FORMAT") or "mp3").strip()
     url = "https://api.openai.com/v1/audio/speech"
-    payload = {"model": model, "input": text, "voice": voice, "response_format": response_format}
+    payload = {"model": model, "input": text, "voice": resolved_voice, "response_format": response_format}
     res = requests.post(url, headers=_openai_headers(), json=payload, timeout=120)
     if not res.ok:
         raise HTTPException(status_code=res.status_code, detail=res.text)
@@ -284,7 +286,7 @@ def _runpod_decode_worker_output(output: Any) -> tuple[bytes, str]:
     return decoded, mime
 
 
-def _runpod_tts_bytes(text: str) -> tuple[bytes, str]:
+def _runpod_tts_bytes(text: str, voice: Optional[str] = None) -> tuple[bytes, str]:
     api_key = _env("RUNPOD_API_KEY")
     endpoint = _env("RUNPOD_TTS_ENDPOINT_ID")
     if not api_key or not endpoint:
@@ -292,7 +294,14 @@ def _runpod_tts_bytes(text: str) -> tuple[bytes, str]:
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     # Some workers expect `prompt` instead of `text`
-    payload: dict[str, Any] = {"input": {"text": text, "prompt": text}}
+    voice_value = (voice or "").strip()
+    input_payload: dict[str, Any] = {"text": text, "prompt": text}
+    if voice_value:
+        # Different workers use different field names; send common aliases.
+        input_payload["voice"] = voice_value
+        input_payload["voice_id"] = voice_value
+        input_payload["speaker"] = voice_value
+    payload: dict[str, Any] = {"input": input_payload}
 
     # Prefer runsync; if it returns IN_QUEUE / IN_PROGRESS with an id, poll that id (do not enqueue twice).
     wait_ms = int((_env("RUNPOD_TTS_WAIT_MS") or "180000").strip() or "180000")
@@ -351,7 +360,7 @@ def _normalize_tts_provider(raw: str) -> str:
     return s
 
 
-def _tts_bytes(text: str, tts_provider: str) -> tuple[bytes, str]:
+def _tts_bytes(text: str, tts_provider: str, voice: Optional[str] = None) -> tuple[bytes, str]:
     p = _normalize_tts_provider(tts_provider)
 
     if p == "browser":
@@ -367,22 +376,22 @@ def _tts_bytes(text: str, tts_provider: str) -> tuple[bytes, str]:
                 detail="pocket_tts requires RUNPOD_API_KEY and RUNPOD_TTS_ENDPOINT_ID in apps/ai/.env "
                 "(remove duplicate empty lines like RUNPOD_API_KEY= above the real key, or restart after fix).",
             )
-        return _runpod_tts_bytes(text)
+        return _runpod_tts_bytes(text, voice=voice)
 
     if p in {"openai"}:
         if _env("OPENAI_API_KEY"):
-            return _openai_tts_bytes(text)
+            return _openai_tts_bytes(text, voice=voice)
         if runpod_ready:
-            return _runpod_tts_bytes(text)
+            return _runpod_tts_bytes(text, voice=voice)
         raise HTTPException(
             status_code=500,
             detail="tts_provider openai needs OPENAI_API_KEY, or set RunPod TTS env vars for fallback.",
         )
 
     if runpod_ready:
-        return _runpod_tts_bytes(text)
+        return _runpod_tts_bytes(text, voice=voice)
     if _env("OPENAI_API_KEY"):
-        return _openai_tts_bytes(text)
+        return _openai_tts_bytes(text, voice=voice)
     raise HTTPException(
         status_code=400,
         detail=f"Unsupported tts_provider: {tts_provider!r}. Use pocket_tts, openai, or browser.",
@@ -397,7 +406,7 @@ def ezri_chat(req: EzriChatRequest):
 
 @app.post("/api/v1/speak")
 def ezri_speak(req: EzriSpeakRequest):
-    audio_bytes, content_type = _tts_bytes(req.text, req.tts_provider)
+    audio_bytes, content_type = _tts_bytes(req.text, req.tts_provider, voice=req.voice)
     return Response(content=audio_bytes, media_type=content_type)
 
 
@@ -407,6 +416,7 @@ async def ezri_ws_active(
     brain_provider: Optional[str] = None,
     tts_provider: Optional[str] = None,
     stt_provider: Optional[str] = None,
+    voice: Optional[str] = None,
     userid: str = "anon",
     session_id: str = "session",
 ):
@@ -472,7 +482,7 @@ async def ezri_ws_active(
 
                 ws_audio_enabled = (_env("EZRI_WS_AUDIO") or "1").strip().lower() not in {"0", "false", "no"}
                 if ws_audio_enabled and tts.lower() != "browser":
-                    audio_bytes, _ct = await asyncio.to_thread(_tts_bytes, text_out, tts)
+                    audio_bytes, _ct = await asyncio.to_thread(_tts_bytes, text_out, tts, voice)
                     await websocket.send_json({"type": "step", "status": "speaking", "message": "Synthesizing audio..."})
 
                     # Stream bytes in chunks to mimic the engineer's streaming behavior,

@@ -22,6 +22,7 @@ import {
   verifyKnowledgeTwoFactorRecoveryHandler,
   requestKnowledgeTwoFactorLoginCodeHandler,
   verifyKnowledgeTwoFactorLoginCodeHandler,
+  reportCrisisEventHandler,
 } from './user.controller';
 import { checkUserSchema, signupSchema } from './user.schema';
 
@@ -87,6 +88,14 @@ export async function userRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate],
     },
     getRecentActivityHandler
+  );
+
+  fastify.post(
+    '/crisis-events',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    reportCrisisEventHandler
   );
 
   fastify.get(

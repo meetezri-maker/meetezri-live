@@ -17,16 +17,21 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../../lib/api";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 interface CrisisEvent {
   id: string;
   user: string;
+  userEmail?: string;
+  userPhone?: string;
   riskLevel: "critical" | "high" | "medium" | "low";
   type: string;
   keywords: string[];
   timestamp: string;
   status: "pending" | "contacted" | "resolved";
   aiConfidence: number;
+  notes?: string;
   createdAt?: string;
   resolvedAt?: string;
 }
@@ -78,18 +83,22 @@ function mapApiCrisisEvent(event: any): CrisisEvent {
   return {
     id: event.id,
     user,
+    userEmail: event.profiles?.email || undefined,
+    userPhone: event.profiles?.phone || undefined,
     riskLevel: (event.risk_level || "medium") as CrisisEvent["riskLevel"],
     type: event.event_type || "Crisis event",
     keywords: Array.isArray(event.keywords) ? event.keywords : [],
     timestamp: formatRelativeTime(createdAt),
     status: (event.status || "pending") as CrisisEvent["status"],
     aiConfidence: typeof event.ai_confidence === "number" ? event.ai_confidence : 0,
+    notes: typeof event.notes === "string" ? event.notes : undefined,
     createdAt,
     resolvedAt,
   };
 }
 
 export function CrisisMonitoring() {
+  const navigate = useNavigate();
   const [events, setEvents] = useState<CrisisEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -126,6 +135,65 @@ export function CrisisMonitoring() {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailContent, setEmailContent] = useState("");
   const [callNotes, setCallNotes] = useState("");
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [resolveNotes, setResolveNotes] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<{
+    phone?: string;
+    email?: string;
+    emergencyName?: string;
+    emergencyPhone?: string;
+  } | null>(null);
+
+  const parsePhoneForDial = (phone: string | undefined) => {
+    if (!phone) return null;
+    const candidate = phone.replace(/[^\d+#*]/g, "");
+    return candidate.length >= 3 ? candidate : null;
+  };
+
+  const mergeUpdatedEvent = (updated: any) => {
+    const mapped = mapApiCrisisEvent(updated);
+    setEvents((prev) => prev.map((item) => (item.id === mapped.id ? mapped : item)));
+    setSelectedEvent((prev) => (prev && prev.id === mapped.id ? mapped : prev));
+  };
+
+  const updateEventStatus = async (
+    eventId: string,
+    data: { status?: string; notes?: string }
+  ) => {
+    setIsUpdating(true);
+    try {
+      const updated = await api.admin.updateCrisisEventStatus(eventId, data);
+      mergeUpdatedEvent(updated);
+      if (data.status === "resolved") {
+        toast.success("Crisis event marked as resolved.");
+      } else if (data.status === "contacted") {
+        toast.success("Crisis event updated to contacted.");
+      } else {
+        toast.success("Crisis event updated.");
+      }
+    } catch (err) {
+      console.error("Failed to update crisis event", err);
+      toast.error("Failed to update crisis event status.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const loadEventContactDetails = async (eventId: string) => {
+    try {
+      const detail = await api.admin.getCrisisEvent(eventId);
+      setSelectedContact({
+        phone: detail?.profiles?.phone || undefined,
+        email: detail?.profiles?.email || undefined,
+        emergencyName: detail?.profiles?.emergency_contact_name || undefined,
+        emergencyPhone: detail?.profiles?.emergency_contact_phone || undefined,
+      });
+    } catch (err) {
+      console.error("Failed to load crisis event details", err);
+      setSelectedContact(null);
+    }
+  };
 
   const loadEvents = async () => {
     try {
@@ -280,7 +348,12 @@ export function CrisisMonitoring() {
           <Card className="p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold">Active Crisis Events</h2>
-              <Button variant="outline" size="sm" className="gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => navigate("/admin/crisis-protocol")}
+              >
                 <Shield className="w-4 h-4" />
                 Crisis Protocol Guide
               </Button>
@@ -350,9 +423,10 @@ export function CrisisMonitoring() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="gap-2 hover:bg-blue-50"
+                            className="gap-2 hover:bg-blue-500"
                             onClick={() => {
                               setSelectedEvent(event);
+                              void loadEventContactDetails(event.id);
                               setShowDetailsModal(true);
                             }}
                           >
@@ -364,9 +438,11 @@ export function CrisisMonitoring() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="gap-2 hover:bg-green-50"
+                                className="gap-2 hover:bg-green-500"
                                 onClick={() => {
                                   setSelectedEvent(event);
+                                  void loadEventContactDetails(event.id);
+                                  setCallNotes("");
                                   setShowCallModal(true);
                                 }}
                               >
@@ -376,9 +452,11 @@ export function CrisisMonitoring() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="gap-2 hover:bg-purple-50"
+                                className="gap-2 hover:bg-purple-500"
                                 onClick={() => {
                                   setSelectedEvent(event);
+                                  void loadEventContactDetails(event.id);
+                                  setEmailContent("");
                                   setShowEmailModal(true);
                                 }}
                               >
@@ -392,10 +470,9 @@ export function CrisisMonitoring() {
                               size="sm"
                               className="gap-2"
                               onClick={() => {
-                                console.log("Marking event as resolved:", event.id);
-                                alert(
-                                  `Event #${event.id} for ${event.user} marked as resolved.`
-                                );
+                                setSelectedEvent(event);
+                                setResolveNotes(event.notes || "");
+                                setShowResolveModal(true);
                               }}
                             >
                               <CheckCircle className="w-4 h-4" />
@@ -538,6 +615,8 @@ export function CrisisMonitoring() {
                         className="flex-1 bg-green-600 hover:bg-green-700 gap-2"
                         onClick={() => {
                           setShowDetailsModal(false);
+                          void loadEventContactDetails(selectedEvent.id);
+                          setCallNotes("");
                           setShowCallModal(true);
                         }}
                       >
@@ -548,6 +627,8 @@ export function CrisisMonitoring() {
                         className="flex-1 bg-purple-600 hover:bg-purple-700 gap-2"
                         onClick={() => {
                           setShowDetailsModal(false);
+                          void loadEventContactDetails(selectedEvent.id);
+                          setEmailContent("");
                           setShowEmailModal(true);
                         }}
                       >
@@ -622,12 +703,12 @@ export function CrisisMonitoring() {
                 <label className="block text-sm font-semibold text-gray-700 mb-3">Emergency Resources Ready</label>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
-                    <p className="text-xs text-gray-600 mb-1">Suicide Hotline</p>
-                    <p className="font-bold text-gray-900">988</p>
+                    <p className="text-xs text-gray-600 mb-1">User Phone</p>
+                    <p className="font-bold text-gray-900">{selectedContact?.phone || selectedEvent.userPhone || "Not available"}</p>
                   </div>
                   <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
-                    <p className="text-xs text-gray-600 mb-1">Emergency Services</p>
-                    <p className="font-bold text-gray-900">911</p>
+                    <p className="text-xs text-gray-600 mb-1">Emergency Contact</p>
+                    <p className="font-bold text-gray-900">{selectedContact?.emergencyPhone || "Not available"}</p>
                   </div>
                 </div>
               </div>
@@ -647,15 +728,28 @@ export function CrisisMonitoring() {
               {/* Actions */}
               <div className="flex gap-3">
                 <Button
+                  disabled={isUpdating}
                   className="flex-1 bg-green-600 hover:bg-green-700 gap-2"
-                  onClick={() => {
-                    console.log('Initiating call:', selectedEvent.id, callNotes);
+                  onClick={async () => {
+                    const dialTarget =
+                      parsePhoneForDial(selectedContact?.phone) ||
+                      parsePhoneForDial(selectedEvent.userPhone) ||
+                      parsePhoneForDial(selectedContact?.emergencyPhone);
+                    if (dialTarget) {
+                      window.location.assign(`tel:${dialTarget}`);
+                    } else {
+                      toast.error("No dialable phone number found for this user.");
+                    }
+                    await updateEventStatus(selectedEvent.id, {
+                      status: "contacted",
+                      notes: callNotes || "Phone outreach initiated by admin.",
+                    });
                     setShowCallModal(false);
                     setCallNotes("");
                   }}
                 >
                   <Phone className="w-4 h-4" />
-                  Start Call
+                  {isUpdating ? "Updating..." : "Start Call"}
                 </Button>
                 <Button
                   variant="outline"
@@ -726,6 +820,10 @@ export function CrisisMonitoring() {
 
               {/* Email Content */}
               <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">To</label>
+                <div className="px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-800 mb-3">
+                  {selectedContact?.email || selectedEvent.userEmail || "No email available"}
+                </div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Email Message</label>
                 <textarea
                   value={emailContent}
@@ -739,15 +837,27 @@ export function CrisisMonitoring() {
               {/* Actions */}
               <div className="flex gap-3">
                 <Button
+                  disabled={isUpdating}
                   className="flex-1 bg-purple-600 hover:bg-purple-700 gap-2"
-                  onClick={() => {
-                    console.log('Sending email:', selectedEvent.id, emailContent);
+                  onClick={async () => {
+                    const email = selectedContact?.email || selectedEvent.userEmail;
+                    if (email) {
+                      const subject = encodeURIComponent("Crisis Support Check-in");
+                      const body = encodeURIComponent(emailContent || "Checking in with support resources.");
+                      window.location.assign(`mailto:${email}?subject=${subject}&body=${body}`);
+                    } else {
+                      toast.error("No email found for this user.");
+                    }
+                    await updateEventStatus(selectedEvent.id, {
+                      status: "contacted",
+                      notes: "Crisis support email prepared/sent by admin.",
+                    });
                     setShowEmailModal(false);
                     setEmailContent("");
                   }}
                 >
                   <Mail className="w-4 h-4" />
-                  Send Email
+                  {isUpdating ? "Updating..." : "Send Email"}
                 </Button>
                 <Button
                   variant="outline"
@@ -758,6 +868,83 @@ export function CrisisMonitoring() {
                   }}
                 >
                   Cancel
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Resolve Event Modal */}
+      <AnimatePresence>
+        {showResolveModal && selectedEvent && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowResolveModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl border border-pink-100"
+            >
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">Resolve Crisis Event</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Mark this event as resolved and save final notes.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowResolveModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              <div className="mb-5 p-4 rounded-xl bg-gray-50 border border-gray-200">
+                <p className="font-semibold text-gray-900">{selectedEvent.user}</p>
+                <p className="text-sm text-gray-600">{selectedEvent.type}</p>
+                <p className="text-xs text-gray-500 mt-1">Event ID: {selectedEvent.id}</p>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Resolution Notes</label>
+                <textarea
+                  value={resolveNotes}
+                  onChange={(e) => setResolveNotes(e.target.value)}
+                  rows={4}
+                  placeholder="Add resolution details, outcomes, and next steps..."
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-green-500 outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setShowResolveModal(false)}
+                  disabled={isUpdating}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  disabled={isUpdating}
+                  onClick={async () => {
+                    await updateEventStatus(selectedEvent.id, {
+                      status: "resolved",
+                      notes: resolveNotes || "Resolved by admin in crisis monitoring.",
+                    });
+                    setShowResolveModal(false);
+                  }}
+                >
+                  {isUpdating ? "Saving..." : "Confirm Resolve"}
                 </Button>
               </div>
             </motion.div>

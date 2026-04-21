@@ -46,6 +46,7 @@ import { SafetyStateIndicator } from "@/app/components/safety/SafetyStateIndicat
 import { SafetyBoundaryMessage } from "@/app/components/safety/SafetyBoundaryMessage";
 import { SafetyResourceCard } from "@/app/components/safety/SafetyResourceCard";
 import { getSafetyResources } from "@/app/utils/safetyResources";
+import { getCurrentRegion, getEmergencyResources, getRegionInfo } from "@/app/utils/safetyResources";
 import { LowMinutesWarning } from "@/app/components/modals/LowMinutesWarning";
 import { getEzriConfig } from "@/lib/ezri/config";
 import { getOrCreateEzriUserid } from "@/lib/ezri/ids";
@@ -1873,6 +1874,44 @@ export function ActiveSession() {
     return (words.length >= 2 && candidate.length >= 6) || micLevel >= 26;
   };
 
+  const autoEmergencyDialTriggeredRef = useRef(false);
+  const lastCrisisEventReportAtRef = useRef(0);
+  const parseDialTarget = (rawPhone: string): string | null => {
+    const normalized = rawPhone.toLowerCase();
+    const candidates = normalized
+      .split(/\bor\b|\/|,|;|\|/g)
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    for (const candidate of candidates) {
+      const digitsOnly = candidate.replace(/[^\d+#*]/g, "");
+      if (digitsOnly.length >= 3) return digitsOnly;
+    }
+
+    const fallback = normalized.replace(/[^\d+#*]/g, "");
+    return fallback.length >= 3 ? fallback : null;
+  };
+  const getEmergencyDialTarget = (): string | null => {
+    const userRegion = getCurrentRegion();
+    const emergencyByRegion = getRegionInfo(userRegion).emergencyNumber;
+    const emergencyResources = getEmergencyResources(userRegion);
+    const emergencyNumber =
+      emergencyByRegion ||
+      emergencyResources.find((r) => r.type === "emergency" && r.phone)?.phone ||
+      emergencyResources.find((r) => !!r.phone)?.phone;
+    if (!emergencyNumber) return null;
+    return parseDialTarget(emergencyNumber);
+  };
+  const openEmergencyDialer = () => {
+    const dialTarget = getEmergencyDialTarget();
+    if (dialTarget) {
+      setCrisisDialTarget(dialTarget);
+      window.location.assign(`tel:${dialTarget}`);
+      return;
+    }
+    toast.error("No emergency number available for your selected region.");
+  };
+
   const handleUserText = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -1880,8 +1919,60 @@ export function ActiveSession() {
     // Safety analysis should be based on real user content (not mock phrases).
     try {
       const analysis = analyzeTextForSafety(trimmed, currentState);
+      const isCrisisKeywordDetection =
+        analysis.matchedKeywords.length > 0 &&
+        (analysis.suggestedState === "HIGH_RISK" ||
+          analysis.suggestedState === "SAFETY_MODE");
+
+      if (isCrisisKeywordDetection) {
+        setDetectedCrisisKeywords(analysis.matchedKeywords);
+        setShowCrisisKeywordModal(true);
+      }
+
+      if (analysis.suggestedState === "SAFETY_MODE" && !autoEmergencyDialTriggeredRef.current) {
+        autoEmergencyDialTriggeredRef.current = true;
+        try {
+          openEmergencyDialer();
+        } catch (error) {
+          console.error("Failed to auto-open emergency dialer:", error);
+        }
+      }
+
+      if (
+        analysis.suggestedState === "ELEVATED_CONCERN" ||
+        analysis.suggestedState === "HIGH_RISK" ||
+        analysis.suggestedState === "SAFETY_MODE"
+      ) {
+        const now = Date.now();
+        const shouldReport = now - lastCrisisEventReportAtRef.current > 30000;
+        if (shouldReport) {
+          lastCrisisEventReportAtRef.current = now;
+          const riskLevel =
+            analysis.suggestedState === "SAFETY_MODE"
+              ? "critical"
+              : analysis.suggestedState === "HIGH_RISK"
+                ? "high"
+                : "medium";
+          api
+            .reportCrisisEvent({
+              riskLevel,
+              eventType: "keyword_detection",
+              keywords: analysis.matchedKeywords,
+              aiConfidence: Math.round(analysis.confidence * 100),
+              notes: `Auto-detected in active session (${analysis.suggestedState})`,
+            })
+            .catch((error) => {
+              console.error("Failed to report crisis event:", error);
+            });
+        }
+      }
+
       if (analysis.confidence > 0.6 && analysis.suggestedState !== currentState) {
-        updateState(analysis.suggestedState, "conversation_analysis", analysis.detectedSignals);
+        updateState(
+          analysis.suggestedState,
+          "conversation_analysis",
+          analysis.detectedSignals
+        );
       }
     } catch {}
 
@@ -2290,6 +2381,9 @@ export function ActiveSession() {
   // Safety state
   const [showSafetyBoundary, setShowSafetyBoundary] = useState(false);
   const [showSafetyResources, setShowSafetyResources] = useState(false);
+  const [showCrisisKeywordModal, setShowCrisisKeywordModal] = useState(false);
+  const [detectedCrisisKeywords, setDetectedCrisisKeywords] = useState<string[]>([]);
+  const [crisisDialTarget, setCrisisDialTarget] = useState<string>("");
   const [isSessionPaused, setIsSessionPaused] = useState(false);
   const [lastSafetyState, setLastSafetyState] = useState(currentState);
 
@@ -3701,6 +3795,74 @@ export function ActiveSession() {
         )}
       </AnimatePresence>
 
+      {/* Crisis Keyword Modal */}
+      <AnimatePresence>
+        {showCrisisKeywordModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 16 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              className="bg-gradient-to-br from-slate-900 to-red-950 rounded-2xl sm:rounded-3xl p-4 sm:p-6 max-w-md w-full max-h-[92dvh] overflow-y-auto border border-red-400/40 shadow-2xl"
+            >
+              <div className="text-center mb-4">
+                <div className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center mx-auto mb-3">
+                  <AlertCircle className="w-7 h-7 text-white" />
+                </div>
+                <h3 className="text-xl sm:text-2xl font-bold text-white">Crisis Alert Detected</h3>
+                <p className="text-sm sm:text-base text-red-100 mt-2">
+                  We detected crisis-related language. Please contact emergency support now.
+                </p>
+              </div>
+
+              {detectedCrisisKeywords.length > 0 ? (
+                <div className="mb-5">
+                  <p className="text-xs text-red-100/90 mb-2">Detected keywords:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {detectedCrisisKeywords.slice(0, 6).map((kw) => (
+                      <span
+                        key={kw}
+                        className="px-2 py-1 rounded-md text-xs bg-red-900/60 text-red-100 border border-red-300/30"
+                      >
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="space-y-2">
+                <button
+                  onClick={openEmergencyDialer}
+                  className="w-full px-4 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold"
+                >
+                  Call Emergency Now{crisisDialTarget ? ` (${crisisDialTarget})` : ""}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCrisisKeywordModal(false);
+                    setShowSafetyResources(true);
+                  }}
+                  className="w-full px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium"
+                >
+                  View Safety Resources
+                </button>
+                <button
+                  onClick={() => setShowCrisisKeywordModal(false)}
+                  className="w-full px-4 py-3 rounded-xl bg-transparent text-red-200 font-medium"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Safety Resources Modal */}
       <AnimatePresence>
         {showSafetyResources && (
@@ -3708,45 +3870,49 @@ export function ActiveSession() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              className="bg-gradient-to-br from-slate-900 to-purple-900 rounded-3xl p-8 max-w-lg w-full border-2 border-red-500/30 shadow-2xl"
+              className="bg-gradient-to-br from-slate-900 to-purple-900 rounded-2xl sm:rounded-3xl w-full max-w-2xl h-[94dvh] sm:h-[90dvh] border-2 border-red-500/30 shadow-2xl flex flex-col overflow-hidden"
             >
-              <div className="text-center mb-6">
+              <div className="text-center px-4 sm:px-6 pt-4 sm:pt-6 pb-4 border-b border-white/10">
                 <motion.div
                   animate={{ scale: [1, 1.1, 1], rotate: [0, 10, -10, 0] }}
                   transition={{ duration: 0.5, repeat: 3 }}
-                  className="w-20 h-20 bg-gradient-to-br from-red-500 to-rose-600 rounded-full flex items-center justify-center mx-auto mb-4"
+                  className="w-14 h-14 sm:w-20 sm:h-20 bg-gradient-to-br from-red-500 to-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4"
                 >
-                  <Heart className="w-10 h-10 text-white" />
+                  <Heart className="w-7 h-7 sm:w-10 sm:h-10 text-white" />
                 </motion.div>
-                <h3 className="text-3xl font-bold text-white mb-2">
+                <h3 className="text-2xl sm:text-3xl font-bold text-white mb-2">
                   Safety Resources
                 </h3>
-                <p className="text-gray-300 text-lg">
+                <p className="text-sm sm:text-lg text-gray-300">
                   We've detected a potential safety concern in your conversation.
                   Here are some resources to help you.
                 </p>
               </div>
 
-              <div className="space-y-3 mb-6">
+              <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4">
                 <h4 className="text-white font-semibold text-center mb-3">
                   Helpful Resources:
                 </h4>
-                {safetyResources.map((resource) => (
-                  <SafetyResourceCard key={resource.id} resource={resource} />
-                ))}
+                <div className="space-y-3">
+                  {safetyResources.map((resource) => (
+                    <SafetyResourceCard key={resource.id} resource={resource} />
+                  ))}
+                </div>
               </div>
 
-              <button
-                onClick={() => navigate("/app/dashboard")}
-                className="w-full px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
-              >
-                End Session & Return to Dashboard
-              </button>
+              <div className="px-4 sm:px-6 py-3 border-t border-white/10 bg-black/20">
+                <button
+                  onClick={() => navigate("/app/dashboard")}
+                  className="w-full px-4 sm:px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
+                >
+                  End Session & Return to Dashboard
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

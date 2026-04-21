@@ -125,6 +125,10 @@ const activityLogsCache = new Map<string, { data: any[]; timestamp: number }>();
 const CRISIS_EVENTS_CACHE_TTL = 120 * 1000; // 120 seconds
 const crisisEventsCache = new Map<string, { data: any[]; timestamp: number }>();
 
+export function invalidateCrisisEventsCache() {
+  crisisEventsCache.clear();
+}
+
 const EMAIL_TEMPLATES_CACHE_TTL = 120 * 1000; // 120 seconds
 let emailTemplatesCache: { data: any[]; timestamp: number } | null = null;
 
@@ -3763,6 +3767,8 @@ export async function updateCrisisEventStatus(
       }
     }
   });
+
+  invalidateCrisisEventsCache();
 
   return {
     ...event,

@@ -11,6 +11,14 @@ interface UserPayload {
   role?: string;
 }
 
+type ReportCrisisBody = {
+  riskLevel?: 'low' | 'medium' | 'high' | 'critical';
+  eventType?: string;
+  keywords?: string[];
+  aiConfidence?: number;
+  notes?: string;
+};
+
 function sanitizeSelfProfileResponse(profile: Record<string, any> | null) {
   if (!profile) return profile;
   const sanitized = { ...profile };
@@ -491,6 +499,35 @@ export async function getRecentActivityHandler(
   const limit = Number.isFinite(parsedLimit) ? parsedLimit : 25;
   const activity = await userService.getRecentActivity(user.sub, limit);
   return activity;
+}
+
+export async function reportCrisisEventHandler(
+  request: FastifyRequest<{ Body: ReportCrisisBody }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const body = (request.body || {}) as ReportCrisisBody;
+  const riskLevel = body.riskLevel;
+
+  if (!riskLevel || !['low', 'medium', 'high', 'critical'].includes(riskLevel)) {
+    return reply.code(400).send({ message: 'riskLevel is required' });
+  }
+
+  try {
+    const event = await userService.createCrisisEventFromDetection({
+      userId: user.sub,
+      riskLevel,
+      eventType: body.eventType,
+      keywords: Array.isArray(body.keywords) ? body.keywords : [],
+      aiConfidence:
+        typeof body.aiConfidence === 'number' ? body.aiConfidence : undefined,
+      notes: body.notes,
+    });
+    return reply.code(201).send(event);
+  } catch (error) {
+    request.log.error({ error }, 'Failed to create crisis event');
+    return reply.code(500).send({ message: 'Failed to create crisis event' });
+  }
 }
 
 export async function getKnowledgeTwoFactorStatusHandler(

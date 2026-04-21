@@ -1215,6 +1215,39 @@ export async function getRecentActivity(userId: string, limit: number = 25) {
     .slice(0, safeLimit);
 }
 
+export async function createCrisisEventFromDetection(input: {
+  userId: string;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  eventType?: string;
+  keywords?: string[];
+  aiConfidence?: number;
+  notes?: string;
+}) {
+  const keywords = (input.keywords || [])
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .slice(0, 20);
+
+  const event = await prisma.crisis_events.create({
+    data: {
+      user_id: input.userId,
+      risk_level: input.riskLevel,
+      event_type: input.eventType || 'keyword_detection',
+      keywords,
+      ai_confidence:
+        typeof input.aiConfidence === 'number'
+          ? Math.max(0, Math.min(100, Math.round(input.aiConfidence)))
+          : null,
+      notes: input.notes,
+      status: 'pending',
+    },
+  });
+
+  adminService.invalidateCrisisEventsCache();
+
+  return event;
+}
+
 export async function updateProfile(userId: string, data: UpdateProfileInput) {
   const {
     emergency_contact_name,
