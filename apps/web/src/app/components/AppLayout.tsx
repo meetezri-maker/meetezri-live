@@ -283,7 +283,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div
           className={`mx-auto flex items-center justify-between ${headerInnerClass} ${headerHeightClass}`}
         >
-          <div className="flex items-center gap-2">
+          <Link to="/app/dashboard" className="flex items-center gap-2">
             <motion.div
               animate={{ 
                 rotate: [0, 10, -10, 0],
@@ -298,7 +298,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             >
               <BrandLogo heightClass={compact ? "h-8" : "h-9"} />
             </motion.div>
-          </div>
+          </Link>
 
           <div className="flex items-center gap-2">
             <Link to="/app/notifications">
