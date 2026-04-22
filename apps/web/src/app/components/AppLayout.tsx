@@ -16,7 +16,8 @@ import {
   Clock,
   Sparkles,
   CreditCard,
-  AlertTriangle
+  AlertTriangle,
+  Loader2
 } from "lucide-react";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { BrandLogo } from "./BrandLogo";
@@ -116,6 +117,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     return defaults;
   });
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
@@ -267,9 +269,14 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   const confirmLogout = async () => {
-    await signOut();
-    setShowLogoutModal(false);
-    navigate("/login");
+    setLogoutLoading(true);
+    try {
+      await signOut();
+      setShowLogoutModal(false);
+      navigate("/login");
+    } finally {
+      setLogoutLoading(false);
+    }
   };
 
   return (
@@ -475,7 +482,13 @@ export function AppLayout({ children }: AppLayoutProps) {
         </nav>
       </div>
 
-      <AlertDialog open={showLogoutModal} onOpenChange={setShowLogoutModal}>
+      <AlertDialog
+        open={showLogoutModal}
+        onOpenChange={(open) => {
+          if (logoutLoading) return;
+          setShowLogoutModal(open);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Log out?</AlertDialogTitle>
@@ -484,12 +497,20 @@ export function AppLayout({ children }: AppLayoutProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={logoutLoading}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmLogout}
               className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
+              disabled={logoutLoading}
             >
-              Log Out
+              {logoutLoading ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Logging out...
+                </span>
+              ) : (
+                "Log Out"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -15,6 +15,7 @@ import {
   ChevronRight,
   ArrowLeft,
   LogOut,
+  Loader2,
   Trophy,
   Users,
   BookOpen,
@@ -61,6 +62,7 @@ export function SettingsHub() {
   const { profile, refreshProfile, user, signOut } = useAuth();
   const { unreadCount } = useNotifications();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
   
   // Quick Settings State
   const [quickSettings, setQuickSettings] = useState([
@@ -186,9 +188,14 @@ export function SettingsHub() {
   };
 
   const confirmLogout = async () => {
-    await signOut();
-    setShowLogoutModal(false);
-    navigate("/login");
+    setLogoutLoading(true);
+    try {
+      await signOut();
+      setShowLogoutModal(false);
+      navigate("/login");
+    } finally {
+      setLogoutLoading(false);
+    }
   };
 
   const settingSections: SettingSection[] = [
@@ -520,7 +527,13 @@ export function SettingsHub() {
             </p>
           </div>
 
-          <AlertDialog open={showLogoutModal} onOpenChange={setShowLogoutModal}>
+          <AlertDialog
+            open={showLogoutModal}
+            onOpenChange={(open) => {
+              if (logoutLoading) return;
+              setShowLogoutModal(open);
+            }}
+          >
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Log out?</AlertDialogTitle>
@@ -529,12 +542,20 @@ export function SettingsHub() {
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel disabled={logoutLoading}>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={confirmLogout}
                   className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
+                  disabled={logoutLoading}
                 >
-                  Log Out
+                  {logoutLoading ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Logging out...
+                    </span>
+                  ) : (
+                    "Log Out"
+                  )}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

@@ -23,7 +23,16 @@ import {
   Loader2,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Cell,
+} from "recharts";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
 import { AdminPaginationBar } from "../../components/admin/AdminPaginationBar";
@@ -460,12 +469,33 @@ export function UserSegmentation() {
       ? platform.engagement_distribution
       : [{ range: "—", users: 0 }];
 
-  // Segment distribution for pie chart
-  const segmentDistribution = segments.map(seg => ({
-    name: seg.name,
-    value: seg.userCount,
-    color: seg.color
-  }));
+  const segmentDistribution = (() => {
+    const rows = segments
+      .map((seg) => ({
+        name: seg.name,
+        users: seg.userCount,
+        color: seg.color,
+      }))
+      .filter((r) => Number.isFinite(r.users) && r.users > 0);
+
+    rows.sort((a, b) => b.users - a.users);
+
+    const TOP_N = 10;
+    const top = rows.slice(0, TOP_N);
+    const rest = rows.slice(TOP_N);
+    const otherUsers = rest.reduce((sum, r) => sum + r.users, 0);
+
+    return otherUsers > 0
+      ? [
+          ...top,
+          {
+            name: `Other (${rest.length})`,
+            users: otherUsers,
+            color: "#94a3b8",
+          },
+        ]
+      : top;
+  })();
 
   const stats = {
     totalEndUsers: platform.total_end_users,
@@ -618,24 +648,38 @@ export function UserSegmentation() {
           >
             <h2 className="text-xl font-bold text-gray-900 mb-6">Segment Distribution</h2>
             <ResponsiveContainer width="100%" height={250}>
-              <RechartsPie>
-                <Pie
-                  data={segmentDistribution}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, value }) => `${name}: ${value}`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {segmentDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+              <BarChart
+                data={segmentDistribution}
+                layout="vertical"
+                margin={{ top: 8, right: 12, bottom: 8, left: 12 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis type="number" stroke="#6b7280" allowDecimals={false} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  stroke="#6b7280"
+                  width={110}
+                  tick={{ fontSize: 11 }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#fff",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "12px",
+                  }}
+                  formatter={(value) => [`${value}`, "Users"]}
+                />
+                <Bar dataKey="users" radius={[0, 8, 8, 0]} isAnimationActive={false}>
+                  {segmentDistribution.map((entry, idx) => (
+                    <Cell key={`seg-bar-${idx}`} fill={entry.color} />
                   ))}
-                </Pie>
-                <Tooltip />
-              </RechartsPie>
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
+            <p className="mt-3 text-xs text-gray-500">
+              Showing top segments by users{segments.length > 10 ? " (rest grouped as Other)" : ""}.
+            </p>
           </motion.div>
 
           {/* Engagement Distribution */}

@@ -377,6 +377,8 @@ function filterRecentMoods(moods: any[], maxDays = 30, limit = 25) {
 export function SuperAdminDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [recentMoods, setRecentMoods] = useState<any[]>([]);
+  const MOODS_PAGE_SIZE = 10;
+  const [moodsPage, setMoodsPage] = useState(1);
   const [activityFeed, setActivityFeed] = useState<
     { action: string; user: string; time: string; type: string }[]
   >([]);
@@ -421,6 +423,22 @@ export function SuperAdminDashboard() {
       sessionWeekOffset,
     };
   }, [chartPeriod, yearRange, sessionWeekOffset, monthOffset]);
+
+  const moodsTotalPages = useMemo(
+    () => Math.max(1, Math.ceil((recentMoods?.length ?? 0) / MOODS_PAGE_SIZE)),
+    [recentMoods?.length]
+  );
+
+  const pagedRecentMoods = useMemo(() => {
+    const page = Math.min(Math.max(1, moodsPage), moodsTotalPages);
+    const start = (page - 1) * MOODS_PAGE_SIZE;
+    return (recentMoods ?? []).slice(start, start + MOODS_PAGE_SIZE);
+  }, [recentMoods, moodsPage, moodsTotalPages]);
+
+  useEffect(() => {
+    // Reset/clamp when data changes (polling, filter changes, etc.)
+    setMoodsPage((p) => Math.min(Math.max(1, p), moodsTotalPages));
+  }, [moodsTotalPages, recentMoods?.length]);
 
   useEffect(() => {
     if (chartPeriod !== "week" && sessionWeekOffset !== 0) {
@@ -1631,6 +1649,35 @@ export function SuperAdminDashboard() {
                   Latest check-ins from the last 30 days (up to 25)
                 </p>
               </div>
+              {recentMoods.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    Page {Math.min(moodsPage, moodsTotalPages)} of {moodsTotalPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-3"
+                    disabled={moodsPage <= 1}
+                    onClick={() => setMoodsPage((p) => Math.max(1, p - 1))}
+                  >
+                    Prev
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-3"
+                    disabled={moodsPage >= moodsTotalPages}
+                    onClick={() =>
+                      setMoodsPage((p) => Math.min(moodsTotalPages, p + 1))
+                    }
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -1639,7 +1686,7 @@ export function SuperAdminDashboard() {
                   No mood check-ins in the last 30 days.
                 </div>
               ) : (
-                recentMoods.map((mood, index) => (
+                pagedRecentMoods.map((mood, index) => (
                   <motion.div
                     key={mood.id}
                     initial={{ opacity: 0, scale: 0.9 }}
