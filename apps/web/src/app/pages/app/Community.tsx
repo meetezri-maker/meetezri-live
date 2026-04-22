@@ -22,6 +22,7 @@ import {
   Pencil,
   Trash2,
   Send,
+  Smile,
 } from "lucide-react";
 import { AnimatedCard } from "@/app/components/AnimatedCard";
 import { Link } from "react-router-dom";
@@ -31,14 +32,7 @@ import { toast } from "sonner";
 import { Switch } from "@/app/components/ui/switch";
 import { Label } from "@/app/components/ui/label";
 import { cn } from "@/app/components/ui/utils";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/app/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 
 type FeedPost = {
   id: string;
@@ -77,6 +71,23 @@ type PostComment = {
   createdAt: string;
 };
 
+const COMMENT_ICONS = ["💬", "🧠", "🌿", "⭐", "📝", "❤️", "🙏", "🔥"] as const;
+const EMOJI_KEYBOARD = [
+  "😀","😁","😂","🤣","😊","😍","😘","😎","🥹","😭","😤","😴",
+  "👍","👎","👏","🙏","💪","🫶","❤️","💜","💙","💚","💛","🧡",
+  "🔥","✨","⭐","🌟","🌿","🍀","🌈","☀️","🌙","☕","🧠","📝",
+] as const;
+
+function splitIconFromComment(content: string): { icon: string | null; text: string } {
+  const raw = (content ?? "").trim();
+  if (!raw) return { icon: null, text: "" };
+  for (const ic of COMMENT_ICONS) {
+    if (raw === ic) return { icon: ic, text: "" };
+    if (raw.startsWith(`${ic} `)) return { icon: ic, text: raw.slice(ic.length).trimStart() };
+  }
+  return { icon: null, text: raw };
+}
+
 type Overview = {
   members: number;
   posts: number;
@@ -107,14 +118,22 @@ export function Community() {
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [groupActionId, setGroupActionId] = useState<string | null>(null);
-  const [commentModalPost, setCommentModalPost] = useState<FeedPost | null>(null);
-  const [comments, setComments] = useState<PostComment[]>([]);
-  const [commentsLoading, setCommentsLoading] = useState(false);
-  const [commentDraft, setCommentDraft] = useState("");
-  const [commentSending, setCommentSending] = useState(false);
+  const [openCommentsPostId, setOpenCommentsPostId] = useState<string | null>(null);
+  const [commentsByPostId, setCommentsByPostId] = useState<Record<string, PostComment[]>>({});
+  const [commentsLoadingByPostId, setCommentsLoadingByPostId] = useState<Record<string, boolean>>({});
+  const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
+  const [commentSendingByPostId, setCommentSendingByPostId] = useState<Record<string, boolean>>({});
+  const [emojiPickerOpenByPostId, setEmojiPickerOpenByPostId] = useState<Record<string, boolean>>({});
+  const [emojiPickerQueryByPostId, setEmojiPickerQueryByPostId] = useState<Record<string, string>>({});
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+
+  const [editingCommentByPostId, setEditingCommentByPostId] = useState<Record<string, string | null>>({});
+  const [editCommentDraftByPostId, setEditCommentDraftByPostId] = useState<Record<string, string>>({});
+  const [editCommentSavingByPostId, setEditCommentSavingByPostId] = useState<Record<string, boolean>>({});
+  const [emojiPickerOpenEditByPostId, setEmojiPickerOpenEditByPostId] = useState<Record<string, boolean>>({});
+  const [emojiPickerQueryEditByPostId, setEmojiPickerQueryEditByPostId] = useState<Record<string, string>>({});
 
   const privacy = (profile?.privacy_settings || {}) as PrivacyCommunity;
   const showDisplayName = privacy.showDisplayNameInCommunity !== false;
@@ -214,38 +233,81 @@ export function Community() {
     }
   };
 
-  const openCommentsModal = async (post: FeedPost) => {
-    setCommentModalPost(post);
-    setComments([]);
-    setCommentDraft("");
-    setCommentsLoading(true);
+  const toggleCommentsForPost = async (post: FeedPost) => {
+    const nextOpen = openCommentsPostId === post.id ? null : post.id;
+    setOpenCommentsPostId(nextOpen);
+    if (!nextOpen) return;
+
+    // Lazy-load comments and cache per post.
+    if (commentsByPostId[post.id]?.length) return;
+    setCommentsLoadingByPostId((m) => ({ ...m, [post.id]: true }));
     try {
       const data = (await api.getCommunityPostComments(post.id)) as PostComment[];
-      setComments(Array.isArray(data) ? data : []);
+      setCommentsByPostId((m) => ({ ...m, [post.id]: Array.isArray(data) ? data : [] }));
     } catch {
       toast.error("Could not load comments");
     } finally {
-      setCommentsLoading(false);
+      setCommentsLoadingByPostId((m) => ({ ...m, [post.id]: false }));
     }
   };
 
-  const handleCommentPost = async () => {
-    if (!commentModalPost) return;
-    if (!commentDraft.trim()) return;
-    setCommentSending(true);
+  const handleCommentPost = async (postId: string) => {
+    const draft = (commentDraftByPostId[postId] || "").trim();
+    if (!draft) return;
+    setCommentSendingByPostId((m) => ({ ...m, [postId]: true }));
     try {
-      const res = (await api.addCommunityPostComment(commentModalPost.id, commentDraft.trim())) as { comments: number };
-      setCommentDraft("");
-      const latest = (await api.getCommunityPostComments(commentModalPost.id)) as PostComment[];
-      setComments(Array.isArray(latest) ? latest : []);
-      setPostsData((prev) =>
-        prev.map((p) => (p.id === commentModalPost.id ? { ...p, comments: res.comments } : p))
-      );
-      toast.success("Comment posted");
+      const res = (await api.addCommunityPostComment(postId, draft)) as { comments: number };
+      setCommentDraftByPostId((m) => ({ ...m, [postId]: "" }));
+      const latest = (await api.getCommunityPostComments(postId)) as PostComment[];
+      setCommentsByPostId((m) => ({ ...m, [postId]: Array.isArray(latest) ? latest : [] }));
+      setPostsData((prev) => prev.map((p) => (p.id === postId ? { ...p, comments: res.comments } : p)));
     } catch {
       toast.error("Could not post comment");
     } finally {
-      setCommentSending(false);
+      setCommentSendingByPostId((m) => ({ ...m, [postId]: false }));
+    }
+  };
+
+  const startEditComment = (postId: string, c: PostComment) => {
+    setEditingCommentByPostId((m) => ({ ...m, [postId]: c.id }));
+    // Keep the full content so any leading emoji icon remains intact.
+    setEditCommentDraftByPostId((m) => ({ ...m, [postId]: c.content }));
+  };
+
+  const cancelEditComment = (postId: string) => {
+    setEditingCommentByPostId((m) => ({ ...m, [postId]: null }));
+    setEditCommentDraftByPostId((m) => ({ ...m, [postId]: "" }));
+  };
+
+  const saveEditComment = async (postId: string, commentId: string) => {
+    const draft = (editCommentDraftByPostId[postId] || "").trim();
+    if (!draft) return;
+    setEditCommentSavingByPostId((m) => ({ ...m, [postId]: true }));
+    try {
+      await api.updateCommunityPostComment(postId, commentId, draft);
+      const latest = (await api.getCommunityPostComments(postId)) as PostComment[];
+      setCommentsByPostId((m) => ({ ...m, [postId]: Array.isArray(latest) ? latest : [] }));
+      cancelEditComment(postId);
+      toast.success("Comment updated");
+    } catch {
+      toast.error("Could not update comment");
+    } finally {
+      setEditCommentSavingByPostId((m) => ({ ...m, [postId]: false }));
+    }
+  };
+
+  const deleteComment = async (postId: string, commentId: string) => {
+    if (!window.confirm("Delete this comment?")) return;
+    try {
+      const res = (await api.deleteCommunityPostComment(postId, commentId)) as { ok: boolean; comments?: number };
+      const latest = (await api.getCommunityPostComments(postId)) as PostComment[];
+      setCommentsByPostId((m) => ({ ...m, [postId]: Array.isArray(latest) ? latest : [] }));
+      if (typeof res?.comments === "number") {
+        setPostsData((prev) => prev.map((p) => (p.id === postId ? { ...p, comments: res.comments! } : p)));
+      }
+      toast.success("Comment deleted");
+    } catch {
+      toast.error("Could not delete comment");
     }
   };
 
@@ -690,8 +752,8 @@ export function Community() {
                             <button
                               type="button"
                               className="flex items-center gap-2 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-                              onClick={() => openCommentsModal(post)}
-                              aria-label="Comment on post"
+                              onClick={() => toggleCommentsForPost(post)}
+                              aria-label={openCommentsPostId === post.id ? "Hide comments" : "Show comments"}
                             >
                               <MessageSquare className="w-4 h-4" />
                               {post.comments}
@@ -710,6 +772,264 @@ export function Community() {
                             </motion.button>
                           </div>
                         </div>
+
+                        {/* Inline comments (Instagram-style) */}
+                        {openCommentsPostId === post.id && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="mt-4 rounded-2xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900/40 overflow-hidden"
+                          >
+                            <div className="max-h-64 overflow-auto p-4 space-y-3">
+                              {commentsLoadingByPostId[post.id] ? (
+                                <div className="py-6 flex items-center justify-center">
+                                  <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
+                                </div>
+                              ) : (commentsByPostId[post.id] || []).length === 0 ? (
+                                <p className="text-sm text-muted-foreground py-2">No comments yet. Be the first one.</p>
+                              ) : (
+                                (commentsByPostId[post.id] || []).map((c) => (
+                                  <div key={c.id} className="flex items-start gap-3">
+                                    <div className="shrink-0">
+                                      {c.author.avatarUrl ? (
+                                        <img
+                                          src={c.author.avatarUrl}
+                                          alt=""
+                                          className="w-8 h-8 rounded-full object-cover border border-gray-200 dark:border-slate-700"
+                                        />
+                                      ) : (
+                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-200 to-blue-200 dark:from-purple-900 dark:to-blue-900 flex items-center justify-center text-[10px] font-bold text-purple-900 dark:text-purple-100">
+                                          {initials(c.author.name)}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                                          {c.author.name}
+                                        </p>
+                                        <p className="text-[11px] text-gray-500 dark:text-slate-400 shrink-0">
+                                          {(() => {
+                                            try {
+                                              return formatDistanceToNow(parseISO(c.createdAt), { addSuffix: true });
+                                            } catch {
+                                              return "recently";
+                                            }
+                                          })()}
+                                        </p>
+                                      </div>
+                                      {editingCommentByPostId[post.id] === c.id ? (
+                                        <div className="mt-1 space-y-2">
+                                          <div className="flex items-center gap-2">
+                                            <Popover
+                                              open={Boolean(emojiPickerOpenEditByPostId[post.id])}
+                                              onOpenChange={(open) =>
+                                                setEmojiPickerOpenEditByPostId((m) => ({ ...m, [post.id]: open }))
+                                              }
+                                            >
+                                              <PopoverTrigger asChild>
+                                                <button
+                                                  type="button"
+                                                  className="h-7 w-7 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-300 hover:border-purple-300 dark:hover:border-purple-600"
+                                                  title="Emoji keyboard"
+                                                  aria-label="Open emoji keyboard"
+                                                >
+                                                  <Smile className="w-4 h-4 mx-auto" />
+                                                </button>
+                                              </PopoverTrigger>
+                                              <PopoverContent className="w-72" align="start">
+                                                <input
+                                                  value={emojiPickerQueryEditByPostId[post.id] || ""}
+                                                  onChange={(e) =>
+                                                    setEmojiPickerQueryEditByPostId((m) => ({
+                                                      ...m,
+                                                      [post.id]: e.target.value,
+                                                    }))
+                                                  }
+                                                  placeholder="Search emoji…"
+                                                  className="mb-2 w-full rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm"
+                                                />
+                                                <div className="grid grid-cols-8 gap-1 max-h-44 overflow-auto">
+                                                  {EMOJI_KEYBOARD.filter((emo) => {
+                                                    const q = (emojiPickerQueryEditByPostId[post.id] || "").trim();
+                                                    if (!q) return true;
+                                                    return emo.includes(q);
+                                                  }).map((emo) => (
+                                                    <button
+                                                      key={emo}
+                                                      type="button"
+                                                      className="text-lg p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+                                                      onClick={() => {
+                                                        setEditCommentDraftByPostId((m) => ({
+                                                          ...m,
+                                                          [post.id]: `${m[post.id] || ""}${emo}`,
+                                                        }));
+                                                        setEmojiPickerOpenEditByPostId((m) => ({ ...m, [post.id]: false }));
+                                                      }}
+                                                    >
+                                                      {emo}
+                                                    </button>
+                                                  ))}
+                                                </div>
+                                              </PopoverContent>
+                                            </Popover>
+                                          </div>
+                                          <textarea
+                                            value={editCommentDraftByPostId[post.id] || ""}
+                                            onChange={(e) =>
+                                              setEditCommentDraftByPostId((m) => ({
+                                                ...m,
+                                                [post.id]: e.target.value,
+                                              }))
+                                            }
+                                            rows={2}
+                                            className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400"
+                                          />
+                                          <div className="flex items-center gap-2">
+                                            <button
+                                              type="button"
+                                              className="px-3 py-1.5 rounded-xl bg-purple-600 text-white text-xs disabled:opacity-60"
+                                              onClick={() => saveEditComment(post.id, c.id)}
+                                              disabled={
+                                                Boolean(editCommentSavingByPostId[post.id]) ||
+                                                !(editCommentDraftByPostId[post.id] || "").trim()
+                                              }
+                                            >
+                                              {editCommentSavingByPostId[post.id] ? "Saving..." : "Save"}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-slate-700 text-xs"
+                                              onClick={() => cancelEditComment(post.id)}
+                                              disabled={Boolean(editCommentSavingByPostId[post.id])}
+                                            >
+                                              Cancel
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        (() => {
+                                          const { icon, text } = splitIconFromComment(c.content);
+                                          return (
+                                            <div className="mt-1">
+                                              <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap break-words">
+                                                {icon ? <span className="mr-1">{icon}</span> : null}
+                                                {text}
+                                              </p>
+                                              {c.isByCurrentUser ? (
+                                                <div className="mt-1 flex items-center gap-2">
+                                                  <button
+                                                    type="button"
+                                                    className="p-1 rounded-md text-gray-500 hover:text-purple-600 hover:bg-purple-50 dark:text-slate-400 dark:hover:text-purple-400 dark:hover:bg-slate-800/60 transition-colors"
+                                                    onClick={() => startEditComment(post.id, c)}
+                                                    aria-label="Edit comment"
+                                                  >
+                                                    <Pencil className="w-4 h-4" />
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    className="p-1 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-50 dark:text-slate-400 dark:hover:text-red-400 dark:hover:bg-slate-800/60 transition-colors"
+                                                    onClick={() => void deleteComment(post.id, c.id)}
+                                                    aria-label="Delete comment"
+                                                  >
+                                                    <Trash2 className="w-4 h-4" />
+                                                  </button>
+                                                </div>
+                                              ) : null}
+                                            </div>
+                                          );
+                                        })()
+                                      )}
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+
+                            <div className="border-t border-gray-200 dark:border-slate-800 p-3 bg-white dark:bg-slate-900">
+                              <div className="flex items-center gap-2">
+                                <Popover
+                                  open={Boolean(emojiPickerOpenByPostId[post.id])}
+                                  onOpenChange={(open) =>
+                                    setEmojiPickerOpenByPostId((m) => ({ ...m, [post.id]: open }))
+                                  }
+                                >
+                                  <PopoverTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="h-9 w-9 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-300 hover:border-purple-300 dark:hover:border-purple-600"
+                                      title="Emoji keyboard"
+                                      aria-label="Open emoji keyboard"
+                                    >
+                                      <Smile className="w-4 h-4 mx-auto" />
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-72" align="start">
+                                    <input
+                                      value={emojiPickerQueryByPostId[post.id] || ""}
+                                      onChange={(e) =>
+                                        setEmojiPickerQueryByPostId((m) => ({
+                                          ...m,
+                                          [post.id]: e.target.value,
+                                        }))
+                                      }
+                                      placeholder="Search emoji…"
+                                      className="mb-2 w-full rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm"
+                                    />
+                                    <div className="grid grid-cols-8 gap-1 max-h-44 overflow-auto">
+                                      {EMOJI_KEYBOARD.filter((emo) => {
+                                        const q = (emojiPickerQueryByPostId[post.id] || "").trim();
+                                        if (!q) return true;
+                                        return emo.includes(q);
+                                      }).map((emo) => (
+                                        <button
+                                          key={emo}
+                                          type="button"
+                                          className="text-lg p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+                                          onClick={() => {
+                                            setCommentDraftByPostId((m) => ({
+                                              ...m,
+                                              [post.id]: `${m[post.id] || ""}${emo}`,
+                                            }));
+                                            setEmojiPickerOpenByPostId((m) => ({ ...m, [post.id]: false }));
+                                          }}
+                                        >
+                                          {emo}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                                <input
+                                  value={commentDraftByPostId[post.id] || ""}
+                                  onChange={(e) =>
+                                    setCommentDraftByPostId((m) => ({ ...m, [post.id]: e.target.value }))
+                                  }
+                                  placeholder="Add a comment..."
+                                  className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400"
+                                />
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-purple-600 text-white text-sm disabled:opacity-60"
+                                  onClick={() => handleCommentPost(post.id)}
+                                  disabled={
+                                    Boolean(commentSendingByPostId[post.id]) ||
+                                    !(commentDraftByPostId[post.id] || "").trim()
+                                  }
+                                >
+                                  {commentSendingByPostId[post.id] ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Send className="w-4 h-4" />
+                                  )}
+                                  Post
+                                </button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
                       </div>
                     </AnimatedCard>
                     );
@@ -947,63 +1267,6 @@ export function Community() {
           </motion.div>
         </motion.div>
       )}
-
-      <Dialog open={Boolean(commentModalPost)} onOpenChange={(v) => !v && setCommentModalPost(null)}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Comments</DialogTitle>
-            <DialogDescription>
-              {commentModalPost ? `On: ${commentModalPost.content.slice(0, 80)}${commentModalPost.content.length > 80 ? "..." : ""}` : ""}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-[45vh] overflow-auto space-y-3 pr-1">
-            {commentsLoading ? (
-              <div className="py-8 flex items-center justify-center">
-                <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
-              </div>
-            ) : comments.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">No comments yet. Be the first one.</p>
-            ) : (
-              comments.map((c) => (
-                <div key={c.id} className="rounded-xl border border-gray-200 dark:border-slate-700 p-3 bg-gray-50 dark:bg-slate-900/40">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{c.author.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">
-                      {(() => {
-                        try {
-                          return formatDistanceToNow(parseISO(c.createdAt), { addSuffix: true });
-                        } catch {
-                          return "recently";
-                        }
-                      })()}
-                    </p>
-                  </div>
-                  <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap">{c.content}</p>
-                </div>
-              ))
-            )}
-          </div>
-          <DialogFooter>
-            <div className="w-full flex items-center gap-2">
-              <input
-                value={commentDraft}
-                onChange={(e) => setCommentDraft(e.target.value)}
-                placeholder="Write your comment..."
-                className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
-              />
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-purple-600 text-white text-sm disabled:opacity-60"
-                onClick={handleCommentPost}
-                disabled={commentSending || !commentDraft.trim()}
-              >
-                {commentSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                Send
-              </button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </AppLayout>
   );
 }

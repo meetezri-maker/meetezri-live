@@ -53,6 +53,29 @@ function resolveAuthorDisplayName(
   return (fullName && fullName.trim()) || 'Member';
 }
 
+async function ensureCommunityPostAuthorSnapshotsTable(): Promise<void> {
+  await prisma.$executeRaw`
+    CREATE TABLE IF NOT EXISTS public.community_post_author_snapshots (
+      post_id uuid PRIMARY KEY REFERENCES public.community_posts(id) ON DELETE CASCADE,
+      author_name text NOT NULL,
+      author_avatar_url text,
+      author_user_id uuid,
+      created_at timestamptz NOT NULL DEFAULT timezone('utc'::text, now())
+    )
+  `;
+}
+
+function resolveSnapshotAuthorUserId(
+  viewerUserId: string,
+  authorUserId: string,
+  privacy: unknown,
+  displayName: string
+): string | null {
+  if (displayName === 'Anonymous') return null;
+  if (viewerUserId === authorUserId) return authorUserId;
+  return isProfileVisibleToCommunityOthers(privacy) ? authorUserId : null;
+}
+
 export async function getCommunityOverview() {
   const [
     groupCount,
@@ -235,9 +258,31 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
     }
   }
 
+  const snapshotByPostId = new Map<
+    string,
+    { author_name: string; author_avatar_url: string | null; author_user_id: string | null }
+  >();
+  if (postIds.length > 0) {
+    await ensureCommunityPostAuthorSnapshotsTable();
+    const rows = await prisma.$queryRaw<
+      Array<{ post_id: string; author_name: string; author_avatar_url: string | null; author_user_id: string | null }>
+    >(Prisma.sql`
+      SELECT post_id, author_name, author_avatar_url, author_user_id
+      FROM public.community_post_author_snapshots
+      WHERE post_id IN (${Prisma.join(postIds.map((id) => Prisma.sql`${id}::uuid`))})
+    `);
+    for (const r of rows) {
+      snapshotByPostId.set(r.post_id, {
+        author_name: r.author_name,
+        author_avatar_url: r.author_avatar_url,
+        author_user_id: r.author_user_id,
+      });
+    }
+  }
+
   return posts.map((p) => {
     const profile = p.profiles;
-    const displayName = resolveAuthorDisplayName(profile?.full_name, profile?.privacy_settings);
+    const fallbackDisplayName = resolveAuthorDisplayName(profile?.full_name, profile?.privacy_settings);
     let authorRole: 'member' | 'moderator' | 'companion' = 'member';
     if (profile?.role === 'therapist') authorRole = 'companion';
     else if (p.group_id) {
@@ -251,22 +296,28 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
       (p.tags && p.tags[0]) ||
       'General Discussion';
 
+    const snap = snapshotByPostId.get(p.id);
+    const displayName = snap?.author_name ?? fallbackDisplayName;
+    const avatarUrl =
+      snap?.author_avatar_url !== undefined
+        ? snap.author_avatar_url
+        : resolveCommunityAvatarUrl(profile?.avatar_url, profile?.privacy_settings);
+    const authorUserId =
+      snap?.author_user_id !== undefined
+        ? snap.author_user_id
+        : resolveSnapshotAuthorUserId(userId, p.user_id, profile?.privacy_settings, displayName);
+
     return {
       id: p.id,
       author: {
         name: displayName,
-        avatarUrl: resolveCommunityAvatarUrl(profile?.avatar_url, profile?.privacy_settings),
+        avatarUrl,
         role: authorRole,
       },
       /** True when this post belongs to the requesting user. */
       isByCurrentUser: p.user_id === userId,
       /** Set when the author is not anonymous and allows profile discovery — use for “view profile” links. */
-      authorUserId:
-        displayName === 'Anonymous'
-          ? null
-          : p.user_id === userId || isProfileVisibleToCommunityOthers(profile?.privacy_settings)
-            ? p.user_id
-            : null,
+      authorUserId,
       content: p.content,
       category,
       createdAt: p.created_at.toISOString(),
@@ -286,7 +337,7 @@ export async function createCommunityPost(
 ) {
   const profile = await prisma.profiles.findUnique({
     where: { id: userId },
-    select: { privacy_settings: true },
+    select: { privacy_settings: true, full_name: true, avatar_url: true },
   });
   const ps = profile?.privacy_settings as PrivacyJson;
   if (ps?.communityEnabled === false) {
@@ -328,6 +379,17 @@ export async function createCommunityPost(
       likes_count: 0,
     },
   });
+
+  // Snapshot author fields at time of posting so older posts don't change when privacy settings change.
+  await ensureCommunityPostAuthorSnapshotsTable();
+  const displayName = resolveAuthorDisplayName(profile?.full_name, profile?.privacy_settings);
+  const avatarUrl = resolveCommunityAvatarUrl(profile?.avatar_url, profile?.privacy_settings);
+  const authorUserId = resolveSnapshotAuthorUserId(userId, userId, profile?.privacy_settings, displayName);
+  await prisma.$executeRaw`
+    INSERT INTO public.community_post_author_snapshots (post_id, author_name, author_avatar_url, author_user_id)
+    VALUES (${created.id}::uuid, ${displayName}, ${avatarUrl}, ${authorUserId}::uuid)
+    ON CONFLICT (post_id) DO NOTHING
+  `;
 
   invalidateCommunityCaches();
   return created;
@@ -609,6 +671,57 @@ export async function getPostCommentsForUser(viewerUserId: string, postId: strin
       createdAt: c.created_at.toISOString(),
     };
   });
+}
+
+export async function updatePostComment(
+  userId: string,
+  postId: string,
+  commentId: string,
+  content: string
+) {
+  const comment = await prisma.community_comments.findFirst({
+    where: { id: commentId, post_id: postId },
+    select: { user_id: true },
+  });
+  if (!comment) {
+    const err = new Error('Comment not found');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+  if (comment.user_id !== userId) {
+    const err = new Error('You can only edit your own comments');
+    (err as any).statusCode = 403;
+    throw err;
+  }
+
+  await prisma.community_comments.update({
+    where: { id: commentId },
+    data: { content: content.trim() },
+  });
+  invalidateCommunityCaches();
+  return { ok: true };
+}
+
+export async function deletePostComment(userId: string, postId: string, commentId: string) {
+  const comment = await prisma.community_comments.findFirst({
+    where: { id: commentId, post_id: postId },
+    select: { user_id: true },
+  });
+  if (!comment) {
+    const err = new Error('Comment not found');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+  if (comment.user_id !== userId) {
+    const err = new Error('You can only delete your own comments');
+    (err as any).statusCode = 403;
+    throw err;
+  }
+
+  await prisma.community_comments.delete({ where: { id: commentId } });
+  const comments = await prisma.community_comments.count({ where: { post_id: postId } });
+  invalidateCommunityCaches();
+  return { ok: true, comments };
 }
 
 export async function updateCommunityPost(userId: string, postId: string, content: string) {

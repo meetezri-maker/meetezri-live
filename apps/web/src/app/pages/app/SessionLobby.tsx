@@ -47,6 +47,8 @@ interface UpcomingSession {
   id: string;
   avatarName: string;
   avatarImage?: string;
+  icon?: string;
+  comment?: string;
   type: string;
   date: string;
   duration: string;
@@ -108,6 +110,8 @@ export function SessionLobby() {
 
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
+  const [scheduleComment, setScheduleComment] = useState("");
+  const [scheduleIcon, setScheduleIcon] = useState("💬");
   const [isStarting, setIsStarting] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const [upcomingSessions, setUpcomingSessions] = useState<UpcomingSession[]>([]);
@@ -330,6 +334,18 @@ export function SessionLobby() {
         const isExpired = !!scheduledDate && scheduledDate.getTime() < now.getTime() && session.status === "scheduled";
         const avatarName = session.config?.avatar || selectedAvatar || "Alex";
         const avatarPreview = lobbyAvatarByName(avatarName);
+        const icon =
+          typeof session.config?.icon === "string"
+            ? session.config.icon
+            : typeof session.config?.emoji === "string"
+              ? session.config.emoji
+              : undefined;
+        const comment =
+          typeof session.config?.comment === "string"
+            ? session.config.comment
+            : typeof session.config?.notes === "string"
+              ? session.config.notes
+              : undefined;
         const date = scheduledDate
           ? scheduledDate.toLocaleString("en-US", {
               month: "short",
@@ -346,6 +362,8 @@ export function SessionLobby() {
           id: session.id,
           avatarName: avatarPreview.name,
           avatarImage: avatarPreview.cardImage,
+          icon,
+          comment,
           type: session.type === "instant" ? "Instant" : "Scheduled",
           date,
           duration: session.duration_minutes ? `${session.duration_minutes} min` : "N/A",
@@ -414,13 +432,17 @@ export function SessionLobby() {
     try {
       const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
       const avatarToUse = scheduleAvatarOverride || selectedAvatar;
+      const nextComment = scheduleComment.trim();
+      const nextIcon = scheduleIcon.trim();
       if (editingScheduledSessionId) {
         await api.sessions.updateScheduled(editingScheduledSessionId, {
           duration_minutes: selectedDuration,
           scheduled_at: scheduledAt,
           config: {
             voice: selectedVoice,
-            avatar: avatarToUse
+            avatar: avatarToUse,
+            comment: nextComment || undefined,
+            icon: nextIcon || undefined,
           }
         });
         toast.success("Scheduled session updated");
@@ -430,7 +452,9 @@ export function SessionLobby() {
           scheduled_at: scheduledAt,
           config: {
             voice: selectedVoice,
-            avatar: avatarToUse
+            avatar: avatarToUse,
+            comment: nextComment || undefined,
+            icon: nextIcon || undefined,
           }
         });
         toast.success("Session scheduled successfully");
@@ -438,6 +462,8 @@ export function SessionLobby() {
       setShowScheduleModal(false);
       setScheduleAvatarOverride(null);
       setEditingScheduledSessionId(null);
+      setScheduleComment("");
+      setScheduleIcon("💬");
       loadUpcomingSessions();
     } catch (err: any) {
       const message = err?.message || "Failed to schedule session";
@@ -476,6 +502,8 @@ export function SessionLobby() {
     setShowScheduleModal(false);
     setEditingScheduledSessionId(null);
     setScheduleAvatarOverride(null);
+    setScheduleComment("");
+    setScheduleIcon("💬");
   };
 
   const voices = [
@@ -488,7 +516,9 @@ export function SessionLobby() {
   const tempSelectedAvatarIsFemale = isFemaleAvatarName(tempSelectedAvatar);
 
   const isVoiceDisabledForAvatar = (voiceGender: string): boolean => {
-    return tempSelectedAvatarIsFemale && voiceGender.toLowerCase() === "female";
+    const vg = voiceGender.trim().toLowerCase();
+    if (tempSelectedAvatarIsFemale) return vg !== "female";
+    return vg !== "male";
   };
 
   const stopVoicePreview = () => {
@@ -546,13 +576,22 @@ export function SessionLobby() {
   }, []);
 
   useEffect(() => {
-    if (!isVoiceDisabledForAvatar("Female")) return;
     const selectedVoiceMeta = voices.find((v) => v.name === tempSelectedVoice);
-    if (selectedVoiceMeta && selectedVoiceMeta.gender.toLowerCase() === "female") {
-      const fallbackMale = voices.find((v) => v.gender.toLowerCase() === "male");
-      if (fallbackMale) setTempSelectedVoice(fallbackMale.name);
-    }
-  }, [tempSelectedAvatar, tempSelectedVoice]);
+    if (!selectedVoiceMeta) return;
+    if (!isVoiceDisabledForAvatar(selectedVoiceMeta.gender)) return;
+
+    const fallback = voices.find((v) =>
+      tempSelectedAvatarIsFemale
+        ? v.gender.toLowerCase() === "female"
+        : v.gender.toLowerCase() === "male"
+    );
+    if (fallback) setTempSelectedVoice(fallback.name);
+  }, [tempSelectedAvatar, tempSelectedAvatarIsFemale, tempSelectedVoice]);
+
+  useEffect(() => {
+    if (showCustomizeModal) return;
+    stopVoicePreview();
+  }, [showCustomizeModal]);
 
   const [sessionAvatarList, setSessionAvatarList] = useState(LOBBY_AVATARS);
 
@@ -1181,7 +1220,7 @@ export function SessionLobby() {
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="h-11 w-11 rounded-full overflow-hidden ring-2 ring-white/80 dark:ring-gray-900 shadow-sm shrink-0 bg-muted/60">
+                        <div className="relative h-11 w-11 rounded-full overflow-hidden ring-2 ring-white/80 dark:ring-gray-900 shadow-sm shrink-0 bg-muted/60">
                           {session.avatarImage ? (
                             <img
                               src={session.avatarImage}
@@ -1193,10 +1232,20 @@ export function SessionLobby() {
                               <User className="h-5 w-5 text-muted-foreground" aria-hidden />
                             </div>
                           )}
+                          {session.icon ? (
+                            <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-white dark:bg-gray-900 flex items-center justify-center text-[11px] shadow ring-1 ring-black/5 dark:ring-white/10">
+                              {session.icon}
+                            </div>
+                          ) : null}
                         </div>
                         <div className="flex-1">
                           <p className="font-semibold text-sm">{session.avatarName}</p>
                           <p className="text-xs text-muted-foreground">{session.date}</p>
+                          {session.comment ? (
+                            <p className="mt-1 text-[11px] text-muted-foreground line-clamp-1">
+                              {session.comment}
+                            </p>
+                          ) : null}
                         </div>
                         <span
                           className={`text-[10px] uppercase tracking-wide font-semibold px-2 py-1 rounded-full ${
@@ -1585,6 +1634,57 @@ export function SessionLobby() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Comment & Icon */}
+                      <div className="mb-2">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Sparkles className="w-5 h-5 text-primary" />
+                          <h3 className="font-bold text-lg">Add a note</h3>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                          <div className="sm:col-span-1 p-4 rounded-xl border-2 dark:border-gray-700 transition-all text-left relative bg-gray-50 dark:bg-gray-800/50">
+                            <label className="block text-xs text-muted-foreground mb-2">Icon</label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                value={scheduleIcon}
+                                onChange={(e) => setScheduleIcon(e.target.value)}
+                                maxLength={2}
+                                className="w-14 text-center text-xl p-2 border-none outline-none bg-transparent dark:text-white"
+                                aria-label="Session icon"
+                              />
+                              <div className="flex flex-wrap gap-1">
+                                {["💬", "🧠", "🌿", "⭐", "📝", "❤️"].map((ic) => (
+                                  <button
+                                    key={ic}
+                                    type="button"
+                                    onClick={() => setScheduleIcon(ic)}
+                                    className={`h-8 w-8 rounded-lg border text-sm transition-colors ${
+                                      scheduleIcon === ic
+                                        ? "border-primary bg-primary/10"
+                                        : "border-border hover:border-primary/40"
+                                    }`}
+                                    aria-label={`Set icon ${ic}`}
+                                  >
+                                    {ic}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="sm:col-span-4 p-4 rounded-xl border-2 dark:border-gray-700 transition-all text-left relative bg-gray-50 dark:bg-gray-800/50">
+                            <label className="block text-xs text-muted-foreground mb-2">Comment</label>
+                            <textarea
+                              value={scheduleComment}
+                              onChange={(e) => setScheduleComment(e.target.value)}
+                              rows={3}
+                              placeholder="Optional: what would you like to focus on next time?"
+                              className="w-full resize-none p-2 border-none outline-none bg-transparent dark:text-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Footer Buttons - Fixed */}
@@ -1705,6 +1805,8 @@ export function SessionLobby() {
                         setScheduleAvatarOverride(activeUpcomingSession.avatarName);
                         setEditingScheduledSessionId(activeUpcomingSession.id);
                         setSelectedDuration(activeUpcomingSession.durationMinutes || selectedDuration);
+                        setScheduleComment(activeUpcomingSession.comment ?? "");
+                        setScheduleIcon(activeUpcomingSession.icon ?? "💬");
                         if (activeUpcomingSession.scheduledAt) {
                           const dt = new Date(activeUpcomingSession.scheduledAt);
                           const yyyy = dt.getFullYear();

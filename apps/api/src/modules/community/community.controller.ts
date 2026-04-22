@@ -146,6 +146,41 @@ export async function getPostCommentsHandler(
   }
 }
 
+export async function updateCommentHandler(
+  request: FastifyRequest<{ Params: { postId: string; commentId: string }; Body: { content: string } }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const content = request.body?.content;
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    return reply.code(400).send({ message: 'Comment content is required' });
+  }
+  try {
+    return await communityService.updatePostComment(
+      user.sub,
+      request.params.postId,
+      request.params.commentId,
+      content
+    );
+  } catch (err: any) {
+    const code = err?.statusCode || 500;
+    return reply.code(code).send({ message: err?.message || 'Failed to update comment' });
+  }
+}
+
+export async function deleteCommentHandler(
+  request: FastifyRequest<{ Params: { postId: string; commentId: string } }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  try {
+    return await communityService.deletePostComment(user.sub, request.params.postId, request.params.commentId);
+  } catch (err: any) {
+    const code = err?.statusCode || 500;
+    return reply.code(code).send({ message: err?.message || 'Failed to delete comment' });
+  }
+}
+
 export async function updatePostHandler(
   request: FastifyRequest<{ Params: { postId: string }; Body: { content: string } }>,
   reply: FastifyReply
