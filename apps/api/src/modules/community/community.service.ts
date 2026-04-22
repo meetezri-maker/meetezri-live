@@ -42,6 +42,17 @@ async function ensureCommunityPostLikesTable(): Promise<void> {
   `;
 }
 
+async function ensureCommunityPostViewsTable(): Promise<void> {
+  await prisma.$executeRaw`
+    CREATE TABLE IF NOT EXISTS public.community_post_views (
+      post_id uuid NOT NULL REFERENCES public.community_posts(id) ON DELETE CASCADE,
+      user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+      viewed_at timestamptz NOT NULL DEFAULT timezone('utc'::text, now()),
+      PRIMARY KEY (post_id, user_id)
+    )
+  `;
+}
+
 function resolveAuthorDisplayName(
   fullName: string | null | undefined,
   privacy: unknown
@@ -200,22 +211,19 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
   const postIds = posts.map((p) => p.id);
   const viewsByPost = new Map<string, number>();
   if (postIds.length > 0) {
-    await prisma.$executeRaw`
-      CREATE TABLE IF NOT EXISTS public.community_post_views (
-        post_id uuid NOT NULL REFERENCES public.community_posts(id) ON DELETE CASCADE,
-        user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-        viewed_at timestamptz NOT NULL DEFAULT timezone('utc'::text, now()),
-        PRIMARY KEY (post_id, user_id)
-      )
-    `;
-
-    for (const postId of postIds) {
-      await prisma.$executeRaw`
+    await ensureCommunityPostViewsTable();
+    // Single batched insert instead of N inserts (much faster).
+    // Prisma's TS overloads can be picky with nested Sql values; runtime supports this shape.
+    await (prisma as any).$executeRaw(
+      Prisma.sql`
         INSERT INTO public.community_post_views (post_id, user_id)
-        VALUES (${postId}::uuid, ${userId}::uuid)
+        VALUES ${Prisma.join(
+          postIds.map((postId) => Prisma.sql`(${postId}::uuid, ${userId}::uuid)`),
+          ', '
+        )}
         ON CONFLICT (post_id, user_id) DO NOTHING
-      `;
-    }
+      `
+    );
 
     const viewRows = await prisma.$queryRaw<Array<{ post_id: string; views: bigint }>>(
       Prisma.sql`
@@ -724,7 +732,12 @@ export async function deletePostComment(userId: string, postId: string, commentI
   return { ok: true, comments };
 }
 
-export async function updateCommunityPost(userId: string, postId: string, content: string) {
+export async function updateCommunityPost(
+  userId: string,
+  postId: string,
+  content: string,
+  tags?: string[]
+) {
   const post = await prisma.community_posts.findFirst({
     where: { id: postId, deleted_at: null },
     select: { user_id: true },
@@ -739,9 +752,16 @@ export async function updateCommunityPost(userId: string, postId: string, conten
     (err as any).statusCode = 403;
     throw err;
   }
+  const normalizedTags =
+    tags === undefined
+      ? undefined
+      : tags
+          .map((t) => String(t || '').trim())
+          .filter(Boolean)
+          .slice(0, 20);
   await prisma.community_posts.update({
     where: { id: postId },
-    data: { content: content.trim() },
+    data: { content: content.trim(), ...(normalizedTags ? { tags: normalizedTags } : {}) },
   });
   invalidateCommunityCaches();
   return { ok: true };

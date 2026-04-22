@@ -182,16 +182,20 @@ export async function deleteCommentHandler(
 }
 
 export async function updatePostHandler(
-  request: FastifyRequest<{ Params: { postId: string }; Body: { content: string } }>,
+  request: FastifyRequest<{ Params: { postId: string }; Body: { content: string; tags?: string[] } }>,
   reply: FastifyReply
 ) {
   const user = request.user as UserPayload;
   const content = request.body?.content;
+  const tags = request.body?.tags;
   if (!content || typeof content !== 'string' || !content.trim()) {
     return reply.code(400).send({ message: 'Content is required' });
   }
+  if (tags !== undefined && !Array.isArray(tags)) {
+    return reply.code(400).send({ message: 'Tags must be an array' });
+  }
   try {
-    return await communityService.updateCommunityPost(user.sub, request.params.postId, content);
+    return await communityService.updateCommunityPost(user.sub, request.params.postId, content, tags);
   } catch (err: any) {
     const code = err?.statusCode || 500;
     return reply.code(code).send({ message: err?.message || 'Failed to update post' });

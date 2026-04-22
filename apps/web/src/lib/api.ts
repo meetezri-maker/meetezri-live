@@ -313,12 +313,12 @@ export const api = {
     return handleResponse(res, 'Failed to delete comment');
   },
 
-  async updateCommunityPost(postId: string, content: string) {
+  async updateCommunityPost(postId: string, content: string, tags?: string[]) {
     const headers = await getHeaders();
     const res = await fetch(`${API_URL}/community/posts/${postId}`, {
       method: 'PATCH',
       headers,
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, ...(tags ? { tags } : {}) }),
     });
     return handleResponse(res, 'Failed to update post');
   },

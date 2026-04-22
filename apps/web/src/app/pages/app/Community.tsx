@@ -127,6 +127,7 @@ export function Community() {
   const [emojiPickerQueryByPostId, setEmojiPickerQueryByPostId] = useState<Record<string, string>>({});
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
+  const [editTagsDraft, setEditTagsDraft] = useState("");
   const [editSaving, setEditSaving] = useState(false);
 
   const [editingCommentByPostId, setEditingCommentByPostId] = useState<Record<string, string | null>>({});
@@ -325,18 +326,27 @@ export function Community() {
   const startEditPost = (post: FeedPost) => {
     setEditingPostId(post.id);
     setEditDraft(post.content);
+    setEditTagsDraft(post.tags.join(", "));
   };
 
   const saveEditPost = async (postId: string) => {
     if (!editDraft.trim()) return;
+    const nextTags = editTagsDraft
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 20);
     setEditSaving(true);
     try {
-      await api.updateCommunityPost(postId, editDraft.trim());
+      await api.updateCommunityPost(postId, editDraft.trim(), nextTags);
       setPostsData((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, content: editDraft.trim() } : p))
+        prev.map((p) =>
+          p.id === postId ? { ...p, content: editDraft.trim(), tags: nextTags } : p
+        )
       );
       setEditingPostId(null);
       setEditDraft("");
+      setEditTagsDraft("");
       toast.success("Post updated");
     } catch {
       toast.error("Could not update post");
@@ -381,7 +391,10 @@ export function Community() {
       setNewPostGroupId("");
       setNewPostCategory("General Discussion");
       setShowNewPostModal(false);
-      await loadData();
+      // Fast path: only refresh posts (skip overview+groups).
+      const posts = (await api.getCommunityPosts(40)) as FeedPost[];
+      setPostsData(Array.isArray(posts) ? posts : []);
+      setOverview((prev) => (prev ? { ...prev, posts: prev.posts + 1 } : prev));
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to publish");
     } finally {
@@ -600,58 +613,58 @@ export function Community() {
                       "flex items-start gap-4 mb-4 rounded-xl -mx-2 px-2 pt-2 pb-1 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50";
                     const authorRowStatic = "flex items-start gap-4 mb-4";
                     const authorHeader = (
-                      <>
-                        <div className="shrink-0">
-                          {post.author.avatarUrl ? (
-                            <img
-                              src={post.author.avatarUrl}
-                              alt=""
-                              className="w-12 h-12 rounded-full object-cover border border-gray-200 dark:border-slate-700"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-200 to-blue-200 dark:from-purple-900 dark:to-blue-900 flex items-center justify-center text-sm font-bold text-purple-900 dark:text-purple-100">
-                              {initials(post.author.name)}
+                      <div className="flex items-start justify-between gap-4 w-full">
+                        <div className="flex items-start gap-4 min-w-0">
+                          <div className="shrink-0">
+                            {post.author.avatarUrl ? (
+                              <img
+                                src={post.author.avatarUrl}
+                                alt=""
+                                className="w-12 h-12 rounded-full object-cover border border-gray-200 dark:border-slate-700"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-200 to-blue-200 dark:from-purple-900 dark:to-blue-900 flex items-center justify-center text-sm font-bold text-purple-900 dark:text-purple-100">
+                                {initials(post.author.name)}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate">{post.author.name}</h3>
+                              <span
+                                className={`text-xs px-2 py-1 rounded-full ${getRoleBadge(post.author.role).bg} ${getRoleBadge(post.author.role).text}`}
+                              >
+                                {getRoleBadge(post.author.role).label}
+                              </span>
                             </div>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white truncate">{post.author.name}</h3>
-                            <span
-                              className={`text-xs px-2 py-1 rounded-full ${getRoleBadge(post.author.role).bg} ${getRoleBadge(post.author.role).text}`}
-                            >
-                              {getRoleBadge(post.author.role).label}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 flex-wrap">
-                            <span>{post.category}</span>
-                            <span>•</span>
-                            <Clock className="w-4 h-4 shrink-0" />
-                            <span>
-                              {(() => {
-                                try {
-                                  return formatDistanceToNow(parseISO(post.createdAt), { addSuffix: true });
-                                } catch {
-                                  return "recently";
-                                }
-                              })()}
-                            </span>
+                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 flex-wrap">
+                              <span>{post.category}</span>
+                              <span>•</span>
+                              <Clock className="w-4 h-4 shrink-0" />
+                              <span>
+                                {(() => {
+                                  try {
+                                    return formatDistanceToNow(parseISO(post.createdAt), { addSuffix: true });
+                                  } catch {
+                                    return "recently";
+                                  }
+                                })()}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </>
-                    );
-                    return (
-                    <AnimatedCard key={post.id} delay={index * 0.05}>
-                      <div
-                        id={`post-${post.id}`}
-                        className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6 hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-lg transition-all"
-                      >
+
                         {post.isByCurrentUser && (
-                          <div className="flex items-center justify-end gap-2 mb-2">
+                          <div className="shrink-0 flex items-center gap-2">
                             <button
                               type="button"
                               className="p-2 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-                              onClick={() => startEditPost(post)}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                startEditPost(post);
+                              }}
                               aria-label="Edit post"
                             >
                               <Pencil className="w-4 h-4" />
@@ -659,13 +672,25 @@ export function Community() {
                             <button
                               type="button"
                               className="p-2 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                              onClick={() => handleDeletePost(post)}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                void handleDeletePost(post);
+                              }}
                               aria-label="Delete post"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         )}
+                      </div>
+                    );
+                    return (
+                    <AnimatedCard key={post.id} delay={index * 0.05}>
+                      <div
+                        id={`post-${post.id}`}
+                        className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6 hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-lg transition-all"
+                      >
                         {post.authorUserId ? (
                           <Link
                             to={`/app/profile/${post.authorUserId}`}
@@ -686,6 +711,17 @@ export function Community() {
                               rows={4}
                               className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-gray-900 dark:text-white"
                             />
+                            <div className="mt-3">
+                              <label className="block text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">
+                                Hashtags (comma-separated)
+                              </label>
+                              <input
+                                value={editTagsDraft}
+                                onChange={(e) => setEditTagsDraft(e.target.value)}
+                                className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                                placeholder="e.g. General Discussion, anxiety, support"
+                              />
+                            </div>
                             <div className="mt-2 flex items-center justify-end gap-2">
                               <button
                                 type="button"
@@ -693,6 +729,7 @@ export function Community() {
                                 onClick={() => {
                                   setEditingPostId(null);
                                   setEditDraft("");
+                                  setEditTagsDraft("");
                                 }}
                                 disabled={editSaving}
                               >
