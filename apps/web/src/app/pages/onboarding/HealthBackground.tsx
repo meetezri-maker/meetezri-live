@@ -128,7 +128,7 @@ export function OnboardingHealthBackground() {
               />
               <p className="text-xs text-muted-foreground mt-3 flex items-start gap-2">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <span>Ezri complements but doesn't replace professional companionship</span>
+                <span>Solace complements but doesn't replace professional companionship</span>
               </p>
             </Card>
           </motion.div>

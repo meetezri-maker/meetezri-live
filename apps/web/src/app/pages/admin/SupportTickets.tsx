@@ -209,8 +209,29 @@ export function SupportTickets() {
   };
 
   const handleViewTicket = (ticket: Ticket) => {
-    setViewingTicket(ticket);
-    setNewStatus(ticket.status);
+    (async () => {
+      setViewingTicket(ticket);
+      setNewStatus(ticket.status);
+      try {
+        const full = (await api.admin.getSupportTicket(ticket.id)) as any;
+        const msgs = Array.isArray(full?.support_ticket_messages)
+          ? full.support_ticket_messages.map((m: any) => ({
+              from:
+                m?.author_role === "support"
+                  ? "Support Team"
+                  : m?.profiles?.full_name?.trim() || "User",
+              message: m?.body || "",
+              time: m?.created_at ? new Date(m.created_at).toLocaleString() : "",
+            }))
+          : [];
+        setViewingTicket((prev) =>
+          prev ? { ...prev, description: full?.description ?? prev.description, messages: msgs } : prev
+        );
+      } catch (e) {
+        // If this fails, admin can still view the ticket description.
+        console.error(e);
+      }
+    })();
   };
 
   const handlePrevious = () => {
@@ -231,22 +252,29 @@ export function SupportTickets() {
       return;
     }
     try {
-      const stamp = `\n\n--- Support reply (${new Date().toLocaleString()}) ---\n${replyMessage.trim()}`;
-      await api.admin.updateSupportTicket(viewingTicket.id, {
-        description: `${viewingTicket.description || ""}${stamp}`,
-      });
-      toast.success("Reply saved on the ticket");
+      await api.support.addMessage(viewingTicket.id, replyMessage.trim());
+      toast.success("Reply sent");
       setReplyMessage("");
       setShowReplyModal(false);
       await fetchTickets();
+      // refresh conversation
+      const full = (await api.admin.getSupportTicket(viewingTicket.id)) as any;
+      const msgs = Array.isArray(full?.support_ticket_messages)
+        ? full.support_ticket_messages.map((m: any) => ({
+            from:
+              m?.author_role === "support"
+                ? "Support Team"
+                : m?.profiles?.full_name?.trim() || "User",
+            message: m?.body || "",
+            time: m?.created_at ? new Date(m.created_at).toLocaleString() : "",
+          }))
+        : [];
       setViewingTicket((prev) =>
-        prev
-          ? { ...prev, description: `${prev.description || ""}${stamp}` }
-          : prev
+        prev ? { ...prev, description: full?.description ?? prev.description, messages: msgs } : prev
       );
     } catch (e) {
       console.error(e);
-      toast.error("Failed to save reply");
+      toast.error("Failed to send reply");
     }
   };
 

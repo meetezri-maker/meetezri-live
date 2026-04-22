@@ -1830,6 +1830,15 @@ export const api = {
       const res = await fetch(`${API_URL}/admin/support-tickets${query}`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch tickets');
     },
+    async getSupportTicket(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/support-tickets/${encodeURIComponent(id)}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch ticket');
+    },
     async updateSupportTicket(id: string, data: any) {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/admin/support-tickets/${id}`, { method: 'PUT', headers, body: JSON.stringify(data) });
@@ -2055,6 +2064,67 @@ export const api = {
   },
 
 
+
+  // Support (end-user)
+  support: {
+    async listTickets(params?: { status?: string; limit?: number }) {
+      const headers = await getHeaders();
+      const search = new URLSearchParams();
+      if (params?.status) search.set('status', params.status);
+      if (params?.limit != null) search.set('limit', String(params.limit));
+      const qs = search.toString();
+      const res = await fetch(`${API_URL}/support/tickets${qs ? `?${qs}` : ''}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to load tickets');
+    },
+
+    async createTicket(body: {
+      subject: string;
+      description: string;
+      priority?: 'low' | 'medium' | 'high' | 'urgent';
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/support/tickets`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to create ticket');
+    },
+
+    async getTicket(ticketId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/support/tickets/${encodeURIComponent(ticketId)}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to load ticket');
+    },
+
+    async addMessage(ticketId: string, body: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/support/tickets/${encodeURIComponent(ticketId)}/messages`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ body }),
+      });
+      return handleResponse(res, 'Failed to send message');
+    },
+
+    async closeTicket(ticketId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/support/tickets/${encodeURIComponent(ticketId)}/close`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      });
+      return handleResponse(res, 'Failed to close ticket');
+    },
+  },
 
   // Billing API
   billing: {

@@ -8,7 +8,7 @@ import {
   getNudgeTemplates, createNudgeTemplate, updateNudgeTemplate, deleteNudgeTemplate,
   getEmailTemplates, createEmailTemplate, updateEmailTemplate, deleteEmailTemplate,
   getPushCampaigns, createPushCampaign, updatePushCampaign, deletePushCampaign,
-  getSupportTickets, updateSupportTicket,
+  getSupportTickets, getSupportTicketById, updateSupportTicket,
   getCommunityStats, getCommunityGroups,
   getCommunityPostsForAdmin, updateCommunityPostAdmin, softDeleteCommunityPostAdmin,
   updateCommunityGroupAdmin, deleteCommunityGroupAdmin, getCommunityGroupMembersAdmin,
@@ -572,9 +572,23 @@ export async function getSupportTicketsHandler(request: FastifyRequest, reply: F
   }
 }
 
+export async function getSupportTicketHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const ticket = await getSupportTicketById(request.params.id);
+    return reply.code(200).send(ticket);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to fetch ticket' });
+  }
+}
+
 export async function updateSupportTicketHandler(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
   try {
-    const ticket = await updateSupportTicket(request.params.id, request.body);
+    const actorId = (request.user as any)?.sub as string | undefined;
+    const ticket = await updateSupportTicket(request.params.id, request.body, actorId);
     return reply.code(200).send(ticket);
   } catch (error) {
     request.log.error(error);

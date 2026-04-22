@@ -25,7 +25,6 @@ import { WELLNESS_CATEGORY_ICONS } from "@/lib/wellnessCategoryIcons";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { WELLNESS_BUILTIN_TOOLS_ADMIN } from "@/lib/wellnessBuiltinToolsMetadata";
-import { mergeApiBuiltinsForAdmin } from "@/lib/mergeAdminWellnessTools";
 import type { LucideIcon } from "lucide-react";
 
 interface Article {
@@ -43,11 +42,8 @@ interface Article {
   contentUrl?: string | null;
 }
 
-function wellnessCategoryToKind(category: string): "article" | "audio" | "exercise" {
-  if (category === "Exercise") return "exercise";
-  if (category === "Sleep Health" || category === "Relaxation") return "audio";
-  return "article";
-}
+// NOTE: Built-in articles must use IDs that `ResourceArticlePage` can resolve (`builtin:<id>`),
+// so we take them directly from `WELLNESS_BUILTIN_TOOLS_ADMIN`.
 
 function categoryVisuals(category: string): { gradient: string; Icon: LucideIcon } {
   if (isWellnessToolCategory(category)) {
@@ -75,9 +71,7 @@ export function Resources() {
         const toolList = Array.isArray(toolsRes) ? toolsRes : [];
         const publishedTools = toolList.filter((t: any) => !t.status || t.status === "published");
 
-        const builtins: Article[] = WELLNESS_BUILTIN_TOOLS_ADMIN.filter(
-          (t) => wellnessCategoryToKind(t.category) === "article"
-        ).map((t) => ({
+        const builtins: Article[] = WELLNESS_BUILTIN_TOOLS_ADMIN.map((t) => ({
           id: `builtin:${t.id}`,
           source: "builtin",
           title: t.title,
@@ -92,35 +86,33 @@ export function Resources() {
           contentUrl: null,
         }));
 
-        const apiItems: Article[] = publishedTools
-          .filter((t: any) => wellnessCategoryToKind(t.category || "") === "article")
-          .map((t: any) => ({
-            id: t.id,
-            source: "api",
-            title: t.title || "Untitled",
-            description: t.description || "Wellness content",
-            category: t.category || "General",
-            duration:
-              typeof t.duration_seconds === "number" && t.duration_seconds > 0
-                ? `${Math.max(1, Math.round(t.duration_seconds / 60))} min read`
-                : t.duration_minutes
-                  ? `${t.duration_minutes} min read`
-                  : "—",
-            difficulty:
-              String(t.difficulty || "Beginner").toLowerCase() === "advanced"
-                ? "advanced"
-                : String(t.difficulty || "Beginner").toLowerCase() === "intermediate"
-                  ? "intermediate"
-                  : "beginner",
-            rating: Number(t.rating) || 0,
-            views: Number(t.usage_count) || 0,
-            isFavorite: Boolean(t.is_favorite),
-            tags: [t.category].filter(Boolean),
-            contentUrl: t.content_url || null,
-          }));
+        const apiItems: Article[] = publishedTools.map((t: any) => ({
+          id: t.id,
+          source: "api",
+          title: t.title || "Untitled",
+          description: t.description || "Wellness content",
+          category: t.category || "General",
+          duration:
+            typeof t.duration_seconds === "number" && t.duration_seconds > 0
+              ? `${Math.max(1, Math.round(t.duration_seconds / 60))} min read`
+              : t.duration_minutes
+                ? `${t.duration_minutes} min read`
+                : "—",
+          difficulty:
+            String(t.difficulty || "Beginner").toLowerCase() === "advanced"
+              ? "advanced"
+              : String(t.difficulty || "Beginner").toLowerCase() === "intermediate"
+                ? "intermediate"
+                : "beginner",
+          rating: Number(t.rating) || 0,
+          views: Number(t.usage_count) || 0,
+          isFavorite: Boolean(t.is_favorite),
+          tags: [t.category].filter(Boolean),
+          contentUrl: t.content_url || null,
+        }));
 
-        const merged = mergeApiBuiltinsForAdmin(builtins, apiItems);
-        setArticles(merged);
+        // Keep built-in reading articles always visible, then add API items.
+        setArticles([...builtins, ...apiItems]);
       } catch (error) {
         console.error(error);
         toast.error("Failed to load articles");
@@ -177,13 +169,20 @@ export function Resources() {
   return (
     <AppLayout>
       <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-violet-50/40 dark:from-slate-950 dark:via-slate-950 dark:to-violet-950/20 transition-colors duration-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {loading && (
-            <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading articles…
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {loading ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 dark:bg-slate-950/60 backdrop-blur-sm">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-5 py-4 shadow-xl">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="h-5 w-5 animate-spin text-violet-600 dark:text-violet-400" />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">Loading articles</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Preparing your reading library…</p>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
+          ) : null}
 
           <Link
             to="/app/settings"
@@ -233,7 +232,7 @@ export function Resources() {
             </select>
           </div>
 
-          {filteredArticles.length === 0 ? (
+          {!loading && filteredArticles.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/50 dark:bg-slate-900/40 px-6 py-16 text-center">
               <BookOpen className="h-10 w-10 text-violet-500 mx-auto mb-4" />
               <p className="text-lg font-semibold text-slate-900 dark:text-white">No articles match</p>
@@ -251,7 +250,7 @@ export function Resources() {
                 Reset filters
               </button>
             </div>
-          ) : (
+          ) : !loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
               {filteredArticles.map((article, index) => {
                 const { gradient, Icon: CategoryIcon } = categoryVisuals(article.category);
@@ -373,7 +372,7 @@ export function Resources() {
                 );
               })}
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </AppLayout>

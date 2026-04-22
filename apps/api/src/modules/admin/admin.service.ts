@@ -3,6 +3,7 @@ import prisma from '../../lib/prisma';
 import { mergeCompanionAvatarCounts } from '../../lib/companionDisplayName';
 import { PLAN_LIMITS, PLAN_MONTHLY_LIST_PRICE_USD } from '../billing/billing.constants';
 import { Prisma, $Enums } from '@prisma/client';
+import { notificationsService } from '../notifications/notifications.service';
 import { CreateAdminUserInput, DashboardStats } from './admin.schema';
 import { endSession } from '../sessions/sessions.service';
 import { notificationsService } from '../notifications/notifications.service';
@@ -2984,7 +2985,38 @@ export async function getSupportTickets(page: number = 1, limit: number = 20, st
   });
 }
 
-export async function updateSupportTicket(id: string, data: any) {
+export async function getSupportTicketById(id: string) {
+  return prisma.support_tickets.findUnique({
+    where: { id },
+    include: {
+      profiles_support_tickets_user_idToprofiles: {
+        select: { full_name: true, email: true, avatar_url: true },
+      },
+      profiles_support_tickets_assigned_toToprofiles: {
+        select: { full_name: true, email: true },
+      },
+      support_ticket_messages: {
+        orderBy: { created_at: 'asc' },
+        select: {
+          id: true,
+          author_role: true,
+          body: true,
+          created_at: true,
+          profiles: {
+            select: { full_name: true, email: true, avatar_url: true, role: true },
+          },
+        },
+      },
+    },
+  });
+}
+
+export async function updateSupportTicket(id: string, data: any, actorUserId?: string) {
+  const before = await prisma.support_tickets.findUnique({
+    where: { id },
+    select: { id: true, user_id: true, subject: true, status: true, priority: true, assigned_to: true },
+  });
+
   const patch: Prisma.support_ticketsUncheckedUpdateInput = {
     updated_at: new Date(),
   };
@@ -2993,10 +3025,51 @@ export async function updateSupportTicket(id: string, data: any) {
   if (data.assigned_to !== undefined) patch.assigned_to = data.assigned_to;
   if (data.description !== undefined) patch.description = data.description;
   if (data.subject !== undefined) patch.subject = data.subject;
-  return prisma.support_tickets.update({
+  const updated = await prisma.support_tickets.update({
     where: { id },
     data: patch,
   });
+
+  // Status change: write to thread + notify user.
+  if (before && data.status !== undefined && before.status !== data.status) {
+    const nextStatus = String(data.status);
+
+    if (actorUserId) {
+      try {
+        await prisma.support_ticket_messages.create({
+          data: {
+            ticket_id: id,
+            author_user_id: actorUserId,
+            author_role: 'support',
+            body: `Status changed to ${nextStatus.replace(/_/g, ' ')}`,
+          },
+        });
+      } catch {
+        // ignore
+      }
+    }
+
+    try {
+      await notificationsService.create({
+        user_id: before.user_id,
+        type: 'support',
+        title: 'Ticket status updated',
+        message: before.subject
+          ? `“${before.subject}” is now ${nextStatus.replace(/_/g, ' ')}.`
+          : `Your ticket is now ${nextStatus.replace(/_/g, ' ')}.`,
+        metadata: {
+          kind: 'support_ticket',
+          ticketId: id,
+          action: 'status_changed',
+          status: nextStatus,
+        },
+      } as any);
+    } catch {
+      // ignore
+    }
+  }
+
+  return updated;
 }
 
 // 6. Community Management
