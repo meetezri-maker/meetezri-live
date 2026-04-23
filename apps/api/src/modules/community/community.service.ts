@@ -310,10 +310,14 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
       snap?.author_avatar_url !== undefined
         ? snap.author_avatar_url
         : resolveCommunityAvatarUrl(profile?.avatar_url, profile?.privacy_settings);
+    // Important: profile link visibility should follow CURRENT privacy settings (not snapshot),
+    // otherwise old posts may still link to a profile that is now private (causing a 404 on open).
     const authorUserId =
-      snap?.author_user_id !== undefined
-        ? snap.author_user_id
-        : resolveSnapshotAuthorUserId(userId, p.user_id, profile?.privacy_settings, displayName);
+      displayName === 'Anonymous'
+        ? null
+        : p.user_id === userId || isProfileVisibleToCommunityOthers(profile?.privacy_settings)
+          ? p.user_id
+          : null;
 
     return {
       id: p.id,
@@ -484,13 +488,6 @@ export async function getCommunityMemberPublicProfile(
     throw err;
   }
 
-  const displayName = resolveAuthorDisplayName(profile.full_name, profile.privacy_settings);
-  if (displayName === 'Anonymous') {
-    const err = new Error('This profile is not public');
-    (err as any).statusCode = 404;
-    throw err;
-  }
-
   const isSelf = viewerUserId === memberUserId;
   if (!isSelf) {
     const pv = (profile.privacy_settings as PrivacyJson)?.profileVisibility;
@@ -500,6 +497,10 @@ export async function getCommunityMemberPublicProfile(
       throw err;
     }
   }
+
+  // Note: a user can choose to appear "Anonymous" in the community feed while still having a
+  // public profile (no link is shown when anonymous, but direct URLs shouldn't 404 if public).
+  const displayName = resolveAuthorDisplayName(profile.full_name, profile.privacy_settings);
 
   const sessions = profile._count.app_sessions;
   const checkins = profile._count.mood_entries;
