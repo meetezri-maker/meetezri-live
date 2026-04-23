@@ -462,7 +462,7 @@ export function AccessibilitySettings() {
               <div>
                 <h3 className="font-bold text-green-900 dark:text-green-100 mb-2">WCAG 2.1 AA Compliant</h3>
                 <p className="text-sm text-green-700 dark:text-green-300 mb-3">
-                  Ezri is designed to meet Web Content Accessibility Guidelines (WCAG) 2.1 Level AA standards. 
+                  Solace is designed to meet Web Content Accessibility Guidelines (WCAG) 2.1 Level AA standards. 
                   We're committed to making mental health support accessible to everyone.
                 </p>
                 <button onClick={() => window.open("https://www.w3.org/TR/WCAG21/", "_blank")} className="text-sm  cursor-pointer text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium underline">

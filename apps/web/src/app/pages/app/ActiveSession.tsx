@@ -67,6 +67,9 @@ import {
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
+// Temporary kill-switch: don't interrupt sessions with the crisis keyword popup.
+const CRISIS_KEYWORD_MODAL_ENABLED = false;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Keyword lists — covers Ready Player Me, Blender ARKit, Mixamo, CC3/CC4,
 // MetaHuman, and most custom Blender rigs.
@@ -1924,7 +1927,7 @@ export function ActiveSession() {
         (analysis.suggestedState === "HIGH_RISK" ||
           analysis.suggestedState === "SAFETY_MODE");
 
-      if (isCrisisKeywordDetection) {
+      if (isCrisisKeywordDetection && CRISIS_KEYWORD_MODAL_ENABLED) {
         setDetectedCrisisKeywords(analysis.matchedKeywords);
         setShowCrisisKeywordModal(true);
       }
@@ -2022,8 +2025,8 @@ export function ActiveSession() {
         await speakViaEzriTts(res.text);
       }
     } catch (e: any) {
-      console.error("Ezri chat failed:", e);
-      toast.error(e?.message || "Ezri chat failed");
+      console.error("Solace chat failed:", e);
+      toast.error(e?.message || "Solace chat failed");
     } finally {
       // WebSocket replies clear thinking in onAssistantText / onAudio / onError.
       if (!spokeViaWebSocket) setIsEzriThinking(false);
@@ -2561,11 +2564,11 @@ export function ActiveSession() {
           setIsEzriThinking(false);
         },
         onError: (err, ctx) => {
-          console.error("Ezri WS error:", err, ctx);
+          console.error("Solace WS error:", err, ctx);
           const msg =
             typeof err === "string"
               ? err
-              : (err as Error)?.message || "Ezri connection error";
+              : (err as Error)?.message || "Solace connection error";
           toast.error(msg);
           setIsEzriThinking(false);
         },
@@ -3797,7 +3800,7 @@ export function ActiveSession() {
 
       {/* Crisis Keyword Modal */}
       <AnimatePresence>
-        {showCrisisKeywordModal && (
+        {CRISIS_KEYWORD_MODAL_ENABLED && showCrisisKeywordModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

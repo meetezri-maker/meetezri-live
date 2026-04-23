@@ -803,14 +803,14 @@ export function CrisisMonitoring() {
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   <button 
                     className="p-3 border-2 border-purple-500 bg-purple-50 rounded-xl text-left hover:bg-purple-100 transition-colors"
-                    onClick={() => setEmailContent(`Dear ${selectedEvent.user},\n\nWe noticed you may be going through a difficult time, and we want you to know that support is available. Your wellbeing is important to us.\n\nIf you're experiencing a crisis, please reach out to:\n- National Suicide Prevention Lifeline: 988\n- Crisis Text Line: Text HOME to 741741\n- Emergency Services: 911\n\nOur team is here to support you. Please don't hesitate to reach out.\n\nWith care,\nEzri Crisis Support Team`)}
+                    onClick={() => setEmailContent(`Dear ${selectedEvent.user},\n\nWe noticed you may be going through a difficult time, and we want you to know that support is available. Your wellbeing is important to us.\n\nIf you're experiencing a crisis, please reach out to:\n- National Suicide Prevention Lifeline: 988\n- Crisis Text Line: Text HOME to 741741\n- Emergency Services: 911\n\nOur team is here to support you. Please don't hesitate to reach out.\n\nWith care,\nSolace Crisis Support Team`)}
                   >
                     <p className="font-semibold text-purple-900 text-sm">Supportive Check-in</p>
                     <p className="text-xs text-purple-700 mt-1">Empathetic outreach with resources</p>
                   </button>
                   <button 
                     className="p-3 border-2 border-gray-300 bg-white rounded-xl text-left hover:bg-gray-50 transition-colors"
-                    onClick={() => setEmailContent(`Dear ${selectedEvent.user},\n\nThis is an urgent message regarding your recent session. We are deeply concerned about your safety and wellbeing.\n\nPlease contact us immediately or reach out to emergency services:\n- Call 911 for immediate emergency assistance\n- National Suicide Prevention Lifeline: 988 (24/7)\n- Crisis Text Line: Text HOME to 741741\n\nYour life matters. Help is available.\n\nUrgently,\nEzri Crisis Support Team`)}
+                    onClick={() => setEmailContent(`Dear ${selectedEvent.user},\n\nThis is an urgent message regarding your recent session. We are deeply concerned about your safety and wellbeing.\n\nPlease contact us immediately or reach out to emergency services:\n- Call 911 for immediate emergency assistance\n- National Suicide Prevention Lifeline: 988 (24/7)\n- Crisis Text Line: Text HOME to 741741\n\nYour life matters. Help is available.\n\nUrgently,\nSolace Crisis Support Team`)}
                   >
                     <p className="font-semibold text-gray-900 text-sm">Urgent Safety Outreach</p>
                     <p className="text-xs text-gray-700 mt-1">Immediate safety concerns</p>
