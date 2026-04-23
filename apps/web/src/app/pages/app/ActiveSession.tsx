@@ -2252,6 +2252,7 @@ export function ActiveSession() {
 
       if (
         permissionsGranted &&
+        !isSessionPausedRef.current &&
         !isEzriSpeakingRef.current &&
         !isSessionEndingRef.current
       ) {
@@ -2265,6 +2266,7 @@ export function ActiveSession() {
           if (isSessionEndingRef.current) return;
           try {
             if (
+              !isSessionPausedRef.current &&
               !isEzriSpeakingRef.current &&
               recognitionRef.current &&
               !isRecognitionActiveRef.current
@@ -2305,6 +2307,7 @@ export function ActiveSession() {
     const watchdog = setInterval(() => {
       if (
         !isSessionEndingRef.current &&
+        !isSessionPausedRef.current &&
         !isListening &&
         !isEzriSpeakingRef.current &&
         recognitionRef.current &&
@@ -2370,17 +2373,6 @@ export function ActiveSession() {
     };
   }, [permissionsGranted, stream]);
 
-  useEffect(() => {
-    if (stream) {
-      stream
-        .getAudioTracks()
-        .forEach((track) => (track.enabled = !isMuted));
-      stream
-        .getVideoTracks()
-        .forEach((track) => (track.enabled = !isCameraOff));
-    }
-  }, [isMuted, isCameraOff, stream]);
-
   // Safety state
   const [showSafetyBoundary, setShowSafetyBoundary] = useState(false);
   const [showSafetyResources, setShowSafetyResources] = useState(false);
@@ -2393,6 +2385,58 @@ export function ActiveSession() {
   useEffect(() => {
     isSessionPausedRef.current = isSessionPaused;
   }, [isSessionPaused]);
+
+  useEffect(() => {
+    if (!stream) return;
+    stream
+      .getAudioTracks()
+      .forEach((track) => (track.enabled = !isMuted && !isSessionPaused));
+    stream
+      .getVideoTracks()
+      .forEach((track) => (track.enabled = !isCameraOff));
+  }, [isMuted, isCameraOff, isSessionPaused, stream]);
+
+  // Pause should stop *all* listening + playback (no mic capture, no STT, no avatar audio).
+  useEffect(() => {
+    if (isSessionPaused) {
+      // Stop any assistant playback immediately
+      wsAudioQueueRef.current = [];
+      wsIsPlaybackActiveRef.current = false;
+      try {
+        wsClientRef.current?.sendPlaybackDone();
+      } catch {
+        /* ignore */
+      }
+      stopAudioAndSpeechDriver();
+
+      // Stop speech recognition so we don't keep listening in the background
+      try {
+        if (recognitionRef.current) {
+          recognitionRef.current.onend = null;
+          recognitionRef.current.stop();
+        }
+      } catch {}
+      setIsListening(false);
+      isRecognitionActiveRef.current = false;
+      return;
+    }
+
+    // Resume: restart recognition if allowed and not currently active
+    try {
+      if (
+        permissionsGranted &&
+        !isMutedRef.current &&
+        !isEzriSpeakingRef.current &&
+        !isSessionEndingRef.current &&
+        recognitionRef.current &&
+        !isRecognitionActiveRef.current
+      ) {
+        recognitionRef.current.start();
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [isSessionPaused, permissionsGranted]);
 
   // Credits
   const [initialCreditsSeconds, setInitialCreditsSeconds] = useState<number | null>(
