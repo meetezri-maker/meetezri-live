@@ -67,8 +67,8 @@ import {
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-// Temporary kill-switch: don't interrupt sessions with the crisis keyword popup.
-const CRISIS_KEYWORD_MODAL_ENABLED = false;
+// Crisis keyword popup (public, user-facing).
+const CRISIS_KEYWORD_MODAL_ENABLED = true;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Keyword lists — covers Ready Player Me, Blender ARKit, Mixamo, CC3/CC4,

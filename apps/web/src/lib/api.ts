@@ -494,7 +494,7 @@ export const api = {
     return handleResponse(res, 'Failed to check user existence');
   },
 
-  async signup(data: { email: string; password: string; firstName: string; lastName: string; stripe_session_id?: string }) {
+  async signup(data: { email: string; password: string; firstName: string; lastName: string; age: string; stripe_session_id?: string }) {
     const res = await fetch(`${API_URL}/users/signup`, {
       method: 'POST',
       headers: {

@@ -33,6 +33,10 @@ const signupSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
   lastName: z.string().min(2, "Last name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
+  age: z.string().refine((val) => {
+    const num = parseInt(val);
+    return !isNaN(num) && num >= 18;
+  }, "You must be 18+ to create an account"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   confirmPassword: z.string()
 }).refine((data) => data.password === data.confirmPassword, {
@@ -67,6 +71,7 @@ export function Signup() {
       firstName: "",
       lastName: "",
       email: "",
+      age: "",
       password: "",
       confirmPassword: "",
     },
@@ -227,6 +232,7 @@ export function Signup() {
             data: {
               first_name: data.firstName,
               last_name: data.lastName,
+              age: data.age,
               email_verification_required: true,
               signup_type: 'trial',
               signup_source: 'app',
@@ -250,6 +256,7 @@ export function Signup() {
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
+        age: data.age,
         stripe_session_id: stripeSessionId || undefined
       });
 
@@ -525,6 +532,32 @@ export function Signup() {
                               <Input
                                 type="email"
                                 placeholder="you@example.com"
+                                className="bg-input-background transition-all focus:scale-[1.02]"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </motion.div>
+                    
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.425 }}
+                    >
+                      <FormField
+                        control={form.control}
+                        name="age"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Age</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min="18"
+                                placeholder="18"
                                 className="bg-input-background transition-all focus:scale-[1.02]"
                                 {...field}
                               />

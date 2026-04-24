@@ -129,6 +129,7 @@ export async function signupHandler(
 
   try {
     const fullName = `${firstName} ${lastName}`.trim();
+    const age = (request.body as any)?.age;
 
     // Reuse existing auth row when signup retry happens after partial failures.
     let authUserId = accountState.auth_user_id;
@@ -143,6 +144,7 @@ export async function signupHandler(
           user_metadata: {
             first_name: firstName,
             last_name: lastName,
+            age,
             signup_source: 'app',
           },
         });
@@ -720,6 +722,20 @@ export async function completeOnboardingHandler(
       message: firstIssue?.message ?? 'Validation failed',
       issues: result.error.issues,
     });
+  }
+
+  // Enforce age gate (18+) for onboarding completion.
+  // Allow missing `age` only if it was already stored on the user's profile (legacy clients/flows).
+  if (!result.data.age) {
+    const existing = await userService.getProfile(user.sub);
+    const storedAge = (existing as any)?.age;
+    if (!storedAge || (typeof storedAge === 'string' && !storedAge.trim())) {
+      return reply.code(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'Age is required (18+) to complete onboarding',
+      });
+    }
   }
 
   try {

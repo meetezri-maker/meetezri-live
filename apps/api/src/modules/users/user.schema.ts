@@ -16,17 +16,19 @@ function ageFromIsoDob(val: string): number | null {
   return years;
 }
 
+const MIN_ACCOUNT_AGE_YEARS = 18;
+
 const ageOrIsoDobSchema = z
   .string()
   .refine((val) => {
     const v = val.trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
       const y = ageFromIsoDob(v);
-      return y !== null && y >= 0;
+      return y !== null && y >= MIN_ACCOUNT_AGE_YEARS;
     }
     const num = Number.parseInt(v, 10);
-    return Number.isFinite(num) && num > 0;
-  }, 'Age must be a positive number, or use date of birth (YYYY-MM-DD)');
+    return Number.isFinite(num) && num >= MIN_ACCOUNT_AGE_YEARS;
+  }, `You must be at least ${MIN_ACCOUNT_AGE_YEARS}+ to use this app`);
 
 /** Accept string/number from clients; allow ISO DOB for account settings. */
 const ageSchemaCoerced = z.preprocess(
@@ -183,6 +185,10 @@ export const signupSchema = z.object({
   password: z.string().min(6),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
+  age: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : String(val)),
+    ageOrIsoDobSchema
+  ),
   stripe_session_id: z.string().optional(),
 });
 
