@@ -27,6 +27,8 @@ export interface ResourceAnalytics {
   averageTimeToInteract?: number; // milliseconds from view to click
 }
 
+type InteractionSet = ResourceInteraction[];
+
 /**
  * Track a resource interaction
  */
@@ -82,36 +84,45 @@ export function getResourceInteractionHistory(resourceId: string): ResourceInter
 /**
  * Get analytics for a specific resource
  */
-export function getResourceAnalytics(resourceId: string): ResourceAnalytics {
-  const interactions = getResourceInteractionHistory(resourceId);
+function getResourceAnalyticsFromInteractions(
+  resourceId: string,
+  interactions: InteractionSet
+): ResourceAnalytics {
+  const history = interactions.filter(i => i.resourceId === resourceId);
 
   const analytics: ResourceAnalytics = {
     resourceId,
-    totalViews: interactions.filter(i => i.interactionType === 'view').length,
-    totalClicks: interactions.filter(i => ['call', 'text', 'visit'].includes(i.interactionType)).length,
-    totalCalls: interactions.filter(i => i.interactionType === 'call').length,
-    totalTexts: interactions.filter(i => i.interactionType === 'text').length,
-    totalVisits: interactions.filter(i => i.interactionType === 'visit').length,
+    totalViews: history.filter(i => i.interactionType === 'view').length,
+    totalClicks: history.filter(i => ['call', 'text', 'visit'].includes(i.interactionType)).length,
+    totalCalls: history.filter(i => i.interactionType === 'call').length,
+    totalTexts: history.filter(i => i.interactionType === 'text').length,
+    totalVisits: history.filter(i => i.interactionType === 'visit').length,
   };
 
-  if (interactions.length > 0) {
-    analytics.firstInteraction = interactions[interactions.length - 1].timestamp;
-    analytics.lastInteraction = interactions[0].timestamp;
+  if (history.length > 0) {
+    analytics.firstInteraction = history[history.length - 1].timestamp;
+    analytics.lastInteraction = history[0].timestamp;
   }
 
   return analytics;
 }
 
+export function getResourceAnalytics(resourceId: string): ResourceAnalytics {
+  const interactions = getResourceInteractionHistory(resourceId);
+  return getResourceAnalyticsFromInteractions(resourceId, interactions);
+}
+
 /**
  * Get aggregate analytics for all resources
  */
-export function getAllResourceAnalytics(): Record<string, ResourceAnalytics> {
-  const interactions = getResourceInteractions();
+export function getAllResourceAnalytics(
+  interactions: InteractionSet = getResourceInteractions()
+): Record<string, ResourceAnalytics> {
   const resourceIds = [...new Set(interactions.map(i => i.resourceId))];
 
   const analytics: Record<string, ResourceAnalytics> = {};
   resourceIds.forEach(id => {
-    analytics[id] = getResourceAnalytics(id);
+    analytics[id] = getResourceAnalyticsFromInteractions(id, interactions);
   });
 
   return analytics;
@@ -120,8 +131,11 @@ export function getAllResourceAnalytics(): Record<string, ResourceAnalytics> {
 /**
  * Get most used resources
  */
-export function getMostUsedResources(limit: number = 5): Array<ResourceAnalytics & { rank: number }> {
-  const allAnalytics = getAllResourceAnalytics();
+export function getMostUsedResources(
+  limit: number = 5,
+  interactions: InteractionSet = getResourceInteractions()
+): Array<ResourceAnalytics & { rank: number }> {
+  const allAnalytics = getAllResourceAnalytics(interactions);
   const sorted = Object.values(allAnalytics)
     .sort((a, b) => b.totalClicks - a.totalClicks)
     .slice(0, limit)
@@ -137,8 +151,11 @@ export function getMostUsedResources(limit: number = 5): Array<ResourceAnalytics
  * Get resource effectiveness score (0-100)
  * Based on: views, clicks, and click-through rate
  */
-export function getResourceEffectivenessScore(resourceId: string): number {
-  const analytics = getResourceAnalytics(resourceId);
+export function getResourceEffectivenessScore(
+  resourceId: string,
+  interactions: InteractionSet = getResourceInteractions()
+): number {
+  const analytics = getResourceAnalyticsFromInteractions(resourceId, interactions);
 
   if (analytics.totalViews === 0) return 0;
 
@@ -161,8 +178,9 @@ export function getResourceEffectivenessScore(resourceId: string): number {
 /**
  * Get interactions by safety state
  */
-export function getInteractionsBySafetyState(): Record<string, number> {
-  const interactions = getResourceInteractions();
+export function getInteractionsBySafetyState(
+  interactions: InteractionSet = getResourceInteractions()
+): Record<string, number> {
   const byState: Record<string, number> = {};
 
   interactions.forEach(interaction => {
@@ -177,8 +195,9 @@ export function getInteractionsBySafetyState(): Record<string, number> {
 /**
  * Get interactions by resource type
  */
-export function getInteractionsByResourceType(): Record<string, number> {
-  const interactions = getResourceInteractions();
+export function getInteractionsByResourceType(
+  interactions: InteractionSet = getResourceInteractions()
+): Record<string, number> {
   const byType: Record<string, number> = {};
 
   interactions.forEach(interaction => {
@@ -213,9 +232,9 @@ export function exportResourceAnalytics(): string {
     exportDate: new Date().toISOString(),
     totalInteractions: interactions.length,
     analytics,
-    bySafetyState: getInteractionsBySafetyState(),
-    byResourceType: getInteractionsByResourceType(),
-    mostUsed: getMostUsedResources(10)
+    bySafetyState: getInteractionsBySafetyState(interactions),
+    byResourceType: getInteractionsByResourceType(interactions),
+    mostUsed: getMostUsedResources(10, interactions)
   };
 
   return JSON.stringify(exportData, null, 2);

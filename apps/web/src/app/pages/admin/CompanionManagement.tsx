@@ -57,10 +57,23 @@ function isoToDateTimeLocal(raw: string | undefined): string {
 }
 
 function formatAvailabilityDisplay(raw: string): string {
-  if (!raw || raw === "—") return "—";
+  if (!raw || raw === "—") return "Field not set";
+  // Backend sometimes stores structured JSON as a string (e.g. {"note":"...","timezone":"UTC"}).
+  // Don’t show raw JSON to admins — treat as not set / placeholder.
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+      const note = typeof parsed.note === "string" ? parsed.note.trim() : "";
+      if (note) return note;
+      return "Field not set";
+    } catch {
+      return "Field not set";
+    }
+  }
   const d = new Date(raw);
   if (!Number.isNaN(d.getTime())) return d.toLocaleString();
-  return raw;
+  return "Field not set";
 }
 
 const LICENSE_PATTERN = /^[A-Z]{2,10}-\d{3,10}$/;
@@ -81,6 +94,12 @@ function formatLicenseInput(raw: string): string {
 function isValidOptionalLicense(license: string): boolean {
   const normalized = formatLicenseInput(license.trim());
   if (!normalized) return true;
+  return LICENSE_PATTERN.test(normalized);
+}
+
+function isValidRequiredLicense(license: string): boolean {
+  const normalized = formatLicenseInput(license.trim());
+  if (!normalized) return false;
   return LICENSE_PATTERN.test(normalized);
 }
 
@@ -137,6 +156,8 @@ export function CompanionManagement() {
     language: "",
     availabilityAt: "",
   });
+
+  const [createErrors, setCreateErrors] = useState<Partial<Record<keyof typeof createForm, string>>>({});
 
   const [editForm, setEditForm] = useState({
     name: "",
@@ -234,33 +255,44 @@ export function CompanionManagement() {
     setShowEditModal(true);
   };
 
+  const validateCreate = (form: typeof createForm) => {
+    const errors: Partial<Record<keyof typeof createForm, string>> = {};
+    if (!form.name.trim()) errors.name = "Full name is required";
+    if (!form.email.trim()) errors.email = "Email is required";
+    if (!form.license.trim()) errors.license = "License number is required";
+    if (form.license.trim() && !isValidRequiredLicense(form.license)) errors.license = "Use format like LCSW-12345";
+    if (!form.phone.trim()) {
+      errors.phone = "Phone is required";
+    } else if (!isValidOptionalAppPhone(form.phone)) {
+      errors.phone = "Enter a valid phone with country code and exactly 12 digits";
+    }
+    if (!form.specializations) errors.specializations = "Select a specialization";
+    if (!form.language) errors.language = "Select a language";
+    if (!form.availabilityAt.trim()) errors.availabilityAt = "Availability is required";
+    return errors;
+  };
+
+  const createIsValid = Object.keys(validateCreate(createForm)).length === 0;
+
   const handleCreate = async () => {
-    if (!createForm.name.trim() || !createForm.email.trim()) {
-      toast.error("Name and email are required");
-      return;
-    }
-    if (!isValidOptionalLicense(createForm.license)) {
-      toast.error("License format must be like LCSW-12345");
-      return;
-    }
-    if (!isValidOptionalAppPhone(createForm.phone)) {
-      toast.error("Enter a valid phone with country code and exactly 12 digits, or leave blank");
+    const errors = validateCreate(createForm);
+    if (Object.keys(errors).length > 0) {
+      setCreateErrors(errors);
+      toast.error("Please fill all required fields");
       return;
     }
     setSaving(true);
     try {
       const availabilityPayload =
-        createForm.availabilityAt.trim() !== ""
-          ? new Date(createForm.availabilityAt).toISOString()
-          : undefined;
+        createForm.availabilityAt.trim() !== "" ? new Date(createForm.availabilityAt).toISOString() : undefined;
       const list = (await api.admin.createCompanion({
         full_name: createForm.name.trim(),
         email: createForm.email.trim(),
-        phone: createForm.phone.trim() || undefined,
-        license_number: createForm.license.trim() || undefined,
+        phone: createForm.phone.trim(),
+        license_number: createForm.license.trim(),
         specializations: parseCommaList(createForm.specializations),
-        languages: createForm.language ? [createForm.language] : [],
-        availability: availabilityPayload,
+        languages: [createForm.language],
+        availability: availabilityPayload!,
       })) as Companion[];
       setCompanions(Array.isArray(list) ? list : companions);
       toast.success("Companion saved. New accounts receive an invite email when needed.");
@@ -274,6 +306,7 @@ export function CompanionManagement() {
         language: "",
         availabilityAt: "",
       });
+      setCreateErrors({});
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to create companion";
       toast.error(msg);
@@ -559,15 +592,15 @@ export function CompanionManagement() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 text-sm">
                         <div className="flex items-center gap-2 text-gray-600">
                           <Mail className="w-4 h-4 shrink-0" />
-                          {companion.email || "—"}
+                          {companion.email || "Field not set"}
                         </div>
                         <div className="flex items-center gap-2 text-gray-600">
                           <Phone className="w-4 h-4 shrink-0" />
-                          {companion.phone || "—"}
+                          {companion.phone || "Field not set"}
                         </div>
                         <div className="flex items-center gap-2 text-gray-600">
                           <Award className="w-4 h-4 shrink-0" />
-                          {companion.license || "—"}
+                          {companion.license || "Field not set"}
                         </div>
                         <div className="flex items-center gap-2 text-gray-600">
                           <Calendar className="w-4 h-4 shrink-0" />
@@ -599,7 +632,7 @@ export function CompanionManagement() {
                         <div>
                           <p className="text-gray-600">Rating</p>
                           <p className="font-bold text-gray-900">
-                            {companion.rating > 0 ? `${companion.rating.toFixed(1)} ⭐` : "N/A"}
+                            {companion.rating > 0 ? `${companion.rating.toFixed(1)} ⭐` : "0"}
                           </p>
                         </div>
                         <div>
@@ -695,22 +728,36 @@ export function CompanionManagement() {
                     <input
                       type="text"
                       value={createForm.name}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
+                      required
+                      aria-invalid={Boolean(createErrors.name)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setCreateForm((f) => ({ ...f, name: v }));
+                        if (createErrors.name) setCreateErrors((p) => ({ ...p, name: undefined }));
+                      }}
                       placeholder="Dr. Jane Smith"
-                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
+                      className={`w-full px-4 py-2.5 rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none ${createErrors.name ? "border-red-300" : "border-gray-200"}`}
                     />
+                    {createErrors.name ? <p className="text-xs text-red-600 mt-1.5">{createErrors.name}</p> : null}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">License Number</label>
                     <input
                       type="text"
                       value={createForm.license}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, license: formatLicenseInput(e.target.value) }))}
+                      required
+                      aria-invalid={Boolean(createErrors.license)}
+                      onChange={(e) => {
+                        const v = formatLicenseInput(e.target.value);
+                        setCreateForm((f) => ({ ...f, license: v }));
+                        if (createErrors.license) setCreateErrors((p) => ({ ...p, license: undefined }));
+                      }}
                       pattern="[A-Z]{2,10}-[0-9]{3,10}"
                       title="Use format like LCSW-12345"
                       placeholder="LCSW-12345"
-                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
+                      className={`w-full px-4 py-2.5 rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none ${createErrors.license ? "border-red-300" : "border-gray-200"}`}
                     />
+                    {createErrors.license ? <p className="text-xs text-red-600 mt-1.5">{createErrors.license}</p> : null}
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -719,27 +766,44 @@ export function CompanionManagement() {
                     <input
                       type="email"
                       value={createForm.email}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))}
+                      required
+                      aria-invalid={Boolean(createErrors.email)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setCreateForm((f) => ({ ...f, email: v }));
+                        if (createErrors.email) setCreateErrors((p) => ({ ...p, email: undefined }));
+                      }}
                       placeholder="companion@example.com"
-                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
+                      className={`w-full px-4 py-2.5 rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none ${createErrors.email ? "border-red-300" : "border-gray-200"}`}
                     />
+                    {createErrors.email ? <p className="text-xs text-red-600 mt-1.5">{createErrors.email}</p> : null}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone (optional)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
                     <p className="text-xs text-gray-500 mb-1.5">Country code + number (exactly 12 digits total).</p>
                     <PhoneInput
                       value={createForm.phone}
-                      onChange={(v) => setCreateForm((f) => ({ ...f, phone: v }))}
+                      onChange={(v) => {
+                        setCreateForm((f) => ({ ...f, phone: v }));
+                        if (createErrors.phone) setCreateErrors((p) => ({ ...p, phone: undefined }));
+                      }}
                       placeholder="Phone number"
                     />
+                    {createErrors.phone ? <p className="text-xs text-red-600 mt-1.5">{createErrors.phone}</p> : null}
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Specializations</label>
                   <select
                     value={createForm.specializations}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, specializations: e.target.value }))}
-                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none bg-white"
+                    required
+                    aria-invalid={Boolean(createErrors.specializations)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCreateForm((f) => ({ ...f, specializations: v }));
+                      if (createErrors.specializations) setCreateErrors((p) => ({ ...p, specializations: undefined }));
+                    }}
+                    className={`w-full px-4 py-2.5 rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none bg-white ${createErrors.specializations ? "border-red-300" : "border-gray-200"}`}
                   >
                     {COMPANION_SPECIALIZATIONS.map((opt, i) => (
                       <option key={opt.value || `spec-${i}`} value={opt.value}>
@@ -747,14 +811,23 @@ export function CompanionManagement() {
                       </option>
                     ))}
                   </select>
+                  {createErrors.specializations ? (
+                    <p className="text-xs text-red-600 mt-1.5">{createErrors.specializations}</p>
+                  ) : null}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Languages</label>
                     <select
                       value={createForm.language}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, language: e.target.value }))}
-                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none bg-white"
+                      required
+                      aria-invalid={Boolean(createErrors.language)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setCreateForm((f) => ({ ...f, language: v }));
+                        if (createErrors.language) setCreateErrors((p) => ({ ...p, language: undefined }));
+                      }}
+                      className={`w-full px-4 py-2.5 rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none bg-white ${createErrors.language ? "border-red-300" : "border-gray-200"}`}
                     >
                       {COMPANION_LANGUAGES.map((opt, i) => (
                         <option key={opt.value || `lang-${i}`} value={opt.value}>
@@ -762,16 +835,25 @@ export function CompanionManagement() {
                         </option>
                       ))}
                     </select>
+                    {createErrors.language ? <p className="text-xs text-red-600 mt-1.5">{createErrors.language}</p> : null}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Availability</label>
                     <input
                       type="datetime-local"
                       value={createForm.availabilityAt}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, availabilityAt: e.target.value }))}
-                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none"
+                      required
+                      aria-invalid={Boolean(createErrors.availabilityAt)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setCreateForm((f) => ({ ...f, availabilityAt: v }));
+                        if (createErrors.availabilityAt) setCreateErrors((p) => ({ ...p, availabilityAt: undefined }));
+                      }}
+                      className={`w-full px-4 py-2.5 rounded-xl border focus:ring-2 focus:ring-blue-500 focus:border-blue-300 outline-none ${createErrors.availabilityAt ? "border-red-300" : "border-gray-200"}`}
                     />
-                    <p className="text-xs text-gray-500 mt-1.5">Date and time for next availability (optional).</p>
+                    {createErrors.availabilityAt ? (
+                      <p className="text-xs text-red-600 mt-1.5">{createErrors.availabilityAt}</p>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -791,7 +873,7 @@ export function CompanionManagement() {
                   type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  disabled={saving}
+                  disabled={saving || !createIsValid}
                   onClick={() => void handleCreate()}
                   className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2"
                 >

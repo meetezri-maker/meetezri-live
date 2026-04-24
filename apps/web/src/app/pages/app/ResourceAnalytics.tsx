@@ -15,7 +15,6 @@ import {
   Eye,
   Phone,
   MessageSquare,
-  ExternalLink,
   BarChart3,
   Award,
   Calendar,
@@ -46,16 +45,28 @@ export function ResourceAnalyticsPage() {
   }, [timeFilter]);
 
   const loadAnalytics = () => {
-    const allAnalytics = getAllResourceAnalytics();
+    const now = new Date();
+    const startDate =
+      timeFilter === '7d'
+        ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        : timeFilter === '30d'
+          ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+          : timeFilter === '90d'
+            ? new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+            : null;
+
+    const interactions = startDate ? getInteractionsByTimePeriod(startDate, now) : getInteractionsByTimePeriod(new Date(0), now);
+
+    const allAnalytics = getAllResourceAnalytics(interactions);
     setAnalytics(allAnalytics);
 
-    const topResources = getMostUsedResources(10);
+    const topResources = getMostUsedResources(10, interactions);
     setMostUsed(topResources);
 
-    const stateCounts = getInteractionsBySafetyState();
+    const stateCounts = getInteractionsBySafetyState(interactions);
     setBySafetyState(stateCounts);
 
-    const typeCounts = getInteractionsByResourceType();
+    const typeCounts = getInteractionsByResourceType(interactions);
     setByType(typeCounts);
   };
 
@@ -128,10 +139,26 @@ export function ResourceAnalyticsPage() {
                 Track the effectiveness and usage of safety resources
               </p>
             </div>
-            <Button onClick={handleExport} variant="outline">
-              <Download className="w-4 h-4 mr-2" />
-              Export Data
-            </Button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-muted-foreground" />
+                <select
+                  value={timeFilter}
+                  onChange={(e) => setTimeFilter(e.target.value as typeof timeFilter)}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  aria-label="Time range"
+                >
+                  <option value="7d">Last 7 days</option>
+                  <option value="30d">Last 30 days</option>
+                  <option value="90d">Last 90 days</option>
+                  <option value="all">All time</option>
+                </select>
+              </div>
+              <Button onClick={handleExport} variant="outline">
+                <Download className="w-4 h-4 mr-2" />
+                Export Data
+              </Button>
+            </div>
           </div>
         </motion.div>
 
@@ -194,7 +221,18 @@ export function ResourceAnalyticsPage() {
               </Card>
             ) : (
               mostUsed.map((resource) => {
-                const effectivenessScore = getResourceEffectivenessScore(resource.resourceId);
+                const now = new Date();
+                const startDate =
+                  timeFilter === '7d'
+                    ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+                    : timeFilter === '30d'
+                      ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+                      : timeFilter === '90d'
+                        ? new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+                        : null;
+                const interactions = startDate ? getInteractionsByTimePeriod(startDate, now) : getInteractionsByTimePeriod(new Date(0), now);
+
+                const effectivenessScore = getResourceEffectivenessScore(resource.resourceId, interactions);
                 const ctr = resource.totalViews > 0 
                   ? ((resource.totalClicks / resource.totalViews) * 100).toFixed(1)
                   : '0';
