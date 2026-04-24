@@ -68,7 +68,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 // Crisis keyword popup (public, user-facing).
-const CRISIS_KEYWORD_MODAL_ENABLED = true;
+const CRISIS_KEYWORD_MODAL_ENABLED = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Keyword lists — covers Ready Player Me, Blender ARKit, Mixamo, CC3/CC4,
