@@ -312,13 +312,16 @@ export function HabitTracker() {
       if (habit.completedToday) {
         // Uncomplete
         await api.habits.uncomplete(id, format(new Date(), 'yyyy-MM-dd'));
+        toast.success("Marked as not completed");
       } else {
         // Complete
         await api.habits.complete(id, new Date().toISOString());
+        toast.success("Habit completed");
       }
       fetchHabits(); // Refresh to update streaks and logs
     } catch (error) {
       console.error("Failed to toggle habit", error);
+      toast.error("Failed to save habit log");
     }
   };
 
@@ -350,9 +353,11 @@ export function HabitTracker() {
     try {
       if (isCompleted) {
         await api.habits.uncomplete(habitId, format(targetDate, 'yyyy-MM-dd'));
+        toast.success(`Removed log for ${format(targetDate, "MMM d")}`);
       } else {
         // Use ISO string for strict backend validation
         await api.habits.complete(habitId, targetDate.toISOString());
+        toast.success(`Saved log for ${format(targetDate, "MMM d")}`);
       }
       fetchHabits();
     } catch (error) {
@@ -365,8 +370,8 @@ export function HabitTracker() {
 
   const totalHabits = habits.length;
   const completedToday = habits.filter(h => h.completedToday).length;
-  const completionRate = Math.round((completedToday / totalHabits) * 100);
-  const longestStreak = Math.max(...habits.map(h => h.currentStreak));
+  const completionRate = totalHabits > 0 ? Math.round((completedToday / totalHabits) * 100) : 0;
+  const longestStreak = totalHabits > 0 ? Math.max(...habits.map(h => h.currentStreak)) : 0;
 
   const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   

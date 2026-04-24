@@ -815,12 +815,22 @@ export const api = {
 
     async getUserJournals(userId: string) { // Admin only
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/users/${userId}/journals`, {
+      const res = await fetch(`${API_URL}/journal/admin/users/${userId}/journals`, {
         method: 'GET',
         headers,
         cache: 'no-store',
       });
       return handleResponse(res, 'Failed to fetch user journals');
+    },
+
+    async getAllJournalsAdmin() { // Admin only
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/journal/admin`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch all journals');
     }
   },
 
@@ -1201,6 +1211,16 @@ export const api = {
         cache: 'no-store',
       });
       return handleResponse(res, 'Failed to fetch user habits');
+    },
+
+    async getAllHabitsAdmin() { // Admin only
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/habits/admin`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch all habits');
     }
   },
 
@@ -1324,7 +1344,7 @@ export const api = {
 
     async getUserSessions(userId: string) { // Admin only
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/users/${userId}/sessions`, {
+      const res = await fetch(`${API_URL}/sessions/admin/users/${userId}/sessions`, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -1367,7 +1387,7 @@ export const api = {
 
     async getUserMoods(userId: string) { // Admin only
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/users/${userId}/moods`, {
+      const res = await fetch(`${API_URL}/moods/admin/users/${userId}/moods`, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -1613,7 +1633,7 @@ export const api = {
 
     async getUserSubscription(userId: string) {
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/users/${userId}/subscription`, {
+      const res = await fetch(`${API_URL}/billing/admin/users/${userId}/subscription`, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -2012,7 +2032,10 @@ export const api = {
       const res = await fetch(`${API_URL}/admin/session-recordings/${id}/reviewed`, { method: 'POST', headers });
       return handleResponse(res, 'Failed to mark recording reviewed');
     },
-    async updateSessionRecording(id: string, data: { admin_flagged?: boolean; review_notes?: string }) {
+    async updateSessionRecording(
+      id: string,
+      data: { admin_flagged?: boolean; review_notes?: string; topics?: string[]; summary?: string }
+    ) {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/admin/session-recordings/${id}`, {
         method: 'PATCH',
@@ -2343,6 +2366,16 @@ export const api = {
         cache: 'no-store',
       });
       return handleResponse(res, 'Failed to fetch user sleep entries');
+    },
+
+    async getAllEntriesAdmin() { // Admin only
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/sleep/admin`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch all sleep entries');
     }
   },
 

@@ -42,6 +42,7 @@ interface Transcript {
   sessionDuration: number;
   messages: Message[];
   topics: string[];
+  summary?: string;
   sentiment: RowSentiment;
   isFlagged: boolean;
   isReviewed: boolean;
@@ -84,6 +85,7 @@ function mapApiSessionToTranscript(session: any): Transcript {
     sessionDuration: session.duration_minutes ?? 0,
     messages: [],
     topics,
+    summary: typeof config.summary === 'string' ? config.summary : undefined,
     sentiment,
     isFlagged: !!config.admin_flagged,
     isReviewed,
@@ -92,6 +94,113 @@ function mapApiSessionToTranscript(session: any): Transcript {
     reviewedAt: typeof config.reviewed_at === 'string' ? config.reviewed_at : undefined,
     messageCount: session._count?.session_messages ?? 0,
   };
+}
+
+const TOPIC_RULES: { topic: string; keywords: string[] }[] = [
+  { topic: 'anxiety', keywords: ['anxiety', 'anxious', 'panic', 'panicking', 'worry', 'worried', 'overthinking'] },
+  { topic: 'stress', keywords: ['stress', 'stressed', 'overwhelmed', 'pressure', 'burnout'] },
+  { topic: 'sleep', keywords: ['sleep', 'insomnia', 'nightmare', 'tired', 'fatigue', 'rest'] },
+  { topic: 'depression', keywords: ['depressed', 'depression', 'hopeless', 'empty', 'sad', 'numb'] },
+  { topic: 'work', keywords: ['work', 'job', 'boss', 'colleague', 'meeting', 'deadline'] },
+  { topic: 'relationships', keywords: ['relationship', 'partner', 'wife', 'husband', 'boyfriend', 'girlfriend', 'family'] },
+  { topic: 'self-esteem', keywords: ['confidence', 'self-esteem', 'worth', 'good enough', 'imposter'] },
+  { topic: 'grief', keywords: ['grief', 'loss', 'passed away', 'funeral', 'bereaved'] },
+  { topic: 'crisis', keywords: ['suicidal', 'self-harm', 'kill myself', 'end it', 'hurt myself'] },
+];
+
+function normalizeTextForTopics(s: string): string {
+  return (s || '')
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/[^a-z0-9\s']/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function deriveTopicsAndSummary(messages: Message[]): { topics: string[]; summary: string } {
+  const userText = normalizeTextForTopics(messages.filter((m) => m.speaker === 'user').map((m) => m.text).join(' '));
+  const allText = normalizeTextForTopics(messages.map((m) => m.text).join(' '));
+
+  const scores = new Map<string, number>();
+  for (const rule of TOPIC_RULES) {
+    let count = 0;
+    for (const k of rule.keywords) {
+      const kk = normalizeTextForTopics(k);
+      if (!kk) continue;
+      const re = new RegExp(`\\b${kk.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\\\$&')}\\b`, 'g');
+      const hits = (allText.match(re) || []).length;
+      count += hits;
+    }
+    if (count > 0) scores.set(rule.topic, count);
+  }
+
+  const topics = [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([t]) => t);
+
+  // fallback keywords if rules matched nothing
+  if (topics.length === 0) {
+    const stop = new Set([
+      'the','a','an','and','or','but','to','of','in','on','for','with','at','by','from','as','is','are','was','were','be','been','being',
+      'i','me','my','mine','you','your','yours','we','our','ours','they','their','them','he','she','it','this','that','these','those',
+      'just','really','very','so','not','no','yes','yeah','ok','okay','like','feel','feels','feeling','felt','think','thinking','know',
+    ]);
+    const freq = new Map<string, number>();
+    for (const w of userText.split(' ')) {
+      if (!w || w.length < 4) continue;
+      if (stop.has(w)) continue;
+      freq.set(w, (freq.get(w) ?? 0) + 1);
+    }
+    topics.push(
+      ...[...freq.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([w]) => w)
+    );
+  }
+
+  const firstUser = messages.find((m) => m.speaker === 'user')?.text?.trim() || '';
+  const firstAi = messages.find((m) => m.speaker === 'ai')?.text?.trim() || '';
+  const base = firstUser || firstAi || '';
+  const summaryBase = base.length > 180 ? `${base.slice(0, 177)}…` : base;
+  const summary =
+    topics.length > 0
+      ? `Topics: ${topics.slice(0, 4).join(', ')}. ${summaryBase}`.trim()
+      : summaryBase || 'Session transcript available.';
+
+  return { topics: [...new Set(topics.map((t) => t.trim()).filter(Boolean))].slice(0, 6), summary };
+}
+
+function buildAccurateSummary(messages: Message[], topics: string[]): string {
+  const userMsgs = messages
+    .filter((m) => m.speaker === 'user')
+    .map((m) => (m.text || '').trim())
+    .filter(Boolean);
+  const aiMsgs = messages
+    .filter((m) => m.speaker === 'ai')
+    .map((m) => (m.text || '').trim())
+    .filter(Boolean);
+
+  // Prefer user messages for accuracy (what the person actually said).
+  const first = userMsgs[0] || aiMsgs[0] || '';
+  const last = userMsgs[userMsgs.length - 1] || '';
+
+  const pick = (s: string) => {
+    const trimmed = s.replace(/\s+/g, ' ').trim();
+    return trimmed.length > 220 ? `${trimmed.slice(0, 217)}…` : trimmed;
+  };
+
+  const baseParts: string[] = [];
+  if (first) baseParts.push(pick(first));
+  if (last && last !== first) baseParts.push(pick(last));
+
+  const base = baseParts.filter(Boolean).join(' • ');
+  if (!base) return 'Transcript stored, but no readable text was found.';
+
+  // Keep topics but do not over-claim: only list top few inferred topics.
+  const top = topics.slice(0, 4);
+  return top.length ? `Summary (from user messages): ${base}. Topics: ${top.join(', ')}.` : `Summary (from user messages): ${base}.`;
 }
 
 function csvEscapeCell(value: string | number | boolean): string {
@@ -129,6 +238,7 @@ export function ConversationTranscripts() {
   const [exportingList, setExportingList] = useState(false);
   const [listPage, setListPage] = useState(1);
   const [listPageSize, setListPageSize] = useState(10);
+  const [derivingForSession, setDerivingForSession] = useState<Record<string, boolean>>({});
 
   /** Loads all ended sessions in pages (API allows up to 5k per page). */
   const fetchSessions = useCallback(async () => {
@@ -199,13 +309,78 @@ export function ConversationTranscripts() {
     });
   };
 
+  const ensureDerivedTopicsAndSummary = useCallback(
+    async (t: Transcript, msgs: Message[]) => {
+      if ((t.topics?.length ?? 0) > 0 && t.summary?.trim()) return;
+      if (!msgs || msgs.length === 0) return;
+
+      setDerivingForSession((prev) => ({ ...prev, [t.id]: true }));
+      const derivedTopics = deriveTopicsAndSummary(msgs).topics;
+      const derivedSummary = buildAccurateSummary(msgs, derivedTopics);
+      const derived = { topics: derivedTopics, summary: derivedSummary };
+      if (derived.topics.length === 0 && !derived.summary?.trim()) {
+        setDerivingForSession((prev) => ({ ...prev, [t.id]: false }));
+        return;
+      }
+
+      try {
+        const updated = await api.admin.updateSessionRecording(t.id, {
+          topics: derived.topics,
+          summary: derived.summary,
+        });
+        mergeSessionUpdate(t.id, updated);
+      } catch (e) {
+        // ok: show locally if save fails (e.g. perms)
+        setTranscripts((prev) =>
+          prev.map((x) =>
+            x.id === t.id
+              ? {
+                  ...x,
+                  topics: derived.topics.length ? derived.topics : x.topics,
+                  summary: derived.summary || x.summary,
+                }
+              : x
+          )
+        );
+        setTranscriptModal((tm) =>
+          tm?.id === t.id
+            ? {
+                ...tm,
+                topics: derived.topics.length ? derived.topics : tm.topics,
+                summary: derived.summary || tm.summary,
+              }
+            : tm
+        );
+        setDetailsModal((dm) =>
+          dm?.id === t.id
+            ? {
+                ...dm,
+                topics: derived.topics.length ? derived.topics : dm.topics,
+                summary: derived.summary || dm.summary,
+              }
+            : dm
+        );
+      }
+      setDerivingForSession((prev) => ({ ...prev, [t.id]: false }));
+    },
+    [mergeSessionUpdate]
+  );
+
   const loadMessagesFor = async (t: Transcript) => {
-    if (messagesBySession[t.id] || transcriptLoadingId === t.id) return;
+    // If already cached, we may still need derived topics/summary.
+    const cached = messagesBySession[t.id];
+    if (cached && cached.length > 0) {
+      await ensureDerivedTopicsAndSummary(t, cached);
+      return;
+    }
+    if (transcriptLoadingId === t.id) return;
+
     setTranscriptLoadingId(t.id);
     try {
       const rows = await api.admin.getSessionRecordingTranscript(t.id);
       const msgs = mapDbMessagesToMessages(rows as any[]);
       setMessagesBySession((prev) => ({ ...prev, [t.id]: msgs }));
+      await ensureDerivedTopicsAndSummary(t, msgs);
     } catch (e) {
       console.error(e);
     } finally {
@@ -215,6 +390,12 @@ export function ConversationTranscripts() {
 
   const openTranscriptModal = (t: Transcript) => {
     setTranscriptModal(t);
+    void loadMessagesFor(t);
+  };
+
+  const openDetailsModal = (t: Transcript) => {
+    setDetailsModal(t);
+    if (t.messageCount === 0) return;
     void loadMessagesFor(t);
   };
 
@@ -635,7 +816,7 @@ Ezri Mental Health Platform - Admin Dashboard
                     type="button"
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
-                    onClick={() => setDetailsModal(transcript)}
+                    onClick={() => openDetailsModal(transcript)}
                     className="p-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all"
                     title="Session details"
                   >
@@ -780,8 +961,28 @@ Ezri Mental Health Platform - Admin Dashboard
                     <dd className="text-gray-900">{detailsModal.isFlagged ? 'Yes' : 'No'}</dd>
                   </div>
                   <div>
+                    <dt className="text-gray-500">Summary</dt>
+                    <dd className="text-gray-900">
+                      {detailsModal.messageCount === 0
+                        ? 'No transcript stored'
+                        : derivingForSession[detailsModal.id]
+                          ? 'Loading…'
+                          : detailsModal.summary?.trim().length
+                            ? detailsModal.summary
+                            : 'Not generated yet'}
+                    </dd>
+                  </div>
+                  <div>
                     <dt className="text-gray-500">Topics</dt>
-                    <dd className="text-gray-900">{detailsModal.topics.length ? detailsModal.topics.join(', ') : '—'}</dd>
+                    <dd className="text-gray-900">
+                      {detailsModal.messageCount === 0
+                        ? 'No transcript stored'
+                        : derivingForSession[detailsModal.id]
+                          ? 'Loading…'
+                          : detailsModal.topics.length
+                            ? detailsModal.topics.join(', ')
+                            : 'Not generated yet'}
+                    </dd>
                   </div>
                 </dl>
                 <button

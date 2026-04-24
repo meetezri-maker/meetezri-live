@@ -63,6 +63,14 @@ import { OrgAdminDashboard } from '@/app/pages/admin/OrgAdminDashboard';
 import { TeamAdminDashboard } from '@/app/pages/admin/TeamAdminDashboard';
 import { UserManagement } from '@/app/pages/admin/UserManagement';
 import { UserDetailsEnhanced } from '@/app/pages/admin/UserDetailsEnhanced';
+import { UserMoodAnalytics } from '@/app/pages/admin/UserMoodAnalytics';
+import { UserJournalAnalytics } from '@/app/pages/admin/UserJournalAnalytics';
+import { UserSleepAnalytics } from '@/app/pages/admin/UserSleepAnalytics';
+import { UserHabitAnalytics } from '@/app/pages/admin/UserHabitAnalytics';
+import { AllUsersMoodAnalytics } from '@/app/pages/admin/AllUsersMoodAnalytics';
+import { AllUsersJournalAnalytics } from '@/app/pages/admin/AllUsersJournalAnalytics';
+import { AllUsersSleepAnalytics } from '@/app/pages/admin/AllUsersSleepAnalytics';
+import { AllUsersHabitAnalytics } from '@/app/pages/admin/AllUsersHabitAnalytics';
 import { UserSegmentation } from '@/app/pages/admin/UserSegmentation';
 import { TeamRoleManagement } from '@/app/pages/admin/TeamRoleManagement';
 import { CompanionManagement } from '@/app/pages/admin/CompanionManagement';
@@ -172,6 +180,8 @@ import { CooldownScreen } from './pages/app/CooldownScreen';
 import { HelpSupport } from './pages/app/HelpSupport';
 import { Progress } from './pages/app/Progress';
 import { SafetyPlan } from './pages/app/SafetyPlan';
+import { Challenges } from './pages/app/Challenges';
+import { SafetyInsights } from './pages/app/SafetyInsights';
 // import { Community } from './pages/app/Community';
 
 function NetworkWatcher() {
@@ -420,6 +430,7 @@ export default function App() {
             <Route path ="/app/settings/cooldown-screen" element={<CooldownScreen />} />
             <Route path = "/app/settings/help-support" element={<HelpSupport />} />
             <Route path="/app/progress" element={<Progress />} />
+            <Route path="/app/settings/safety-insights" element={<SafetyInsights />} />
             {/* <Route path="/app/settings/community" element={<Community />} /> */}
             <Route path="/app/billing" element={<Billing />} />
             <Route path="/app/sleep-tracker" element={<SleepTracker />} />
@@ -427,6 +438,7 @@ export default function App() {
             <Route path="/app/settings/notifications" element={<Notifications />} />
             <Route path="/app/settings/brain-health" element={<BrainHealth />} />
             <Route path="/app/settings/resources" element={<Resources />} />
+            <Route path="/app/challenges" element={<Challenges />} />
             <Route path="/app/settings/resources/article/:articleId" element={<ResourceArticlePage />} />
             <Route path="/app/settings/community" element={<Community />} />
             <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />
@@ -450,6 +462,14 @@ export default function App() {
               path="/admin/user-details-enhanced/:userId"
               element={<UserDetailsEnhanced />}
             />
+            <Route path="/admin/user-analytics/moods/:userId" element={<UserMoodAnalytics />} />
+            <Route path="/admin/user-analytics/journals/:userId" element={<UserJournalAnalytics />} />
+            <Route path="/admin/user-analytics/sleep/:userId" element={<UserSleepAnalytics />} />
+            <Route path="/admin/user-analytics/habits/:userId" element={<UserHabitAnalytics />} />
+            <Route path="/admin/user-analytics/moods" element={<AllUsersMoodAnalytics />} />
+            <Route path="/admin/user-analytics/journals" element={<AllUsersJournalAnalytics />} />
+            <Route path="/admin/user-analytics/sleep" element={<AllUsersSleepAnalytics />} />
+            <Route path="/admin/user-analytics/habits" element={<AllUsersHabitAnalytics />} />
             <Route path="/admin/user-segmentation" element={<UserSegmentation />} />
             <Route path="/admin/team-role-management" element={<TeamRoleManagement />} />
             <Route path="/admin/companion-management" element={<CompanionManagement />} />

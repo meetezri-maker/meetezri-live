@@ -10,16 +10,21 @@ import {
   TrendingUp,
   CheckCircle2,
   X,
-  AlertTriangle
+  AlertTriangle,
+  ArrowLeft,
+  Link as LinkIcon
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { useNotifications } from "@/app/contexts/NotificationsContext";
 import { formatDistanceToNow } from "date-fns";
+import { Link, useLocation } from "react-router-dom";
 
 export function Notifications() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, isLoading } = useNotifications();
   const safeNotifications = Array.isArray(notifications) ? notifications : [];
+  const location = useLocation();
+  const isSettingsNotifications = location.pathname === "/app/settings/notifications";
 
   const getRelativeTime = (value: string | null | undefined) => {
     if (!value) return "Just now";
@@ -90,7 +95,17 @@ export function Notifications() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-6"
         >
+          {isSettingsNotifications && (
+            <Link 
+              to="/app/settings" 
+              className="inline-flex items-center gap-2 text-gray-700 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-200 mb-6 transition-colors font-medium"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back to Settings
+            </Link>
+          )}
           <div className="flex items-center justify-between mb-2">
+        
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
                 <Bell className="w-6 h-6 text-white" />

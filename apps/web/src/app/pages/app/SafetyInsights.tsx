@@ -3,9 +3,9 @@
  * User's personalized safety dashboard with patterns, trends, and recommendations
  */
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/app/components/AppLayout';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -14,36 +14,42 @@ import {
   Shield,
   TrendingUp,
   TrendingDown,
-  Calendar,
   Clock,
   Heart,
   Activity,
   AlertTriangle,
-  CheckCircle,
   Star,
   Sparkles,
   Phone,
   Users,
   Moon,
   Sun,
-  Zap,
   Target,
   Award
 } from 'lucide-react';
 import { useSafety } from '@/app/contexts/SafetyContext';
-import { getSafetyEvents } from '@/app/utils/safetyLogger';
+import { getUserSafetyEvents } from '@/app/utils/safetyLogger';
 import { getMostUsedResources, getInteractionsBySafetyState } from '@/app/utils/resourceTracking';
+import { getSafetyResources } from '@/app/utils/safetyResources';
+import { useAuth } from '@/app/contexts/AuthContext';
 
 export function SafetyInsights() {
   const navigate = useNavigate();
-  const { } = useSafety();
+  const { currentState } = useSafety();
+  const { user } = useAuth();
   const [insights, setInsights] = useState<any>(null);
   const [safetyHistory, setSafetyHistory] = useState<any[]>([]);
 
-  useEffect(() => {
-    const history = getSafetyEvents();
-    setSafetyHistory(history);
+  const resourceIdToName = useMemo(() => {
+    const resources = getSafetyResources();
+    return new Map(resources.map((r) => [r.id, r.name]));
   }, []);
+
+  useEffect(() => {
+    const userId = user?.id || 'anonymous';
+    const history = getUserSafetyEvents(userId);
+    setSafetyHistory(history);
+  }, [user?.id]);
 
   useEffect(() => {
     calculateInsights();
@@ -157,7 +163,8 @@ export function SafetyInsights() {
       highRiskLast14,
       highRiskPrevious14,
       recommendations,
-      safetyScore: calculateSafetyScore(stateDistribution, trend)
+      safetyScore: calculateSafetyScore(stateDistribution, trend),
+      currentState
     });
   };
 
@@ -549,7 +556,9 @@ export function SafetyInsights() {
                       #{index + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">Resource {index + 1}</p>
+                      <p className="text-sm font-medium truncate">
+                        {resourceIdToName.get(resource.resourceId) || resource.resourceId}
+                      </p>
                       <p className="text-xs text-muted-foreground">{resource.totalClicks} uses</p>
                     </div>
                   </div>

@@ -27,6 +27,8 @@ import {
   MessageSquare,
   Package,
   Layout,
+  Moon,
+  Target,
 } from "lucide-react";
 import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
@@ -82,6 +84,10 @@ const NAVIGATION: NavSection[] = [
     roles: ["super_admin", "org_admin", "team_admin"],
     pages: [
       { name: "All Users", href: "/admin/user-management", icon: Users, roles: ["super_admin", "org_admin", "team_admin"] },
+      { name: "All Users • Mood Analytics", href: "/admin/user-analytics/moods", icon: Heart, roles: ["super_admin", "org_admin", "team_admin"] },
+      { name: "All Users • Journal Analytics", href: "/admin/user-analytics/journals", icon: FileText, roles: ["super_admin", "org_admin", "team_admin"] },
+      { name: "All Users • Sleep Logs", href: "/admin/user-analytics/sleep", icon: Moon, roles: ["super_admin", "org_admin", "team_admin"] },
+      { name: "All Users • Habit Tracker", href: "/admin/user-analytics/habits", icon: Target, roles: ["super_admin", "org_admin", "team_admin"] },
       { name: "User Segmentation", href: "/admin/user-segmentation", icon: Users, roles: ["super_admin", "org_admin"] },
       { name: "Team Management", href: "/admin/team-role-management", icon: Shield, roles: ["super_admin", "org_admin"] },
       { name: "Companion Management", href: "/admin/companion-management", icon: Users, roles: ["super_admin", "org_admin"] },

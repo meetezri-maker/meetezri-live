@@ -63,6 +63,33 @@ export async function getHabits(userId: string) {
   return result;
 }
 
+const ALL_HABITS_CACHE_TTL = 120 * 1000; // 120 seconds
+let allHabitsCache: { data: any[]; timestamp: number } | null = null;
+
+export async function getAllHabitsAdmin() {
+  const now = Date.now();
+  if (allHabitsCache && now - allHabitsCache.timestamp < ALL_HABITS_CACHE_TTL) {
+    return allHabitsCache.data;
+  }
+
+  const result = await prisma.habits.findMany({
+    where: { is_archived: false },
+    include: {
+      profiles: {
+        select: { email: true, full_name: true },
+      },
+      habit_logs: {
+        orderBy: { completed_at: "desc" },
+        take: 60,
+      },
+    },
+    orderBy: { created_at: "desc" },
+  });
+
+  allHabitsCache = { data: result, timestamp: Date.now() };
+  return result;
+}
+
 export async function updateHabit(userId: string, habitId: string, data: UpdateHabitInput) {
   // Verify ownership
   const habit = await prisma.habits.findFirst({

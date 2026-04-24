@@ -23,6 +23,35 @@ export async function getJournalEntries(userId: string) {
   });
 }
 
+const ALL_JOURNALS_CACHE_TTL = 120 * 1000; // 120 seconds
+let allJournalsCache: { data: any[]; timestamp: number } | null = null;
+
+function clearAllJournalsCache() {
+  allJournalsCache = null;
+}
+
+export async function getAllJournalsAdmin() {
+  const now = Date.now();
+  if (allJournalsCache && now - allJournalsCache.timestamp < ALL_JOURNALS_CACHE_TTL) {
+    return allJournalsCache.data;
+  }
+
+  const result = await prisma.journal_entries.findMany({
+    orderBy: { created_at: 'desc' },
+    include: {
+      profiles: {
+        select: {
+          email: true,
+          full_name: true,
+        },
+      },
+    },
+  });
+
+  allJournalsCache = { data: result, timestamp: Date.now() };
+  return result;
+}
+
 export async function getJournalEntryById(userId: string, id: string) {
   return prisma.journal_entries.findFirst({
     where: {

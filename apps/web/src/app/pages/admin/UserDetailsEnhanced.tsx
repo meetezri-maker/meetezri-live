@@ -388,6 +388,30 @@ export function UserDetailsEnhanced() {
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <Link to={`/admin/user-analytics/moods/${userId}`}>
+                <Button variant="outline" className="gap-2">
+                  <Heart className="w-4 h-4" />
+                  Mood
+                </Button>
+              </Link>
+              <Link to={`/admin/user-analytics/journals/${userId}`}>
+                <Button variant="outline" className="gap-2">
+                  <Edit className="w-4 h-4" />
+                  Journal
+                </Button>
+              </Link>
+              <Link to={`/admin/user-analytics/sleep/${userId}`}>
+                <Button variant="outline" className="gap-2">
+                  <Moon className="w-4 h-4" />
+                  Sleep
+                </Button>
+              </Link>
+              <Link to={`/admin/user-analytics/habits/${userId}`}>
+                <Button variant="outline" className="gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Habits
+                </Button>
+              </Link>
               <Button
                 variant="outline"
                 className="gap-2"

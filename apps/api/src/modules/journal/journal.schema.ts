@@ -31,5 +31,16 @@ export const journalResponseSchema = z.object({
   updated_at: z.date(),
 });
 
+// Admin-only: include basic profile identity for analytics tables.
+export const journalAdminResponseSchema = journalResponseSchema.extend({
+  profiles: z
+    .object({
+      email: z.string().nullable().optional(),
+      full_name: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+});
+
 export type CreateJournalInput = z.infer<typeof createJournalSchema>;
 export type UpdateJournalInput = z.infer<typeof updateJournalSchema>;

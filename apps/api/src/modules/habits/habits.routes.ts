@@ -6,15 +6,24 @@ import {
   deleteHabitHandler,
   logHabitCompletionHandler,
   removeHabitCompletionHandler,
-  getUserHabitsHandler
+  getUserHabitsHandler,
+  getAllHabitsAdminHandler
 } from "./habits.controller";
 import { createHabitSchema, updateHabitSchema, logHabitSchema, habitResponseSchema } from "./habits.schema";
 
 export async function habitsRoutes(server: FastifyInstance) {
   server.get(
+    "/admin",
+    {
+      preHandler: [server.authenticate, server.authorize(['super_admin', 'org_admin', 'team_admin'])],
+    },
+    getAllHabitsAdminHandler
+  );
+
+  server.get(
     "/admin/users/:userId/habits",
     {
-      preHandler: [server.authenticate, server.authorize(['super_admin', 'org_admin'])],
+      preHandler: [server.authenticate, server.authorize(['super_admin', 'org_admin', 'team_admin'])],
     },
     getUserHabitsHandler
   );

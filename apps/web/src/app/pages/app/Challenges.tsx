@@ -12,193 +12,88 @@ import {
   CheckCircle2,
   Lock,
   Award,
-  TrendingUp,
-  Calendar,
-  Users,
   Clock,
-  Gift,
-  ChevronRight
+  ChevronRight,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { api } from "@/lib/api";
+import {
+  mapWellnessChallengeDashboardToRows,
+  type WellnessChallengeDashboardPayload,
+  type WellnessChallengeRow,
+} from "@/app/features/wellness/challengesMapper";
 
-interface Challenge {
-  id: string;
-  title: string;
-  description: string;
-  progress: number;
-  target: number;
-  reward: number;
-  difficulty: "Easy" | "Medium" | "Hard";
-  icon: typeof Trophy;
-  color: string;
-  isCompleted: boolean;
-  isLocked: boolean;
-  category: "Daily" | "Weekly" | "Monthly" | "Special";
-  expiresIn?: string;
+function formatCategoryBadge(categoryLabel?: string | null) {
+  const label = (categoryLabel || "General").trim();
+  const key = label.toLowerCase();
+  if (key.includes("mind")) return { label, className: "bg-purple-100 text-purple-700" };
+  if (key.includes("sleep")) return { label, className: "bg-indigo-100 text-indigo-700" };
+  if (key.includes("journal")) return { label, className: "bg-pink-100 text-pink-700" };
+  if (key.includes("habit")) return { label, className: "bg-orange-100 text-orange-700" };
+  if (key.includes("exerc") || key.includes("fitness")) return { label, className: "bg-green-100 text-green-700" };
+  return { label, className: "bg-blue-100 text-blue-700" };
 }
 
 export function Challenges() {
   const [activeTab, setActiveTab] = useState<"all" | "active" | "completed">("all");
-  const [challenges] = useState<Challenge[]>([
-    {
-      id: "daily-checkin",
-      title: "Daily Check-In Streak",
-      description: "Check in for 7 days in a row",
-      progress: 5,
-      target: 7,
-      reward: 100,
-      difficulty: "Easy",
-      icon: Flame,
-      color: "from-orange-400 to-red-500",
-      isCompleted: false,
-      isLocked: false,
-      category: "Daily",
-      expiresIn: "2 days"
-    },
-    {
-      id: "meditation-master",
-      title: "Meditation Master",
-      description: "Complete 10 meditation sessions",
-      progress: 6,
-      target: 10,
-      reward: 200,
-      difficulty: "Medium",
-      icon: Star,
-      color: "from-purple-400 to-pink-500",
-      isCompleted: false,
-      isLocked: false,
-      category: "Weekly"
-    },
-    {
-      id: "breath-work",
-      title: "Breath Work Pro",
-      description: "Complete 5 breathing exercises",
-      progress: 5,
-      target: 5,
-      reward: 150,
-      difficulty: "Easy",
-      icon: Zap,
-      color: "from-blue-400 to-cyan-500",
-      isCompleted: true,
-      isLocked: false,
-      category: "Weekly"
-    },
-    {
-      id: "journal-writer",
-      title: "Journal Writer",
-      description: "Write 15 journal entries",
-      progress: 12,
-      target: 15,
-      reward: 250,
-      difficulty: "Medium",
-      icon: Heart,
-      color: "from-pink-400 to-rose-500",
-      isCompleted: false,
-      isLocked: false,
-      category: "Monthly"
-    },
-    {
-      id: "wellness-warrior",
-      title: "Wellness Warrior",
-      description: "Complete 30 wellness activities",
-      progress: 8,
-      target: 30,
-      reward: 500,
-      difficulty: "Hard",
-      icon: Trophy,
-      color: "from-amber-400 to-yellow-500",
-      isCompleted: false,
-      isLocked: false,
-      category: "Monthly"
-    },
-    {
-      id: "perfect-week",
-      title: "Perfect Week",
-      description: "Complete all daily goals for 7 days",
-      progress: 0,
-      target: 7,
-      reward: 1000,
-      difficulty: "Hard",
-      icon: Target,
-      color: "from-green-400 to-emerald-500",
-      isCompleted: false,
-      isLocked: true,
-      category: "Special"
-    },
-    {
-      id: "mood-tracker",
-      title: "Mood Tracker",
-      description: "Log your mood for 14 consecutive days",
-      progress: 9,
-      target: 14,
-      reward: 300,
-      difficulty: "Medium",
-      icon: Heart,
-      color: "from-red-400 to-pink-500",
-      isCompleted: false,
-      isLocked: false,
-      category: "Weekly"
-    },
-    {
-      id: "sleep-champion",
-      title: "Sleep Champion",
-      description: "Track sleep for 10 nights in a row",
-      progress: 7,
-      target: 10,
-      reward: 200,
-      difficulty: "Easy",
-      icon: Star,
-      color: "from-indigo-400 to-blue-500",
-      isCompleted: false,
-      isLocked: false,
-      category: "Weekly"
-    },
-    {
-      id: "gratitude-guru",
-      title: "Gratitude Guru",
-      description: "Complete 20 gratitude exercises",
-      progress: 15,
-      target: 20,
-      reward: 350,
-      difficulty: "Medium",
-      icon: Gift,
-      color: "from-yellow-400 to-orange-500",
-      isCompleted: false,
-      isLocked: false,
-      category: "Monthly"
-    },
-    {
-      id: "early-bird",
-      title: "Early Bird",
-      description: "Complete morning meditation 5 times",
-      progress: 5,
-      target: 5,
-      reward: 150,
-      difficulty: "Easy",
-      icon: Zap,
-      color: "from-cyan-400 to-blue-500",
-      isCompleted: true,
-      isLocked: false,
-      category: "Daily",
-      expiresIn: "5 days"
-    }
-  ]);
-
-  const totalPoints = 750;
-  const currentLevel = 5;
-  const pointsToNextLevel = 250;
-
-  const filteredChallenges = challenges.filter(challenge => {
-    if (activeTab === "active") return !challenge.isCompleted && !challenge.isLocked;
-    if (activeTab === "completed") return challenge.isCompleted;
-    return true;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState({
+    totalPoints: 0,
+    currentLevel: 1,
+    pointsToNextLevel: 250,
+    levelProgressPercent: 0,
   });
+  const [challenges, setChallenges] = useState<WellnessChallengeRow[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const raw = (await api.wellness.getChallengesForMe()) as WellnessChallengeDashboardPayload;
+        if (cancelled) return;
+        setSummary({
+          totalPoints: raw.totalPoints ?? 0,
+          currentLevel: raw.currentLevel ?? 1,
+          pointsToNextLevel: raw.pointsToNextLevel ?? 250,
+          levelProgressPercent: typeof raw.levelProgressPercent === "number" ? raw.levelProgressPercent : 0,
+        });
+        setChallenges(mapWellnessChallengeDashboardToRows(raw));
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Could not load challenges");
+          setChallenges([]);
+          setSummary({
+            totalPoints: 0,
+            currentLevel: 1,
+            pointsToNextLevel: 250,
+            levelProgressPercent: 0,
+          });
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filteredChallenges = useMemo(() => {
+    return challenges.filter((challenge) => {
+      if (activeTab === "active") return !challenge.isCompleted && !challenge.isLocked;
+      if (activeTab === "completed") return challenge.isCompleted;
+      return true;
+    });
+  }, [activeTab, challenges]);
 
   const stats = [
-    { label: "Active Challenges", value: challenges.filter(c => !c.isCompleted && !c.isLocked).length, icon: Target },
-    { label: "Completed", value: challenges.filter(c => c.isCompleted).length, icon: CheckCircle2 },
-    { label: "Total Points", value: totalPoints, icon: Star },
-    { label: "Current Level", value: currentLevel, icon: Award }
+    { label: "Active Challenges", value: challenges.filter((c) => !c.isCompleted && !c.isLocked).length, icon: Target },
+    { label: "Completed", value: challenges.filter((c) => c.isCompleted).length, icon: CheckCircle2 },
+    { label: "Total Points", value: summary.totalPoints, icon: Star },
+    { label: "Current Level", value: summary.currentLevel, icon: Award },
   ];
 
   return (
@@ -217,6 +112,9 @@ export function Challenges() {
           <p className="text-muted-foreground">
             Complete challenges to earn points, level up, and build healthy habits
           </p>
+          {error && (
+            <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">{error}</p>
+          )}
         </motion.div>
 
         {/* Level Progress Card */}
@@ -238,9 +136,9 @@ export function Challenges() {
               </div>
               <div className="text-center">
                 <div className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent mb-1">
-                  Level {currentLevel}
+                  Level {summary.currentLevel}
                 </div>
-                <div className="text-sm text-muted-foreground">{totalPoints} points</div>
+                <div className="text-sm text-muted-foreground">{summary.totalPoints} points</div>
               </div>
             </div>
 
@@ -249,13 +147,15 @@ export function Challenges() {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Next Level</span>
                 <span className="text-sm text-muted-foreground">
-                  {pointsToNextLevel} points needed
+                  {summary.pointsToNextLevel} points needed
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                 <motion.div
                   initial={{ width: 0 }}
-                  animate={{ width: `${((totalPoints % 1000) / 1000) * 100}%` }}
+                  animate={{
+                    width: `${Math.min(100, Math.max(0, summary.levelProgressPercent))}%`,
+                  }}
                   transition={{ duration: 1, ease: "easeOut" }}
                   className="h-full bg-gradient-to-r from-primary to-secondary rounded-full"
                 />
@@ -346,9 +246,15 @@ export function Challenges() {
 
         {/* Challenges Grid */}
         <div className="space-y-4">
+          {loading && (
+            <Card className="p-5 text-sm text-muted-foreground">
+              Loading your challenges…
+            </Card>
+          )}
           {filteredChallenges.map((challenge, index) => {
             const Icon = challenge.icon;
-            const progressPercentage = (challenge.progress / challenge.target) * 100;
+            const progressPercentage = Math.min(100, (challenge.progress / challenge.target) * 100);
+            const badge = formatCategoryBadge(challenge.categoryLabel);
 
             return (
               <motion.div
@@ -395,22 +301,19 @@ export function Challenges() {
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             <h3 className="font-bold text-lg">{challenge.title}</h3>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                              challenge.category === "Daily" ? "bg-blue-100 text-blue-700" :
-                              challenge.category === "Weekly" ? "bg-purple-100 text-purple-700" :
-                              challenge.category === "Monthly" ? "bg-orange-100 text-orange-700" :
-                              "bg-pink-100 text-pink-700"
-                            }`}>
-                              {challenge.category}
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.className}`}
+                            >
+                              {badge.label}
                             </span>
                           </div>
                           <p className="text-sm text-muted-foreground mb-2">
                             {challenge.description}
                           </p>
-                          {challenge.expiresIn && !challenge.isCompleted && (
-                            <div className="flex items-center gap-1 text-xs text-orange-600">
+                          {!challenge.isCompleted && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Clock className="w-3 h-3" />
-                              <span>Expires in {challenge.expiresIn}</span>
+                              <span>Keep going—you're close!</span>
                             </div>
                           )}
                         </div>
@@ -476,7 +379,7 @@ export function Challenges() {
           })}
         </div>
 
-        {filteredChallenges.length === 0 && (
+        {!loading && filteredChallenges.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

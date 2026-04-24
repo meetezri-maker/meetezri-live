@@ -23,6 +23,31 @@ export async function getSleepEntries(userId: string) {
   });
 }
 
+const ALL_SLEEP_CACHE_TTL = 120 * 1000; // 120 seconds
+let allSleepCache: { data: any[]; timestamp: number } | null = null;
+
+export async function getAllSleepEntriesAdmin() {
+  const now = Date.now();
+  if (allSleepCache && now - allSleepCache.timestamp < ALL_SLEEP_CACHE_TTL) {
+    return allSleepCache.data;
+  }
+
+  const result = await prisma.sleep_entries.findMany({
+    orderBy: { bed_time: 'desc' },
+    include: {
+      profiles: {
+        select: {
+          email: true,
+          full_name: true,
+        },
+      },
+    },
+  });
+
+  allSleepCache = { data: result, timestamp: Date.now() };
+  return result;
+}
+
 export async function getSleepEntryById(userId: string, id: string) {
   return prisma.sleep_entries.findFirst({
     where: { id, user_id: userId },

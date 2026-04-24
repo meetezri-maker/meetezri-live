@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { createJournalEntry, deleteJournalEntry, getJournalEntries, getJournalEntryById, updateJournalEntry, toggleJournalFavorite } from './journal.service';
+import { createJournalEntry, deleteJournalEntry, getAllJournalsAdmin, getJournalEntries, getJournalEntryById, updateJournalEntry, toggleJournalFavorite } from './journal.service';
 import { CreateJournalInput, UpdateJournalInput } from './journal.schema';
 
 interface UserPayload {
@@ -77,6 +77,14 @@ export async function getUserJournalsHandler(
 ) {
   const { userId } = request.params;
   const journals = await getJournalEntries(userId);
+  return reply.send(journals);
+}
+
+export async function getAllJournalsAdminHandler(
+  _request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const journals = await getAllJournalsAdmin();
   return reply.send(journals);
 }
 

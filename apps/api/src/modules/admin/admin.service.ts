@@ -6,7 +6,6 @@ import { Prisma, $Enums } from '@prisma/client';
 import { notificationsService } from '../notifications/notifications.service';
 import { CreateAdminUserInput, DashboardStats } from './admin.schema';
 import { endSession } from '../sessions/sessions.service';
-import { notificationsService } from '../notifications/notifications.service';
 import { emailService } from '../email/email.service';
 import { supabaseAdmin } from '../../config/supabase';
 import * as userService from '../users/user.service';
@@ -3646,7 +3645,7 @@ export async function markSessionRecordingReviewed(sessionId: string, reviewerId
 
 export async function updateSessionRecordingMeta(
   sessionId: string,
-  input: { admin_flagged?: boolean; review_notes?: string }
+  input: { admin_flagged?: boolean; review_notes?: string; topics?: string[]; summary?: string }
 ) {
   const session = await prisma.app_sessions.findUnique({
     where: { id: sessionId },
@@ -3661,6 +3660,12 @@ export async function updateSessionRecordingMeta(
   }
   if (typeof input.review_notes === 'string') {
     updatedConfig.review_notes = input.review_notes;
+  }
+  if (Array.isArray(input.topics)) {
+    updatedConfig.topics = input.topics.filter((t) => typeof t === 'string' && t.trim().length > 0);
+  }
+  if (typeof input.summary === 'string') {
+    updatedConfig.summary = input.summary;
   }
   return prisma.app_sessions.update({
     where: { id: sessionId },
