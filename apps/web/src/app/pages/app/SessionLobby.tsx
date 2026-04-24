@@ -767,7 +767,7 @@ export function SessionLobby() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   onClick={() => setShowMinutesPicker(false)}
-                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                  className="fixed left-0 top-0 w-screen h-[100dvh] bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"
                 >
                   <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
@@ -1296,7 +1296,7 @@ export function SessionLobby() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setShowCustomizeModal(false)}
-                className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+                className="fixed left-0 top-0 w-screen h-[100dvh] bg-black/50 z-50 flex items-center justify-center p-4"
               >
                 {/* Modal */}
                 <motion.div
@@ -1532,7 +1532,7 @@ export function SessionLobby() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={closeScheduleModal}
-                className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+                className="fixed left-0 top-0 w-screen h-[100dvh] bg-black/50 z-50 flex items-center justify-center p-4"
               >
                 {/* Modal */}
                 <motion.div
@@ -1723,7 +1723,7 @@ export function SessionLobby() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowUpcomingActionModal(false)}
-              className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+              className="fixed left-0 top-0 w-screen h-[100dvh] bg-black/50 z-50 flex items-center justify-center p-4"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.92 }}
