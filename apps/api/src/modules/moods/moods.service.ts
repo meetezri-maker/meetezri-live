@@ -3,11 +3,20 @@ import { CreateMoodInput } from "./moods.schema";
 import { invalidateUserProfileCache } from "../users/user.service";
 import { notificationsService } from "../notifications/notifications.service";
 
+const userMoodsCache = new Map<string, { data: any[]; timestamp: number }>();
+const USER_MOODS_CACHE_TTL = 30 * 1000; // 30s: list can be large; avoid re-querying during navigation
+const userMoodsInFlight = new Map<string, Promise<any[]>>();
+
 const ALL_MOODS_CACHE_TTL = 120 * 1000; // 120 seconds
 let allMoodsCache: { data: any[]; timestamp: number } | null = null;
 
 function clearMoodsCache() {
   allMoodsCache = null;
+}
+
+function clearUserMoodsCache(userId: string) {
+  userMoodsCache.delete(userId);
+  userMoodsInFlight.delete(userId);
 }
 
 export async function createMood(userId: string, input: CreateMoodInput) {
@@ -27,16 +36,37 @@ export async function createMood(userId: string, input: CreateMoodInput) {
     },
   });
   invalidateUserProfileCache(userId);
+  clearUserMoodsCache(userId);
   clearMoodsCache();
   return created;
 }
 
 export async function getMoodsByUserId(userId: string) {
-  await notificationsService.ensureStreakRiskReminder(userId, "mood");
-  return prisma.mood_entries.findMany({
+  const cached = userMoodsCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < USER_MOODS_CACHE_TTL) {
+    return cached.data;
+  }
+
+  const inFlight = userMoodsInFlight.get(userId);
+  if (inFlight) return await inFlight;
+
+  // IMPORTANT: don't block the moods list on reminder logic (it does extra DB work and may create rows).
+  // Best-effort only; keep GET /moods fast and side-effect free.
+  void notificationsService.ensureStreakRiskReminder(userId, "mood").catch(() => {});
+
+  const run = (async () => {
+  const data = await prisma.mood_entries.findMany({
     where: { user_id: userId },
     orderBy: { created_at: "desc" },
   });
+  userMoodsCache.set(userId, { data, timestamp: Date.now() });
+  return data;
+  })().finally(() => {
+    userMoodsInFlight.delete(userId);
+  });
+
+  userMoodsInFlight.set(userId, run);
+  return await run;
 }
 
 export async function getAllMoods() {

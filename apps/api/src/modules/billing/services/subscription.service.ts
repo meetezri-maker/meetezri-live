@@ -12,32 +12,67 @@ import {
 import { getOrCreateStripeCustomer } from './stripe-customer.service';
 import { addSubscriptionAllowanceMinutes } from '../credit-balance.service';
 
+const userSubscriptionCache = new Map<string, { data: any; timestamp: number }>();
+const USER_SUBSCRIPTION_CACHE_TTL = 30 * 1000; // 30s: avoids repeated subscription lookups on navigation.
+const userSubscriptionInFlight = new Map<string, Promise<any | null>>();
+
+const userBillingHistoryCache = new Map<string, { data: any[]; timestamp: number }>();
+const USER_BILLING_HISTORY_TTL = 30 * 1000;
+const userBillingHistoryInFlight = new Map<string, Promise<any[]>>();
+
+function clearUserBillingCaches(userId: string) {
+  userSubscriptionCache.delete(userId);
+  userSubscriptionInFlight.delete(userId);
+  userBillingHistoryCache.delete(userId);
+  userBillingHistoryInFlight.delete(userId);
+}
+
 export async function getSubscription(userId: string) {
-  const sub = await prisma.subscriptions.findFirst({
-    where: {
-      user_id: userId,
-      NOT: {
-        status: {
-          in: ['incomplete', 'incomplete_expired'],
-        },
-      },
-    },
-    orderBy: {
-      created_at: 'desc',
-    },
-  });
-
-  if (!sub) return null;
-
-  const status = sub.status || '';
-  const now = new Date();
-
-  // If canceled and past end date, treat as no subscription (fall back to trial/free)
-  if (['canceled', 'cancelled'].includes(status) && sub.end_date && sub.end_date < now) {
-    return null;
+  const cached = userSubscriptionCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < USER_SUBSCRIPTION_CACHE_TTL) {
+    return cached.data ?? null;
   }
 
-  return sub;
+  const inFlight = userSubscriptionInFlight.get(userId);
+  if (inFlight) return await inFlight;
+
+  const run = (async () => {
+    const sub = await prisma.subscriptions.findFirst({
+      where: {
+        user_id: userId,
+        NOT: {
+          status: {
+            in: ['incomplete', 'incomplete_expired'],
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
+
+    if (!sub) {
+      userSubscriptionCache.set(userId, { data: null, timestamp: Date.now() });
+      return null;
+    }
+
+    const status = sub.status || '';
+    const now = new Date();
+
+    // If canceled and past end date, treat as no subscription (fall back to trial/free)
+    if (['canceled', 'cancelled'].includes(status) && sub.end_date && sub.end_date < now) {
+      userSubscriptionCache.set(userId, { data: null, timestamp: Date.now() });
+      return null;
+    }
+
+    userSubscriptionCache.set(userId, { data: sub, timestamp: Date.now() });
+    return sub;
+  })().finally(() => {
+    userSubscriptionInFlight.delete(userId);
+  });
+
+  userSubscriptionInFlight.set(userId, run);
+  return await run;
 }
 
 export async function createCheckoutSession(userId: string, email: string, data: CreateSubscriptionInput) {
@@ -186,6 +221,7 @@ export async function linkSubscriptionToUser(userId: string, sessionId: string) 
 
   // Sync subscriptions
   await syncSubscriptionWithStripe(userId);
+  clearUserBillingCaches(userId);
 }
 
 export async function createPortalSession(userId: string) {
@@ -220,24 +256,28 @@ export async function updateSubscription(userId: string, data: UpdateSubscriptio
     throw new Error('No active subscription found');
   }
 
-  return prisma.subscriptions.update({
+  const updated = await prisma.subscriptions.update({
     where: { id: sub.id },
     data: {
       ...data,
       updated_at: new Date(),
     },
   });
+  clearUserBillingCaches(userId);
+  return updated;
 }
 
 export async function updateSubscriptionById(id: string, data: UpdateSubscriptionInput) {
   clearSubscriptionsCache();
-  return prisma.subscriptions.update({
+  const updated = await prisma.subscriptions.update({
     where: { id },
     data: {
       ...data,
       updated_at: new Date(),
     },
   });
+  // User id isn't available; rely on TTL cache for per-user.
+  return updated;
 }
 
 export async function cancelSubscription(userId: string) {
@@ -264,7 +304,7 @@ export async function cancelSubscription(userId: string) {
     }
   }
 
-  return prisma.subscriptions.update({
+  const updated = await prisma.subscriptions.update({
     where: { id: sub.id },
     data: {
       status: 'canceled',
@@ -273,13 +313,32 @@ export async function cancelSubscription(userId: string) {
       updated_at: new Date(),
     },
   });
+  clearUserBillingCaches(userId);
+  return updated;
 }
 
 export async function getBillingHistory(userId: string) {
-  return prisma.subscriptions.findMany({
-    where: { user_id: userId },
-    orderBy: { created_at: 'desc' },
+  const cached = userBillingHistoryCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < USER_BILLING_HISTORY_TTL) {
+    return cached.data;
+  }
+
+  const inFlight = userBillingHistoryInFlight.get(userId);
+  if (inFlight) return await inFlight;
+
+  const run = (async () => {
+    const data = await prisma.subscriptions.findMany({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+    });
+    userBillingHistoryCache.set(userId, { data, timestamp: Date.now() });
+    return data;
+  })().finally(() => {
+    userBillingHistoryInFlight.delete(userId);
   });
+
+  userBillingHistoryInFlight.set(userId, run);
+  return await run;
 }
 
 export async function getAllSubscriptions(page: number = 1, limit: number = 50) {

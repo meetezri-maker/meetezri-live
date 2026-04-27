@@ -1,6 +1,7 @@
 import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 import cors from '@fastify/cors';
+import compress from '@fastify/compress';
 import rawBody from 'fastify-raw-body';
 import jwt from '@fastify/jwt';
 import dotenv from 'dotenv';
@@ -32,18 +33,22 @@ const jwtLib = require('jsonwebtoken');
 dotenv.config();
 
 // Debugging for Vercel Environment
-console.log('Starting API...');
-const dbUrl = process.env.DATABASE_URL || '';
-const dbHost = dbUrl.includes('@') ? dbUrl.split('@')[1] : 'Unknown';
-const dbUser = dbUrl.includes('://') ? dbUrl.split('://')[1].split(':')[0] : 'Unknown';
-
-console.log('Environment Debug:', {
-  NODE_ENV: process.env.NODE_ENV,
-  PORT: process.env.PORT,
-  DATABASE_URL_HOST: dbHost, 
-  DATABASE_USER: dbUser, // Log the user to verify if it's 'postgres' or 'postgres.[ref]'
-  DIRECT_URL_SET: !!process.env.DIRECT_URL,
-});
+const DEBUG_API = process.env.DEBUG_API === '1' || process.env.DEBUG_API === 'true';
+const DEBUG_API_TIMING =
+  process.env.DEBUG_API_TIMING === '1' || process.env.DEBUG_API_TIMING === 'true';
+if (DEBUG_API) {
+  console.log('Starting API...');
+  const dbUrl = process.env.DATABASE_URL || '';
+  const dbHost = dbUrl.includes('@') ? dbUrl.split('@')[1] : 'Unknown';
+  const dbUser = dbUrl.includes('://') ? dbUrl.split('://')[1].split(':')[0] : 'Unknown';
+  console.log('Environment Debug:', {
+    NODE_ENV: process.env.NODE_ENV,
+    PORT: process.env.PORT,
+    DATABASE_URL_HOST: dbHost,
+    DATABASE_USER: dbUser,
+    DIRECT_URL_SET: !!process.env.DIRECT_URL,
+  });
+}
 
 const app = Fastify({ logger: true }).withTypeProvider<ZodTypeProvider>();
 
@@ -54,6 +59,20 @@ app.setSerializerCompiler(serializerCompiler);
 app.addHook('onRequest', (request, reply, done) => {
   (request as any).startTime = performance.now();
   done();
+});
+
+app.addHook('onSend', (request, reply, payload, done) => {
+  const startTime = (request as any).startTime;
+  if (startTime) {
+    const duration = performance.now() - startTime;
+    if (DEBUG_API_TIMING) {
+      const ms = Math.max(0, Math.round(duration));
+      // Useful for Chrome DevTools and quick perf triage.
+      reply.header('x-api-ms', String(ms));
+      reply.header('Server-Timing', `app;dur=${ms}`);
+    }
+  }
+  done(null, payload);
 });
 
 app.addHook('onResponse', (request, reply, done) => {
@@ -100,6 +119,10 @@ app.register(cors, {
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 });
 
+// Compress responses (JSON/text) to reduce payload size and improve perceived latency.
+// Works well on serverless too; clients usually send `Accept-Encoding: gzip, br`.
+app.register(compress, { global: true });
+
 app.register(rateLimit, {
   max: 300, // 300 requests per minute per IP
   timeWindow: 60 * 1000
@@ -120,9 +143,9 @@ if (rawSecret) {
   if (rawSecret.length > 20 && !rawSecret.includes(' ') && rawSecret.endsWith('=')) {
     try {
       secret = Buffer.from(rawSecret, 'base64');
-      console.log('Detected Base64 JWT Secret, decoded to buffer.');
+      if (DEBUG_API) console.log('Detected Base64 JWT Secret, decoded to buffer.');
     } catch (e) {
-      console.log('Failed to decode JWT Secret as Base64, using as string.');
+      if (DEBUG_API) console.log('Failed to decode JWT Secret as Base64, using as string.');
       secret = rawSecret;
     }
   } else {
@@ -148,7 +171,7 @@ const getJwks = async (projectUrl: string) => {
     const data = await response.json();
     cachedJwks = data;
     lastJwksFetch = now;
-    console.log('Fetched JWKS keys:', data.keys?.length);
+    if (DEBUG_API) console.log('Fetched JWKS keys:', data.keys?.length);
     return data;
   } catch (err) {
     console.error('Error fetching JWKS:', err);

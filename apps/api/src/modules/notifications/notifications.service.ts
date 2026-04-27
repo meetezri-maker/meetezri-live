@@ -5,6 +5,19 @@ import { emailService } from '../email/email.service';
 
 type StreakReminderType = 'mood' | 'journal';
 
+const notificationsListCache = new Map<string, { data: any[]; timestamp: number }>();
+const notificationsUnreadCountCache = new Map<string, { data: number; timestamp: number }>();
+const NOTIFICATIONS_CACHE_TTL = 5 * 1000; // 5 seconds
+
+function clearNotificationCachesForUser(userId: string) {
+  notificationsListCache.delete(userId);
+  notificationsUnreadCountCache.delete(userId);
+}
+
+function clearNotificationCachesForUsers(userIds: string[]) {
+  for (const id of userIds) clearNotificationCachesForUser(id);
+}
+
 const STREAK_REMINDER_TITLES: Record<StreakReminderType, string[]> = {
   mood: [
     'Your streak is on the line. don’t miss today’s check-in.',
@@ -159,9 +172,11 @@ export const notificationsService = {
        throw new Error("User has disabled notifications");
     }
 
-    return prisma.notifications.create({
+    const created = await prisma.notifications.create({
       data: input as Prisma.notificationsUncheckedCreateInput,
     });
+    clearNotificationCachesForUser(input.user_id);
+    return created;
   },
 
   async ensureStreakRiskReminder(userId: string, type: StreakReminderType) {
@@ -326,9 +341,11 @@ export const notificationsService = {
 
     if (data.length === 0) return { count: 0 };
 
-    return prisma.notifications.createMany({
+    const result = await prisma.notifications.createMany({
       data,
     });
+    clearNotificationCachesForUsers(targetUserIds);
+    return result;
   },
 
   async createManyForUsers(
@@ -339,7 +356,7 @@ export const notificationsService = {
     const targetUserIds = await this.filterRecentDuplicates(dedupedUserIds, input);
     if (targetUserIds.length === 0) return { count: 0 };
 
-    return prisma.notifications.createMany({
+    const result = await prisma.notifications.createMany({
       data: targetUserIds.map((id) => ({
         user_id: id,
         type: input.type,
@@ -349,33 +366,51 @@ export const notificationsService = {
         is_read: false
       })),
     });
+    clearNotificationCachesForUsers(targetUserIds);
+    return result;
   },
 
   async findAll(userId: string) {
-    return prisma.notifications.findMany({
+    const cached = notificationsListCache.get(userId);
+    if (cached && Date.now() - cached.timestamp < NOTIFICATIONS_CACHE_TTL) {
+      return cached.data;
+    }
+    const data = await prisma.notifications.findMany({
       where: { user_id: userId },
       orderBy: { created_at: 'desc' },
       take: 50,
     });
+    notificationsListCache.set(userId, { data, timestamp: Date.now() });
+    return data;
   },
 
   async markAsRead(id: string, userId: string) {
-    return prisma.notifications.update({
+    const updated = await prisma.notifications.update({
       where: { id, user_id: userId },
       data: { is_read: true },
     });
+    clearNotificationCachesForUser(userId);
+    return updated;
   },
 
   async markAllAsRead(userId: string) {
-     return prisma.notifications.updateMany({
+     const result = await prisma.notifications.updateMany({
        where: { user_id: userId, is_read: false },
        data: { is_read: true },
      });
+     clearNotificationCachesForUser(userId);
+     return result;
   },
 
   async getUnreadCount(userId: string) {
-    return prisma.notifications.count({
+    const cached = notificationsUnreadCountCache.get(userId);
+    if (cached && Date.now() - cached.timestamp < NOTIFICATIONS_CACHE_TTL) {
+      return cached.data;
+    }
+    const count = await prisma.notifications.count({
       where: { user_id: userId, is_read: false },
     });
+    notificationsUnreadCountCache.set(userId, { data: count, timestamp: Date.now() });
+    return count;
   }
 };

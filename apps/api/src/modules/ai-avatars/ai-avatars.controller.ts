@@ -2,6 +2,7 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import {
   createAvatar,
+  getAllAvatars,
   getAllAvatarsWithUsageStats,
   getAvatarById,
   updateAvatar,
@@ -27,11 +28,25 @@ export async function getAllAvatarsHandler(
   reply: FastifyReply
 ) {
   try {
-    const avatars = await getAllAvatarsWithUsageStats();
+    // App uses this for companion selection. Keep it fast: return base avatar rows only.
+    const avatars = await getAllAvatars();
     return reply.code(200).send(avatars);
   } catch (error) {
     request.log.error(error);
     return reply.code(500).send({ message: "Failed to fetch avatars" });
+  }
+}
+
+export async function getAllAvatarsWithUsageStatsHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  try {
+    const avatars = await getAllAvatarsWithUsageStats();
+    return reply.code(200).send(avatars);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: "Failed to fetch avatars stats" });
   }
 }
 

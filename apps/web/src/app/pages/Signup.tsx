@@ -201,13 +201,13 @@ export function Signup() {
       if (selectedPlan === 'trial') {
         // For free trial: create account client-side so a session is established immediately
         
-        const {
-          emailRedirectTo: redirectUrl,
-          targetPath,
-          baseUrl,
-          isLocal,
-          source,
-        } = resolveVerificationRedirectForFlow("trial");
+        // Trial hardening: always use the *current browser origin* for email redirects.
+        // This prevents any env/config mismatch from forcing production URLs during local dev.
+        const redirectUrl = `${window.location.origin}/app/user-profile`;
+        const targetPath = "/app/user-profile";
+        const baseUrl = window.location.origin;
+        const isLocal = true;
+        const source = "window.location.origin(trial_hardcode)";
         
         // Required debug logging: exact emailRedirectTo passed to Supabase.
         console.log("Trial signup: supabase.auth.signUp emailRedirectTo (exact):", redirectUrl, {
@@ -753,13 +753,11 @@ export function Signup() {
                                     action: {
                                       label: "Resend Email",
                                       onClick: async () => {
-                                        const {
-                                          emailRedirectTo: redirectUrl,
-                                          targetPath,
-                                          baseUrl,
-                                          isLocal,
-                                          source,
-                                        } = resolveVerificationRedirectForFlow("trial");
+                                        const redirectUrl = `${window.location.origin}/app/user-profile`;
+                                        const targetPath = "/app/user-profile";
+                                        const baseUrl = window.location.origin;
+                                        const isLocal = true;
+                                        const source = "window.location.origin(trial_hardcode)";
 
                                         // Required debug logging: exact emailRedirectTo passed to Supabase.
                                         console.log("Trial retry resend: supabase.auth.resend emailRedirectTo (exact):", redirectUrl, {

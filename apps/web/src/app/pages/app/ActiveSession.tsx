@@ -1517,10 +1517,6 @@ export function ActiveSession() {
   }, [apiSessionId]);
 
   useEffect(() => {
-    sessionTimeRef.current = sessionTime;
-  }, [sessionTime]);
-
-  useEffect(() => {
     authTokenRef.current = session?.access_token ?? null;
   }, [session?.access_token]);
 
@@ -1552,6 +1548,69 @@ export function ActiveSession() {
   const ttsMouthTapOkRef = useRef(false);
   /** Text of the clip currently playing (for echo filter; state alone lags behind STT). */
   const ezriPlaybackTextRef = useRef<string>("");
+  const micWasEnabledBeforeTtsRef = useRef<boolean | null>(null);
+
+  const setMicEnabled = (enabled: boolean) => {
+    if (!stream) return;
+    try {
+      stream.getAudioTracks().forEach((t) => {
+        t.enabled = enabled;
+      });
+    } catch {}
+  };
+
+  const pauseListeningForTts = () => {
+    // Prevent TTS echo being re-transcribed as the user.
+    // 1) Stop SpeechRecognition (best-effort).
+    // IMPORTANT: do not detach handlers (onend/onresult). We rely on them to restart later.
+    // Also: recognition.onend already won't auto-restart while `isEzriSpeakingRef.current` is true.
+    try {
+      if (recognitionRef.current && isRecognitionActiveRef.current) {
+        recognitionRef.current.stop();
+      }
+    } catch {}
+
+    // 2) Disable mic track (extra protection if OS routes speaker → mic).
+    try {
+      if (stream) {
+        const tracks = stream.getAudioTracks();
+        if (tracks.length > 0) {
+          micWasEnabledBeforeTtsRef.current = tracks[0].enabled;
+          setMicEnabled(false);
+        }
+      }
+    } catch {}
+  };
+
+  const resumeListeningAfterTts = () => {
+    // Restore mic
+    try {
+      const prev = micWasEnabledBeforeTtsRef.current;
+      if (typeof prev === "boolean") {
+        setMicEnabled(prev && !isMutedRef.current && !isSessionPausedRef.current);
+      } else {
+        setMicEnabled(!isMutedRef.current && !isSessionPausedRef.current);
+      }
+    } catch {}
+    micWasEnabledBeforeTtsRef.current = null;
+
+    // Restart recognition (small delay so echo tail doesn't trigger).
+    window.setTimeout(() => {
+      if (
+        isSessionEndingRef.current ||
+        isSessionPausedRef.current ||
+        isMutedRef.current ||
+        isEzriSpeakingRef.current
+      ) {
+        return;
+      }
+      try {
+        if (recognitionRef.current && !isRecognitionActiveRef.current) {
+          recognitionRef.current.start();
+        }
+      } catch {}
+    }, 300);
+  };
 
   const stopAudioAndSpeechDriver = () => {
     if (ttsAnalyserRafRef.current) {
@@ -1659,6 +1718,7 @@ export function ActiveSession() {
     setSpeechCharIndex(0);
     setIsEzriSpeaking(true);
     isEzriSpeakingRef.current = true;
+    pauseListeningForTts();
 
     let url = "";
     let revoke: (() => void) | undefined;
@@ -1744,6 +1804,7 @@ export function ActiveSession() {
     audio.onended = () => {
       if (seq !== audioPlaySeqRef.current) return;
       stopAudioAndSpeechDriver();
+      resumeListeningAfterTts();
       setSpeechPulse((v) => v + 1);
       // Do NOT call recognition.start() here.
       // Recognition auto-restart is handled centrally by recognition.onend.
@@ -1760,6 +1821,7 @@ export function ActiveSession() {
         mediaErrorMessage: me?.message,
       });
       stopAudioAndSpeechDriver();
+      resumeListeningAfterTts();
       toast.error("Audio playback failed (unsupported or interrupted).");
       opts?.onDone?.();
     };
@@ -1776,6 +1838,7 @@ export function ActiveSession() {
       if (e?.name === "AbortError") return;
       console.error("Audio play() failed:", e);
       stopAudioAndSpeechDriver();
+      resumeListeningAfterTts();
       toast.error("Audio playback failed (autoplay blocked or unsupported).");
       opts?.onDone?.();
     }
@@ -2050,6 +2113,11 @@ export function ActiveSession() {
 
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
+      // Updating React state on every animation frame forces the entire
+      // ActiveSession tree to re-render ~60fps. We only need UI-level metering,
+      // so throttle state updates while keeping the mouth driver ref “live”.
+      let lastUiUpdateAt = 0;
+      let lastUiLevel = 0;
 
       const updateAudioLevel = () => {
         if (audioContext.state === "suspended") audioContext.resume();
@@ -2057,9 +2125,14 @@ export function ActiveSession() {
         let sum = 0;
         for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
         const level = sum / bufferLength;
-        setAudioLevel(level);
-        if (!isEzriSpeakingRef.current) {
-          mouthAudioLevelRef.current = level;
+        if (!isEzriSpeakingRef.current) mouthAudioLevelRef.current = level;
+
+        const now = performance.now();
+        // ~15fps max, plus a small threshold to avoid micro-updates.
+        if (now - lastUiUpdateAt > 66 || Math.abs(level - lastUiLevel) > 2) {
+          lastUiUpdateAt = now;
+          lastUiLevel = level;
+          setAudioLevel(level);
         }
         animationFrameId = requestAnimationFrame(updateAudioLevel);
       };
@@ -2344,7 +2417,11 @@ export function ActiveSession() {
         try {
           const userStream = await navigator.mediaDevices.getUserMedia({
             video: true,
-            audio: true,
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            },
           });
           setStream(userStream);
           if (videoRef.current) videoRef.current.srcObject = userStream;
@@ -2662,13 +2739,14 @@ export function ActiveSession() {
     if (isSessionPaused || hasSessionEnded) return;
 
     const timer = setInterval(() => {
-      setSessionTime((prev) => {
-        const next = prev + 1;
-        // Keep ref in sync immediately so refresh / pagehide always sends accurate seconds
-        // (React state→ref effect can lag one frame behind the interval).
-        sessionTimeRef.current = next;
-        return next;
-      });
+      // Keep accurate time in a ref (no React render).
+      sessionTimeRef.current += 1;
+      const next = sessionTimeRef.current;
+      // Update React state less frequently to reduce re-render cost of this huge screen.
+      // UI time jumps in small steps, but session logic (heartbeat/end) remains accurate via the ref.
+      if (next < 5 || next % 5 === 0) {
+        setSessionTime(next);
+      }
     }, 1000);
 
     return () => clearInterval(timer);
@@ -2684,14 +2762,15 @@ export function ActiveSession() {
 
     const tick = async () => {
       if (cancelled) return;
+      const elapsed = sessionTimeRef.current;
       // Avoid sending too early (need at least a few seconds of session time)
-      if (sessionTime <= 0) return;
+      if (elapsed <= 0) return;
       // Only send if at least 15s have passed since last send
-      if (sessionTime - lastSent < 15) return;
+      if (elapsed - lastSent < 15) return;
 
       try {
-        await api.sessions.heartbeat(apiSessionId, sessionTime);
-        lastSent = sessionTime;
+        await api.sessions.heartbeat(apiSessionId, elapsed);
+        lastSent = elapsed;
       } catch (e) {
         // Best-effort; don't interrupt session on transient failures
       }
@@ -2705,7 +2784,7 @@ export function ActiveSession() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [apiSessionId, isSessionPaused, hasSessionEnded, sessionTime]);
+  }, [apiSessionId, isSessionPaused, hasSessionEnded]);
 
   const remainingSeconds =
     initialCreditsSeconds !== null
@@ -2827,10 +2906,13 @@ export function ActiveSession() {
     const token = authTokenRef.current;
     if (!id || !token || remoteEndAttemptedRef.current) return;
     remoteEndAttemptedRef.current = true;
+    const transcriptToSend = Array.isArray(transcriptRef.current)
+      ? transcriptRef.current.slice(-120)
+      : undefined;
     const payload = {
       duration_seconds: sessionTimeRef.current,
       recording_url: undefined as string | undefined,
-      transcript: transcriptRef.current,
+      transcript: transcriptToSend,
     };
     try {
       void fetch(`${SESSION_API_BASE}/sessions/${id}/end`, {
@@ -2891,10 +2973,11 @@ export function ActiveSession() {
     remoteEndAttemptedRef.current = true;
 
     setIsUploading(true);
-    const durationSeconds = sessionTime;
+    const durationSeconds = sessionTimeRef.current;
 
     try {
-      await api.sessions.end(apiSessionId, durationSeconds, undefined, transcript);
+      const transcriptToSend = Array.isArray(transcript) ? transcript.slice(-120) : undefined;
+      await api.sessions.end(apiSessionId, durationSeconds, undefined, transcriptToSend as any);
       try {
         await refreshProfile();
       } catch (e) {
@@ -2918,7 +3001,7 @@ export function ActiveSession() {
     try {
       await endSessionAndCleanup();
 
-      const durationSeconds = sessionTime;
+      const durationSeconds = sessionTimeRef.current;
 
       const needsCooldown =
         currentState === "HIGH_RISK" || currentState === "SAFETY_MODE";

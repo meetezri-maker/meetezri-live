@@ -56,8 +56,14 @@ function tryParseHttpOrigin(value?: string | null): string | null {
 function getWebBaseUrlFromRequest(
   request: FastifyRequest
 ): { webBaseUrl: string; source: string } {
+  const explicit = (request.headers['x-web-base-url'] as string | undefined) ?? null;
   const origin = request.headers.origin;
   const referer = request.headers.referer;
+
+  const fromExplicit = tryParseHttpOrigin(explicit);
+  if (fromExplicit) {
+    return { webBaseUrl: fromExplicit, source: 'request.x-web-base-url' };
+  }
 
   // Browser requests from the SPA always send Origin (same-origin POST) or Referer.
   // Use that first so production (e.g. Vercel) verification links match the site the user
@@ -73,13 +79,15 @@ function getWebBaseUrlFromRequest(
     return { webBaseUrl: fromReferer, source: 'request.referer' };
   }
 
-  const envWebBaseUrl =
-    process.env.WEB_BASE_URL ||
-    process.env.APP_URL ||
-    process.env.CLIENT_URL ||
-    'http://localhost:5173';
+  const envCandidateRaw =
+    process.env.WEB_BASE_URL || process.env.APP_URL || process.env.CLIENT_URL || '';
+  const envCandidate = envCandidateRaw.trim();
+  const envParsed = tryParseHttpOrigin(envCandidate);
+  if (envParsed) {
+    return { webBaseUrl: envParsed, source: 'env' };
+  }
 
-  return { webBaseUrl: envWebBaseUrl, source: 'env' };
+  return { webBaseUrl: 'http://localhost:5173', source: 'fallback.localhost' };
 }
 
 function resolvePostVerificationTargetPath(signupType: 'trial' | 'plan') {
@@ -94,9 +102,35 @@ function buildVerificationRedirectTo(
   signupType: 'trial' | 'plan'
 ) {
   const targetPath = resolvePostVerificationTargetPath(signupType);
-  // Use exact final route URLs per flow so Supabase sends users directly.
-  const redirectTo = `${webBaseUrl}${targetPath}`;
+  // Always route through /auth/callback so the SPA can finalize verification consistently.
+  // This is important for magiclinks used in resend-verification, where Supabase may not
+  // mark email_confirmed_at as expected unless we explicitly confirm server-side.
+  const redirectTo = `${webBaseUrl}/auth/callback?redirect=${encodeURIComponent(targetPath)}&via=verification&flow=${signupType}`;
   return { redirectTo, targetPath };
+}
+
+export async function confirmEmailHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload & { email?: string };
+  const userId = user.sub;
+
+  try {
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      email_confirm: true,
+      user_metadata: {
+        email_verification_required: false,
+      },
+    } as any);
+
+    if (error) throw error;
+
+    return reply.code(200).send({ success: true });
+  } catch (error: any) {
+    request.log.error({ error, userId }, 'Failed to confirm email');
+    return reply.code(500).send({ message: error.message || 'Failed to confirm email' });
+  }
 }
 
 export async function checkUserExistsHandler(
@@ -195,6 +229,7 @@ export async function signupHandler(
         request: {
           origin: request.headers.origin,
           referer: request.headers.referer,
+          x_web_base_url: request.headers['x-web-base-url'],
           baseUrl,
           baseUrlSource,
           isLocal: baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1'),
@@ -220,9 +255,32 @@ export async function signupHandler(
     });
 
     if (linkError) throw linkError;
-    const verificationLink = linkData.properties?.action_link;
+    const verificationLinkRaw = linkData.properties?.action_link;
 
-    if (!verificationLink) throw new Error('Failed to generate verification link');
+    if (!verificationLinkRaw) throw new Error('Failed to generate verification link');
+    // Supabase can sometimes rewrite/override redirect_to based on project URL config.
+    // Enforce our computed redirect explicitly so local dev stays on localhost.
+    let verificationLink = verificationLinkRaw;
+    try {
+      const u = new URL(verificationLinkRaw);
+      u.searchParams.set('redirect_to', finalRedirectTo);
+      verificationLink = u.toString();
+    } catch {
+      // If URL parsing fails, keep the original link.
+      verificationLink = verificationLinkRaw;
+    }
+
+    try {
+      const u = new URL(verificationLink);
+      const rt = u.searchParams.get('redirect_to') || '';
+      const rtOrigin = rt ? (new URL(rt)).origin : null;
+      request.log.info(
+        { redirectToPassed: finalRedirectTo, redirectToInLinkOrigin: rtOrigin },
+        'Signup verification link redirect_to (origin only)'
+      );
+    } catch {
+      // ignore
+    }
 
     const welcomeVerificationEmail = emailService.buildWelcomeVerificationEmail({
       firstName,
@@ -230,12 +288,17 @@ export async function signupHandler(
       audience: signupType,
     });
 
-    await emailService.sendEmail(
-      email,
-      welcomeVerificationEmail.subject,
-      welcomeVerificationEmail.html,
-      welcomeVerificationEmail.text
-    );
+    // Do not block signup on SMTP latency; link is already generated.
+    void emailService
+      .sendEmail(
+        email,
+        welcomeVerificationEmail.subject,
+        welcomeVerificationEmail.html,
+        welcomeVerificationEmail.text
+      )
+      .catch((error) => {
+        request.log.error({ error, email }, 'Failed to send signup verification email');
+      });
 
     return reply.code(201).send({
       success: true,
@@ -298,6 +361,7 @@ export async function resendVerificationHandler(
         request: {
           origin: request.headers.origin,
           referer: request.headers.referer,
+          x_web_base_url: request.headers['x-web-base-url'],
           baseUrl,
           baseUrlSource,
           isLocal: baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1'),
@@ -321,8 +385,30 @@ export async function resendVerificationHandler(
     });
 
     if (linkError) throw linkError;
-    const verificationLink = linkData.properties?.action_link;
-    if (!verificationLink) throw new Error('Failed to generate verification link');
+    const verificationLinkRaw = linkData.properties?.action_link;
+    if (!verificationLinkRaw) throw new Error('Failed to generate verification link');
+    // Supabase can sometimes rewrite/override redirect_to based on project URL config.
+    // Enforce our computed redirect explicitly so local dev stays on localhost.
+    let verificationLink = verificationLinkRaw;
+    try {
+      const u = new URL(verificationLinkRaw);
+      u.searchParams.set('redirect_to', redirectTo);
+      verificationLink = u.toString();
+    } catch {
+      verificationLink = verificationLinkRaw;
+    }
+
+    try {
+      const u = new URL(verificationLink);
+      const rt = u.searchParams.get('redirect_to') || '';
+      const rtOrigin = rt ? (new URL(rt)).origin : null;
+      request.log.info(
+        { redirectToPassed: redirectTo, redirectToInLinkOrigin: rtOrigin },
+        'Resend verification link redirect_to (origin only)'
+      );
+    } catch {
+      // ignore
+    }
 
     const verificationReminderEmail = emailService.buildVerificationReminderEmail({
       verificationLink,

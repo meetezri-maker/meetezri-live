@@ -2,60 +2,64 @@ import prisma from '../../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { emailService } from '../email/email.service';
 import { CreateSessionInput, CreateMessageInput, UpdateScheduledSessionInput } from './sessions.schema';
+import { invalidateUserProfileCache } from '../users/user.service';
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
+const sessionsListCache = new Map<string, { data: any; timestamp: number }>();
+const SESSIONS_LIST_CACHE_TTL = 5 * 1000; // 5s: absorbs UI polling / rapid navigation without going stale long.
+
+function sessionsListCacheKey(userId: string, status?: string, limit?: number) {
+  return `${userId}|${status || ''}|${typeof limit === 'number' ? limit : ''}`;
+}
+
+export function invalidateSessionsCache(userId: string) {
+  const prefix = `${userId}|`;
+  for (const key of sessionsListCache.keys()) {
+    if (key.startsWith(prefix)) sessionsListCache.delete(key);
+  }
+}
+
 async function deductCreditsSeconds(db: DbClient, userId: string, secondsUsed: number) {
   if (secondsUsed <= 0) return;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const profile = await db.profiles.findUnique({
-      where: { id: userId },
-      select: {
-        credits: true,
-        purchased_credits: true,
-        credits_seconds: true,
-        purchased_credits_seconds: true,
-      },
-    });
-
-    if (!profile) return;
-
-    const storedSubSeconds = profile.credits_seconds || 0;
-    const storedPurSeconds = profile.purchased_credits_seconds || 0;
-    const subSeconds = storedSubSeconds > 0 ? storedSubSeconds : (profile.credits || 0) * 60;
-    const purSeconds = storedPurSeconds > 0 ? storedPurSeconds : (profile.purchased_credits || 0) * 60;
-
-    let newSubSeconds = subSeconds;
-    let newPurSeconds = purSeconds;
-    if (newSubSeconds >= secondsUsed) {
-      newSubSeconds -= secondsUsed;
-    } else {
-      const remaining = secondsUsed - newSubSeconds;
-      newSubSeconds = 0;
-      newPurSeconds = Math.max(0, newPurSeconds - remaining);
-    }
-
-    const newSubCredits = newSubSeconds === 0 ? 0 : Math.ceil(newSubSeconds / 60);
-    const newPurCredits = newPurSeconds === 0 ? 0 : Math.ceil(newPurSeconds / 60);
-
-    const updated = await db.profiles.updateMany({
-      where: {
-        id: userId,
-        credits_seconds: storedSubSeconds,
-        purchased_credits_seconds: storedPurSeconds,
-      },
-      data: {
-        credits: newSubCredits,
-        purchased_credits: Math.max(0, newPurCredits),
-        credits_seconds: newSubSeconds,
-        purchased_credits_seconds: newPurSeconds,
-      },
-    });
-
-    if (updated.count === 1) return;
-  }
-
-  throw new Error('Failed to deduct credits safely after retries');
+  // Single atomic update: avoids read/modify/write loops and reduces lock contention
+  // with heartbeat billing.
+  await db.$executeRaw(Prisma.sql`
+    WITH current AS (
+      SELECT
+        id,
+        CASE
+          WHEN COALESCE(credits_seconds, 0) > 0 THEN COALESCE(credits_seconds, 0)
+          ELSE COALESCE(credits, 0) * 60
+        END AS sub_seconds,
+        CASE
+          WHEN COALESCE(purchased_credits_seconds, 0) > 0 THEN COALESCE(purchased_credits_seconds, 0)
+          ELSE COALESCE(purchased_credits, 0) * 60
+        END AS pur_seconds
+      FROM public.profiles
+      WHERE id = ${userId}::uuid
+      FOR UPDATE
+    ),
+    next AS (
+      SELECT
+        id,
+        GREATEST(0, sub_seconds - ${secondsUsed})::int AS next_sub,
+        CASE
+          WHEN sub_seconds >= ${secondsUsed}
+            THEN pur_seconds
+          ELSE GREATEST(0, pur_seconds - (${secondsUsed} - sub_seconds))::int
+        END AS next_pur
+      FROM current
+    )
+    UPDATE public.profiles p
+    SET
+      credits_seconds = n.next_sub,
+      purchased_credits_seconds = n.next_pur,
+      credits = CASE WHEN n.next_sub <= 0 THEN 0 ELSE CEIL(n.next_sub / 60.0)::int END,
+      purchased_credits = CASE WHEN n.next_pur <= 0 THEN 0 ELSE CEIL(n.next_pur / 60.0)::int END
+    FROM next n
+    WHERE p.id = n.id;
+  `);
 }
 
 export async function createSession(userId: string, input: CreateSessionInput) {
@@ -144,6 +148,7 @@ export async function createSession(userId: string, input: CreateSessionInput) {
       void sendScheduledSessionEmails(userId, result);
     }
 
+    invalidateSessionsCache(userId);
     return result;
   } catch (error) {
     console.error('Error in createSession service:', error);
@@ -225,7 +230,13 @@ async function sendScheduledSessionEmails(userId: string, session: any) {
 }
 
 export async function getSessions(userId: string, status?: string, limit?: number) {
-  return prisma.app_sessions.findMany({
+  const key = sessionsListCacheKey(userId, status, limit);
+  const cached = sessionsListCache.get(key);
+  if (cached && Date.now() - cached.timestamp < SESSIONS_LIST_CACHE_TTL) {
+    return cached.data;
+  }
+
+  const data = await prisma.app_sessions.findMany({
     where: {
       user_id: userId,
       ...(status ? { status } : {}),
@@ -240,6 +251,8 @@ export async function getSessions(userId: string, status?: string, limit?: numbe
     },
     ...(typeof limit === 'number' ? { take: limit } : {}),
   });
+  sessionsListCache.set(key, { data, timestamp: Date.now() });
+  return data;
 }
 
 export async function endSession(
@@ -283,20 +296,25 @@ export async function endSession(
   // Save transcript if available
   if (transcript && transcript.length > 0) {
     try {
-      await prisma.session_messages.createMany({
-        data: transcript.map(msg => ({
-          session_id: sessionId,
-          role: msg.role,
-          content: msg.content,
-          created_at: msg.timestamp ? new Date(msg.timestamp) : undefined
-        }))
-      });
+      // Best-effort: do not block session end on transcript persistence.
+      void prisma.session_messages
+        .createMany({
+          data: transcript.map((msg) => ({
+            session_id: sessionId,
+            role: msg.role,
+            content: msg.content,
+            created_at: msg.timestamp ? new Date(msg.timestamp) : undefined,
+          })),
+        })
+        .catch((error) => {
+          console.error("Failed to save transcript:", error);
+        });
     } catch (error) {
       console.error('Failed to save transcript:', error);
     }
   }
 
-  return prisma.app_sessions.update({
+  const updated = await prisma.app_sessions.update({
     where: { id: sessionId },
     data: {
       ended_at: new Date(),
@@ -306,6 +324,9 @@ export async function endSession(
       billed_seconds: secondsUsed,
     },
   });
+  invalidateSessionsCache(userId);
+  invalidateUserProfileCache(userId); // credits + profile totals
+  return updated;
 }
 
 export async function heartbeatSession(userId: string, sessionId: string, elapsedSeconds: number) {
@@ -344,12 +365,14 @@ export async function toggleSessionFavorite(userId: string, sessionId: string) {
   if (!session) {
     throw new Error('Session not found');
   }
-  return prisma.app_sessions.update({
+  const updated = await prisma.app_sessions.update({
     where: { id: sessionId },
     data: {
       is_favorite: !session.is_favorite,
     },
   });
+  invalidateSessionsCache(userId);
+  return updated;
 }
 
 export async function getSessionById(userId: string, sessionId: string) {
@@ -368,13 +391,15 @@ export async function cancelScheduledSession(userId: string, sessionId: string) 
     throw new Error('Only scheduled sessions can be canceled');
   }
 
-  return prisma.app_sessions.update({
+  const updated = await prisma.app_sessions.update({
     where: { id: sessionId },
     data: {
       status: 'canceled',
       ended_at: new Date(),
     },
   });
+  invalidateSessionsCache(userId);
+  return updated;
 }
 
 export async function updateScheduledSession(
@@ -388,7 +413,7 @@ export async function updateScheduledSession(
     throw new Error('Only scheduled sessions can be edited');
   }
 
-  return prisma.app_sessions.update({
+  const updated = await prisma.app_sessions.update({
     where: { id: sessionId },
     data: {
       ...(typeof input.duration_minutes === 'number'
@@ -401,6 +426,8 @@ export async function updateScheduledSession(
       updated_at: new Date(),
     },
   });
+  invalidateSessionsCache(userId);
+  return updated;
 }
 
 export async function createMessage(userId: string, sessionId: string, input: CreateMessageInput) {
@@ -432,6 +459,7 @@ export async function createMessage(userId: string, sessionId: string, input: Cr
     }),
   ]);
 
+  invalidateSessionsCache(userId);
   return message;
 }
 

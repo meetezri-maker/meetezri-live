@@ -1,4 +1,6 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../lib/prisma';
+import { sharedDel, sharedGetJson, sharedSetJson } from '../../lib/sharedCache';
 import {
   CreateWellnessChallengeInput,
   CreateWellnessToolInput,
@@ -15,13 +17,28 @@ const wellnessToolsCache = new Map<string, { data: any[]; timestamp: number }>()
 const WELLNESS_STATS_CACHE_TTL = 60 * 1000; // 60 seconds
 const wellnessStatsCache = new Map<string, { data: any; timestamp: number }>();
 
+const wellnessToolByIdCache = new Map<string, { data: any; timestamp: number }>();
+const WELLNESS_TOOL_BY_ID_CACHE_TTL = 10 * 1000; // 10 seconds
+
+const wellnessChallengesDashboardCache = new Map<string, { data: any; timestamp: number }>();
+const WELLNESS_CHALLENGES_DASHBOARD_CACHE_TTL = 30 * 1000; // 30s: expensive dashboard endpoint; safe to be slightly stale.
+const wellnessChallengesDashboardInFlight = new Map<string, Promise<any>>();
+
+const wellnessChallengesWithStatsCache: { data: any; timestamp: number } | null = null as any;
+let wellnessChallengesWithStatsCacheValue: { data: any; timestamp: number } | null = null;
+const WELLNESS_CHALLENGES_WITH_STATS_TTL = 10 * 1000; // 10 seconds
+
 function clearWellnessToolCaches() {
   wellnessToolsCache.clear();
+  wellnessToolByIdCache.clear();
 }
 
 function clearUserWellnessCaches(userId: string) {
   progressCache.delete(userId);
   wellnessStatsCache.delete(userId);
+  // Dashboard depends on these signals (sessions/moods/journals/wellness). Safe short TTL but clear on writes.
+  wellnessChallengesDashboardCache.delete(userId);
+  void sharedDel(`wellness:challenges:dashboard:${userId}`);
 }
 
 function resolveDurationFields(input: {
@@ -94,6 +111,7 @@ export async function createWellnessChallenge(data: CreateWellnessChallengeInput
           : (data.goal_criteria as object),
     },
   });
+  wellnessChallengesWithStatsCacheValue = null;
   return {
     ...created,
     participants: 0,
@@ -120,6 +138,12 @@ function buildEnrollmentTrendFromJoinedAt(
 }
 
 export async function getWellnessChallengesWithStats() {
+  if (
+    wellnessChallengesWithStatsCacheValue &&
+    Date.now() - wellnessChallengesWithStatsCacheValue.timestamp < WELLNESS_CHALLENGES_WITH_STATS_TTL
+  ) {
+    return wellnessChallengesWithStatsCacheValue.data;
+  }
   const [challenges, participation, completions, joinedRows] = await Promise.all([
     prisma.wellness_challenges.findMany({
       orderBy: { start_date: 'asc' },
@@ -162,10 +186,12 @@ export async function getWellnessChallengesWithStats() {
     };
   });
 
-  return {
+  const data = {
     challenges: mapped,
     enrollmentTrend: buildEnrollmentTrendFromJoinedAt(joinedRows),
   };
+  wellnessChallengesWithStatsCacheValue = { data, timestamp: Date.now() };
+  return data;
 }
 
 async function getChallengeStatsById(challengeId: string): Promise<{
@@ -232,6 +258,7 @@ export async function updateWellnessChallenge(
   });
 
   const stats = await getChallengeStatsById(id);
+  wellnessChallengesWithStatsCacheValue = null;
   return {
     ...updated,
     participants: stats.participants,
@@ -387,6 +414,21 @@ async function computeChallengeProgressForUser(
  * Active challenges with per-user progress for dashboard / app UI.
  */
 export async function getWellnessChallengesForUserDashboard(userId: string) {
+  const cached = wellnessChallengesDashboardCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < WELLNESS_CHALLENGES_DASHBOARD_CACHE_TTL) {
+    return cached.data;
+  }
+
+  const shared = await sharedGetJson<any>(`wellness:challenges:dashboard:${userId}`);
+  if (shared) {
+    wellnessChallengesDashboardCache.set(userId, { data: shared, timestamp: Date.now() });
+    return shared;
+  }
+
+  const inFlight = wellnessChallengesDashboardInFlight.get(userId);
+  if (inFlight) return await inFlight;
+
+  const run = (async () => {
   const now = new Date();
 
   const [challengeRows, recentMoods] = await Promise.all([
@@ -435,16 +477,17 @@ export async function getWellnessChallengesForUserDashboard(userId: string) {
   });
   const partMap = new Map(participationRows.map((p) => [p.challenge_id, p]));
 
-  const completedForPoints = await prisma.user_challenge_participation.findMany({
-    where: { user_id: userId, is_completed: true },
-    include: {
-      wellness_challenges: { select: { reward_points: true } },
-    },
-  });
-  const totalPoints = completedForPoints.reduce(
-    (sum, row) => sum + (row.wellness_challenges.reward_points ?? 0),
-    0
+  // Sum reward points in SQL (avoids loading all completed rows into Node).
+  const totalPointsRows = await prisma.$queryRaw<[{ total: bigint | null }]>(
+    Prisma.sql`
+      SELECT COALESCE(SUM(COALESCE(c.reward_points, 0)), 0)::bigint AS total
+      FROM public.user_challenge_participation p
+      JOIN public.wellness_challenges c ON c.id = p.challenge_id
+      WHERE p.user_id = ${userId}::uuid
+        AND p.is_completed = true
+    `
   );
+  const totalPoints = Number(totalPointsRows[0]?.total ?? 0) || 0;
 
   const withinThousand = totalPoints % 1000;
   const pointsToNextLevel =
@@ -456,36 +499,37 @@ export async function getWellnessChallengesForUserDashboard(userId: string) {
     Math.min(99, Math.floor(totalPoints / 200) + 1)
   );
 
-  const mapped = [];
-  for (const c of challenges) {
-    const part = partMap.get(c.id) ?? null;
-    const target = Math.max(1, getChallengeTargetFromCriteria(c.goal_criteria));
-    const progress = await computeChallengeProgressForUser(
-      userId,
-      c,
-      part,
-      streakDays
-    );
-    const isCompleted = part?.is_completed === true || progress >= target;
-    const gc = (c.goal_criteria || {}) as Record<string, unknown>;
-    const isLocked = gc.locked === true;
+  const mapped = await Promise.all(
+    challenges.map(async (c) => {
+      const part = partMap.get(c.id) ?? null;
+      const target = Math.max(1, getChallengeTargetFromCriteria(c.goal_criteria));
+      const progress = await computeChallengeProgressForUser(
+        userId,
+        c,
+        part,
+        streakDays
+      );
+      const isCompleted = part?.is_completed === true || progress >= target;
+      const gc = (c.goal_criteria || {}) as Record<string, unknown>;
+      const isLocked = gc.locked === true;
 
-    mapped.push({
-      id: c.id,
-      title: c.title,
-      description: c.description ?? '',
-      progress,
-      target,
-      reward: c.reward_points ?? 0,
-      difficulty: mapDifficultyLabel(c.goal_criteria),
-      isCompleted,
-      isLocked,
-      category: c.category,
-      endDate: c.end_date.toISOString(),
-    });
-  }
+      return {
+        id: c.id,
+        title: c.title,
+        description: c.description ?? '',
+        progress,
+        target,
+        reward: c.reward_points ?? 0,
+        difficulty: mapDifficultyLabel(c.goal_criteria),
+        isCompleted,
+        isLocked,
+        category: c.category,
+        endDate: c.end_date.toISOString(),
+      };
+    })
+  );
 
-  return {
+  const data = {
     totalPoints,
     currentLevel,
     pointsToNextLevel:
@@ -495,6 +539,15 @@ export async function getWellnessChallengesForUserDashboard(userId: string) {
       : 0,
     challenges: mapped,
   };
+  wellnessChallengesDashboardCache.set(userId, { data, timestamp: Date.now() });
+  void sharedSetJson(`wellness:challenges:dashboard:${userId}`, data, WELLNESS_CHALLENGES_DASHBOARD_CACHE_TTL);
+  return data;
+  })().finally(() => {
+    wellnessChallengesDashboardInFlight.delete(userId);
+  });
+
+  wellnessChallengesDashboardInFlight.set(userId, run);
+  return await run;
 }
 
 export async function getWellnessTools(userId: string, category?: string) {
@@ -574,6 +627,11 @@ export async function toggleWellnessToolFavorite(userId: string, toolId: string)
 }
 
 export async function getWellnessToolById(userId: string, id: string) {
+  const key = `${userId}|${id}`;
+  const cached = wellnessToolByIdCache.get(key);
+  if (cached && Date.now() - cached.timestamp < WELLNESS_TOOL_BY_ID_CACHE_TTL) {
+    return cached.data;
+  }
   const tool = await prisma.wellness_tools.findUnique({
     where: { id },
     include: {
@@ -585,11 +643,13 @@ export async function getWellnessToolById(userId: string, id: string) {
 
   if (!tool) return null;
 
-  return {
+  const result = {
     ...tool,
     is_favorite: tool.favorite_wellness_tools.length > 0,
     favorite_wellness_tools: undefined
   };
+  wellnessToolByIdCache.set(key, { data: result, timestamp: Date.now() });
+  return result;
 }
 
 export async function updateWellnessTool(id: string, data: UpdateWellnessToolInput) {

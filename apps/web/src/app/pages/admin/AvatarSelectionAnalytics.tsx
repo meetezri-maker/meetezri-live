@@ -60,7 +60,7 @@ export function AvatarSelectionAnalytics() {
     const fetchAvatarUsage = async () => {
       setLoading(true);
       try {
-        const data = await api.aiAvatars.getAll();
+        const data = await api.aiAvatars.getAllWithUsageStats();
         const items = Array.isArray(data) ? data : [];
         const mapped: AvatarUsageRow[] = items.map((item: any) => {
           const sessions = Number.isFinite(item?.session_count) ? Number(item.session_count) : 0;

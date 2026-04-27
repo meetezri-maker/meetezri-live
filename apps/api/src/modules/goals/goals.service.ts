@@ -8,17 +8,43 @@ import {
 
 const nowIso = () => new Date().toISOString();
 
+const goalsListCache = new Map<string, { data: any[]; timestamp: number }>();
+const goalByIdCache = new Map<string, { data: any; timestamp: number }>();
+const goalCheckinsCache = new Map<string, { data: any[]; timestamp: number }>();
+const GOALS_CACHE_TTL = 5 * 1000; // 5 seconds
+
+function invalidateGoalsCache(userId: string, goalId?: string) {
+  goalsListCache.delete(userId);
+  if (goalId) {
+    goalByIdCache.delete(`${userId}|${goalId}`);
+    goalCheckinsCache.delete(`${userId}|${goalId}`);
+  } else {
+    const prefix = `${userId}|`;
+    for (const key of goalByIdCache.keys()) if (key.startsWith(prefix)) goalByIdCache.delete(key);
+    for (const key of goalCheckinsCache.keys()) if (key.startsWith(prefix)) goalCheckinsCache.delete(key);
+  }
+}
+
 export async function listGoals(userId: string) {
-  return prisma.personal_goals.findMany({
+  const cached = goalsListCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < GOALS_CACHE_TTL) return cached.data;
+  const data = await prisma.personal_goals.findMany({
     where: { user_id: userId },
     orderBy: { created_at: "desc" },
   });
+  goalsListCache.set(userId, { data, timestamp: Date.now() });
+  return data;
 }
 
 export async function getGoalById(userId: string, goalId: string) {
-  return prisma.personal_goals.findFirst({
+  const key = `${userId}|${goalId}`;
+  const cached = goalByIdCache.get(key);
+  if (cached && Date.now() - cached.timestamp < GOALS_CACHE_TTL) return cached.data;
+  const data = await prisma.personal_goals.findFirst({
     where: { id: goalId, user_id: userId },
   });
+  goalByIdCache.set(key, { data, timestamp: Date.now() });
+  return data;
 }
 
 export async function createGoal(userId: string, input: CreateGoalInput) {
@@ -26,7 +52,7 @@ export async function createGoal(userId: string, input: CreateGoalInput) {
   const status =
     progress >= 100 ? "completed" : progress > 0 ? "active" : "not_started";
 
-  return prisma.personal_goals.create({
+  const created = await prisma.personal_goals.create({
     data: {
       user_id: userId,
       goal_title: input.goal_title,
@@ -54,6 +80,8 @@ export async function createGoal(userId: string, input: CreateGoalInput) {
       completion_note: null,
     },
   });
+  invalidateGoalsCache(userId);
+  return created;
 }
 
 export async function updateGoal(userId: string, goalId: string, patch: UpdateGoalInput) {
@@ -72,7 +100,7 @@ export async function updateGoal(userId: string, goalId: string, patch: UpdateGo
         ? "active"
         : existing.status);
 
-  return prisma.personal_goals.update({
+  const updated = await prisma.personal_goals.update({
     where: { id: goalId },
     data: {
       ...patch,
@@ -87,6 +115,8 @@ export async function updateGoal(userId: string, goalId: string, patch: UpdateGo
       updated_at: nowIso(),
     },
   });
+  invalidateGoalsCache(userId, goalId);
+  return updated;
 }
 
 export async function updateGoalStatus(
@@ -97,27 +127,35 @@ export async function updateGoalStatus(
   const existing = await getGoalById(userId, goalId);
   if (!existing) return null;
 
-  return prisma.personal_goals.update({
+  const updated = await prisma.personal_goals.update({
     where: { id: goalId },
     data: {
       status: input.status,
       updated_at: nowIso(),
     },
   });
+  invalidateGoalsCache(userId, goalId);
+  return updated;
 }
 
 export async function removeGoal(userId: string, goalId: string) {
   const existing = await getGoalById(userId, goalId);
   if (!existing) return false;
   await prisma.personal_goals.delete({ where: { id: goalId } });
+  invalidateGoalsCache(userId, goalId);
   return true;
 }
 
 export async function listGoalCheckIns(userId: string, goalId: string) {
-  return prisma.goal_check_ins.findMany({
+  const key = `${userId}|${goalId}`;
+  const cached = goalCheckinsCache.get(key);
+  if (cached && Date.now() - cached.timestamp < GOALS_CACHE_TTL) return cached.data;
+  const data = await prisma.goal_check_ins.findMany({
     where: { user_id: userId, goal_id: goalId },
     orderBy: { created_at: "desc" },
   });
+  goalCheckinsCache.set(key, { data, timestamp: Date.now() });
+  return data;
 }
 
 export async function addGoalCheckIn(
@@ -156,5 +194,6 @@ export async function addGoalCheckIn(
     },
   });
 
+  invalidateGoalsCache(userId, goalId);
   return created;
 }

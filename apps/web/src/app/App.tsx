@@ -433,6 +433,7 @@ export default function App() {
             <Route path="/app/settings/safety-insights" element={<SafetyInsights />} />
             {/* <Route path="/app/settings/community" element={<Community />} /> */}
             <Route path="/app/billing" element={<Billing />} />
+            <Route path="/app/invite/create-password" element={<InviteCreatePassword />} />
             <Route path="/app/sleep-tracker" element={<SleepTracker />} />
             <Route path="/app/habit-tracker" element={<HabitTracker />} />
             <Route path="/app/settings/notifications" element={<Notifications />} />

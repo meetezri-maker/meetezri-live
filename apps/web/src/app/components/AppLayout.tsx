@@ -52,7 +52,7 @@ const accentBackgroundMap: Record<string, string> = {
 export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, user } = useAuth();
+  const { signOut, user, profile } = useAuth();
   const { unreadCount } = useNotifications();
 
   const appearanceStorageKey = useMemo(() => {
@@ -251,8 +251,13 @@ export function AppLayout({ children }: AppLayoutProps) {
     : "pb-20 sm:pb-6 sm:pl-72";
   const useGradientUI = appearance.backgroundStyle !== "solid";
 
-  // Check both standard Supabase verification AND our custom metadata flag
-  const isUnverified = user && (!user.email_confirmed_at || user.user_metadata?.email_verification_required);
+  // Prefer backend-derived verification (source of truth), fall back to Supabase session flags.
+  // Supabase user metadata can remain stale in the client session after verification.
+  const isUnverified =
+    (profile
+      ? profile.needs_email_verification === true || profile.email_verified !== true
+      : false) ||
+    (user ? (!user.email_confirmed_at || user.user_metadata?.email_verification_required) : false);
 
   const resendVerification = async () => {
     if (!user?.email) return;
