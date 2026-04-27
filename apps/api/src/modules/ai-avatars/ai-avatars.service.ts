@@ -3,14 +3,27 @@ import prisma from "../../lib/prisma";
 import { Prisma } from "@prisma/client";
 import { CreateAvatarInput, UpdateAvatarInput } from "./ai-avatars.schema";
 
+const avatarsCache = new Map<string, { data: any; timestamp: number }>();
+const AVATARS_CACHE_TTL = 60 * 1000; // 60s: avatars rarely change, but dashboard hits often.
+
+export function invalidateAvatarsCache() {
+  avatarsCache.clear();
+}
+
 export async function createAvatar(input: CreateAvatarInput) {
-  return prisma.ai_avatars.create({
+  const created = await prisma.ai_avatars.create({
     data: input as Prisma.ai_avatarsCreateInput,
   });
+  invalidateAvatarsCache();
+  return created;
 }
 
 /** Usage stats from ended sessions whose JSON config matches avatar name (first name or full) or ai_name. */
 export async function getAllAvatarsWithUsageStats() {
+  const cached = avatarsCache.get("stats");
+  if (cached && Date.now() - cached.timestamp < AVATARS_CACHE_TTL) {
+    return cached.data;
+  }
   const avatars = await prisma.ai_avatars.findMany({
     orderBy: { created_at: "desc" },
   });
@@ -74,9 +87,15 @@ export async function getAllAvatarsWithUsageStats() {
 }
 
 export async function getAllAvatars() {
-  return prisma.ai_avatars.findMany({
+  const cached = avatarsCache.get("list");
+  if (cached && Date.now() - cached.timestamp < AVATARS_CACHE_TTL) {
+    return cached.data;
+  }
+  const data = await prisma.ai_avatars.findMany({
     orderBy: { created_at: "desc" },
   });
+  avatarsCache.set("list", { data, timestamp: Date.now() });
+  return data;
 }
 
 export async function getAvatarById(id: string) {
@@ -86,14 +105,18 @@ export async function getAvatarById(id: string) {
 }
 
 export async function updateAvatar(id: string, input: UpdateAvatarInput) {
-  return prisma.ai_avatars.update({
+  const updated = await prisma.ai_avatars.update({
     where: { id },
     data: input,
   });
+  invalidateAvatarsCache();
+  return updated;
 }
 
 export async function deleteAvatar(id: string) {
-  return prisma.ai_avatars.delete({
+  const deleted = await prisma.ai_avatars.delete({
     where: { id },
   });
+  invalidateAvatarsCache();
+  return deleted;
 }

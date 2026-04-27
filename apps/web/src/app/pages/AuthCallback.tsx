@@ -84,6 +84,18 @@ export function AuthCallback() {
   };
 
   const finalizeVerification = async (sessionUser: any) => {
+      // If this callback was triggered by a verification magiclink, confirm server-side
+      // so email_verified / email_confirmed_at stays consistent for trial users.
+      try {
+        const searchParams = new URLSearchParams(location.search);
+        const via = searchParams.get('via');
+        if (via === 'verification') {
+          await api.confirmEmail();
+        }
+      } catch (e) {
+        console.warn('AuthCallback: failed to confirm email via API', e);
+      }
+
       // If this is a Trial User verifying for the first time
       if (sessionUser?.user_metadata?.email_verification_required) {
         const signupType = sessionUser?.user_metadata?.signup_type;

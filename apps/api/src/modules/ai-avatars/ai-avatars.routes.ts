@@ -3,6 +3,7 @@ import { FastifyInstance } from "fastify";
 import {
   createAvatarHandler,
   getAllAvatarsHandler,
+  getAllAvatarsWithUsageStatsHandler,
   getAvatarByIdHandler,
   updateAvatarHandler,
   deleteAvatarHandler,
@@ -27,6 +28,14 @@ export async function aiAvatarsRoutes(server: FastifyInstance) {
       preHandler: [server.authenticate],
     },
     getAllAvatarsHandler
+  );
+
+  server.get(
+    "/stats",
+    {
+      preHandler: [server.authenticate, server.authorize(['super_admin', 'org_admin', 'team_admin'])],
+    },
+    getAllAvatarsWithUsageStatsHandler
   );
 
   server.get(

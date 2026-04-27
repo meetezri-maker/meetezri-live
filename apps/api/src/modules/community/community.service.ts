@@ -3,6 +3,17 @@ import { Prisma } from '@prisma/client';
 import { invalidateCommunityCaches } from '../admin/admin.service';
 import { calculateStreak } from '../users/user.service';
 
+let communityOverviewCacheValue: { data: any; timestamp: number } | null = null;
+const communityGroupsCache = new Map<string, { data: any; timestamp: number }>();
+const communityCommentsCache = new Map<string, { data: any; timestamp: number }>();
+const COMMUNITY_CACHE_TTL = 5 * 1000; // 5 seconds
+
+function clearCommunityLocalCaches() {
+  communityOverviewCacheValue = null;
+  communityGroupsCache.clear();
+  communityCommentsCache.clear();
+}
+
 type PrivacyJson = {
   communityEnabled?: boolean;
   showDisplayNameInCommunity?: boolean;
@@ -88,6 +99,12 @@ function resolveSnapshotAuthorUserId(
 }
 
 export async function getCommunityOverview() {
+  if (
+    communityOverviewCacheValue &&
+    Date.now() - communityOverviewCacheValue.timestamp < COMMUNITY_CACHE_TTL
+  ) {
+    return communityOverviewCacheValue.data;
+  }
   const [
     groupCount,
     postCount,
@@ -132,7 +149,7 @@ export async function getCommunityOverview() {
     .slice(0, 8)
     .map(([tag, posts]) => ({ tag, posts }));
 
-  return {
+  const data = {
     members: distinctMembers.length,
     posts: postCount,
     groups: groupCount,
@@ -140,9 +157,15 @@ export async function getCommunityOverview() {
     activeNow,
     trendingTags,
   };
+  communityOverviewCacheValue = { data, timestamp: Date.now() };
+  return data;
 }
 
 export async function getCommunityGroupsForUser(userId: string) {
+  const cached = communityGroupsCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < COMMUNITY_CACHE_TTL) {
+    return cached.data;
+  }
   const groups = await prisma.community_groups.findMany({
     where: { archived_at: null },
     orderBy: { created_at: 'desc' },
@@ -157,7 +180,7 @@ export async function getCommunityGroupsForUser(userId: string) {
     },
   });
 
-  return groups.map((g) => ({
+  const data = groups.map((g) => ({
     id: g.id,
     name: g.name,
     description: g.description || '',
@@ -167,6 +190,8 @@ export async function getCommunityGroupsForUser(userId: string) {
     posts: g._count.community_posts,
     isJoined: g.community_group_members.length > 0,
   }));
+  communityGroupsCache.set(userId, { data, timestamp: Date.now() });
+  return data;
 }
 
 export async function getCommunityPostsForUser(userId: string, limit = 30) {
@@ -403,6 +428,7 @@ export async function createCommunityPost(
     ON CONFLICT (post_id) DO NOTHING
   `;
 
+  clearCommunityLocalCaches();
   invalidateCommunityCaches();
   return created;
 }
@@ -424,6 +450,7 @@ export async function joinCommunityGroup(userId: string, groupId: string) {
       data: { group_id: groupId, user_id: userId, role: 'member' },
     });
   }
+  clearCommunityLocalCaches();
   invalidateCommunityCaches();
   return { ok: true };
 }
@@ -432,6 +459,7 @@ export async function leaveCommunityGroup(userId: string, groupId: string) {
   await prisma.community_group_members.deleteMany({
     where: { group_id: groupId, user_id: userId },
   });
+  clearCommunityLocalCaches();
   invalidateCommunityCaches();
   return { ok: true };
 }
@@ -608,6 +636,7 @@ export async function togglePostLike(userId: string, postId: string) {
     });
   });
 
+  clearCommunityLocalCaches();
   invalidateCommunityCaches();
   return { likes: likesTotal, likedByMe };
 }
@@ -634,11 +663,17 @@ export async function addPostComment(userId: string, postId: string, content: st
   const comments = await prisma.community_comments.count({
     where: { post_id: postId },
   });
+  clearCommunityLocalCaches();
   invalidateCommunityCaches();
   return { comments };
 }
 
 export async function getPostCommentsForUser(viewerUserId: string, postId: string) {
+  const key = `${viewerUserId}|${postId}`;
+  const cached = communityCommentsCache.get(key);
+  if (cached && Date.now() - cached.timestamp < COMMUNITY_CACHE_TTL) {
+    return cached.data;
+  }
   const post = await prisma.community_posts.findFirst({
     where: { id: postId, deleted_at: null },
     select: { id: true },
@@ -664,7 +699,7 @@ export async function getPostCommentsForUser(viewerUserId: string, postId: strin
     },
   });
 
-  return rows.map((c) => {
+  const data = rows.map((c) => {
     const p = c.profiles;
     const displayName = resolveAuthorDisplayName(p?.full_name, p?.privacy_settings);
     return {
@@ -680,6 +715,8 @@ export async function getPostCommentsForUser(viewerUserId: string, postId: strin
       createdAt: c.created_at.toISOString(),
     };
   });
+  communityCommentsCache.set(key, { data, timestamp: Date.now() });
+  return data;
 }
 
 export async function updatePostComment(
@@ -707,6 +744,7 @@ export async function updatePostComment(
     where: { id: commentId },
     data: { content: content.trim() },
   });
+  clearCommunityLocalCaches();
   invalidateCommunityCaches();
   return { ok: true };
 }
@@ -729,6 +767,7 @@ export async function deletePostComment(userId: string, postId: string, commentI
 
   await prisma.community_comments.delete({ where: { id: commentId } });
   const comments = await prisma.community_comments.count({ where: { post_id: postId } });
+  clearCommunityLocalCaches();
   invalidateCommunityCaches();
   return { ok: true, comments };
 }
@@ -764,6 +803,7 @@ export async function updateCommunityPost(
     where: { id: postId },
     data: { content: content.trim(), ...(normalizedTags ? { tags: normalizedTags } : {}) },
   });
+  clearCommunityLocalCaches();
   invalidateCommunityCaches();
   return { ok: true };
 }
@@ -787,6 +827,7 @@ export async function deleteCommunityPost(userId: string, postId: string) {
     where: { id: postId },
     data: { deleted_at: new Date() },
   });
+  clearCommunityLocalCaches();
   invalidateCommunityCaches();
   return { ok: true };
 }

@@ -168,7 +168,7 @@ export function AIAvatarManager() {
   const fetchAvatars = async () => {
     try {
       setIsLoading(true);
-      const data = await api.aiAvatars.getAll();
+      const data = await api.aiAvatars.getAllWithUsageStats();
       const rows = Array.isArray(data) ? data : [];
       const mapped = rows.map((item: any) => ({
         id: item.id,

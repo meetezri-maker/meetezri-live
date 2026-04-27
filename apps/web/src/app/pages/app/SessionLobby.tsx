@@ -77,7 +77,7 @@ function isFemaleAvatarName(name: string | null | undefined): boolean {
 }
 
 export function SessionLobby() {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, refreshProfile, user, isLoading: isAuthLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -147,10 +147,11 @@ export function SessionLobby() {
   }, [profile?.selected_avatar]);
 
   useEffect(() => {
-    // Load once on mount; avoid depending on `profile` identity
+    // Wait for auth to hydrate before calling authed endpoints (prevents 401 + retries).
+    if (isAuthLoading || !user?.id) return;
     loadUpcomingSessions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isAuthLoading, user?.id]);
 
   // After ending a session: show carve-out prompt once; clear router state so refresh/back don't repeat
   useEffect(() => {
@@ -202,6 +203,7 @@ export function SessionLobby() {
 
   useEffect(() => {
     // Use the dedicated credits endpoint (no-cache) so "Minutes available" matches Dashboard.
+    if (isAuthLoading || !user?.id) return;
     const loadCredits = async () => {
       try {
         const { credits_seconds, credits } = await api.getCredits();
@@ -217,7 +219,7 @@ export function SessionLobby() {
       }
     };
     loadCredits();
-  }, []);
+  }, [isAuthLoading, user?.id]);
 
   const minutesAvailable = useMemo(() => {
     if (liveCreditsSeconds !== null) {
@@ -313,10 +315,8 @@ export function SessionLobby() {
       setSelectedAvatar(tempSelectedAvatar);
       setSelectedEnvironment(tempSelectedEnvironment);
       setShowCustomizeModal(false);
-      toast.success("Session settings updated — reloading…");
-      window.setTimeout(() => {
-        window.location.reload();
-      }, 400);
+      toast.success("Session settings updated");
+      setIsSavingCustomize(false);
     } catch (err) {
       console.error(err);
       toast.error("Could not save session preferences");
@@ -324,54 +324,63 @@ export function SessionLobby() {
     }
   };
 
+  const mapBackendSessionToUpcoming = (session: BackendSession): UpcomingSession => {
+    const now = new Date();
+    const scheduledDate = session.scheduled_at ? new Date(session.scheduled_at) : null;
+    const isExpired =
+      !!scheduledDate && scheduledDate.getTime() < now.getTime() && session.status === "scheduled";
+
+    const avatarName = session.config?.avatar || selectedAvatar || "Alex";
+    const avatarPreview = lobbyAvatarByName(avatarName);
+
+    const icon =
+      typeof session.config?.icon === "string"
+        ? session.config.icon
+        : typeof session.config?.emoji === "string"
+          ? session.config.emoji
+          : undefined;
+
+    const comment =
+      typeof session.config?.comment === "string"
+        ? session.config.comment
+        : typeof session.config?.notes === "string"
+          ? session.config.notes
+          : undefined;
+
+    const date = scheduledDate
+      ? scheduledDate.toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : new Date(session.created_at).toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+
+    return {
+      id: session.id,
+      avatarName: avatarPreview.name,
+      avatarImage: avatarPreview.cardImage,
+      icon,
+      comment,
+      type: session.type === "instant" ? "Instant" : "Scheduled",
+      date,
+      duration: session.duration_minutes ? `${session.duration_minutes} min` : "N/A",
+      isExpired,
+      scheduledAt: session.scheduled_at,
+      durationMinutes: session.duration_minutes,
+    };
+  };
+
   const loadUpcomingSessions = async () => {
     try {
       setIsLoadingSessions(true);
       const sessions = await api.sessions.list({ status: "scheduled" });
-      const now = new Date();
-      const mappedSessions: UpcomingSession[] = (sessions as BackendSession[]).map((session) => {
-        const scheduledDate = session.scheduled_at ? new Date(session.scheduled_at) : null;
-        const isExpired = !!scheduledDate && scheduledDate.getTime() < now.getTime() && session.status === "scheduled";
-        const avatarName = session.config?.avatar || selectedAvatar || "Alex";
-        const avatarPreview = lobbyAvatarByName(avatarName);
-        const icon =
-          typeof session.config?.icon === "string"
-            ? session.config.icon
-            : typeof session.config?.emoji === "string"
-              ? session.config.emoji
-              : undefined;
-        const comment =
-          typeof session.config?.comment === "string"
-            ? session.config.comment
-            : typeof session.config?.notes === "string"
-              ? session.config.notes
-              : undefined;
-        const date = scheduledDate
-          ? scheduledDate.toLocaleString("en-US", {
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            })
-          : new Date(session.created_at).toLocaleString("en-US", {
-              month: "short",
-              day: "numeric",
-            });
-
-        return {
-          id: session.id,
-          avatarName: avatarPreview.name,
-          avatarImage: avatarPreview.cardImage,
-          icon,
-          comment,
-          type: session.type === "instant" ? "Instant" : "Scheduled",
-          date,
-          duration: session.duration_minutes ? `${session.duration_minutes} min` : "N/A",
-          isExpired,
-          scheduledAt: session.scheduled_at,
-          durationMinutes: session.duration_minutes,
-        };
-      });
+      const mappedSessions: UpcomingSession[] = (sessions as BackendSession[]).map(
+        mapBackendSessionToUpcoming
+      );
       setUpcomingSessions(mappedSessions);
     } catch (err) {
       console.error("Failed to load sessions:", err);
@@ -435,7 +444,7 @@ export function SessionLobby() {
       const nextComment = scheduleComment.trim();
       const nextIcon = scheduleIcon.trim();
       if (editingScheduledSessionId) {
-        await api.sessions.updateScheduled(editingScheduledSessionId, {
+        const updated = (await api.sessions.updateScheduled(editingScheduledSessionId, {
           duration_minutes: selectedDuration,
           scheduled_at: scheduledAt,
           config: {
@@ -444,10 +453,19 @@ export function SessionLobby() {
             comment: nextComment || undefined,
             icon: nextIcon || undefined,
           }
-        });
+        })) as BackendSession | undefined;
         toast.success("Scheduled session updated");
+
+        if (updated?.id) {
+          const mapped = mapBackendSessionToUpcoming(updated);
+          setUpcomingSessions((prev) =>
+            prev.map((s) => (s.id === mapped.id ? mapped : s))
+          );
+        } else {
+          void loadUpcomingSessions();
+        }
       } else {
-        await api.sessions.schedule({
+        const created = (await api.sessions.schedule({
           duration_minutes: selectedDuration,
           scheduled_at: scheduledAt,
           config: {
@@ -456,15 +474,24 @@ export function SessionLobby() {
             comment: nextComment || undefined,
             icon: nextIcon || undefined,
           }
-        });
+        })) as BackendSession | undefined;
         toast.success("Session scheduled successfully");
+
+        if (created?.id) {
+          const mapped = mapBackendSessionToUpcoming(created);
+          setUpcomingSessions((prev) => {
+            const without = prev.filter((s) => s.id !== mapped.id);
+            return [mapped, ...without];
+          });
+        } else {
+          void loadUpcomingSessions();
+        }
       }
       setShowScheduleModal(false);
       setScheduleAvatarOverride(null);
       setEditingScheduledSessionId(null);
       setScheduleComment("");
       setScheduleIcon("💬");
-      loadUpcomingSessions();
     } catch (err: any) {
       const message = err?.message || "Failed to schedule session";
       if (message.includes("trial has expired")) {
@@ -489,8 +516,8 @@ export function SessionLobby() {
       await api.sessions.cancelScheduled(activeUpcomingSession.id);
       toast.success("Scheduled session canceled");
       setShowUpcomingActionModal(false);
+      setUpcomingSessions((prev) => prev.filter((s) => s.id !== activeUpcomingSession.id));
       setActiveUpcomingSession(null);
-      await loadUpcomingSessions();
     } catch (err: any) {
       toast.error(err?.message || "Failed to cancel session");
     } finally {
@@ -597,6 +624,7 @@ export function SessionLobby() {
 
   useEffect(() => {
     let cancelled = false;
+    if (isAuthLoading || !user?.id) return;
     (async () => {
       try {
         const rows = await api.aiAvatars.getAll();
@@ -612,7 +640,7 @@ export function SessionLobby() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isAuthLoading, user?.id]);
 
   const avatars = sessionAvatarList;
 

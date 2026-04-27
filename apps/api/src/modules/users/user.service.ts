@@ -7,6 +7,7 @@ import * as billingService from '../billing/billing.service';
 import { getLifetimeUsedSeconds } from '../billing/credit-balance.service';
 import { pbkdf2Sync, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import { emailService } from '../email/email.service';
+import { sharedDel, sharedGetJson, sharedSetJson } from '../../lib/sharedCache';
 
 export function calculateStreak(moodEntries: any[]) {
   if (!moodEntries || moodEntries.length === 0) return 0;
@@ -431,6 +432,10 @@ type AccountState =
   | 'EMAIL_VERIFIED_ONBOARDING_INCOMPLETE'
   | 'FULLY_ONBOARDED';
 
+const accountStateByEmailCache = new Map<string, { data: any; timestamp: number }>();
+const ACCOUNT_STATE_CACHE_TTL = 10 * 1000; // 10s: absorbs fast retries on signup/check.
+const accountStateByEmailInFlight = new Map<string, Promise<any>>();
+
 function resolveOnboardingCompleted(profile: any): boolean {
   const signupType =
     normalizeSignupType(profile?.signup_type) ??
@@ -481,6 +486,15 @@ function resolveOnboardingCompleted(profile: any): boolean {
 }
 
 export async function resolveAccountStateByEmail(email: string) {
+  const key = String(email || '').trim().toLowerCase();
+  const cached = accountStateByEmailCache.get(key);
+  if (cached && Date.now() - cached.timestamp < ACCOUNT_STATE_CACHE_TTL) {
+    return cached.data;
+  }
+  const inFlight = accountStateByEmailInFlight.get(key);
+  if (inFlight) return await inFlight;
+
+  const run = (async () => {
   const authUser = await prisma.users.findFirst({
     where: { email },
     select: {
@@ -627,6 +641,14 @@ export async function resolveAccountStateByEmail(email: string) {
     onboarding_completed_at: profile.onboarding_completed_at ?? null,
     signup_type: signupTypeResolved,
   };
+  })().finally(() => {
+    accountStateByEmailInFlight.delete(key);
+  });
+
+  accountStateByEmailInFlight.set(key, run);
+  const data = await run;
+  accountStateByEmailCache.set(key, { data, timestamp: Date.now() });
+  return data;
 }
 
 export async function checkUserExists(email: string) {
@@ -804,14 +826,49 @@ export async function createProfileForPaidSignup(
 const userProfileCache = new Map<string, { data: any; timestamp: number }>();
 const PROFILE_CACHE_TTL = 30 * 1000; // 30 seconds
 
+const creditsCache = new Map<string, { data: any; timestamp: number }>();
+const CREDITS_CACHE_TTL = 15 * 1000; // 15s: credits is expensive; UI doesn't need per-second accuracy.
+
+const creditsPeriodUsedCache = new Map<string, { totalSeconds: number; timestamp: number }>();
+const CREDITS_PERIOD_USED_TTL = 60 * 1000; // 60s: period sum is expensive; acceptable staleness for dashboard.
+
+const recentActivityCache = new Map<string, { data: any[]; timestamp: number }>();
+const RECENT_ACTIVITY_CACHE_TTL = 5 * 1000; // 5s: absorbs repeated dashboard loads / route changes.
+
+const creditsInFlight = new Map<string, Promise<any>>();
+const recentActivityInFlight = new Map<string, Promise<any[]>>();
+
+function recentActivityCacheKey(userId: string, limit: number) {
+  return `${userId}|${limit}`;
+}
+
 export function invalidateUserProfileCache(userId: string) {
   userProfileCache.delete(userId);
+  creditsCache.delete(userId);
+  void sharedDel(`users:credits:${userId}`);
+  // creditsPeriodUsedCache is keyed by period, so clear all for this user.
+  const prefix = `${userId}|`;
+  for (const key of creditsPeriodUsedCache.keys()) {
+    if (key.startsWith(prefix)) creditsPeriodUsedCache.delete(key);
+  }
+}
+
+export function invalidateRecentActivityCache(userId: string) {
+  const prefix = `${userId}|`;
+  for (const key of recentActivityCache.keys()) {
+    if (key.startsWith(prefix)) recentActivityCache.delete(key);
+  }
+  // Common limits used by UI (dashboard + lists).
+  void sharedDel(`users:activity:${userId}:10`);
+  void sharedDel(`users:activity:${userId}:25`);
+  void sharedDel(`users:activity:${userId}:50`);
 }
 
 export async function getProfile(userId: string) {
   // Check cache first
   const cached = userProfileCache.get(userId);
   let result: any;
+  let fromCache = false;
 
   if (cached && Date.now() - cached.timestamp < PROFILE_CACHE_TTL) {
     // If user just upgraded, cache can keep returning trial for a short window.
@@ -828,49 +885,74 @@ export async function getProfile(userId: string) {
       }
     } else {
       result = { ...cached.data };
+      fromCache = true;
     }
   }
 
+  // When the cache is valid, return immediately: the cached object already includes
+  // computed totals (`minutes_used`, `credits_total_seconds`) + verification flags.
+  // This avoids extra DB work on hot /users/me traffic (route changes / app boot).
+  if (fromCache && result) {
+    return result;
+  }
+
+  /** When cold-loading profile, we prefetch lifetime + auth in parallel to avoid 3+ sequential round-trips. */
+  let preloaded: {
+    usedSecondsLifetime: number;
+    authUser: {
+      email_confirmed_at: Date | null;
+      raw_user_meta_data: any;
+    } | null;
+  } | null = null;
+
   if (!result) {
-    // Optimized to use a single query to prevent connection pool exhaustion
-    const profileResult = await prisma.profiles.findUnique({
-      where: { id: userId },
-      include: {
-        companion_profiles: true,
-        subscriptions: {
-          where: { status: { in: ['active', 'trialing', 'past_due'] } },
-          orderBy: { created_at: 'desc' },
-          take: 1,
-        },
-        emergency_contacts: {
-          orderBy: { created_at: 'desc' },
-          take: 1,
-        },
-        // Include recent moods
-        mood_entries: {
-          orderBy: { created_at: 'desc' },
-          take: 30,
-        },
-        // Include scheduled appointments
-        appointments_appointments_user_idToprofiles: {
-          where: {
-            status: 'scheduled',
-            start_time: { gt: new Date() },
+    const now = new Date();
+    // Single round-trip: profile (no unused companion / appointment row scans) + count + hot aggregates
+    const [profileResult, upcomingApptCount, usedSecondsLifetime, authUser] = await Promise.all([
+      prisma.profiles.findUnique({
+        where: { id: userId },
+        include: {
+          subscriptions: {
+            where: { status: { in: ['active', 'trialing', 'past_due'] } },
+            orderBy: { created_at: 'desc' },
+            take: 1,
           },
-          orderBy: { start_time: 'asc' },
-        },
-        // Get counts
-        _count: {
-          select: {
-            app_sessions: { where: { ended_at: { not: null } } },
-            mood_entries: true,
-            journal_entries: true,
+          emergency_contacts: {
+            orderBy: { created_at: 'desc' },
+            take: 1,
+          },
+          mood_entries: {
+            orderBy: { created_at: 'desc' },
+            take: 30,
+          },
+          _count: {
+            select: {
+              app_sessions: { where: { ended_at: { not: null } } },
+              mood_entries: true,
+              journal_entries: true,
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.appointments.count({
+        where: {
+          user_id: userId,
+          status: 'scheduled',
+          start_time: { gt: now },
+        },
+      }),
+      getLifetimeUsedSeconds(userId),
+      prisma.users.findUnique({
+        where: { id: userId },
+        select: {
+          email_confirmed_at: true,
+          raw_user_meta_data: true,
+        },
+      }),
+    ]);
 
     if (!profileResult) return null;
+    preloaded = { usedSecondsLifetime, authUser };
 
     // Stale `prisma generate` can omit `bio` from the client model; still read it from DB.
     let profileBio: string | null | undefined = (profileResult as { bio?: string | null }).bio;
@@ -911,9 +993,7 @@ export async function getProfile(userId: string) {
     const journalEntriesCount = profileResult._count.journal_entries;
 
     const streakDays = calculateStreak(profileResult.mood_entries);
-    const scheduledAppointments =
-      profileResult.appointments_appointments_user_idToprofiles;
-    const upcomingSessions = scheduledAppointments.length;
+    const upcomingSessions = upcomingApptCount;
     const primaryContact = latestEmergencyContact;
 
     const internalPlanType = (activeSubscription?.plan_type ||
@@ -962,7 +1042,26 @@ export async function getProfile(userId: string) {
     userProfileCache.set(userId, { data: result, timestamp: Date.now() });
   }
 
-  const usedSecondsLifetime = await getLifetimeUsedSeconds(userId);
+  let usedSecondsLifetime: number;
+  let authForEmail: {
+    email_confirmed_at: Date | null;
+    raw_user_meta_data: any;
+  } | null;
+  if (preloaded) {
+    usedSecondsLifetime = preloaded.usedSecondsLifetime;
+    authForEmail = preloaded.authUser;
+  } else {
+    [usedSecondsLifetime, authForEmail] = await Promise.all([
+      getLifetimeUsedSeconds(userId),
+      prisma.users.findUnique({
+        where: { id: userId },
+        select: {
+          email_confirmed_at: true,
+          raw_user_meta_data: true,
+        },
+      }),
+    ]);
+  }
   const remainingSecondsForAccount =
     typeof result.credits_remaining_seconds === 'number'
       ? result.credits_remaining_seconds
@@ -981,15 +1080,8 @@ export async function getProfile(userId: string) {
   // treat users as verified (which breaks the trial verification popup).
   let emailVerified = false;
   try {
-    const authUser = await prisma.users.findUnique({
-      where: { id: userId },
-      select: {
-        email_confirmed_at: true,
-        raw_user_meta_data: true,
-      },
-    });
-    const isConfirmed = !!authUser?.email_confirmed_at;
-    const rawMeta = (authUser?.raw_user_meta_data ?? {}) as Record<string, any>;
+    const isConfirmed = !!authForEmail?.email_confirmed_at;
+    const rawMeta = (authForEmail?.raw_user_meta_data ?? {}) as Record<string, any>;
     // Check custom metadata flag we set during trial signup.
     const verificationRequired = rawMeta?.email_verification_required === true;
 
@@ -1006,16 +1098,18 @@ export async function getProfile(userId: string) {
     // User is verified ONLY if confirmed by Supabase AND doesn't have the required flag
     emailVerified = isConfirmed && !verificationRequiredAfter;
 
-  // Debug visibility: explain why `email_verified` was computed.
-  console.log("[emailVerified debug]", {
-    userId,
-    email_confirmed_at: authUser?.email_confirmed_at ?? null,
-    email_verification_required: rawMeta?.email_verification_required ?? null,
-    verificationRequired,
-    computedEmailVerified: emailVerified,
-    subscription_plan: result?.subscription_plan ?? null,
-    signup_type: (result as any)?.signup_type ?? null,
-  });
+    // Debug visibility: explain why `email_verified` was computed.
+    if (process.env.DEBUG_API === '1' || process.env.DEBUG_API === 'true') {
+      console.log("[emailVerified debug]", {
+        userId,
+        email_confirmed_at: authForEmail?.email_confirmed_at ?? null,
+        email_verification_required: rawMeta?.email_verification_required ?? null,
+        verificationRequired,
+        computedEmailVerified: emailVerified,
+        subscription_plan: result?.subscription_plan ?? null,
+        signup_type: (result as any)?.signup_type ?? null,
+      });
+    }
   } catch {
     // If we can't fetch, fall back to whatever is already present (if any),
     // otherwise keep it as false (safe default for UX).
@@ -1040,130 +1134,178 @@ export async function getProfile(userId: string) {
 }
 
 export async function getCredits(userId: string) {
-  const activeSub = await prisma.subscriptions.findFirst({
-    where: {
-      user_id: userId,
-      status: { in: ['active', 'trialing', 'past_due'] },
-    },
-    orderBy: { created_at: 'desc' },
-    select: {
-      start_date: true,
-      end_date: true,
-      created_at: true,
-    },
+  const cached = creditsCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < CREDITS_CACHE_TTL) {
+    return cached.data;
+  }
+
+  const shared = await sharedGetJson<any>(`users:credits:${userId}`);
+  if (shared) {
+    creditsCache.set(userId, { data: shared, timestamp: Date.now() });
+    return shared;
+  }
+
+  const inFlight = creditsInFlight.get(userId);
+  if (inFlight) return await inFlight;
+
+  const run = (async () => {
+    const [activeSub, profile] = await Promise.all([
+      prisma.subscriptions.findFirst({
+        where: {
+          user_id: userId,
+          status: { in: ['active', 'trialing', 'past_due'] },
+        },
+        orderBy: { created_at: 'desc' },
+        select: {
+          start_date: true,
+          end_date: true,
+          created_at: true,
+        },
+      }),
+      prisma.profiles.findUnique({
+        where: { id: userId },
+        select: {
+          credits: true,
+          purchased_credits: true,
+          credits_seconds: true,
+          purchased_credits_seconds: true,
+        },
+      }),
+    ]);
+
+    const subscriptionSeconds =
+      (profile?.credits_seconds && profile.credits_seconds > 0)
+        ? profile.credits_seconds
+        : (profile?.credits || 0) * 60;
+    const purchasedSeconds =
+      (profile?.purchased_credits_seconds &&
+        profile.purchased_credits_seconds > 0)
+        ? profile.purchased_credits_seconds
+        : (profile?.purchased_credits || 0) * 60;
+    const remainingSeconds = subscriptionSeconds + purchasedSeconds;
+
+    const ceilMin = (sec: number) => (sec === 0 ? 0 : Math.ceil(sec / 60));
+
+    // "Subscription total" should reflect the full allowance accrued this billing period,
+    // including stacked upgrades: total = remaining + used_this_period.
+    const periodStart = activeSub?.start_date || activeSub?.created_at || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const periodEnd = activeSub?.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    const periodKey = `${userId}|${periodStart.toISOString()}|${periodEnd.toISOString()}`;
+    const cachedPeriod = creditsPeriodUsedCache.get(periodKey);
+    let usedSecondsThisPeriod: number;
+    if (cachedPeriod && Date.now() - cachedPeriod.timestamp < CREDITS_PERIOD_USED_TTL) {
+      usedSecondsThisPeriod = cachedPeriod.totalSeconds;
+    } else {
+      const usedPeriodRows = await prisma.$queryRaw<[{ total: bigint | null }]>(
+        Prisma.sql`
+          SELECT COALESCE(SUM(COALESCE(s.billed_seconds, 0)), 0)::bigint AS total
+          FROM public.app_sessions s
+          WHERE s.user_id = ${userId}::uuid
+            AND s.status = 'completed'
+            AND s.ended_at IS NOT NULL
+            AND s.ended_at >= ${periodStart}
+            AND s.ended_at <= ${periodEnd}
+        `
+      );
+      usedSecondsThisPeriod = Math.max(0, Number(usedPeriodRows[0]?.total ?? 0) || 0);
+      creditsPeriodUsedCache.set(periodKey, { totalSeconds: usedSecondsThisPeriod, timestamp: Date.now() });
+    }
+    const subscriptionTotalSeconds = subscriptionSeconds + usedSecondsThisPeriod;
+
+    const result = {
+      credits: ceilMin(remainingSeconds),
+      subscription: ceilMin(subscriptionSeconds),
+      purchased: ceilMin(purchasedSeconds),
+      credits_seconds: remainingSeconds,
+      subscription_seconds: subscriptionSeconds,
+      purchased_seconds: purchasedSeconds,
+      subscription_total: subscriptionTotalSeconds === 0 ? 0 : Math.ceil(subscriptionTotalSeconds / 60),
+      subscription_total_seconds: subscriptionTotalSeconds,
+    };
+    creditsCache.set(userId, { data: result, timestamp: Date.now() });
+    void sharedSetJson(`users:credits:${userId}`, result, CREDITS_CACHE_TTL);
+    return result;
+  })().finally(() => {
+    creditsInFlight.delete(userId);
   });
 
-  const profile = await prisma.profiles.findUnique({
-    where: { id: userId },
-    select: {
-      credits: true,
-      purchased_credits: true,
-      credits_seconds: true,
-      purchased_credits_seconds: true,
-    },
-  });
-
-  const subscriptionSeconds =
-    (profile?.credits_seconds && profile.credits_seconds > 0)
-      ? profile.credits_seconds
-      : (profile?.credits || 0) * 60;
-  const purchasedSeconds =
-    (profile?.purchased_credits_seconds &&
-      profile.purchased_credits_seconds > 0)
-      ? profile.purchased_credits_seconds
-      : (profile?.purchased_credits || 0) * 60;
-  const remainingSeconds = subscriptionSeconds + purchasedSeconds;
-
-  const usedSecondsLifetime = await getLifetimeUsedSeconds(userId);
-  const totalAccountSeconds = remainingSeconds + usedSecondsLifetime;
-
-  const ceilMin = (sec: number) => (sec === 0 ? 0 : Math.ceil(sec / 60));
-
-  // "Subscription total" should reflect the full allowance accrued this billing period,
-  // including stacked upgrades: total = remaining + used_this_period.
-  const periodStart = activeSub?.start_date || activeSub?.created_at || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const periodEnd = activeSub?.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-  const usedAgg = await prisma.app_sessions.aggregate({
-    where: {
-      user_id: userId,
-      status: 'completed',
-      ended_at: { not: null, gte: periodStart, lte: periodEnd },
-    },
-    _sum: { billed_seconds: true },
-  });
-
-  const usedSecondsThisPeriod = Math.max(0, usedAgg._sum.billed_seconds || 0);
-  const subscriptionTotalSeconds = subscriptionSeconds + usedSecondsThisPeriod;
-
-  return {
-    credits: ceilMin(remainingSeconds),
-    subscription: ceilMin(subscriptionSeconds),
-    purchased: ceilMin(purchasedSeconds),
-    credits_seconds: remainingSeconds,
-    subscription_seconds: subscriptionSeconds,
-    purchased_seconds: purchasedSeconds,
-    subscription_total: subscriptionTotalSeconds === 0 ? 0 : Math.ceil(subscriptionTotalSeconds / 60),
-    subscription_total_seconds: subscriptionTotalSeconds,
-  };
+  creditsInFlight.set(userId, run);
+  return await run;
 }
 
 export async function getRecentActivity(userId: string, limit: number = 25) {
   const safeLimit = Math.min(Math.max(limit, 1), 100);
-  const normalizeSessionTypeLabel = (value: string | null | undefined) => {
-    const raw = String(value || '').trim().toLowerCase();
-    if (!raw) return 'session';
-    if (raw === 'instant' || raw === 'scheduled') return raw;
-    return 'session';
-  };
+  const cacheKey = recentActivityCacheKey(userId, safeLimit);
+  const cached = recentActivityCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < RECENT_ACTIVITY_CACHE_TTL) {
+    return cached.data;
+  }
 
-  const [activityEvents, moodEntries, journalEntries, sessions] = await Promise.all([
-    prisma.activity_events.findMany({
-      where: { user_id: userId },
-      orderBy: { timestamp: 'desc' },
-      take: safeLimit,
-      select: {
-        id: true,
-        timestamp: true,
-        app_name: true,
-        window_title: true,
-        metadata: true,
-      },
-    }),
-    prisma.mood_entries.findMany({
-      where: { user_id: userId },
-      orderBy: { created_at: 'desc' },
-      take: safeLimit,
-      select: {
-        id: true,
-        mood: true,
-        intensity: true,
-        created_at: true,
-      },
-    }),
-    prisma.journal_entries.findMany({
-      where: { user_id: userId },
-      orderBy: { created_at: 'desc' },
-      take: safeLimit,
-      select: {
-        id: true,
-        title: true,
-        created_at: true,
-      },
-    }),
-    prisma.app_sessions.findMany({
-      where: { user_id: userId },
-      orderBy: { created_at: 'desc' },
-      take: safeLimit,
-      select: {
-        id: true,
-        status: true,
-        type: true,
-        duration_minutes: true,
-        created_at: true,
-      },
-    }),
-  ]);
+  const shared = await sharedGetJson<any[]>(`users:activity:${userId}:${safeLimit}`);
+  if (shared) {
+    recentActivityCache.set(cacheKey, { data: shared, timestamp: Date.now() });
+    return shared;
+  }
+
+  const inFlight = recentActivityInFlight.get(cacheKey);
+  if (inFlight) return await inFlight;
+
+  const run = (async () => {
+    const normalizeSessionTypeLabel = (value: string | null | undefined) => {
+      const raw = String(value || '').trim().toLowerCase();
+      if (!raw) return 'session';
+      if (raw === 'instant' || raw === 'scheduled') return raw;
+      return 'session';
+    };
+
+    const [activityEvents, moodEntries, journalEntries, sessions] = await Promise.all([
+      prisma.activity_events.findMany({
+        where: { user_id: userId },
+        orderBy: { timestamp: 'desc' },
+        take: safeLimit,
+        select: {
+          id: true,
+          timestamp: true,
+          app_name: true,
+          window_title: true,
+          metadata: true,
+        },
+      }),
+      prisma.mood_entries.findMany({
+        where: { user_id: userId },
+        orderBy: { created_at: 'desc' },
+        take: safeLimit,
+        select: {
+          id: true,
+          mood: true,
+          intensity: true,
+          created_at: true,
+        },
+      }),
+      prisma.journal_entries.findMany({
+        where: { user_id: userId },
+        orderBy: { created_at: 'desc' },
+        take: safeLimit,
+        select: {
+          id: true,
+          title: true,
+          created_at: true,
+        },
+      }),
+      prisma.app_sessions.findMany({
+        where: { user_id: userId },
+        orderBy: { created_at: 'desc' },
+        take: safeLimit,
+        select: {
+          id: true,
+          status: true,
+          type: true,
+          duration_minutes: true,
+          created_at: true,
+        },
+      }),
+    ]);
 
   const merged = [
     ...activityEvents.map((event) => ({
@@ -1210,9 +1352,19 @@ export async function getRecentActivity(userId: string, limit: number = 25) {
     })),
   ];
 
-  return merged
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, safeLimit);
+    const result = merged
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, safeLimit);
+
+    recentActivityCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    void sharedSetJson(`users:activity:${userId}:${safeLimit}`, result, RECENT_ACTIVITY_CACHE_TTL);
+    return result;
+  })().finally(() => {
+    recentActivityInFlight.delete(cacheKey);
+  });
+
+  recentActivityInFlight.set(cacheKey, run);
+  return await run;
 }
 
 export async function createCrisisEventFromDetection(input: {

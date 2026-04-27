@@ -13,6 +13,7 @@ import {
   checkUserExistsHandler,
   signupHandler,
   resendVerificationHandler,
+  confirmEmailHandler,
   getKnowledgeTwoFactorStatusHandler,
   setupKnowledgeTwoFactorHandler,
   setupKnowledgeTwoFactorEmailHandler,
@@ -72,6 +73,14 @@ export async function userRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate],
     },
     resendVerificationHandler
+  );
+
+  fastify.post(
+    '/confirm-email',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    confirmEmailHandler
   );
 
   fastify.get(

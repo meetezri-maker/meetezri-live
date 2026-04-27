@@ -152,6 +152,53 @@ let getMeInFlight: Promise<any> | null = null;
 let getCreditsInFlight: Promise<any> | null = null;
 /** Merge overlapping GET /journal list calls (auth/session churn on load). */
 let getJournalListInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /users/activity calls (dashboard widgets). */
+let getRecentActivityInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /notifications calls (header + page). */
+let getNotificationsInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /notifications/unread-count calls (header + page). */
+let getUnreadCountInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /wellness/challenges?scope=dashboard calls (dashboard). */
+let getChallengesForMeInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /ai-avatars calls (companion pickers). */
+let getAiAvatarsInFlight: Promise<any> | null = null;
+
+type CachedValue = { at: number; value: unknown };
+const shortGetCache = new Map<string, CachedValue>();
+const shortGetInFlight = new Map<string, Promise<unknown>>();
+
+function getCached<T>(key: string, ttlMs: number): T | null {
+  const hit = shortGetCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > ttlMs) return null;
+  return hit.value as T;
+}
+
+async function getJsonCached<T>(
+  cacheKey: string,
+  url: string,
+  headers: Record<string, string>,
+  defaultErrorMessage: string,
+  ttlMs: number
+): Promise<T> {
+  const cached = getCached<T>(cacheKey, ttlMs);
+  if (cached !== null) return cached;
+
+  const inFlight = shortGetInFlight.get(cacheKey);
+  if (inFlight) return (await inFlight) as T;
+
+  const run = (async () => {
+    const res = await fetch(url, { method: 'GET', headers, cache: 'no-store' });
+    const json = (await handleResponse(res, defaultErrorMessage)) as T;
+    shortGetCache.set(cacheKey, { at: Date.now(), value: json });
+    return json;
+  })().finally(() => {
+    shortGetInFlight.delete(cacheKey);
+  });
+
+  shortGetInFlight.set(cacheKey, run);
+  return (await run) as T;
+}
 
 export const api = {
   async getMe(accessToken?: string) {
@@ -174,7 +221,14 @@ export const api = {
       return run();
     }
     if (!getMeInFlight) {
-      getMeInFlight = run().finally(() => {
+      // Short TTL cache to avoid repeated /users/me calls during route changes.
+      const cached = getCached<any>('GET:/users/me', 10_000);
+      if (cached !== null) return cached;
+
+      getMeInFlight = run().then((data) => {
+        shortGetCache.set('GET:/users/me', { at: Date.now(), value: data });
+        return data;
+      }).finally(() => {
         getMeInFlight = null;
       });
     }
@@ -346,9 +400,23 @@ export const api = {
     const headers = await getHeaders();
     const res = await fetch(`${API_URL}/users/resend-verification`, {
       method: 'POST',
-      headers,
+      headers: {
+        ...headers,
+        'x-web-base-url':
+          import.meta.env.VITE_WEB_BASE_URL ||
+          (typeof window !== 'undefined' ? window.location.origin : ''),
+      },
     });
     return handleResponse(res, 'Failed to send verification email');
+  },
+
+  async confirmEmail() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/confirm-email`, {
+      method: 'POST',
+      headers,
+    });
+    return handleResponse(res, 'Failed to confirm email');
   },
 
   async getKnowledgeTwoFactorStatus() {
@@ -499,6 +567,9 @@ export const api = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-web-base-url':
+          import.meta.env.VITE_WEB_BASE_URL ||
+          (typeof window !== 'undefined' ? window.location.origin : ''),
       },
       body: JSON.stringify(data),
     });
@@ -527,14 +598,19 @@ export const api = {
 
   async getCredits(): Promise<any> {
     if (!getCreditsInFlight) {
+      const cached = getCached<any>('GET:/users/credits', 5_000);
+      if (cached !== null) return cached;
+
       getCreditsInFlight = (async () => {
         const headers = await getHeaders();
-        const res = await fetch(`${API_URL}/users/credits`, {
-          method: 'GET',
+        const data = await getJsonCached<any>(
+          'GET:/users/credits',
+          `${API_URL}/users/credits`,
           headers,
-          cache: 'no-store',
-        });
-        return handleResponse(res, 'Failed to fetch credits');
+          'Failed to fetch credits',
+          5_000
+        );
+        return data;
       })().finally(() => {
         getCreditsInFlight = null;
       });
@@ -543,16 +619,25 @@ export const api = {
   },
 
   async getRecentActivity(limit = 25) {
-    const headers = await getHeaders();
-    const res = await fetch(
-      `${API_URL}/users/activity?${new URLSearchParams({ limit: String(limit) })}`,
-      {
-        method: 'GET',
-        headers,
-        cache: 'no-store',
-      }
-    );
-    return handleResponse(res, 'Failed to fetch recent activity');
+    const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), 100);
+    const cacheKey = `GET:/users/activity?limit=${safeLimit}`;
+    if (!getRecentActivityInFlight) {
+      const cached = getCached<any>(cacheKey, 5_000);
+      if (cached !== null) return cached;
+      getRecentActivityInFlight = (async () => {
+        const headers = await getHeaders();
+        return await getJsonCached<any>(
+          cacheKey,
+          `${API_URL}/users/activity?${new URLSearchParams({ limit: String(safeLimit) })}`,
+          headers,
+          'Failed to fetch recent activity',
+          5_000
+        );
+      })().finally(() => {
+        getRecentActivityInFlight = null;
+      });
+    }
+    return getRecentActivityInFlight;
   },
 
   async reportCrisisEvent(data: {
@@ -919,22 +1004,34 @@ export const api = {
 
     /** Per-user progress for dashboard (active challenges + level summary). Uses ?scope=dashboard on GET /challenges so older API deploys without /challenges/me still work. */
     async getChallengesForMe() {
-      const headers = await getHeaders();
-      const url = `${API_URL}/wellness/challenges?scope=dashboard`;
-      let res = await fetch(url, {
-        method: 'GET',
-        headers,
-        cache: 'no-store',
-      });
-      // Fallback if production API predates scope=dashboard (should not happen).
-      if (res.status === 404) {
-        res = await fetch(`${API_URL}/wellness/challenges/me`, {
-          method: 'GET',
-          headers,
-          cache: 'no-store',
+      const cacheKey = 'GET:/wellness/challenges?scope=dashboard';
+      if (!getChallengesForMeInFlight) {
+        const cached = getCached<any>(cacheKey, 5_000);
+        if (cached !== null) return cached;
+        getChallengesForMeInFlight = (async () => {
+          const headers = await getHeaders();
+          const url = `${API_URL}/wellness/challenges?scope=dashboard`;
+          let res = await fetch(url, {
+            method: 'GET',
+            headers,
+            cache: 'no-store',
+          });
+          // Fallback if production API predates scope=dashboard (should not happen).
+          if (res.status === 404) {
+            res = await fetch(`${API_URL}/wellness/challenges/me`, {
+              method: 'GET',
+              headers,
+              cache: 'no-store',
+            });
+          }
+          const data = await handleResponse(res, 'Failed to fetch your wellness challenges');
+          shortGetCache.set(cacheKey, { at: Date.now(), value: data });
+          return data;
+        })().finally(() => {
+          getChallengesForMeInFlight = null;
         });
       }
-      return handleResponse(res, 'Failed to fetch your wellness challenges');
+      return getChallengesForMeInFlight;
     },
 
     async createChallenge(data: {
@@ -2384,21 +2481,45 @@ export const api = {
   // Notifications API
   notifications: {
     async getAll() {
-      const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/notifications`, {
-        method: 'GET',
-        headers,
-      });
-      return handleResponse(res, 'Failed to fetch notifications');
+      const cacheKey = 'GET:/notifications';
+      if (!getNotificationsInFlight) {
+        const cached = getCached<any>(cacheKey, 5_000);
+        if (cached !== null) return cached;
+        getNotificationsInFlight = (async () => {
+          const headers = await getHeaders();
+          return await getJsonCached<any>(
+            cacheKey,
+            `${API_URL}/notifications`,
+            headers,
+            'Failed to fetch notifications',
+            5_000
+          );
+        })().finally(() => {
+          getNotificationsInFlight = null;
+        });
+      }
+      return getNotificationsInFlight;
     },
 
     async getUnreadCount() {
-      const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/notifications/unread-count`, {
-        method: 'GET',
-        headers,
-      });
-      return handleResponse(res, 'Failed to fetch unread count');
+      const cacheKey = 'GET:/notifications/unread-count';
+      if (!getUnreadCountInFlight) {
+        const cached = getCached<any>(cacheKey, 5_000);
+        if (cached !== null) return cached;
+        getUnreadCountInFlight = (async () => {
+          const headers = await getHeaders();
+          return await getJsonCached<any>(
+            cacheKey,
+            `${API_URL}/notifications/unread-count`,
+            headers,
+            'Failed to fetch unread count',
+            5_000
+          );
+        })().finally(() => {
+          getUnreadCountInFlight = null;
+        });
+      }
+      return getUnreadCountInFlight;
     },
 
     async markAsRead(id: string) {
@@ -2446,12 +2567,37 @@ export const api = {
   // AI Avatars API
   aiAvatars: {
     async getAll() {
+      const cacheKey = 'GET:/ai-avatars';
+      if (!getAiAvatarsInFlight) {
+        const cached = getCached<any>(cacheKey, 30_000);
+        if (cached !== null) return cached;
+        getAiAvatarsInFlight = (async () => {
+          const headers = await getHeaders();
+          return await getJsonCached<any>(
+            cacheKey,
+            `${API_URL}/ai-avatars`,
+            headers,
+            'Failed to fetch AI avatars',
+            30_000
+          );
+        })().finally(() => {
+          getAiAvatarsInFlight = null;
+        });
+      }
+      return getAiAvatarsInFlight;
+    },
+
+    /** Admin-only: includes usage stats computed from session history. */
+    async getAllWithUsageStats() {
+      const cacheKey = 'GET:/ai-avatars/stats';
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/ai-avatars`, {
-        method: 'GET',
+      return await getJsonCached<any>(
+        cacheKey,
+        `${API_URL}/ai-avatars/stats`,
         headers,
-      });
-      return handleResponse(res, 'Failed to fetch AI avatars');
+        'Failed to fetch AI avatars stats',
+        30_000
+      );
     },
 
     async getById(id: string) {
