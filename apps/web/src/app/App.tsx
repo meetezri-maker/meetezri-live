@@ -232,15 +232,16 @@ function NetworkWatcher() {
   return null;
 }
 
+/** Ensures onboarding routes require a session. Logged-in users must be allowed through — routing rules live in ProtectedRoute. */
 function OnboardingAccessGuard({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const location = useLocation();
 
-  if (user) {
-    return <Navigate to="/app/dashboard" replace />;
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  return <Navigate to="/login" state={{ from: location }} replace />;
+  return <>{children}</>;
 }
 
 // (Removed temporary reload/route persistence helpers; the actual fix is in AuthContext + ProtectedRoute.)

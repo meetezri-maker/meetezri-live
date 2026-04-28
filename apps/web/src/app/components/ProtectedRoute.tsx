@@ -29,12 +29,9 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const [isCancelling, setIsCancelling] = useState(false);
 
   if (isLoading) {
-    // Keep onboarding blocked even during initial auth/profile hydration.
-    if (user && isOnboardingRoute) {
-      return <Navigate to="/app/dashboard" replace />;
-    }
     // If we already have a signed-in user, never unmount the entire route tree.
     // Background auth refreshes (often triggered by tab switching) should be silent.
+    // Do NOT redirect away from /onboarding during hydration — paid users land here right after email verify.
     if (user) {
       return <>{children}</>;
     }
@@ -128,11 +125,6 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
         </Dialog>
       </>
     );
-  }
-
-  // Product rule: authenticated users cannot access onboarding routes directly.
-  if (isOnboardingRoute) {
-    return <Navigate to="/app/dashboard" replace />;
   }
 
   // Trial flow rule (per spec):

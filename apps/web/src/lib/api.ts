@@ -12,8 +12,17 @@ async function getHeaders(accessToken?: string) {
     accessToken ||
     (await supabase.auth.getSession()).data.session?.access_token;
 
+  // Tells the API which SPA origin to use in email `redirect_to` (signup, resend, etc.).
+  // The server honors this over `Origin` when set (see `getWebBaseUrlFromRequest` in the API).
+  // Fixes local dev when links would otherwise pick up `WEB_BASE_URL` or a wrong host.
+  const webBase =
+    typeof window !== 'undefined' && window.location?.origin
+      ? { 'X-Web-Base-Url': window.location.origin }
+      : {};
+
   return {
     'Content-Type': 'application/json',
+    ...webBase,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
@@ -552,10 +561,15 @@ export const api = {
   },
 
   async checkUserExists(email: string) {
+    const origin =
+      typeof window !== 'undefined'
+        ? window.location.origin
+        : import.meta.env.VITE_WEB_BASE_URL || '';
     const res = await fetch(`${API_URL}/users/check`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(origin ? { 'x-web-base-url': origin } : {}),
       },
       body: JSON.stringify({ email }),
     });
@@ -563,13 +577,15 @@ export const api = {
   },
 
   async signup(data: { email: string; password: string; firstName: string; lastName: string; age: string; stripe_session_id?: string }) {
+    const origin =
+      typeof window !== 'undefined'
+        ? window.location.origin
+        : import.meta.env.VITE_WEB_BASE_URL || '';
     const res = await fetch(`${API_URL}/users/signup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-web-base-url':
-          import.meta.env.VITE_WEB_BASE_URL ||
-          (typeof window !== 'undefined' ? window.location.origin : ''),
+        ...(origin ? { 'x-web-base-url': origin } : {}),
       },
       body: JSON.stringify(data),
     });
