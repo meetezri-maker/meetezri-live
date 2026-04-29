@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Moon,
   Target,
+  Trophy,
   Clock,
   Sparkles,
   CreditCard,
@@ -472,6 +473,16 @@ export function AppLayout({ children }: AppLayoutProps) {
               >
                 <Target className={navIconClass} />
                 <span className={navLabelClass}>Habit Tracker</span>
+              </motion.div>
+            </Link>
+
+            <Link to="/app/settings/achievements">
+              <motion.div
+                whileHover={{ scale: 1.02, x: 5 }}
+                className={`app-sidebar-item ${isRouteActive("/app/settings/achievements") ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
+              >
+                <Trophy className={navIconClass} />
+                <span className={navLabelClass}>Achievements</span>
               </motion.div>
             </Link>
 
