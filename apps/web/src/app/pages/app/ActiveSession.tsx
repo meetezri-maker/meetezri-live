@@ -1585,7 +1585,7 @@ export function ActiveSession() {
     }, 150);
   };
 
-  const stopPlaybackAndCooldown = (opts?: { sendPlaybackDone?: boolean }) => {
+  const stopPlaybackAndCooldown = (opts?: { sendPlaybackDone?: boolean; cooldownMs?: number }) => {
     // Stop all audio immediately, clear queue, and (optionally) send playback_done after cooldown.
     wsAudioQueueRef.current = [];
     wsIsPlaybackActiveRef.current = false;
@@ -1599,12 +1599,15 @@ export function ActiveSession() {
     if (now - lastPlaybackDoneAtRef.current < 250) return;
     lastPlaybackDoneAtRef.current = now;
 
+    // Default 1500ms is for server-initiated interrupts (echo from physical speakers needs ~800-1200ms to decay).
+    // Client-initiated interrupts pass a shorter value since the browser's AEC already removes speaker echo.
+    const delay = opts?.cooldownMs ?? 1500;
     window.setTimeout(() => {
       try {
         wsClientRef.current?.sendPlaybackDone();
       } catch {}
       resumeStt();
-    }, 1500);
+    }, delay);
   };
 
   const stopAudioAndSpeechDriver = () => {
@@ -1862,14 +1865,18 @@ export function ActiveSession() {
     const now = Date.now();
     if (now - lastBargeInAtRef.current < 400) return;
     lastBargeInAtRef.current = now;
-    // Stop playback immediately, then keep the server in "speaking" state briefly
-    // to avoid echo being treated as user speech.
+
+    // Stop audio immediately and clear all queued chunks.
     stopPlaybackAndCooldown({ sendPlaybackDone: false });
     try {
       wsClientRef.current?.sendInterrupt(source);
     } catch {}
-    // After interrupt, delay playback_done a bit (echo cooldown), then reopen STT.
-    stopPlaybackAndCooldown({ sendPlaybackDone: true });
+
+    // Client-initiated interrupt: the browser's AEC (echoCancellation: true) already removes
+    // speaker echo from the PCM stream before it reaches the server, so a 200ms cooldown is
+    // enough. Using the full 1500ms here caused the server to discard the first ~3 words of
+    // user speech while waiting for playback_done.
+    stopPlaybackAndCooldown({ sendPlaybackDone: true, cooldownMs: 200 });
   };
 
   const normalizeSpeech = (s: string) =>
@@ -2769,11 +2776,8 @@ export function ActiveSession() {
       // Keep accurate time in a ref (no React render).
       sessionTimeRef.current += 1;
       const next = sessionTimeRef.current;
-      // Update React state less frequently to reduce re-render cost of this huge screen.
-      // UI time jumps in small steps, but session logic (heartbeat/end) remains accurate via the ref.
-      if (next < 5 || next % 5 === 0) {
-        setSessionTime(next);
-      }
+      // Keep UI timer in sync (show every second).
+      setSessionTime(next);
     }, 1000);
 
     return () => clearInterval(timer);
