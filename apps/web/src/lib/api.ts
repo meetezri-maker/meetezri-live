@@ -2147,7 +2147,13 @@ export const api = {
     },
     async updateSessionRecording(
       id: string,
-      data: { admin_flagged?: boolean; review_notes?: string; topics?: string[]; summary?: string }
+      data: {
+        admin_flagged?: boolean;
+        review_notes?: string;
+        topics?: string[];
+        summary?: string;
+        status?: 'completed' | 'flagged' | 'reviewed' | 'escalated';
+      }
     ) {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/admin/session-recordings/${id}`, {

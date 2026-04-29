@@ -206,7 +206,6 @@ const navigationItems: NavItem[] = [
       { name: "Session Recordings", href: "/admin/session-recordings", icon: Eye, roles: ["super", "org"] },
       { name: "Activity Monitor", href: "/admin/activity-monitor", icon: TrendingUp, roles: ["super", "org"] },
       { name: "System Health", href: "/admin/system-health-enhanced", icon: Server, roles: ["super"] },
-      { name: "System Health Dashboard", href: "/admin/system-health-dashboard", icon: Activity, roles: ["super"] },
       { name: "Error Tracking", href: "/admin/error-tracking", icon: AlertTriangle, roles: ["super"] },
     ],
   },

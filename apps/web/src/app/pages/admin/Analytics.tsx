@@ -133,7 +133,7 @@ export function Analytics() {
     ? [
         {
           label: "Total Revenue",
-          value: `$${dashboard.revenue.toLocaleString()}`,
+          value: `$${dashboard.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
           change: revenueChange || "0.0%",
           trend: revenueTrend,
           icon: DollarSign,
@@ -422,7 +422,7 @@ export function Analytics() {
               <YAxis stroke="#6b7280" />
               <Tooltip 
                 contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px' }}
-                formatter={(value: number) => `$${value.toLocaleString()}`}
+                  formatter={(value: number) => `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
               />
               <Legend />
               <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} name="Total Revenue" />
