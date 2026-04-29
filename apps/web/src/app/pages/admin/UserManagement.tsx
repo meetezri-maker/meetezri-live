@@ -66,6 +66,8 @@ import {
 export function UserManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isBackgroundLoading, setIsBackgroundLoading] = useState(false);
+  const [nextPage, setNextPage] = useState<number | null>(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterType>("all");
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
@@ -104,37 +106,82 @@ export function UserManagement() {
   });
   const usersPerPage = pageSize;
   const usersFirstLoad = useRef(true);
+  const fetchAbortRef = useRef<AbortController | null>(null);
+  const hasStartedInitialFetchRef = useRef(false);
 
-  const fetchUsers = async () => {
+  const mapApiUser = (u: any): User => ({
+    id: u.id,
+    name: u.full_name || u.email.split("@")[0],
+    email: u.email,
+    status: u.status || "active",
+    joinDate: u.created_at,
+    sessions: typeof u.session_count === "number" ? u.session_count : 0,
+    lastActive: u.last_active || u.updated_at,
+    riskLevel: (u.risk_level as User["riskLevel"]) || "low",
+    subscription: u.subscription || "trial",
+    organization: u.organization || "",
+  });
+
+  const fetchFirstPage = async () => {
     try {
+      // Cancel any in-flight fetch (e.g. refresh / re-mount).
+      fetchAbortRef.current?.abort();
+      fetchAbortRef.current = new AbortController();
+
       if (usersFirstLoad.current) setIsLoading(true);
-      const data = await api.admin.getUsers({ limit: 1000 });
-      
-      const mappedUsers = data.map((u: any) => ({
-        id: u.id,
-        name: u.full_name || u.email.split('@')[0],
-        email: u.email,
-        status: u.status || 'active',
-        joinDate: u.created_at,
-        sessions: typeof u.session_count === "number" ? u.session_count : 0,
-        lastActive: u.last_active || u.updated_at,
-        riskLevel: (u.risk_level as User["riskLevel"]) || 'low',
-        subscription: u.subscription || 'trial',
-        organization: u.organization || ''
-      }));
-      setUsers(mappedUsers);
-    } catch (error) {
-      console.error("Failed to fetch users:", error);
-    } finally {
+
+      // Fetch a small first page quickly so UI becomes interactive.
+      const FIRST_PAGE_LIMIT = 100;
+      const first = await api.admin.getUsers({ page: 1, limit: FIRST_PAGE_LIMIT });
+      const mappedFirst = (Array.isArray(first) ? first : []).map(mapApiUser);
+      setUsers(mappedFirst);
+      setNextPage(mappedFirst.length < FIRST_PAGE_LIMIT ? null : 2);
+
       if (usersFirstLoad.current) {
         setIsLoading(false);
         usersFirstLoad.current = false;
       }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      console.error("Failed to fetch users:", error);
+    } finally {
+      setIsLoading(false);
+      setIsBackgroundLoading(false);
+    }
+  };
+
+  const loadMoreUsers = async () => {
+    if (!nextPage) return;
+    try {
+      setIsBackgroundLoading(true);
+      const PAGE_LIMIT = 250;
+      const page = nextPage;
+      const chunk = await api.admin.getUsers({ page, limit: PAGE_LIMIT });
+      const rows = (Array.isArray(chunk) ? chunk : []).map(mapApiUser);
+      setUsers((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        const next = [...prev];
+        for (const r of rows) {
+          if (!seen.has(r.id)) next.push(r);
+        }
+        return next;
+      });
+      setNextPage(rows.length < PAGE_LIMIT ? null : page + 1);
+    } catch (error) {
+      console.error("Failed to load more users:", error);
+    } finally {
+      setIsBackgroundLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchUsers();
+    // React StrictMode in dev runs effects twice; guard to avoid duplicate API calls.
+    if (hasStartedInitialFetchRef.current) return;
+    hasStartedInitialFetchRef.current = true;
+    fetchFirstPage();
+    return () => {
+      fetchAbortRef.current?.abort();
+    };
   }, []);
 
   const handleAction = async (userId: string, action: 'suspend' | 'activate' | 'delete' | 'email') => {
@@ -242,6 +289,7 @@ export function UserManagement() {
     (currentPage - 1) * usersPerPage,
     currentPage * usersPerPage
   );
+  const shouldAnimateRows = paginatedUsers.length <= 25;
 
   // Stats
   const stats = {
@@ -817,9 +865,9 @@ export function UserManagement() {
                     paginatedUsers.map((user, index) => (
                     <motion.tr
                       key={user.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
+                      initial={shouldAnimateRows ? { opacity: 0, y: 10 } : false}
+                      animate={shouldAnimateRows ? { opacity: 1, y: 0 } : undefined}
+                      transition={shouldAnimateRows ? { delay: index * 0.02 } : undefined}
                       className="hover:bg-gray-50 transition-colors"
                     >
                       <td className="px-4 py-4">
@@ -988,7 +1036,7 @@ export function UserManagement() {
         </motion.div>
 
         {/* Empty State */}
-        {filteredUsers.length === 0 && (
+        {!isLoading && filteredUsers.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1003,6 +1051,21 @@ export function UserManagement() {
               Clear Filters
             </Button>
           </motion.div>
+        )}
+
+        {!isLoading && (
+          <div className="flex items-center justify-center gap-3 -mt-4">
+            {isBackgroundLoading && (
+              <div className="text-xs text-muted-foreground text-center">
+                Loading more users…
+              </div>
+            )}
+            {!isBackgroundLoading && nextPage != null && (
+              <Button variant="outline" size="sm" type="button" onClick={loadMoreUsers}>
+                Load more
+              </Button>
+            )}
+          </div>
         )}
       </div>
 

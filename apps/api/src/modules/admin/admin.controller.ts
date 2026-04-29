@@ -900,7 +900,13 @@ export async function postSessionRecordingReviewedHandler(
 export async function patchSessionRecordingHandler(
   request: FastifyRequest<{
     Params: { id: string };
-    Body: { admin_flagged?: boolean; review_notes?: string; topics?: string[]; summary?: string };
+    Body: {
+      admin_flagged?: boolean;
+      review_notes?: string;
+      topics?: string[];
+      summary?: string;
+      status?: string;
+    };
   }>,
   reply: FastifyReply
 ) {
@@ -910,12 +916,18 @@ export async function patchSessionRecordingHandler(
       review_notes?: string;
       topics?: string[];
       summary?: string;
+      status?: string;
     };
     const session = await updateSessionRecordingMeta(request.params.id, {
       admin_flagged: typeof body.admin_flagged === 'boolean' ? body.admin_flagged : undefined,
       review_notes: typeof body.review_notes === 'string' ? body.review_notes : undefined,
       topics: Array.isArray(body.topics) ? body.topics : undefined,
       summary: typeof body.summary === 'string' ? body.summary : undefined,
+      status:
+        typeof body.status === 'string' &&
+        ['completed', 'flagged', 'reviewed', 'escalated'].includes(body.status)
+          ? (body.status as any)
+          : undefined,
     });
     return reply.code(200).send(session);
   } catch (error: any) {

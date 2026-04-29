@@ -217,13 +217,13 @@ export function RetentionMetrics() {
       description: "registered profiles",
     },
     {
-      label: "Revenue (MRR est.)",
-      value: `$${Math.round(stats?.revenue ?? 0).toLocaleString()}`,
+      label: "Revenue (cash, range)",
+      value: `$${(stats?.revenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       change: "—",
       trend: "up" as const,
       icon: DollarSign,
       color: "from-purple-500 to-pink-600",
-      description: "active subscriptions",
+      description: "completed payments in range",
     },
   ];
 

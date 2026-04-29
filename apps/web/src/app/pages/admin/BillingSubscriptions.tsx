@@ -58,6 +58,7 @@ export function BillingSubscriptions() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [paygTransactions, setPaygTransactions] = useState<any[]>([]);
 
   // Edit states
   const [editPlan, setEditPlan] = useState<"trial" | "core" | "pro">("trial");
@@ -97,6 +98,7 @@ export function BillingSubscriptions() {
     try {
       const data = await api.billing.getAdminBillingOverview();
       setInvoices(data?.invoices || []);
+      setPaygTransactions(data?.paygTransactions || []);
       setSubscriptions((data?.subscriptions || []).map(mapApiSubscription));
     } catch (error) {
       console.error("Failed to fetch billing data:", error);
@@ -171,6 +173,7 @@ export function BillingSubscriptions() {
       const headers = ["Metric", "Value"];
       csvContent = [
         headers.join(","),
+        ["Cash revenue (30d)", `$${stats.cashRevenue30d.toFixed(2)}`].join(","),
         ["Total MRR", `$${stats.totalMRR.toLocaleString()}`].join(","),
         ["Active Subscriptions", stats.activeSubscriptions].join(","),
         ["Invoice revenue (30d)", `$${stats.invoiceRevenue30d.toFixed(2)}`].join(","),
@@ -225,7 +228,16 @@ export function BillingSubscriptions() {
         return sum + Number(inv.amount_due ?? 0);
       }, 0);
 
+    const sumPayg = (start: Date, end: Date) =>
+      (paygTransactions || []).reduce((sum, tx) => {
+        const d = new Date(tx.created);
+        if (d < start || d > end) return sum;
+        return sum + Number(tx.amount ?? 0);
+      }, 0);
+
     const invoiceRevenue30d = sumInvoices(monthAgo, now);
+    const paygRevenue30d = sumPayg(monthAgo, now);
+    const cashRevenue30d = invoiceRevenue30d + paygRevenue30d;
 
     const activeSubscriptions = subscriptions.filter((s) => s.status === "active").length;
     const canceledSubscriptions = subscriptions.filter((s) => s.status === "cancelled").length;
@@ -238,8 +250,9 @@ export function BillingSubscriptions() {
       totalSubscriptions: subscriptions.length,
       churnRate,
       invoiceRevenue30d,
+      cashRevenue30d,
     };
-  }, [subscriptions, invoices]);
+  }, [subscriptions, invoices, paygTransactions]);
 
   const getPlanColor = (plan: string) => {
     switch (plan) {
@@ -345,6 +358,23 @@ export function BillingSubscriptions() {
           >
             <Card className="p-6">
               <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-muted-foreground">Cash revenue (last 30 days)</p>
+                <DollarSign className="w-5 h-5 text-green-600" />
+              </div>
+              <p className="text-3xl font-bold mb-1">
+                ${stats.cashRevenue30d.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-sm text-muted-foreground">Stripe invoices + PAYG</p>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-2">
                 <p className="text-sm text-muted-foreground">Monthly Recurring Revenue</p>
                 <DollarSign className="w-5 h-5 text-green-600" />
               </div>
@@ -361,7 +391,7 @@ export function BillingSubscriptions() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
+            transition={{ delay: 0.2 }}
           >
             <Card className="p-6">
               <div className="flex items-center justify-between mb-2">
@@ -369,24 +399,7 @@ export function BillingSubscriptions() {
                 <CheckCircle className="w-5 h-5 text-blue-600" />
               </div>
               <p className="text-3xl font-bold mb-1">{stats.activeSubscriptions}</p>
-              <p className="text-sm text-muted-foreground">
-                {subscriptions.length} total subscriptions
-              </p>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-muted-foreground">All subscriptions</p>
-                <Users className="w-5 h-5 text-purple-600" />
-              </div>
-              <p className="text-3xl font-bold mb-1">{stats.totalSubscriptions}</p>
-              <p className="text-sm text-muted-foreground">All statuses</p>
+              <p className="text-sm text-muted-foreground">{subscriptions.length} total subscriptions</p>
             </Card>
           </motion.div>
 
@@ -472,7 +485,7 @@ export function BillingSubscriptions() {
                       <h3 className="font-bold text-lg capitalize mb-1">{plan}</h3>
                       <p className="text-2xl font-bold text-primary mb-2">{count}</p>
                       <p className="text-sm text-muted-foreground">
-                        ${revenue.toLocaleString()}/mo revenue
+                        ${revenue.toLocaleString()}/mo MRR
                       </p>
                     </Card>
                   </motion.div>

@@ -158,8 +158,8 @@ ${(d?.hourlyActivity || [])
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatsCard
-            title="Revenue (MRR est.)"
-            value={`$${Math.round(dash?.revenue ?? 0).toLocaleString()}`}
+            title="Revenue (cash, range)"
+            value={`$${(dash?.revenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             change="live"
             changeType="positive"
             icon={TrendingUp}

@@ -9,6 +9,8 @@ import { endSession } from '../sessions/sessions.service';
 import { emailService } from '../email/email.service';
 import { supabaseAdmin } from '../../config/supabase';
 import * as userService from '../users/user.service';
+import { listStripeInvoicesForAdmin } from '../billing/services/admin-stripe-list.service';
+import { isPaygInvoice } from '../billing/services/admin-billing-shared';
 
 // Simple in-memory cache for dashboard stats (keyed by query options)
 const STATS_CACHE_TTL = 60 * 1000; // 60 seconds
@@ -49,6 +51,41 @@ function addUtcDays(d: Date, n: number): Date {
   const x = new Date(d);
   x.setUTCDate(x.getUTCDate() + n);
   return x;
+}
+
+function fmtMonthLabelUtc(d: Date): string {
+  const mon = d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+  const yy = String(d.getUTCFullYear()).slice(-2);
+  return `${mon} ${yy}`;
+}
+
+function fmtWeekLabelUtc(d: Date): string {
+  const mon = d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${mon} ${dd}`;
+}
+
+function fmtYearLabelUtc(d: Date): string {
+  return String(d.getUTCFullYear());
+}
+
+function bucketStartUtc(d: Date, chartPeriod: 'week' | 'month' | 'year'): Date {
+  const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  x.setUTCHours(0, 0, 0, 0);
+  if (chartPeriod === 'year') {
+    return new Date(Date.UTC(x.getUTCFullYear(), 0, 1));
+  }
+  if (chartPeriod === 'month') {
+    return new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), 1));
+  }
+  // week
+  return utcMonday(x);
+}
+
+function bucketLabelUtc(start: Date, chartPeriod: 'week' | 'month' | 'year'): string {
+  if (chartPeriod === 'year') return fmtYearLabelUtc(start);
+  if (chartPeriod === 'month') return fmtMonthLabelUtc(start);
+  return fmtWeekLabelUtc(start);
 }
 
 /**
@@ -245,6 +282,7 @@ export async function getDashboardStats(
         (SELECT count(*)::bigint FROM app_sessions WHERE started_at >= timezone('utc', now()) - interval '1 hour') as sessions_1h,
         (SELECT COALESCE(SUM(amount), 0)::bigint FROM payment_transactions WHERE status = 'completed' AND created_at >= date_trunc('month', timezone('utc', now())) AND created_at < date_trunc('month', timezone('utc', now())) + interval '1 month') as pay_cents_this_month,
         (SELECT COALESCE(SUM(amount), 0)::bigint FROM payment_transactions WHERE status = 'completed' AND created_at >= date_trunc('month', timezone('utc', now())) - interval '1 month' AND created_at < date_trunc('month', timezone('utc', now()))) as pay_cents_prev_month,
+        (SELECT COALESCE(SUM(amount), 0)::bigint FROM payment_transactions WHERE status = 'completed' AND created_at >= ${rangeStart} AND created_at <= ${rangeEnd}) as pay_cents_in_range,
         (SELECT COALESCE(SUM(sub.mrr_usd::numeric), 0)::numeric
           FROM (
             SELECT
@@ -367,6 +405,7 @@ export async function getDashboardStats(
   const sessionsLastHour = Number(counts.sessions_1h || 0);
   const payCentsThisMonth = Number(counts.pay_cents_this_month || 0);
   const payCentsPrevMonth = Number(counts.pay_cents_prev_month || 0);
+  const payCentsInRange = Number(counts.pay_cents_in_range || 0);
   const signupsWeekOverWeekPct =
     signupsPrev7Days > 0
       ? Math.round(((signupsLast7Days - signupsPrev7Days) / signupsPrev7Days) * 1000) / 10
@@ -395,14 +434,32 @@ export async function getDashboardStats(
 
   const subscriptionMrrSumUsd = Number(counts.subscription_mrr_sum_usd ?? 0);
   const paymentCompletedSumUsd = Number(counts.payment_completed_sum_usd ?? 0);
-  /** Subscriptions (USD/month stored on row) + completed checkout volume (amount is cents). */
-  const revenueRaw =
-    Math.round(
-      ((Number.isFinite(subscriptionMrrSumUsd) ? subscriptionMrrSumUsd : 0) +
-        (Number.isFinite(paymentCompletedSumUsd) ? paymentCompletedSumUsd : 0)) *
-        100
-    ) / 100;
-  const revenue = Number.isFinite(revenueRaw) ? revenueRaw : 0;
+  /**
+   * Cash revenue for the selected range (authoritative figure shown on admin pages).
+   *
+   * Source of truth:
+   * - PAYG + any app-recorded payments: `payment_transactions` (cents), completed in range
+   * - Subscriptions / invoices: Stripe invoices (most recent 100), excluding PAYG invoices to avoid double counting
+   *
+   * NOTE: MRR estimates and all-time totals exist in `kpi.*` fields; do not mix them into range revenue.
+   */
+  const stripeInvoices = await listStripeInvoicesForAdmin();
+  const stripeInvoiceRevenueInRangeUsd = stripeInvoices
+    .filter((inv) => {
+      const createdMs = (inv?.created ?? 0) * 1000;
+      if (!createdMs) return false;
+      if (createdMs < rangeStart.getTime() || createdMs > rangeEnd.getTime()) return false;
+      // PAYG invoice cash is recorded in DB via `payment_transactions`; skip to avoid double count.
+      if (isPaygInvoice(inv)) return false;
+      return true;
+    })
+    .reduce((sum, inv) => sum + ((inv.amount_paid || inv.amount_due || 0) / 100), 0);
+
+  const dbRevenueInRangeUsd = payCentsInRange / 100;
+  const revenue = Math.max(
+    0,
+    Math.round((dbRevenueInRangeUsd + stripeInvoiceRevenueInRangeUsd) * 100) / 100
+  );
 
   const startDay = utcDayStart(rangeStart);
   const endDay = utcDayStart(rangeEnd);
@@ -569,7 +626,7 @@ export async function getDashboardStats(
       const cents = Number.isFinite(raw) ? raw : 0;
       return {
         month: String(r.label ?? '—'),
-        revenue: Math.max(0, Math.round(cents / 100)),
+        revenue: Math.max(0, Math.round((cents / 100) * 100) / 100),
       };
     });
 
@@ -581,27 +638,66 @@ export async function getDashboardStats(
     { month: 'Total', revenue: Math.round(revenue) },
   ];
 
+  // Fold Stripe subscription invoice revenue into the series so chart totals line up with `revenue`.
+  const addStripeInvoiceRevenueToSeries = (
+    series: { month: string; revenue: number }[],
+    period: 'week' | 'month' | 'year'
+  ): { month: string; revenue: number }[] => {
+    const map = new Map<string, number>();
+    for (const row of series) {
+      map.set(String(row.month), Number.isFinite(row.revenue) ? row.revenue : 0);
+    }
+
+    for (const inv of stripeInvoices) {
+      if (isPaygInvoice(inv)) continue;
+      const createdMs = (inv?.created ?? 0) * 1000;
+      if (!createdMs) continue;
+      if (createdMs < rangeStart.getTime() || createdMs > rangeEnd.getTime()) continue;
+      const d = new Date(createdMs);
+      const start = bucketStartUtc(d, period);
+      const label = bucketLabelUtc(start, period);
+      const usd = (inv.amount_paid || inv.amount_due || 0) / 100;
+      map.set(label, (map.get(label) ?? 0) + usd);
+    }
+
+    // Preserve existing row order; if invoices introduced a bucket not in DB series, append it.
+    const out = series.map((row) => ({
+      month: row.month,
+      revenue: Math.round(((map.get(String(row.month)) ?? row.revenue) || 0) * 100) / 100,
+    }));
+    for (const [label, usd] of map) {
+      if (!out.some((r) => r.month === label)) {
+        out.push({ month: label, revenue: Math.round(usd * 100) / 100 });
+      }
+    }
+    return out;
+  };
+
+  const revMonthWithStripe = addStripeInvoiceRevenueToSeries(revMonth, 'month');
+  const revWeekWithStripe = addStripeInvoiceRevenueToSeries(revWeek, 'week');
+  const revYearWithStripe = addStripeInvoiceRevenueToSeries(revYear, 'year');
+
   let revenueData =
     chartPeriod === 'week'
-      ? revWeek.length
-        ? revWeek
+      ? revWeekWithStripe.length
+        ? revWeekWithStripe
         : revenueFallback
       : chartPeriod === 'year'
-        ? revYear.length
-          ? revYear
+        ? revYearWithStripe.length
+          ? revYearWithStripe
           : revenueFallback
-        : revMonth.length
-          ? revMonth
+        : revMonthWithStripe.length
+          ? revMonthWithStripe
           : revenueFallback;
 
   const userGrowthIsMock = ugFromSeries.length === 0;
 
   const revenueIsMock =
     chartPeriod === 'week'
-      ? revWeek.length === 0
+      ? revWeekWithStripe.length === 0
       : chartPeriod === 'year'
-        ? revYear.length === 0
-        : revMonth.length === 0;
+        ? revYearWithStripe.length === 0
+        : revMonthWithStripe.length === 0;
 
   const featureUsageRaw = [
     { feature: "AI Sessions", count: totalSessions },
@@ -3645,7 +3741,14 @@ export async function markSessionRecordingReviewed(sessionId: string, reviewerId
 
 export async function updateSessionRecordingMeta(
   sessionId: string,
-  input: { admin_flagged?: boolean; review_notes?: string; topics?: string[]; summary?: string }
+  input: {
+    admin_flagged?: boolean;
+    review_notes?: string;
+    topics?: string[];
+    summary?: string;
+    /** Stored on session.config.status; supports escalation workflow. */
+    status?: 'completed' | 'flagged' | 'reviewed' | 'escalated';
+  }
 ) {
   const session = await prisma.app_sessions.findUnique({
     where: { id: sessionId },
@@ -3666,6 +3769,16 @@ export async function updateSessionRecordingMeta(
   }
   if (typeof input.summary === 'string') {
     updatedConfig.summary = input.summary;
+  }
+  if (
+    typeof input.status === 'string' &&
+    ['completed', 'flagged', 'reviewed', 'escalated'].includes(input.status)
+  ) {
+    updatedConfig.status = input.status;
+    // Escalation implies it should be flagged for review.
+    if (input.status === 'escalated') {
+      updatedConfig.admin_flagged = true;
+    }
   }
   return prisma.app_sessions.update({
     where: { id: sessionId },

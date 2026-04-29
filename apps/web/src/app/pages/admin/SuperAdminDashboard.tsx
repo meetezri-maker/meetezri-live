@@ -623,7 +623,7 @@ export function SuperAdminDashboard() {
     (point: { orgs?: number }) => Number(point?.orgs ?? 0) > 0
   );
 
-  const mrrDisplay = kpi != null ? kpi.subscriptionMrrApprox : Number(revenue);
+  const mrrEstimate = kpi?.subscriptionMrrApprox ?? 0;
   const payThisMonthUsd = (kpi?.paymentVolumeThisMonthCents ?? 0) / 100;
 
   return (
@@ -779,12 +779,12 @@ export function SuperAdminDashboard() {
                     {kpi != null ? formatPctSigned(kpi.paymentMomPct) : "—"} vs prior month
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Subscription MRR (active)</p>
-                <div className="text-3xl font-bold">{formatUsd(mrrDisplay)}</div>
+                <p className="text-sm text-muted-foreground mb-1">Revenue (cash, range)</p>
+                <div className="text-3xl font-bold">{formatUsd(Number(revenue))}</div>
                 <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <TrendingUp className="w-3 h-3 text-green-600" />
                   <span>
-                    {formatUsd(payThisMonthUsd)} completed payments (this month, Stripe)
+                    MRR est.: {formatUsd(mrrEstimate)} · {formatUsd(payThisMonthUsd)} completed payments (this month, Stripe)
                   </span>
                 </div>
               </div>
@@ -1196,7 +1196,7 @@ export function SuperAdminDashboard() {
                   <Server className="w-5 h-5 text-green-500" />
                   <h2 className="font-bold text-xl">System Health</h2>
                 </div>
-                <Link to="/admin/system-health-dashboard">
+                <Link to="/admin/system-health-enhanced">
                   <Button variant="ghost" size="sm">
                     Details
                   </Button>

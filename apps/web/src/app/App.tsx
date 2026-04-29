@@ -115,7 +115,6 @@ import { LiveSessionsMonitor } from '@/app/pages/admin/LiveSessionsMonitor';
 import { SessionRecordings } from '@/app/pages/admin/SessionRecordings';
 import { ActivityMonitor } from '@/app/pages/admin/ActivityMonitor';
 import { SystemHealthEnhanced } from '@/app/pages/admin/SystemHealthEnhanced';
-import { SystemHealthDashboard } from '@/app/pages/admin/SystemHealthDashboard';
 import { ErrorTracking } from '@/app/pages/admin/ErrorTracking';
 import { SystemSettingsEnhanced } from '@/app/pages/admin/SystemSettingsEnhanced';
 import { GlobalConfiguration } from '@/app/pages/admin/GlobalConfiguration';
@@ -530,7 +529,10 @@ export default function App() {
             <Route path="/admin/session-recordings" element={<SessionRecordings />} />
             <Route path="/admin/activity-monitor" element={<ActivityMonitor />} />
             <Route path="/admin/system-health-enhanced" element={<SystemHealthEnhanced />} />
-            <Route path="/admin/system-health-dashboard" element={<SystemHealthDashboard />} />
+            <Route
+              path="/admin/system-health-dashboard"
+              element={<Navigate to="/admin/system-health-enhanced" replace />}
+            />
             <Route path="/admin/error-tracking" element={<ErrorTracking />} />
 
             {/* System */}

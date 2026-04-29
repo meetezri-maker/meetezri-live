@@ -28,6 +28,7 @@ import { goalsRoutes } from './modules/goals/goals.routes';
 import { customAchievementRoutes } from './modules/custom-achievements/custom-achievements.routes';
 import { supportTicketsRoutes } from './modules/support-tickets/support-tickets.routes';
 import jwkToPem from 'jwk-to-pem';
+import prisma from './lib/prisma';
 const jwtLib = require('jsonwebtoken');
 
 dotenv.config();
@@ -321,6 +322,39 @@ app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) =
 
   if (isServerError) {
     request.log.error({ err: error, requestId: request.id }, 'Unhandled API error');
+
+    // Persist server errors for the admin Error Tracking UI.
+    // Best-effort only (never block the response; ignore DB failures).
+    try {
+      const ctx: Record<string, unknown> = {
+        title: typeof error?.name === 'string' ? error.name : 'UnhandledError',
+        endpoint: request.routerPath || request.url,
+        method: request.method,
+        status_code: statusCode,
+        requestId: request.id,
+        ip:
+          (typeof request.headers['x-forwarded-for'] === 'string' && request.headers['x-forwarded-for']) ||
+          request.ip,
+        // If auth plugin attaches a user object, record it.
+        user_id:
+          (request as any)?.user?.sub ||
+          (request as any)?.user?.id ||
+          (request as any)?.auth?.sub ||
+          null,
+      };
+      // Fire and forget
+      void prisma.error_logs.create({
+        data: {
+          message: typeof error?.message === 'string' && error.message.trim() ? error.message : message,
+          stack_trace: typeof error?.stack === 'string' ? error.stack : null,
+          context: ctx as any,
+          severity: 'error',
+          status: 'open',
+        },
+      });
+    } catch {
+      /* ignore */
+    }
   }
 
   reply.code(statusCode).send({

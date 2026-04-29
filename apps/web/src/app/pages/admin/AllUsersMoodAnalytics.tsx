@@ -141,31 +141,23 @@ export function AllUsersMoodAnalytics() {
   const fetchAll = async () => {
     try {
       setLoading(true);
-      const [data, users] = await Promise.all([
-        api.moods.getAllMoods(),
-        (async () => {
-          const collected: AdminUserRow[] = [];
-          let page = 1;
-          const limit = 1000;
-          for (let guard = 0; guard < 25; guard++) {
-            const res: any = await api.admin.getUsers({ page, limit });
-            const list = Array.isArray(res) ? res : Array.isArray(res?.users) ? res.users : [];
-            if (list.length === 0) break;
-            collected.push(
-              ...list.map((u: any) => ({
-                id: String(u.id),
-                name: u.name ?? u.full_name ?? u.fullName ?? null,
-                email: u.email ?? null,
-              }))
-            );
-            if (list.length < limit) break;
-            page += 1;
-          }
-          return collected;
-        })(),
-      ]);
-      setRows(Array.isArray(data) ? data : []);
-      setAllUsers(users);
+      const data = await api.moods.getAllMoods();
+      const moodRows = Array.isArray(data) ? data : [];
+      setRows(moodRows);
+
+      // Build the user list from mood rows (avoids heavy /admin/users paging).
+      const byEmail = new Map<string, AdminUserRow>();
+      for (const r of moodRows) {
+        const emailRaw = (r?.profiles?.email || "").trim().toLowerCase();
+        if (!emailRaw) continue;
+        if (byEmail.has(emailRaw)) continue;
+        byEmail.set(emailRaw, {
+          id: emailRaw,
+          name: (r?.profiles?.full_name || "").trim() || undefined,
+          email: emailRaw,
+        });
+      }
+      setAllUsers(Array.from(byEmail.values()));
     } catch (e) {
       console.error(e);
       setRows([]);

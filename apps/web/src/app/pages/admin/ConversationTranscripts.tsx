@@ -45,6 +45,7 @@ interface Transcript {
   summary?: string;
   sentiment: RowSentiment;
   isFlagged: boolean;
+  isEscalated: boolean;
   isReviewed: boolean;
   adminNotes: string;
   crisisIndicators: string[];
@@ -55,6 +56,7 @@ interface Transcript {
 function mapApiSessionToTranscript(session: any): Transcript {
   const config = session.config || {};
   const isReviewed = !!(config.reviewed_at || config.status === 'reviewed');
+  const isEscalated = config.status === 'escalated';
   const rawSent = (config.sentiment || 'neutral') as string;
   let sentiment: RowSentiment = 'neutral';
   if (rawSent === 'positive') sentiment = 'positive';
@@ -88,6 +90,7 @@ function mapApiSessionToTranscript(session: any): Transcript {
     summary: typeof config.summary === 'string' ? config.summary : undefined,
     sentiment,
     isFlagged: !!config.admin_flagged,
+    isEscalated,
     isReviewed,
     adminNotes: typeof config.review_notes === 'string' ? config.review_notes : '',
     crisisIndicators,
@@ -516,11 +519,53 @@ export function ConversationTranscripts() {
   };
 
   const handleToggleFlag = async (id: string, current: boolean) => {
+    // Optimistic UI: flip immediately, persist in background, revert on failure.
+    const next = !current;
+
+    setTranscripts((prev) => prev.map((t) => (t.id === id ? { ...t, isFlagged: next } : t)));
+    setTranscriptModal((tm) => (tm?.id === id ? { ...tm, isFlagged: next } : tm));
+    setDetailsModal((dm) => (dm?.id === id ? { ...dm, isFlagged: next } : dm));
+
     try {
-      const updated = await api.admin.updateSessionRecording(id, { admin_flagged: !current });
+      const updated = await api.admin.updateSessionRecording(id, { admin_flagged: next });
       mergeSessionUpdate(id, updated);
     } catch (e) {
       console.error(e);
+      // Revert
+      setTranscripts((prev) => prev.map((t) => (t.id === id ? { ...t, isFlagged: current } : t)));
+      setTranscriptModal((tm) => (tm?.id === id ? { ...tm, isFlagged: current } : tm));
+      setDetailsModal((dm) => (dm?.id === id ? { ...dm, isFlagged: current } : dm));
+      toast.error("Could not update flag. Check your connection.");
+    }
+  };
+
+  const handleToggleEscalated = async (id: string, current: boolean) => {
+    // Optimistic UI: flip immediately, persist in background, revert on failure.
+    const next = !current;
+    const nextStatus = next ? 'escalated' : 'completed';
+
+    setTranscripts((prev) =>
+      prev.map((t) =>
+        t.id === id ? { ...t, isEscalated: next, isFlagged: next ? true : t.isFlagged } : t
+      )
+    );
+    setTranscriptModal((tm) =>
+      tm?.id === id ? { ...tm, isEscalated: next, isFlagged: next ? true : tm.isFlagged } : tm
+    );
+    setDetailsModal((dm) =>
+      dm?.id === id ? { ...dm, isEscalated: next, isFlagged: next ? true : dm.isFlagged } : dm
+    );
+
+    try {
+      const updated = await api.admin.updateSessionRecording(id, { status: nextStatus });
+      mergeSessionUpdate(id, updated);
+    } catch (e) {
+      console.error(e);
+      // Revert
+      setTranscripts((prev) => prev.map((t) => (t.id === id ? { ...t, isEscalated: current } : t)));
+      setTranscriptModal((tm) => (tm?.id === id ? { ...tm, isEscalated: current } : tm));
+      setDetailsModal((dm) => (dm?.id === id ? { ...dm, isEscalated: current } : dm));
+      toast.error("Could not update escalation. Check your connection.");
     }
   };
 
@@ -755,6 +800,12 @@ Ezri Mental Health Platform - Admin Dashboard
                         Flagged
                       </span>
                     )}
+                    {transcript.isEscalated && (
+                      <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" />
+                        Escalated
+                      </span>
+                    )}
                     <span className={`px-2 py-1 text-xs font-bold rounded-full ${getSentimentColor(transcript.sentiment)}`}>
                       {transcript.sentiment.charAt(0).toUpperCase() + transcript.sentiment.slice(1)}
                     </span>
@@ -848,6 +899,24 @@ Ezri Mental Health Platform - Admin Dashboard
                     title={transcript.isFlagged ? 'Unflag' : 'Flag for review'}
                   >
                     <Flag className="w-5 h-5" />
+                  </motion.button>
+
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleToggleEscalated(transcript.id, transcript.isEscalated);
+                    }}
+                    className={`p-2 rounded-lg transition-all ${
+                      transcript.isEscalated
+                        ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                        : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                    }`}
+                    title={transcript.isEscalated ? 'De-escalate' : 'Escalate'}
+                  >
+                    <AlertTriangle className="w-5 h-5" />
                   </motion.button>
 
                   <motion.button
