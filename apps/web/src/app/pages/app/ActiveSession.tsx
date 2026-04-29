@@ -1548,55 +1548,25 @@ export function ActiveSession() {
   const ttsMouthTapOkRef = useRef(false);
   /** Text of the clip currently playing (for echo filter; state alone lags behind STT). */
   const ezriPlaybackTextRef = useRef<string>("");
-  const micWasEnabledBeforeTtsRef = useRef<boolean | null>(null);
+  const suppressSttRef = useRef(false);
+  const lastPlaybackDoneAtRef = useRef(0);
 
-  const setMicEnabled = (enabled: boolean) => {
-    if (!stream) return;
-    try {
-      stream.getAudioTracks().forEach((t) => {
-        t.enabled = enabled;
-      });
-    } catch {}
-  };
-
-  const pauseListeningForTts = () => {
-    // Prevent TTS echo being re-transcribed as the user.
-    // 1) Stop SpeechRecognition (best-effort).
-    // IMPORTANT: do not detach handlers (onend/onresult). We rely on them to restart later.
-    // Also: recognition.onend already won't auto-restart while `isEzriSpeakingRef.current` is true.
+  const pauseStt = () => {
+    suppressSttRef.current = true;
+    // Abort is more "immediate" than stop() and avoids delayed finals.
     try {
       if (recognitionRef.current && isRecognitionActiveRef.current) {
-        recognitionRef.current.stop();
-      }
-    } catch {}
-
-    // 2) Disable mic track (extra protection if OS routes speaker → mic).
-    try {
-      if (stream) {
-        const tracks = stream.getAudioTracks();
-        if (tracks.length > 0) {
-          micWasEnabledBeforeTtsRef.current = tracks[0].enabled;
-          setMicEnabled(false);
-        }
+        recognitionRef.current.abort?.();
       }
     } catch {}
   };
 
-  const resumeListeningAfterTts = () => {
-    // Restore mic
-    try {
-      const prev = micWasEnabledBeforeTtsRef.current;
-      if (typeof prev === "boolean") {
-        setMicEnabled(prev && !isMutedRef.current && !isSessionPausedRef.current);
-      } else {
-        setMicEnabled(!isMutedRef.current && !isSessionPausedRef.current);
-      }
-    } catch {}
-    micWasEnabledBeforeTtsRef.current = null;
-
-    // Restart recognition (small delay so echo tail doesn't trigger).
+  const resumeStt = () => {
+    suppressSttRef.current = false;
+    // Short delay to let echo tail die down before reopening STT.
     window.setTimeout(() => {
       if (
+        !permissionsGranted ||
         isSessionEndingRef.current ||
         isSessionPausedRef.current ||
         isMutedRef.current ||
@@ -1608,8 +1578,33 @@ export function ActiveSession() {
         if (recognitionRef.current && !isRecognitionActiveRef.current) {
           recognitionRef.current.start();
         }
+      } catch (e) {
+        // If start() throws due to a broken recognizer, the SpeechRecognition effect watchdog
+        // will recreate/restart it as needed.
+      }
+    }, 150);
+  };
+
+  const stopPlaybackAndCooldown = (opts?: { sendPlaybackDone?: boolean }) => {
+    // Stop all audio immediately, clear queue, and (optionally) send playback_done after cooldown.
+    wsAudioQueueRef.current = [];
+    wsIsPlaybackActiveRef.current = false;
+    wsTtsDoneReceivedRef.current = true; // treat as done so we don't get stuck waiting
+    wsPendingFallbackTextRef.current = "";
+    stopAudioAndSpeechDriver();
+
+    const shouldSend = opts?.sendPlaybackDone !== false;
+    if (!shouldSend) return;
+    const now = Date.now();
+    if (now - lastPlaybackDoneAtRef.current < 250) return;
+    lastPlaybackDoneAtRef.current = now;
+
+    window.setTimeout(() => {
+      try {
+        wsClientRef.current?.sendPlaybackDone();
       } catch {}
-    }, 300);
+      resumeStt();
+    }, 1500);
   };
 
   const stopAudioAndSpeechDriver = () => {
@@ -1718,7 +1713,7 @@ export function ActiveSession() {
     setSpeechCharIndex(0);
     setIsEzriSpeaking(true);
     isEzriSpeakingRef.current = true;
-    pauseListeningForTts();
+    pauseStt();
 
     let url = "";
     let revoke: (() => void) | undefined;
@@ -1804,7 +1799,7 @@ export function ActiveSession() {
     audio.onended = () => {
       if (seq !== audioPlaySeqRef.current) return;
       stopAudioAndSpeechDriver();
-      resumeListeningAfterTts();
+      resumeStt();
       setSpeechPulse((v) => v + 1);
       // Do NOT call recognition.start() here.
       // Recognition auto-restart is handled centrally by recognition.onend.
@@ -1821,24 +1816,19 @@ export function ActiveSession() {
         mediaErrorMessage: me?.message,
       });
       stopAudioAndSpeechDriver();
-      resumeListeningAfterTts();
+      resumeStt();
       toast.error("Audio playback failed (unsupported or interrupted).");
       opts?.onDone?.();
     };
 
     try {
-      if (recognitionRef.current && isListening) {
-        try {
-          recognitionRef.current.stop();
-        } catch {}
-      }
       await audio.play();
     } catch (e: any) {
       if (seq !== audioPlaySeqRef.current) return;
       if (e?.name === "AbortError") return;
       console.error("Audio play() failed:", e);
       stopAudioAndSpeechDriver();
-      resumeListeningAfterTts();
+      resumeStt();
       toast.error("Audio playback failed (autoplay blocked or unsupported).");
       opts?.onDone?.();
     }
@@ -1872,14 +1862,14 @@ export function ActiveSession() {
     const now = Date.now();
     if (now - lastBargeInAtRef.current < 400) return;
     lastBargeInAtRef.current = now;
-    wsAudioQueueRef.current = [];
-    wsIsPlaybackActiveRef.current = false;
-    wsTtsDoneReceivedRef.current = false;
-    wsPendingFallbackTextRef.current = "";
-    stopAudioAndSpeechDriver();
+    // Stop playback immediately, then keep the server in "speaking" state briefly
+    // to avoid echo being treated as user speech.
+    stopPlaybackAndCooldown({ sendPlaybackDone: false });
     try {
       wsClientRef.current?.sendInterrupt(source);
     } catch {}
+    // After interrupt, delay playback_done a bit (echo cooldown), then reopen STT.
+    stopPlaybackAndCooldown({ sendPlaybackDone: true });
   };
 
   const normalizeSpeech = (s: string) =>
@@ -2323,6 +2313,9 @@ export function ActiveSession() {
       setIsListening(false);
       isRecognitionActiveRef.current = false;
 
+      // While STT is suppressed (Ezri speaking / cooldown), do not restart yet.
+      if (suppressSttRef.current) return;
+
       if (
         permissionsGranted &&
         !isSessionPausedRef.current &&
@@ -2409,6 +2402,47 @@ export function ActiveSession() {
 
     return () => clearInterval(watchdog);
   }, [permissionsGranted, isListening]);
+
+  // ── Mic-level barge-in (works even when STT is paused) ───────────────────
+  useEffect(() => {
+    if (!permissionsGranted) return;
+    if (isSessionPausedRef.current) return;
+
+    let raf: number | null = null;
+    let aboveSince: number | null = null;
+
+    const THRESH = 22; // tune: higher = less sensitive
+    const HOLD_MS = 220;
+
+    const tick = () => {
+      if (isSessionEndingRef.current) return;
+      const speaking = isEzriSpeakingRef.current;
+      if (!speaking) {
+        aboveSince = null;
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+
+      const level = audioLevelForWatchdogRef.current;
+      if (level >= THRESH) {
+        if (aboveSince === null) aboveSince = performance.now();
+        const held = performance.now() - aboveSince;
+        if (held >= HOLD_MS) {
+          aboveSince = null;
+          requestBargeInInterrupt("mic_level_barge_in");
+        }
+      } else {
+        aboveSince = null;
+      }
+
+      raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [permissionsGranted]);
 
   // ── Media stream ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -2640,15 +2674,8 @@ export function ActiveSession() {
           }
         },
         onInterrupt: () => {
-          // Mirror reference behavior: stop playback now, clear queue, allow mic to reopen.
-          wsAudioQueueRef.current = [];
-          wsIsPlaybackActiveRef.current = false;
-          wsTtsDoneReceivedRef.current = false;
-          wsPendingFallbackTextRef.current = "";
-          stopAudioAndSpeechDriver();
-          try {
-            wsClientRef.current?.sendPlaybackDone();
-          } catch {}
+          // Stop playback immediately; then send playback_done after echo cooldown.
+          stopPlaybackAndCooldown({ sendPlaybackDone: true });
           setIsEzriThinking(false);
         },
         onAudio: (audio) => {
