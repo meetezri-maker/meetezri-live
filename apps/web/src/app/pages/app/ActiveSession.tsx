@@ -1868,6 +1868,15 @@ export function ActiveSession() {
 
     // Stop audio immediately and clear all queued chunks.
     stopPlaybackAndCooldown({ sendPlaybackDone: false });
+
+    // Restart the browser STT RIGHT NOW — the audio has stopped so there is no echo to
+    // suppress. Deliberately decoupled from the playback_done cooldown timer: the server's
+    // VAD needs the 200ms buffer before it opens its mic, but local STT can start
+    // immediately. Without this, STT stays dead for 350ms+ after the interrupt fires and
+    // the user's interruption words are never captured (they have already stopped speaking
+    // by the time recognition restarts).
+    resumeStt();
+
     try {
       wsClientRef.current?.sendInterrupt(source);
     } catch {}
