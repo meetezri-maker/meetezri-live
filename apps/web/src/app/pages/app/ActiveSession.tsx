@@ -1553,12 +1553,12 @@ export function ActiveSession() {
 
   const pauseStt = () => {
     suppressSttRef.current = true;
-    // Abort is more "immediate" than stop() and avoids delayed finals.
-    try {
-      if (recognitionRef.current && isRecognitionActiveRef.current) {
-        recognitionRef.current.abort?.();
-      }
-    } catch {}
+    // Do NOT abort recognition here. Killing the recognizer means it has to cold-restart
+    // when the user interrupts, causing a 150ms+ gap where their words are lost.
+    // Instead, keep it running — onresult already filters all non-barge-in results while
+    // isEzriSpeakingRef.current is true, so echo cannot leak through as user text.
+    // When the interrupt fires, isEzriSpeakingRef.current flips to false and the still-warm
+    // recognizer delivers the user's words immediately with zero restart latency.
   };
 
   const resumeStt = () => {
