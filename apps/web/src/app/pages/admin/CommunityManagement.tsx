@@ -24,6 +24,8 @@ interface ForumPost {
   id: string;
   author: string;
   authorAvatar: string;
+  authorEmail?: string;
+  authorId?: string;
   title: string;
   content: string;
   category: string;
@@ -112,11 +114,14 @@ export function CommunityManagement() {
         const authorName =
           p.profiles?.full_name?.trim() ||
           (p.profiles?.email ? p.profiles.email.split("@")[0] : "User");
+        const authorEmail = p.profiles?.email || null;
         const locked = Boolean(p.locked_at);
         return {
           id: p.id,
           author: authorName,
           authorAvatar: initials(authorName),
+          authorEmail: authorEmail || undefined,
+          authorId: p.user_id || undefined,
           title: titleFromContent(p.content || ""),
           content: p.content || "",
           category: p.community_groups?.category || p.community_groups?.name || "General",
@@ -869,6 +874,9 @@ export function CommunityManagement() {
                       </div>
                       <div>
                         <h3 className="font-bold text-lg text-gray-900">{viewingPost.author}</h3>
+                        {viewingPost.authorEmail ? (
+                          <p className="text-sm text-gray-600">{viewingPost.authorEmail}</p>
+                        ) : null}
                         <p className="text-sm text-gray-600">{viewingPost.timestamp.toLocaleString()}</p>
                       </div>
                     </div>

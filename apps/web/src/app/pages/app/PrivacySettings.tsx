@@ -67,7 +67,7 @@ export function PrivacySettings() {
   const { profile } = useAuth();
   
   const [settings, setSettings] = useState({
-    profileVisibility: "private",
+    profileVisibility: "public",
     allowAnalytics: true,
     shareProgress: false,
     allowCookies: true,
@@ -84,7 +84,7 @@ export function PrivacySettings() {
       const normalizedVisibility =
         profile.privacy_settings.profileVisibility === "friends"
           ? "private"
-          : profile.privacy_settings.profileVisibility;
+          : profile.privacy_settings.profileVisibility ?? "public";
       setSettings(prev => ({
         ...prev,
         ...profile.privacy_settings,

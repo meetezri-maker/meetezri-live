@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion } from "motion/react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { AppLayout } from "@/app/components/AppLayout";
@@ -110,12 +110,13 @@ export function Community() {
   const [newPostContent, setNewPostContent] = useState("");
   const [newPostCategory, setNewPostCategory] = useState("General Discussion");
   const [newPostTags, setNewPostTags] = useState("");
-  const [newPostGroupId, setNewPostGroupId] = useState<string>("");
+  // Group posting is admin-managed; end-users post to the main feed.
 
   const [overview, setOverview] = useState<Overview | null>(null);
   const [postsData, setPostsData] = useState<FeedPost[]>([]);
   const [groupsData, setGroupsData] = useState<FeedGroup[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingPosts, setLoadingPosts] = useState(true);
+  const [loadingMeta, setLoadingMeta] = useState(true);
   const [posting, setPosting] = useState(false);
   const [groupActionId, setGroupActionId] = useState<string | null>(null);
   const [openCommentsPostId, setOpenCommentsPostId] = useState<string | null>(null);
@@ -136,45 +137,91 @@ export function Community() {
   const [emojiPickerOpenEditByPostId, setEmojiPickerOpenEditByPostId] = useState<Record<string, boolean>>({});
   const [emojiPickerQueryEditByPostId, setEmojiPickerQueryEditByPostId] = useState<Record<string, string>>({});
 
-  const privacy = (profile?.privacy_settings || {}) as PrivacyCommunity;
-  const showDisplayName = privacy.showDisplayNameInCommunity !== false;
-  const showAvatar = privacy.showAvatarInCommunity !== false;
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadPosts = useCallback(async () => {
+    setLoadingPosts(true);
     try {
-      const [ov, posts, groups] = await Promise.all([
-        api.getCommunityOverview(),
-        api.getCommunityPosts(40),
-        api.getCommunityGroups(),
-      ]);
-      setOverview(ov as Overview);
-      setPostsData(posts as FeedPost[]);
-      setGroupsData(groups as FeedGroup[]);
+      const posts = (await api.getCommunityPosts(40)) as FeedPost[];
+      setPostsData(Array.isArray(posts) ? posts : []);
     } catch (e) {
       console.error(e);
-      toast.error("Could not load community. Try again later.");
+      toast.error("Could not load posts. Try again later.");
     } finally {
-      setLoading(false);
+      setLoadingPosts(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const loadMeta = useCallback(async (opts?: { includeGroups?: boolean }) => {
+    setLoadingMeta(true);
+    try {
+      const [ov, groups] = await Promise.all([
+        api.getCommunityOverview(),
+        opts?.includeGroups ? api.getCommunityGroups() : Promise.resolve(groupsData),
+      ]);
+      setOverview(ov as Overview);
+      if (opts?.includeGroups) setGroupsData(groups as FeedGroup[]);
+    } catch (e) {
+      console.error(e);
+      // meta is non-blocking; keep UI usable
+    } finally {
+      setLoadingMeta(false);
+    }
+  }, [groupsData]);
 
-  const persistPrivacy = async (patch: Partial<PrivacyCommunity>) => {
+  useEffect(() => {
+    // Fast: show feed ASAP, load meta in background.
+    void loadPosts();
+    void loadMeta({ includeGroups: false });
+  }, [loadPosts, loadMeta]);
+
+  const [privacyDraft, setPrivacyDraft] = useState<PrivacyCommunity>(() => {
+    const ps = (profile?.privacy_settings || {}) as PrivacyCommunity;
+    return {
+      showDisplayNameInCommunity: ps.showDisplayNameInCommunity !== false,
+      showAvatarInCommunity: ps.showAvatarInCommunity !== false,
+    };
+  });
+
+  const showDisplayName = privacyDraft.showDisplayNameInCommunity !== false;
+  const showAvatar = privacyDraft.showAvatarInCommunity !== false;
+
+  useEffect(() => {
+    const ps = (profile?.privacy_settings || {}) as PrivacyCommunity;
+    setPrivacyDraft({
+      showDisplayNameInCommunity: ps.showDisplayNameInCommunity !== false,
+      showAvatarInCommunity: ps.showAvatarInCommunity !== false,
+    });
+  }, [profile?.privacy_settings]);
+
+  const persistTimerRef = useRef<number | null>(null);
+  const pendingPrivacyRef = useRef<PrivacyCommunity | null>(null);
+
+  const flushPrivacySave = useCallback(async () => {
+    const pending = pendingPrivacyRef.current;
+    if (!pending) return;
+    pendingPrivacyRef.current = null;
     const next = {
       ...(profile?.privacy_settings as object),
-      ...patch,
+      ...pending,
     };
     try {
       await api.updateProfile({ privacy_settings: next });
-      await refreshProfile();
-      toast.success("Settings saved");
+      // Refresh in background so UI stays snappy.
+      void refreshProfile();
     } catch {
       toast.error("Failed to save settings");
     }
+  }, [profile?.privacy_settings, refreshProfile]);
+
+  const persistPrivacy = (patch: Partial<PrivacyCommunity>) => {
+    setPrivacyDraft((prev) => {
+      const next = { ...prev, ...patch };
+      pendingPrivacyRef.current = next;
+      if (persistTimerRef.current) window.clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = window.setTimeout(() => {
+        void flushPrivacySave();
+      }, 350);
+      return next;
+    });
   };
 
   const filteredPosts = useMemo(() => {
@@ -200,9 +247,7 @@ export function Community() {
     );
   }, [groupsData, searchQuery]);
 
-  const trendingTopics = overview?.trendingTags?.length
-    ? overview.trendingTags
-    : [];
+  const trendingTopics = overview?.trendingTags?.length ? overview.trendingTags : [];
 
   const getRoleBadge = (role: string) => {
     const badges = {
@@ -380,21 +425,69 @@ export function Community() {
         .map((t) => t.trim())
         .filter(Boolean)
         .slice(0, 20);
-      await api.createCommunityPost({
+      const created = (await api.createCommunityPost({
         content: newPostContent.trim(),
         tags: tags.length ? tags : undefined,
-        group_id: newPostGroupId || undefined,
-      });
-      toast.success("Post published");
+        // group_id intentionally omitted
+      })) as { id?: string; created_at?: string } | { id?: string; createdAt?: string } | any;
+
+      const createdId = String(created?.id || "");
+      const createdAtIso =
+        (created?.created_at ? new Date(created.created_at).toISOString() : null) ||
+        (created?.createdAt ? new Date(created.createdAt).toISOString() : null) ||
+        new Date().toISOString();
+
+      // Optimistic insert: show the post immediately without waiting for a full re-fetch.
+      const fullName =
+        typeof (profile as any)?.full_name === "string"
+          ? ((profile as any).full_name as string)
+          : typeof (profile as any)?.fullName === "string"
+            ? ((profile as any).fullName as string)
+            : "";
+      const avatarUrl =
+        typeof (profile as any)?.avatar_url === "string"
+          ? ((profile as any).avatar_url as string)
+          : typeof (profile as any)?.avatarUrl === "string"
+            ? ((profile as any).avatarUrl as string)
+            : null;
+      const displayName = showDisplayName ? (fullName.trim() || "Member") : "Anonymous";
+      const optimisticPost: FeedPost = {
+        id: createdId || `tmp-${Date.now()}`,
+        author: {
+          name: displayName,
+          avatarUrl: showAvatar ? avatarUrl : null,
+          role: ((profile as any)?.role === "therapist" ? "companion" : "member") as any,
+        },
+        isByCurrentUser: true,
+        authorUserId: (profile as any)?.id ?? null,
+        content: newPostContent.trim(),
+        category: newPostCategory,
+        createdAt: createdAtIso,
+        views: 0,
+        likes: 0,
+        likedByMe: false,
+        comments: 0,
+        tags: tags.length ? tags : [],
+      };
+
+      setPostsData((prev) => [optimisticPost, ...prev]);
+      setOverview((prev) => (prev ? { ...prev, posts: prev.posts + 1 } : prev));
+
       setNewPostContent("");
       setNewPostTags("");
-      setNewPostGroupId("");
       setNewPostCategory("General Discussion");
       setShowNewPostModal(false);
-      // Fast path: only refresh posts (skip overview+groups).
-      const posts = (await api.getCommunityPosts(40)) as FeedPost[];
-      setPostsData(Array.isArray(posts) ? posts : []);
-      setOverview((prev) => (prev ? { ...prev, posts: prev.posts + 1 } : prev));
+      toast.success("Post published");
+
+      // Background refresh (non-blocking) to reconcile server state (ids, tags, counts).
+      void (async () => {
+        try {
+          const posts = (await api.getCommunityPosts(40)) as FeedPost[];
+          if (Array.isArray(posts)) setPostsData(posts);
+        } catch {
+          // ignore; optimistic UI already updated
+        }
+      })();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to publish");
     } finally {
@@ -412,7 +505,8 @@ export function Community() {
         await api.joinCommunityGroup(g.id);
         toast.success(`Joined ${g.name}`);
       }
-      await loadData();
+      await loadPosts();
+      await loadMeta({ includeGroups: true });
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Could not update membership");
     } finally {
@@ -429,7 +523,7 @@ export function Community() {
       }
     : { members: 0, posts: 0, groups: 0, activeNow: 0 };
 
-  if (loading && !overview) {
+  if (loadingPosts && postsData.length === 0) {
     return (
       <AppLayout>
         <div className="min-h-[50vh] flex items-center justify-center bg-gray-50 dark:bg-slate-950">
@@ -563,7 +657,12 @@ export function Community() {
                     key={tab.id}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => {
+                      setActiveTab(tab.id);
+                      if (tab.id === "groups" && groupsData.length === 0) {
+                        void loadMeta({ includeGroups: true });
+                      }
+                    }}
                     className={`px-6 py-3 rounded-xl flex items-center gap-2 font-semibold transition-all ${
                       isActive
                         ? "bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-md"
@@ -603,7 +702,11 @@ export function Community() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:items-start">
             <div className="lg:col-span-2 space-y-6 min-w-0">
               {activeTab === "feed" &&
-                (filteredPosts.length === 0 ? (
+                (loadingPosts ? (
+                  <div className="flex justify-center py-16">
+                    <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+                  </div>
+                ) : filteredPosts.length === 0 ? (
                   <div className="text-center py-16 text-gray-500 dark:text-slate-400 rounded-2xl border border-dashed border-gray-200 dark:border-slate-700">
                     No posts yet. Be the first to share—or check back soon.
                   </div>
@@ -1256,26 +1359,7 @@ export function Community() {
                 </select>
               </div>
 
-              {groupsData.length > 0 && (
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                  <label className="text-gray-700 dark:text-slate-300 font-medium shrink-0">Group (optional):</label>
-                  <select
-                    value={newPostGroupId}
-                    onChange={(e) => setNewPostGroupId(e.target.value)}
-                    className="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:border-purple-500"
-                    disabled={posting}
-                  >
-                    <option value="">No group</option>
-                    {groupsData
-                      .filter((g) => g.privacy === "public" || g.isJoined)
-                      .map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {g.name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              )}
+              {/* Group selection removed: admins create/manage groups. */}
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                 <label className="text-gray-700 dark:text-slate-300 font-medium shrink-0">Tags:</label>

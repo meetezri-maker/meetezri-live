@@ -19,17 +19,9 @@ type PrivacyJson = {
   showDisplayNameInCommunity?: boolean;
   /** When false, avatar is hidden from community feed and public member profile for others. */
   showAvatarInCommunity?: boolean;
-  /** When private/friends, other members cannot open this user's profile from community (see Privacy Settings). */
   profileVisibility?: string;
 } | null;
 
-/** True when another member may open this user's community profile (not private). */
-function isProfileVisibleToCommunityOthers(privacy: unknown): boolean {
-  const ps = privacy as PrivacyJson;
-  const v = ps?.profileVisibility;
-  if (v === 'private' || v === 'friends') return false;
-  return true;
-}
 
 function resolveCommunityAvatarUrl(
   avatarUrl: string | null | undefined,
@@ -64,6 +56,18 @@ async function ensureCommunityPostViewsTable(): Promise<void> {
   `;
 }
 
+// Run all three DDL ensures once per server process — avoids DDL overhead on every feed request.
+let _tablesEnsuredPromise: Promise<void> | null = null;
+function ensureAllCommunityTables(): Promise<void> {
+  if (_tablesEnsuredPromise) return _tablesEnsuredPromise;
+  _tablesEnsuredPromise = Promise.all([
+    ensureCommunityPostViewsTable(),
+    ensureCommunityPostLikesTable(),
+    ensureCommunityPostAuthorSnapshotsTable(),
+  ]).then(() => undefined);
+  return _tablesEnsuredPromise;
+}
+
 function resolveAuthorDisplayName(
   fullName: string | null | undefined,
   privacy: unknown
@@ -87,16 +91,6 @@ async function ensureCommunityPostAuthorSnapshotsTable(): Promise<void> {
   `;
 }
 
-function resolveSnapshotAuthorUserId(
-  viewerUserId: string,
-  authorUserId: string,
-  privacy: unknown,
-  displayName: string
-): string | null {
-  if (displayName === 'Anonymous') return null;
-  if (viewerUserId === authorUserId) return authorUserId;
-  return isProfileVisibleToCommunityOthers(privacy) ? authorUserId : null;
-}
 
 export async function getCommunityOverview() {
   if (
@@ -135,11 +129,23 @@ export async function getCommunityOverview() {
     where: { deleted_at: null },
     orderBy: { created_at: 'desc' },
     take: 120,
-    select: { tags: true },
+    select: {
+      tags: true,
+      community_groups: { select: { category: true, name: true } },
+    },
   });
   for (const row of tagRows) {
-    for (const t of row.tags || []) {
-      const k = t.trim().toLowerCase();
+    const baseTags = Array.isArray(row.tags) ? row.tags : [];
+    const derived =
+      baseTags.length > 0
+        ? baseTags
+        : [
+            row.community_groups?.category ||
+              row.community_groups?.name ||
+              'general discussion',
+          ];
+    for (const t of derived) {
+      const k = String(t || '').trim().toLowerCase();
       if (!k) continue;
       tagCounts.set(k, (tagCounts.get(k) || 0) + 1);
     }
@@ -235,74 +241,66 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
 
   const postIds = posts.map((p) => p.id);
   const viewsByPost = new Map<string, number>();
-  if (postIds.length > 0) {
-    await ensureCommunityPostViewsTable();
-    // Single batched insert instead of N inserts (much faster).
-    // Prisma's TS overloads can be picky with nested Sql values; runtime supports this shape.
-    await (prisma as any).$executeRaw(
-      Prisma.sql`
-        INSERT INTO public.community_post_views (post_id, user_id)
-        VALUES ${Prisma.join(
-          postIds.map((postId) => Prisma.sql`(${postId}::uuid, ${userId}::uuid)`),
-          ', '
-        )}
-        ON CONFLICT (post_id, user_id) DO NOTHING
-      `
-    );
+  const likesCountByPost = new Map<string, number>();
+  const likedByCurrentUser = new Set<string>();
+  const snapshotByPostId = new Map<
+    string,
+    { author_name: string; author_avatar_url: string | null; author_user_id: string | null }
+  >();
 
+  if (postIds.length > 0) {
+    // Ensure auxiliary tables exist — runs DDL only once per server process (cached promise).
+    await ensureAllCommunityTables();
+
+    const postIdsSql = Prisma.join(postIds.map((id) => Prisma.sql`${id}::uuid`));
+
+    // Record views + fetch counts in one CTE round-trip (was 2 separate queries).
     const viewRows = await prisma.$queryRaw<Array<{ post_id: string; views: bigint }>>(
       Prisma.sql`
+        WITH _ins AS (
+          INSERT INTO public.community_post_views (post_id, user_id)
+          VALUES ${Prisma.join(
+            postIds.map((id) => Prisma.sql`(${id}::uuid, ${userId}::uuid)`),
+            ', '
+          )}
+          ON CONFLICT (post_id, user_id) DO NOTHING
+        )
         SELECT post_id, COUNT(*)::bigint AS views
         FROM public.community_post_views
-        WHERE post_id IN (${Prisma.join(postIds.map((id) => Prisma.sql`${id}::uuid`))})
+        WHERE post_id IN (${postIdsSql})
         GROUP BY post_id
       `
     );
     for (const row of viewRows) {
       viewsByPost.set(row.post_id, Number(row.views || 0));
     }
-  }
 
-  const likesCountByPost = new Map<string, number>();
-  const likedByCurrentUser = new Set<string>();
-  if (postIds.length > 0) {
-    await ensureCommunityPostLikesTable();
-    const likeCountRows = await prisma.$queryRaw<Array<{ post_id: string; c: bigint }>>(
+    // Fetch like counts + whether current user liked — one query (was 2 separate queries).
+    const likeRows = await prisma.$queryRaw<
+      Array<{ post_id: string; likes: bigint; liked_by_me: boolean }>
+    >(
       Prisma.sql`
-        SELECT post_id, COUNT(*)::bigint AS c
+        SELECT
+          post_id,
+          COUNT(*)::bigint AS likes,
+          BOOL_OR(user_id = ${userId}::uuid) AS liked_by_me
         FROM public.community_post_likes
-        WHERE post_id IN (${Prisma.join(postIds.map((id) => Prisma.sql`${id}::uuid`))})
+        WHERE post_id IN (${postIdsSql})
         GROUP BY post_id
       `
     );
-    for (const row of likeCountRows) {
-      likesCountByPost.set(row.post_id, Number(row.c));
+    for (const row of likeRows) {
+      likesCountByPost.set(row.post_id, Number(row.likes));
+      if (row.liked_by_me) likedByCurrentUser.add(row.post_id);
     }
-    const likedRows = await prisma.$queryRaw<Array<{ post_id: string }>>(
-      Prisma.sql`
-        SELECT post_id
-        FROM public.community_post_likes
-        WHERE user_id = ${userId}::uuid
-          AND post_id IN (${Prisma.join(postIds.map((id) => Prisma.sql`${id}::uuid`))})
-      `
-    );
-    for (const row of likedRows) {
-      likedByCurrentUser.add(row.post_id);
-    }
-  }
 
-  const snapshotByPostId = new Map<
-    string,
-    { author_name: string; author_avatar_url: string | null; author_user_id: string | null }
-  >();
-  if (postIds.length > 0) {
-    await ensureCommunityPostAuthorSnapshotsTable();
+    // Author snapshots.
     const rows = await prisma.$queryRaw<
       Array<{ post_id: string; author_name: string; author_avatar_url: string | null; author_user_id: string | null }>
     >(Prisma.sql`
       SELECT post_id, author_name, author_avatar_url, author_user_id
       FROM public.community_post_author_snapshots
-      WHERE post_id IN (${Prisma.join(postIds.map((id) => Prisma.sql`${id}::uuid`))})
+      WHERE post_id IN (${postIdsSql})
     `);
     for (const r of rows) {
       snapshotByPostId.set(r.post_id, {
@@ -335,14 +333,16 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
       snap?.author_avatar_url !== undefined
         ? snap.author_avatar_url
         : resolveCommunityAvatarUrl(profile?.avatar_url, profile?.privacy_settings);
-    // Important: profile link visibility should follow CURRENT privacy settings (not snapshot),
-    // otherwise old posts may still link to a profile that is now private (causing a 404 on open).
+    // Community profile link: show when the author is not posting anonymously.
+    // We intentionally ignore `profileVisibility` here — that setting controls general
+    // profile search/discovery, not community-specific visibility. The correct signal
+    // for community is `showDisplayNameInCommunity`: if the user is showing their name
+    // in community posts, they are implicitly discoverable within the community.
+    const showDisplayName = (profile?.privacy_settings as PrivacyJson)?.showDisplayNameInCommunity;
     const authorUserId =
-      displayName === 'Anonymous'
-        ? null
-        : p.user_id === userId || isProfileVisibleToCommunityOthers(profile?.privacy_settings)
-          ? p.user_id
-          : null;
+      p.user_id === userId || showDisplayName !== false
+        ? p.user_id
+        : null;
 
     return {
       id: p.id,
@@ -421,7 +421,10 @@ export async function createCommunityPost(
   await ensureCommunityPostAuthorSnapshotsTable();
   const displayName = resolveAuthorDisplayName(profile?.full_name, profile?.privacy_settings);
   const avatarUrl = resolveCommunityAvatarUrl(profile?.avatar_url, profile?.privacy_settings);
-  const authorUserId = resolveSnapshotAuthorUserId(userId, userId, profile?.privacy_settings, displayName);
+  // Snapshot: store author_user_id when user is showing their name (not anonymous).
+  // This mirrors the feed logic: profile-link visibility == showDisplayNameInCommunity.
+  const showDisplayNameSnap = (profile?.privacy_settings as PrivacyJson)?.showDisplayNameInCommunity;
+  const authorUserId = showDisplayNameSnap !== false ? userId : null;
   await prisma.$executeRaw`
     INSERT INTO public.community_post_author_snapshots (post_id, author_name, author_avatar_url, author_user_id)
     VALUES (${created.id}::uuid, ${displayName}, ${avatarUrl}, ${authorUserId}::uuid)
@@ -518,9 +521,13 @@ export async function getCommunityMemberPublicProfile(
 
   const isSelf = viewerUserId === memberUserId;
   if (!isSelf) {
-    const pv = (profile.privacy_settings as PrivacyJson)?.profileVisibility;
-    if (pv === 'private' || pv === 'friends') {
-      const err = new Error('This profile is private');
+    // Gate community profile access on whether the user shows their name in community.
+    // `profileVisibility` is intentionally NOT used here — it controls general search/discovery
+    // and was previously defaulting to "private" due to a UI bug, causing accidental lockouts.
+    // If the user posts anonymously (showDisplayNameInCommunity === false), block profile access.
+    // If not set (undefined/null) or explicitly true, allow access — user is visible in community.
+    if (ps?.showDisplayNameInCommunity === false) {
+      const err = new Error('This profile is not visible in the community');
       (err as any).statusCode = 404;
       throw err;
     }
