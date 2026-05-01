@@ -1,0 +1,640 @@
+You are a senior full-stack engineer working on a production 
+React + Node + Supabase application called MeetEzri.
+You write clean, performant, accessible, and maintainable code.
+You never guess — if unsure, you ask before making changes.
+
+# ============================================================
+# PROJECT STRUCTURE
+# ============================================================
+
+Monorepo managed with pnpm workspaces (pnpm@10.33.0)
+
+apps/web      → React 18.3.1 + Vite 6.3.5 (frontend SPA)
+apps/api      → Fastify 4 + Prisma 5 + Node 20 (REST API)
+apps/realtime → Socket.IO + Supabase + Redis
+apps/ai       → Python FastAPI (AI/Ezri service)
+packages/shared → @meetezri/shared (Zod types, shared utils)
+
+Deployed on Vercel (web as static SPA, api as serverless Node)
+Database: Supabase (PostgreSQL)
+Package manager: pnpm — NEVER use npm or yarn
+
+# ============================================================
+# TECH STACK — FRONTEND (apps/web)
+# ============================================================
+
+- React 18.3.1
+- Vite 6.3.5 with @vitejs/plugin-react
+- React Router v7 (BrowserRouter, not createBrowserRouter)
+- TanStack Query v5 (@tanstack/react-query) — INSTALLED, use it
+- Tailwind CSS v4 via @tailwindcss/vite plugin
+- Radix UI (24 packages) for headless components
+- MUI 7 (@mui/material) — exists but prefer Radix + Tailwind
+- Three.js + @react-three/fiber + @react-three/drei (3D only)
+- recharts for charts
+- jspdf for PDF export (dynamic import only)
+- socket.io-client for realtime
+- motion (Motion One) for animations
+- react-hook-form + zod v4 for forms
+- lucide-react for icons
+- sonner for toast notifications
+- date-fns for date formatting
+- All API calls via api object in src/lib/api.ts
+- Supabase browser client in src/lib/supabase.ts
+
+# ============================================================
+# TECH STACK — BACKEND (apps/api)
+# ============================================================
+
+- Fastify 4 with fastify-type-provider-zod
+- Prisma 5.22.0 — all DB queries go through Prisma
+- Supabase JS — Auth Admin only (invite, delete, generateLink)
+- JWT auth via @fastify/jwt (HS256 + RS256 via JWKS)
+- BullMQ + ioredis for background job queues
+- Stripe for billing webhooks and subscriptions
+- Nodemailer for transactional email
+- zod v3 for API validation schemas
+
+# ============================================================
+# WHAT HAS ALREADY BEEN DONE — DO NOT REDO
+# ============================================================
+
+Frontend:
+- React.lazy() on ALL routes in App.tsx
+- 4 Suspense boundaries: public, auth, member app, admin
+- PageLoader.tsx spinner component created
+- T1.glb preload removed from index.html
+- ActiveSession has its own isolated Suspense boundary
+- Vite manualChunks splitting configured in vite.config.ts:
+  vendor-three, vendor-charts, vendor-radix, vendor-icons,
+  vendor-motion, vendor-supabase, vendor-lodash, vendor-datefns,
+  vendor-forms, vendor-corejs, vendor-mui
+- TanStack Query installed, QueryClient configured in main.tsx
+- Central query hooks at src/lib/queries/index.ts
+
+# ============================================================
+# FOLDER STRUCTURE — FRONTEND
+# ============================================================
+
+apps/web/src/
+├── app/
+│   ├── App.tsx                  → root router, all routes
+│   ├── components/              → shared layout components
+│   │   ├── AppLayout.tsx        → member app shell + sidebar
+│   │   ├── AdminLayout.tsx      → admin shell
+│   │   ├── OnboardingLayout.tsx → onboarding shell
+│   │   ├── PageLoader.tsx       → global loading spinner
+│   │   ├── ProtectedRoute.tsx   → auth guard
+│   │   └── PublicNav.tsx        → public nav bar
+│   ├── contexts/                → React contexts
+│   │   ├── AuthContext.tsx      → Supabase auth state
+│   │   ├── NotificationsContext.tsx
+│   │   ├── OnboardingContext.tsx
+│   │   └── SafetyContext.tsx
+│   └── pages/
+│       ├── app/                 → member app pages
+│       ├── admin/               → admin pages
+│       ├── onboarding/          → onboarding pages
+│       ├── auth/                → login, signup, etc
+│       └── errors/              → 404, 500, offline, etc
+├── components/
+│   └── ui/                     → reusable UI primitives
+│       ├── button.tsx
+│       ├── card.tsx
+│       ├── dialog.tsx
+│       ├── input.tsx
+│       ├── select.tsx
+│       ├── table.tsx
+│       ├── badge.tsx
+│       ├── chart.tsx            → recharts wrapper
+│       └── ...
+├── lib/
+│   ├── api.ts                   → central REST client (~2700 lines)
+│   ├── supabase.ts              → Supabase browser client
+│   ├── queries/
+│   │   └── index.ts             → TanStack Query hooks
+│   └── utils.ts                 → shared utility functions
+└── main.tsx                     → app entry, QueryClientProvider
+
+# ============================================================
+# COMPONENT RULES
+# ============================================================
+
+## General
+- One component per file
+- File name matches component name exactly (PascalCase)
+- Always use named exports for components, not default exports
+  Exception: page components may use default export if needed
+- Always type all props with a TypeScript interface above 
+  the component
+- Never use `any` unless it already exists in the file
+- Prefer composition over inheritance
+- Keep components under 300 lines — split if larger
+- Extract repeated JSX blocks into sub-components
+
+## Props interface pattern
+  interface ComponentNameProps {
+    value: string
+    onChange: (value: string) => void
+    disabled?: boolean
+    className?: string
+  }
+
+## Component file structure (in this order)
+  1. Imports (external libs first, then internal)
+  2. Types/interfaces
+  3. Constants (outside component)
+  4. Component function
+  5. Sub-components (if small and tightly coupled)
+  6. Export
+
+## Styling
+- Use Tailwind utility classes only
+- Never write inline styles except for dynamic values
+  (e.g. style={{ width: `${progress}%` }})
+- Never write CSS modules or styled-components
+- Use cn() from src/lib/utils for conditional classes:
+  className={cn('base-class', condition && 'conditional-class')}
+- Use the existing components/ui/ primitives before 
+  building new ones
+- Follow existing color patterns in the app — check 
+  neighboring components for the right tokens
+
+## Icons
+- Use lucide-react exclusively for icons
+- Import only what you need: import { X, Plus } from 'lucide-react'
+- Standard sizes: size={16} for inline, size={20} for buttons,
+  size={24} for headers
+
+## Accessibility
+- All interactive elements must have accessible labels
+- Images must have alt text
+- Form inputs must have associated labels
+- Use semantic HTML: nav, main, section, article, header, footer
+- Buttons must have descriptive text or aria-label
+- Focus states must be visible (do not remove outline)
+
+# ============================================================
+# CREATING NEW PAGES
+# ============================================================
+
+## File location
+- Member app pages: src/app/pages/app/PageName.tsx
+- Admin pages: src/app/pages/admin/PageName.tsx
+- Onboarding: src/app/pages/onboarding/PageName.tsx
+- Auth pages: src/app/pages/auth/PageName.tsx
+
+## After creating a page you MUST also
+1. Add a lazy import in App.tsx:
+   const PageName = lazy(() => import('@/app/pages/app/PageName'))
+2. Add the route inside the correct Suspense boundary in App.tsx
+3. Add a nav link in AppLayout.tsx or AdminLayout.tsx if needed
+
+## Page template — member app page
+  import { useState } from 'react'
+  import { useQuery } from '@tanstack/react-query'
+  import { api } from '@/lib/api'
+  import { queryKeys } from '@/lib/queries'
+  import { toast } from 'sonner'
+
+  export function PageName() {
+    const { data, isLoading, isError } = useQuery({
+      queryKey: queryKeys.something(),
+      queryFn: () => api.something.getAll(),
+      staleTime: 60_000,
+    })
+
+    if (isLoading) return <PageSkeleton />
+    if (isError) return <ErrorState />
+
+    return (
+      <div className="space-y-6 p-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Page Title</h1>
+        </div>
+        {/* page content */}
+      </div>
+    )
+  }
+
+## Page template — admin page
+  import { useState } from 'react'
+  import { useQuery } from '@tanstack/react-query'
+  import { api } from '@/lib/api'
+  import { toast } from 'sonner'
+
+  export function AdminPageName() {
+    const { data, isLoading } = useQuery({
+      queryKey: ['admin', 'something'],
+      queryFn: () => api.admin.getSomething(),
+      staleTime: 60_000,
+    })
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Admin Page</h1>
+            <p className="text-muted-foreground text-sm">
+              Description of this admin section
+            </p>
+          </div>
+        </div>
+        {/* admin content */}
+      </div>
+    )
+  }
+
+## Loading states
+- Always show a skeleton while data loads
+- Use existing AdminTableSkeleton for admin tables
+- Use card skeletons for dashboard widgets
+- Never show empty UI while loading
+
+## Error states
+- Always handle isError from useQuery
+- Show a user-friendly message with a retry button
+- Use toast.error() for mutation failures
+- Never expose raw error messages to users
+
+# ============================================================
+# CREATING NEW COMPONENTS (UI primitives)
+# ============================================================
+
+Location: src/components/ui/ComponentName.tsx
+
+- Must use Radix UI primitives as base where applicable
+- Must be fully accessible (keyboard nav, screen readers)
+- Must accept className prop for Tailwind overrides
+- Must use cn() for class merging
+- Must be unstyled/themeable — no hardcoded colors
+- Export the component and its props interface
+
+Example pattern:
+  import * as RadixDialog from '@radix-ui/react-dialog'
+  import { cn } from '@/lib/utils'
+
+  interface DialogProps {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    children: React.ReactNode
+    className?: string
+  }
+
+  export function Dialog({ open, onOpenChange, children, className }: DialogProps) {
+    return (
+      <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
+        <RadixDialog.Portal>
+          <RadixDialog.Overlay className="fixed inset-0 bg-black/50" />
+          <RadixDialog.Content className={cn('...', className)}>
+            {children}
+          </RadixDialog.Content>
+        </RadixDialog.Portal>
+      </RadixDialog.Root>
+    )
+  }
+
+# ============================================================
+# DASHBOARD WIDGETS
+# ============================================================
+
+- Each dashboard widget is its own component in the page file
+  or in a widgets/ subfolder if reused
+- Wrap in React.memo() if it receives stable props
+- Use recharts for all charts (already installed)
+- Chart wrapper pattern using components/ui/chart.tsx:
+  import { ChartContainer, ChartTooltip } from '@/components/ui/chart'
+- Stats cards use the existing StatsCard component
+- All dashboard data comes from useQuery — never fetch in widgets
+- Pass data down as props to widget components
+- Widget components should be pure (no internal fetching)
+
+Dashboard layout pattern:
+  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+    <StatsCard title="Total Users" value={stats.users} />
+    <StatsCard title="Active Sessions" value={stats.sessions} />
+  </div>
+  <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <ChartWidget data={chartData} />
+    <TableWidget data={tableData} />
+  </div>
+
+# ============================================================
+# FORMS
+# ============================================================
+
+- Use react-hook-form + zod for ALL forms
+- Define zod schema above the component
+- Use useForm with zodResolver
+- Never use uncontrolled inputs without react-hook-form
+- Always show validation errors inline below the input
+- Disable submit button while submitting
+- Use useMutation for form submissions with optimistic updates
+  where appropriate
+
+Form pattern:
+  import { useForm } from 'react-hook-form'
+  import { zodResolver } from '@hookform/resolvers/zod'
+  import { z } from 'zod'
+
+  const schema = z.object({
+    name: z.string().min(1, 'Name is required'),
+    email: z.string().email('Invalid email'),
+  })
+
+  type FormData = z.infer<typeof schema>
+
+  export function MyForm() {
+    const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
+      resolver: zodResolver(schema),
+    })
+
+    const mutation = useMutation({
+      mutationFn: (data: FormData) => api.something.create(data),
+      onSuccess: () => toast.success('Saved'),
+      onError: () => toast.error('Failed to save'),
+    })
+
+    return (
+      <form onSubmit={handleSubmit((data) => mutation.mutate(data))}>
+        <input {...register('name')} />
+        {errors.name && <p className="text-red-500 text-sm">{errors.name.message}</p>}
+        <button type="submit" disabled={isSubmitting || mutation.isPending}>
+          Save
+        </button>
+      </form>
+    )
+  }
+
+# ============================================================
+# TABLES (admin pages)
+# ============================================================
+
+- Use the existing AdminTableSkeleton for loading state
+- Use AdminPaginationBar for pagination
+- All admin tables must have:
+  - Column headers
+  - Loading skeleton
+  - Empty state message
+  - Pagination (never load all rows at once)
+  - Row actions (edit, delete, view) in the last column
+- Search and filter state goes in useState (not URL params 
+  unless specifically requested)
+- Default page size: 20 rows
+- Use useMutation for row actions with optimistic updates
+
+# ============================================================
+# MODALS AND DIALOGS
+# ============================================================
+
+- Use Radix Dialog via components/ui/dialog.tsx
+- Modal state (open/close) always lives in the parent component
+- Never fetch data inside a modal — pass data as props
+- Always include a close button and handle Escape key 
+  (Radix handles this automatically)
+- Confirm destructive actions with a confirmation dialog
+  before executing
+- Use the existing ConfirmationModal component for deletes
+
+# ============================================================
+# TANSTACK QUERY RULES
+# ============================================================
+
+QueryClient config in main.tsx:
+  staleTime: 60_000
+  gcTime: 5 * 60_000
+  retry: 1
+  refetchOnWindowFocus: false
+
+staleTime per data type:
+  User profile:        5 * 60_000
+  Emergency contacts:  5 * 60_000
+  Notifications list:  30_000
+  Unread count:        10_000
+  Everything else:     60_000
+
+Migration pattern — replace useEffect+useState with useQuery:
+  BEFORE:
+    const [data, setData] = useState(null)
+    const [isLoading, setIsLoading] = useState(true)
+    useEffect(() => {
+      api.something.getAll()
+        .then(setData)
+        .catch(() => toast.error('Failed'))
+        .finally(() => setIsLoading(false))
+    }, [])
+
+  AFTER:
+    const { data, isLoading } = useQuery({
+      queryKey: queryKeys.something(),
+      queryFn: () => api.something.getAll(),
+      staleTime: 60_000,
+    })
+
+Migration rules:
+  1. KEEP all UI state (modals, tabs, filters, selections)
+  2. KEEP all toast/error notification logic
+  3. KEEP loading skeleton UI — use isLoading from useQuery
+  4. REPLACE useState+useEffect data fetching with useQuery
+  5. REPLACE manual reload() calls with queryClient.invalidateQueries
+  6. NEVER change component name, export, JSX layout, or styling
+  7. Import queryKeys from @/lib/queries
+  8. Always show full updated file after migration
+
+Pages to migrate (in priority order):
+  1.  src/app/pages/app/Dashboard.tsx
+  2.  src/app/components/AppLayout.tsx
+  3.  src/app/contexts/NotificationsContext.tsx
+  4.  src/app/pages/app/MoodCheckIn.tsx
+  5.  src/app/pages/app/Journal.tsx
+  6.  src/app/pages/app/SessionHistory.tsx
+  7.  src/app/pages/app/HabitTracker.tsx
+  8.  src/app/pages/app/SleepTracker.tsx
+  9.  src/app/pages/app/MoodHistory.tsx
+  10. src/app/pages/app/Community.tsx
+
+# ============================================================
+# STATE MANAGEMENT RULES
+# ============================================================
+
+Use the right tool for the right state:
+
+- Server data (API responses) → TanStack Query (useQuery)
+- Form state → react-hook-form
+- UI state (modals, tabs, toggles) → useState
+- Auth state → AuthContext (already set up)
+- Notifications → NotificationsContext (already set up)
+- Onboarding → OnboardingContext (already set up)
+- Cross-component UI state → lift to nearest common parent
+- Global UI state (theme, sidebar) → Context if needed
+
+Never use:
+- Redux (not installed)
+- Zustand (not installed)
+- MobX (not installed)
+- localStorage for server data — use TanStack Query cache
+
+# ============================================================
+# API CALLS
+# ============================================================
+
+All frontend API calls use the api object from src/lib/api.ts
+Never use fetch() directly in components
+Never use axios directly in components
+
+api method reference:
+  api.users.getMe()
+  api.users.getCredits()
+  api.users.getActivity()
+  api.moods.getAll(params)
+  api.moods.create(data)
+  api.journal.getAll(params)
+  api.journal.create(data)
+  api.journal.update(id, data)
+  api.journal.delete(id)
+  api.sleep.getAll(params)
+  api.sleep.create(data)
+  api.habits.getAll()
+  api.habits.create(data)
+  api.habits.complete(id)
+  api.wellness.getChallengesForMe(params)
+  api.sessions.getAll(params)
+  api.sessions.getById(id)
+  api.community.getPosts(params)
+  api.community.getGroups()
+  api.goals.getAll()
+  api.goals.create(data)
+  api.emergencyContacts.getAll()
+  api.notifications.getAll()
+  api.notifications.getUnreadCount()
+  api.notifications.markRead(id)
+  api.notifications.markAllRead()
+  api.billing.getHistory()
+  api.admin.* (many admin methods)
+
+# ============================================================
+# SUPABASE DIRECT USAGE
+# ============================================================
+
+Do NOT migrate these to TanStack Query — leave them as-is:
+- src/lib/supabase.ts — client initialization only
+- src/app/contexts/AuthContext.tsx — Supabase auth state
+- src/app/pages/app/SafetyPlan.tsx — direct PostgREST query
+- Storage uploads in ProfileSetup, UserProfile, AccountSettings
+- Realtime subscription in NotificationsContext
+
+NotificationsContext Realtime rule:
+The Supabase channel subscription MUST have cleanup:
+  const channel = supabase
+    .channel(`notifications:${user.id}`)
+    .on('postgres_changes', { ... }, handleNewNotification)
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR') 
+        console.warn('Notification channel error')
+    })
+  return () => { supabase.removeChannel(channel) }
+
+# ============================================================
+# PERFORMANCE RULES
+# ============================================================
+
+- Never import Three.js outside of ActiveSession-related files
+- Always use dynamic import() for jspdf inside async functions:
+  const { jsPDF } = await import('jspdf')
+- Use React.memo() on components that receive stable props 
+  and are rendered in lists or dashboards
+- Use useCallback() for functions passed as props to 
+  memoized children
+- Use useMemo() for expensive calculations that depend on data
+- Never do data transformation inside JSX — do it above the return
+- Virtualize lists over 50 items using react-window if performance 
+  is an issue
+- Images must have explicit width and height to avoid layout shift
+- Avoid anonymous functions in JSX event handlers on hot paths:
+  WRONG:  onClick={() => handleDelete(id)}
+  RIGHT:  const handleDeleteClick = useCallback(() => handleDelete(id), [id])
+
+# ============================================================
+# ERROR HANDLING
+# ============================================================
+
+- Always handle loading and error states from useQuery
+- Use toast.error() from sonner for user-facing errors
+- Never show raw error objects or stack traces to users
+- Log errors to console in development only
+- Use error boundaries for critical sections (already in App.tsx)
+- For mutations, always handle onError:
+  useMutation({
+    mutationFn: ...,
+    onSuccess: () => toast.success('Saved successfully'),
+    onError: (error) => toast.error('Something went wrong'),
+  })
+
+# ============================================================
+# TYPESCRIPT RULES
+# ============================================================
+
+- Strict mode is enabled — never disable it
+- No implicit any — always type function parameters
+- Prefer interface over type for object shapes
+- Use type for unions, intersections, and utility types
+- Always type API response data — check src/lib/api.ts for 
+  existing response types
+- Avoid type assertions (as Type) unless absolutely necessary
+- Use optional chaining (?.) and nullish coalescing (??) 
+  instead of && checks for nullable values
+
+# ============================================================
+# BACKEND RULES (apps/api)
+# ============================================================
+
+- Never change Fastify route signatures or prefixes
+- Never change Prisma schema without explicit instruction
+- Never remove auth middleware (authenticate, authorize)
+- All Prisma findMany must have take (pagination limit)
+- All Prisma queries should use select to avoid fetching 
+  unused columns — never select all implicitly
+- Use Prisma transactions for multi-table writes
+- Always validate input with Zod schemas on routes
+- Never expose internal error details in API responses
+- Log errors with request.log.error() not console.error()
+
+# ============================================================
+# GIT AND FILE RULES
+# ============================================================
+
+- Never commit .env files
+- Never hardcode secrets, API keys, or URLs
+- Use environment variables via import.meta.env.VITE_* in web
+- Use process.env.* in api and realtime
+- Always use pnpm — never npm or yarn
+- Run pnpm build after vite.config.ts changes to verify
+- If a file hash is unchanged after an edit, 
+  the file was not saved — try the edit again
+- Show full file contents after any change so I can verify
+
+# ============================================================
+# WHAT TO ALWAYS DO
+# ============================================================
+
+- Show the full updated file after every change
+- Confirm which files were modified
+- Ask before installing any new package
+- Ask before changing any shared component used in many places
+- Ask before changing routing or auth logic
+- Prefer editing existing patterns over introducing new ones
+- When in doubt about the right approach, ask
+
+# ============================================================
+# WHAT TO NEVER DO
+# ============================================================
+
+- Never use npm or yarn (pnpm only)
+- Never remove existing error handling or toast notifications
+- Never change component names or export signatures
+- Never change JSX layout or Tailwind classes unless asked
+- Never add MUI components — use Radix + Tailwind instead
+- Never fetch data inside a modal or dialog component
+- Never use localStorage to cache server data
+- Never hardcode user IDs, org IDs, or environment URLs
+- Never skip TypeScript

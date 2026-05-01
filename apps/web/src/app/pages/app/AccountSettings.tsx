@@ -24,6 +24,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { AppLayout } from "@/app/components/AppLayout";
+import { PasswordStrengthMeter } from "@/app/components/ui/PasswordStrengthMeter";
 import { api } from "@/lib/api";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { toast } from "sonner";
@@ -2071,6 +2072,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                       onChange={(e) => setPasswordState({...passwordState, newPassword: e.target.value})}
                       className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
                     />
+                    <PasswordStrengthMeter password={passwordState.newPassword} />
                   </div>
 
                   <div>

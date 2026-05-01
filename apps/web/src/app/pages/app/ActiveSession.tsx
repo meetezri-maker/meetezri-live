@@ -465,6 +465,15 @@ function ThreeAvatar({
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     rendererRef.current = renderer;
 
+    // Make the canvas fill the container exactly so it never overflows (which
+    // would clip the top of the avatar under the parent's overflow-hidden).
+    renderer.domElement.style.display = "block";
+    renderer.domElement.style.position = "absolute";
+    renderer.domElement.style.top = "0";
+    renderer.domElement.style.left = "0";
+    renderer.domElement.style.width = "100%";
+    renderer.domElement.style.height = "100%";
+
     container.appendChild(renderer.domElement);
 
     // Lights
@@ -519,6 +528,11 @@ function ThreeAvatar({
           if (child.isMesh) {
             child.castShadow = true;
             child.receiveShadow = true;
+            // Skinned meshes have stale bounding spheres after the model is
+            // repositioned/scaled, causing Three.js frustum culling to
+            // incorrectly discard them (head and other parts disappear).
+            // Disabling frustum culling is the standard fix for GLB avatars.
+            child.frustumCulled = false;
 
             const dict = child.morphTargetDictionary as
               | Record<string, number>
@@ -682,6 +696,12 @@ function ThreeAvatar({
           console.warn("[Avatar] No blink morphs or eyelid bones found.");
         }
 
+        // Apply export-orientation correction BEFORE framing so the bounding
+        // box is computed on the correctly-oriented model.
+        if (viewTuning.modelRotationX) model.rotation.x = viewTuning.modelRotationX;
+        if (viewTuning.modelRotationY) model.rotation.y = viewTuning.modelRotationY;
+        if (viewTuning.modelRotationZ) model.rotation.z = viewTuning.modelRotationZ;
+
         // Center and frame model
         const box = new THREE.Box3().setFromObject(model);
         const size = new THREE.Vector3();
@@ -692,9 +712,12 @@ function ThreeAvatar({
 
         model.position.sub(center);
 
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const baseScale =
-          (4.5 / maxDim) * viewTuning.scaleMultiplier;
+        // When showing a portrait (cameraDistanceMultiplier < 1), scale by the
+        // model's HEIGHT only — not the widest dimension. This prevents T-pose
+        // arm-spans from shrinking the model and pushing the head out of frame.
+      
+        const scaleDim = size.y; // Always scale by height for portrait framing
+        const baseScale = (4.5 / scaleDim) * viewTuning.scaleMultiplier;
         baseScaleRef.current = baseScale;
         model.scale.setScalar(baseScale);
         model.position.y += viewTuning.offsetY;
@@ -708,19 +731,49 @@ function ThreeAvatar({
         scaledBox.getSize(scaledSize);
         scaledBox.getCenter(scaledCenter);
 
+        // Try to find the head bone so the camera looks exactly at the face
+        // instead of relying on a guessed fraction of model height.
+        let headBone: THREE.Object3D | null = null;
+        model.traverse((child: THREE.Object3D) => {
+          if ((child as any).isBone && !headBone) {
+            const n = child.name.toLowerCase();
+            if (/\bhead\b/.test(n)) headBone = child;
+          }
+        });
+        // Second pass: looser match if strict "head" wasn't found
+        if (!headBone) {
+          model.traverse((child: THREE.Object3D) => {
+            if ((child as any).isBone && !headBone) {
+              const n = child.name.toLowerCase();
+              if (n.includes("head") || n.includes("skull") || n.includes("cranium")) {
+                headBone = child;
+              }
+            }
+          });
+        }
+
+        let lookAtY: number;
+        if (headBone) {
+          // Get the head bone world position after all transforms are applied
+          const headPos = new THREE.Vector3();
+          (headBone as THREE.Object3D).updateWorldMatrix(true, false);
+          (headBone as THREE.Object3D).getWorldPosition(headPos);
+          // Aim slightly above the head-bone pivot (the pivot is typically at
+          // the base of the skull; we add 8% of model height to reach the face).
+          lookAtY = headPos.y + scaledSize.y * 0.08;
+        } else {
+          // Fallback: fraction-based estimate
+          lookAtY = scaledCenter.y + scaledSize.y * viewTuning.lookAtYOffsetFraction;
+        }
+
         const portraitHeight = scaledSize.y * 0.98;
         const fovRad = (camera.fov * Math.PI) / 180;
         const distance =
           (portraitHeight / 2 / Math.tan(fovRad / 2)) *
           viewTuning.cameraDistanceMultiplier;
-        const lookAtY =
-          scaledCenter.y +
-          scaledSize.y * viewTuning.lookAtYOffsetFraction;
 
-        camera.position.set(scaledCenter.x, lookAtY, distance * 1);
-        camera.lookAt(
-          new THREE.Vector3(scaledCenter.x, lookAtY, scaledCenter.z)
-        );
+        camera.position.set(scaledCenter.x, lookAtY, distance);
+        camera.lookAt(new THREE.Vector3(scaledCenter.x, lookAtY, scaledCenter.z));
         camera.updateProjectionMatrix();
 
         if (!cancelled) {
@@ -742,8 +795,11 @@ function ThreeAvatar({
       const cam = cameraRef.current;
       if (!c || !r || !cam) return;
 
-      const w = c.clientWidth || 800;
-      const h = c.clientHeight || 600;
+      // Use getBoundingClientRect so we always get the CSS-rendered size,
+      // not the canvas pixel size (which can differ after CSS 100% scaling).
+      const rect = c.getBoundingClientRect();
+      const w = rect.width || c.clientWidth || 800;
+      const h = rect.height || c.clientHeight || 600;
 
       cam.aspect = w / h;
       cam.updateProjectionMatrix();
@@ -1287,7 +1343,7 @@ function ThreeAvatar({
     };
   }, [isSpeaking, audioLevel, speechText, speechCharIndex]);
   return (
-    <div className="relative w-full h-full min-h-[500px]">
+    <div className="relative w-full h-full">
       {avatarLoadState === "loading" && (
         <div
           className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl bg-gradient-to-b from-slate-900/95 to-purple-950/90 px-6 text-center"
@@ -1315,9 +1371,10 @@ function ThreeAvatar({
           </p>
         </div>
       )}
+      {/* position: relative so the absolute canvas stays clipped to this box */}
       <div
         ref={containerRef}
-        className={`h-full min-h-[500px] w-full ${
+        className={`relative h-full w-full ${
           avatarLoadState !== "ready" ? "opacity-0" : "opacity-100"
         }`}
       />

@@ -4,6 +4,7 @@ import { Card } from "../components/ui/card";
 import { Label } from "../components/ui/label";
 import { useNavigate, useLocation } from "react-router-dom";
 import { KeyRound, CheckCircle, Mail, Loader2 } from "lucide-react";
+import { PasswordStrengthMeter } from "../components/ui/PasswordStrengthMeter";
 import { PublicNav } from "../components/PublicNav";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
@@ -212,6 +213,7 @@ export function InviteCreatePassword() {
                   disabled={isLoading}
                   autoComplete="new-password"
                 />
+                <PasswordStrengthMeter password={password} />
               </div>
 
               <div className="space-y-2">

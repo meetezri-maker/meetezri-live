@@ -7,6 +7,7 @@ import { Link, useLocation } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { Video, Heart, BookOpen, TrendingUp, Calendar, Sparkles, ArrowRight, Award, Target, Flame, Clock, Zap, Mail } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { WellnessChallenges } from "../../components/WellnessChallenges";
 import { PWAInstallPrompt } from "../../components/PWAInstallPrompt";
@@ -22,6 +23,7 @@ import {
   DialogFooter,
 } from "../../components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
+import { queryKeys } from "@/lib/queries";
 
 interface BackendSession {
   id: string;
@@ -38,14 +40,11 @@ interface BackendSession {
 export function Dashboard() {
   const location = useLocation();
   const { user, profile, refreshProfile } = useAuth();
-  const [upcomingSessionsCount, setUpcomingSessionsCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+
+  // UI-only state — no fetched data here
   const [confirmEmailDismissed, setConfirmEmailDismissed] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [cancelSubscriptionLoading, setCancelSubscriptionLoading] = useState(false);
-  const [activityFeed, setActivityFeed] = useState<
-    Array<{ id: string; type: string; text: string; time: string; emoji: string }>
-  >([]);
 
   const rawSignupType =
     (user as any)?.user_metadata?.signup_type ??
@@ -105,30 +104,107 @@ export function Dashboard() {
     }
   };
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const sessionsRaw = await api.sessions.list({ status: "scheduled" });
-        const sessions = Array.isArray(sessionsRaw)
-          ? (sessionsRaw as BackendSession[])
-          : Array.isArray((sessionsRaw as { sessions?: unknown })?.sessions)
-            ? ((sessionsRaw as { sessions: BackendSession[] }).sessions)
-            : [];
-        const now = new Date();
-        const nonExpired = sessions.filter((session) => {
-          const scheduledDate = session.scheduled_at ? new Date(session.scheduled_at) : null;
-          if (!scheduledDate) return false;
-          return scheduledDate.getTime() >= now.getTime() && session.status === "scheduled";
-        });
-        setUpcomingSessionsCount(nonExpired.length);
-      } catch (error) {
-        console.error("Failed to fetch upcoming sessions", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadData();
-  }, []);
+  // --- Sessions query (replaces useState + useEffect) ---
+  const { data: sessionsRaw, isLoading } = useQuery({
+    queryKey: queryKeys.sessions.list({ status: "scheduled" }),
+    queryFn: () => api.sessions.list({ status: "scheduled" }),
+    staleTime: 60_000,
+  });
+
+  const upcomingSessionsCount = (() => {
+    const sessions = Array.isArray(sessionsRaw)
+      ? (sessionsRaw as BackendSession[])
+      : Array.isArray((sessionsRaw as { sessions?: unknown })?.sessions)
+        ? ((sessionsRaw as { sessions: BackendSession[] }).sessions)
+        : [];
+    const now = new Date();
+    return sessions.filter((session) => {
+      const scheduledDate = session.scheduled_at ? new Date(session.scheduled_at) : null;
+      if (!scheduledDate) return false;
+      return scheduledDate.getTime() >= now.getTime() && session.status === "scheduled";
+    }).length;
+  })();
+
+  // --- Credits query (replaces useState + useEffect) ---
+  const { data: creditsData } = useQuery({
+    queryKey: queryKeys.credits.byUser(user?.id),
+    queryFn: () => api.getCredits() as Promise<{
+      credits_seconds?: number;
+      credits?: number;
+      subscription_total_seconds?: number;
+      subscription_total?: number;
+      purchased_seconds?: number;
+      purchased?: number;
+    }>,
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  });
+
+  const liveCreditsSeconds = creditsData
+    ? typeof creditsData.credits_seconds === "number"
+      ? Math.max(0, creditsData.credits_seconds)
+      : typeof creditsData.credits === "number"
+      ? Math.max(0, creditsData.credits) * 60
+      : null
+    : null;
+
+  const liveCreditsTotalSeconds = (() => {
+    if (!creditsData) return null;
+    const totalSeconds =
+      typeof creditsData.subscription_total_seconds === "number"
+        ? Math.max(0, creditsData.subscription_total_seconds)
+        : typeof creditsData.subscription_total === "number"
+        ? Math.max(0, creditsData.subscription_total) * 60
+        : null;
+    const purchasedSecondsValue =
+      typeof creditsData.purchased_seconds === "number"
+        ? Math.max(0, creditsData.purchased_seconds)
+        : typeof creditsData.purchased === "number"
+        ? Math.max(0, creditsData.purchased) * 60
+        : 0;
+    return totalSeconds !== null ? totalSeconds + purchasedSecondsValue : null;
+  })();
+
+  const liveCreditsTotalMinutes =
+    liveCreditsTotalSeconds !== null ? Math.ceil(liveCreditsTotalSeconds / 60) : null;
+
+  // --- Activity query (replaces useState + useEffect) ---
+  const { data: activityRaw } = useQuery({
+    queryKey: queryKeys.activity.recent(user?.id),
+    queryFn: () => api.getRecentActivity(20) as Promise<unknown>,
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  });
+
+  const emojiForActivityType = (type: string) => {
+    if (type === "mood") return "😊";
+    if (type === "journal") return "📓";
+    if (type === "session") return "🎥";
+    if (type === "event") return "⚡";
+    return "📝";
+  };
+
+  const activityFeed = (() => {
+    const rows = Array.isArray(activityRaw)
+      ? (activityRaw as Array<{ id: string; type: string; text: string; created_at: string; mood?: string }>)
+      : Array.isArray((activityRaw as { items?: unknown })?.items)
+        ? ((activityRaw as { items: Array<{ id: string; type: string; text: string; created_at: string; mood?: string }> }).items)
+        : [];
+    return rows.slice(0, 10).map((row) => {
+      const created = row.created_at ? new Date(row.created_at) : null;
+      const timeOk = created && !Number.isNaN(created.getTime());
+      return {
+        id: row.id,
+        type: row.type,
+        text: row.text,
+        time: timeOk ? formatDistanceToNow(created!, { addSuffix: true }) : "Recently",
+        emoji:
+          row.type === "mood" && row.mood
+            ? getMoodEmoji(row.mood)
+            : emojiForActivityType(row.type),
+      };
+    });
+  })();
 
   const firstName = profile?.full_name?.split(" ")[0] || "Friend";
   const optimisticMood = resolveLatestMoodFromClient();
@@ -141,6 +217,7 @@ export function Dashboard() {
       window.sessionStorage.removeItem("ezri_latest_mood_checkin");
     }
   }, [optimisticMood, profile?.current_mood]);
+
   const streakDays = profile?.streak_days || 0;
   
   // Real data from backend
@@ -149,9 +226,6 @@ export function Dashboard() {
   const creditsTotal =
     profile?.credits_total != null ? profile.credits_total : 200;
   const userPlan = profile?.subscription_plan || "Basic Plan";
-  const [liveCreditsSeconds, setLiveCreditsSeconds] = useState<number | null>(null);
-  const [liveCreditsTotalSeconds, setLiveCreditsTotalSeconds] = useState<number | null>(null);
-  const [liveCreditsTotalMinutes, setLiveCreditsTotalMinutes] = useState<number | null>(null);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -160,62 +234,6 @@ export function Dashboard() {
       .toString()
       .padStart(2, "0")}`;
   };
-
-  useEffect(() => {
-    const loadCredits = async () => {
-      try {
-        const {
-          credits_seconds,
-          credits,
-          subscription_total_seconds,
-          subscription_total,
-          purchased_seconds,
-          purchased,
-        } = (await api.getCredits()) as {
-          credits_seconds?: number;
-          credits?: number;
-          subscription_total_seconds?: number;
-          subscription_total?: number;
-          purchased_seconds?: number;
-          purchased?: number;
-        };
-        const seconds =
-          typeof credits_seconds === "number"
-            ? Math.max(0, credits_seconds)
-            : typeof credits === "number"
-                ? Math.max(0, credits) * 60
-                : null;
-        setLiveCreditsSeconds(seconds);
-        const totalSeconds =
-          (typeof subscription_total_seconds === "number"
-            ? Math.max(0, subscription_total_seconds)
-            : typeof subscription_total === "number"
-            ? Math.max(0, subscription_total) * 60
-            : null);
-        const purchasedSecondsValue =
-          (typeof purchased_seconds === "number"
-            ? Math.max(0, purchased_seconds)
-            : typeof purchased === "number"
-            ? Math.max(0, purchased) * 60
-            : 0);
-        if (totalSeconds !== null) {
-          const combined = totalSeconds + purchasedSecondsValue;
-          setLiveCreditsTotalSeconds(combined);
-          setLiveCreditsTotalMinutes(Math.ceil(combined / 60));
-        } else {
-          setLiveCreditsTotalSeconds(null);
-          setLiveCreditsTotalMinutes(null);
-        }
-      } catch (e) {
-        // Fall back to profile-derived fields below
-        setLiveCreditsSeconds(null);
-        setLiveCreditsTotalSeconds(null);
-        setLiveCreditsTotalMinutes(null);
-      }
-    };
-    void loadCredits();
-    // Profile already supplies credit fallbacks; avoid re-fetching /users/credits when profile fields hydrate.
-  }, [user?.id]);
 
   const creditsRemainingSeconds =
     liveCreditsSeconds !== null
@@ -300,47 +318,6 @@ export function Dashboard() {
             emoji: "👋",
           },
         ];
-
-  useEffect(() => {
-    const emojiForActivityType = (type: string) => {
-      if (type === "mood") return "😊";
-      if (type === "journal") return "📓";
-      if (type === "session") return "🎥";
-      if (type === "event") return "⚡";
-      return "📝";
-    };
-
-    const loadRecentActivity = async () => {
-      try {
-        const raw = (await api.getRecentActivity(20)) as unknown;
-        const rows = Array.isArray(raw)
-          ? (raw as Array<{ id: string; type: string; text: string; created_at: string; mood?: string }>)
-          : Array.isArray((raw as { items?: unknown })?.items)
-            ? ((raw as { items: Array<{ id: string; type: string; text: string; created_at: string; mood?: string }> })
-                .items)
-            : [];
-        const mapped = rows.slice(0, 10).map((row) => {
-          const created = row.created_at ? new Date(row.created_at) : null;
-          const timeOk = created && !Number.isNaN(created.getTime());
-          return {
-            id: row.id,
-            type: row.type,
-            text: row.text,
-            time: timeOk ? formatDistanceToNow(created!, { addSuffix: true }) : "Recently",
-            emoji:
-              row.type === "mood" && row.mood
-                ? getMoodEmoji(row.mood)
-                : emojiForActivityType(row.type),
-          };
-        });
-        setActivityFeed(mapped);
-      } catch (error) {
-        setActivityFeed([]);
-      }
-    };
-
-    void loadRecentActivity();
-  }, [user?.id]);
 
   const recentActivities = activityFeed.length > 0 ? activityFeed : moodBasedFallbackActivities;
 

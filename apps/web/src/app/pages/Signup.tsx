@@ -20,6 +20,7 @@ import * as z from "zod";
 import {
   resolveVerificationRedirectForFlow,
 } from "@/lib/verificationRedirect";
+import { PasswordStrengthMeter } from "../components/ui/PasswordStrengthMeter";
 import {
   Form,
   FormControl,
@@ -587,6 +588,7 @@ export function Signup() {
                                 {...field}
                               />
                             </FormControl>
+                            <PasswordStrengthMeter password={field.value ?? ""} />
                             <FormMessage />
                           </FormItem>
                         )}
