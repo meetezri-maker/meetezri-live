@@ -3242,6 +3242,23 @@ export async function softDeleteCommunityPostAdmin(id: string) {
   });
 }
 
+export async function createCommunityGroupAdmin(data: {
+  name: string;
+  description: string;
+  category: string;
+  privacy: string;
+}) {
+  invalidateCommunityCaches();
+  return prisma.community_groups.create({
+    data: {
+      name: data.name,
+      description: data.description || null,
+      category: data.category || 'General',
+      privacy: data.privacy || 'public',
+    },
+  });
+}
+
 export async function updateCommunityGroupAdmin(id: string, data: any) {
   invalidateCommunityCaches();
   const patch: Prisma.community_groupsUpdateInput = {};
@@ -3269,6 +3286,32 @@ export async function getCommunityGroupMembersAdmin(groupId: string) {
     include: {
       profiles: { select: { full_name: true, email: true } },
     },
+  });
+}
+
+export async function addGroupMemberAdmin(groupId: string, userId: string, role = 'member') {
+  const group = await prisma.community_groups.findUnique({ where: { id: groupId } });
+  if (!group) {
+    const err = new Error('Group not found');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+  const user = await prisma.profiles.findUnique({ where: { id: userId } });
+  if (!user) {
+    const err = new Error('User not found');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+  return prisma.community_group_members.upsert({
+    where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+    create: { group_id: groupId, user_id: userId, role },
+    update: { role },
+  });
+}
+
+export async function removeGroupMemberAdmin(groupId: string, userId: string) {
+  return prisma.community_group_members.deleteMany({
+    where: { group_id: groupId, user_id: userId },
   });
 }
 

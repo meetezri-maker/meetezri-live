@@ -11,7 +11,8 @@ import {
   getSupportTicketsHandler, getSupportTicketHandler, updateSupportTicketHandler,
   getCommunityStatsHandler, getCommunityGroupsHandler, getContentPerformanceHandler, getWellnessToolUsageHandler,
   getCommunityPostsHandler, patchCommunityPostHandler, deleteCommunityPostHandler,
-  patchCommunityGroupHandler, deleteCommunityGroupHandler, getCommunityGroupMembersHandler,
+  createCommunityGroupHandler, patchCommunityGroupHandler, deleteCommunityGroupHandler,
+  getCommunityGroupMembersHandler, addGroupMemberHandler, removeGroupMemberHandler,
   dispatchPushCampaignHandler,
   getLiveSessionsHandler, endLiveSessionHandler, flagSessionForReviewHandler, getActivityLogsHandler, getGlobalAuditLogsHandler, getSessionRecordingsHandler, getErrorLogsHandler, getSessionRecordingTranscriptHandler,
   getAdminSystemHealthHandler, patchErrorLogResolveHandler, postErrorLogsArchiveResolvedHandler, postSessionRecordingReviewedHandler, patchSessionRecordingHandler,
@@ -249,12 +250,15 @@ export async function adminRoutes(fastify: FastifyInstance) {
   // Community
   fastify.get('/community/stats', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getCommunityStatsHandler);
   fastify.get('/community/groups', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getCommunityGroupsHandler);
+  fastify.post('/community/groups', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, createCommunityGroupHandler);
   fastify.get('/community/posts', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getCommunityPostsHandler);
   fastify.patch('/community/posts/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, patchCommunityPostHandler);
   fastify.delete('/community/posts/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, deleteCommunityPostHandler);
   fastify.patch('/community/groups/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, patchCommunityGroupHandler);
   fastify.delete('/community/groups/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, deleteCommunityGroupHandler);
   fastify.get('/community/groups/:id/members', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getCommunityGroupMembersHandler);
+  fastify.post('/community/groups/:id/members', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, addGroupMemberHandler);
+  fastify.delete('/community/groups/:id/members/:userId', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, removeGroupMemberHandler);
 
   // Monitoring
   fastify.get('/live-sessions', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getLiveSessionsHandler);

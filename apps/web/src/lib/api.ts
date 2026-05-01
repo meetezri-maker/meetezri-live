@@ -2033,6 +2033,15 @@ export const api = {
       const res = await fetch(`${API_URL}/admin/community/posts/${id}`, { method: 'DELETE', headers });
       return handleResponseAllowEmpty(res, 'Failed to delete post');
     },
+    async createCommunityGroup(data: { name: string; description: string; category: string; privacy: string }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/groups`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to create group');
+    },
     async patchCommunityGroup(id: string, data: Record<string, unknown>) {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/admin/community/groups/${id}`, {
@@ -2054,6 +2063,23 @@ export const api = {
         headers,
       });
       return handleResponse(res, 'Failed to fetch group members');
+    },
+    async addGroupMember(groupId: string, userId: string, role = 'member') {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/groups/${groupId}/members`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ userId, role }),
+      });
+      return handleResponse(res, 'Failed to add member');
+    },
+    async removeGroupMember(groupId: string, userId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/groups/${groupId}/members/${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+        headers,
+      });
+      return handleResponseAllowEmpty(res, 'Failed to remove member');
     },
 
     // Monitoring

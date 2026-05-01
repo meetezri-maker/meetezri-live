@@ -169,7 +169,6 @@ const NAVIGATION: NavSection[] = [
       { name: "Email Templates", href: "/admin/email-templates", icon: FileText, roles: ["super_admin", "org_admin"] },
       { name: "Push Notifications", href: "/admin/push-notifications", icon: Bell, roles: ["super_admin", "org_admin"] },
       { name: "Support Tickets", href: "/admin/support-tickets", icon: FileText, roles: ["super_admin", "org_admin", "team_admin"] },
-      { name: "Community Management", href: "/admin/community-management", icon: Users, roles: ["super_admin", "org_admin"] },
     ],
   },
   {

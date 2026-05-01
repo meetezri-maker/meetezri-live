@@ -11,7 +11,8 @@ import {
   getSupportTickets, getSupportTicketById, updateSupportTicket,
   getCommunityStats, getCommunityGroups,
   getCommunityPostsForAdmin, updateCommunityPostAdmin, softDeleteCommunityPostAdmin,
-  updateCommunityGroupAdmin, deleteCommunityGroupAdmin, getCommunityGroupMembersAdmin,
+  createCommunityGroupAdmin, updateCommunityGroupAdmin, deleteCommunityGroupAdmin,
+  getCommunityGroupMembersAdmin, addGroupMemberAdmin, removeGroupMemberAdmin,
   dispatchPushCampaignAsNotifications,
   getLiveSessions, getActivityLogs, getGlobalAuditLogs, getSessionRecordings, getErrorLogs, getSessionRecordingTranscript,
   getCrisisEvents, getCrisisEvent, updateCrisisEventStatus,
@@ -678,6 +679,19 @@ export async function deleteCommunityPostHandler(
   }
 }
 
+export async function createCommunityGroupHandler(
+  request: FastifyRequest<{ Body: { name: string; description: string; category: string; privacy: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const group = await createCommunityGroupAdmin(request.body || ({} as any));
+    return reply.code(201).send(group);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to create group' });
+  }
+}
+
 export async function patchCommunityGroupHandler(
   request: FastifyRequest<{ Params: { id: string }; Body: Record<string, unknown> }>,
   reply: FastifyReply
@@ -714,6 +728,32 @@ export async function getCommunityGroupMembersHandler(
   } catch (error) {
     request.log.error(error);
     return reply.code(500).send({ message: 'Failed to fetch group members' });
+  }
+}
+
+export async function addGroupMemberHandler(
+  request: FastifyRequest<{ Params: { id: string }; Body: { userId: string; role?: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const result = await addGroupMemberAdmin(request.params.id, request.body.userId, request.body.role);
+    return reply.code(200).send(result);
+  } catch (error: any) {
+    request.log.error(error);
+    return reply.code(error?.statusCode === 404 ? 404 : 500).send({ message: error?.message || 'Failed to add member' });
+  }
+}
+
+export async function removeGroupMemberHandler(
+  request: FastifyRequest<{ Params: { id: string; userId: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    await removeGroupMemberAdmin(request.params.id, request.params.userId);
+    return reply.code(204).send();
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to remove member' });
   }
 }
 

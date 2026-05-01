@@ -92,7 +92,21 @@ export function CommunityManagement() {
     category: "",
     privacy: "public" as "public" | "private",
   });
-  const [groupMembers, setGroupMembers] = useState<{ name: string; role: string | null }[]>([]);
+  const [groupMembers, setGroupMembers] = useState<{ id: string; name: string; email: string; role: string | null }[]>([]);
+  const [allUsers, setAllUsers] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [memberSearch, setMemberSearch] = useState("");
+  const [addMemberSaving, setAddMemberSaving] = useState<string | null>(null);
+  const [removeMemberSaving, setRemoveMemberSaving] = useState<string | null>(null);
+  const [recentlyAdded, setRecentlyAdded] = useState<Set<string>>(new Set());
+
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [createGroupForm, setCreateGroupForm] = useState({
+    name: "",
+    description: "",
+    category: "",
+    privacy: "public" as "public" | "private",
+  });
+  const [createGroupSaving, setCreateGroupSaving] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -162,22 +176,48 @@ export function CommunityManagement() {
     loadData();
   }, [loadData]);
 
+  const reloadGroupMembers = async (groupId: string) => {
+    try {
+      const members = await api.admin.getCommunityGroupMembers(groupId);
+      setGroupMembers(
+        (members || []).map((m: any) => ({
+          id: m.user_id,
+          name: m.profiles?.full_name?.trim() || m.profiles?.email || "Member",
+          email: m.profiles?.email || "",
+          role: m.role,
+        }))
+      );
+    } catch {
+      setGroupMembers([]);
+    }
+  };
+
   useEffect(() => {
     if (!viewingGroup) {
       setGroupMembers([]);
+      setMemberSearch("");
+      setRecentlyAdded(new Set());
       return;
     }
+    reloadGroupMembers(viewingGroup.id);
+    // Fetch all users for the add-member picker
     (async () => {
       try {
-        const members = await api.admin.getCommunityGroupMembers(viewingGroup.id);
-        setGroupMembers(
-          (members || []).map((m: any) => ({
-            name: m.profiles?.full_name?.trim() || m.profiles?.email || "Member",
-            role: m.role,
+        const dir = await api.admin.getUsers({ limit: 1000 });
+        const list: any[] = Array.isArray((dir as any)?.users)
+          ? (dir as any).users
+          : Array.isArray(dir)
+          ? dir
+          : [];
+        setAllUsers(
+          list.map((u: any) => ({
+            id: u.id,
+            name: u.full_name?.trim() || u.email?.split("@")[0] || "User",
+            email: u.email || "",
           }))
         );
       } catch {
-        setGroupMembers([]);
+        // fallback: leave empty; current members still show
       }
     })();
   }, [viewingGroup]);
@@ -312,6 +352,88 @@ export function CommunityManagement() {
     } catch (e) {
       console.error(e);
       toast.error("Could not delete group");
+    }
+  };
+
+  const handleAddMember = async (userId: string) => {
+    if (!viewingGroup) return;
+    // Optimistic: add instantly to the members list so the UI updates immediately
+    const user = allUsers.find((u) => u.id === userId);
+    if (user) {
+      setGroupMembers((prev) => [
+        ...prev,
+        { id: userId, name: user.name, email: user.email, role: "member" },
+      ]);
+    }
+    setRecentlyAdded((prev) => new Set(prev).add(userId));
+    setAddMemberSaving(userId);
+    try {
+      await api.admin.addGroupMember(viewingGroup.id, userId);
+      // Background sync — don't await, just keep local state
+      void reloadGroupMembers(viewingGroup.id);
+      setTimeout(() => {
+        setRecentlyAdded((prev) => {
+          const next = new Set(prev);
+          next.delete(userId);
+          return next;
+        });
+      }, 3000);
+    } catch (e) {
+      console.error(e);
+      toast.error("Could not add member");
+      // Rollback optimistic update on failure
+      setGroupMembers((prev) => prev.filter((m) => m.id !== userId));
+      setRecentlyAdded((prev) => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
+    } finally {
+      setAddMemberSaving(null);
+    }
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!viewingGroup) return;
+    // Optimistic: remove instantly
+    setGroupMembers((prev) => prev.filter((m) => m.id !== userId));
+    setRemoveMemberSaving(userId);
+    try {
+      await api.admin.removeGroupMember(viewingGroup.id, userId);
+      // Background sync
+      void reloadGroupMembers(viewingGroup.id);
+    } catch (e) {
+      console.error(e);
+      toast.error("Could not remove member");
+      // Rollback: re-fetch to restore correct state
+      await reloadGroupMembers(viewingGroup.id);
+    } finally {
+      setRemoveMemberSaving(null);
+    }
+  };
+
+  const handleCreateGroup = async () => {
+    if (!createGroupForm.name.trim()) {
+      toast.error("Group name is required");
+      return;
+    }
+    setCreateGroupSaving(true);
+    try {
+      await api.admin.createCommunityGroup({
+        name: createGroupForm.name.trim(),
+        description: createGroupForm.description.trim(),
+        category: createGroupForm.category.trim() || "General",
+        privacy: createGroupForm.privacy,
+      });
+      toast.success("Group created");
+      setCreateGroupOpen(false);
+      setCreateGroupForm({ name: "", description: "", category: "", privacy: "public" });
+      loadData();
+    } catch (e) {
+      console.error(e);
+      toast.error("Could not create group");
+    } finally {
+      setCreateGroupSaving(false);
     }
   };
 
@@ -598,6 +720,18 @@ export function CommunityManagement() {
         )}
 
         {selectedTab === "groups" && (
+          <>
+            <div className="flex justify-end">
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setCreateGroupOpen(true)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow"
+              >
+                <span className="text-lg leading-none">+</span> Create Group
+              </motion.button>
+            </div>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -737,6 +871,7 @@ export function CommunityManagement() {
               </motion.div>
             ))}
           </motion.div>
+          </>
         )}
 
         {selectedTab === "reported" && (
@@ -1184,7 +1319,7 @@ export function CommunityManagement() {
                     <div className="grid grid-cols-3 gap-4">
                       <div className="bg-gray-50 rounded-lg p-4 text-center">
                         <Users className="w-6 h-6 text-gray-600 mx-auto mb-2" />
-                        <p className="text-2xl font-bold text-gray-900">{viewingGroup.members.toLocaleString()}</p>
+                        <p className="text-2xl font-bold text-gray-900">{groupMembers.length}</p>
                         <p className="text-xs text-gray-600">Members</p>
                       </div>
                       <div className="bg-gray-50 rounded-lg p-4 text-center">
@@ -1199,18 +1334,98 @@ export function CommunityManagement() {
                       </div>
                     </div>
 
+                    {/* Current members */}
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-900 mb-3">Members & roles</h3>
-                      <div className="bg-gray-50 rounded-lg p-4 space-y-2 max-h-48 overflow-y-auto">
+                      <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                        Members ({groupMembers.length})
+                      </h3>
+                      <div className="bg-gray-50 rounded-lg divide-y divide-gray-200 max-h-48 overflow-y-auto">
                         {groupMembers.length === 0 ? (
-                          <p className="text-sm text-gray-600">Loading members…</p>
+                          <p className="text-sm text-gray-500 p-3">No members yet.</p>
                         ) : (
-                          groupMembers.map((m, i) => (
-                            <div key={`${m.name}-${i}`} className="flex justify-between text-sm">
-                              <span className="text-gray-800">{m.name}</span>
-                              <span className="text-gray-500">{m.role || "member"}</span>
+                          groupMembers.map((m) => (
+                            <div key={m.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                              <div className="min-w-0">
+                                <p className="font-medium text-gray-900 truncate">{m.name}</p>
+                                <p className="text-xs text-gray-500 truncate">{m.email}</p>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 ml-2">
+                                <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs">
+                                  {m.role || "member"}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={removeMemberSaving === m.id}
+                                  onClick={() => handleRemoveMember(m.id)}
+                                  className="text-red-500 hover:text-red-700 disabled:opacity-40 text-xs font-medium"
+                                  title="Remove from group"
+                                >
+                                  {removeMemberSaving === m.id ? "…" : "Remove"}
+                                </button>
+                              </div>
                             </div>
                           ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Add members from all-users list */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-semibold text-gray-900">Add Members</h3>
+                        <span className="text-xs text-green-600 font-medium">✓ Saved automatically</span>
+                      </div>
+                      <div className="relative mb-2">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="Search users by name or email…"
+                          value={memberSearch}
+                          onChange={(e) => setMemberSearch(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+                      <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 max-h-52 overflow-y-auto">
+                        {allUsers
+                          .filter((u) => {
+                            const q = memberSearch.toLowerCase();
+                            return (
+                              !q ||
+                              u.name.toLowerCase().includes(q) ||
+                              u.email.toLowerCase().includes(q)
+                            );
+                          })
+                          .map((u) => {
+                            const isMember = groupMembers.some((m) => m.id === u.id);
+                            return (
+                              <div key={u.id} className="flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50">
+                                <div className="min-w-0">
+                                  <p className="font-medium text-gray-900 truncate">{u.name}</p>
+                                  <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                                </div>
+                                {isMember ? (
+                                  recentlyAdded.has(u.id) ? (
+                                    <span className="shrink-0 ml-2 flex items-center gap-1 text-xs text-green-600 font-semibold">
+                                      <span>✓</span> Added
+                                    </span>
+                                  ) : (
+                                    <span className="shrink-0 ml-2 text-xs text-gray-400 font-medium">Already in group</span>
+                                  )
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={addMemberSaving === u.id}
+                                    onClick={() => handleAddMember(u.id)}
+                                    className="shrink-0 ml-2 px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-medium"
+                                  >
+                                    {addMemberSaving === u.id ? "Adding…" : "Add"}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        {allUsers.length === 0 && (
+                          <p className="text-sm text-gray-500 p-3">Loading users…</p>
                         )}
                       </div>
                     </div>
@@ -1225,20 +1440,10 @@ export function CommunityManagement() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          setViewingGroup(null);
-                          toast.info("Promote members to moderators in the product database or a future role workflow.");
-                        }}
-                        className="flex-1 px-4 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-medium"
-                      >
-                        Manage Moderators
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => setViewingGroup(null)}
-                        className="px-4 py-3 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
+                        className="flex-1 px-4 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-medium"
                       >
-                        Close
+                        ✓ Done — Changes Saved
                       </button>
                     </div>
                   </div>
@@ -1319,6 +1524,113 @@ export function CommunityManagement() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Create Group Modal */}
+      <AnimatePresence>
+        {createGroupOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60]"
+              onClick={() => setCreateGroupOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+              onClick={() => setCreateGroupOpen(false)}
+            >
+              <div
+                className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="text-xl font-bold text-gray-900">Create New Group</h3>
+                  <button
+                    type="button"
+                    onClick={() => setCreateGroupOpen(false)}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <X className="w-5 h-5 text-gray-500" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Group Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="e.g. Anxiety Support"
+                      value={createGroupForm.name}
+                      onChange={(e) => setCreateGroupForm((f) => ({ ...f, name: e.target.value }))}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 min-h-[80px] focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                      placeholder="What is this group about?"
+                      value={createGroupForm.description}
+                      onChange={(e) => setCreateGroupForm((f) => ({ ...f, description: e.target.value }))}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                    <input
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="e.g. Mental Health, General"
+                      value={createGroupForm.category}
+                      onChange={(e) => setCreateGroupForm((f) => ({ ...f, category: e.target.value }))}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Privacy</label>
+                    <select
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={createGroupForm.privacy}
+                      onChange={(e) =>
+                        setCreateGroupForm((f) => ({
+                          ...f,
+                          privacy: e.target.value as "public" | "private",
+                        }))
+                      }
+                    >
+                      <option value="public">Public — anyone can join</option>
+                      <option value="private">Private — invite only</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={handleCreateGroup}
+                    disabled={createGroupSaving}
+                    className="flex-1 px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium"
+                  >
+                    {createGroupSaving ? "Creating…" : "Create Group"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreateGroupOpen(false)}
+                    className="px-4 py-3 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </AdminLayoutNew>
   );
 }
