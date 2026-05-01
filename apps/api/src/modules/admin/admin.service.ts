@@ -818,6 +818,31 @@ export async function getRecentActivity() {
   return result;
 }
 
+export async function getUserStatusCounts(): Promise<{
+  total: number;
+  active: number;
+  suspended: number;
+  inactive: number;
+}> {
+  const rows = await prisma.$queryRaw<
+    { total: bigint; suspended: bigint; active: bigint }[]
+  >`
+    SELECT
+      COUNT(*)::bigint                                                                          AS total,
+      COUNT(*) FILTER (WHERE role = 'suspended')::bigint                                       AS suspended,
+      COUNT(*) FILTER (
+        WHERE role IS DISTINCT FROM 'suspended'
+          AND id IN (SELECT DISTINCT user_id FROM app_sessions WHERE ended_at IS NOT NULL)
+      )::bigint AS active
+    FROM profiles
+  `;
+  const r = rows[0] ?? { total: 0n, suspended: 0n, active: 0n };
+  const total = Number(r.total);
+  const suspended = Number(r.suspended);
+  const active = Number(r.active);
+  return { total, active, suspended, inactive: total - active - suspended };
+}
+
 export async function getAllUsers(page: number = 1, limit: number = 20) {
   const cacheKey = `${page}_${limit}`;
   const cached = usersCache.get(cacheKey);

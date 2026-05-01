@@ -65,6 +65,12 @@ import {
 
 export function UserManagement() {
   const [users, setUsers] = useState<User[]>([]);
+  const [realCounts, setRealCounts] = useState<{
+    total: number;
+    active: number;
+    suspended: number;
+    inactive: number;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isBackgroundLoading, setIsBackgroundLoading] = useState(false);
   const [nextPage, setNextPage] = useState<number | null>(1);
@@ -130,12 +136,16 @@ export function UserManagement() {
 
       if (usersFirstLoad.current) setIsLoading(true);
 
-      // Fetch a small first page quickly so UI becomes interactive.
+      // Fetch real counts and first page of users in parallel.
       const FIRST_PAGE_LIMIT = 100;
-      const first = await api.admin.getUsers({ page: 1, limit: FIRST_PAGE_LIMIT });
+      const [first, counts] = await Promise.all([
+        api.admin.getUsers({ page: 1, limit: FIRST_PAGE_LIMIT }),
+        api.admin.getUserCounts().catch(() => null),
+      ]);
       const mappedFirst = (Array.isArray(first) ? first : []).map(mapApiUser);
       setUsers(mappedFirst);
       setNextPage(mappedFirst.length < FIRST_PAGE_LIMIT ? null : 2);
+      if (counts) setRealCounts(counts);
 
       if (usersFirstLoad.current) {
         setIsLoading(false);
@@ -184,18 +194,30 @@ export function UserManagement() {
     };
   }, []);
 
+  const refreshCounts = async () => {
+    try {
+      const counts = await api.admin.getUserCounts();
+      setRealCounts(counts);
+    } catch {
+      // best-effort
+    }
+  };
+
   const handleAction = async (userId: string, action: 'suspend' | 'activate' | 'delete' | 'email') => {
     const onConfirm = async () => {
       try {
         if (action === 'delete') {
           await api.admin.deleteUser(userId);
           setUsers(users.filter((u) => u.id !== userId));
+          refreshCounts();
         } else if (action === 'suspend') {
           await api.admin.updateUser(userId, { status: 'suspended' });
           setUsers(users.map((u) => (u.id === userId ? { ...u, status: 'suspended' } : u)));
+          refreshCounts();
         } else if (action === 'activate') {
           await api.admin.updateUser(userId, { status: 'active' });
           setUsers(users.map((u) => (u.id === userId ? { ...u, status: 'active' } : u)));
+          refreshCounts();
         } else if (action === 'email') {
           const user = users.find((u) => u.id === userId);
           if (!user) {
@@ -291,12 +313,12 @@ export function UserManagement() {
   );
   const shouldAnimateRows = paginatedUsers.length <= 25;
 
-  // Stats
+  // Stats — use authoritative DB counts when available, fall back to loaded users.
   const stats = {
-    total: users.length,
-    active: users.filter((u) => u.status === "active").length,
-    suspended: users.filter((u) => u.status === "suspended").length,
-    inactive: users.filter((u) => u.status === "inactive").length,
+    total: realCounts?.total ?? users.length,
+    active: realCounts?.active ?? users.filter((u) => u.status === "active").length,
+    suspended: realCounts?.suspended ?? users.filter((u) => u.status === "suspended").length,
+    inactive: realCounts?.inactive ?? users.filter((u) => u.status === "inactive").length,
     highRisk: users.filter((u) => u.riskLevel === "high").length,
   };
 
@@ -408,6 +430,7 @@ export function UserManagement() {
               selectedUsers.includes(u.id) ? { ...u, status: "active" } : u
             )
           );
+          refreshCounts();
         } else if (action === "suspend") {
           await Promise.all(
             selectedUsers.map((userId) => api.admin.updateUser(userId, { status: "suspended" }))
@@ -417,6 +440,7 @@ export function UserManagement() {
               selectedUsers.includes(u.id) ? { ...u, status: "suspended" } : u
             )
           );
+          refreshCounts();
         } else if (action === "email") {
           const usersToEmail = users.filter((u) => selectedUsers.includes(u.id));
           await Promise.all(
@@ -1218,7 +1242,7 @@ export function UserManagement() {
                           subscription: "trial",
                           organization: "",
                         });
-                        await fetchUsers();
+                        await fetchFirstPage();
                       } catch (e: unknown) {
                         const msg =
                           e instanceof Error ? e.message : "Could not create user.";

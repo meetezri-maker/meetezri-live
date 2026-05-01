@@ -1,7 +1,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { 
-  getDashboardStatsHandler, getUsersHandler, createUserHandler, getUserHandler, updateUserHandler, deleteUserHandler, getUserAuditLogsHandler, getRecentActivityHandler,
+  getDashboardStatsHandler, getUsersHandler, getUserCountsHandler, createUserHandler, getUserHandler, updateUserHandler, deleteUserHandler, getUserAuditLogsHandler, getRecentActivityHandler,
   getUserSegmentsHandler, createUserSegmentHandler, deleteUserSegmentHandler, getUserSegmentUsersHandler,
   getManualNotificationsHandler, createManualNotificationHandler, getNotificationAudienceCountsHandler,
   getNudgesHandler, createNudgeHandler, updateNudgeHandler, deleteNudgeHandler,
@@ -56,6 +56,14 @@ export async function adminRoutes(fastify: FastifyInstance) {
   );
 
   // User Management
+  fastify.get(
+    '/users/counts',
+    {
+      preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])],
+    },
+    getUserCountsHandler
+  );
+
   fastify.get(
     '/users',
     {

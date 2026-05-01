@@ -1551,6 +1551,16 @@ export const api = {
       return handleResponse(res, 'Failed to fetch recent activity');
     },
 
+    async getUserCounts(): Promise<{ total: number; active: number; suspended: number; inactive: number }> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/users/counts`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch user counts');
+    },
+
     async getUsers(params?: { page?: number; limit?: number }) {
       const headers = await getHeaders();
       const search = new URLSearchParams();

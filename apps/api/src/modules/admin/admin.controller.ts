@@ -1,7 +1,7 @@
 
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { 
-  getDashboardStats, getAllUsers, getUserById, createUserByAdmin, updateUser, deleteUser, getUserAuditLogs, getRecentActivity,
+  getDashboardStats, getAllUsers, getUserStatusCounts, getUserById, createUserByAdmin, updateUser, deleteUser, getUserAuditLogs, getRecentActivity,
   getUserSegmentationDashboard, createUserSegment, deleteUserSegment, getUserSegmentUsers,
   getManualNotifications, createManualNotification, getNotificationAudienceCounts,
   getNudges, createNudge, updateNudge, deleteNudge,
@@ -112,6 +112,19 @@ export async function getUsersHandler(
       message: 'Failed to fetch users',
       error: error instanceof Error ? error.message : String(error)
     });
+  }
+}
+
+export async function getUserCountsHandler(
+  _request: FastifyRequest,
+  reply: FastifyReply
+) {
+  try {
+    const counts = await getUserStatusCounts();
+    return reply.code(200).send(counts);
+  } catch (error) {
+    _request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to fetch user counts' });
   }
 }
 
