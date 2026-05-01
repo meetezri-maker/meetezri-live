@@ -734,7 +734,7 @@ export function SuperAdminDashboard() {
                     <span className="text-xs text-green-600 font-semibold">Live</span>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Active Sessions</p>
+                <p className="text-sm text-muted-foreground mb-1">Active Sessions <span className="text-xs">(last 4h)</span></p>
                 <motion.div
                   key={sessionCount}
                   initial={{ scale: 1.1 }}

@@ -82,7 +82,7 @@ export function AdminDashboard() {
             delay={0}
           />
           <StatsCard
-            title="Active Sessions"
+            title="Active Sessions (4h)"
             value={stats?.activeSessions?.toLocaleString() || "0"}
             change="Live"
             changeType="positive"

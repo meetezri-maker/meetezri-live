@@ -267,7 +267,7 @@ export async function getDashboardStats(
     prisma.$queryRaw`
       SELECT 
         (SELECT count(*) FROM profiles) as total_users,
-        (SELECT count(*) FROM app_sessions WHERE started_at IS NOT NULL AND ended_at IS NULL) as active_sessions,
+        (SELECT count(*) FROM app_sessions WHERE started_at IS NOT NULL AND ended_at IS NULL AND started_at >= timezone('utc', now()) - interval '4 hours') as active_sessions,
         (SELECT count(*) FROM app_sessions) as total_sessions,
         (SELECT AVG(duration_minutes) FROM app_sessions) as avg_duration,
         (SELECT count(*) FROM crisis_events WHERE status = 'pending') as pending_crisis,
@@ -3738,7 +3738,13 @@ export async function getAdminSystemHealth() {
   let activeSessions = 0;
   try {
     activeSessions = await prisma.app_sessions.count({
-      where: { ended_at: null, started_at: { not: null } },
+      where: {
+        ended_at: null,
+        started_at: {
+          not: null,
+          gte: new Date(Date.now() - 4 * 60 * 60 * 1000),
+        },
+      },
     });
   } catch {
     activeSessions = 0;

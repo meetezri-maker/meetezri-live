@@ -37,21 +37,31 @@ export async function getAllAvatarsWithUsageStats() {
 
   const statsRows = await prisma.$queryRaw<StatRow[]>`
     WITH matched AS (
-      SELECT s.id AS session_id, s.user_id, s.duration_minutes, a.id AS avatar_id
+      SELECT DISTINCT ON (s.id)
+        s.id AS session_id, s.user_id, s.duration_minutes, a.id AS avatar_id
       FROM app_sessions s
       INNER JOIN ai_avatars a ON (
         s.ended_at IS NOT NULL
-        AND s.config IS NOT NULL
         AND (
+          -- Match on config->>'avatar': exact full name or first word of avatar name
           (
-            (s.config->>'avatar') IS NOT NULL AND (
-              LOWER(TRIM(s.config->>'avatar')) = LOWER(SPLIT_PART(a.name, ' ', 1))
-              OR LOWER(TRIM(s.config->>'avatar')) = LOWER(a.name)
+            s.config IS NOT NULL
+            AND (s.config->>'avatar') IS NOT NULL
+            AND TRIM(s.config->>'avatar') <> ''
+            AND (
+              LOWER(TRIM(s.config->>'avatar')) = LOWER(a.name)
+              OR LOWER(TRIM(s.config->>'avatar')) = LOWER(SPLIT_PART(a.name, ' ', 1))
             )
           )
+          -- Match on config->>'ai_name': exact full name or first word of avatar name
           OR (
-            (s.config->>'ai_name') IS NOT NULL
-            AND LOWER(TRIM(s.config->>'ai_name')) = LOWER(a.name)
+            s.config IS NOT NULL
+            AND (s.config->>'ai_name') IS NOT NULL
+            AND TRIM(s.config->>'ai_name') <> ''
+            AND (
+              LOWER(TRIM(s.config->>'ai_name')) = LOWER(a.name)
+              OR LOWER(TRIM(s.config->>'ai_name')) = LOWER(SPLIT_PART(a.name, ' ', 1))
+            )
           )
         )
       )

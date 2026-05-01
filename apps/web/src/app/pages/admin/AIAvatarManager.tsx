@@ -28,7 +28,6 @@ import {
   X,
   Volume2,
   Heart,
-  CheckCircle,
   AlertCircle,
   User,
   Upload,
@@ -142,6 +141,7 @@ export function AIAvatarManager() {
   const [avatars, setAvatars] = useState<AIAvatar[]>([]);
   /** When false, the list is filled from `DEFAULT_AI_COMPANIONS` only (database is empty). */
   const [usingDbRows, setUsingDbRows] = useState(true);
+  const [totalEndedSessions, setTotalEndedSessions] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [portraitFile, setPortraitFile] = useState<File | null>(null);
   const [portraitPreviewUrl, setPortraitPreviewUrl] = useState<string | null>(null);
@@ -168,7 +168,18 @@ export function AIAvatarManager() {
   const fetchAvatars = async () => {
     try {
       setIsLoading(true);
-      const data = await api.aiAvatars.getAllWithUsageStats();
+      // Fetch avatar stats and total ended sessions count in parallel.
+      const [data, recordingsPage] = await Promise.all([
+        api.aiAvatars.getAllWithUsageStats(),
+        api.admin.getSessionRecordings({ limit: 1, page: 1 }).catch(() => null),
+      ]);
+
+      // Extract total ended sessions from the first-page response.
+      if (recordingsPage && !Array.isArray(recordingsPage)) {
+        const t = (recordingsPage as { items: unknown[]; total: number }).total;
+        if (typeof t === 'number') setTotalEndedSessions(t);
+      }
+
       const rows = Array.isArray(data) ? data : [];
       const mapped = rows.map((item: any) => ({
         id: item.id,
@@ -519,7 +530,7 @@ export function AIAvatarManager() {
 
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <CheckCircle className="w-8 h-8 text-green-600" />
+                <Users className="w-8 h-8 text-green-600" />
                 <span className="text-2xl font-bold text-gray-900">{stats.activeAvatars}</span>
               </div>
               <p className="text-sm text-gray-600">Active Avatars</p>
@@ -527,11 +538,12 @@ export function AIAvatarManager() {
 
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <Users className="w-8 h-8 text-blue-600" />
-                <span className="text-2xl font-bold text-gray-900">{stats.totalSessionUsage.toLocaleString()}</span>
+                <Clock className="w-8 h-8 text-blue-600" />
+                <span className="text-2xl font-bold text-gray-900">
+                  {totalEndedSessions != null ? totalEndedSessions.toLocaleString() : stats.totalSessionUsage.toLocaleString()}
+                </span>
               </div>
-              <p className="text-sm text-gray-600">Sessions (usage)</p>
-              <p className="text-xs text-gray-400 mt-1">Ended sessions matched to avatars by name</p>
+              <p className="text-sm text-gray-600">Total Sessions</p>
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">

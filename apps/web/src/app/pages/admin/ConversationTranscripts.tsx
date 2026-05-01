@@ -228,6 +228,7 @@ function mapDbMessagesToMessages(rows: any[]): Message[] {
 
 export function ConversationTranscripts() {
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
+  const [dbTotal, setDbTotal] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [transcriptModal, setTranscriptModal] = useState<Transcript | null>(null);
@@ -253,11 +254,22 @@ export function ConversationTranscripts() {
       const all: unknown[] = [];
       for (let page = 1; page <= MAX_PAGES; page += 1) {
         const data = await api.admin.getSessionRecordings({ limit: PAGE_SIZE, page });
-        const batch = Array.isArray(data) ? data : (data as { items: unknown[]; total: number }).items ?? [];
+        const isWrapped = !Array.isArray(data) && typeof data === 'object' && data !== null;
+        const batch = isWrapped
+          ? (data as { items: unknown[]; total: number }).items ?? []
+          : (data as unknown[]);
+        // Capture the authoritative DB total from the first page response.
+        if (page === 1 && isWrapped) {
+          const t = (data as { items: unknown[]; total: number }).total;
+          if (typeof t === 'number') setDbTotal(t);
+        }
         all.push(...batch);
         if (batch.length < PAGE_SIZE) break;
       }
-      setTranscripts((all as any[]).map(mapApiSessionToTranscript));
+      const mapped = (all as any[]).map(mapApiSessionToTranscript);
+      setTranscripts(mapped);
+      // Fall back to loaded count if backend total wasn't available.
+      setDbTotal((prev) => prev ?? mapped.length);
     } catch (e) {
       console.error(e);
       setLoadError('Failed to load session transcripts.');
@@ -403,7 +415,7 @@ export function ConversationTranscripts() {
   };
 
   const stats = {
-    total: transcripts.length,
+    total: dbTotal ?? transcripts.length,
     flagged: transcripts.filter((t) => t.isFlagged).length,
     crisis: transcripts.filter((t) => t.sentiment === 'crisis').length,
   };
@@ -717,7 +729,7 @@ Ezri Mental Health Platform - Admin Dashboard
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <MessageSquare className="w-8 h-8 text-blue-600" />
-                <span className="text-2xl font-bold text-gray-900">{stats.total}</span>
+                <span className="text-2xl font-bold text-gray-900">{stats.total.toLocaleString()}</span>
               </div>
               <p className="text-sm text-gray-600">Total Sessions</p>
             </div>
@@ -725,7 +737,7 @@ Ezri Mental Health Platform - Admin Dashboard
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <Flag className="w-8 h-8 text-yellow-600" />
-                <span className="text-2xl font-bold text-gray-900">{stats.flagged}</span>
+                <span className="text-2xl font-bold text-gray-900">{stats.flagged.toLocaleString()}</span>
               </div>
               <p className="text-sm text-gray-600">Flagged Sessions</p>
             </div>
@@ -733,7 +745,7 @@ Ezri Mental Health Platform - Admin Dashboard
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <AlertTriangle className="w-8 h-8 text-red-600" />
-                <span className="text-2xl font-bold text-gray-900">{stats.crisis}</span>
+                <span className="text-2xl font-bold text-gray-900">{stats.crisis.toLocaleString()}</span>
               </div>
               <p className="text-sm text-gray-600">Crisis Sessions</p>
             </div>
