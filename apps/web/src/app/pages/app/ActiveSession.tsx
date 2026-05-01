@@ -2678,6 +2678,7 @@ export function ActiveSession() {
   );
   const [accountCreditsSeconds, setAccountCreditsSeconds] = useState<number | null>(null);
   const [showLowCreditsWarning, setShowLowCreditsWarning] = useState(false);
+  const [lowCreditsWarningDismissed, setLowCreditsWarningDismissed] = useState(false);
   const [showOutOfCredits, setShowOutOfCredits] = useState(false);
   const [showLowMinutesModal, setShowLowMinutesModal] = useState(false);
   const [hasShownLowMinutesModal, setHasShownLowMinutesModal] = useState(false);
@@ -2980,9 +2981,11 @@ export function ActiveSession() {
       projectedAccountRemainingWholeMinutes > 0 &&
       projectedAccountRemainingWholeMinutes < 10
     ) {
-      if (!showLowCreditsWarning) setShowLowCreditsWarning(true);
+      if (!showLowCreditsWarning && !lowCreditsWarningDismissed) setShowLowCreditsWarning(true);
     } else {
+      // Credits recovered above threshold — reset so the banner can show again next dip.
       if (showLowCreditsWarning) setShowLowCreditsWarning(false);
+      if (lowCreditsWarningDismissed) setLowCreditsWarningDismissed(false);
     }
     if (remainingWholeMinutes === null) return;
     if (remainingWholeMinutes === 0 && !showOutOfCredits)
@@ -2999,6 +3002,7 @@ export function ActiveSession() {
     remainingWholeMinutes,
     projectedAccountRemainingWholeMinutes,
     showLowCreditsWarning,
+    lowCreditsWarningDismissed,
     showOutOfCredits,
     hasShownLowMinutesModal,
   ]);
@@ -3868,7 +3872,10 @@ export function ActiveSession() {
                         Buy More Minutes
                       </button>
                       <button
-                        onClick={() => setShowLowCreditsWarning(false)}
+                        onClick={() => {
+                          setShowLowCreditsWarning(false);
+                          setLowCreditsWarningDismissed(true);
+                        }}
                         disabled={isBuyingMoreMinutes}
                         className="px-4 py-2 bg-amber-600 text-white rounded-lg font-medium text-sm hover:bg-amber-700 transition-colors"
                       >
