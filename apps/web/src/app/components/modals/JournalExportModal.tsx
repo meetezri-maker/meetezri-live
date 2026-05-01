@@ -53,7 +53,7 @@ export function JournalExportModal({ isOpen, onClose, entries }: JournalExportMo
           type: "application/json;charset=utf-8",
         });
       } else {
-        const doc = buildJournalPdf(filteredEntries);
+        const doc = await buildJournalPdf(filteredEntries);
         blob = doc.output("blob");
       }
 

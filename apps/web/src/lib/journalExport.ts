@@ -1,5 +1,22 @@
-import { jsPDF } from "jspdf";
 import { htmlToPlainText } from "./htmlPlainText";
+
+// Type alias derived purely from TypeScript's import() type syntax.
+interface JsPdfDoc {
+  addPage(): void;
+  splitTextToSize(text: string, maxWidth: number): string[];
+  text(text: string, x: number, y: number): void;
+  setFont(fontName: string, fontStyle: string): void;
+  setFontSize(size: number): void;
+  setTextColor(r: number, g: number, b: number): void;
+  setFillColor(r: number, g: number, b: number): void;
+  setDrawColor(r: number, g: number, b: number): void;
+  roundedRect(x: number, y: number, w: number, h: number,
+              rx: number, ry: number, style: string): void;
+  line(x1: number, y1: number, x2: number, y2: number): void;
+  internal: { pageSize: { getWidth(): number } };
+  output(type: 'blob'): Blob;
+  save(filename: string): void;
+}
 
 /** Minimal shape for journal export (matches Journal page entry fields). */
 export interface JournalExportEntry {
@@ -107,7 +124,7 @@ const MOOD_LABELS: Record<string, string> = {
   "😡": "Angry",
 };
 
-function nextY(doc: jsPDF, y: number, step: number): number {
+function nextY(doc: JsPdfDoc, y: number, step: number): number {
   if (y + step > PDF_BOTTOM) {
     doc.addPage();
     return PDF_MARGIN + step;
@@ -116,7 +133,7 @@ function nextY(doc: jsPDF, y: number, step: number): number {
 }
 
 function writeWrapped(
-  doc: jsPDF,
+  doc: JsPdfDoc,
   text: string,
   maxW: number,
   y: number,
@@ -156,7 +173,8 @@ function formatMoodTags(tags: string[]): string {
   return cleanPdfText(`Mood: ${labels.join(", ")}`);
 }
 
-export function buildJournalPdf(entries: JournalExportEntry[]): jsPDF {
+export async function buildJournalPdf(entries: JournalExportEntry[]): Promise<JsPdfDoc> {
+  const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const maxW = pageW - PDF_MARGIN * 2;

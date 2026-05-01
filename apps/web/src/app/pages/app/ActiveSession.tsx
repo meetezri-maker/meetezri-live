@@ -1550,6 +1550,13 @@ export function ActiveSession() {
   const ezriPlaybackTextRef = useRef<string>("");
   const suppressSttRef = useRef(false);
   const lastPlaybackDoneAtRef = useRef(0);
+  // Tracks the in-flight REST request so it can be aborted on interruption.
+  const restAbortControllerRef = useRef<AbortController | null>(null);
+  // When true, ALL incoming WS audio/text from the server is dropped.
+  // Set to true on interrupt, cleared only when a new user message is actually sent.
+  // This is the ONLY reliable way to ignore late audio chunks that the server
+  // buffered before it processed our interrupt signal.
+  const suppressIncomingAudioRef = useRef(false);
 
   const pauseStt = () => {
     suppressSttRef.current = true;
@@ -1866,7 +1873,25 @@ export function ActiveSession() {
     if (now - lastBargeInAtRef.current < 400) return;
     lastBargeInAtRef.current = now;
 
-    // Stop audio immediately and clear all queued chunks.
+    // ── Step 1: Suppress ALL incoming WS audio/text until the new user
+    // message is sent. This is the only reliable way to discard late audio
+    // chunks the server buffered before it processed our interrupt signal.
+    suppressIncomingAudioRef.current = true;
+
+    // ── Step 2: Invalidate active turn bookkeeping.
+    wsActiveTurnRef.current += 1;
+    wsAudioSeenTurnRef.current = 0;
+    wsAssistantBufferRef.current = "";
+    wsLastFinalTextRef.current = "";
+    wsPendingFallbackTextRef.current = "";
+
+    // ── Step 3: Abort any in-flight REST (LLM + TTS) request immediately.
+    if (restAbortControllerRef.current) {
+      restAbortControllerRef.current.abort();
+      restAbortControllerRef.current = null;
+    }
+
+    // ── Step 4: Stop audio and clear queue.
     stopPlaybackAndCooldown({ sendPlaybackDone: false });
 
     // Restart the browser STT RIGHT NOW — the audio has stopped so there is no echo to
@@ -2054,6 +2079,13 @@ export function ActiveSession() {
       const ws = wsClientRef.current;
       if (ws && ws.getStatus() === "connected") {
         spokeViaWebSocket = true;
+        // Abort any lingering REST request from a previous turn.
+        if (restAbortControllerRef.current) {
+          restAbortControllerRef.current.abort();
+          restAbortControllerRef.current = null;
+        }
+        // Allow new audio from server now that a real new message is being sent.
+        suppressIncomingAudioRef.current = false;
         wsActiveTurnRef.current += 1;
         wsAudioSeenTurnRef.current = 0;
         wsAssistantBufferRef.current = "";
@@ -2078,6 +2110,17 @@ export function ActiveSession() {
         throw new Error("Ezri is not configured (missing env).");
       }
 
+      // Abort any previously in-flight REST request.
+      if (restAbortControllerRef.current) {
+        restAbortControllerRef.current.abort();
+      }
+      const abortCtrl = new AbortController();
+      restAbortControllerRef.current = abortCtrl;
+      // Allow new audio now that we're actually sending a new message.
+      suppressIncomingAudioRef.current = false;
+      // Capture active turn so we can verify it hasn't been superseded when the response arrives.
+      const myRestTurn = wsActiveTurnRef.current;
+
       const brainProvider = ezriConfig.defaults.brainProvider;
       const res = await ezriApi.sendChatRest({
         prompt: trimmed,
@@ -2085,7 +2128,12 @@ export function ActiveSession() {
         userid: ezriUserid,
         session_id: sessionId,
         voice: ezriTtsVoiceId,
+        signal: abortCtrl.signal,
       });
+
+      // If the user interrupted while the REST call was in-flight, discard result.
+      if (myRestTurn !== wsActiveTurnRef.current) return;
+      restAbortControllerRef.current = null;
 
       if (res.text) appendAssistantFinal(res.text);
       if (res.audio) {
@@ -2094,6 +2142,8 @@ export function ActiveSession() {
         await speakViaEzriTts(res.text);
       }
     } catch (e: any) {
+      // AbortError is expected when interrupted — don't show an error toast.
+      if ((e as any)?.name === "AbortError") return;
       console.error("Solace chat failed:", e);
       toast.error(e?.message || "Solace chat failed");
     } finally {
@@ -2649,6 +2699,9 @@ export function ActiveSession() {
       new EzriRealtimeClient({
         onStatus: (s) => setEzriWsStatus(s),
         onAssistantText: (text, kind) => {
+          // Drop everything from the old turn until the user's new message is sent.
+          if (suppressIncomingAudioRef.current) return;
+
           if (kind === "partial") {
             wsAssistantBufferRef.current += text;
             return;
@@ -2656,6 +2709,7 @@ export function ActiveSession() {
 
           const full = (wsAssistantBufferRef.current + text).trim();
           wsAssistantBufferRef.current = "";
+
           // Deduplicate: some backends emit both transcription.ai and assistant_final.
           if (full && full === wsLastFinalTextRef.current) return;
           wsLastFinalTextRef.current = full;
@@ -2673,10 +2727,16 @@ export function ActiveSession() {
           setIsEzriThinking(false);
         },
         onTtsDone: () => {
+          // tts_done from an interrupted turn — ignore entirely.
+          if (suppressIncomingAudioRef.current) {
+            wsTtsDoneReceivedRef.current = false;
+            return;
+          }
+
           wsTtsDoneReceivedRef.current = true;
-          const activeTurn = wsActiveTurnRef.current;
+
           // If the server claims TTS finished but we never received any audio frames, use REST speak fallback.
-          if (wsAudioSeenTurnRef.current !== activeTurn && wsPendingFallbackTextRef.current.trim()) {
+          if (wsAudioSeenTurnRef.current !== wsActiveTurnRef.current && wsPendingFallbackTextRef.current.trim()) {
             const t = wsPendingFallbackTextRef.current.trim();
             wsPendingFallbackTextRef.current = "";
             void speakViaEzriTts(t);
@@ -2695,6 +2755,12 @@ export function ActiveSession() {
           setIsEzriThinking(false);
         },
         onAudio: (audio) => {
+          // Drop audio from the old turn — any chunk arriving while suppressed
+          // is a server-buffered leftover that arrived before our interrupt
+          // was processed. We only lift suppression when the new user message
+          // is actually sent (see handleUserText).
+          if (suppressIncomingAudioRef.current) return;
+
           const buffered = wsAssistantBufferRef.current.trim();
           const subtitle = buffered || wsLastFinalTextRef.current.trim() || "…";
           wsAudioSeenTurnRef.current = wsActiveTurnRef.current;
@@ -2705,6 +2771,12 @@ export function ActiveSession() {
           }
           wsAudioQueueRef.current.push({ subtitle, audio });
           const playNext = () => {
+            // Drop queued chunk if suppression was re-enabled mid-queue.
+            if (suppressIncomingAudioRef.current) {
+              wsAudioQueueRef.current = [];
+              wsIsPlaybackActiveRef.current = false;
+              return;
+            }
             if (wsIsPlaybackActiveRef.current) return;
             const next = wsAudioQueueRef.current.shift();
             if (!next) {

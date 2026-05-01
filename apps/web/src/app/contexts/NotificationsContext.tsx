@@ -87,7 +87,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
       // Subscribe to realtime changes
       const channel = supabase
-        .channel('public:notifications')
+        .channel(`notifications:${user.id}`)
         .on(
           'postgres_changes',
           {
@@ -114,7 +114,11 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
             await syncUnreadCount();
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.warn('[NotificationsContext] Realtime channel error for user', user.id);
+          }
+        });
 
       return () => {
         supabase.removeChannel(channel);

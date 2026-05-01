@@ -8,6 +8,8 @@ export type EzriChatRestRequest = {
   session_id: string;
   /** Same Kokoro/RunPod voice id as WebSocket `voice=` (required for correct male/female TTS on REST). */
   voice?: string;
+  /** Optional AbortSignal — pass one so the request can be cancelled on interruption. */
+  signal?: AbortSignal;
 };
 
 export type EzriChatRestResult = {
@@ -80,10 +82,12 @@ export function createEzriApiClient(apiBase: string) {
 
   return {
     async sendChatRest(req: EzriChatRestRequest): Promise<EzriChatRestResult> {
+      const { signal, ...reqBody } = req;
       const res = await fetch(`${base}/api/v1/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(req),
+        body: JSON.stringify(reqBody),
+        signal,
       });
 
       const body = await readJsonOrText(res);

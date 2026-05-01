@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 // Contexts
@@ -9,179 +9,179 @@ import { OnboardingProvider } from '@/app/contexts/OnboardingContext';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { ProtectedRoute } from '@/app/components/ProtectedRoute';
 
-// Components
+// Components (shell / layout — keep eager so they render before any lazy page loads)
 import { Toaster } from '@/app/components/ui/sonner';
 import { MobileMetaTags } from '@/app/components/MobileMetaTags';
 import { ThemeManager } from '@/app/components/ThemeManager';
 import { AppLayout } from '@/app/components/AppLayout';
+import { PageLoader } from '@/app/components/PageLoader';
 
-// Public Pages
-import { Landing } from '@/app/pages/Landing';
-import { HowItWorks } from '@/app/pages/HowItWorks';
-import { Privacy } from '@/app/pages/Privacy';
-import { Terms } from '@/app/pages/Terms';
-import { Accessibility } from '@/app/pages/Accessibility';
-import { Pricing } from '@/app/pages/Pricing';
+// ─── Public Pages ────────────────────────────────────────────────────────────
+const Landing              = lazy(() => import('@/app/pages/Landing').then(m => ({ default: m.Landing })));
+const HowItWorks           = lazy(() => import('@/app/pages/HowItWorks').then(m => ({ default: m.HowItWorks })));
+const Privacy              = lazy(() => import('@/app/pages/Privacy').then(m => ({ default: m.Privacy })));
+const Terms                = lazy(() => import('@/app/pages/Terms').then(m => ({ default: m.Terms })));
+const Accessibility        = lazy(() => import('@/app/pages/Accessibility').then(m => ({ default: m.Accessibility })));
+const Pricing              = lazy(() => import('@/app/pages/Pricing').then(m => ({ default: m.Pricing })));
 
-// Auth Pages
-import { Login } from '@/app/pages/Login';
-import { Signup } from '@/app/pages/Signup';
-import { VerifyEmail } from '@/app/pages/VerifyEmail';
-import { AuthCallback } from '@/app/pages/AuthCallback';
-import { ForgotPassword } from '@/app/pages/ForgotPassword';
-import { ResetPassword } from '@/app/pages/ResetPassword';
-import { InviteCreatePassword } from '@/app/pages/InviteCreatePassword';
+// ─── Auth Pages ──────────────────────────────────────────────────────────────
+const Login                = lazy(() => import('@/app/pages/Login').then(m => ({ default: m.Login })));
+const Signup               = lazy(() => import('@/app/pages/Signup').then(m => ({ default: m.Signup })));
+const VerifyEmail          = lazy(() => import('@/app/pages/VerifyEmail').then(m => ({ default: m.VerifyEmail })));
+const AuthCallback         = lazy(() => import('@/app/pages/AuthCallback').then(m => ({ default: m.AuthCallback })));
+const ForgotPassword       = lazy(() => import('@/app/pages/ForgotPassword').then(m => ({ default: m.ForgotPassword })));
+const ResetPassword        = lazy(() => import('@/app/pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
+const InviteCreatePassword = lazy(() => import('@/app/pages/InviteCreatePassword').then(m => ({ default: m.InviteCreatePassword })));
 
-// Coming Soon Page
-import { ComingSoon } from '@/app/pages/onboarding/ComingSoon';
+// Admin public auth pages (no role required — treated as auth section)
+const AdminLogin           = lazy(() => import('@/app/pages/admin/AdminLogin').then(m => ({ default: m.AdminLogin })));
+const AdminCredentials     = lazy(() => import('@/app/pages/admin/AdminCredentials').then(m => ({ default: m.AdminCredentials })));
+const TwoFactorAuth        = lazy(() => import('@/app/pages/admin/TwoFactorAuth').then(m => ({ default: m.TwoFactorAuth })));
 
-import { OnboardingWelcome } from '@/app/pages/onboarding/Welcome';
-import { OnboardingProfileSetup } from '@/app/pages/onboarding/ProfileSetup';
-import { OnboardingWellnessBaseline } from '@/app/pages/onboarding/WellnessBaseline';
-import { OnboardingHealthBackground } from '@/app/pages/onboarding/HealthBackground';
-import { OnboardingAvatarPreferences } from '@/app/pages/onboarding/AvatarPreferences';
-import { OnboardingEmergencyContact } from '@/app/pages/onboarding/EmergencyContact';
-import { OnboardingPermissions } from '@/app/pages/onboarding/Permissions';
-import { OnboardingSafetyConsent } from '@/app/pages/onboarding/SafetyConsent';
-import { OnboardingSubscription } from '@/app/pages/onboarding/Subscription';
-import { OnboardingComplete } from '@/app/pages/onboarding/Complete';
+// ─── Onboarding Pages ────────────────────────────────────────────────────────
+const ComingSoon                  = lazy(() => import('@/app/pages/onboarding/ComingSoon').then(m => ({ default: m.ComingSoon })));
+const OnboardingWelcome           = lazy(() => import('@/app/pages/onboarding/Welcome').then(m => ({ default: m.OnboardingWelcome })));
+const OnboardingProfileSetup      = lazy(() => import('@/app/pages/onboarding/ProfileSetup').then(m => ({ default: m.OnboardingProfileSetup })));
+const OnboardingWellnessBaseline  = lazy(() => import('@/app/pages/onboarding/WellnessBaseline').then(m => ({ default: m.OnboardingWellnessBaseline })));
+const OnboardingHealthBackground  = lazy(() => import('@/app/pages/onboarding/HealthBackground').then(m => ({ default: m.OnboardingHealthBackground })));
+const OnboardingAvatarPreferences = lazy(() => import('@/app/pages/onboarding/AvatarPreferences').then(m => ({ default: m.OnboardingAvatarPreferences })));
+const OnboardingEmergencyContact  = lazy(() => import('@/app/pages/onboarding/EmergencyContact').then(m => ({ default: m.OnboardingEmergencyContact })));
+const OnboardingPermissions       = lazy(() => import('@/app/pages/onboarding/Permissions').then(m => ({ default: m.OnboardingPermissions })));
+const OnboardingSafetyConsent     = lazy(() => import('@/app/pages/onboarding/SafetyConsent').then(m => ({ default: m.OnboardingSafetyConsent })));
+const OnboardingSubscription      = lazy(() => import('@/app/pages/onboarding/Subscription').then(m => ({ default: m.OnboardingSubscription })));
+const OnboardingComplete          = lazy(() => import('@/app/pages/onboarding/Complete').then(m => ({ default: m.OnboardingComplete })));
 
-// User App Pages
-import { Dashboard } from '@/app/pages/app/Dashboard';
-import { MoodCheckIn } from '@/app/pages/app/MoodCheckIn';
-import { UserProfile } from '@/app/pages/app/UserProfile';
-import { MemberProfileView } from '@/app/pages/app/MemberProfileView';
-import { SessionLobby } from '@/app/pages/app/SessionLobby';
-import { ActiveSession } from '@/app/pages/app/ActiveSession';
-import { Billing } from '@/app/pages/app/Billing';
-import { SleepTracker } from '@/app/pages/app/SleepTracker';
-import { HabitTracker } from '@/app/pages/app/HabitTracker';
-
-// Admin Pages
-import { SuperAdminDashboard } from '@/app/pages/admin/SuperAdminDashboard';
-import { OrgAdminDashboard } from '@/app/pages/admin/OrgAdminDashboard';
-import { TeamAdminDashboard } from '@/app/pages/admin/TeamAdminDashboard';
-import { UserManagement } from '@/app/pages/admin/UserManagement';
-import { UserDetailsEnhanced } from '@/app/pages/admin/UserDetailsEnhanced';
-import { UserMoodAnalytics } from '@/app/pages/admin/UserMoodAnalytics';
-import { UserJournalAnalytics } from '@/app/pages/admin/UserJournalAnalytics';
-import { UserSleepAnalytics } from '@/app/pages/admin/UserSleepAnalytics';
-import { UserHabitAnalytics } from '@/app/pages/admin/UserHabitAnalytics';
-import { AllUsersMoodAnalytics } from '@/app/pages/admin/AllUsersMoodAnalytics';
-import { AllUsersJournalAnalytics } from '@/app/pages/admin/AllUsersJournalAnalytics';
-import { AllUsersSleepAnalytics } from '@/app/pages/admin/AllUsersSleepAnalytics';
-import { AllUsersHabitAnalytics } from '@/app/pages/admin/AllUsersHabitAnalytics';
-import { UserSegmentation } from '@/app/pages/admin/UserSegmentation';
-import { TeamRoleManagement } from '@/app/pages/admin/TeamRoleManagement';
-import { CompanionManagement } from '@/app/pages/admin/CompanionManagement';
-import { AIAvatarManager } from '@/app/pages/admin/AIAvatarManager';
-import { ConversationTranscripts } from '@/app/pages/admin/ConversationTranscripts';
-import { CrisisDashboard } from '@/app/pages/admin/CrisisDashboard';
-import { CrisisMonitoring } from '@/app/pages/admin/CrisisMonitoring';
-import { CrisisEventDetails } from '@/app/pages/admin/CrisisEventDetails';
-import { CrisisFollowUpQueue } from '@/app/pages/admin/CrisisFollowUpQueue';
-import { CrisisProtocol } from '@/app/pages/admin/CrisisProtocol';
-import { Analytics } from '@/app/pages/admin/Analytics';
-import { UsageOverview } from '@/app/pages/admin/UsageOverview';
-import { UsageAnalytics } from '@/app/pages/admin/UsageAnalytics';
-import { SessionAnalytics } from '@/app/pages/admin/SessionAnalytics';
-import { EngagementMetrics } from '@/app/pages/admin/EngagementMetrics';
-import { RetentionMetrics } from '@/app/pages/admin/RetentionMetrics';
-import { FeatureAdoption } from '@/app/pages/admin/FeatureAdoption';
-import { OnboardingAnalytics } from '@/app/pages/admin/OnboardingAnalytics';
-import { ReportsAnalytics } from '@/app/pages/admin/ReportsAnalytics';
-import { AvatarSelectionAnalytics } from '@/app/pages/admin/AvatarSelectionAnalytics';
-import { ContentManagement } from '@/app/pages/admin/ContentManagement';
-import { WellnessToolsCMS } from '@/app/pages/admin/WellnessToolsCMS';
-import { WellnessContentCMS } from '@/app/pages/admin/WellnessContentCMS';
-import { WellnessContentLibrary } from '@/app/pages/admin/WellnessContentLibrary';
-import { WellnessToolEditor } from '@/app/pages/admin/WellnessToolEditor';
-import { ExerciseLibrary } from '@/app/pages/admin/ExerciseLibrary';
-import { ContentPerformance } from '@/app/pages/admin/ContentPerformance';
-import { ContentModeration } from '@/app/pages/admin/ContentModeration';
-import { NudgeManagement } from '@/app/pages/admin/NudgeManagement';
-import { NudgeTemplates } from '@/app/pages/admin/NudgeTemplates';
-import { NudgeScheduler } from '@/app/pages/admin/NudgeScheduler';
-import { NudgePerformance } from '@/app/pages/admin/NudgePerformance';
-import { WellnessChallenges } from '@/app/pages/admin/WellnessChallenges';
-import { BadgeManager } from '@/app/pages/admin/BadgeManager';
-import { NotificationsCenter } from '@/app/pages/admin/NotificationsCenter';
-import { ManualNotifications } from '@/app/pages/admin/ManualNotifications';
-import { EmailTemplates } from '@/app/pages/admin/EmailTemplates';
-import { PushNotifications } from '@/app/pages/admin/PushNotifications';
-import { SupportTickets } from '@/app/pages/admin/SupportTickets';
-import { CommunityManagement } from '@/app/pages/admin/CommunityManagement';
-import { LiveSessionsMonitor } from '@/app/pages/admin/LiveSessionsMonitor';
-import { SessionRecordings } from '@/app/pages/admin/SessionRecordings';
-import { ActivityMonitor } from '@/app/pages/admin/ActivityMonitor';
-import { SystemHealthEnhanced } from '@/app/pages/admin/SystemHealthEnhanced';
-import { ErrorTracking } from '@/app/pages/admin/ErrorTracking';
-import { SystemSettingsEnhanced } from '@/app/pages/admin/SystemSettingsEnhanced';
-import { GlobalConfiguration } from '@/app/pages/admin/GlobalConfiguration';
-import { FeatureFlags } from '@/app/pages/admin/FeatureFlags';
-import { APIManagement } from '@/app/pages/admin/APIManagement';
-import { IntegrationSettings } from '@/app/pages/admin/IntegrationSettings';
-import { BrandingCustomization } from '@/app/pages/admin/BrandingCustomization';
-import { ABTesting } from '@/app/pages/admin/ABTesting';
-import { Billing as AdminBilling } from '@/app/pages/admin/Billing';
-import { BillingSubscriptions } from '@/app/pages/admin/BillingSubscriptions';
-import { PackageManager } from '@/app/pages/admin/PackageManager';
-import { PayAsYouGoManager } from '@/app/pages/admin/PayAsYouGoManager';
-import { ComplianceDashboard } from '@/app/pages/admin/ComplianceDashboard';
-import { HIPAACompliance } from '@/app/pages/admin/HIPAACompliance';
-import { DataPrivacyControls } from '@/app/pages/admin/DataPrivacyControls';
-import { DataRetentionPrivacy } from '@/app/pages/admin/DataRetentionPrivacy';
-import { AuditLogs } from '@/app/pages/admin/AuditLogs';
-import { SystemLogs } from '@/app/pages/admin/SystemLogs';
-import { LegalDocumentation } from '@/app/pages/admin/LegalDocumentation';
-import { DataExport } from '@/app/pages/admin/DataExport';
-import { BackupRecovery } from '@/app/pages/admin/BackupRecovery';
-
-// Error Pages
-import { Error404 } from '@/app/pages/errors/Error404';
-import { Error500 } from '@/app/pages/errors/Error500';
-import { Offline } from '@/app/pages/errors/Offline';
-import { Maintenance } from '@/app/pages/errors/Maintenance';
-import { PermissionDenied } from '@/app/pages/errors/PermissionDenied';
-import { TrialExpired } from '@/app/pages/errors/TrialExpired';
-import { NoDeviceAccess } from '@/app/pages/errors/NoDeviceAccess';
-
-// Admin Public Pages
-import { AdminLogin } from '@/app/pages/admin/AdminLogin';
-import { AdminCredentials } from '@/app/pages/admin/AdminCredentials';
-import { TwoFactorAuth } from '@/app/pages/admin/TwoFactorAuth';
-import { MoodHistory } from './pages/app/MoodHistory';
-import { Journal } from './pages/app/Journal';
-import { WellnessTools } from './pages/app/WellnessTools';
-import { SecuritySettings } from './pages/admin/SecuritySettings';
-import { SessionHistory } from './pages/app/SessionHistory';
-import { Settings } from './pages/app/Settings';
-import { SettingsHub } from './pages/app/SettingsHub';
-import { AccountSettings } from './pages/app/AccountSettings';
-import { EmergencyContacts } from './pages/app/EmergencyContacts';
-import { Notifications } from './pages/app/Notifications';
-import { PrivacySettings } from './pages/app/PrivacySettings';
-import { AccessibilitySettings } from './pages/app/AccessibilitySettings';
-import { AppearanceSettings } from './pages/app/AppearanceSettings';
-import { ChangeAvatar } from './pages/app/ChangeAvatar';
-import { Achievements } from './pages/app/Achievements';
-import { NotificationHistory } from './pages/app/NotificationHistory';
-import { RecentActivityHistory } from './pages/app/RecentActivityHistory';
-// import { GoalsList } from './pages/app/GoalsList';
-import { GoalDetails } from './pages/app/GoalDetails';
-import { BrainHealth } from './pages/app/BrainHealth';
-import { Resources } from './pages/app/Resources';
-import { ResourceArticlePage } from './pages/app/ResourceArticlePage';
-import { Community } from './pages/app/Community';
-import { CrisisResources } from './pages/app/CrisisResources';
-import { ResourceAnalyticsPage } from './pages/app/ResourceAnalytics';
-import { CooldownScreen } from './pages/app/CooldownScreen';
-import { HelpSupport } from './pages/app/HelpSupport';
-import { Progress } from './pages/app/Progress';
-import { SafetyPlan } from './pages/app/SafetyPlan';
-import { Challenges } from './pages/app/Challenges';
-import { SafetyInsights } from './pages/app/SafetyInsights';
+// ─── User App Pages ───────────────────────────────────────────────────────────
+const Dashboard              = lazy(() => import('@/app/pages/app/Dashboard').then(m => ({ default: m.Dashboard })));
+const MoodCheckIn            = lazy(() => import('@/app/pages/app/MoodCheckIn').then(m => ({ default: m.MoodCheckIn })));
+const UserProfile            = lazy(() => import('@/app/pages/app/UserProfile').then(m => ({ default: m.UserProfile })));
+const MemberProfileView      = lazy(() => import('@/app/pages/app/MemberProfileView').then(m => ({ default: m.MemberProfileView })));
+const SessionLobby           = lazy(() => import('@/app/pages/app/SessionLobby').then(m => ({ default: m.SessionLobby })));
+const ActiveSession          = lazy(() => import('@/app/pages/app/ActiveSession').then(m => ({ default: m.ActiveSession })));
+const Billing                = lazy(() => import('@/app/pages/app/Billing').then(m => ({ default: m.Billing })));
+const SleepTracker           = lazy(() => import('@/app/pages/app/SleepTracker').then(m => ({ default: m.SleepTracker })));
+const HabitTracker           = lazy(() => import('@/app/pages/app/HabitTracker').then(m => ({ default: m.HabitTracker })));
+const MoodHistory            = lazy(() => import('./pages/app/MoodHistory').then(m => ({ default: m.MoodHistory })));
+const Journal                = lazy(() => import('./pages/app/Journal').then(m => ({ default: m.Journal })));
+const WellnessTools          = lazy(() => import('./pages/app/WellnessTools').then(m => ({ default: m.WellnessTools })));
+const SessionHistory         = lazy(() => import('./pages/app/SessionHistory').then(m => ({ default: m.SessionHistory })));
+const Settings               = lazy(() => import('./pages/app/Settings').then(m => ({ default: m.Settings })));
+const SettingsHub            = lazy(() => import('./pages/app/SettingsHub').then(m => ({ default: m.SettingsHub })));
+const AccountSettings        = lazy(() => import('./pages/app/AccountSettings').then(m => ({ default: m.AccountSettings })));
+const EmergencyContacts      = lazy(() => import('./pages/app/EmergencyContacts').then(m => ({ default: m.EmergencyContacts })));
+const Notifications          = lazy(() => import('./pages/app/Notifications').then(m => ({ default: m.Notifications })));
+const PrivacySettings        = lazy(() => import('./pages/app/PrivacySettings').then(m => ({ default: m.PrivacySettings })));
+const AccessibilitySettings  = lazy(() => import('./pages/app/AccessibilitySettings').then(m => ({ default: m.AccessibilitySettings })));
+const AppearanceSettings     = lazy(() => import('./pages/app/AppearanceSettings').then(m => ({ default: m.AppearanceSettings })));
+const ChangeAvatar           = lazy(() => import('./pages/app/ChangeAvatar').then(m => ({ default: m.ChangeAvatar })));
+const Achievements           = lazy(() => import('./pages/app/Achievements').then(m => ({ default: m.Achievements })));
+const NotificationHistory    = lazy(() => import('./pages/app/NotificationHistory').then(m => ({ default: m.NotificationHistory })));
+const RecentActivityHistory  = lazy(() => import('./pages/app/RecentActivityHistory').then(m => ({ default: m.RecentActivityHistory })));
+// const GoalsList           = lazy(() => import('./pages/app/GoalsList').then(m => ({ default: m.GoalsList })));
+const GoalDetails            = lazy(() => import('./pages/app/GoalDetails').then(m => ({ default: m.GoalDetails })));
+const BrainHealth            = lazy(() => import('./pages/app/BrainHealth').then(m => ({ default: m.BrainHealth })));
+const Resources              = lazy(() => import('./pages/app/Resources').then(m => ({ default: m.Resources })));
+const ResourceArticlePage    = lazy(() => import('./pages/app/ResourceArticlePage').then(m => ({ default: m.ResourceArticlePage })));
+const Community              = lazy(() => import('./pages/app/Community').then(m => ({ default: m.Community })));
+const CrisisResources        = lazy(() => import('./pages/app/CrisisResources').then(m => ({ default: m.CrisisResources })));
+const ResourceAnalyticsPage  = lazy(() => import('./pages/app/ResourceAnalytics').then(m => ({ default: m.ResourceAnalyticsPage })));
+const CooldownScreen         = lazy(() => import('./pages/app/CooldownScreen').then(m => ({ default: m.CooldownScreen })));
+const HelpSupport            = lazy(() => import('./pages/app/HelpSupport').then(m => ({ default: m.HelpSupport })));
+const Progress               = lazy(() => import('./pages/app/Progress').then(m => ({ default: m.Progress })));
+const SafetyPlan             = lazy(() => import('./pages/app/SafetyPlan').then(m => ({ default: m.SafetyPlan })));
+const Challenges             = lazy(() => import('./pages/app/Challenges').then(m => ({ default: m.Challenges })));
+const SafetyInsights         = lazy(() => import('./pages/app/SafetyInsights').then(m => ({ default: m.SafetyInsights })));
 // import { Community } from './pages/app/Community';
+
+// ─── Admin Pages ─────────────────────────────────────────────────────────────
+const SuperAdminDashboard       = lazy(() => import('@/app/pages/admin/SuperAdminDashboard').then(m => ({ default: m.SuperAdminDashboard })));
+const OrgAdminDashboard         = lazy(() => import('@/app/pages/admin/OrgAdminDashboard').then(m => ({ default: m.OrgAdminDashboard })));
+const TeamAdminDashboard        = lazy(() => import('@/app/pages/admin/TeamAdminDashboard').then(m => ({ default: m.TeamAdminDashboard })));
+const UserManagement            = lazy(() => import('@/app/pages/admin/UserManagement').then(m => ({ default: m.UserManagement })));
+const UserDetailsEnhanced       = lazy(() => import('@/app/pages/admin/UserDetailsEnhanced').then(m => ({ default: m.UserDetailsEnhanced })));
+const UserMoodAnalytics         = lazy(() => import('@/app/pages/admin/UserMoodAnalytics').then(m => ({ default: m.UserMoodAnalytics })));
+const UserJournalAnalytics      = lazy(() => import('@/app/pages/admin/UserJournalAnalytics').then(m => ({ default: m.UserJournalAnalytics })));
+const UserSleepAnalytics        = lazy(() => import('@/app/pages/admin/UserSleepAnalytics').then(m => ({ default: m.UserSleepAnalytics })));
+const UserHabitAnalytics        = lazy(() => import('@/app/pages/admin/UserHabitAnalytics').then(m => ({ default: m.UserHabitAnalytics })));
+const AllUsersMoodAnalytics     = lazy(() => import('@/app/pages/admin/AllUsersMoodAnalytics').then(m => ({ default: m.AllUsersMoodAnalytics })));
+const AllUsersJournalAnalytics  = lazy(() => import('@/app/pages/admin/AllUsersJournalAnalytics').then(m => ({ default: m.AllUsersJournalAnalytics })));
+const AllUsersSleepAnalytics    = lazy(() => import('@/app/pages/admin/AllUsersSleepAnalytics').then(m => ({ default: m.AllUsersSleepAnalytics })));
+const AllUsersHabitAnalytics    = lazy(() => import('@/app/pages/admin/AllUsersHabitAnalytics').then(m => ({ default: m.AllUsersHabitAnalytics })));
+const UserSegmentation          = lazy(() => import('@/app/pages/admin/UserSegmentation').then(m => ({ default: m.UserSegmentation })));
+const TeamRoleManagement        = lazy(() => import('@/app/pages/admin/TeamRoleManagement').then(m => ({ default: m.TeamRoleManagement })));
+const CompanionManagement       = lazy(() => import('@/app/pages/admin/CompanionManagement').then(m => ({ default: m.CompanionManagement })));
+const AIAvatarManager           = lazy(() => import('@/app/pages/admin/AIAvatarManager').then(m => ({ default: m.AIAvatarManager })));
+const ConversationTranscripts   = lazy(() => import('@/app/pages/admin/ConversationTranscripts').then(m => ({ default: m.ConversationTranscripts })));
+const CrisisDashboard           = lazy(() => import('@/app/pages/admin/CrisisDashboard').then(m => ({ default: m.CrisisDashboard })));
+const CrisisMonitoring          = lazy(() => import('@/app/pages/admin/CrisisMonitoring').then(m => ({ default: m.CrisisMonitoring })));
+const CrisisEventDetails        = lazy(() => import('@/app/pages/admin/CrisisEventDetails').then(m => ({ default: m.CrisisEventDetails })));
+const CrisisFollowUpQueue       = lazy(() => import('@/app/pages/admin/CrisisFollowUpQueue').then(m => ({ default: m.CrisisFollowUpQueue })));
+const CrisisProtocol            = lazy(() => import('@/app/pages/admin/CrisisProtocol').then(m => ({ default: m.CrisisProtocol })));
+const Analytics                 = lazy(() => import('@/app/pages/admin/Analytics').then(m => ({ default: m.Analytics })));
+const UsageOverview             = lazy(() => import('@/app/pages/admin/UsageOverview').then(m => ({ default: m.UsageOverview })));
+const UsageAnalytics            = lazy(() => import('@/app/pages/admin/UsageAnalytics').then(m => ({ default: m.UsageAnalytics })));
+const SessionAnalytics          = lazy(() => import('@/app/pages/admin/SessionAnalytics').then(m => ({ default: m.SessionAnalytics })));
+const EngagementMetrics         = lazy(() => import('@/app/pages/admin/EngagementMetrics').then(m => ({ default: m.EngagementMetrics })));
+const RetentionMetrics          = lazy(() => import('@/app/pages/admin/RetentionMetrics').then(m => ({ default: m.RetentionMetrics })));
+const FeatureAdoption           = lazy(() => import('@/app/pages/admin/FeatureAdoption').then(m => ({ default: m.FeatureAdoption })));
+const OnboardingAnalytics       = lazy(() => import('@/app/pages/admin/OnboardingAnalytics').then(m => ({ default: m.OnboardingAnalytics })));
+const ReportsAnalytics          = lazy(() => import('@/app/pages/admin/ReportsAnalytics').then(m => ({ default: m.ReportsAnalytics })));
+const AvatarSelectionAnalytics  = lazy(() => import('@/app/pages/admin/AvatarSelectionAnalytics').then(m => ({ default: m.AvatarSelectionAnalytics })));
+const ContentManagement         = lazy(() => import('@/app/pages/admin/ContentManagement').then(m => ({ default: m.ContentManagement })));
+const WellnessToolsCMS          = lazy(() => import('@/app/pages/admin/WellnessToolsCMS').then(m => ({ default: m.WellnessToolsCMS })));
+const WellnessContentCMS        = lazy(() => import('@/app/pages/admin/WellnessContentCMS').then(m => ({ default: m.WellnessContentCMS })));
+const WellnessContentLibrary    = lazy(() => import('@/app/pages/admin/WellnessContentLibrary').then(m => ({ default: m.WellnessContentLibrary })));
+const WellnessToolEditor        = lazy(() => import('@/app/pages/admin/WellnessToolEditor').then(m => ({ default: m.WellnessToolEditor })));
+const ExerciseLibrary           = lazy(() => import('@/app/pages/admin/ExerciseLibrary').then(m => ({ default: m.ExerciseLibrary })));
+const ContentPerformance        = lazy(() => import('@/app/pages/admin/ContentPerformance').then(m => ({ default: m.ContentPerformance })));
+const ContentModeration         = lazy(() => import('@/app/pages/admin/ContentModeration').then(m => ({ default: m.ContentModeration })));
+const NudgeManagement           = lazy(() => import('@/app/pages/admin/NudgeManagement').then(m => ({ default: m.NudgeManagement })));
+const NudgeTemplates            = lazy(() => import('@/app/pages/admin/NudgeTemplates').then(m => ({ default: m.NudgeTemplates })));
+const NudgeScheduler            = lazy(() => import('@/app/pages/admin/NudgeScheduler').then(m => ({ default: m.NudgeScheduler })));
+const NudgePerformance          = lazy(() => import('@/app/pages/admin/NudgePerformance').then(m => ({ default: m.NudgePerformance })));
+const WellnessChallenges        = lazy(() => import('@/app/pages/admin/WellnessChallenges').then(m => ({ default: m.WellnessChallenges })));
+const BadgeManager              = lazy(() => import('@/app/pages/admin/BadgeManager').then(m => ({ default: m.BadgeManager })));
+const NotificationsCenter       = lazy(() => import('@/app/pages/admin/NotificationsCenter').then(m => ({ default: m.NotificationsCenter })));
+const ManualNotifications       = lazy(() => import('@/app/pages/admin/ManualNotifications').then(m => ({ default: m.ManualNotifications })));
+const EmailTemplates            = lazy(() => import('@/app/pages/admin/EmailTemplates').then(m => ({ default: m.EmailTemplates })));
+const PushNotifications         = lazy(() => import('@/app/pages/admin/PushNotifications').then(m => ({ default: m.PushNotifications })));
+const SupportTickets            = lazy(() => import('@/app/pages/admin/SupportTickets').then(m => ({ default: m.SupportTickets })));
+const CommunityManagement       = lazy(() => import('@/app/pages/admin/CommunityManagement').then(m => ({ default: m.CommunityManagement })));
+const LiveSessionsMonitor       = lazy(() => import('@/app/pages/admin/LiveSessionsMonitor').then(m => ({ default: m.LiveSessionsMonitor })));
+const SessionRecordings         = lazy(() => import('@/app/pages/admin/SessionRecordings').then(m => ({ default: m.SessionRecordings })));
+const ActivityMonitor           = lazy(() => import('@/app/pages/admin/ActivityMonitor').then(m => ({ default: m.ActivityMonitor })));
+const SystemHealthEnhanced      = lazy(() => import('@/app/pages/admin/SystemHealthEnhanced').then(m => ({ default: m.SystemHealthEnhanced })));
+const ErrorTracking             = lazy(() => import('@/app/pages/admin/ErrorTracking').then(m => ({ default: m.ErrorTracking })));
+const SystemSettingsEnhanced    = lazy(() => import('@/app/pages/admin/SystemSettingsEnhanced').then(m => ({ default: m.SystemSettingsEnhanced })));
+const GlobalConfiguration       = lazy(() => import('@/app/pages/admin/GlobalConfiguration').then(m => ({ default: m.GlobalConfiguration })));
+const FeatureFlags              = lazy(() => import('@/app/pages/admin/FeatureFlags').then(m => ({ default: m.FeatureFlags })));
+const APIManagement             = lazy(() => import('@/app/pages/admin/APIManagement').then(m => ({ default: m.APIManagement })));
+const IntegrationSettings       = lazy(() => import('@/app/pages/admin/IntegrationSettings').then(m => ({ default: m.IntegrationSettings })));
+const BrandingCustomization     = lazy(() => import('@/app/pages/admin/BrandingCustomization').then(m => ({ default: m.BrandingCustomization })));
+const ABTesting                 = lazy(() => import('@/app/pages/admin/ABTesting').then(m => ({ default: m.ABTesting })));
+const AdminBilling              = lazy(() => import('@/app/pages/admin/Billing').then(m => ({ default: m.Billing })));
+const BillingSubscriptions      = lazy(() => import('@/app/pages/admin/BillingSubscriptions').then(m => ({ default: m.BillingSubscriptions })));
+const PackageManager            = lazy(() => import('@/app/pages/admin/PackageManager').then(m => ({ default: m.PackageManager })));
+const PayAsYouGoManager         = lazy(() => import('@/app/pages/admin/PayAsYouGoManager').then(m => ({ default: m.PayAsYouGoManager })));
+const SecuritySettings          = lazy(() => import('./pages/admin/SecuritySettings').then(m => ({ default: m.SecuritySettings })));
+const ComplianceDashboard       = lazy(() => import('@/app/pages/admin/ComplianceDashboard').then(m => ({ default: m.ComplianceDashboard })));
+const HIPAACompliance           = lazy(() => import('@/app/pages/admin/HIPAACompliance').then(m => ({ default: m.HIPAACompliance })));
+const DataPrivacyControls       = lazy(() => import('@/app/pages/admin/DataPrivacyControls').then(m => ({ default: m.DataPrivacyControls })));
+const DataRetentionPrivacy      = lazy(() => import('@/app/pages/admin/DataRetentionPrivacy').then(m => ({ default: m.DataRetentionPrivacy })));
+const AuditLogs                 = lazy(() => import('@/app/pages/admin/AuditLogs').then(m => ({ default: m.AuditLogs })));
+const SystemLogs                = lazy(() => import('@/app/pages/admin/SystemLogs').then(m => ({ default: m.SystemLogs })));
+const LegalDocumentation        = lazy(() => import('@/app/pages/admin/LegalDocumentation').then(m => ({ default: m.LegalDocumentation })));
+const DataExport                = lazy(() => import('@/app/pages/admin/DataExport').then(m => ({ default: m.DataExport })));
+const BackupRecovery            = lazy(() => import('@/app/pages/admin/BackupRecovery').then(m => ({ default: m.BackupRecovery })));
+
+// ─── Error Pages ─────────────────────────────────────────────────────────────
+const Error404        = lazy(() => import('@/app/pages/errors/Error404').then(m => ({ default: m.Error404 })));
+const Error500        = lazy(() => import('@/app/pages/errors/Error500').then(m => ({ default: m.Error500 })));
+const Offline         = lazy(() => import('@/app/pages/errors/Offline').then(m => ({ default: m.Offline })));
+const Maintenance     = lazy(() => import('@/app/pages/errors/Maintenance').then(m => ({ default: m.Maintenance })));
+const PermissionDenied = lazy(() => import('@/app/pages/errors/PermissionDenied').then(m => ({ default: m.PermissionDenied })));
+const TrialExpired    = lazy(() => import('@/app/pages/errors/TrialExpired').then(m => ({ default: m.TrialExpired })));
+const NoDeviceAccess  = lazy(() => import('@/app/pages/errors/NoDeviceAccess').then(m => ({ default: m.NoDeviceAccess })));
 
 function NetworkWatcher() {
   const navigate = useNavigate();
@@ -356,99 +356,128 @@ export default function App() {
         <MobileMetaTags />
         <Toaster />
         <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<Landing />} />
-          <Route path="/how-it-works" element={<HowItWorks />} />
-          <Route path="/privacy" element={<Privacy />} />
-          <Route path="/terms" element={<Terms />} />
-          <Route path="/accessibility" element={<Accessibility />} />
-          <Route path="/pricing" element={<Pricing />} />
-          
-          {/* Auth Routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/invite/create-password" element={<InviteCreatePassword />} />
-          
-          {/* Admin Routes - Public */}
-          <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin/credentials" element={<AdminCredentials />} />
-          <Route path="/admin/two-factor-auth" element={<TwoFactorAuth />} />
+          {/* ── Boundary 1: Public Routes ─────────────────────────────────── */}
+          <Route element={<Suspense fallback={<PageLoader />}><Outlet /></Suspense>}>
+            <Route path="/" element={<Landing />} />
+            <Route path="/how-it-works" element={<HowItWorks />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/accessibility" element={<Accessibility />} />
+            <Route path="/pricing" element={<Pricing />} />
 
-          {/* Protected Routes - All Redirected to Coming Soon */}
+            {/* Error pages share the public boundary */}
+            <Route path="/error/404" element={<Error404 />} />
+            <Route path="/error/500" element={<Error500 />} />
+            <Route path="/error/offline" element={<Offline />} />
+            <Route path="/error/maintenance" element={<Maintenance />} />
+            <Route path="/error/permission-denied" element={<PermissionDenied />} />
+            <Route path="/error/no-device-access" element={<NoDeviceAccess />} />
+            <Route path="/error/trial-expired" element={<TrialExpired />} />
+          </Route>
+
+          {/* ── Boundary 2: Auth Routes ───────────────────────────────────── */}
+          <Route element={<Suspense fallback={<PageLoader />}><Outlet /></Suspense>}>
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/invite/create-password" element={<InviteCreatePassword />} />
+
+            {/* Admin Routes - Public */}
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/credentials" element={<AdminCredentials />} />
+            <Route path="/admin/two-factor-auth" element={<TwoFactorAuth />} />
+          </Route>
+
+          {/* ── Protected Routes ──────────────────────────────────────────── */}
           <Route element={<ProtectedRoute><Outlet /></ProtectedRoute>}>
-            <Route element={<OnboardingProvider><Outlet /></OnboardingProvider>}>
-              {/* Onboarding Routes */}
-              <Route path="/onboarding" element={<OnboardingAccessGuard><Outlet /></OnboardingAccessGuard>}>
-                <Route index element={<Navigate to="/onboarding/welcome" replace />} />
-                <Route path="welcome" element={<OnboardingWelcome />} />
-                <Route path="profile-setup" element={<OnboardingProfileSetup />} />
-                <Route path="wellness-baseline" element={<OnboardingWellnessBaseline />} />
-                <Route path="health-background" element={<OnboardingHealthBackground />} />
-                <Route path="avatar-preferences" element={<OnboardingAvatarPreferences />} />
-                <Route path="emergency-contact" element={<OnboardingEmergencyContact />} />
-                <Route path="permissions" element={<OnboardingPermissions />} />
-                <Route path="safety-consent" element={<OnboardingSafetyConsent />} />
-                <Route path="subscription" element={<OnboardingSubscription />} />
-                <Route path="complete" element={<OnboardingComplete />} />
-                <Route path="*" element={<Navigate to="/onboarding/welcome" replace />} />
-              </Route>
-            </Route>
-          
-            {/* App Routes */}
-            <Route path="/app/dashboard" element={<Dashboard />} />
-            <Route path="/app/mood-checkin" element={<MoodCheckIn />} />
-            <Route path="/app/mood-history" element={<MoodHistory />} />
-            <Route path="/app/journal" element={<Journal />} />
-            <Route path="/app/wellness-tools" element={<WellnessTools />} />
 
-            <Route path="/app/session-lobby" element={<SessionLobby />} />
-            <Route path= "/app/session-history" element={<SessionHistory />} />
-            <Route path="/app/settings" element={<SettingsHub />} />
-            <Route path="/app/settings/account" element={<AccountSettings />} />
-            <Route path="/app/settings/emergency-contacts" element={<EmergencyContacts />} />
-           <Route path="/app/notifications" element={<Notifications />} />
-            <Route path="/app/active-session" element={<ActiveSession />} />
-            <Route path = "/app/settings/privacy" element={<PrivacySettings />} />
-            <Route path = "/app/settings/accessibility" element={<AccessibilitySettings />} />
-            <Route path = "/app/settings/appearance" element={<AppearanceSettings />} />
-            <Route path = "/app/settings/change-avatar" element={<ChangeAvatar />} />
-            <Route path = "/app/settings/achievements" element={<Achievements />} />
-            {/* <Route path = "/app/settings/goals" element={<GoalsList />} /> */}
-            {/* <Route path = "/app/settings/goals/:goalId" element={<GoalDetails />} /> */}
-            <Route path = "/app/settings/notification-history" element={<NotificationHistory />} />
-            <Route path="/app/recent-activity-history" element={<RecentActivityHistory />} />
-            <Route path="/app/profile/:userId" element={<MemberProfileView />} />
-            <Route path="/profile/:userId" element={<MemberProfileView />} />
-            <Route path="/app/profile" element={<Navigate to="/app/user-profile" replace />} />
-            <Route path="/app/user-profile" element={<UserProfile />} />
-            <Route path="/app/crisis-resources" element={<CrisisResources />} />
-            <Route path="/app/settings/resource-analytics" element={<ResourceAnalyticsPage />} />
-            <Route path ="/app/settings/cooldown-screen" element={<CooldownScreen />} />
-            <Route path = "/app/settings/help-support" element={<HelpSupport />} />
-            <Route path="/app/progress" element={<Progress />} />
-            <Route path="/app/settings/safety-insights" element={<SafetyInsights />} />
-            {/* <Route path="/app/settings/community" element={<Community />} /> */}
-            <Route path="/app/billing" element={<Billing />} />
-            <Route path="/app/invite/create-password" element={<InviteCreatePassword />} />
-            <Route path="/app/sleep-tracker" element={<SleepTracker />} />
-            <Route path="/app/habit-tracker" element={<HabitTracker />} />
-            <Route path="/app/settings/notifications" element={<Notifications />} />
-            <Route path="/app/settings/brain-health" element={<BrainHealth />} />
-            <Route path="/app/settings/resources" element={<Resources />} />
-            <Route path="/app/challenges" element={<Challenges />} />
-            <Route path="/app/settings/resources/article/:articleId" element={<ResourceArticlePage />} />
-            <Route path="/app/settings/community" element={<Community />} />
-            <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />
-            <Route path ="/app/settings/safety-plan" element={<SafetyPlan />} />
+            {/* ── Boundary 3: Member App Routes (onboarding + /app/*) ───── */}
+            <Route element={<Suspense fallback={<PageLoader />}><Outlet /></Suspense>}>
+              {/* Protected Routes - All Redirected to Coming Soon */}
+              <Route element={<OnboardingProvider><Outlet /></OnboardingProvider>}>
+                {/* Onboarding Routes */}
+                <Route path="/onboarding" element={<OnboardingAccessGuard><Outlet /></OnboardingAccessGuard>}>
+                  <Route index element={<Navigate to="/onboarding/welcome" replace />} />
+                  <Route path="welcome" element={<OnboardingWelcome />} />
+                  <Route path="profile-setup" element={<OnboardingProfileSetup />} />
+                  <Route path="wellness-baseline" element={<OnboardingWellnessBaseline />} />
+                  <Route path="health-background" element={<OnboardingHealthBackground />} />
+                  <Route path="avatar-preferences" element={<OnboardingAvatarPreferences />} />
+                  <Route path="emergency-contact" element={<OnboardingEmergencyContact />} />
+                  <Route path="permissions" element={<OnboardingPermissions />} />
+                  <Route path="safety-consent" element={<OnboardingSafetyConsent />} />
+                  <Route path="subscription" element={<OnboardingSubscription />} />
+                  <Route path="complete" element={<OnboardingComplete />} />
+                  <Route path="*" element={<Navigate to="/onboarding/welcome" replace />} />
+                </Route>
+              </Route>
+
+              {/* App Routes */}
+              <Route path="/app/dashboard" element={<Dashboard />} />
+              <Route path="/app/mood-checkin" element={<MoodCheckIn />} />
+              <Route path="/app/mood-history" element={<MoodHistory />} />
+              <Route path="/app/journal" element={<Journal />} />
+              <Route path="/app/wellness-tools" element={<WellnessTools />} />
+
+              <Route path="/app/session-lobby" element={<SessionLobby />} />
+              <Route path= "/app/session-history" element={<SessionHistory />} />
+              <Route path="/app/settings" element={<SettingsHub />} />
+              <Route path="/app/settings/account" element={<AccountSettings />} />
+              <Route path="/app/settings/emergency-contacts" element={<EmergencyContacts />} />
+             <Route path="/app/notifications" element={<Notifications />} />
+              <Route
+                path="/app/active-session"
+                element={
+                  <Suspense fallback={<PageLoader />}>
+                    <ActiveSession />
+                  </Suspense>
+                }
+              />
+              <Route path = "/app/settings/privacy" element={<PrivacySettings />} />
+              <Route path = "/app/settings/accessibility" element={<AccessibilitySettings />} />
+              <Route path = "/app/settings/appearance" element={<AppearanceSettings />} />
+              <Route path = "/app/settings/change-avatar" element={<ChangeAvatar />} />
+              <Route path = "/app/settings/achievements" element={<Achievements />} />
+              {/* <Route path = "/app/settings/goals" element={<GoalsList />} /> */}
+              {/* <Route path = "/app/settings/goals/:goalId" element={<GoalDetails />} /> */}
+              <Route path = "/app/settings/notification-history" element={<NotificationHistory />} />
+              <Route path="/app/recent-activity-history" element={<RecentActivityHistory />} />
+              <Route path="/app/profile/:userId" element={<MemberProfileView />} />
+              <Route path="/profile/:userId" element={<MemberProfileView />} />
+              <Route path="/app/profile" element={<Navigate to="/app/user-profile" replace />} />
+              <Route path="/app/user-profile" element={<UserProfile />} />
+              <Route path="/app/crisis-resources" element={<CrisisResources />} />
+              <Route path="/app/settings/resource-analytics" element={<ResourceAnalyticsPage />} />
+              <Route path ="/app/settings/cooldown-screen" element={<CooldownScreen />} />
+              <Route path = "/app/settings/help-support" element={<HelpSupport />} />
+              <Route path="/app/progress" element={<Progress />} />
+              <Route path="/app/settings/safety-insights" element={<SafetyInsights />} />
+              {/* <Route path="/app/settings/community" element={<Community />} /> */}
+              <Route path="/app/billing" element={<Billing />} />
+              <Route path="/app/invite/create-password" element={<InviteCreatePassword />} />
+              <Route path="/app/sleep-tracker" element={<SleepTracker />} />
+              <Route path="/app/habit-tracker" element={<HabitTracker />} />
+              <Route path="/app/settings/notifications" element={<Notifications />} />
+              <Route path="/app/settings/brain-health" element={<BrainHealth />} />
+              <Route path="/app/settings/resources" element={<Resources />} />
+              <Route path="/app/challenges" element={<Challenges />} />
+              <Route path="/app/settings/resources/article/:articleId" element={<ResourceArticlePage />} />
+              <Route path="/app/settings/community" element={<Community />} />
+              <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />
+              <Route path ="/app/settings/safety-plan" element={<SafetyPlan />} />
+            </Route>
+
+            {/* ── Boundary 4: Admin Routes ──────────────────────────────── */}
             {/* Admin Routes - Protected and role-gated */}
             <Route
               element={
                 <ProtectedRoute allowedRoles={['super_admin', 'org_admin', 'team_admin']}>
-                  <Outlet />
+                  <Suspense fallback={<PageLoader />}>
+                    <Outlet />
+                  </Suspense>
                 </ProtectedRoute>
               }
             >
@@ -621,15 +650,6 @@ export default function App() {
             </Route>
           </Route>
 
-          {/* Error Pages */}
-          <Route path="/error/404" element={<Error404 />} />
-          <Route path="/error/500" element={<Error500 />} />
-          <Route path="/error/offline" element={<Offline />} />
-          <Route path="/error/maintenance" element={<Maintenance />} />
-          <Route path="/error/permission-denied" element={<PermissionDenied />} />
-          <Route path="/error/no-device-access" element={<NoDeviceAccess />} />
-          <Route path="/error/trial-expired" element={<TrialExpired />} />
-          
           {/* Catch-all redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
