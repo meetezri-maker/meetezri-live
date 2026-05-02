@@ -87,6 +87,7 @@ export function FeatureAdoption() {
   }[];
   const hourlyActivity = (dash?.hourlyActivity || []) as { hour: string; hourNum?: number; sessions: number }[];
 
+  const totalSessionsAllTime = Number(dash?.totalSessions) || 0;
   const sessionsInRange = sessionActivity.reduce((s, x) => s + (Number(x.sessions) || 0), 0);
 
   const sessionTrendData = sessionActivity.map((r) => ({
@@ -151,13 +152,13 @@ export function FeatureAdoption() {
       description: "relative activity share",
     },
     {
-      label: "Sessions in range",
-      value: sessionsInRange.toLocaleString(),
-      change: "—",
+      label: "Total Sessions",
+      value: totalSessionsAllTime.toLocaleString(),
+      change: `${sessionsInRange.toLocaleString()} in range`,
       trend: "up" as const,
       icon: BookOpen,
       color: "from-cyan-500 to-blue-600",
-      description: "sum of daily sessions in selected dates",
+      description: "all-time ended sessions · badge shows count in selected dates",
     },
     {
       label: "Onboarding completion",

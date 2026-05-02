@@ -24,6 +24,7 @@ import {
   getBackupRecordJsonForDownload,
   getContentPerformanceAnalytics,
   getWellnessToolUsageAggregates,
+  getAdminAchievements, createAdminAchievement, updateAdminAchievement, deleteAdminAchievement,
 } from './admin.service';
 import {
   listFeatureFlags,
@@ -1477,5 +1478,69 @@ export async function putBrandingConfigHandler(request: FastifyRequest, reply: F
   } catch (error) {
     request.log.error(error);
     return reply.code(500).send({ message: 'Failed to save branding' });
+  }
+}
+
+// ── Achievements Admin ──────────────────────────────────────────────────────
+
+export async function getAdminAchievementsHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const data = await getAdminAchievements();
+    return reply.code(200).send(data);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to fetch achievements' });
+  }
+}
+
+export async function postAdminAchievementHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const body = (request.body || {}) as Record<string, unknown>;
+    const achievement = await createAdminAchievement({
+      name: String(body.name ?? ''),
+      description: body.description !== undefined ? String(body.description) : undefined,
+      category: body.category !== undefined ? String(body.category) : undefined,
+      iconUrl: body.iconUrl !== undefined ? String(body.iconUrl) : undefined,
+      criteria: body.criteria as Record<string, unknown> | undefined,
+      points: body.points !== undefined ? Number(body.points) : undefined,
+      level: body.level !== undefined ? Number(body.level) : undefined,
+      maxLevel: body.maxLevel !== undefined ? Number(body.maxLevel) : undefined,
+    });
+    return reply.code(201).send(achievement);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to create achievement' });
+  }
+}
+
+export async function patchAdminAchievementHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const { id } = request.params as { id: string };
+    const body = (request.body || {}) as Record<string, unknown>;
+    const achievement = await updateAdminAchievement(id, {
+      name: body.name !== undefined ? String(body.name) : undefined,
+      description: body.description !== undefined ? String(body.description) : undefined,
+      category: body.category !== undefined ? String(body.category) : undefined,
+      iconUrl: body.iconUrl !== undefined ? String(body.iconUrl) : undefined,
+      criteria: body.criteria as Record<string, unknown> | undefined,
+      points: body.points !== undefined ? Number(body.points) : undefined,
+      level: body.level !== undefined ? Number(body.level) : undefined,
+      maxLevel: body.maxLevel !== undefined ? Number(body.maxLevel) : undefined,
+    });
+    return reply.code(200).send(achievement);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to update achievement' });
+  }
+}
+
+export async function deleteAdminAchievementHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const { id } = request.params as { id: string };
+    await deleteAdminAchievement(id);
+    return reply.code(204).send();
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: 'Failed to delete achievement' });
   }
 }

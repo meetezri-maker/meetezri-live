@@ -7,7 +7,6 @@ import {
   Mail,
   Phone,
   Calendar,
-  Award,
   BarChart3,
   Edit,
   Trash2,
@@ -35,7 +34,6 @@ type Companion = {
   verified: boolean;
   joinedDate: string;
   sessionsCount: number;
-  rating: number;
   availability: string;
   languages: string[];
 };
@@ -222,13 +220,7 @@ export function CompanionManagement() {
     active: companions.filter((t) => t.status === "active").length,
     pending: companions.filter((t) => t.status === "pending").length,
     totalSessions: companions.reduce((sum, t) => sum + t.sessionsCount, 0),
-    avgRating:
-      companions.filter((t) => t.rating > 0).length > 0
-        ? (
-            companions.filter((t) => t.rating > 0).reduce((sum, t) => sum + t.rating, 0) /
-            companions.filter((t) => t.rating > 0).length
-          ).toFixed(1)
-        : "0",
+    verified: companions.filter((t) => t.verified).length,
   };
 
   const openEdit = (c: Companion) => {
@@ -507,11 +499,11 @@ export function CompanionManagement() {
           >
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500 to-red-600">
-                <Award className="w-6 h-6 text-white" />
+                <CheckCircle className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Avg Rating</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.avgRating} ⭐</p>
+                <p className="text-gray-600 text-sm">Verified</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.verified}</p>
               </div>
             </div>
           </motion.div>
@@ -599,7 +591,7 @@ export function CompanionManagement() {
                           {companion.phone || "Field not set"}
                         </div>
                         <div className="flex items-center gap-2 text-gray-600">
-                          <Award className="w-4 h-4 shrink-0" />
+                          <CheckCircle className="w-4 h-4 shrink-0" />
                           {companion.license || "Field not set"}
                         </div>
                         <div className="flex items-center gap-2 text-gray-600">
@@ -630,10 +622,8 @@ export function CompanionManagement() {
                           <p className="font-bold text-gray-900">{companion.sessionsCount}</p>
                         </div>
                         <div>
-                          <p className="text-gray-600">Rating</p>
-                          <p className="font-bold text-gray-900">
-                            {companion.rating > 0 ? `${companion.rating.toFixed(1)} ⭐` : "0"}
-                          </p>
+                          <p className="text-gray-600">License</p>
+                          <p className="font-bold text-gray-900 text-xs break-words">{companion.license || "—"}</p>
                         </div>
                         <div>
                           <p className="text-gray-600">Availability</p>

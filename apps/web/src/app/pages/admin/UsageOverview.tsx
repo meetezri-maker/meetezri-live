@@ -1,7 +1,6 @@
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import {
-  Users,
   Activity,
   Clock,
   TrendingUp,
@@ -123,8 +122,6 @@ export function UsageOverview() {
   const daysInRange = sessionActivity.length;
   const totalSessionsInRange = sessionCounts.reduce((a, b) => a + b, 0);
   const totalMinutesInRange = sessionData.reduce((a, b) => a + (Number(b.totalMinutes) || 0), 0);
-  const avgSessionsPerDay =
-    daysInRange > 0 ? Math.round((totalSessionsInRange / daysInRange) * 10) / 10 : 0;
   const avgSessionDurationInRange =
     totalSessionsInRange > 0
       ? Math.round((totalMinutesInRange / totalSessionsInRange) * 10) / 10
@@ -143,18 +140,12 @@ export function UsageOverview() {
     return ((current - previous) / previous) * 100;
   };
 
-  const formatChange = (value: number) => {
-    const fixed = value.toFixed(1);
-    return `${value >= 0 ? "+" : ""}${fixed}%`;
-  };
+  const formatChange = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
 
-  let compareLabel = "2nd half vs 1st half of range";
   let sessionsPrev: number | null = null;
   let minutesPrev: number | null = null;
   let avgDurFirst: number | null = null;
   let avgDurSecond: number | null = null;
-  let avgSessionsPerDayFirst = 0;
-  let avgSessionsPerDaySecond = 0;
 
   if (daysInRange >= 2 && half >= 1) {
     const firstHalfSessions = sumSessions(0, half);
@@ -165,14 +156,8 @@ export function UsageOverview() {
     minutesPrev = firstHalfMinutes;
     avgDurFirst = firstHalfSessions > 0 ? firstHalfMinutes / firstHalfSessions : null;
     avgDurSecond = secondHalfSessions > 0 ? secondHalfMinutes / secondHalfSessions : null;
-    avgSessionsPerDayFirst = firstHalfSessions / half;
-    avgSessionsPerDaySecond = secondHalfSessions / (daysInRange - half);
   }
 
-  const dailyActiveUsersChange =
-    avgSessionsPerDayFirst > 0
-      ? getPercentChange(avgSessionsPerDaySecond, avgSessionsPerDayFirst)
-      : 0;
   const sessionsChange =
     sessionsPrev != null && half >= 1
       ? getPercentChange(sumSessions(half, daysInRange), sessionsPrev)
@@ -186,24 +171,27 @@ export function UsageOverview() {
       ? getPercentChange(avgDurSecond, avgDurFirst)
       : 0;
 
+  const avgSessionsPerDay =
+    daysInRange > 0 ? Math.round((totalSessionsInRange / daysInRange) * 10) / 10 : 0;
+
   const stats = [
     {
-      label: "Avg sessions / day",
-      value: avgSessionsPerDay.toLocaleString(),
-      change: formatChange(dailyActiveUsersChange),
-      trend: (dailyActiveUsersChange >= 0 ? "up" : "down") as "up" | "down",
-      icon: Users,
-      color: "from-blue-500 to-cyan-600",
-      description: compareLabel,
-    },
-    {
       label: "Total sessions",
-      value: totalSessionsInRange.toLocaleString(),
+      value: (statsData?.totalSessions ?? 0).toLocaleString(),
       change: formatChange(sessionsChange),
       trend: (sessionsChange >= 0 ? "up" : "down") as "up" | "down",
       icon: Activity,
       color: "from-purple-500 to-pink-600",
-      description: "in selected range",
+      description: "all time · completed sessions",
+    },
+    {
+      label: "Avg sessions / day",
+      value: avgSessionsPerDay.toLocaleString(),
+      change: formatChange(sessionsChange),
+      trend: (sessionsChange >= 0 ? "up" : "down") as "up" | "down",
+      icon: Calendar,
+      color: "from-blue-500 to-cyan-600",
+      description: `over selected range (${daysInRange}d)`,
     },
     {
       label: "Total minutes",
@@ -224,8 +212,6 @@ export function UsageOverview() {
       description: "weighted across range",
     },
   ];
-
-  const COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#6b7280"];
 
   if (isLoading) {
     return (
@@ -376,10 +362,11 @@ export function UsageOverview() {
                 <YAxis stroke="#9ca3af" />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#1f2937",
-                    border: "1px solid #374151",
-                    borderRadius: "8px",
-                    color: "#fff",
+                    backgroundColor: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                    fontSize: 12,
                   }}
                 />
                 <Legend />
@@ -433,7 +420,7 @@ export function UsageOverview() {
 
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={sessionData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="date" stroke="#9ca3af" />
                   <YAxis stroke="#9ca3af" />
                   <Tooltip
@@ -469,7 +456,7 @@ export function UsageOverview() {
 
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={sessionData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="date" stroke="#9ca3af" />
                   <YAxis stroke="#9ca3af" />
                   <Tooltip
@@ -521,7 +508,7 @@ export function UsageOverview() {
                       <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="hour" stroke="#9ca3af" />
                   <YAxis stroke="#9ca3af" />
                   <Tooltip
@@ -568,12 +555,12 @@ export function UsageOverview() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) =>
-                      `${(percent * 100).toFixed(0)}%`
-                    }
+                    label={false}
+                    innerRadius={55}
                     outerRadius={100}
                     fill="#8884d8"
                     dataKey="value"
+                    paddingAngle={3}
                   >
                     {activityDistribution.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />

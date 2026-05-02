@@ -7,7 +7,7 @@ import { motion } from "motion/react";
 import { Download, TrendingUp, Users, Clock, Activity } from "lucide-react";
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { api } from "../../../lib/api";
-import { downloadTextFile } from "@/lib/adminAnalytics";
+import { datesForPreset, downloadTextFile } from "@/lib/adminAnalytics";
 
 export function ReportsAnalytics() {
   const [dash, setDash] = useState<any | null>(null);
@@ -16,7 +16,8 @@ export function ReportsAnalytics() {
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      setDash(await api.admin.getStats({ chartPeriod: "month", rangeDays: 90 }));
+      const { dateFrom, dateTo } = datesForPreset("30d");
+      setDash(await api.admin.getStats({ chartPeriod: "month", dateFrom, dateTo }));
     } finally {
       setIsLoading(false);
     }
@@ -74,7 +75,7 @@ ${sessionActivity.map((x: { day: string; sessions: number }) => `${x.day}: ${x.s
     if (reportName === "Financial Report") {
       return (
         header +
-        `Revenue (subscription MRR estimate): $${Math.round(d?.revenue ?? 0).toLocaleString()}
+        `Revenue (cash, last 30 days): $${(d?.revenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
 
 REVENUE BY PERIOD
 ${(d?.revenueData || [])

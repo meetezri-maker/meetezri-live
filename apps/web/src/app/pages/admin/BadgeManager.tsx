@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
@@ -13,334 +13,213 @@ import {
   CheckCircle,
   Users,
   TrendingUp,
-  Unlock,
-  Lock,
   Edit,
   Eye,
   X,
   Save,
   BarChart3,
-  Calendar
+  Calendar,
+  Loader2,
+  Trash2,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
-
-interface Badge {
-  id: string;
-  name: string;
-  description: string;
-  category: "achievement" | "milestone" | "special" | "streak" | "challenge";
-  icon: string;
-  color: string;
-  requirement: string;
-  totalEarned: number;
-  rarity: "common" | "rare" | "epic" | "legendary";
-  points: number;
-  isActive: boolean;
-  createdAt: Date;
-}
+import { api } from "@/lib/api";
 
 interface Achievement {
   id: string;
   name: string;
   description: string;
-  category: "sessions" | "mood" | "journal" | "social" | "wellness";
+  category: string;
+  iconUrl: string;
+  criteria: unknown;
+  points: number;
   level: number;
   maxLevel: number;
-  progress: number;
-  requirement: number;
-  reward: {
-    points: number;
-    badge?: string;
-  };
-  unlocked: number;
-  totalUsers: number;
+  createdAt: string;
+  earnedCount: number;
+}
+
+const CATEGORY_ICONS: Record<string, React.ElementType> = {
+  achievement: Trophy,
+  milestone: Target,
+  special: Star,
+  streak: Zap,
+  challenge: Crown,
+  sessions: Trophy,
+  mood: Star,
+  journal: Award,
+  social: Users,
+  wellness: TrendingUp,
+};
+
+const CATEGORY_COLORS: Record<string, string> = {
+  achievement: "from-yellow-500 to-orange-600",
+  milestone: "from-blue-500 to-indigo-600",
+  special: "from-purple-500 to-pink-600",
+  streak: "from-orange-500 to-red-600",
+  challenge: "from-emerald-500 to-teal-600",
+  sessions: "from-cyan-500 to-blue-600",
+  mood: "from-rose-400 to-pink-600",
+  journal: "from-violet-500 to-purple-600",
+  social: "from-green-500 to-emerald-600",
+  wellness: "from-teal-500 to-cyan-600",
+};
+
+const CATEGORIES = ["achievement", "milestone", "special", "streak", "challenge", "sessions", "mood", "journal", "social", "wellness"];
+
+function getCategoryIcon(category: string): React.ElementType {
+  return CATEGORY_ICONS[category] ?? Award;
+}
+
+function getCategoryColor(category: string): string {
+  return CATEGORY_COLORS[category] ?? "from-slate-500 to-slate-700";
+}
+
+function SkeletonCard() {
+  return (
+    <div className="border-2 border-gray-200 rounded-xl p-5 animate-pulse">
+      <div className="flex items-start gap-3 mb-3">
+        <div className="w-14 h-14 rounded-xl bg-gray-200" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 bg-gray-200 rounded w-3/4" />
+          <div className="h-3 bg-gray-200 rounded w-1/2" />
+        </div>
+      </div>
+      <div className="h-3 bg-gray-200 rounded w-full mb-2" />
+      <div className="grid grid-cols-2 gap-2">
+        <div className="h-10 bg-gray-200 rounded-lg" />
+        <div className="h-10 bg-gray-200 rounded-lg" />
+      </div>
+    </div>
+  );
 }
 
 export function BadgeManager() {
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedAch, setSelectedAch] = useState<Achievement | null>(null);
+  const [editModal, setEditModal] = useState<Achievement | null>(null);
+  const [viewStatsModal, setViewStatsModal] = useState<Achievement | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
-  const [activeTab, setActiveTab] = useState<"badges" | "achievements">("badges");
-  
-  // Modal states
-  const [editBadgeModal, setEditBadgeModal] = useState<Badge | null>(null);
-  const [viewStatsModal, setViewStatsModal] = useState<Badge | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
-  const [newItemName, setNewItemName] = useState("");
-  const [newItemDesc, setNewItemDesc] = useState("");
-  const [newBadgeCategory, setNewBadgeCategory] = useState<Badge["category"]>("achievement");
-  const [newBadgeRarity, setNewBadgeRarity] = useState<Badge["rarity"]>("common");
-  const [newBadgePoints, setNewBadgePoints] = useState(50);
-  const [newBadgeIcon, setNewBadgeIcon] = useState("🏅");
-  const [newBadgeRequirement, setNewBadgeRequirement] = useState("");
-  const [newAchCategory, setNewAchCategory] = useState<Achievement["category"]>("sessions");
-  const [newAchPoints, setNewAchPoints] = useState(100);
-  const [newAchRequirement, setNewAchRequirement] = useState(10);
+  // Create form
+  const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [newCategory, setNewCategory] = useState("achievement");
+  const [newPoints, setNewPoints] = useState(50);
+  const [newLevel, setNewLevel] = useState(1);
+  const [newMaxLevel, setNewMaxLevel] = useState(5);
 
-  const [badges, setBadges] = useState<Badge[]>([
-    {
-      id: "badge001",
-      name: "First Steps",
-      description: "Complete your first therapy session",
-      category: "milestone",
-      icon: "🎯",
-      color: "from-blue-500 to-indigo-600",
-      requirement: "Complete 1 session",
-      totalEarned: 1205,
-      rarity: "common",
-      points: 50,
-      isActive: true,
-      createdAt: new Date("2024-01-15")
-    },
-    {
-      id: "badge002",
-      name: "Week Warrior",
-      description: "Complete 7 consecutive days of mood tracking",
-      category: "streak",
-      icon: "🔥",
-      color: "from-orange-500 to-red-600",
-      requirement: "7-day mood tracking streak",
-      totalEarned: 892,
-      rarity: "rare",
-      points: 100,
-      isActive: true,
-      createdAt: new Date("2024-02-01")
-    },
-    {
-      id: "badge003",
-      name: "Journaling Master",
-      description: "Write 50 journal entries",
-      category: "achievement",
-      icon: "📖",
-      color: "from-purple-500 to-pink-600",
-      requirement: "Write 50 journal entries",
-      totalEarned: 456,
-      rarity: "epic",
-      points: 250,
-      isActive: true,
-      createdAt: new Date("2024-03-10")
-    },
-    {
-      id: "badge004",
-      name: "Mindful Legend",
-      description: "Complete 100 meditation sessions",
-      category: "achievement",
-      icon: "🧘",
-      color: "from-green-500 to-emerald-600",
-      requirement: "Complete 100 meditation sessions",
-      totalEarned: 234,
-      rarity: "legendary",
-      points: 500,
-      isActive: true,
-      createdAt: new Date("2024-04-05")
-    },
-    {
-      id: "badge005",
-      name: "Community Champion",
-      description: "Help 10 other users in forums",
-      category: "special",
-      icon: "💬",
-      color: "from-yellow-500 to-orange-500",
-      requirement: "Help 10 users in community",
-      totalEarned: 178,
-      rarity: "rare",
-      points: 200,
-      isActive: true,
-      createdAt: new Date("2024-05-20")
-    },
-    {
-      id: "badge006",
-      name: "Challenge Champion",
-      description: "Complete all wellness challenges",
-      category: "challenge",
-      icon: "🏆",
-      color: "from-yellow-400 to-yellow-600",
-      requirement: "Complete all 6 wellness challenges",
-      totalEarned: 89,
-      rarity: "legendary",
-      points: 1000,
-      isActive: true,
-      createdAt: new Date("2024-06-01")
-    },
-    {
-      id: "badge007",
-      name: "Beta Tester",
-      description: "Early adopter special badge",
-      category: "special",
-      icon: "✨",
-      color: "from-purple-400 to-purple-600",
-      requirement: "Join during beta period",
-      totalEarned: 342,
-      rarity: "epic",
-      points: 300,
-      isActive: false,
-      createdAt: new Date("2024-01-01")
+  // Edit form mirrors
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editCategory, setEditCategory] = useState("achievement");
+  const [editPoints, setEditPoints] = useState(0);
+  const [editLevel, setEditLevel] = useState(1);
+  const [editMaxLevel, setEditMaxLevel] = useState(5);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.admin.getAchievements();
+      setAchievements(data.achievements);
+      setTotalUsers(data.totalUsers);
+    } catch (err) {
+      toast.error("Failed to load achievements");
+    } finally {
+      setIsLoading(false);
     }
-  ]);
+  }, []);
 
-  const [achievements, setAchievements] = useState<Achievement[]>([
-    {
-      id: "ach001",
-      name: "Session Streaker",
-      description: "Complete therapy sessions consistently",
-      category: "sessions",
-      level: 3,
-      maxLevel: 5,
-      progress: 15,
-      requirement: 25,
-      reward: {
-        points: 150,
-        badge: "Session Master"
-      },
-      unlocked: 456,
-      totalUsers: 1205
-    },
-    {
-      id: "ach002",
-      name: "Mood Tracker Pro",
-      description: "Track your mood daily",
-      category: "mood",
-      level: 4,
-      maxLevel: 5,
-      progress: 28,
-      requirement: 30,
-      reward: {
-        points: 200
-      },
-      unlocked: 678,
-      totalUsers: 1205
-    },
-    {
-      id: "ach003",
-      name: "Journal Journey",
-      description: "Write meaningful journal entries",
-      category: "journal",
-      level: 2,
-      maxLevel: 5,
-      progress: 8,
-      requirement: 15,
-      reward: {
-        points: 100,
-        badge: "Reflective Writer"
-      },
-      unlocked: 234,
-      totalUsers: 1205
-    },
-    {
-      id: "ach004",
-      name: "Social Butterfly",
-      description: "Engage with the community",
-      category: "social",
-      level: 1,
-      maxLevel: 3,
-      progress: 3,
-      requirement: 10,
-      reward: {
-        points: 75
-      },
-      unlocked: 189,
-      totalUsers: 1205
-    },
-    {
-      id: "ach005",
-      name: "Wellness Warrior",
-      description: "Complete wellness activities",
-      category: "wellness",
-      level: 3,
-      maxLevel: 5,
-      progress: 18,
-      requirement: 20,
-      reward: {
-        points: 175,
-        badge: "Wellness Champion"
-      },
-      unlocked: 523,
-      totalUsers: 1205
-    }
-  ]);
+  useEffect(() => { load(); }, [load]);
 
-  const resetCreateForm = () => {
-    setNewItemName("");
-    setNewItemDesc("");
-    setNewBadgeCategory("achievement");
-    setNewBadgeRarity("common");
-    setNewBadgePoints(50);
-    setNewBadgeIcon("🏅");
-    setNewBadgeRequirement("");
-    setNewAchCategory("sessions");
-    setNewAchPoints(100);
-    setNewAchRequirement(10);
+  const openEdit = (a: Achievement) => {
+    setEditModal(a);
+    setEditName(a.name);
+    setEditDesc(a.description);
+    setEditCategory(a.category);
+    setEditPoints(a.points);
+    setEditLevel(a.level);
+    setEditMaxLevel(a.maxLevel);
   };
 
-  const handleSubmitCreate = () => {
-    if (!newItemName.trim()) {
-      toast.error("Name is required");
-      return;
-    }
-    if (activeTab === "badges") {
-      const b: Badge = {
-        id: `badge_${crypto.randomUUID()}`,
-        name: newItemName.trim(),
-        description: newItemDesc.trim() || "—",
-        category: newBadgeCategory,
-        icon: newBadgeIcon.trim() || "🏅",
-        color: "from-slate-500 to-slate-700",
-        requirement: newBadgeRequirement.trim() || "—",
-        totalEarned: 0,
-        rarity: newBadgeRarity,
-        points: newBadgePoints,
-        isActive: true,
-        createdAt: new Date(),
-      };
-      setBadges((prev) => [b, ...prev]);
-      toast.success("Badge created");
-    } else {
-      const a: Achievement = {
-        id: `ach_${crypto.randomUUID()}`,
-        name: newItemName.trim(),
-        description: newItemDesc.trim() || "—",
-        category: newAchCategory,
-        level: 1,
-        maxLevel: 5,
-        progress: 0,
-        requirement: newAchRequirement,
-        reward: { points: newAchPoints },
-        unlocked: 0,
-        totalUsers: 1,
-      };
-      setAchievements((prev) => [a, ...prev]);
+  const resetCreate = () => {
+    setNewName(""); setNewDesc(""); setNewCategory("achievement");
+    setNewPoints(50); setNewLevel(1); setNewMaxLevel(5);
+  };
+
+  const handleCreate = async () => {
+    if (!newName.trim()) { toast.error("Name is required"); return; }
+    setSaving(true);
+    try {
+      const created = await api.admin.createAchievement({
+        name: newName.trim(),
+        description: newDesc.trim() || undefined,
+        category: newCategory,
+        points: newPoints,
+        level: newLevel,
+        maxLevel: newMaxLevel,
+      });
+      setAchievements((prev) => [created as Achievement, ...prev]);
+      setShowCreateModal(false);
+      resetCreate();
       toast.success("Achievement created");
-    }
-    setShowCreateModal(false);
-    resetCreateForm();
-  };
-
-  const getRarityColor = (rarity: string) => {
-    switch(rarity) {
-      case "common": return "bg-gray-100 text-gray-700";
-      case "rare": return "bg-blue-100 text-blue-700";
-      case "epic": return "bg-purple-100 text-purple-700";
-      case "legendary": return "bg-yellow-100 text-yellow-700";
-      default: return "bg-gray-100 text-gray-700";
+    } catch {
+      toast.error("Failed to create achievement");
+    } finally {
+      setSaving(false);
     }
   };
 
-  const getCategoryIcon = (category: string) => {
-    switch(category) {
-      case "achievement": return Trophy;
-      case "milestone": return Target;
-      case "special": return Star;
-      case "streak": return Zap;
-      case "challenge": return Crown;
-      default: return Award;
+  const handleSaveEdit = async () => {
+    if (!editModal) return;
+    if (!editName.trim()) { toast.error("Name is required"); return; }
+    setSaving(true);
+    try {
+      const updated = await api.admin.updateAchievement(editModal.id, {
+        name: editName.trim(),
+        description: editDesc.trim() || undefined,
+        category: editCategory,
+        points: editPoints,
+        level: editLevel,
+        maxLevel: editMaxLevel,
+      });
+      setAchievements((prev) =>
+        prev.map((a) => (a.id === editModal.id ? { ...a, ...(updated as Achievement) } : a))
+      );
+      setEditModal(null);
+      toast.success("Achievement updated");
+    } catch {
+      toast.error("Failed to update achievement");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeleting(id);
+    try {
+      await api.admin.deleteAchievement(id);
+      setAchievements((prev) => prev.filter((a) => a.id !== id));
+      setSelectedAch(null);
+      toast.success("Achievement deleted");
+    } catch {
+      toast.error("Failed to delete achievement");
+    } finally {
+      setDeleting(null);
     }
   };
 
   const stats = {
-    totalBadges: badges.length,
-    activeBadges: badges.filter(b => b.isActive).length,
-    totalEarned: badges.reduce((sum, b) => sum + b.totalEarned, 0),
-    avgCompletion: 68
+    total: achievements.length,
+    totalEarned: achievements.reduce((s, a) => s + a.earnedCount, 0),
+    withPoints: achievements.filter((a) => a.points > 0).length,
+    topEarned: achievements.reduce((max, a) => Math.max(max, a.earnedCount), 0),
   };
 
   return (
@@ -353,635 +232,371 @@ export function BadgeManager() {
           className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
         >
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Badge & Achievement Manager</h1>
-            <p className="text-gray-600 mt-1">Create and manage user rewards</p>
+            <h1 className="text-3xl font-bold text-gray-900">Achievement Manager</h1>
+            <p className="text-gray-600 mt-1">
+              Manage platform-wide achievements — <span className="font-medium">{totalUsers.toLocaleString()}</span> registered users
+            </p>
           </div>
 
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => {
-              resetCreateForm();
-              setShowCreateModal(true);
-            }}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg"
-          >
-            <Plus className="w-4 h-4" />
-            Create {activeTab === "badges" ? "Badge" : "Achievement"}
-          </motion.button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={load}
+              disabled={isLoading}
+              className="gap-1.5"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => { resetCreate(); setShowCreateModal(true); }}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg text-sm font-medium"
+            >
+              <Plus className="w-4 h-4" />
+              New Achievement
+            </motion.button>
+          </div>
         </motion.div>
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
-          >
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
-                <Award className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-gray-600 text-sm">Total Badges</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalBadges}</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white rounded-2xl p-6 shadow-lg border-2 border-green-200"
-          >
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600">
-                <CheckCircle className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-gray-600 text-sm">Active</p>
-                <p className="text-2xl font-bold text-green-600">{stats.activeBadges}</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2 }}
-            className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
-          >
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600">
-                <Users className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-gray-600 text-sm">Total Earned</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalEarned.toLocaleString()}</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3 }}
-            className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
-          >
-            <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-600">
-                <TrendingUp className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-gray-600 text-sm">Avg Completion</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.avgCompletion}%</p>
-              </div>
-            </div>
-          </motion.div>
+          {[
+            { label: "Total Achievements", value: stats.total, icon: Award, color: "from-blue-500 to-indigo-600", border: "border-gray-100" },
+            { label: "Times Earned (total)", value: stats.totalEarned.toLocaleString(), icon: CheckCircle, color: "from-green-500 to-emerald-600", border: "border-green-200" },
+            { label: "With Points", value: stats.withPoints, icon: Star, color: "from-yellow-500 to-orange-600", border: "border-gray-100" },
+            { label: "Registered Users", value: totalUsers.toLocaleString(), icon: Users, color: "from-purple-500 to-pink-600", border: "border-gray-100" },
+          ].map((s, i) => {
+            const Icon = s.icon;
+            return (
+              <motion.div
+                key={s.label}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: i * 0.08 }}
+                className={`bg-white rounded-2xl p-6 shadow-lg border-2 ${s.border}`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-xl bg-gradient-to-br ${s.color}`}>
+                    <Icon className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-gray-600 text-sm">{s.label}</p>
+                    <p className="text-2xl font-bold text-gray-900">{isLoading ? "—" : s.value}</p>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
 
-        {/* Tabs */}
+        {/* Achievement Grid */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-white rounded-2xl p-2 shadow-lg border border-gray-100 flex gap-2"
+          transition={{ delay: 0.35 }}
+          className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
         >
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setActiveTab("badges")}
-            className={`flex-1 px-4 py-2 rounded-xl font-medium transition-colors ${
-              activeTab === "badges"
-                ? "bg-blue-500 text-white"
-                : "text-gray-700 hover:bg-gray-100"
-            }`}
-          >
-            <Award className="w-4 h-4 inline mr-2" />
-            Badges ({badges.length})
-          </motion.button>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-yellow-500" />
+              All Achievements
+              {!isLoading && (
+                <span className="text-base font-normal text-gray-500">({achievements.length})</span>
+              )}
+            </h2>
+          </div>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setActiveTab("achievements")}
-            className={`flex-1 px-4 py-2 rounded-xl font-medium transition-colors ${
-              activeTab === "achievements"
-                ? "bg-blue-500 text-white"
-                : "text-gray-700 hover:bg-gray-100"
-            }`}
-          >
-            <Trophy className="w-4 h-4 inline mr-2" />
-            Achievements ({achievements.length})
-          </motion.button>
-        </motion.div>
-
-        {/* Badges Tab */}
-        {activeTab === "badges" && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
-          >
-            <h2 className="text-xl font-bold text-gray-900 mb-6">All Badges</h2>
-
+          {isLoading ? (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {badges.map((badge, index) => {
-                const CategoryIcon = getCategoryIcon(badge.category);
-                
+              {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+            </div>
+          ) : achievements.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <Trophy className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p className="font-medium">No achievements yet</p>
+              <p className="text-sm mt-1">Create your first achievement using the button above.</p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {achievements.map((ach, index) => {
+                const CategoryIcon = getCategoryIcon(ach.category);
+                const earnRate = totalUsers > 0 ? ((ach.earnedCount / totalUsers) * 100).toFixed(1) : "0";
+                const isSelected = selectedAch?.id === ach.id;
                 return (
                   <motion.div
-                    key={badge.id}
+                    key={ach.id}
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.6 + index * 0.05 }}
-                    onClick={() => setSelectedBadge(selectedBadge?.id === badge.id ? null : badge)}
+                    transition={{ delay: 0.05 + index * 0.04 }}
+                    onClick={() => setSelectedAch(isSelected ? null : ach)}
                     className={`border-2 rounded-xl p-5 cursor-pointer transition-all ${
-                      selectedBadge?.id === badge.id
+                      isSelected
                         ? "border-blue-500 bg-blue-50 shadow-md"
                         : "border-gray-200 hover:border-gray-300 hover:shadow-md"
                     }`}
                   >
                     <div className="flex items-start gap-3 mb-3">
-                      <div className={`text-4xl p-2 rounded-xl bg-gradient-to-br ${badge.color}`}>
-                        {badge.icon}
+                      <div className={`p-3 rounded-xl bg-gradient-to-br ${getCategoryColor(ach.category)} shrink-0`}>
+                        <CategoryIcon className="w-6 h-6 text-white" />
                       </div>
-
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-bold text-gray-900">{badge.name}</h3>
-                          {badge.isActive ? (
-                            <Unlock className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <Lock className="w-4 h-4 text-gray-400" />
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 rounded-lg text-xs font-medium uppercase ${getRarityColor(badge.rarity)}`}>
-                            {badge.rarity}
-                          </span>
-                          <CategoryIcon className="w-3 h-3 text-gray-500" />
-                        </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-gray-900 truncate">{ach.name}</h3>
+                        <span className="inline-block mt-0.5 px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs capitalize">
+                          {ach.category}
+                        </span>
                       </div>
                     </div>
 
-                    <p className="text-sm text-gray-600 mb-3">{badge.description}</p>
-
-                    <div className="bg-gray-50 rounded-lg p-2 mb-3">
-                      <p className="text-xs text-gray-600 mb-1">Requirement:</p>
-                      <p className="text-sm font-medium text-gray-900">{badge.requirement}</p>
-                    </div>
+                    {ach.description && (
+                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">{ach.description}</p>
+                    )}
 
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="bg-blue-50 rounded-lg p-2">
                         <p className="text-xs text-blue-600">Points</p>
-                        <p className="font-bold text-blue-700">{badge.points}</p>
+                        <p className="font-bold text-blue-700">{ach.points}</p>
                       </div>
-
                       <div className="bg-purple-50 rounded-lg p-2">
-                        <p className="text-xs text-purple-600">Earned</p>
-                        <p className="font-bold text-purple-700">{badge.totalEarned}</p>
+                        <p className="text-xs text-purple-600">Earned by</p>
+                        <p className="font-bold text-purple-700">{ach.earnedCount} users</p>
                       </div>
                     </div>
 
-                    {selectedBadge?.id === badge.id && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        className="mt-3 pt-3 border-t border-gray-200"
-                      >
-                        <p className="text-xs text-gray-600 mb-2">
-                          Created: {badge.createdAt.toLocaleDateString()}
-                        </p>
-                        <div className="flex gap-2">
-                          <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => setEditBadgeModal(badge)}
-                            className="flex-1 px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium"
-                          >
-                            <Edit className="w-3 h-3 inline mr-1" />
-                            Edit
-                          </motion.button>
-                          <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => setViewStatsModal(badge)}
-                            className="flex-1 px-3 py-1.5 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-medium"
-                          >
-                            <Eye className="w-3 h-3 inline mr-1" />
-                            Stats
-                          </motion.button>
-                        </div>
-                      </motion.div>
+                    {ach.maxLevel > 1 && (
+                      <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-500">
+                        <BarChart3 className="w-3 h-3" />
+                        Level {ach.level} / {ach.maxLevel}
+                      </div>
                     )}
+
+                    <AnimatePresence>
+                      {isSelected && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="mt-3 pt-3 border-t border-gray-200 space-y-2"
+                        >
+                          <p className="text-xs text-gray-500">
+                            Earn rate: <span className="font-semibold text-gray-700">{earnRate}%</span> of all users
+                          </p>
+                          <div className="flex gap-2">
+                            <motion.button
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={(e) => { e.stopPropagation(); openEdit(ach); }}
+                              className="flex-1 px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium flex items-center justify-center gap-1"
+                            >
+                              <Edit className="w-3 h-3" /> Edit
+                            </motion.button>
+                            <motion.button
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={(e) => { e.stopPropagation(); setViewStatsModal(ach); }}
+                              className="flex-1 px-3 py-1.5 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-medium flex items-center justify-center gap-1"
+                            >
+                              <Eye className="w-3 h-3" /> Stats
+                            </motion.button>
+                            <motion.button
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              disabled={deleting === ach.id}
+                              onClick={(e) => { e.stopPropagation(); handleDelete(ach.id); }}
+                              className="px-3 py-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 text-xs font-medium flex items-center justify-center gap-1 disabled:opacity-50"
+                            >
+                              {deleting === ach.id
+                                ? <Loader2 className="w-3 h-3 animate-spin" />
+                                : <Trash2 className="w-3 h-3" />}
+                            </motion.button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </motion.div>
                 );
               })}
             </div>
-          </motion.div>
-        )}
-
-        {/* Achievements Tab */}
-        {activeTab === "achievements" && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
-          >
-            <h2 className="text-xl font-bold text-gray-900 mb-6">All Achievements</h2>
-
-            <div className="space-y-4">
-              {achievements.map((achievement, index) => {
-                const progressPercent = (achievement.progress / achievement.requirement) * 100;
-                
-                return (
-                  <motion.div
-                    key={achievement.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.6 + index * 0.05 }}
-                    className="border-2 border-gray-200 rounded-xl p-5 hover:border-gray-300 hover:shadow-md transition-all"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="p-3 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-600">
-                        <Trophy className="w-6 h-6 text-white" />
-                      </div>
-
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-bold text-gray-900 text-lg">{achievement.name}</h3>
-                          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium">
-                            Level {achievement.level}/{achievement.maxLevel}
-                          </span>
-                        </div>
-
-                        <p className="text-gray-600 mb-3">{achievement.description}</p>
-
-                        {/* Progress Bar */}
-                        <div className="mb-3">
-                          <div className="flex items-center justify-between text-sm mb-1">
-                            <span className="text-gray-600">Progress</span>
-                            <span className="font-medium text-gray-900">
-                              {achievement.progress}/{achievement.requirement}
-                            </span>
-                          </div>
-                          <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                            <motion.div
-                              initial={{ width: 0 }}
-                              animate={{ width: `${progressPercent}%` }}
-                              transition={{ duration: 1, delay: 0.7 + index * 0.05 }}
-                              className="h-full bg-gradient-to-r from-blue-500 to-indigo-600"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Metrics */}
-                        <div className="grid grid-cols-4 gap-3">
-                          <div className="bg-gray-50 rounded-lg p-2">
-                            <p className="text-xs text-gray-600">Points</p>
-                            <p className="font-bold text-gray-900">{achievement.reward.points}</p>
-                          </div>
-
-                          <div className="bg-gray-50 rounded-lg p-2">
-                            <p className="text-xs text-gray-600">Unlocked</p>
-                            <p className="font-bold text-gray-900">{achievement.unlocked}</p>
-                          </div>
-
-                          <div className="bg-gray-50 rounded-lg p-2">
-                            <p className="text-xs text-gray-600">Completion</p>
-                            <p className="font-bold text-gray-900">
-                              {Math.round((achievement.unlocked / achievement.totalUsers) * 100)}%
-                            </p>
-                          </div>
-
-                          <div className="bg-gray-50 rounded-lg p-2">
-                            <p className="text-xs text-gray-600">Category</p>
-                            <p className="font-bold text-gray-900 capitalize">{achievement.category}</p>
-                          </div>
-                        </div>
-
-                        {achievement.reward.badge && (
-                          <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                            <p className="text-xs text-yellow-700">
-                              <Star className="w-3 h-3 inline mr-1" />
-                              Reward: <span className="font-medium">{achievement.reward.badge}</span> badge
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
+          )}
+        </motion.div>
 
         {/* Create Modal */}
-        {showCreateModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
-            onClick={() => setShowCreateModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-            >
-              <h3 className="text-2xl font-bold text-gray-900 mb-6">
-                Create {activeTab === "badges" ? "Badge" : "Achievement"}
-              </h3>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-                  <input
-                    type="text"
-                    placeholder={activeTab === "badges" ? "e.g., Master Meditator" : "e.g., Session Champion"}
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={newItemName}
-                    onChange={(e) => setNewItemName(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                  <textarea
-                    placeholder="Describe the badge or achievement..."
-                    rows={3}
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={newItemDesc}
-                    onChange={(e) => setNewItemDesc(e.target.value)}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                    <select
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                      value={activeTab === "badges" ? newBadgeCategory : newAchCategory}
-                      onChange={(e) =>
-                        activeTab === "badges"
-                          ? setNewBadgeCategory(e.target.value as Badge["category"])
-                          : setNewAchCategory(e.target.value as Achievement["category"])
-                      }
-                    >
-                      {activeTab === "badges" ? (
-                        <>
-                          <option value="achievement">Achievement</option>
-                          <option value="milestone">Milestone</option>
-                          <option value="special">Special</option>
-                          <option value="streak">Streak</option>
-                          <option value="challenge">Challenge</option>
-                        </>
-                      ) : (
-                        <>
-                          <option value="sessions">Sessions</option>
-                          <option value="mood">Mood</option>
-                          <option value="journal">Journal</option>
-                          <option value="social">Social</option>
-                          <option value="wellness">Wellness</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
-
-                  {activeTab === "badges" && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Rarity</label>
-                      <select
-                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={newBadgeRarity}
-                        onChange={(e) =>
-                          setNewBadgeRarity(e.target.value as Badge["rarity"])
-                        }
-                      >
-                        <option value="common">Common</option>
-                        <option value="rare">Rare</option>
-                        <option value="epic">Epic</option>
-                        <option value="legendary">Legendary</option>
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Points Reward</label>
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="100"
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                      value={activeTab === "badges" ? newBadgePoints : newAchPoints}
-                      onChange={(e) =>
-                        activeTab === "badges"
-                          ? setNewBadgePoints(Number(e.target.value) || 0)
-                          : setNewAchPoints(Number(e.target.value) || 0)
-                      }
-                    />
-                  </div>
-
-                  {activeTab === "badges" ? (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Icon Emoji</label>
-                      <input
-                        type="text"
-                        placeholder="🏆"
-                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={newBadgeIcon}
-                        onChange={(e) => setNewBadgeIcon(e.target.value)}
-                      />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Target count</label>
-                      <input
-                        type="number"
-                        min={1}
-                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={newAchRequirement}
-                        onChange={(e) => setNewAchRequirement(Number(e.target.value) || 1)}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {activeTab === "badges" && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Requirement</label>
-                    <input
-                      type="text"
-                      placeholder="e.g., Complete 10 sessions"
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                      value={newBadgeRequirement}
-                      onChange={(e) => setNewBadgeRequirement(e.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <motion.button
-                  type="button"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
-                >
-                  Cancel
-                </motion.button>
-
-                <motion.button
-                  type="button"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleSubmitCreate}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
-                >
-                  Create
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* Edit Badge Modal */}
         <AnimatePresence>
-          {editBadgeModal && (
+          {showCreateModal && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
-              onClick={() => setEditBadgeModal(null)}
+              onClick={() => setShowCreateModal(false)}
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+                className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto"
               >
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900">Edit Badge</h3>
-                  <Button variant="ghost" size="sm" onClick={() => setEditBadgeModal(null)}>
+                  <h3 className="text-2xl font-bold text-gray-900">New Achievement</h3>
+                  <Button variant="ghost" size="sm" onClick={() => setShowCreateModal(false)}>
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-                    <Input defaultValue={editBadgeModal.name} />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                    <Input placeholder="e.g., Session Champion" value={newName} onChange={(e) => setNewName(e.target.value)} />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                     <textarea
-                      defaultValue={editBadgeModal.description}
-                      rows={3}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      rows={2}
+                      placeholder="Describe what the user must do…"
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                      value={newDesc}
+                      onChange={(e) => setNewDesc(e.target.value)}
                     />
                   </div>
-
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                      <select 
-                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        defaultValue={editBadgeModal.category}
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                      <select
+                        className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                        value={newCategory}
+                        onChange={(e) => setNewCategory(e.target.value)}
                       >
-                        <option value="achievement">Achievement</option>
-                        <option value="milestone">Milestone</option>
-                        <option value="special">Special</option>
-                        <option value="streak">Streak</option>
-                        <option value="challenge">Challenge</option>
+                        {CATEGORIES.map((c) => (
+                          <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                        ))}
                       </select>
                     </div>
-
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Rarity</label>
-                      <select 
-                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                        defaultValue={editBadgeModal.rarity}
-                      >
-                        <option value="common">Common</option>
-                        <option value="rare">Rare</option>
-                        <option value="epic">Epic</option>
-                        <option value="legendary">Legendary</option>
-                      </select>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Points Reward</label>
+                      <Input type="number" min={0} value={newPoints} onChange={(e) => setNewPoints(Number(e.target.value) || 0)} />
                     </div>
                   </div>
-
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Points</label>
-                      <Input type="number" defaultValue={editBadgeModal.points} />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Level</label>
+                      <Input type="number" min={1} value={newLevel} onChange={(e) => setNewLevel(Number(e.target.value) || 1)} />
                     </div>
-
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Icon Emoji</label>
-                      <Input defaultValue={editBadgeModal.icon} />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Max Level</label>
+                      <Input type="number" min={1} value={newMaxLevel} onChange={(e) => setNewMaxLevel(Number(e.target.value) || 1)} />
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Requirement</label>
-                    <Input defaultValue={editBadgeModal.requirement} />
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="isActive"
-                      defaultChecked={editBadgeModal.isActive}
-                      className="w-4 h-4 text-blue-600 rounded"
-                    />
-                    <label htmlFor="isActive" className="text-sm font-medium text-gray-700">
-                      Active (users can earn this badge)
-                    </label>
                   </div>
                 </div>
 
                 <div className="flex gap-3 mt-6">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setEditBadgeModal(null)}
-                    className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
-                  >
+                  <Button variant="outline" className="flex-1" onClick={() => setShowCreateModal(false)}>
                     Cancel
-                  </motion.button>
-
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      alert(`Saved changes to: ${editBadgeModal.name}`);
-                      setEditBadgeModal(null);
-                    }}
-                    className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
+                  </Button>
+                  <Button
+                    className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:opacity-90"
+                    disabled={saving}
+                    onClick={handleCreate}
                   >
-                    <Save className="w-4 h-4 inline mr-2" />
-                    Save Changes
-                  </motion.button>
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Create
+                  </Button>
                 </div>
               </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* View Stats Modal */}
+        {/* Edit Modal */}
+        <AnimatePresence>
+          {editModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+              onClick={() => setEditModal(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900">Edit Achievement</h3>
+                  <Button variant="ghost" size="sm" onClick={() => setEditModal(null)}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                    <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea
+                      rows={2}
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                      value={editDesc}
+                      onChange={(e) => setEditDesc(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                      <select
+                        className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                        value={editCategory}
+                        onChange={(e) => setEditCategory(e.target.value)}
+                      >
+                        {CATEGORIES.map((c) => (
+                          <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Points Reward</label>
+                      <Input type="number" min={0} value={editPoints} onChange={(e) => setEditPoints(Number(e.target.value) || 0)} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Level</label>
+                      <Input type="number" min={1} value={editLevel} onChange={(e) => setEditLevel(Number(e.target.value) || 1)} />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Max Level</label>
+                      <Input type="number" min={1} value={editMaxLevel} onChange={(e) => setEditMaxLevel(Number(e.target.value) || 1)} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <Button variant="outline" className="flex-1" onClick={() => setEditModal(null)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:opacity-90"
+                    disabled={saving}
+                    onClick={handleSaveEdit}
+                  >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                    Save Changes
+                  </Button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Stats Modal */}
         <AnimatePresence>
           {viewStatsModal && (
             <motion.div
@@ -996,81 +611,66 @@ export function BadgeManager() {
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-white rounded-2xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+                className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto"
               >
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900">Badge Statistics</h3>
+                  <h3 className="text-2xl font-bold text-gray-900">Achievement Stats</h3>
                   <Button variant="ghost" size="sm" onClick={() => setViewStatsModal(null)}>
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
 
                 <div className="space-y-6">
-                  {/* Badge Header */}
-                  <div className="flex items-start gap-4 p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl">
-                    <div className={`text-6xl p-3 rounded-xl bg-gradient-to-br ${viewStatsModal.color}`}>
-                      {viewStatsModal.icon}
+                  <div className={`flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br ${getCategoryColor(viewStatsModal.category)} bg-opacity-10`}>
+                    <div className={`p-4 rounded-xl bg-gradient-to-br ${getCategoryColor(viewStatsModal.category)}`}>
+                      {(() => { const Icon = getCategoryIcon(viewStatsModal.category); return <Icon className="w-8 h-8 text-white" />; })()}
                     </div>
-                    <div className="flex-1">
-                      <h4 className="text-2xl font-bold text-gray-900 mb-2">{viewStatsModal.name}</h4>
-                      <p className="text-gray-600 mb-2">{viewStatsModal.description}</p>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-3 py-1 rounded-lg text-xs font-medium uppercase ${getRarityColor(viewStatsModal.rarity)}`}>
-                          {viewStatsModal.rarity}
-                        </span>
-                        <span className="px-3 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-700 uppercase">
-                          {viewStatsModal.category}
-                        </span>
-                        <span className={`px-3 py-1 rounded-lg text-xs font-medium ${viewStatsModal.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-                          {viewStatsModal.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </div>
+                    <div>
+                      <h4 className="text-xl font-bold text-gray-900">{viewStatsModal.name}</h4>
+                      {viewStatsModal.description && (
+                        <p className="text-gray-600 text-sm mt-0.5">{viewStatsModal.description}</p>
+                      )}
+                      <span className="mt-1 inline-block px-2 py-0.5 bg-white/70 rounded text-xs capitalize font-medium text-gray-700">
+                        {viewStatsModal.category}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Key Metrics */}
                   <div className="grid grid-cols-3 gap-4">
                     <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                       <Award className="w-6 h-6 text-blue-600 mb-2" />
-                      <p className="text-3xl font-bold text-blue-600">{viewStatsModal.totalEarned}</p>
-                      <p className="text-sm text-gray-600">Times Earned</p>
+                      <p className="text-2xl font-bold text-blue-600">{viewStatsModal.earnedCount}</p>
+                      <p className="text-xs text-gray-600">Times Earned</p>
                     </div>
-
                     <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                       <Star className="w-6 h-6 text-yellow-600 mb-2" />
-                      <p className="text-3xl font-bold text-yellow-600">{viewStatsModal.points}</p>
-                      <p className="text-sm text-gray-600">Points Reward</p>
+                      <p className="text-2xl font-bold text-yellow-600">{viewStatsModal.points}</p>
+                      <p className="text-xs text-gray-600">Points</p>
                     </div>
-
                     <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
                       <TrendingUp className="w-6 h-6 text-purple-600 mb-2" />
-                      <p className="text-3xl font-bold text-purple-600">
-                        {((viewStatsModal.totalEarned / 1205) * 100).toFixed(1)}%
+                      <p className="text-2xl font-bold text-purple-600">
+                        {totalUsers > 0 ? ((viewStatsModal.earnedCount / totalUsers) * 100).toFixed(1) : "0"}%
                       </p>
-                      <p className="text-sm text-gray-600">Earn Rate</p>
+                      <p className="text-xs text-gray-600">Earn Rate</p>
                     </div>
                   </div>
 
-                  {/* Requirements */}
-                  <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <h5 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                      <Target className="w-5 h-5 text-gray-600" />
-                      Requirement
-                    </h5>
-                    <p className="text-gray-700">{viewStatsModal.requirement}</p>
-                  </div>
+                  {viewStatsModal.maxLevel > 1 && (
+                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="text-sm font-medium text-gray-700">Level: {viewStatsModal.level} / {viewStatsModal.maxLevel}</p>
+                    </div>
+                  )}
 
-                  {/* Creation Date */}
                   <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <h5 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
-                      <Calendar className="w-5 h-5 text-gray-600" />
-                      Creation Date
+                    <h5 className="font-medium text-gray-900 mb-1 flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-gray-600" /> Created
                     </h5>
-                    <p className="text-gray-700">{viewStatsModal.createdAt.toLocaleDateString('en-US', { 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric' 
-                    })}</p>
+                    <p className="text-gray-700 text-sm">
+                      {new Date(viewStatsModal.createdAt).toLocaleDateString("en-US", {
+                        year: "numeric", month: "long", day: "numeric"
+                      })}
+                    </p>
                   </div>
 
                   <Button variant="outline" className="w-full" onClick={() => setViewStatsModal(null)}>

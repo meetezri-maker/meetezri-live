@@ -2238,7 +2238,60 @@ export const api = {
         body: JSON.stringify(data),
       });
       return handleResponse(res, 'Failed to update crisis event');
-    }
+    },
+
+    async getAchievements(): Promise<{
+      totalUsers: number;
+      achievements: {
+        id: string; name: string; description: string; category: string;
+        iconUrl: string; criteria: unknown; points: number; level: number;
+        maxLevel: number; createdAt: string; earnedCount: number;
+      }[];
+    }> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/achievements`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch achievements');
+    },
+
+    async createAchievement(data: {
+      name: string; description?: string; category?: string; iconUrl?: string;
+      points?: number; level?: number; maxLevel?: number;
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/achievements`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to create achievement');
+    },
+
+    async updateAchievement(id: string, data: {
+      name?: string; description?: string; category?: string; iconUrl?: string;
+      points?: number; level?: number; maxLevel?: number;
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/achievements/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to update achievement');
+    },
+
+    async deleteAchievement(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/achievements/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (res.status === 204) return true;
+      return handleResponse(res, 'Failed to delete achievement');
+    },
   },
 
 

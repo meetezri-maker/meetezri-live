@@ -268,10 +268,11 @@ export async function getDashboardStats(
       SELECT 
         (SELECT count(*) FROM profiles) as total_users,
         (SELECT count(*) FROM app_sessions WHERE started_at IS NOT NULL AND ended_at IS NULL AND started_at >= timezone('utc', now()) - interval '4 hours') as active_sessions,
-        (SELECT count(*) FROM app_sessions) as total_sessions,
-        (SELECT AVG(duration_minutes) FROM app_sessions) as avg_duration,
+        (SELECT count(*) FROM app_sessions WHERE started_at IS NOT NULL AND ended_at IS NOT NULL) as total_sessions,
+        (SELECT AVG(duration_minutes) FROM app_sessions WHERE started_at IS NOT NULL AND ended_at IS NOT NULL) as avg_duration,
         (SELECT count(*) FROM crisis_events WHERE status = 'pending') as pending_crisis,
         (SELECT count(*) FROM mood_entries) as mood_entries,
+        (SELECT ROUND(AVG(intensity)::numeric, 1) FROM mood_entries WHERE intensity IS NOT NULL) as avg_mood_score,
         (SELECT count(*) FROM journal_entries) as journal_entries,
         (SELECT count(*) FROM sleep_entries) as sleep_entries,
         (SELECT count(*) FROM habit_logs) as habit_logs,
@@ -300,13 +301,14 @@ export async function getDashboardStats(
           WHERE LOWER(TRIM(COALESCE(status, ''))) IN ('completed', 'succeeded')
         ) as payment_completed_sum_usd
     `,
-    // 2. Hourly distribution across the selected date range
+    // 2. Hourly distribution across the selected date range (completed sessions only)
     prisma.$queryRaw`
       SELECT 
         EXTRACT(HOUR FROM started_at) as hour,
         COUNT(*)::bigint as count
       FROM app_sessions
-      WHERE started_at >= ${rangeStart} AND started_at <= ${rangeEnd}
+      WHERE started_at IS NOT NULL AND ended_at IS NOT NULL
+        AND started_at >= ${rangeStart} AND started_at <= ${rangeEnd}
       GROUP BY EXTRACT(HOUR FROM started_at)
     `,
     prisma.$queryRaw`
@@ -315,7 +317,8 @@ export async function getDashboardStats(
         COUNT(*)::bigint as count,
         COALESCE(SUM(duration_minutes), 0)::bigint as total_duration
       FROM app_sessions
-      WHERE started_at >= ${rangeStart} AND started_at <= ${rangeEnd}
+      WHERE started_at IS NOT NULL AND ended_at IS NOT NULL
+        AND started_at >= ${rangeStart} AND started_at <= ${rangeEnd}
       GROUP BY DATE(started_at AT TIME ZONE 'UTC')
     `,
     prisma.$queryRaw<Array<{ name: string; c: bigint }>>`
@@ -426,6 +429,7 @@ export async function getDashboardStats(
   const avgSessionLength = Math.round(Number(counts.avg_duration || 0));
   const crisisAlerts = Number(counts.pending_crisis || 0);
   const moodEntriesCount = Number(counts.mood_entries || 0);
+  const avgMoodScore = counts.avg_mood_score != null ? Math.round(Number(counts.avg_mood_score) * 10) / 10 : null;
   const journalEntriesCount = Number(counts.journal_entries || 0);
   const sleepEntriesCount = Number(counts.sleep_entries || 0);
   const habitLogsCount = Number(counts.habit_logs || 0);
@@ -732,6 +736,7 @@ export async function getDashboardStats(
     activeSessions,
     totalSessions,
     avgSessionLength,
+    avgMoodScore,
     crisisAlerts,
     revenue,
     systemHealth,
@@ -4328,4 +4333,113 @@ export async function getBackupRecordJsonForDownload(id: string) {
     storagePath: r.storage_path,
     errorMessage: r.error_message,
   };
+}
+
+// ── Achievements Admin ──────────────────────────────────────────────────────
+
+export async function getAdminAchievements() {
+  const [achievements, totalUsers] = await Promise.all([
+    prisma.achievements.findMany({
+      include: { user_achievements: true },
+      orderBy: { created_at: 'asc' },
+    }),
+    prisma.profiles.count(),
+  ]);
+
+  return {
+    totalUsers,
+    achievements: achievements.map((a) => ({
+      id: a.id,
+      name: a.name,
+      description: a.description ?? '',
+      category: a.category ?? 'achievement',
+      iconUrl: a.icon_url ?? '',
+      criteria: a.criteria,
+      points: a.points ?? 0,
+      level: a.level ?? 1,
+      maxLevel: a.max_level ?? 1,
+      createdAt: a.created_at.toISOString(),
+      earnedCount: a.user_achievements.length,
+    })),
+  };
+}
+
+export async function createAdminAchievement(data: {
+  name: string;
+  description?: string;
+  category?: string;
+  iconUrl?: string;
+  criteria?: Record<string, unknown>;
+  points?: number;
+  level?: number;
+  maxLevel?: number;
+}) {
+  const a = await prisma.achievements.create({
+    data: {
+      name: data.name,
+      description: data.description ?? null,
+      category: data.category ?? null,
+      icon_url: data.iconUrl ?? null,
+      criteria: (data.criteria ?? null) as Prisma.InputJsonValue,
+      points: data.points ?? 0,
+      level: data.level ?? 1,
+      max_level: data.maxLevel ?? 1,
+    },
+  });
+  return {
+    id: a.id,
+    name: a.name,
+    description: a.description ?? '',
+    category: a.category ?? 'achievement',
+    iconUrl: a.icon_url ?? '',
+    criteria: a.criteria,
+    points: a.points ?? 0,
+    level: a.level ?? 1,
+    maxLevel: a.max_level ?? 1,
+    createdAt: a.created_at.toISOString(),
+    earnedCount: 0,
+  };
+}
+
+export async function updateAdminAchievement(id: string, data: {
+  name?: string;
+  description?: string;
+  category?: string;
+  iconUrl?: string;
+  criteria?: Record<string, unknown>;
+  points?: number;
+  level?: number;
+  maxLevel?: number;
+}) {
+  const a = await prisma.achievements.update({
+    where: { id },
+    data: {
+      ...(data.name !== undefined ? { name: data.name } : {}),
+      ...(data.description !== undefined ? { description: data.description } : {}),
+      ...(data.category !== undefined ? { category: data.category } : {}),
+      ...(data.iconUrl !== undefined ? { icon_url: data.iconUrl } : {}),
+      ...(data.criteria !== undefined ? { criteria: data.criteria as Prisma.InputJsonValue } : {}),
+      ...(data.points !== undefined ? { points: data.points } : {}),
+      ...(data.level !== undefined ? { level: data.level } : {}),
+      ...(data.maxLevel !== undefined ? { max_level: data.maxLevel } : {}),
+    },
+    include: { user_achievements: true },
+  });
+  return {
+    id: a.id,
+    name: a.name,
+    description: a.description ?? '',
+    category: a.category ?? 'achievement',
+    iconUrl: a.icon_url ?? '',
+    criteria: a.criteria,
+    points: a.points ?? 0,
+    level: a.level ?? 1,
+    maxLevel: a.max_level ?? 1,
+    createdAt: a.created_at.toISOString(),
+    earnedCount: a.user_achievements.length,
+  };
+}
+
+export async function deleteAdminAchievement(id: string) {
+  await prisma.achievements.delete({ where: { id } });
 }

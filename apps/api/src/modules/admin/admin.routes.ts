@@ -26,6 +26,7 @@ import {
   getApiPlatformConfigHandler, putApiPlatformConfigHandler, postAdminApiKeyHandler,
   getIntegrationsConfigHandler, putIntegrationsConfigHandler,
   getBrandingConfigHandler, putBrandingConfigHandler,
+  getAdminAchievementsHandler, postAdminAchievementHandler, patchAdminAchievementHandler, deleteAdminAchievementHandler,
 } from './admin.controller';
 import {
   userListSchema,
@@ -308,4 +309,10 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   fastify.get('/platform/branding', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, getBrandingConfigHandler);
   fastify.put('/platform/branding', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, putBrandingConfigHandler);
+
+  // Achievements admin
+  fastify.get('/achievements', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin', 'team_admin'])] }, getAdminAchievementsHandler);
+  fastify.post('/achievements', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, postAdminAchievementHandler);
+  fastify.patch('/achievements/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin', 'org_admin'])] }, patchAdminAchievementHandler);
+  fastify.delete('/achievements/:id', { preHandler: [fastify.authenticate, fastify.authorize(['super_admin'])] }, deleteAdminAchievementHandler);
 }

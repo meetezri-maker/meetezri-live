@@ -134,7 +134,6 @@ const WellnessContentLibrary    = lazy(() => import('@/app/pages/admin/WellnessC
 const WellnessToolEditor        = lazy(() => import('@/app/pages/admin/WellnessToolEditor').then(m => ({ default: m.WellnessToolEditor })));
 const ExerciseLibrary           = lazy(() => import('@/app/pages/admin/ExerciseLibrary').then(m => ({ default: m.ExerciseLibrary })));
 const ContentPerformance        = lazy(() => import('@/app/pages/admin/ContentPerformance').then(m => ({ default: m.ContentPerformance })));
-const ContentModeration         = lazy(() => import('@/app/pages/admin/ContentModeration').then(m => ({ default: m.ContentModeration })));
 const NudgeManagement           = lazy(() => import('@/app/pages/admin/NudgeManagement').then(m => ({ default: m.NudgeManagement })));
 const NudgeTemplates            = lazy(() => import('@/app/pages/admin/NudgeTemplates').then(m => ({ default: m.NudgeTemplates })));
 const NudgeScheduler            = lazy(() => import('@/app/pages/admin/NudgeScheduler').then(m => ({ default: m.NudgeScheduler })));
@@ -535,8 +534,6 @@ export default function App() {
             <Route path="/admin/wellness-tool-editor" element={<WellnessToolEditor />} />
             <Route path="/admin/exercise-library" element={<ExerciseLibrary />} />
             <Route path="/admin/content-performance" element={<ContentPerformance />} />
-            <Route path="/admin/content-moderation" element={<ContentModeration />} />
-
             {/* Engagement */}
             <Route path="/admin/nudge-management" element={<NudgeManagement />} />
             <Route path="/admin/nudge-templates" element={<NudgeTemplates />} />

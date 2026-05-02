@@ -20,7 +20,6 @@ import {
   Trash2, 
   Power, 
   PowerOff, 
-  Star, 
   Users, 
   Clock, 
   Search,
@@ -70,7 +69,6 @@ interface AIAvatar {
   image: string;
   voiceType: string;
   accentType: string;
-  rating: number;
   totalUsers: number;
   totalSessions: number;
   avgSessionLength: number;
@@ -126,7 +124,6 @@ function buildLocalDefaultAvatars(): AIAvatar[] {
     image: "",
     voiceType: c.voice_type,
     accentType: c.accent_type,
-    rating: c.rating,
     totalUsers: 0,
     totalSessions: 0,
     avgSessionLength: 0,
@@ -194,7 +191,6 @@ export function AIAvatarManager() {
         ),
         voiceType: item.voice_type,
         accentType: item.accent_type,
-        rating: Number(item.rating) || 5.0,
         totalUsers: typeof item.unique_users === 'number' ? item.unique_users : 0,
         totalSessions: typeof item.session_count === 'number' ? item.session_count : 0,
         avgSessionLength: typeof item.avg_session_minutes === 'number' ? item.avg_session_minutes : 0,
@@ -227,17 +223,14 @@ export function AIAvatarManager() {
         totalAvatars: 0,
         activeAvatars: 0,
         totalSessionUsage: 0,
-        avgRating: "0.0",
+        totalUsers: 0,
       };
     }
     return {
       totalAvatars: avatars.length,
       activeAvatars: avatars.filter((a) => a.isActive).length,
       totalSessionUsage: avatars.reduce((sum, a) => sum + a.totalSessions, 0),
-      avgRating:
-        avatars.length > 0
-          ? (avatars.reduce((sum, a) => sum + a.rating, 0) / avatars.length).toFixed(1)
-          : "0.0",
+      totalUsers: avatars.reduce((sum, a) => sum + a.totalUsers, 0),
     };
   }, [avatars, usingDbRows]);
 
@@ -548,10 +541,11 @@ export function AIAvatarManager() {
 
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <Star className="w-8 h-8 text-yellow-600" />
-                <span className="text-2xl font-bold text-gray-900">{stats.avgRating}</span>
+                <Users className="w-8 h-8 text-indigo-600" />
+                <span className="text-2xl font-bold text-gray-900">{stats.totalUsers.toLocaleString()}</span>
               </div>
-              <p className="text-sm text-gray-600">Average Rating</p>
+              <p className="text-sm text-gray-600">Users Engaged</p>
+              <p className="text-xs text-gray-400 mt-0.5">Unique users per avatar (summed)</p>
             </div>
           </div>
 
@@ -608,10 +602,6 @@ export function AIAvatarManager() {
                     <h3 className="text-xl font-bold text-gray-900 mb-1">{avatar.name}</h3>
                     <p className="text-sm text-gray-600 mb-2">{avatar.gender} • {avatar.ageRange} years</p>
                     <div className="flex items-center gap-3 text-xs text-gray-600">
-                      <div className="flex items-center gap-1">
-                        <Star className="w-4 h-4 text-yellow-500" fill="currentColor" />
-                        <span className="font-semibold">{avatar.rating}</span>
-                      </div>
                       <div className="flex items-center gap-1">
                         <Users className="w-4 h-4" />
                         <span>{avatar.totalUsers.toLocaleString()} users</span>

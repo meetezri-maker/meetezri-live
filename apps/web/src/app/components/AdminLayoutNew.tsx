@@ -143,7 +143,6 @@ const NAVIGATION: NavSection[] = [
       { name: "Tool Editor", href: "/admin/wellness-tool-editor", icon: FileText, roles: ["super_admin", "org_admin"] },
       { name: "Exercise Library", href: "/admin/exercise-library", icon: FileText, roles: ["super_admin", "org_admin"] },
       { name: "Content Performance", href: "/admin/content-performance", icon: BarChart3, roles: ["super_admin", "org_admin"] },
-      { name: "Content Moderation", href: "/admin/content-moderation", icon: Shield, roles: ["super_admin", "org_admin"] },
     ],
   },
   {
@@ -255,11 +254,11 @@ const roleInfo: Record<AdminRole, { name: string; gradient: string; icon: any }>
 export function AdminLayoutNew({ children }: AdminLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, signOut, hasRole } = useAuth();
+  const { user, profile, signOut, hasRole, isLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isAdmin = hasRole(["super_admin", "org_admin", "team_admin"]);
   
-  if (profile && !isAdmin) {
+  if (!isLoading && profile && !isAdmin) {
     return <Navigate to="/error/permission-denied" replace />;
   }
 
@@ -366,7 +365,11 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
           {/* Navigation - Clean List */}
           <nav className="flex-1 overflow-y-auto px-3 py-3">
             <div className="space-y-0.5">
-              {filteredNav.map((section) => {
+              {isLoading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="h-9 rounded-lg bg-gray-200/70 animate-pulse mx-0.5" />
+                ))
+              ) : filteredNav.map((section) => {
                 const isExpanded = expandedSection === section.name;
                 const SectionIcon = section.icon;
                 const hasActiveChild = section.pages.some(

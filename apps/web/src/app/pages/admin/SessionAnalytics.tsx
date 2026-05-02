@@ -13,8 +13,8 @@ import {
   Users,
 } from "lucide-react";
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   BarChart,
   Bar,
   PieChart,
@@ -127,15 +127,28 @@ export function SessionAnalytics() {
     count: item.sessions,
   }));
 
+  const totalSessionsAllTime = statsData?.totalSessions ?? 0;
+
   const statsCards = [
     {
       title: "Total Sessions",
-      value: sessionsInRange.toLocaleString(),
+      value: totalSessionsAllTime.toLocaleString(),
       change: "0.0%",
       changeType: "positive",
       icon: MessageSquare,
       color: "primary",
       delay: 0,
+      sub: "all time · completed",
+    },
+    {
+      title: "Sessions in Period",
+      value: sessionsInRange.toLocaleString(),
+      change: "0.0%",
+      changeType: "positive",
+      icon: TrendingUp,
+      color: "success",
+      delay: 0.1,
+      sub: "selected date range",
     },
     {
       title: "Avg Duration",
@@ -144,7 +157,8 @@ export function SessionAnalytics() {
       changeType: "positive",
       icon: Clock,
       color: "secondary",
-      delay: 0.1,
+      delay: 0.2,
+      sub: "per completed session",
     },
     {
       title: "Registered users",
@@ -153,16 +167,8 @@ export function SessionAnalytics() {
       changeType: "positive",
       icon: Users,
       color: "accent",
-      delay: 0.2,
-    },
-    {
-      title: "Avg daily sessions",
-      value: avgDailySessions.toLocaleString(),
-      change: "0.0%",
-      changeType: "positive",
-      icon: TrendingUp,
-      color: "success",
       delay: 0.3,
+      sub: "total registered",
     },
   ];
 
@@ -315,38 +321,47 @@ export function SessionAnalytics() {
             transition={{ delay: 0.4 }}
           >
             <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6">Session trend (selected range)</h2>
+              <h2 className="text-xl font-bold mb-1">Session trend</h2>
+              <p className="text-sm text-muted-foreground mb-6">Daily sessions in selected range</p>
               <ResponsiveContainer width="100%" height={340}>
-                <LineChart data={sessionTrendData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <AreaChart data={sessionTrendData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
+                  <defs>
+                    <linearGradient id="sessionTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#9b87f5" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#9b87f5" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis
                     dataKey="date"
-                    stroke="#6b7280"
-                    tick={{ fontSize: 11 }}
-                    angle={-40}
+                    stroke="#94a3b8"
+                    tick={{ fontSize: 11, fill: "#64748b" }}
+                    angle={-35}
                     textAnchor="end"
-                    height={72}
+                    height={64}
                     interval="preserveStartEnd"
                     minTickGap={28}
                   />
-                  <YAxis stroke="#6b7280" tick={{ fontSize: 11 }} width={40} />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 11, fill: "#64748b" }} width={40} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "10px",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                      fontSize: 12,
                     }}
                   />
-                  <Legend />
-                  <Line
+                  <Area
                     type="monotone"
                     dataKey="sessions"
                     stroke="#9b87f5"
-                    strokeWidth={3}
-                    dot={{ fill: "#9b87f5", r: 5 }}
-                    activeDot={{ r: 7 }}
+                    strokeWidth={2.5}
+                    fill="url(#sessionTrendGrad)"
+                    dot={false}
+                    activeDot={{ r: 6, fill: "#9b87f5", strokeWidth: 0 }}
                   />
-                </LineChart>
+                </AreaChart>
               </ResponsiveContainer>
             </Card>
           </motion.div>
@@ -371,10 +386,11 @@ export function SessionAnalytics() {
                     labelLine={false}
                     label={false}
                     isAnimationActive={false}
-                    outerRadius={88}
+                    innerRadius={55}
+                    outerRadius={90}
                     fill="#8884d8"
                     dataKey="value"
-                    paddingAngle={2}
+                    paddingAngle={3}
                   >
                     {avatarUsageData.map((entry, index) => (
                       <Cell key={`cell-${entry.name}-${index}`} fill={entry.color} />
@@ -387,8 +403,10 @@ export function SessionAnalytics() {
                     ]}
                     contentStyle={{
                       backgroundColor: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "10px",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                      fontSize: 12,
                     }}
                   />
                 </PieChart>
@@ -421,27 +439,32 @@ export function SessionAnalytics() {
             transition={{ delay: 0.6 }}
           >
             <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6">Popular Topics</h2>
+              <h2 className="text-xl font-bold mb-1">Sessions by Day</h2>
+              <p className="text-sm text-muted-foreground mb-6">Daily session volume in selected range</p>
               <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={topicDistributionData} layout="vertical" margin={{ left: 8, right: 12 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis type="number" stroke="#6b7280" tick={{ fontSize: 11 }} />
-                  <YAxis
+                <BarChart data={topicDistributionData} margin={{ top: 4, right: 12, left: 0, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis
                     dataKey="topic"
-                    type="category"
-                    stroke="#6b7280"
-                    width={88}
-                    tick={{ fontSize: 10 }}
-                    interval={0}
+                    stroke="#94a3b8"
+                    tick={{ fontSize: 10, fill: "#64748b" }}
+                    angle={-35}
+                    textAnchor="end"
+                    height={56}
+                    interval="preserveStartEnd"
+                    minTickGap={20}
                   />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 11, fill: "#64748b" }} width={36} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "10px",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                      fontSize: 12,
                     }}
                   />
-                  <Bar dataKey="count" fill="#9b87f5" radius={[0, 8, 8, 0]} />
+                  <Bar dataKey="count" name="Sessions" fill="#9b87f5" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -454,29 +477,32 @@ export function SessionAnalytics() {
             transition={{ delay: 0.7 }}
           >
             <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6">Session Duration Distribution</h2>
+              <h2 className="text-xl font-bold mb-1">Active Sessions by Hour</h2>
+              <p className="text-sm text-muted-foreground mb-6">Session volume distribution by hour of day</p>
               <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={sessionDurationData} margin={{ bottom: 16, left: 4, right: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <BarChart data={sessionDurationData} margin={{ top: 4, bottom: 8, left: 0, right: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis
                     dataKey="range"
-                    stroke="#6b7280"
-                    tick={{ fontSize: 10 }}
+                    stroke="#94a3b8"
+                    tick={{ fontSize: 10, fill: "#64748b" }}
                     angle={-35}
                     textAnchor="end"
-                    height={64}
+                    height={56}
                     interval="preserveStartEnd"
                     minTickGap={8}
                   />
-                  <YAxis stroke="#6b7280" tick={{ fontSize: 11 }} width={36} />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 11, fill: "#64748b" }} width={36} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "10px",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                      fontSize: 12,
                     }}
                   />
-                  <Bar dataKey="count" fill="#7c3aed" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="count" name="Sessions" fill="#7c3aed" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
