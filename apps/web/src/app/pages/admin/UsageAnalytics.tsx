@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
@@ -32,9 +32,9 @@ import {
   AreaChart,
 } from "recharts";
 import { mergeCompanionAvatarCountsClient } from "@/lib/avatar/adminAvatarAnalytics";
-import { api } from "../../../lib/api";
 import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
 import { datesForPreset, downloadCsv } from "@/lib/adminAnalytics";
+import { useAdminStats } from "@/lib/queries/adminQueries";
 
 const COMPANION_PIE_COLOR: Record<string, string> = {
   "Not set": "#94a3b8",
@@ -66,32 +66,12 @@ export function UsageAnalytics() {
   const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
 
   const [selectedMetric, setSelectedMetric] = useState<"sessions" | "users" | "avgDuration">("sessions");
-  const [statsData, setStatsData] = useState<any | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const loadStats = useCallback(async (forceRefresh?: boolean) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const data = await api.admin.getStats({
-        chartPeriod: "month",
-        dateFrom,
-        dateTo,
-        ...(forceRefresh ? { refresh: true } : {}),
-      });
-      setStatsData(data);
-    } catch (err: any) {
-      console.error("Failed to fetch usage analytics", err);
-      setError(err.message || "Failed to load usage analytics");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [dateFrom, dateTo]);
-
-  useEffect(() => {
-    void loadStats();
-  }, [loadStats]);
+  const { data: statsData, isLoading, isFetching, error, refetch } = useAdminStats({
+    chartPeriod: "month",
+    dateFrom,
+    dateTo,
+  });
 
   const sessionActivity = (statsData?.sessionActivity || []) as Array<{
     day: string;
@@ -295,7 +275,7 @@ export function UsageAnalytics() {
       <AdminLayoutNew>
         <div className="max-w-2xl mx-auto py-16 text-center space-y-4">
           <h1 className="text-2xl font-bold">Usage analytics unavailable</h1>
-          <p className="text-muted-foreground">{error}</p>
+          <p className="text-muted-foreground">{error?.message ?? String(error)}</p>
         </div>
       </AdminLayoutNew>
     );
@@ -334,8 +314,8 @@ export function UsageAnalytics() {
               dateTo={dateTo}
               onDateFromChange={setDateFrom}
               onDateToChange={setDateTo}
-              onRefresh={() => void loadStats(true)}
-              isLoading={isLoading}
+              onRefresh={() => void refetch()}
+              isLoading={isFetching}
               onExport={() => {
                 if (!statsData) return;
                 const rows = sessionData.map((r) => ({ ...r }));

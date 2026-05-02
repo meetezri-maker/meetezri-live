@@ -28,11 +28,11 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Card } from "@/app/components/ui/card";
-import { api } from "../../../lib/api";
 import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
 import { buildStatsQuery, datesForPreset, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
+import { useAdminStats } from "@/lib/queries/adminQueries";
 
 function rollingSum(sessions: number[], windowSize: number, i: number): number {
   let s = 0;
@@ -48,34 +48,8 @@ export function UsageOverview() {
   const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
   const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
 
-  const [statsData, setStatsData] = useState<any | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadStats = useCallback(async (forceRefresh?: boolean) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const q = buildStatsQuery({
-        chartPeriod,
-        rangePreset,
-        useCustomRange,
-        dateFrom,
-        dateTo,
-      });
-      const data = await api.admin.getStats({ ...q, ...(forceRefresh ? { refresh: true } : {}) });
-      setStatsData(data);
-    } catch (err: any) {
-      console.error("Failed to fetch usage overview stats", err);
-      setError(err.message || "Failed to load usage overview");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [chartPeriod, rangePreset, useCustomRange, dateFrom, dateTo]);
-
-  useEffect(() => {
-    void loadStats();
-  }, [loadStats]);
+  const statsParams = buildStatsQuery({ chartPeriod, rangePreset, useCustomRange, dateFrom, dateTo });
+  const { data: statsData, isLoading, isFetching, error, refetch } = useAdminStats(statsParams);
 
   const sessionActivity = (statsData?.sessionActivity || []) as any[];
   const sessionCounts = sessionActivity.map((item: any) => Number(item.sessions) || 0);
@@ -231,7 +205,7 @@ export function UsageOverview() {
           <p className="text-gray-600 mb-4">
             Failed to load usage data. Please try again later.
           </p>
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-red-600">{error?.message ?? String(error)}</p>
         </div>
       </AdminLayoutNew>
     );
@@ -263,8 +237,8 @@ export function UsageOverview() {
             dateTo={dateTo}
             onDateFromChange={setDateFrom}
             onDateToChange={setDateTo}
-            onRefresh={() => void loadStats(true)}
-            isLoading={isLoading}
+            onRefresh={() => void refetch()}
+            isLoading={isFetching}
             exportLabel="Export report"
             onExport={() => {
               if (!statsData) return;

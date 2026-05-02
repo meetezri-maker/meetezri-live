@@ -16,31 +16,12 @@ import {
   Smile,
 } from "lucide-react";
 import { Link } from "react-router";
-import { useEffect, useState } from "react";
-import { api } from "../../../lib/api";
+import { useAdminStats, useAdminRecentActivity } from "@/lib/queries/adminQueries";
 
 export function AdminDashboard() {
-  const [stats, setStats] = useState<any>(null);
-  const [recentActivity, setRecentActivity] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsData, activityData] = await Promise.all([
-          api.admin.getStats(),
-          api.admin.getRecentActivity()
-        ]);
-        setStats(statsData);
-        setRecentActivity(activityData);
-      } catch (error) {
-        console.error("Failed to fetch dashboard data", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+  const { data: stats, isLoading: statsLoading } = useAdminStats();
+  const { data: recentActivity, isLoading: recentLoading } = useAdminRecentActivity();
+  const isLoading = statsLoading || recentLoading;
 
   if (isLoading) {
     return (

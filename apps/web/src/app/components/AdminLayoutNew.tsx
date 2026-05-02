@@ -177,7 +177,6 @@ const NAVIGATION: NavSection[] = [
     pages: [
       { name: "Live Sessions", href: "/admin/live-sessions-monitor", icon: Eye, roles: ["super_admin", "org_admin", "team_admin"] },
       { name: "Session Recordings", href: "/admin/session-recordings", icon: Eye, roles: ["super_admin", "org_admin"] },
-      { name: "Activity Monitor", href: "/admin/activity-monitor", icon: Eye, roles: ["super_admin", "org_admin"] },
       { name: "System Health", href: "/admin/system-health-enhanced", icon: Server, roles: ["super_admin"] },
       { name: "Error Tracking", href: "/admin/error-tracking", icon: AlertTriangle, roles: ["super_admin"] },
     ],

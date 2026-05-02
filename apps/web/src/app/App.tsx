@@ -148,7 +148,6 @@ const SupportTickets            = lazy(() => import('@/app/pages/admin/SupportTi
 const CommunityManagement       = lazy(() => import('@/app/pages/admin/CommunityManagement').then(m => ({ default: m.CommunityManagement })));
 const LiveSessionsMonitor       = lazy(() => import('@/app/pages/admin/LiveSessionsMonitor').then(m => ({ default: m.LiveSessionsMonitor })));
 const SessionRecordings         = lazy(() => import('@/app/pages/admin/SessionRecordings').then(m => ({ default: m.SessionRecordings })));
-const ActivityMonitor           = lazy(() => import('@/app/pages/admin/ActivityMonitor').then(m => ({ default: m.ActivityMonitor })));
 const SystemHealthEnhanced      = lazy(() => import('@/app/pages/admin/SystemHealthEnhanced').then(m => ({ default: m.SystemHealthEnhanced })));
 const ErrorTracking             = lazy(() => import('@/app/pages/admin/ErrorTracking').then(m => ({ default: m.ErrorTracking })));
 const SystemSettingsEnhanced    = lazy(() => import('@/app/pages/admin/SystemSettingsEnhanced').then(m => ({ default: m.SystemSettingsEnhanced })));
@@ -553,7 +552,6 @@ export default function App() {
             {/* Monitoring */}
             <Route path="/admin/live-sessions-monitor" element={<LiveSessionsMonitor />} />
             <Route path="/admin/session-recordings" element={<SessionRecordings />} />
-            <Route path="/admin/activity-monitor" element={<ActivityMonitor />} />
             <Route path="/admin/system-health-enhanced" element={<SystemHealthEnhanced />} />
             <Route
               path="/admin/system-health-dashboard"

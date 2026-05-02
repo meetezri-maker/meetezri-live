@@ -447,7 +447,10 @@ export async function getDashboardStats(
    *
    * NOTE: MRR estimates and all-time totals exist in `kpi.*` fields; do not mix them into range revenue.
    */
-  const stripeInvoices = await listStripeInvoicesForAdmin();
+  const stripeInvoices = await Promise.race([
+    listStripeInvoicesForAdmin(),
+    new Promise<[]>((resolve) => setTimeout(() => resolve([]), 5000)),
+  ]);
   const stripeInvoiceRevenueInRangeUsd = stripeInvoices
     .filter((inv) => {
       const createdMs = (inv?.created ?? 0) * 1000;

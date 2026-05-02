@@ -2,7 +2,7 @@ import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { StatsCard } from "../../components/StatsCard";
 import { motion } from "motion/react";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
 import { datesForPreset, downloadCsv } from "@/lib/adminAnalytics";
 import { mergeCompanionAvatarCountsClient } from "@/lib/avatar/adminAvatarAnalytics";
@@ -27,8 +27,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { api } from "../../../lib/api";
 import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
+import { useAdminStats, useAdminRecentActivity } from "@/lib/queries/adminQueries";
 
 const COMPANION_PIE_COLOR: Record<string, string> = {
   "Not set": "#94a3b8",
@@ -58,37 +58,15 @@ export function SessionAnalytics() {
   const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
   const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
 
-  const [statsData, setStatsData] = useState<any | null>(null);
-  const [recentSessions, setRecentSessions] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: statsData, isLoading: statsLoading, isFetching, error, refetch } = useAdminStats({
+    chartPeriod: "month",
+    dateFrom,
+    dateTo,
+  });
+  const { data: recentData, isLoading: recentLoading } = useAdminRecentActivity();
 
-  const loadData = useCallback(async (forceRefresh?: boolean) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [stats, recent] = await Promise.all([
-        api.admin.getStats({
-          chartPeriod: "month",
-          dateFrom,
-          dateTo,
-          ...(forceRefresh ? { refresh: true } : {}),
-        }),
-        api.admin.getRecentActivity(),
-      ]);
-      setStatsData(stats);
-      setRecentSessions(recent.sessions || []);
-    } catch (err: any) {
-      console.error("Failed to fetch session analytics", err);
-      setError(err.message || "Failed to load session analytics");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [dateFrom, dateTo]);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const isLoading = statsLoading || recentLoading;
+  const recentSessions: any[] = recentData?.sessions || [];
 
   const totalUsers = statsData?.totalUsers || 0;
 
@@ -237,7 +215,7 @@ export function SessionAnalytics() {
           <p className="text-muted-foreground mb-4">
             Failed to load session analytics. Please try again later.
           </p>
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-red-600">{error?.message ?? String(error)}</p>
         </div>
       </AdminLayoutNew>
     );
@@ -272,8 +250,8 @@ export function SessionAnalytics() {
             dateTo={dateTo}
             onDateFromChange={setDateFrom}
             onDateToChange={setDateTo}
-            onRefresh={() => void loadData(true)}
-            isLoading={isLoading}
+            onRefresh={() => void refetch()}
+            isLoading={isFetching}
             onExport={() => {
               if (!statsData) return;
               const rows = (statsData.sessionActivity || []).map((r: any, i: number) => ({

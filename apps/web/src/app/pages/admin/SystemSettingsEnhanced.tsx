@@ -1,9 +1,10 @@
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -19,10 +20,15 @@ import {
   RotateCcw,
   CheckCircle,
   AlertTriangle,
-  Server,
   Cloud,
   Code,
   Palette,
+  Loader2,
+  Key,
+  Copy,
+  X,
+  ExternalLink,
+  Zap,
 } from "lucide-react";
 
 const SETTINGS_KEY = "admin.system_settings_enhanced";

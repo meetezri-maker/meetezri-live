@@ -14,6 +14,10 @@ import {
   Download,
   CheckCircle,
   Search,
+  ShieldAlert,
+  Loader2,
+  Info,
+  ChevronRight,
 } from "lucide-react";
 
 interface SessionRecording {
@@ -76,6 +80,7 @@ export function SessionRecordings() {
   const [transcripts, setTranscripts] = useState<Record<string, TranscriptMessage[]>>({});
   const [transcriptLoadingId, setTranscriptLoadingId] = useState<string | null>(null);
   const [transcriptErrorId, setTranscriptErrorId] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<{ id: string; type: string } | null>(null);
 
   useEffect(() => {
     const PAGE_SIZE = 500;
@@ -165,6 +170,16 @@ export function SessionRecordings() {
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    switch(status) {
+      case "completed": return "No issues";
+      case "flagged": return "Needs attention";
+      case "reviewed": return "Done — reviewed";
+      case "escalated": return "Escalated";
+      default: return status;
+    }
+  };
+
   const getSentimentColor = (sentiment: string) => {
     switch(sentiment) {
       case "positive": return "text-green-600";
@@ -189,14 +204,7 @@ export function SessionRecordings() {
     totalRecordings: totalRecordingCount || recordings.length,
     flaggedSessions: recordings.filter((r) => r.status === "flagged").length,
     escalatedSessions: recordings.filter((r) => r.status === "escalated").length,
-    avgQualityScore: (() => {
-      const scored = recordings.filter(
-        (r): r is SessionRecording & { qualityScore: number } =>
-          r.qualityScore != null && r.qualityScore > 0
-      );
-      if (scored.length === 0) return null as number | null;
-      return Math.round(scored.reduce((sum, r) => sum + r.qualityScore, 0) / scored.length);
-    })(),
+    reviewedSessions: recordings.filter((r) => r.status === "reviewed").length,
   };
 
   const loadTranscript = (recording: SessionRecording) => {
@@ -267,6 +275,7 @@ export function SessionRecordings() {
 
   const handleMarkReviewed = async (e: React.MouseEvent, recording: SessionRecording) => {
     e.stopPropagation();
+    setActionLoading({ id: recording.id, type: "reviewed" });
     try {
       await api.admin.markSessionRecordingReviewed(recording.id);
       setRecordings((prev) =>
@@ -277,6 +286,44 @@ export function SessionRecordings() {
     } catch (err) {
       console.error(err);
       alert("Could not mark as reviewed. Try again.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleEscalate = async (e: React.MouseEvent, recording: SessionRecording) => {
+    e.stopPropagation();
+    setActionLoading({ id: recording.id, type: "escalated" });
+    try {
+      await api.admin.updateSessionRecording(recording.id, { status: "escalated" });
+      setRecordings((prev) =>
+        prev.map((r) =>
+          r.id === recording.id ? { ...r, status: "escalated" as const } : r
+        )
+      );
+    } catch (err) {
+      console.error(err);
+      alert("Could not escalate session. Try again.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleFlag = async (e: React.MouseEvent, recording: SessionRecording) => {
+    e.stopPropagation();
+    setActionLoading({ id: recording.id, type: "flagged" });
+    try {
+      await api.admin.updateSessionRecording(recording.id, { admin_flagged: true, status: "flagged" });
+      setRecordings((prev) =>
+        prev.map((r) =>
+          r.id === recording.id ? { ...r, status: "flagged" as const } : r
+        )
+      );
+    } catch (err) {
+      console.error(err);
+      alert("Could not flag session. Try again.");
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -303,7 +350,41 @@ export function SessionRecordings() {
         >
           <div>
             <h1 className="text-3xl font-bold text-gray-900">AI Session Recordings</h1>
-            <p className="text-gray-600 mt-1">Review and analyze session recordings</p>
+            <p className="text-gray-600 mt-1">Review and take action on AI companion sessions</p>
+          </div>
+        </motion.div>
+
+        {/* Review Workflow Guide */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-blue-50 border border-blue-200 rounded-2xl p-4"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <Info className="w-5 h-5 text-blue-600 shrink-0" />
+            <p className="text-sm font-semibold text-blue-800">How to review a session</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-blue-100">
+              <span className="w-6 h-6 rounded-full bg-green-100 text-green-700 text-xs font-bold flex items-center justify-center">1</span>
+              <span className="text-gray-700">Read the transcript</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-blue-400 shrink-0" />
+            <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-yellow-100">
+              <span className="w-6 h-6 rounded-full bg-yellow-100 text-yellow-700 text-xs font-bold flex items-center justify-center">2</span>
+              <span className="text-gray-700">Spot a concern? → <strong>Needs Attention</strong></span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-blue-400 shrink-0" />
+            <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-red-100">
+              <span className="w-6 h-6 rounded-full bg-red-100 text-red-700 text-xs font-bold flex items-center justify-center">3</span>
+              <span className="text-gray-700">Very serious? → <strong>Escalate to Management</strong></span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-blue-400 shrink-0" />
+            <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-blue-100">
+              <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">4</span>
+              <span className="text-gray-700">All handled? → <strong>Mark as Done</strong></span>
+            </div>
           </div>
         </motion.div>
 
@@ -363,18 +444,15 @@ export function SessionRecordings() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3 }}
-            className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
+            className="bg-white rounded-2xl p-6 shadow-lg border-2 border-blue-200"
           >
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600">
-                <Star className="w-6 h-6 text-white" />
+              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
+                <CheckCircle className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Avg Quality</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {stats.avgQualityScore == null ? "—" : `${stats.avgQualityScore}/100`}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">Among sessions with a score</p>
+                <p className="text-gray-600 text-sm">Reviewed</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.reviewedSessions}</p>
               </div>
             </div>
           </motion.div>
@@ -402,13 +480,13 @@ export function SessionRecordings() {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+              className="px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
             >
-              <option value="all">All Status</option>
-              <option value="completed">Completed</option>
-              <option value="flagged">Flagged</option>
-              <option value="reviewed">Reviewed</option>
+              <option value="all">All Sessions</option>
+              <option value="completed">No Issues</option>
+              <option value="flagged">Needs Attention</option>
               <option value="escalated">Escalated</option>
+              <option value="reviewed">Done — Reviewed</option>
             </select>
           </div>
         </motion.div>
@@ -457,11 +535,11 @@ export function SessionRecordings() {
                     </div>
 
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center flex-wrap gap-2 mb-2">
                         <h3 className="font-bold text-gray-900 text-lg">{recording.userName}</h3>
-                        <span className={`px-2 py-1 rounded-lg text-xs font-medium uppercase flex items-center gap-1 ${getStatusColor(recording.status)}`}>
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 ${getStatusColor(recording.status)}`}>
                           <StatusIcon className="w-3 h-3" />
-                          {recording.status}
+                          {getStatusLabel(recording.status)}
                         </span>
                         <span className={`text-xs font-medium capitalize ${getSentimentColor(recording.sentiment)}`}>
                           {recording.sentiment}
@@ -581,48 +659,138 @@ export function SessionRecordings() {
                         </motion.div>
                       )}
 
-                      {/* Action Buttons */}
-                      <div className="flex gap-2 mt-4">
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (selectedRecording?.id !== recording.id) {
-                              setSelectedRecording(recording);
-                            }
-                            if (recording.transcriptAvailable) {
-                              loadTranscript(recording);
-                            }
-                          }}
-                          className="flex-1 px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium flex items-center justify-center gap-1"
-                        >
-                          <MessageSquare className="w-4 h-4" />
-                          {selectedRecording?.id === recording.id ? "Hide Transcript" : "View Transcript"}
-                        </motion.button>
-
-                        <motion.button
-                          type="button"
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={(e) => void handleDownloadRecording(e, recording)}
-                          disabled={transcriptLoadingId === recording.id}
-                          className="px-3 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium disabled:opacity-50"
-                        >
-                          <Download className="w-4 h-4" />
-                        </motion.button>
-
-                        {(recording.status === "flagged" || recording.status === "escalated") && (
+                      {/* Action Panel */}
+                      <div className="mt-4 pt-4 border-t border-gray-100">
+                        {/* Utility row: transcript + download */}
+                        <div className="flex gap-2 mb-3">
+                          <motion.button
+                            whileHover={{ scale: 1.01 }}
+                            whileTap={{ scale: 0.99 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (selectedRecording?.id !== recording.id) {
+                                setSelectedRecording(recording);
+                              }
+                              if (recording.transcriptAvailable) {
+                                loadTranscript(recording);
+                              }
+                            }}
+                            className="flex-1 px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium flex items-center justify-center gap-1.5"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                            {selectedRecording?.id === recording.id ? "Hide Conversation" : "Read Conversation"}
+                          </motion.button>
                           <motion.button
                             type="button"
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={(e) => void handleMarkReviewed(e, recording)}
-                            className="px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium flex items-center gap-1"
+                            whileHover={{ scale: 1.01 }}
+                            whileTap={{ scale: 0.99 }}
+                            onClick={(e) => void handleDownloadRecording(e, recording)}
+                            disabled={transcriptLoadingId === recording.id}
+                            title="Download session as JSON"
+                            className="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-sm font-medium disabled:opacity-50 flex items-center gap-1.5"
                           >
-                            <CheckCircle className="w-4 h-4" />
-                            Mark Reviewed
+                            <Download className="w-4 h-4" />
+                            <span className="hidden sm:inline">Export</span>
                           </motion.button>
+                        </div>
+
+                        {/* Status-specific action row with clear descriptions */}
+                        {recording.status === "completed" && (
+                          <div className="flex items-start gap-3 bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+                            <Flag className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-yellow-800">See something concerning?</p>
+                              <p className="text-xs text-yellow-700 mt-0.5">Mark this session so your team knows it needs a closer look.</p>
+                            </div>
+                            <motion.button
+                              type="button"
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              disabled={actionLoading?.id === recording.id}
+                              onClick={(e) => void handleFlag(e, recording)}
+                              className="shrink-0 px-4 py-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                            >
+                              {actionLoading?.id === recording.id && actionLoading.type === "flagged"
+                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                : <Flag className="w-4 h-4" />}
+                              Needs Attention
+                            </motion.button>
+                          </div>
+                        )}
+
+                        {recording.status === "flagged" && (
+                          <div className="space-y-2">
+                            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-3">
+                              <ShieldAlert className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-red-800">Serious safety or policy issue?</p>
+                                <p className="text-xs text-red-700 mt-0.5">Escalate so management is notified immediately.</p>
+                              </div>
+                              <motion.button
+                                type="button"
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                disabled={actionLoading?.id === recording.id}
+                                onClick={(e) => void handleEscalate(e, recording)}
+                                className="shrink-0 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                              >
+                                {actionLoading?.id === recording.id && actionLoading.type === "escalated"
+                                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                                  : <ShieldAlert className="w-4 h-4" />}
+                                Escalate to Management
+                              </motion.button>
+                            </div>
+                            <div className="flex items-start gap-3 bg-green-50 border border-green-200 rounded-xl p-3">
+                              <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-green-800">Already handled this?</p>
+                                <p className="text-xs text-green-700 mt-0.5">Mark it done so others know it's been taken care of.</p>
+                              </div>
+                              <motion.button
+                                type="button"
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                disabled={actionLoading?.id === recording.id}
+                                onClick={(e) => void handleMarkReviewed(e, recording)}
+                                className="shrink-0 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                              >
+                                {actionLoading?.id === recording.id && actionLoading.type === "reviewed"
+                                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                                  : <CheckCircle className="w-4 h-4" />}
+                                Mark as Done
+                              </motion.button>
+                            </div>
+                          </div>
+                        )}
+
+                        {recording.status === "escalated" && (
+                          <div className="flex items-start gap-3 bg-green-50 border border-green-200 rounded-xl p-3">
+                            <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-green-800">Issue resolved by management?</p>
+                              <p className="text-xs text-green-700 mt-0.5">Mark this done once management has reviewed and closed it.</p>
+                            </div>
+                            <motion.button
+                              type="button"
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              disabled={actionLoading?.id === recording.id}
+                              onClick={(e) => void handleMarkReviewed(e, recording)}
+                              className="shrink-0 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                            >
+                              {actionLoading?.id === recording.id && actionLoading.type === "reviewed"
+                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                : <CheckCircle className="w-4 h-4" />}
+                              Mark as Done
+                            </motion.button>
+                          </div>
+                        )}
+
+                        {recording.status === "reviewed" && (
+                          <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                            <CheckCircle className="w-4 h-4 shrink-0" />
+                            <span>This session has been reviewed and marked as done.</span>
+                          </div>
                         )}
                       </div>
                     </div>
