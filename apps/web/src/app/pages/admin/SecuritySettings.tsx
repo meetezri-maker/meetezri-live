@@ -6,7 +6,6 @@ import {
   Key,
   Eye,
   AlertTriangle,
-  CheckCircle,
   Users,
   Clock,
   Smartphone,
@@ -15,10 +14,13 @@ import {
   Save,
   X,
   Loader2,
+  Download,
+  LogOut,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 const SECURITY_SETTINGS_KEY = "admin_security_settings";
 
@@ -104,7 +106,7 @@ export function SecuritySettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [showLogDetails, setShowLogDetails] = useState(false);
   const [selectedLog, setSelectedLog] = useState<SecurityLog | null>(null);
-  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
+  const [isTerminating, setIsTerminating] = useState(false);
 
   const patchForm = useCallback((partial: Partial<AdminSecurityForm>) => {
     setForm((f) => ({ ...f, ...partial }));
@@ -143,15 +145,64 @@ export function SecuritySettings() {
         form,
         "Admin security policy configuration (UI preferences; enforce in auth layer separately)"
       );
-      toast.success("Security settings saved.");
-      setShowSaveConfirmation(true);
-      setTimeout(() => setShowSaveConfirmation(false), 3000);
+      toast.success("Security settings saved successfully.");
     } catch (e) {
       console.error(e);
       toast.error("Failed to save security settings.");
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleTerminateAllSessions = async () => {
+    if (!window.confirm("This will sign out your current session. All other active sessions will expire at their next token refresh. Continue?")) return;
+    setIsTerminating(true);
+    try {
+      await supabase.auth.signOut({ scope: "global" });
+      toast.success("All sessions terminated. You have been signed out.");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to terminate sessions.");
+      setIsTerminating(false);
+    }
+  };
+
+  const handleExportLogs = () => {
+    if (securityLogs.length === 0) {
+      toast.error("No security logs to export.");
+      return;
+    }
+    const headers = ["ID", "Event", "Severity", "User", "IP Address", "Timestamp", "Action"];
+    const rows = securityLogs.map((log) => [
+      log.id,
+      `"${log.event.replace(/"/g, '""')}"`,
+      log.severity,
+      log.user,
+      log.ipAddress,
+      log.timestamp.toISOString(),
+      `"${log.action.replace(/"/g, '""')}"`,
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `security-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${securityLogs.length} security log entries.`);
+  };
+
+  const handleExportSingleLog = (log: SecurityLog) => {
+    const data = JSON.stringify(log, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `security-log-${log.id}-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success("Log exported as JSON.");
   };
 
   const handleViewLog = (log: SecurityLog) => {
@@ -663,6 +714,31 @@ export function SecuritySettings() {
               <span className="text-sm text-gray-700">Allow concurrent logins from same IP</span>
             </label>
           </div>
+
+          {/* Terminate All Sessions */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-xl">
+              <div>
+                <h3 className="font-bold text-gray-900 mb-1">Terminate All Sessions</h3>
+                <p className="text-sm text-gray-600">Sign out all users from all devices immediately. Use with caution.</p>
+              </div>
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                disabled={isTerminating}
+                onClick={() => void handleTerminateAllSessions()}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {isTerminating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <LogOut className="w-4 h-4" />
+                )}
+                {isTerminating ? "Terminating…" : "Terminate All Sessions"}
+              </motion.button>
+            </div>
+          </div>
         </motion.div>
 
         {/* Security Logs */}
@@ -672,9 +748,22 @@ export function SecuritySettings() {
           transition={{ delay: 0.7 }}
           className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
         >
-          <div className="flex items-center gap-3 mb-6">
-            <FileText className="w-6 h-6 text-purple-600" />
-            <h2 className="text-xl font-bold text-gray-900">Recent Security Events</h2>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <FileText className="w-6 h-6 text-purple-600" />
+              <h2 className="text-xl font-bold text-gray-900">Recent Security Events</h2>
+            </div>
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleExportLogs}
+              disabled={securityLogs.length === 0}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm font-medium text-gray-700 disabled:opacity-40 disabled:pointer-events-none"
+            >
+              <Download className="w-4 h-4" />
+              Export All ({securityLogs.length})
+            </motion.button>
           </div>
 
           <div className="space-y-3">
@@ -728,19 +817,6 @@ export function SecuritySettings() {
             ))}
           </div>
         </motion.div>
-
-        {/* Save Confirmation Toast */}
-        {showSaveConfirmation && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-10 right-10 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 z-50"
-          >
-            <CheckCircle className="w-5 h-5" />
-            <span className="font-medium">Settings saved successfully!</span>
-          </motion.div>
-        )}
 
         {/* Log Details Modal */}
         {showLogDetails && selectedLog && (
@@ -850,12 +926,13 @@ export function SecuritySettings() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow-lg"
+                    className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow-lg flex items-center justify-center gap-2"
                     onClick={() => {
-                      console.log("Exporting log:", selectedLog.id);
+                      handleExportSingleLog(selectedLog);
                       setShowLogDetails(false);
                     }}
                   >
+                    <Download className="w-4 h-4" />
                     Export Log
                   </motion.button>
                 </div>

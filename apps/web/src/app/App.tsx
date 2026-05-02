@@ -1,5 +1,6 @@
-import { useEffect, lazy, Suspense } from 'react';
+import { useEffect, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { api } from '@/lib/api';
 
 // Contexts
 import { AuthProvider } from '@/app/contexts/AuthContext';
@@ -180,6 +181,49 @@ const Maintenance     = lazy(() => import('@/app/pages/errors/Maintenance').then
 const PermissionDenied = lazy(() => import('@/app/pages/errors/PermissionDenied').then(m => ({ default: m.PermissionDenied })));
 const TrialExpired    = lazy(() => import('@/app/pages/errors/TrialExpired').then(m => ({ default: m.TrialExpired })));
 const NoDeviceAccess  = lazy(() => import('@/app/pages/errors/NoDeviceAccess').then(m => ({ default: m.NoDeviceAccess })));
+
+/**
+ * Reads saved security settings and enforces idle session timeout.
+ * Listens to user activity events and signs out after the configured
+ * inactivity period (default 30 min).
+ */
+function IdleTimeoutEnforcer() {
+  const { user, signOut } = useAuth();
+  const timerRef = useRef<number | null>(null);
+  const timeoutMsRef = useRef(30 * 60 * 1000); // default 30 min
+
+  useEffect(() => {
+    if (!user) return;
+
+    // Load saved security settings to get configured timeout
+    api.getSettings().then((rows: unknown) => {
+      const list = Array.isArray(rows) ? rows : [];
+      const row = list.find((r: { key?: string }) => r.key === 'admin_security_settings');
+      const minutes = parseInt(String(row?.value?.sessionTimeout ?? '30'), 10);
+      if (Number.isFinite(minutes) && minutes > 0) {
+        timeoutMsRef.current = minutes * 60 * 1000;
+      }
+    }).catch(() => {/* use default */});
+
+    const resetTimer = () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => {
+        void signOut();
+      }, timeoutMsRef.current);
+    };
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'click', 'scroll'] as const;
+    activityEvents.forEach((e) => window.addEventListener(e, resetTimer, { passive: true }));
+    resetTimer(); // start the timer immediately
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      activityEvents.forEach((e) => window.removeEventListener(e, resetTimer));
+    };
+  }, [user, signOut]);
+
+  return null;
+}
 
 function NetworkWatcher() {
   const navigate = useNavigate();
@@ -401,6 +445,7 @@ export default function App() {
         <BrowserRouter>
         <ThemeManager />
         <NetworkWatcher />
+        <IdleTimeoutEnforcer />
         <MobileMetaTags />
         <Toaster />
         <Routes>

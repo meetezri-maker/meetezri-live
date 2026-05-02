@@ -176,7 +176,7 @@
   background-color: oklch(0.23 0 0) !important;
 }
 
-/* Gradient backgrounds → solid dark */
+/* Light pastel gradient backgrounds → solid dark (only -50 source/dest) */
 .dark [class*="from-gray-"],
 .dark [class*="from-slate-"],
 .dark [class*="from-zinc-"],
@@ -201,19 +201,33 @@
 .dark [class*="to-indigo-100"],
 .dark [class*="to-purple-50"],
 .dark [class*="to-green-50"],
-.dark [class*="to-emerald-50"],
-.dark [class*="bg-gradient-to-r"],
-.dark [class*="bg-gradient-to-br"],
-.dark [class*="bg-gradient-to-b"] {
+.dark [class*="to-emerald-50"] {
   background: oklch(0.18 0 0) !important;
   background-image: none !important;
 }
 
-/* Inline style gradients */
+/* Inline style gradients (page-level backgrounds, not icon chips) */
 .dark [style*="linear-gradient"],
 .dark [style*="radial-gradient"] {
   background: oklch(0.18 0 0) !important;
   background-image: none !important;
+}
+
+/* Re-allow vivid icon/button gradients that use darker from-* colors (500/600) */
+.dark [class*="from-blue-5"]:not([class*="from-blue-50"]),
+.dark [class*="from-green-5"]:not([class*="from-green-50"]),
+.dark [class*="from-purple-5"]:not([class*="from-purple-50"]),
+.dark [class*="from-red-5"]:not([class*="from-red-50"]),
+.dark [class*="from-orange-5"]:not([class*="from-orange-50"]),
+.dark [class*="from-pink-5"]:not([class*="from-pink-50"]),
+.dark [class*="from-indigo-5"]:not([class*="from-indigo-50"]),
+.dark [class*="from-emerald-5"]:not([class*="from-emerald-50"]),
+.dark [class*="from-teal-5"]:not([class*="from-teal-50"]),
+.dark [class*="from-yellow-5"]:not([class*="from-yellow-50"]),
+.dark [class*="from-cyan-5"]:not([class*="from-cyan-50"]),
+.dark [class*="from-violet-5"]:not([class*="from-violet-50"]) {
+  background: revert !important;
+  background-image: revert !important;
 }
 
 /* Text: force light color on dark backgrounds */
@@ -318,26 +332,65 @@
 .dark [class*="bg-fuchsia-50"]  { background-color: rgba(80, 10,  90,  0.55) !important; }
 .dark [class*="bg-fuchsia-100"] { background-color: rgba(100,15,  110, 0.60) !important; }
 
-/* Colored text — brighten so it stays visible against the darkened backgrounds */
-.dark [class*="text-red-"],
-.dark [class*="text-rose-"],
-.dark [class*="text-pink-"],
-.dark [class*="text-orange-"],
-.dark [class*="text-amber-"],
-.dark [class*="text-yellow-"],
-.dark [class*="text-lime-"],
-.dark [class*="text-green-"],
-.dark [class*="text-emerald-"],
-.dark [class*="text-teal-"],
-.dark [class*="text-cyan-"],
-.dark [class*="text-sky-"],
-.dark [class*="text-blue-"],
-.dark [class*="text-indigo-"],
-.dark [class*="text-purple-"],
-.dark [class*="text-violet-"],
-.dark [class*="text-fuchsia-"] {
-  filter: brightness(1.6);
-}
+/* Colored text — convert dark shades to light pastels so they're readable on dark backgrounds.
+   Using direct color overrides (NOT filter) to avoid cascading into child elements' backgrounds. */
+
+/* Red family */
+.dark [class*="text-red-500"], .dark [class*="text-red-600"],
+.dark [class*="text-red-700"], .dark [class*="text-red-800"],
+.dark [class*="text-red-900"] { color: #fca5a5 !important; }
+.dark [class*="text-red-400"] { color: #f87171 !important; }
+
+.dark [class*="text-rose-500"], .dark [class*="text-rose-600"],
+.dark [class*="text-rose-700"], .dark [class*="text-rose-800"] { color: #fda4af !important; }
+
+.dark [class*="text-pink-500"], .dark [class*="text-pink-600"],
+.dark [class*="text-pink-700"], .dark [class*="text-pink-800"] { color: #f9a8d4 !important; }
+
+/* Orange / amber / yellow */
+.dark [class*="text-orange-500"], .dark [class*="text-orange-600"],
+.dark [class*="text-orange-700"], .dark [class*="text-orange-800"] { color: #fdba74 !important; }
+
+.dark [class*="text-amber-500"], .dark [class*="text-amber-600"],
+.dark [class*="text-amber-700"], .dark [class*="text-amber-800"] { color: #fcd34d !important; }
+
+.dark [class*="text-yellow-500"], .dark [class*="text-yellow-600"],
+.dark [class*="text-yellow-700"], .dark [class*="text-yellow-800"] { color: #fde047 !important; }
+
+/* Green family */
+.dark [class*="text-green-500"], .dark [class*="text-green-600"],
+.dark [class*="text-green-700"], .dark [class*="text-green-800"] { color: #86efac !important; }
+.dark [class*="text-green-400"] { color: #4ade80 !important; }
+
+.dark [class*="text-emerald-500"], .dark [class*="text-emerald-600"],
+.dark [class*="text-emerald-700"], .dark [class*="text-emerald-800"] { color: #6ee7b7 !important; }
+
+.dark [class*="text-teal-500"], .dark [class*="text-teal-600"],
+.dark [class*="text-teal-700"], .dark [class*="text-teal-800"] { color: #5eead4 !important; }
+
+/* Blue family */
+.dark [class*="text-blue-500"], .dark [class*="text-blue-600"],
+.dark [class*="text-blue-700"], .dark [class*="text-blue-800"] { color: #93c5fd !important; }
+.dark [class*="text-blue-400"] { color: #60a5fa !important; }
+
+.dark [class*="text-sky-500"], .dark [class*="text-sky-600"],
+.dark [class*="text-sky-700"] { color: #7dd3fc !important; }
+
+.dark [class*="text-cyan-500"], .dark [class*="text-cyan-600"],
+.dark [class*="text-cyan-700"] { color: #67e8f9 !important; }
+
+.dark [class*="text-indigo-500"], .dark [class*="text-indigo-600"],
+.dark [class*="text-indigo-700"], .dark [class*="text-indigo-800"] { color: #a5b4fc !important; }
+
+/* Purple family */
+.dark [class*="text-purple-500"], .dark [class*="text-purple-600"],
+.dark [class*="text-purple-700"], .dark [class*="text-purple-800"] { color: #d8b4fe !important; }
+
+.dark [class*="text-violet-500"], .dark [class*="text-violet-600"],
+.dark [class*="text-violet-700"] { color: #c4b5fd !important; }
+
+.dark [class*="text-fuchsia-500"], .dark [class*="text-fuchsia-600"],
+.dark [class*="text-fuchsia-700"] { color: #f0abfc !important; }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 
