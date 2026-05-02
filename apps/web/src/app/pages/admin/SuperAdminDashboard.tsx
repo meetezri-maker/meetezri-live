@@ -27,6 +27,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  HeartPulse,
+  Timer,
+  Brain,
+  BookOpen,
+  Siren,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -290,6 +295,24 @@ function formatPctSigned(n: number) {
   if (!Number.isFinite(n)) return "—";
   const sign = n > 0 ? "+" : "";
   return `${sign}${n.toFixed(1)}%`;
+}
+
+function formatUptime(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "—";
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function formatMinutes(mins: number) {
+  if (!Number.isFinite(mins) || mins <= 0) return "—";
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
 const CHART_TOOLTIP_STYLE = {
@@ -600,6 +623,10 @@ export function SuperAdminDashboard() {
   const userCount = stats?.totalUsers || 0;
   const sessionCount = stats?.activeSessions || 0;
   const revenue = stats?.revenue || 0;
+  const totalSessions = stats?.totalSessions || 0;
+  const avgSessionLength = stats?.avgSessionLength || 0;
+  const avgMoodScore = stats?.avgMoodScore ?? null;
+  const crisisAlertsCount = stats?.crisisAlerts || 0;
   const kpi = stats?.kpi as
     | {
         signupsLast7Days: number;
@@ -667,7 +694,7 @@ export function SuperAdminDashboard() {
           </div>
         )}
 
-        {/* Animated Stats Cards */}
+        {/* Primary Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Total Users */}
           <motion.div
@@ -714,13 +741,11 @@ export function SuperAdminDashboard() {
             </Card>
           </motion.div>
 
-
-
           {/* Active Sessions */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
+            transition={{ delay: 0.1 }}
           >
             <Card className="p-6 bg-gradient-to-br from-cyan-50 to-white border-cyan-200 relative overflow-hidden group hover:shadow-xl transition-all">
               <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl" />
@@ -760,7 +785,7 @@ export function SuperAdminDashboard() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: 0.2 }}
           >
             <Card className="p-6 bg-gradient-to-br from-green-50 to-white border-green-200 relative overflow-hidden group hover:shadow-xl transition-all">
               <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-full blur-3xl" />
@@ -784,13 +809,130 @@ export function SuperAdminDashboard() {
                 <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <TrendingUp className="w-3 h-3 text-green-600" />
                   <span>
-                    MRR est.: {formatUsd(mrrEstimate)} · {formatUsd(payThisMonthUsd)} completed payments (this month, Stripe)
+                    MRR est.: {formatUsd(mrrEstimate)} · {formatUsd(payThisMonthUsd)} (this month, Stripe)
                   </span>
                 </div>
               </div>
             </Card>
           </motion.div>
+
+          {/* Crisis Alerts */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <Link to="/admin/crisis-monitoring">
+              <Card className={`p-6 relative overflow-hidden group hover:shadow-xl transition-all cursor-pointer ${
+                crisisAlertsCount > 0
+                  ? "bg-gradient-to-br from-red-50 to-white border-red-300"
+                  : "bg-gradient-to-br from-emerald-50 to-white border-emerald-200"
+              }`}>
+                <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl ${
+                  crisisAlertsCount > 0 ? "bg-red-500/10" : "bg-emerald-500/10"
+                }`} />
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                      crisisAlertsCount > 0 ? "bg-red-500" : "bg-emerald-500"
+                    }`}>
+                      <Siren className="w-6 h-6 text-white" />
+                    </div>
+                    {crisisAlertsCount > 0 && (
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                        <span className="text-xs text-red-600 font-semibold">Needs Review</span>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-1">Open Crisis Alerts</p>
+                  <motion.div
+                    key={crisisAlertsCount}
+                    initial={{ scale: 1.1 }}
+                    animate={{ scale: 1 }}
+                    transition={{ duration: 0.3 }}
+                    className={`text-3xl font-bold ${crisisAlertsCount > 0 ? "text-red-600" : "text-emerald-600"}`}
+                  >
+                    {crisisAlertsCount.toLocaleString()}
+                  </motion.div>
+                  <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                    <Shield className="w-3 h-3" />
+                    <span>{crisisAlertsCount === 0 ? "All clear — no pending crisis events" : "Tap to review pending events"}</span>
+                  </div>
+                </div>
+              </Card>
+            </Link>
+          </motion.div>
         </div>
+
+        {/* Engagement & Wellbeing Metrics Row */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+        >
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Total AI Sessions */}
+            <Card className="p-5 flex items-center gap-4 hover:shadow-md transition-all">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
+                <Brain className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Total AI Sessions</p>
+                <p className="text-2xl font-bold tabular-nums">{totalSessions.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground truncate">All-time companion conversations</p>
+              </div>
+            </Card>
+
+            {/* Avg Session Duration */}
+            <Card className="p-5 flex items-center gap-4 hover:shadow-md transition-all">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shrink-0">
+                <Timer className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Avg Session Length</p>
+                <p className="text-2xl font-bold tabular-nums">{formatMinutes(avgSessionLength)}</p>
+                <p className="text-xs text-muted-foreground truncate">Per completed AI session</p>
+              </div>
+            </Card>
+
+            {/* Avg Mood Score */}
+            <Card className="p-5 flex items-center gap-4 hover:shadow-md transition-all">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center shrink-0">
+                <HeartPulse className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Avg Mood Score</p>
+                <p className="text-2xl font-bold tabular-nums">
+                  {avgMoodScore != null ? `${avgMoodScore}/10` : "—"}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">All-time intensity average</p>
+              </div>
+            </Card>
+
+            {/* API Uptime */}
+            <Card className="p-5 flex items-center gap-4 hover:shadow-md transition-all">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                processHealth?.databaseConnected === false
+                  ? "bg-gradient-to-br from-red-500 to-rose-600"
+                  : "bg-gradient-to-br from-teal-500 to-cyan-600"
+              }`}>
+                <BookOpen className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">API Uptime</p>
+                <p className="text-2xl font-bold tabular-nums">
+                  {formatUptime(processHealth?.uptimeSeconds ?? 0)}
+                </p>
+                <p className={`text-xs truncate font-medium ${
+                  processHealth?.databaseConnected === false ? "text-red-500" : "text-emerald-600"
+                }`}>
+                  {processHealth?.databaseConnected === false ? "DB unreachable" : "Database connected"}
+                </p>
+              </div>
+            </Card>
+          </div>
+        </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 8 }}
