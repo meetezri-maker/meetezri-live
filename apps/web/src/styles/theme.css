@@ -80,6 +80,267 @@
   --sidebar-ring: oklch(0.439 0 0);
 }
 
+/* ─── Dark mode: Recharts SVG text & tooltip overrides ─── */
+
+/* All SVG text inside charts */
+.dark .recharts-wrapper text,
+.dark .recharts-wrapper tspan {
+  fill: oklch(0.82 0 0) !important;
+}
+
+/* Axis tick labels specifically */
+.dark .recharts-cartesian-axis-tick-value,
+.dark .recharts-text,
+.dark .recharts-label {
+  fill: oklch(0.82 0 0) !important;
+}
+
+/* Axis lines (the lines drawn for X and Y axes) */
+.dark .recharts-cartesian-axis-line,
+.dark .recharts-cartesian-axis > line {
+  stroke: oklch(0.38 0 0) !important;
+}
+
+/* Axis tick marks */
+.dark .recharts-cartesian-axis-tick > line {
+  stroke: oklch(0.38 0 0) !important;
+}
+
+/* Cartesian grid lines */
+.dark .recharts-cartesian-grid-horizontal line,
+.dark .recharts-cartesian-grid-vertical line {
+  stroke: oklch(0.28 0 0) !important;
+}
+
+/* Reference lines */
+.dark .recharts-reference-line line {
+  stroke: oklch(0.45 0 0) !important;
+}
+
+/* Legend text */
+.dark .recharts-legend-item-text {
+  color: oklch(0.82 0 0) !important;
+}
+
+/* Default tooltip wrapper (the built-in white box) */
+.dark .recharts-default-tooltip {
+  background-color: oklch(0.22 0 0) !important;
+  border: 1px solid oklch(0.35 0 0) !important;
+  color: oklch(0.92 0 0) !important;
+}
+
+.dark .recharts-tooltip-label {
+  color: oklch(0.92 0 0) !important;
+}
+
+.dark .recharts-tooltip-item {
+  color: oklch(0.8 0 0) !important;
+}
+
+/* Custom tooltip divs (white bg cards rendered inside recharts-tooltip-wrapper) */
+.dark .recharts-tooltip-wrapper > div,
+.dark .recharts-tooltip-wrapper > div * {
+  background-color: oklch(0.22 0 0) !important;
+  border-color: oklch(0.35 0 0) !important;
+  color: oklch(0.92 0 0) !important;
+}
+
+/* Polar charts (radar, pie) axis labels */
+.dark .recharts-polar-angle-axis-tick-value,
+.dark .recharts-polar-radius-axis-tick-value {
+  fill: oklch(0.82 0 0) !important;
+}
+
+/* ─── Dark mode: force hardcoded Tailwind color classes to respect dark theme ─── */
+/* The admin panel uses many hardcoded bg-white / text-gray-* classes that don't
+   use dark: variants. These overrides ensure dark mode works consistently across
+   all pages, following the same pattern as .high-contrast below. */
+
+.dark body,
+.dark [class*="bg-white"],
+.dark [class*="bg-gray-50"],
+.dark [class*="bg-gray-100"],
+.dark [class*="bg-slate-50"],
+.dark [class*="bg-slate-100"],
+.dark [class*="bg-zinc-50"],
+.dark [class*="bg-zinc-100"],
+.dark [class*="bg-neutral-50"],
+.dark [class*="bg-neutral-100"] {
+  background-color: oklch(0.18 0 0) !important;
+}
+
+.dark [class*="bg-gray-200"],
+.dark [class*="bg-gray-300"],
+.dark [class*="bg-slate-200"],
+.dark [class*="bg-zinc-200"] {
+  background-color: oklch(0.23 0 0) !important;
+}
+
+/* Gradient backgrounds → solid dark */
+.dark [class*="from-gray-"],
+.dark [class*="from-slate-"],
+.dark [class*="from-zinc-"],
+.dark [class*="from-neutral-"],
+.dark [class*="from-white"],
+.dark [class*="from-blue-50"],
+.dark [class*="from-indigo-50"],
+.dark [class*="from-purple-50"],
+.dark [class*="from-green-50"],
+.dark [class*="from-emerald-50"],
+.dark [class*="from-teal-50"],
+.dark [class*="from-yellow-50"],
+.dark [class*="from-orange-50"],
+.dark [class*="from-red-50"],
+.dark [class*="from-pink-50"],
+.dark [class*="to-gray-"],
+.dark [class*="to-slate-"],
+.dark [class*="to-zinc-"],
+.dark [class*="to-white"],
+.dark [class*="to-blue-50"],
+.dark [class*="to-indigo-50"],
+.dark [class*="to-indigo-100"],
+.dark [class*="to-purple-50"],
+.dark [class*="to-green-50"],
+.dark [class*="to-emerald-50"],
+.dark [class*="bg-gradient-to-r"],
+.dark [class*="bg-gradient-to-br"],
+.dark [class*="bg-gradient-to-b"] {
+  background: oklch(0.18 0 0) !important;
+  background-image: none !important;
+}
+
+/* Inline style gradients */
+.dark [style*="linear-gradient"],
+.dark [style*="radial-gradient"] {
+  background: oklch(0.18 0 0) !important;
+  background-image: none !important;
+}
+
+/* Text: force light color on dark backgrounds */
+.dark [class*="text-gray-900"],
+.dark [class*="text-gray-800"],
+.dark [class*="text-gray-700"],
+.dark [class*="text-slate-900"],
+.dark [class*="text-slate-800"],
+.dark [class*="text-slate-700"],
+.dark [class*="text-zinc-900"],
+.dark [class*="text-black"] {
+  color: oklch(0.92 0 0) !important;
+}
+
+.dark [class*="text-gray-600"],
+.dark [class*="text-gray-500"],
+.dark [class*="text-slate-600"],
+.dark [class*="text-slate-500"],
+.dark [class*="text-zinc-600"],
+.dark [class*="text-zinc-500"],
+.dark [class*="text-muted-foreground"] {
+  color: oklch(0.72 0 0) !important;
+}
+
+/* Borders */
+.dark [class*="border-gray-100"],
+.dark [class*="border-gray-200"],
+.dark [class*="border-gray-300"],
+.dark [class*="border-slate-200"],
+.dark [class*="border-slate-300"],
+.dark [class*="border-zinc-200"] {
+  border-color: oklch(0.3 0 0) !important;
+}
+
+/* Cards */
+.dark [class*="bg-white/"],
+.dark [class*="bg-gray-50/"],
+.dark [class*="bg-white "],
+.dark .bg-white {
+  background-color: oklch(0.2 0 0) !important;
+}
+
+/* Inputs, selects, textareas */
+.dark input:not([type="range"]),
+.dark textarea,
+.dark select {
+  background-color: oklch(0.22 0 0) !important;
+  color: oklch(0.92 0 0) !important;
+  border-color: oklch(0.32 0 0) !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: oklch(0.55 0 0) !important;
+}
+
+/* Colored light-tinted backgrounds (alerts, badges, pills).
+   Use direct background-color overrides — NOT filter — so text inside
+   inherits the dark theme's --foreground color correctly and stays readable. */
+
+/* Red / rose / pink */
+.dark [class*="bg-red-50"]    { background-color: rgba(80,  10, 10,  0.55) !important; }
+.dark [class*="bg-red-100"]   { background-color: rgba(100, 15, 15,  0.60) !important; }
+.dark [class*="bg-rose-50"]   { background-color: rgba(80,  10, 30,  0.55) !important; }
+.dark [class*="bg-rose-100"]  { background-color: rgba(100, 15, 40,  0.60) !important; }
+.dark [class*="bg-pink-50"]   { background-color: rgba(80,  10, 40,  0.55) !important; }
+.dark [class*="bg-pink-100"]  { background-color: rgba(100, 15, 55,  0.60) !important; }
+
+/* Orange / amber / yellow */
+.dark [class*="bg-orange-50"]  { background-color: rgba(90,  40, 5,   0.55) !important; }
+.dark [class*="bg-orange-100"] { background-color: rgba(110, 50, 8,   0.60) !important; }
+.dark [class*="bg-amber-50"]   { background-color: rgba(90,  45, 5,   0.55) !important; }
+.dark [class*="bg-amber-100"]  { background-color: rgba(110, 55, 8,   0.60) !important; }
+.dark [class*="bg-yellow-50"]  { background-color: rgba(80,  60, 5,   0.55) !important; }
+.dark [class*="bg-yellow-100"] { background-color: rgba(100, 75, 8,   0.60) !important; }
+.dark [class*="bg-lime-50"]    { background-color: rgba(40,  60, 5,   0.55) !important; }
+.dark [class*="bg-lime-100"]   { background-color: rgba(50,  75, 8,   0.60) !important; }
+
+/* Green / emerald / teal */
+.dark [class*="bg-green-50"]    { background-color: rgba(5,  60,  30,  0.55) !important; }
+.dark [class*="bg-green-100"]   { background-color: rgba(5,  75,  40,  0.60) !important; }
+.dark [class*="bg-emerald-50"]  { background-color: rgba(5,  60,  35,  0.55) !important; }
+.dark [class*="bg-emerald-100"] { background-color: rgba(5,  75,  45,  0.60) !important; }
+.dark [class*="bg-teal-50"]     { background-color: rgba(5,  55,  55,  0.55) !important; }
+.dark [class*="bg-teal-100"]    { background-color: rgba(5,  70,  70,  0.60) !important; }
+
+/* Blue / sky / cyan / indigo */
+.dark [class*="bg-blue-50"]    { background-color: rgba(10, 30,  90,  0.55) !important; }
+.dark [class*="bg-blue-100"]   { background-color: rgba(15, 40,  110, 0.60) !important; }
+.dark [class*="bg-sky-50"]     { background-color: rgba(8,  50,  90,  0.55) !important; }
+.dark [class*="bg-sky-100"]    { background-color: rgba(10, 65,  110, 0.60) !important; }
+.dark [class*="bg-cyan-50"]    { background-color: rgba(5,  55,  80,  0.55) !important; }
+.dark [class*="bg-cyan-100"]   { background-color: rgba(5,  70,  100, 0.60) !important; }
+.dark [class*="bg-indigo-50"]  { background-color: rgba(30, 20,  100, 0.55) !important; }
+.dark [class*="bg-indigo-100"] { background-color: rgba(40, 25,  120, 0.60) !important; }
+
+/* Purple / violet / fuchsia */
+.dark [class*="bg-purple-50"]   { background-color: rgba(55, 10,  100, 0.55) !important; }
+.dark [class*="bg-purple-100"]  { background-color: rgba(70, 15,  120, 0.60) !important; }
+.dark [class*="bg-violet-50"]   { background-color: rgba(60, 10,  100, 0.55) !important; }
+.dark [class*="bg-violet-100"]  { background-color: rgba(75, 15,  120, 0.60) !important; }
+.dark [class*="bg-fuchsia-50"]  { background-color: rgba(80, 10,  90,  0.55) !important; }
+.dark [class*="bg-fuchsia-100"] { background-color: rgba(100,15,  110, 0.60) !important; }
+
+/* Colored text — brighten so it stays visible against the darkened backgrounds */
+.dark [class*="text-red-"],
+.dark [class*="text-rose-"],
+.dark [class*="text-pink-"],
+.dark [class*="text-orange-"],
+.dark [class*="text-amber-"],
+.dark [class*="text-yellow-"],
+.dark [class*="text-lime-"],
+.dark [class*="text-green-"],
+.dark [class*="text-emerald-"],
+.dark [class*="text-teal-"],
+.dark [class*="text-cyan-"],
+.dark [class*="text-sky-"],
+.dark [class*="text-blue-"],
+.dark [class*="text-indigo-"],
+.dark [class*="text-purple-"],
+.dark [class*="text-violet-"],
+.dark [class*="text-fuchsia-"] {
+  filter: brightness(1.6);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+
 .high-contrast {
   --background: #000000;
   --foreground: #ffffff;

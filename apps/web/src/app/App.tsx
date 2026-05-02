@@ -276,6 +276,26 @@ export default function App() {
           } catch {
           }
         }
+        // Admin-set appearance (hex colors + theme from system settings page)
+        const adminAppearance = window.localStorage.getItem("ezri_admin_appearance");
+        if (adminAppearance) {
+          try {
+            const ap = JSON.parse(adminAppearance) as {
+              defaultTheme?: string;
+              primaryColor?: string;
+              accentColor?: string;
+              reducedMotion?: boolean;
+            };
+            if (ap.defaultTheme === "Dark") theme = "dark";
+            else if (ap.defaultTheme === "System") theme = "auto";
+            else if (ap.defaultTheme === "Light") theme = "light";
+            // Colors and reduced motion apply everywhere
+            if (ap.primaryColor) (window as any).__adminPrimaryColor = ap.primaryColor;
+            if (ap.accentColor) (window as any).__adminAccentColor = ap.accentColor;
+            if (ap.reducedMotion != null) (window as any).__adminReducedMotion = ap.reducedMotion;
+          } catch {
+          }
+        }
         if (savedAccessibility) {
           try {
             accessibilitySettings = JSON.parse(savedAccessibility);
@@ -318,6 +338,36 @@ export default function App() {
     root.style.setProperty("--accent", accent);
     root.style.setProperty("--primary", accent);
     root.style.setProperty("--ring", accent);
+
+    // Override with admin appearance colors (from system settings page)
+    const adminPrimary = (window as any).__adminPrimaryColor;
+    const adminAccent = (window as any).__adminAccentColor;
+    const adminReducedMotion = (window as any).__adminReducedMotion;
+    if (adminPrimary) { root.style.setProperty("--primary", adminPrimary); root.style.setProperty("--ring", adminPrimary); }
+    if (adminAccent) root.style.setProperty("--accent", adminAccent);
+    if (adminReducedMotion != null) root.classList.toggle("reduced-motion", Boolean(adminReducedMotion));
+
+    // Override with brand colors (from branding-customization page — highest priority)
+    try {
+      const brandingRaw = window.localStorage.getItem("ezri_branding");
+      if (brandingRaw) {
+        const brandingParsed = JSON.parse(brandingRaw) as { branding?: { primaryColor?: string; accentColor?: string; appName?: string; faviconUrl?: string; bodyFont?: string } };
+        const b = brandingParsed.branding;
+        if (b?.primaryColor) { root.style.setProperty("--primary", b.primaryColor); root.style.setProperty("--ring", b.primaryColor); }
+        if (b?.accentColor) root.style.setProperty("--accent", b.accentColor);
+        if (b?.appName) document.title = b.appName;
+        if (b?.faviconUrl) {
+          let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
+          if (!link) { link = document.createElement("link"); link.rel = "icon"; document.head.appendChild(link); }
+          link.href = b.faviconUrl;
+        }
+        if (b?.bodyFont && b.bodyFont !== "Inter") {
+          document.body.style.fontFamily = `"${b.bodyFont}", sans-serif`;
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
 
     const fontSizeMap: Record<string, string> = {
       small: "14px",
