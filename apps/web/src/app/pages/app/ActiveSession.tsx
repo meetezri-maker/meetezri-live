@@ -1614,6 +1614,16 @@ export function ActiveSession() {
   // This is the ONLY reliable way to ignore late audio chunks that the server
   // buffered before it processed our interrupt signal.
   const suppressIncomingAudioRef = useRef(false);
+  // Ref mirror of isEzriThinking state — safe to read inside STT callbacks and
+  // async functions without stale closure issues.
+  const isEzriThinkingRef = useRef(false);
+  // Text of the most recent message sent to the backend that has NOT yet produced
+  // any audio response. Used to merge follow-up user speech during the silence gap.
+  const pendingUserTextRef = useRef<string>("");
+  // How many old in-flight server responses to silently drop before playing the
+  // next one. Incremented each time a merge fires so that only the LATEST merged
+  // message's response is played. Decremented on each tts_done / server interrupt.
+  const dropOldResponsesRef = useRef(0);
 
   const pauseStt = () => {
     suppressSttRef.current = true;
@@ -2070,6 +2080,41 @@ export function ActiveSession() {
     const trimmed = text.trim();
     if (!trimmed) return;
 
+    // ── Silence-gap merge ────────────────────────────────────────────────────
+    // If the backend is still processing the previous message (thinking, not yet
+    // speaking), cancel that request and re-send both texts as a single message.
+    // This covers the pattern: user speaks → silence → user speaks again before
+    // the response arrives. Without this, both utterances would be processed
+    // independently, giving two separate replies instead of one coherent answer.
+    if (isEzriThinkingRef.current && !isEzriSpeakingRef.current) {
+      const prev = pendingUserTextRef.current;
+      const merged = prev ? `${prev} ${trimmed}` : trimmed;
+
+      // Abort in-flight REST request immediately.
+      if (restAbortControllerRef.current) {
+        restAbortControllerRef.current.abort();
+        restAbortControllerRef.current = null;
+      }
+      // Tell WS callbacks to silently drop the NEXT complete response cycle
+      // (text + audio + tts_done) that arrives for the old in-flight request.
+      // We do NOT touch suppressIncomingAudioRef here — that ref is only for
+      // the barge-in path. The WS path in handleUserText will lift it normally
+      // for the merged message, so the merged response flows through freely.
+      dropOldResponsesRef.current += 1;
+
+      // Reset thinking state so the recursive call proceeds cleanly.
+      setIsEzriThinking(false);
+      isEzriThinkingRef.current = false;
+      pendingUserTextRef.current = "";
+
+      console.log(`[merge] Combining "${prev}" + "${trimmed}" → "${merged}" (drop=${dropOldResponsesRef.current})`);
+      void handleUserText(merged);
+      return;
+    }
+
+    // Record what we are about to send so follow-up speech can be merged.
+    pendingUserTextRef.current = trimmed;
+
     // Safety analysis should be based on real user content (not mock phrases).
     try {
       const analysis = analyzeTextForSafety(trimmed, currentState);
@@ -2131,6 +2176,7 @@ export function ActiveSession() {
     } catch {}
 
     setIsEzriThinking(true);
+    isEzriThinkingRef.current = true;
     let spokeViaWebSocket = false;
     try {
       const ws = wsClientRef.current;
@@ -2205,7 +2251,11 @@ export function ActiveSession() {
       toast.error(e?.message || "Solace chat failed");
     } finally {
       // WebSocket replies clear thinking in onAssistantText / onAudio / onError.
-      if (!spokeViaWebSocket) setIsEzriThinking(false);
+      if (!spokeViaWebSocket) {
+        setIsEzriThinking(false);
+        isEzriThinkingRef.current = false;
+        pendingUserTextRef.current = "";
+      }
     }
   };
 
@@ -2759,6 +2809,8 @@ export function ActiveSession() {
         onAssistantText: (text, kind) => {
           // Drop everything from the old turn until the user's new message is sent.
           if (suppressIncomingAudioRef.current) return;
+          // Drop old in-flight responses that arrived before the merged message's response.
+          if (dropOldResponsesRef.current > 0) return;
 
           if (kind === "partial") {
             wsAssistantBufferRef.current += text;
@@ -2783,10 +2835,21 @@ export function ActiveSession() {
             wsPendingFallbackTextRef.current = full;
           }
           setIsEzriThinking(false);
+          isEzriThinkingRef.current = false;
+          pendingUserTextRef.current = "";
         },
         onTtsDone: () => {
           // tts_done from an interrupted turn — ignore entirely.
           if (suppressIncomingAudioRef.current) {
+            wsTtsDoneReceivedRef.current = false;
+            return;
+          }
+          // This tts_done closes one old response cycle — decrement the drop counter
+          // so the NEXT response (the merged one) is allowed through.
+          if (dropOldResponsesRef.current > 0) {
+            dropOldResponsesRef.current -= 1;
+            wsAudioQueueRef.current = [];
+            wsIsPlaybackActiveRef.current = false;
             wsTtsDoneReceivedRef.current = false;
             return;
           }
@@ -2808,9 +2871,17 @@ export function ActiveSession() {
           }
         },
         onInterrupt: () => {
+          // If a merge is in progress, the server interrupted the old turn on its
+          // own (streaming server behaviour). Clear the drop counter so the merged
+          // response is accepted immediately.
+          if (dropOldResponsesRef.current > 0) {
+            dropOldResponsesRef.current = 0;
+          }
           // Stop playback immediately; then send playback_done after echo cooldown.
           stopPlaybackAndCooldown({ sendPlaybackDone: true });
           setIsEzriThinking(false);
+          isEzriThinkingRef.current = false;
+          pendingUserTextRef.current = "";
         },
         onAudio: (audio) => {
           // Drop audio from the old turn — any chunk arriving while suppressed
@@ -2818,6 +2889,8 @@ export function ActiveSession() {
           // was processed. We only lift suppression when the new user message
           // is actually sent (see handleUserText).
           if (suppressIncomingAudioRef.current) return;
+          // Drop audio belonging to old in-flight responses.
+          if (dropOldResponsesRef.current > 0) return;
 
           const buffered = wsAssistantBufferRef.current.trim();
           const subtitle = buffered || wsLastFinalTextRef.current.trim() || "…";
@@ -2856,6 +2929,8 @@ export function ActiveSession() {
           };
           playNext();
           setIsEzriThinking(false);
+          isEzriThinkingRef.current = false;
+          pendingUserTextRef.current = "";
         },
         onError: (err, ctx) => {
           console.error("Solace WS error:", err, ctx);
@@ -2865,6 +2940,8 @@ export function ActiveSession() {
               : (err as Error)?.message || "Solace connection error";
           toast.error(msg);
           setIsEzriThinking(false);
+          isEzriThinkingRef.current = false;
+          pendingUserTextRef.current = "";
         },
       });
 

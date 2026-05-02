@@ -22,8 +22,10 @@ export type WellnessChallengeDashboardPayload = {
     reward: number;
     difficulty: string;
     isCompleted: boolean;
+    isJoined?: boolean;
     isLocked: boolean;
     category?: string | null;
+    endDate?: string | null;
   }>;
 };
 
@@ -38,8 +40,10 @@ export interface WellnessChallengeRow {
   icon: LucideIcon;
   color: string;
   isCompleted: boolean;
+  isJoined: boolean;
   isLocked: boolean;
   categoryLabel?: string | null;
+  endDate?: string | null;
 }
 
 function getGradientForCategory(category: string | null | undefined): string {
@@ -116,8 +120,10 @@ export function mapWellnessChallengeDashboardToRows(
         ),
         color: getGradientForCategory((c as { category?: unknown }).category as string | null | undefined),
         isCompleted: Boolean((c as { isCompleted?: unknown }).isCompleted),
+        isJoined: Boolean((c as { isJoined?: unknown }).isJoined),
         isLocked: Boolean((c as { isLocked?: unknown }).isLocked),
         categoryLabel: ((c as { category?: unknown }).category as string | null | undefined) ?? null,
+        endDate: ((c as { endDate?: unknown }).endDate as string | null | undefined) ?? null,
       }));
   } catch {
     return [];

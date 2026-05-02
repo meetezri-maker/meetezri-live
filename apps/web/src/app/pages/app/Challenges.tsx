@@ -13,9 +13,11 @@ import {
   Lock,
   Award,
   Clock,
-  ChevronRight,
+  UserPlus,
+  UserMinus,
+  Loader2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import {
   mapWellnessChallengeDashboardToRows,
@@ -34,6 +36,18 @@ function formatCategoryBadge(categoryLabel?: string | null) {
   return { label, className: "bg-blue-100 text-blue-700" };
 }
 
+function formatEndDate(endDate?: string | null) {
+  if (!endDate) return null;
+  const d = new Date(endDate);
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return "Ended";
+  if (diffDays === 0) return "Ends today";
+  if (diffDays === 1) return "1 day left";
+  return `${diffDays} days left`;
+}
+
 export function Challenges() {
   const [activeTab, setActiveTab] = useState<"all" | "active" | "completed">("all");
   const [loading, setLoading] = useState(true);
@@ -45,41 +59,54 @@ export function Challenges() {
     levelProgressPercent: 0,
   });
   const [challenges, setChallenges] = useState<WellnessChallengeRow[]>([]);
+  const [joiningId, setJoiningId] = useState<string | null>(null);
+
+  const loadChallenges = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const raw = (await api.wellness.getChallengesForMe()) as WellnessChallengeDashboardPayload;
+      setSummary({
+        totalPoints: raw.totalPoints ?? 0,
+        currentLevel: raw.currentLevel ?? 1,
+        pointsToNextLevel: raw.pointsToNextLevel ?? 250,
+        levelProgressPercent: typeof raw.levelProgressPercent === "number" ? raw.levelProgressPercent : 0,
+      });
+      setChallenges(mapWellnessChallengeDashboardToRows(raw));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load challenges");
+      setChallenges([]);
+      setSummary({ totalPoints: 0, currentLevel: 1, pointsToNextLevel: 250, levelProgressPercent: 0 });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const raw = (await api.wellness.getChallengesForMe()) as WellnessChallengeDashboardPayload;
-        if (cancelled) return;
-        setSummary({
-          totalPoints: raw.totalPoints ?? 0,
-          currentLevel: raw.currentLevel ?? 1,
-          pointsToNextLevel: raw.pointsToNextLevel ?? 250,
-          levelProgressPercent: typeof raw.levelProgressPercent === "number" ? raw.levelProgressPercent : 0,
-        });
-        setChallenges(mapWellnessChallengeDashboardToRows(raw));
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Could not load challenges");
-          setChallenges([]);
-          setSummary({
-            totalPoints: 0,
-            currentLevel: 1,
-            pointsToNextLevel: 250,
-            levelProgressPercent: 0,
-          });
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+    loadChallenges();
+  }, [loadChallenges]);
+
+  const handleJoinToggle = useCallback(async (challenge: WellnessChallengeRow) => {
+    if (joiningId || challenge.isCompleted || challenge.isLocked) return;
+    setJoiningId(challenge.id);
+    try {
+      if (challenge.isJoined) {
+        await api.wellness.unjoinChallenge(challenge.id);
+        setChallenges(prev =>
+          prev.map(c => c.id === challenge.id ? { ...c, isJoined: false } : c)
+        );
+      } else {
+        await api.wellness.joinChallenge(challenge.id);
+        setChallenges(prev =>
+          prev.map(c => c.id === challenge.id ? { ...c, isJoined: true } : c)
+        );
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    } catch {
+      // Silently fail — user can retry
+    } finally {
+      setJoiningId(null);
+    }
+  }, [joiningId]);
 
   const filteredChallenges = useMemo(() => {
     return challenges.filter((challenge) => {
@@ -142,7 +169,6 @@ export function Challenges() {
               </div>
             </div>
 
-            {/* Level Progress Bar */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Next Level</span>
@@ -193,54 +219,25 @@ export function Challenges() {
           className="mb-6"
         >
           <div className="flex gap-2 border-b border-gray-200">
-            <button
-              onClick={() => setActiveTab("all")}
-              className={`px-4 py-2 font-medium transition-colors relative ${
-                activeTab === "all"
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-gray-900"
-              }`}
-            >
-              All Challenges
-              {activeTab === "all" && (
-                <motion.div
-                  layoutId="activeTab"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
-                />
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab("active")}
-              className={`px-4 py-2 font-medium transition-colors relative ${
-                activeTab === "active"
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-gray-900"
-              }`}
-            >
-              Active
-              {activeTab === "active" && (
-                <motion.div
-                  layoutId="activeTab"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
-                />
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab("completed")}
-              className={`px-4 py-2 font-medium transition-colors relative ${
-                activeTab === "completed"
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-gray-900"
-              }`}
-            >
-              Completed
-              {activeTab === "completed" && (
-                <motion.div
-                  layoutId="activeTab"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
-                />
-              )}
-            </button>
+            {(["all", "active", "completed"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 font-medium transition-colors relative capitalize ${
+                  activeTab === tab
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-gray-900"
+                }`}
+              >
+                {tab === "all" ? "All Challenges" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {activeTab === tab && (
+                  <motion.div
+                    layoutId="activeTab"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                  />
+                )}
+              </button>
+            ))}
           </div>
         </motion.div>
 
@@ -255,6 +252,8 @@ export function Challenges() {
             const Icon = challenge.icon;
             const progressPercentage = Math.min(100, (challenge.progress / challenge.target) * 100);
             const badge = formatCategoryBadge(challenge.categoryLabel);
+            const timeLeft = formatEndDate(challenge.endDate);
+            const isJoiningThis = joiningId === challenge.id;
 
             return (
               <motion.div
@@ -266,10 +265,10 @@ export function Challenges() {
                 <Card
                   className={`p-5 transition-all ${
                     challenge.isLocked
-                      ? "opacity-50 cursor-not-allowed"
+                      ? "opacity-50"
                       : challenge.isCompleted
                       ? "bg-gradient-to-r from-green-50 to-emerald-50 border-green-200"
-                      : "hover:shadow-lg cursor-pointer"
+                      : "hover:shadow-lg"
                   }`}
                 >
                   <div className="flex items-start gap-4">
@@ -298,26 +297,31 @@ export function Challenges() {
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 mb-3">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <h3 className="font-bold text-lg">{challenge.title}</h3>
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.className}`}
-                            >
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.className}`}>
                               {badge.label}
                             </span>
                           </div>
                           <p className="text-sm text-muted-foreground mb-2">
                             {challenge.description}
                           </p>
-                          {!challenge.isCompleted && (
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Clock className="w-3 h-3" />
-                              <span>Keep going—you're close!</span>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {timeLeft && (
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Clock className="w-3 h-3" />
+                                <span>{timeLeft}</span>
+                              </div>
+                            )}
+                            {challenge.isJoined && !challenge.isCompleted && (
+                              <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                                Enrolled
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex flex-col items-end gap-2">
+                        <div className="flex flex-col items-end gap-2 flex-shrink-0">
                           <div className="px-2 py-1 bg-gray-100 rounded-full text-xs font-medium">
                             {challenge.difficulty}
                           </div>
@@ -371,6 +375,32 @@ export function Challenges() {
                           Complete previous challenges to unlock
                         </div>
                       )}
+
+                      {/* Join / Leave button */}
+                      {!challenge.isLocked && !challenge.isCompleted && (
+                        <div className="mt-3">
+                          <Button
+                            size="sm"
+                            variant={challenge.isJoined ? "outline" : "default"}
+                            className="gap-1.5"
+                            disabled={isJoiningThis}
+                            onClick={() => handleJoinToggle(challenge)}
+                          >
+                            {isJoiningThis ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : challenge.isJoined ? (
+                              <UserMinus className="w-3.5 h-3.5" />
+                            ) : (
+                              <UserPlus className="w-3.5 h-3.5" />
+                            )}
+                            {isJoiningThis
+                              ? "Loading…"
+                              : challenge.isJoined
+                              ? "Leave Challenge"
+                              : "Join Challenge"}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Card>
@@ -388,7 +418,7 @@ export function Challenges() {
             <Trophy className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-xl font-bold text-gray-900 mb-2">No challenges found</h3>
             <p className="text-gray-600">
-              {activeTab === "completed" 
+              {activeTab === "completed"
                 ? "You haven't completed any challenges yet. Keep working on your active challenges!"
                 : "All challenges completed! Check back soon for new challenges."}
             </p>

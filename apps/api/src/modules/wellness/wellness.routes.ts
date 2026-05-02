@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { createWellnessToolSchema, updateWellnessToolSchema, wellnessToolResponseSchema, trackProgressSchema, progressResponseSchema, wellnessChallengeResponseSchema, createWellnessChallengeSchema } from './wellness.schema';
-import { createWellnessToolHandler, createWellnessChallengeHandler, deleteWellnessToolHandler, getWellnessToolByIdHandler, getWellnessToolsHandler, updateWellnessToolHandler, trackWellnessProgressHandler, getUserWellnessProgressHandler, startWellnessSessionHandler, completeWellnessSessionHandler, getWellnessStatsHandler, getWellnessChallengesHandler, getWellnessChallengesMeHandler, toggleWellnessToolFavoriteHandler, updateWellnessChallengeHandler } from './wellness.controller';
+import { createWellnessToolHandler, createWellnessChallengeHandler, deleteWellnessToolHandler, getWellnessToolByIdHandler, getWellnessToolsHandler, updateWellnessToolHandler, trackWellnessProgressHandler, getUserWellnessProgressHandler, startWellnessSessionHandler, completeWellnessSessionHandler, getWellnessStatsHandler, getWellnessChallengesHandler, getWellnessChallengesMeHandler, toggleWellnessToolFavoriteHandler, updateWellnessChallengeHandler, joinWellnessChallengeHandler, unjoinWellnessChallengeHandler } from './wellness.controller';
 import { z } from 'zod';
 
 export async function wellnessRoutes(app: FastifyInstance) {
@@ -62,6 +62,28 @@ export async function wellnessRoutes(app: FastifyInstance) {
       preHandler: [app.authenticate, app.authorize(['super_admin', 'org_admin'])],
     },
     updateWellnessChallengeHandler
+  );
+
+  app.post(
+    '/challenges/:id/join',
+    {
+      schema: {
+        params: z.object({ id: z.string() }),
+      },
+      preHandler: [app.authenticate],
+    },
+    joinWellnessChallengeHandler
+  );
+
+  app.delete(
+    '/challenges/:id/join',
+    {
+      schema: {
+        params: z.object({ id: z.string() }),
+      },
+      preHandler: [app.authenticate],
+    },
+    unjoinWellnessChallengeHandler
   );
 
   app.get(

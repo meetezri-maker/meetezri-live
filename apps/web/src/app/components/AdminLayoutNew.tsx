@@ -150,12 +150,8 @@ const NAVIGATION: NavSection[] = [
     icon: Zap,
     roles: ["super_admin", "org_admin"],
     pages: [
-      { name: "Nudge Management", href: "/admin/nudge-management", icon: Bell, roles: ["super_admin", "org_admin"] },
-      { name: "Nudge Templates", href: "/admin/nudge-templates", icon: FileText, roles: ["super_admin", "org_admin"] },
-      { name: "Nudge Scheduler", href: "/admin/nudge-scheduler", icon: LayoutDashboard, roles: ["super_admin", "org_admin"] },
-      { name: "Nudge Performance", href: "/admin/nudge-performance", icon: BarChart3, roles: ["super_admin", "org_admin"] },
-      { name: "Wellness Challenges", href: "/admin/wellness-challenges", icon: FileText, roles: ["super_admin", "org_admin"] },
-      { name: "Badge Manager", href: "/admin/badge-manager", icon: FileText, roles: ["super_admin", "org_admin"] },
+      { name: "Nudge Center", href: "/admin/nudge-center", icon: Bell, roles: ["super_admin", "org_admin"] },
+      { name: "Gamification", href: "/admin/gamification", icon: BarChart3, roles: ["super_admin", "org_admin"] },
     ],
   },
   {
@@ -163,10 +159,7 @@ const NAVIGATION: NavSection[] = [
     icon: Bell,
     roles: ["super_admin", "org_admin", "team_admin"],
     pages: [
-      { name: "Notifications Center", href: "/admin/notifications-center", icon: Bell, roles: ["super_admin", "org_admin", "team_admin"] },
-      { name: "Manual Notifications", href: "/admin/manual-notifications", icon: Bell, roles: ["super_admin", "org_admin"] },
-      { name: "Email Templates", href: "/admin/email-templates", icon: FileText, roles: ["super_admin", "org_admin"] },
-      { name: "Push Notifications", href: "/admin/push-notifications", icon: Bell, roles: ["super_admin", "org_admin"] },
+      { name: "Communications Hub", href: "/admin/communications", icon: Bell, roles: ["super_admin", "org_admin", "team_admin"] },
       { name: "Support Tickets", href: "/admin/support-tickets", icon: FileText, roles: ["super_admin", "org_admin", "team_admin"] },
     ],
   },

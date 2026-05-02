@@ -210,6 +210,32 @@ async function getChallengeStatsById(challengeId: string): Promise<{
   return { participants, completionRate };
 }
 
+export async function joinWellnessChallenge(userId: string, challengeId: string) {
+  const challenge = await prisma.wellness_challenges.findUnique({ where: { id: challengeId } });
+  if (!challenge) throw new Error('Challenge not found');
+
+  const result = await prisma.user_challenge_participation.upsert({
+    where: { user_id_challenge_id: { user_id: userId, challenge_id: challengeId } },
+    create: { user_id: userId, challenge_id: challengeId, progress: 0, is_completed: false },
+    update: {},
+  });
+  clearUserWellnessCaches(userId);
+  wellnessChallengesWithStatsCacheValue = null;
+  return result;
+}
+
+export async function unjoinWellnessChallenge(userId: string, challengeId: string) {
+  try {
+    await prisma.user_challenge_participation.delete({
+      where: { user_id_challenge_id: { user_id: userId, challenge_id: challengeId } },
+    });
+  } catch {
+    // Already not joined
+  }
+  clearUserWellnessCaches(userId);
+  wellnessChallengesWithStatsCacheValue = null;
+}
+
 export async function updateWellnessChallenge(
   id: string,
   data: UpdateWellnessChallengeInput
@@ -522,12 +548,27 @@ export async function getWellnessChallengesForUserDashboard(userId: string) {
         reward: c.reward_points ?? 0,
         difficulty: mapDifficultyLabel(c.goal_criteria),
         isCompleted,
+        isJoined: part !== null,
         isLocked,
         category: c.category,
         endDate: c.end_date.toISOString(),
       };
     })
   );
+
+  // Fire-and-forget: persist completed challenges so totalPoints is accurate on subsequent loads
+  const toComplete = mapped.filter(c => c.isCompleted);
+  if (toComplete.length > 0) {
+    void Promise.all(
+      toComplete.map(c =>
+        prisma.user_challenge_participation.upsert({
+          where: { user_id_challenge_id: { user_id: userId, challenge_id: c.id } },
+          create: { user_id: userId, challenge_id: c.id, progress: c.progress, is_completed: true },
+          update: { progress: c.progress, is_completed: true },
+        })
+      )
+    ).catch(() => undefined);
+  }
 
   const data = {
     totalPoints,

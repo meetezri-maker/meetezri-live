@@ -25,6 +25,11 @@ export type CompanionViewTuning = {
   lookAtYOffsetFraction: number;
   /** Scales viseme + jaw/lip drive (morphs and bones). */
   mouthDriveMultiplier: number;
+  /** Euler rotation (radians) applied to the model root before framing.
+   *  Use to correct GLB export orientation (e.g. Math.PI to flip upside-down models). */
+  modelRotationX: number;
+  modelRotationY: number;
+  modelRotationZ: number;
 };
 
 export const DEFAULT_COMPANION_VIEW_TUNING: CompanionViewTuning = {
@@ -33,6 +38,9 @@ export const DEFAULT_COMPANION_VIEW_TUNING: CompanionViewTuning = {
   cameraDistanceMultiplier: 1,
   lookAtYOffsetFraction: 0.12,
   mouthDriveMultiplier: 1,
+  modelRotationX: 0,
+  modelRotationY: 0,
+  modelRotationZ: 0,
 };
 
 /** Per-avatar patches; merge over defaults. Add entries when a GLB needs different framing or mouth strength. */

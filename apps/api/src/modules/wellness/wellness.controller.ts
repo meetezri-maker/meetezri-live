@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { createWellnessTool, createWellnessChallenge, deleteWellnessTool, getWellnessToolById, getWellnessTools, updateWellnessTool, trackWellnessProgress, getUserWellnessProgress, startWellnessSession, completeWellnessSession, getWellnessStats, getWellnessChallengesWithStats, getWellnessChallengesForUserDashboard, toggleWellnessToolFavorite, updateWellnessChallenge } from './wellness.service';
+import { createWellnessTool, createWellnessChallenge, deleteWellnessTool, getWellnessToolById, getWellnessTools, updateWellnessTool, trackWellnessProgress, getUserWellnessProgress, startWellnessSession, completeWellnessSession, getWellnessStats, getWellnessChallengesWithStats, getWellnessChallengesForUserDashboard, toggleWellnessToolFavorite, updateWellnessChallenge, joinWellnessChallenge, unjoinWellnessChallenge } from './wellness.service';
 import {
   CreateWellnessChallengeInput,
   CreateWellnessToolInput,
@@ -203,6 +203,31 @@ export async function createWellnessChallengeHandler(
         : error?.message || 'Failed to create wellness challenge';
     return reply.code(400).send({ message });
   }
+}
+
+export async function joinWellnessChallengeHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const userId = (request.user as { sub: string }).sub;
+    const result = await joinWellnessChallenge(userId, request.params.id);
+    return reply.code(201).send(result);
+  } catch (error: any) {
+    if (error.message === 'Challenge not found') {
+      return reply.code(404).send({ message: 'Challenge not found' });
+    }
+    throw error;
+  }
+}
+
+export async function unjoinWellnessChallengeHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  const userId = (request.user as { sub: string }).sub;
+  await unjoinWellnessChallenge(userId, request.params.id);
+  return reply.code(204).send();
 }
 
 export async function updateWellnessChallengeHandler(

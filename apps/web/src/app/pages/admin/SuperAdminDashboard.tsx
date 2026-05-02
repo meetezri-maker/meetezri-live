@@ -489,7 +489,9 @@ export function SuperAdminDashboard() {
       try {
         const data = await api.admin.getStats({
           ...statsQuery,
-          refresh: true,
+          // Only skip the server cache when the chart period/range changes (non-first loads).
+          // First load uses the cached result so it appears instantly.
+          refresh: !isFirstLoad,
         });
         if (cancelled) return;
         setStats(data);

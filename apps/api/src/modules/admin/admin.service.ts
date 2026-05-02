@@ -13,7 +13,7 @@ import { listStripeInvoicesForAdmin } from '../billing/services/admin-stripe-lis
 import { isPaygInvoice } from '../billing/services/admin-billing-shared';
 
 // Simple in-memory cache for dashboard stats (keyed by query options)
-const STATS_CACHE_TTL = 60 * 1000; // 60 seconds
+const STATS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const statsCache = new Map<string, { data: DashboardStats; timestamp: number }>();
 
 export type DashboardStatsQuery = {
@@ -262,6 +262,8 @@ export async function getDashboardStats(
     revenueMonthly,
     revenueWeekly,
     revenueYearly,
+    userGrowthSeriesRaw,
+    stripeInvoices,
   ] = await Promise.all([
     // 1. Optimized: Single query for all counts using raw SQL
     prisma.$queryRaw`
@@ -397,10 +399,18 @@ export async function getDashboardStats(
         AND created_at <= ${rangeEnd}
       GROUP BY date_trunc('year', timezone('utc'::text, created_at))
       ORDER BY date_trunc('year', timezone('utc'::text, created_at))
-    `
+    `,
+    // 10. User growth series — runs in parallel with all other queries
+    queryUserGrowthSeries(chartPeriod, rangeStart, rangeEnd),
+    // 11. Stripe invoices — runs in parallel with DB queries, 5s timeout
+    Promise.race([
+      listStripeInvoicesForAdmin(),
+      new Promise<[]>((resolve) => setTimeout(() => resolve([]), 5000)),
+    ]),
   ]);
 
   const counts = (countsResult as any[])[0] || {};
+  const userGrowthSeries = userGrowthSeriesRaw;
 
   const totalUsers = Number(counts.total_users || 0);
   const signupsLast7Days = Number(counts.signups_7d || 0);
@@ -422,8 +432,6 @@ export async function getDashboardStats(
         ? 100
         : 0;
 
-  const userGrowthSeries = await queryUserGrowthSeries(chartPeriod, rangeStart, rangeEnd);
-
   const activeSessions = Number(counts.active_sessions || 0);
   const totalSessions = Number(counts.total_sessions || 0);
   const avgSessionLength = Math.round(Number(counts.avg_duration || 0));
@@ -438,19 +446,6 @@ export async function getDashboardStats(
 
   const subscriptionMrrSumUsd = Number(counts.subscription_mrr_sum_usd ?? 0);
   const paymentCompletedSumUsd = Number(counts.payment_completed_sum_usd ?? 0);
-  /**
-   * Cash revenue for the selected range (authoritative figure shown on admin pages).
-   *
-   * Source of truth:
-   * - PAYG + any app-recorded payments: `payment_transactions` (cents), completed in range
-   * - Subscriptions / invoices: Stripe invoices (most recent 100), excluding PAYG invoices to avoid double counting
-   *
-   * NOTE: MRR estimates and all-time totals exist in `kpi.*` fields; do not mix them into range revenue.
-   */
-  const stripeInvoices = await Promise.race([
-    listStripeInvoicesForAdmin(),
-    new Promise<[]>((resolve) => setTimeout(() => resolve([]), 5000)),
-  ]);
   const stripeInvoiceRevenueInRangeUsd = stripeInvoices
     .filter((inv) => {
       const createdMs = (inv?.created ?? 0) * 1000;

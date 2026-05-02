@@ -1089,6 +1089,26 @@ export const api = {
       return handleResponse(res, 'Failed to update wellness challenge');
     },
 
+    async joinChallenge(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/wellness/challenges/${encodeURIComponent(id)}/join`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      });
+      return handleResponse(res, 'Failed to join challenge');
+    },
+
+    async unjoinChallenge(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/wellness/challenges/${encodeURIComponent(id)}/join`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (res.status === 204) return true;
+      return handleResponse(res, 'Failed to leave challenge');
+    },
+
     async create(data: any) {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/wellness`, {

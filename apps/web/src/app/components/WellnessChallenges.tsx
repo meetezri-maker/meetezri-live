@@ -4,16 +4,15 @@ import { Skeleton } from "./ui/skeleton";
 import { motion } from "motion/react";
 import {
   Trophy,
-  Target,
-  Flame,
   Star,
-  Zap,
-  Heart,
   CheckCircle2,
   Lock,
+  UserPlus,
+  UserMinus,
+  Loader2,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { api } from "@/lib/api";
 
@@ -34,6 +33,7 @@ export function WellnessChallenges() {
     levelProgressPercent: 0,
   });
   const [challenges, setChallenges] = useState<ChallengeRow[]>([]);
+  const [joiningId, setJoiningId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +66,28 @@ export function WellnessChallenges() {
       cancelled = true;
     };
   }, []);
+
+  const handleJoinToggle = useCallback(async (challenge: ChallengeRow) => {
+    if (joiningId || challenge.isCompleted || challenge.isLocked) return;
+    setJoiningId(challenge.id);
+    try {
+      if (challenge.isJoined) {
+        await api.wellness.unjoinChallenge(challenge.id);
+        setChallenges(prev =>
+          prev.map(c => c.id === challenge.id ? { ...c, isJoined: false } : c)
+        );
+      } else {
+        await api.wellness.joinChallenge(challenge.id);
+        setChallenges(prev =>
+          prev.map(c => c.id === challenge.id ? { ...c, isJoined: true } : c)
+        );
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setJoiningId(null);
+    }
+  }, [joiningId]);
 
   const displayChallenges = useMemo(() => challenges.slice(0, 6), [challenges]);
 
@@ -154,6 +176,8 @@ export function WellnessChallenges() {
               (challenge.progress / challenge.target) * 100
             );
 
+            const isJoiningThis = joiningId === challenge.id;
+
             return (
               <motion.div
                 key={challenge.id}
@@ -164,10 +188,10 @@ export function WellnessChallenges() {
                 <Card
                   className={`p-4 transition-all ${
                     challenge.isLocked
-                      ? "opacity-50 cursor-not-allowed"
+                      ? "opacity-50"
                       : challenge.isCompleted
                         ? "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border-green-200 dark:border-green-800"
-                        : "hover:shadow-lg cursor-pointer"
+                        : "hover:shadow-lg"
                   }`}
                 >
                   <div className="flex items-start gap-4">
@@ -194,13 +218,20 @@ export function WellnessChallenges() {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <div>
-                          <h3 className="font-bold">{challenge.title}</h3>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                            <h3 className="font-bold">{challenge.title}</h3>
+                            {challenge.isJoined && !challenge.isCompleted && (
+                              <span className="text-xs font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                                Enrolled
+                              </span>
+                            )}
+                          </div>
                           <p className="text-sm text-muted-foreground">
                             {challenge.description}
                           </p>
                         </div>
-                        <div className="flex flex-col items-end gap-1">
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <div className="px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded-full text-xs font-medium">
                             {challenge.difficulty}
                           </div>
@@ -249,6 +280,27 @@ export function WellnessChallenges() {
                       {challenge.isLocked && (
                         <div className="text-xs text-muted-foreground italic">
                           🔒 Complete previous challenges to unlock
+                        </div>
+                      )}
+
+                      {!challenge.isLocked && !challenge.isCompleted && (
+                        <div className="mt-2">
+                          <Button
+                            size="sm"
+                            variant={challenge.isJoined ? "outline" : "default"}
+                            className="h-7 text-xs gap-1"
+                            disabled={isJoiningThis}
+                            onClick={() => handleJoinToggle(challenge)}
+                          >
+                            {isJoiningThis ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : challenge.isJoined ? (
+                              <UserMinus className="w-3 h-3" />
+                            ) : (
+                              <UserPlus className="w-3 h-3" />
+                            )}
+                            {isJoiningThis ? "…" : challenge.isJoined ? "Leave" : "Join"}
+                          </Button>
                         </div>
                       )}
                     </div>

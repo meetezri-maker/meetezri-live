@@ -135,16 +135,9 @@ const WellnessContentLibrary    = lazy(() => import('@/app/pages/admin/WellnessC
 const WellnessToolEditor        = lazy(() => import('@/app/pages/admin/WellnessToolEditor').then(m => ({ default: m.WellnessToolEditor })));
 const ExerciseLibrary           = lazy(() => import('@/app/pages/admin/ExerciseLibrary').then(m => ({ default: m.ExerciseLibrary })));
 const ContentPerformance        = lazy(() => import('@/app/pages/admin/ContentPerformance').then(m => ({ default: m.ContentPerformance })));
-const NudgeManagement           = lazy(() => import('@/app/pages/admin/NudgeManagement').then(m => ({ default: m.NudgeManagement })));
-const NudgeTemplates            = lazy(() => import('@/app/pages/admin/NudgeTemplates').then(m => ({ default: m.NudgeTemplates })));
-const NudgeScheduler            = lazy(() => import('@/app/pages/admin/NudgeScheduler').then(m => ({ default: m.NudgeScheduler })));
-const NudgePerformance          = lazy(() => import('@/app/pages/admin/NudgePerformance').then(m => ({ default: m.NudgePerformance })));
-const WellnessChallenges        = lazy(() => import('@/app/pages/admin/WellnessChallenges').then(m => ({ default: m.WellnessChallenges })));
-const BadgeManager              = lazy(() => import('@/app/pages/admin/BadgeManager').then(m => ({ default: m.BadgeManager })));
-const NotificationsCenter       = lazy(() => import('@/app/pages/admin/NotificationsCenter').then(m => ({ default: m.NotificationsCenter })));
-const ManualNotifications       = lazy(() => import('@/app/pages/admin/ManualNotifications').then(m => ({ default: m.ManualNotifications })));
-const EmailTemplates            = lazy(() => import('@/app/pages/admin/EmailTemplates').then(m => ({ default: m.EmailTemplates })));
-const PushNotifications         = lazy(() => import('@/app/pages/admin/PushNotifications').then(m => ({ default: m.PushNotifications })));
+const NudgeCenter               = lazy(() => import('@/app/pages/admin/NudgeCenter').then(m => ({ default: m.NudgeCenter })));
+const Gamification              = lazy(() => import('@/app/pages/admin/Gamification').then(m => ({ default: m.Gamification })));
+const CommunicationsHub         = lazy(() => import('@/app/pages/admin/CommunicationsHub').then(m => ({ default: m.CommunicationsHub })));
 const SupportTickets            = lazy(() => import('@/app/pages/admin/SupportTickets').then(m => ({ default: m.SupportTickets })));
 const CommunityManagement       = lazy(() => import('@/app/pages/admin/CommunityManagement').then(m => ({ default: m.CommunityManagement })));
 const LiveSessionsMonitor       = lazy(() => import('@/app/pages/admin/LiveSessionsMonitor').then(m => ({ default: m.LiveSessionsMonitor })));
@@ -629,18 +622,21 @@ export default function App() {
             <Route path="/admin/exercise-library" element={<ExerciseLibrary />} />
             <Route path="/admin/content-performance" element={<ContentPerformance />} />
             {/* Engagement */}
-            <Route path="/admin/nudge-management" element={<NudgeManagement />} />
-            <Route path="/admin/nudge-templates" element={<NudgeTemplates />} />
-            <Route path="/admin/nudge-scheduler" element={<NudgeScheduler />} />
-            <Route path="/admin/nudge-performance" element={<NudgePerformance />} />
-            <Route path="/admin/wellness-challenges" element={<WellnessChallenges />} />
-            <Route path="/admin/badge-manager" element={<BadgeManager />} />
+            <Route path="/admin/nudge-center" element={<NudgeCenter />} />
+            <Route path="/admin/nudge-management" element={<Navigate to="/admin/nudge-center" replace />} />
+            <Route path="/admin/nudge-templates" element={<Navigate to="/admin/nudge-center" replace />} />
+            <Route path="/admin/nudge-scheduler" element={<Navigate to="/admin/nudge-center" replace />} />
+            <Route path="/admin/nudge-performance" element={<Navigate to="/admin/nudge-center" replace />} />
+            <Route path="/admin/gamification" element={<Gamification />} />
+            <Route path="/admin/wellness-challenges" element={<Navigate to="/admin/gamification" replace />} />
+            <Route path="/admin/badge-manager" element={<Navigate to="/admin/gamification" replace />} />
 
             {/* Communications */}
-            <Route path="/admin/notifications-center" element={<NotificationsCenter />} />
-            <Route path="/admin/manual-notifications" element={<ManualNotifications />} />
-            <Route path="/admin/email-templates" element={<EmailTemplates />} />
-            <Route path="/admin/push-notifications" element={<PushNotifications />} />
+            <Route path="/admin/communications" element={<CommunicationsHub />} />
+            <Route path="/admin/notifications-center" element={<Navigate to="/admin/communications" replace />} />
+            <Route path="/admin/manual-notifications" element={<Navigate to="/admin/communications" replace />} />
+            <Route path="/admin/email-templates" element={<Navigate to="/admin/communications" replace />} />
+            <Route path="/admin/push-notifications" element={<Navigate to="/admin/communications" replace />} />
             <Route path="/admin/support-tickets" element={<SupportTickets />} />
             <Route path="/admin/community-management" element={<CommunityManagement />} />
 
