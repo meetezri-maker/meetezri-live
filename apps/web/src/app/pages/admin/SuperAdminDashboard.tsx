@@ -399,6 +399,7 @@ function filterRecentMoods(moods: any[], maxDays = 30, limit = 25) {
 
 export function SuperAdminDashboard() {
   const [stats, setStats] = useState<any>(null);
+  const [avatarTotalSessions, setAvatarTotalSessions] = useState<number | null>(null);
   const [recentMoods, setRecentMoods] = useState<any[]>([]);
   const MOODS_PAGE_SIZE = 10;
   const [moodsPage, setMoodsPage] = useState(1);
@@ -497,11 +498,16 @@ export function SuperAdminDashboard() {
         setStats(data);
 
         if (isFirstLoad) {
-          const [moods, recent] = await Promise.all([
+          const [moods, recent, avatarStats] = await Promise.all([
             api.moods.getAllMoods(),
             api.admin.getRecentActivity(),
+            api.aiAvatars.getAllWithUsageStats().catch(() => null),
           ]);
           if (cancelled) return;
+          if (Array.isArray(avatarStats)) {
+            const sum = (avatarStats as any[]).reduce((acc, a) => acc + (Number(a.session_count) || 0), 0);
+            setAvatarTotalSessions(sum);
+          }
           setRecentMoods(filterRecentMoods(moods));
           setActivityFeed(buildActivityFeedFromRecent(recent));
           setCrisisAlerts(mapCrisisAlertsFromRecent(recent));
@@ -625,7 +631,7 @@ export function SuperAdminDashboard() {
   const userCount = stats?.totalUsers || 0;
   const sessionCount = stats?.activeSessions || 0;
   const revenue = stats?.revenue || 0;
-  const totalSessions = stats?.totalSessions || 0;
+  const totalSessions = avatarTotalSessions ?? stats?.totalSessions ?? 0;
   const avgSessionLength = stats?.avgSessionLength || 0;
   const avgMoodScore = stats?.avgMoodScore ?? null;
   const crisisAlertsCount = stats?.crisisAlerts || 0;

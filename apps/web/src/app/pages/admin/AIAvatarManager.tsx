@@ -187,7 +187,6 @@ export function AIAvatarManager() {
   const [avatars, setAvatars] = useState<AIAvatar[]>([]);
   /** When false, the list is filled from `DEFAULT_AI_COMPANIONS` only (database is empty). */
   const [usingDbRows, setUsingDbRows] = useState(true);
-  const [platformTotalSessions, setPlatformTotalSessions] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [portraitFile, setPortraitFile] = useState<File | null>(null);
   const [portraitPreviewUrl, setPortraitPreviewUrl] = useState<string | null>(null);
@@ -233,13 +232,7 @@ export function AIAvatarManager() {
   const fetchAvatars = async () => {
     try {
       setIsLoading(true);
-      const [data, platformStats] = await Promise.all([
-        api.aiAvatars.getAllWithUsageStats(),
-        api.admin.getStats().catch(() => null),
-      ]);
-      if (platformStats && typeof (platformStats as any).totalSessions === 'number') {
-        setPlatformTotalSessions((platformStats as any).totalSessions);
-      }
+      const data = await api.aiAvatars.getAllWithUsageStats();
       const rows = Array.isArray(data) ? data : [];
       const mapped = rows.map((item: any) => ({
         id: item.id,
@@ -654,7 +647,7 @@ export function AIAvatarManager() {
               <div className="flex items-center justify-between mb-2">
                 <Clock className="w-8 h-8 text-blue-600" />
                 <span className="text-2xl font-bold text-gray-900">
-                  {(platformTotalSessions ?? stats.totalSessionUsage).toLocaleString()}
+                  {stats.totalSessionUsage.toLocaleString()}
                 </span>
               </div>
               <p className="text-sm text-gray-600">Total Sessions</p>
