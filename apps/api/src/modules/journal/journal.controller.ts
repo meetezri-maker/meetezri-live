@@ -81,10 +81,13 @@ export async function getUserJournalsHandler(
 }
 
 export async function getAllJournalsAdminHandler(
-  _request: FastifyRequest,
+  request: FastifyRequest<{ Querystring: { startDate?: string; endDate?: string } }>,
   reply: FastifyReply
 ) {
-  const journals = await getAllJournalsAdmin();
+  const { startDate, endDate } = request.query;
+  const start = startDate ? new Date(startDate) : undefined;
+  const end = endDate ? new Date(endDate) : undefined;
+  const journals = await getAllJournalsAdmin(start, end);
   return reply.send(journals);
 }
 

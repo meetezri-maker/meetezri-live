@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../../lib/api";
-import { BookOpen, RefreshCw } from "lucide-react";
+import { BookOpen, RefreshCw, Eye } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -148,31 +149,33 @@ export function AllUsersJournalAnalytics() {
     return m;
   }, [allUsers]);
 
-  const fetchAll = async () => {
+  const emailToId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of allUsers) {
+      const email = (u.email || "").trim().toLowerCase();
+      if (email) m.set(email, String(u.id));
+    }
+    return m;
+  }, [allUsers]);
+
+  const fetchAll = async (year = filterYear, month = filterMonth) => {
     try {
       setLoading(true);
+      const start = new Date(year, month, 1, 0, 0, 0, 0);
+      const end = new Date(year, month + 1, 1, 0, 0, 0, 0);
       const [data, users] = await Promise.all([
-        api.journal.getAllJournalsAdmin(),
-        (async () => {
-          const collected: AdminUserRow[] = [];
-          let page = 1;
-          const limit = 1000;
-          for (let guard = 0; guard < 25; guard++) {
-            const res: any = await api.admin.getUsers({ page, limit });
-            const list = Array.isArray(res) ? res : Array.isArray(res?.users) ? res.users : [];
-            if (list.length === 0) break;
-            collected.push(
-              ...list.map((u: any) => ({
-                id: String(u.id),
-                name: u.name ?? u.full_name ?? u.fullName ?? null,
-                email: u.email ?? null,
-              }))
-            );
-            if (list.length < limit) break;
-            page += 1;
-          }
-          return collected;
-        })(),
+        api.journal.getAllJournalsAdmin({
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+        }),
+        api.admin.getUsers({ page: 1, limit: 1000 }).then((res: any) => {
+          const list = Array.isArray(res) ? res : Array.isArray(res?.users) ? res.users : [];
+          return list.map((u: any) => ({
+            id: String(u.id),
+            name: u.name ?? u.full_name ?? u.fullName ?? null,
+            email: u.email ?? null,
+          }));
+        }),
       ]);
       setRows(Array.isArray(data) ? data : []);
       setAllUsers(users);
@@ -186,23 +189,12 @@ export function AllUsersJournalAnalytics() {
   };
 
   useEffect(() => {
-    fetchAll();
-  }, []);
-
-  const period = useMemo(() => {
-    const start = monthStart(filterYear, filterMonth);
-    const end = monthEndExclusive(filterYear, filterMonth);
-    return { start, end };
+    fetchAll(filterYear, filterMonth);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterYear, filterMonth]);
 
-  const periodRows = useMemo(() => {
-    const s = period.start.getTime();
-    const e = period.end.getTime();
-    return rows.filter((r) => {
-      const t = r.created_at ? new Date(r.created_at).getTime() : NaN;
-      return Number.isFinite(t) && t >= s && t < e;
-    });
-  }, [rows, period]);
+  // rows are already scoped to the selected month by the API; periodRows === rows
+  const periodRows = rows;
 
   const chartData = useMemo(() => {
     const map = new Map<string, number>();
@@ -294,15 +286,9 @@ export function AllUsersJournalAnalytics() {
   }, [entryQuery, filterMonth, filterYear]);
 
   const years = useMemo(() => {
-    const ys = new Set<number>();
-    for (const r of rows) {
-      if (!r.created_at) continue;
-      const y = new Date(r.created_at).getFullYear();
-      if (Number.isFinite(y)) ys.add(y);
-    }
-    if (ys.size === 0) ys.add(new Date().getFullYear());
-    return Array.from(ys).sort((a, b) => b - a);
-  }, [rows]);
+    const currentYear = new Date().getFullYear();
+    return Array.from({ length: 4 }, (_, i) => currentYear - i);
+  }, []);
 
   return (
     <AdminLayoutNew>
@@ -315,7 +301,7 @@ export function AllUsersJournalAnalytics() {
             </h1>
             <p className="text-sm text-muted-foreground">Platform-wide journal entries</p>
           </div>
-          <Button variant="outline" className="gap-2" onClick={() => fetchAll()} disabled={loading}>
+          <Button variant="outline" className="gap-2" onClick={() => fetchAll(filterYear, filterMonth)} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
@@ -358,12 +344,12 @@ export function AllUsersJournalAnalytics() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="p-5 bg-gradient-to-br from-white via-indigo-50/45 to-blue-50/35 border-indigo-100/60">
-            <p className="text-sm text-muted-foreground">Total journal entries</p>
+            <p className="text-sm text-muted-foreground">Entries (selected month)</p>
             <p className="text-3xl font-bold mt-1">{rows.length}</p>
           </Card>
           <Card className="p-5 bg-gradient-to-br from-white via-indigo-50/45 to-blue-50/35 border-indigo-100/60">
-            <p className="text-sm text-muted-foreground">Entries (selected month)</p>
-            <p className="text-3xl font-bold mt-1">{periodRows.length}</p>
+            <p className="text-sm text-muted-foreground">Active users this month</p>
+            <p className="text-3xl font-bold mt-1">{new Set(rows.map(r => r.user_id).filter(Boolean)).size}</p>
           </Card>
           <Card className="p-5 bg-gradient-to-br from-white via-indigo-50/45 to-blue-50/35 border-indigo-100/60">
             <p className="text-sm text-muted-foreground">Top tags (selected month)</p>
@@ -437,33 +423,51 @@ export function AllUsersJournalAnalytics() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Entries (30d)</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {loading ? (
                     <tr>
-                      <td colSpan={3} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={4} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         Loading…
                       </td>
                     </tr>
                   ) : usersBreakdown.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={4} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         No users found.
                       </td>
                     </tr>
                   ) : (
                     usersBreakdown
                       .slice((usersPage - 1) * pageSize, usersPage * pageSize)
-                      .map((u) => (
-                      <tr key={u.email} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-medium">{u.name}</td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">{u.email}</td>
-                        <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">
-                          {u.entries30d}
-                        </td>
-                      </tr>
-                    ))
+                      .map((u) => {
+                        const userId = emailToId.get(u.email.toLowerCase());
+                        return (
+                        <tr key={u.email} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm font-medium">{u.name}</td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">{u.email}</td>
+                          <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">
+                            {u.entries30d}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {userId ? (
+                              <Link
+                                to={`/admin/user-analytics/journals/${userId}`}
+                                className="inline-flex items-center justify-center rounded-md p-1.5 text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                title="View user journal details"
+                              >
+                                <Eye size={16} />
+                              </Link>
+                            ) : (
+                              <span className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-300 cursor-not-allowed">
+                                <Eye size={16} />
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )})
                   )}
                 </tbody>
               </table>
@@ -504,18 +508,19 @@ export function AllUsersJournalAnalytics() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tags</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {loading ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         Loading…
                       </td>
                     </tr>
                   ) : filteredEntries.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         No journal entries found.
                       </td>
                     </tr>
@@ -541,6 +546,7 @@ export function AllUsersJournalAnalytics() {
                           .map((t) => String(t || "").trim())
                           .filter(Boolean)
                           .map(formatTag);
+                        const userId = r.user_id ?? emailToId.get(email.toLowerCase());
                         return (
                           <tr key={r.id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 text-sm whitespace-nowrap">{dateLabel}</td>
@@ -549,6 +555,21 @@ export function AllUsersJournalAnalytics() {
                             <td className="px-4 py-3 text-sm max-w-[26rem] truncate">{title}</td>
                             <td className="px-4 py-3 text-sm text-muted-foreground">
                               {tags.length ? tags.join(", ") : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {userId ? (
+                                <Link
+                                  to={`/admin/user-analytics/journals/${userId}`}
+                                  className="inline-flex items-center justify-center rounded-md p-1.5 text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                  title="View user journal details"
+                                >
+                                  <Eye size={16} />
+                                </Link>
+                              ) : (
+                                <span className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-300 cursor-not-allowed">
+                                  <Eye size={16} />
+                                </span>
+                              )}
                             </td>
                           </tr>
                         );

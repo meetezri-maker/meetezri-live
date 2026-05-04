@@ -106,11 +106,14 @@ export async function getUserHabitsHandler(
 }
 
 export async function getAllHabitsAdminHandler(
-  _request: FastifyRequest,
+  request: FastifyRequest<{ Querystring: { startDate?: string; endDate?: string } }>,
   reply: FastifyReply
 ) {
   try {
-    const habits = await getAllHabitsAdmin();
+    const { startDate, endDate } = request.query;
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    const habits = await getAllHabitsAdmin(start, end);
     return reply.code(200).send(habits);
   } catch (e) {
     console.error(e);

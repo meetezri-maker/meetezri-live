@@ -875,7 +875,7 @@ export function SuperAdminDashboard() {
         >
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Total AI Sessions */}
-            <Card className="p-5 flex items-center gap-4 hover:shadow-md transition-all">
+            <Card className="p-5 flex flex-row items-center gap-4 hover:shadow-md transition-all">
               <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
                 <Brain className="w-5 h-5 text-white" />
               </div>
@@ -887,7 +887,7 @@ export function SuperAdminDashboard() {
             </Card>
 
             {/* Avg Session Duration */}
-            <Card className="p-5 flex items-center gap-4 hover:shadow-md transition-all">
+            <Card className="p-5 flex flex-row items-center gap-4 hover:shadow-md transition-all">
               <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shrink-0">
                 <Timer className="w-5 h-5 text-white" />
               </div>
@@ -899,7 +899,7 @@ export function SuperAdminDashboard() {
             </Card>
 
             {/* Avg Mood Score */}
-            <Card className="p-5 flex items-center gap-4 hover:shadow-md transition-all">
+            <Card className="p-5 flex flex-row items-center gap-4 hover:shadow-md transition-all">
               <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center shrink-0">
                 <HeartPulse className="w-5 h-5 text-white" />
               </div>
@@ -913,7 +913,7 @@ export function SuperAdminDashboard() {
             </Card>
 
             {/* API Uptime */}
-            <Card className="p-5 flex items-center gap-4 hover:shadow-md transition-all">
+            <Card className="p-5 flex flex-row items-center gap-4 hover:shadow-md transition-all">
               <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
                 processHealth?.databaseConnected === false
                   ? "bg-gradient-to-br from-red-500 to-rose-600"

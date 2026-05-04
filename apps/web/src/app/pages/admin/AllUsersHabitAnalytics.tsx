@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../../lib/api";
-import { RefreshCw, Target, Flame } from "lucide-react";
+import { RefreshCw, Target, Flame, Eye } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -128,31 +129,36 @@ export function AllUsersHabitAnalytics() {
   const [entriesPage, setEntriesPage] = useState(1);
   const pageSize = 25;
 
-  const fetchAll = async () => {
+  const emailToId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of allUsers) {
+      const email = (u.email || "").trim().toLowerCase();
+      if (email) m.set(email, String(u.id));
+    }
+    return m;
+  }, [allUsers]);
+
+  const fetchAll = async (year = filterYear, month = filterMonth) => {
     try {
       setLoading(true);
+      // Fetch one extra week on each side so the weekly view has data when spanning months
+      const start = new Date(year, month, 1, 0, 0, 0, 0);
+      start.setDate(start.getDate() - 7);
+      const end = new Date(year, month + 1, 1, 0, 0, 0, 0);
+      end.setDate(end.getDate() + 7);
       const [data, users] = await Promise.all([
-        api.habits.getAllHabitsAdmin(),
-        (async () => {
-          const collected: AdminUserRow[] = [];
-          let page = 1;
-          const limit = 1000;
-          for (let guard = 0; guard < 25; guard++) {
-            const res: any = await api.admin.getUsers({ page, limit });
-            const list = Array.isArray(res) ? res : Array.isArray(res?.users) ? res.users : [];
-            if (list.length === 0) break;
-            collected.push(
-              ...list.map((u: any) => ({
-                id: String(u.id),
-                name: u.name ?? u.full_name ?? u.fullName ?? null,
-                email: u.email ?? null,
-              }))
-            );
-            if (list.length < limit) break;
-            page += 1;
-          }
-          return collected;
-        })(),
+        api.habits.getAllHabitsAdmin({
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+        }),
+        api.admin.getUsers({ page: 1, limit: 1000 }).then((res: any) => {
+          const list = Array.isArray(res) ? res : Array.isArray(res?.users) ? res.users : [];
+          return list.map((u: any) => ({
+            id: String(u.id),
+            name: u.name ?? u.full_name ?? u.fullName ?? null,
+            email: u.email ?? null,
+          }));
+        }),
       ]);
       setRows(Array.isArray(data) ? data : []);
       setAllUsers(users);
@@ -166,14 +172,14 @@ export function AllUsersHabitAnalytics() {
   };
 
   useEffect(() => {
-    fetchAll();
-  }, []);
-
-  const period = useMemo(() => {
-    const start = monthStart(filterYear, filterMonth);
-    const end = monthEndExclusive(filterYear, filterMonth);
-    return { start, end };
+    fetchAll(filterYear, filterMonth);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterYear, filterMonth]);
+
+  const period = useMemo(() => ({
+    start: monthStart(filterYear, filterMonth),
+    end: monthEndExclusive(filterYear, filterMonth),
+  }), [filterYear, filterMonth]);
 
   const week = useMemo(() => {
     // Anchor on "today" shifted by weekOffset; then compute Monday..Sunday.
@@ -339,16 +345,9 @@ export function AllUsersHabitAnalytics() {
   }, [entryQuery, filterMonth, filterYear]);
 
   const years = useMemo(() => {
-    const ys = new Set<number>();
-    for (const h of rows) {
-      for (const l of h.habit_logs || []) {
-        const y = new Date(l.completed_at).getFullYear();
-        if (Number.isFinite(y)) ys.add(y);
-      }
-    }
-    if (ys.size === 0) ys.add(new Date().getFullYear());
-    return Array.from(ys).sort((a, b) => b - a);
-  }, [rows]);
+    const currentYear = new Date().getFullYear();
+    return Array.from({ length: 4 }, (_, i) => currentYear - i);
+  }, []);
 
   return (
     <AdminLayoutNew>
@@ -361,7 +360,7 @@ export function AllUsersHabitAnalytics() {
             </h1>
             <p className="text-sm text-muted-foreground">Habits and completions</p>
           </div>
-          <Button variant="outline" className="gap-2" onClick={() => fetchAll()} disabled={loading}>
+          <Button variant="outline" className="gap-2" onClick={() => fetchAll(filterYear, filterMonth)} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
@@ -404,7 +403,7 @@ export function AllUsersHabitAnalytics() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="p-5 bg-gradient-to-br from-white via-teal-50/40 to-emerald-50/30 border-teal-100/60">
-            <p className="text-sm text-muted-foreground">Active habits</p>
+            <p className="text-sm text-muted-foreground">Active habits (this month)</p>
             <p className="text-3xl font-bold mt-1">{rows.length}</p>
           </Card>
           <Card className="p-5 bg-gradient-to-br from-white via-teal-50/40 to-emerald-50/30 border-teal-100/60">
@@ -498,36 +497,54 @@ export function AllUsersHabitAnalytics() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Active habits</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Completions (30d)</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {loading ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         Loading…
                       </td>
                     </tr>
                   ) : usersBreakdown.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         No users found.
                       </td>
                     </tr>
                   ) : (
                     usersBreakdown
                       .slice((usersPage - 1) * pageSize, usersPage * pageSize)
-                      .map((u) => (
-                      <tr key={u.email} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-medium">{u.name}</td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">{u.email}</td>
-                        <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">
-                          {u.activeHabits}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">
-                          {u.completions30d}
-                        </td>
-                      </tr>
-                    ))
+                      .map((u) => {
+                        const userId = emailToId.get(u.email.toLowerCase());
+                        return (
+                        <tr key={u.email} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm font-medium">{u.name}</td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">{u.email}</td>
+                          <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">
+                            {u.activeHabits}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">
+                            {u.completions30d}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {userId ? (
+                              <Link
+                                to={`/admin/user-analytics/habits/${userId}`}
+                                className="inline-flex items-center justify-center rounded-md p-1.5 text-teal-600 hover:bg-teal-50 transition-colors"
+                                title="View user habit details"
+                              >
+                                <Eye size={16} />
+                              </Link>
+                            ) : (
+                              <span className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-300 cursor-not-allowed">
+                                <Eye size={16} />
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )})
                   )}
                 </tbody>
               </table>
@@ -567,18 +584,19 @@ export function AllUsersHabitAnalytics() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Habit</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {loading ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         Loading…
                       </td>
                     </tr>
                   ) : completionEntries.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         No completions found.
                       </td>
                     </tr>
@@ -592,12 +610,28 @@ export function AllUsersHabitAnalytics() {
                           month: "short",
                           day: "2-digit",
                         });
+                        const userId = emailToId.get(r.email.toLowerCase());
                         return (
                           <tr key={r.id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 text-sm whitespace-nowrap">{dateLabel}</td>
                             <td className="px-4 py-3 text-sm font-medium">{r.habit}</td>
                             <td className="px-4 py-3 text-sm">{r.user}</td>
                             <td className="px-4 py-3 text-sm text-muted-foreground">{r.email}</td>
+                            <td className="px-4 py-3 text-center">
+                              {userId ? (
+                                <Link
+                                  to={`/admin/user-analytics/habits/${userId}`}
+                                  className="inline-flex items-center justify-center rounded-md p-1.5 text-teal-600 hover:bg-teal-50 transition-colors"
+                                  title="View user habit details"
+                                >
+                                  <Eye size={16} />
+                                </Link>
+                              ) : (
+                                <span className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-300 cursor-not-allowed">
+                                  <Eye size={16} />
+                                </span>
+                              )}
+                            </td>
                           </tr>
                         );
                       })
@@ -670,23 +704,26 @@ export function AllUsersHabitAnalytics() {
                         <span className="ml-1 text-[11px] font-semibold text-gray-700">{d.getDate()}</span>
                       </th>
                     ))}
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {loading ? (
                     <tr>
-                      <td colSpan={10} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={11} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         Loading…
                       </td>
                     </tr>
                   ) : weekProgressRows.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={11} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         No habits found.
                       </td>
                     </tr>
                   ) : (
-                    weekProgressRows.slice(0, 300).map((r) => (
+                    weekProgressRows.slice(0, 300).map((r) => {
+                      const userId = emailToId.get(r.email.toLowerCase());
+                      return (
                       <tr key={r.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm font-medium">{r.habit}</td>
                         <td className="px-4 py-3 text-sm">{r.user}</td>
@@ -705,8 +742,23 @@ export function AllUsersHabitAnalytics() {
                             </td>
                           );
                         })}
+                        <td className="px-4 py-3 text-center">
+                          {userId ? (
+                            <Link
+                              to={`/admin/user-analytics/habits/${userId}`}
+                              className="inline-flex items-center justify-center rounded-md p-1.5 text-teal-600 hover:bg-teal-50 transition-colors"
+                              title="View user habit details"
+                            >
+                              <Eye size={16} />
+                            </Link>
+                          ) : (
+                            <span className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-300 cursor-not-allowed">
+                              <Eye size={16} />
+                            </span>
+                          )}
+                        </td>
                       </tr>
-                    ))
+                    )})
                   )}
                 </tbody>
               </table>

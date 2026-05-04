@@ -61,10 +61,13 @@ export async function getUserSleepEntriesHandler(
 }
 
 export async function getAllSleepEntriesAdminHandler(
-  _request: FastifyRequest,
+  request: FastifyRequest<{ Querystring: { startDate?: string; endDate?: string } }>,
   reply: FastifyReply
 ) {
-  const entries = await getAllSleepEntriesAdmin();
+  const { startDate, endDate } = request.query;
+  const start = startDate ? new Date(startDate) : undefined;
+  const end = endDate ? new Date(endDate) : undefined;
+  const entries = await getAllSleepEntriesAdmin(start, end);
   return reply.send(entries);
 }
 

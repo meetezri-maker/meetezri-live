@@ -130,3 +130,97 @@ export async function deleteAvatar(id: string) {
   invalidateAvatarsCache();
   return deleted;
 }
+
+type AvatarSessionRow = {
+  id: string;
+  user_id: string;
+  started_at: Date | null;
+  ended_at: Date | null;
+  duration_minutes: number | null;
+  full_name: string | null;
+  email: string | null;
+  message_count: number;
+};
+
+type AvatarUserRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  last_session: Date | null;
+  session_count: bigint;
+};
+
+/** Paginated ended sessions matched to a specific avatar by name. */
+export async function getSessionsForAvatar(avatarId: string, page = 1, limit = 20) {
+  const avatar = await prisma.ai_avatars.findUnique({ where: { id: avatarId }, select: { name: true } });
+  if (!avatar) throw new Error('Avatar not found');
+
+  const avatarName = avatar.name.toLowerCase().trim();
+  const firstName = avatarName.split(' ')[0];
+  const skip = Math.max(0, (page - 1) * limit);
+  const take = Math.min(Math.max(limit, 1), 100);
+
+  const [items, countRows] = await Promise.all([
+    prisma.$queryRaw<AvatarSessionRow[]>`
+      SELECT s.id::text, s.user_id::text, s.started_at, s.ended_at, s.duration_minutes,
+             p.full_name, p.email,
+             (SELECT COUNT(*)::int FROM session_messages sm WHERE sm.session_id = s.id) AS message_count
+      FROM app_sessions s
+      LEFT JOIN profiles p ON p.id = s.user_id
+      WHERE s.ended_at IS NOT NULL
+        AND s.config IS NOT NULL
+        AND (
+          LOWER(TRIM(s.config->>'avatar')) = ${avatarName}
+          OR LOWER(TRIM(s.config->>'avatar')) = ${firstName}
+          OR LOWER(TRIM(s.config->>'ai_name')) = ${avatarName}
+          OR LOWER(TRIM(s.config->>'ai_name')) = ${firstName}
+        )
+      ORDER BY s.started_at DESC
+      LIMIT ${take} OFFSET ${skip}
+    `,
+    prisma.$queryRaw<{ total: bigint }[]>`
+      SELECT COUNT(*)::bigint AS total
+      FROM app_sessions s
+      WHERE s.ended_at IS NOT NULL
+        AND s.config IS NOT NULL
+        AND (
+          LOWER(TRIM(s.config->>'avatar')) = ${avatarName}
+          OR LOWER(TRIM(s.config->>'avatar')) = ${firstName}
+          OR LOWER(TRIM(s.config->>'ai_name')) = ${avatarName}
+          OR LOWER(TRIM(s.config->>'ai_name')) = ${firstName}
+        )
+    `,
+  ]);
+
+  return { items, total: Number(countRows[0]?.total ?? 0) };
+}
+
+/** All unique users who have had at least one ended session with the given avatar. */
+export async function getUsersForAvatar(avatarId: string) {
+  const avatar = await prisma.ai_avatars.findUnique({ where: { id: avatarId }, select: { name: true } });
+  if (!avatar) throw new Error('Avatar not found');
+
+  const avatarName = avatar.name.toLowerCase().trim();
+  const firstName = avatarName.split(' ')[0];
+
+  const rows = await prisma.$queryRaw<AvatarUserRow[]>`
+    SELECT p.id::text, p.full_name, p.email, p.avatar_url,
+           MAX(s.started_at) AS last_session,
+           COUNT(s.id)::bigint AS session_count
+    FROM app_sessions s
+    INNER JOIN profiles p ON p.id = s.user_id
+    WHERE s.ended_at IS NOT NULL
+      AND s.config IS NOT NULL
+      AND (
+        LOWER(TRIM(s.config->>'avatar')) = ${avatarName}
+        OR LOWER(TRIM(s.config->>'avatar')) = ${firstName}
+        OR LOWER(TRIM(s.config->>'ai_name')) = ${avatarName}
+        OR LOWER(TRIM(s.config->>'ai_name')) = ${firstName}
+      )
+    GROUP BY p.id, p.full_name, p.email, p.avatar_url
+    ORDER BY last_session DESC
+  `;
+
+  return rows.map((u) => ({ ...u, session_count: Number(u.session_count) }));
+}

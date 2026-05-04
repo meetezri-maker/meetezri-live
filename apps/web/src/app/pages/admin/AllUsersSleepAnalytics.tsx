@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../../lib/api";
-import { Moon, RefreshCw, Clock } from "lucide-react";
+import { Moon, RefreshCw, Clock, Eye } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -125,31 +126,33 @@ export function AllUsersSleepAnalytics() {
     return m;
   }, [allUsers]);
 
-  const fetchAll = async () => {
+  const emailToId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of allUsers) {
+      const email = (u.email || "").trim().toLowerCase();
+      if (email) m.set(email, String(u.id));
+    }
+    return m;
+  }, [allUsers]);
+
+  const fetchAll = async (year = filterYear, month = filterMonth) => {
     try {
       setLoading(true);
+      const start = new Date(year, month, 1, 0, 0, 0, 0);
+      const end = new Date(year, month + 1, 1, 0, 0, 0, 0);
       const [data, users] = await Promise.all([
-        api.sleep.getAllEntriesAdmin(),
-        (async () => {
-          const collected: AdminUserRow[] = [];
-          let page = 1;
-          const limit = 1000;
-          for (let guard = 0; guard < 25; guard++) {
-            const res: any = await api.admin.getUsers({ page, limit });
-            const list = Array.isArray(res) ? res : Array.isArray(res?.users) ? res.users : [];
-            if (list.length === 0) break;
-            collected.push(
-              ...list.map((u: any) => ({
-                id: String(u.id),
-                name: u.name ?? u.full_name ?? u.fullName ?? null,
-                email: u.email ?? null,
-              }))
-            );
-            if (list.length < limit) break;
-            page += 1;
-          }
-          return collected;
-        })(),
+        api.sleep.getAllEntriesAdmin({
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+        }),
+        api.admin.getUsers({ page: 1, limit: 1000 }).then((res: any) => {
+          const list = Array.isArray(res) ? res : Array.isArray(res?.users) ? res.users : [];
+          return list.map((u: any) => ({
+            id: String(u.id),
+            name: u.name ?? u.full_name ?? u.fullName ?? null,
+            email: u.email ?? null,
+          }));
+        }),
       ]);
       setRows(Array.isArray(data) ? data : []);
       setAllUsers(users);
@@ -163,23 +166,12 @@ export function AllUsersSleepAnalytics() {
   };
 
   useEffect(() => {
-    fetchAll();
-  }, []);
-
-  const period = useMemo(() => {
-    const start = monthStart(filterYear, filterMonth);
-    const end = monthEndExclusive(filterYear, filterMonth);
-    return { start, end };
+    fetchAll(filterYear, filterMonth);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterYear, filterMonth]);
 
-  const periodRows = useMemo(() => {
-    const s = period.start.getTime();
-    const e = period.end.getTime();
-    return rows.filter((r) => {
-      const t = new Date(r.bed_time || r.created_at || "").getTime();
-      return Number.isFinite(t) && t >= s && t < e;
-    });
-  }, [rows, period]);
+  // rows are already scoped to the selected month by the API; periodRows === rows
+  const periodRows = rows;
 
   const avgHours = useMemo(() => {
     const vals = periodRows.map((r) => durationHours(r.bed_time, r.wake_time)).filter((v): v is number => v != null);
@@ -313,16 +305,9 @@ export function AllUsersSleepAnalytics() {
   }, [entryQuery, filterMonth, filterYear]);
 
   const years = useMemo(() => {
-    const ys = new Set<number>();
-    for (const r of rows) {
-      const d = r.bed_time || r.created_at;
-      if (!d) continue;
-      const y = new Date(d).getFullYear();
-      if (Number.isFinite(y)) ys.add(y);
-    }
-    if (ys.size === 0) ys.add(new Date().getFullYear());
-    return Array.from(ys).sort((a, b) => b - a);
-  }, [rows]);
+    const currentYear = new Date().getFullYear();
+    return Array.from({ length: 4 }, (_, i) => currentYear - i);
+  }, []);
 
   return (
     <AdminLayoutNew>
@@ -335,7 +320,7 @@ export function AllUsersSleepAnalytics() {
             </h1>
             <p className="text-sm text-muted-foreground">Platform-wide sleep entries</p>
           </div>
-          <Button variant="outline" className="gap-2" onClick={() => fetchAll()} disabled={loading}>
+          <Button variant="outline" className="gap-2" onClick={() => fetchAll(filterYear, filterMonth)} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
@@ -378,7 +363,7 @@ export function AllUsersSleepAnalytics() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="p-5 bg-gradient-to-br from-white via-indigo-50/40 to-blue-50/30 border-indigo-100/60">
-            <p className="text-sm text-muted-foreground">Total sleep entries</p>
+            <p className="text-sm text-muted-foreground">Sleep entries (selected month)</p>
             <p className="text-3xl font-bold mt-1">{rows.length}</p>
           </Card>
           <Card className="p-5 bg-gradient-to-br from-white via-indigo-50/40 to-blue-50/30 border-indigo-100/60">
@@ -450,39 +435,57 @@ export function AllUsersSleepAnalytics() {
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Entries (30d)</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Avg hours</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Avg quality</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {loading ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         Loading…
                       </td>
                     </tr>
                   ) : usersBreakdown.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         No users found.
                       </td>
                     </tr>
                   ) : (
                     usersBreakdown
                       .slice((usersPage - 1) * pageSize, usersPage * pageSize)
-                      .map((u) => (
-                      <tr key={u.email} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-medium">{u.name}</td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">{u.email}</td>
-                        <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">
-                          {u.entries30d}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">
-                          {u.avgHours30d}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">
-                          {u.avgQuality30d}
-                        </td>
-                      </tr>
-                    ))
+                      .map((u) => {
+                        const userId = emailToId.get(u.email.toLowerCase());
+                        return (
+                        <tr key={u.email} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm font-medium">{u.name}</td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">{u.email}</td>
+                          <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">
+                            {u.entries30d}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">
+                            {u.avgHours30d}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">
+                            {u.avgQuality30d}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {userId ? (
+                              <Link
+                                to={`/admin/user-analytics/sleep/${userId}`}
+                                className="inline-flex items-center justify-center rounded-md p-1.5 text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                title="View user sleep details"
+                              >
+                                <Eye size={16} />
+                              </Link>
+                            ) : (
+                              <span className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-300 cursor-not-allowed">
+                                <Eye size={16} />
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )})
                   )}
                 </tbody>
               </table>
@@ -525,18 +528,19 @@ export function AllUsersSleepAnalytics() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Wake time</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Quality</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Hours</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {loading ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         Loading…
                       </td>
                     </tr>
                   ) : filteredEntries.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         No sleep entries found.
                       </td>
                     </tr>
@@ -561,6 +565,7 @@ export function AllUsersSleepAnalytics() {
                         const bed = r.bed_time ? new Date(r.bed_time).toLocaleString() : "—";
                         const wake = r.wake_time ? new Date(r.wake_time).toLocaleString() : "—";
                         const hours = durationHours(r.bed_time, r.wake_time);
+                        const userId = r.user_id ?? emailToId.get(email.toLowerCase());
                         return (
                           <tr key={r.id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 text-sm whitespace-nowrap">{dateLabel}</td>
@@ -573,6 +578,21 @@ export function AllUsersSleepAnalytics() {
                             </td>
                             <td className="px-4 py-3 text-sm text-right font-semibold tabular-nums">
                               {hours ?? 0}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {userId ? (
+                                <Link
+                                  to={`/admin/user-analytics/sleep/${userId}`}
+                                  className="inline-flex items-center justify-center rounded-md p-1.5 text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                  title="View user sleep details"
+                                >
+                                  <Eye size={16} />
+                                </Link>
+                              ) : (
+                                <span className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-300 cursor-not-allowed">
+                                  <Eye size={16} />
+                                </span>
+                              )}
                             </td>
                           </tr>
                         );

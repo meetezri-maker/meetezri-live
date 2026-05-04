@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
-import { AlertTriangle, Phone, Mail, Eye, CheckCircle, Clock, TrendingDown, Shield, MessageSquare, User, ArrowRight, AlertCircle, Activity, Calendar, Download, X, ChevronRight, Zap, ClipboardList } from "lucide-react";
+import { AlertTriangle, Phone, Mail, Eye, CheckCircle, Clock, TrendingDown, Shield, MessageSquare, User, ArrowRight, AlertCircle, Activity, Calendar, Download, X, ChevronRight, Zap, ClipboardList, RotateCcw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../../lib/api";
 
@@ -104,6 +104,24 @@ function mapApiCrisisEvent(event: any): CrisisEvent {
   };
 }
 
+function getPreviousStatus(status: CrisisEvent["status"]): CrisisEvent["status"] | null {
+  const map: Partial<Record<CrisisEvent["status"], CrisisEvent["status"]>> = {
+    contacted: "pending",
+    "in-progress": "contacted",
+    resolved: "in-progress",
+  };
+  return map[status] ?? null;
+}
+
+function getPreviousStatusLabel(status: CrisisEvent["status"]): string {
+  const map: Partial<Record<CrisisEvent["status"], string>> = {
+    contacted: "Pending",
+    "in-progress": "Contacted",
+    resolved: "In Progress",
+  };
+  return map[status] ?? "";
+}
+
 // Workflow steps definition
 const WORKFLOW_STEPS: { status: CrisisEvent["status"]; label: string; color: string; bg: string }[] = [
   { status: "pending",     label: "Pending",     color: "text-red-600",    bg: "bg-red-500" },
@@ -172,6 +190,11 @@ export function CrisisDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [bannerReviewed, setBannerReviewed] = useState(false);
+  const [highlightCritical, setHighlightCritical] = useState(false);
+  const [showMoveBackModal, setShowMoveBackModal] = useState(false);
+  const [moveBackEvent, setMoveBackEvent] = useState<CrisisEvent | null>(null);
+  const kanbanRef = useRef<HTMLDivElement>(null);
 
   const loadEvents = async () => {
     try {
@@ -312,7 +335,7 @@ export function CrisisDashboard() {
         </motion.div>
 
         {/* Critical Alert Banner */}
-        {stats.critical > 0 && (
+        {stats.critical > 0 && !bannerReviewed && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -331,9 +354,29 @@ export function CrisisDashboard() {
                     </p>
                   </div>
                 </div>
-                <Button className="bg-red-600 hover:bg-red-700" onClick={() => setRiskFilter("critical")}>
-                  Review Now
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    className="bg-red-600 hover:bg-red-700"
+                    onClick={() => {
+                      setBannerReviewed(true);
+                      setRiskFilter("critical");
+                      setHighlightCritical(true);
+                      setTimeout(() => setHighlightCritical(false), 3000);
+                      setTimeout(() => {
+                        kanbanRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }, 100);
+                    }}
+                  >
+                    Review Now
+                  </Button>
+                  <button
+                    onClick={() => setBannerReviewed(true)}
+                    className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                    aria-label="Dismiss alert"
+                  >
+                    <X className="w-4 h-4 text-red-500" />
+                  </button>
+                </div>
               </div>
             </Card>
           </motion.div>
@@ -467,7 +510,19 @@ export function CrisisDashboard() {
         </motion.div>
 
         {/* ── Kanban Pipeline Board ── */}
+        {highlightCritical && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold"
+          >
+            <AlertTriangle className="w-4 h-4 animate-pulse" />
+            Showing critical cases only — scroll down to review each one
+          </motion.div>
+        )}
         <motion.div
+          ref={kanbanRef}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.55 }}
@@ -619,12 +674,24 @@ export function CrisisDashboard() {
                         Begin Intervention
                         <ChevronRight className="w-3 h-3 ml-auto" />
                       </Button>
-                      <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs h-7" asChild>
-                        <Link to={`/admin/crisis-event-details?id=${encodeURIComponent(event.id)}`}>
-                          <Eye className="w-3 h-3" />
-                          View Details
-                        </Link>
-                      </Button>
+                      <div className="flex gap-1.5">
+                        <Button variant="outline" size="sm" className="flex-1 gap-1.5 text-xs h-7" asChild>
+                          <Link to={`/admin/crisis-event-details?id=${encodeURIComponent(event.id)}`}>
+                            <Eye className="w-3 h-3" />
+                            View Details
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 text-xs h-7 text-gray-500 hover:text-orange-100 hover:border-orange-600"
+                          onClick={() => { setMoveBackEvent(event); setShowMoveBackModal(true); }}
+                          title="Move back to Pending"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Undo
+                        </Button>
+                      </div>
                     </div>
                   </motion.div>
                 ))}
@@ -699,12 +766,24 @@ export function CrisisDashboard() {
                         Resolve Case
                         <ChevronRight className="w-3 h-3 ml-auto" />
                       </Button>
-                      <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs h-7" asChild>
-                        <Link to={`/admin/crisis-event-details?id=${encodeURIComponent(event.id)}`}>
-                          <Eye className="w-3 h-3" />
-                          View Details
-                        </Link>
-                      </Button>
+                      <div className="flex gap-1.5">
+                        <Button variant="outline" size="sm" className="flex-1 gap-1.5 text-xs h-7" asChild>
+                          <Link to={`/admin/crisis-event-details?id=${encodeURIComponent(event.id)}`}>
+                            <Eye className="w-3 h-3" />
+                            View Details
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 text-xs h-7 text-gray-500 hover:text-orange-600 hover:border-orange-300"
+                          onClick={() => { setMoveBackEvent(event); setShowMoveBackModal(true); }}
+                          title="Move back to Contacted"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Undo
+                        </Button>
+                      </div>
                     </div>
                   </motion.div>
                 ))}
@@ -761,12 +840,24 @@ export function CrisisDashboard() {
                         <span>Total time: {event.responseTime}</span>
                       </div>
                     )}
-                    <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs h-7" asChild>
-                      <Link to={`/admin/crisis-event-details?id=${encodeURIComponent(event.id)}`}>
-                        <Eye className="w-3 h-3" />
-                        View Report
-                      </Link>
-                    </Button>
+                    <div className="flex gap-1.5">
+                      <Button variant="outline" size="sm" className="flex-1 gap-1.5 text-xs h-7" asChild>
+                        <Link to={`/admin/crisis-event-details?id=${encodeURIComponent(event.id)}`}>
+                          <Eye className="w-3 h-3" />
+                          View Report
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 text-xs h-7 text-gray-500 hover:text-orange-600 hover:border-orange-300"
+                        onClick={() => { setMoveBackEvent(event); setShowMoveBackModal(true); }}
+                        title="Move back to In Progress"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        Undo
+                      </Button>
+                    </div>
                   </motion.div>
                 ))}
               </div>
@@ -1125,6 +1216,84 @@ export function CrisisDashboard() {
                 {!isUpdating && <ArrowRight className="w-4 h-4 ml-auto" />}
               </Button>
               <Button variant="outline" className="px-5" onClick={() => { setShowResolveModal(false); setResolutionNotes(""); }}>
+                Cancel
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* ── Move Back Confirmation Modal ── */}
+      {showMoveBackModal && moveBackEvent && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowMoveBackModal(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                  <RotateCcw className="w-5 h-5 text-orange-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Move Case Back?</h3>
+                  <p className="text-sm text-gray-500">{moveBackEvent.userName}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowMoveBackModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-5">
+              <p className="text-sm text-orange-800">
+                This will move <strong>{moveBackEvent.userName}</strong>'s case from{" "}
+                <strong className="capitalize">{moveBackEvent.status.replace("-", " ")}</strong> back to{" "}
+                <strong>{getPreviousStatusLabel(moveBackEvent.status)}</strong>.
+              </p>
+              <p className="text-xs text-orange-600 mt-2">
+                Use this only to correct an accidental status change. All previous notes will be preserved.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                className="flex-1 bg-orange-500 hover:bg-orange-600 gap-2"
+                disabled={isUpdating}
+                onClick={async () => {
+                  if (!moveBackEvent) return;
+                  const prevStatus = getPreviousStatus(moveBackEvent.status);
+                  if (!prevStatus) return;
+                  try {
+                    setIsUpdating(true);
+                    await api.admin.updateCrisisEventStatus(moveBackEvent.id, {
+                      status: prevStatus,
+                    });
+                    await loadEvents();
+                    setShowMoveBackModal(false);
+                    setMoveBackEvent(null);
+                  } catch (err) {
+                    console.error("Failed to move case back", err);
+                  } finally {
+                    setIsUpdating(false);
+                  }
+                }}
+              >
+                <RotateCcw className="w-4 h-4" />
+                {isUpdating ? "Saving…" : `Move Back to ${getPreviousStatusLabel(moveBackEvent.status)}`}
+              </Button>
+              <Button
+                variant="outline"
+                className="px-5"
+                onClick={() => { setShowMoveBackModal(false); setMoveBackEvent(null); }}
+              >
                 Cancel
               </Button>
             </div>

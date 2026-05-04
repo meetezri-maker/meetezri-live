@@ -924,9 +924,10 @@ export const api = {
       return handleResponse(res, 'Failed to fetch user journals');
     },
 
-    async getAllJournalsAdmin() { // Admin only
+    async getAllJournalsAdmin(params?: { startDate?: string; endDate?: string }) { // Admin only
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/journal/admin`, {
+      const qs = params ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null) as [string, string][])).toString() : '';
+      const res = await fetch(`${API_URL}/journal/admin${qs}`, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -1346,9 +1347,10 @@ export const api = {
       return handleResponse(res, 'Failed to fetch user habits');
     },
 
-    async getAllHabitsAdmin() { // Admin only
+    async getAllHabitsAdmin(params?: { startDate?: string; endDate?: string }) { // Admin only
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/habits/admin`, {
+      const qs = params ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null) as [string, string][])).toString() : '';
+      const res = await fetch(`${API_URL}/habits/admin${qs}`, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -1794,6 +1796,11 @@ export const api = {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/admin/user-segments`, { method: 'POST', headers, body: JSON.stringify(data) });
       return handleResponse(res, 'Failed to create segment');
+    },
+    async updateUserSegment(id: string, data: any) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/user-segments/${id}`, { method: 'PUT', headers, body: JSON.stringify(data) });
+      return handleResponse(res, 'Failed to update segment');
     },
     async deleteUserSegment(id: string) {
       const headers = await getHeaders();
@@ -2596,9 +2603,10 @@ export const api = {
       return handleResponse(res, 'Failed to fetch user sleep entries');
     },
 
-    async getAllEntriesAdmin() { // Admin only
+    async getAllEntriesAdmin(params?: { startDate?: string; endDate?: string }) { // Admin only
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/sleep/admin`, {
+      const qs = params ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null) as [string, string][])).toString() : '';
+      const res = await fetch(`${API_URL}/sleep/admin${qs}`, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -2768,6 +2776,25 @@ export const api = {
       });
       if (res.status === 204) return true;
       return handleResponse(res, 'Failed to delete AI avatar');
-    }
+    },
+
+    async getAvatarSessions(id: string, params?: { page?: number; limit?: number }) {
+      const headers = await getHeaders();
+      const query = params
+        ? `?${new URLSearchParams(
+            Object.entries(params)
+              .filter(([, value]) => value !== undefined && value !== null)
+              .reduce((acc, [key, value]) => ({ ...acc, [key]: String(value) }), {} as Record<string, string>)
+          ).toString()}`
+        : '';
+      const res = await fetch(`${API_URL}/ai-avatars/${id}/sessions${query}`, { method: 'GET', headers });
+      return handleResponse(res, 'Failed to fetch avatar sessions');
+    },
+
+    async getAvatarUsers(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/ai-avatars/${id}/users`, { method: 'GET', headers });
+      return handleResponse(res, 'Failed to fetch avatar users');
+    },
   }
 };

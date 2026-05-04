@@ -31,7 +31,13 @@ import {
   User,
   Upload,
   Loader2,
+  Star,
+  MessageSquare,
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
 } from 'lucide-react';
+import { cn } from '@/app/components/ui/utils';
 
 /** Portrait: optional URL/path from DB, else `public/avatars/<Name>.png`. */
 function AdminAvatarVisual({ name, imageFallback }: { name: string; imageFallback: string }) {
@@ -76,6 +82,33 @@ interface AIAvatar {
   createdAt: string;
   /** Shown when API returned no rows — previews only until you seed or create in the database */
   isLocalDefault?: boolean;
+}
+
+interface AvatarSession {
+  id: string;
+  user_id: string;
+  started_at: string | null;
+  ended_at: string | null;
+  duration_minutes: number | null;
+  full_name: string | null;
+  email: string | null;
+  message_count: number;
+}
+
+interface AvatarUser {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  last_session: string | null;
+  session_count: number;
+}
+
+interface TranscriptMessage {
+  id: string;
+  role: string;
+  content: string;
+  created_at: string;
 }
 
 /** Upload to Supabase `avatars` bucket; path must start with `userId/` per RLS. */
@@ -133,12 +166,28 @@ function buildLocalDefaultAvatars(): AIAvatar[] {
   }));
 }
 
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatDateTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+const SESSIONS_PAGE_SIZE = 20;
+
 export function AIAvatarManager() {
   const { user } = useAuth();
   const [avatars, setAvatars] = useState<AIAvatar[]>([]);
   /** When false, the list is filled from `DEFAULT_AI_COMPANIONS` only (database is empty). */
   const [usingDbRows, setUsingDbRows] = useState(true);
-  const [totalEndedSessions, setTotalEndedSessions] = useState<number | null>(null);
+  const [platformTotalSessions, setPlatformTotalSessions] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [portraitFile, setPortraitFile] = useState<File | null>(null);
   const [portraitPreviewUrl, setPortraitPreviewUrl] = useState<string | null>(null);
@@ -148,6 +197,25 @@ export function AIAvatarManager() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState<AIAvatar | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Sessions modal state
+  const [sessionsModal, setSessionsModal] = useState<{ avatar: AIAvatar | null; open: boolean }>({ avatar: null, open: false });
+  const [sessionsData, setSessionsData] = useState<{ items: AvatarSession[]; total: number }>({ items: [], total: 0 });
+  const [sessionsPage, setSessionsPage] = useState(1);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+
+  // Transcript modal state
+  const [transcriptModal, setTranscriptModal] = useState<{
+    open: boolean;
+    session: AvatarSession | null;
+    messages: TranscriptMessage[];
+    loading: boolean;
+  }>({ open: false, session: null, messages: [], loading: false });
+
+  // Users modal state
+  const [usersModal, setUsersModal] = useState<{ avatar: AIAvatar | null; open: boolean }>({ avatar: null, open: false });
+  const [usersData, setUsersData] = useState<AvatarUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
 
   // New Avatar Form State
   const [formData, setFormData] = useState({
@@ -165,18 +233,13 @@ export function AIAvatarManager() {
   const fetchAvatars = async () => {
     try {
       setIsLoading(true);
-      // Fetch avatar stats and total ended sessions count in parallel.
-      const [data, recordingsPage] = await Promise.all([
+      const [data, platformStats] = await Promise.all([
         api.aiAvatars.getAllWithUsageStats(),
-        api.admin.getSessionRecordings({ limit: 1, page: 1 }).catch(() => null),
+        api.admin.getStats().catch(() => null),
       ]);
-
-      // Extract total ended sessions from the first-page response.
-      if (recordingsPage && !Array.isArray(recordingsPage)) {
-        const t = (recordingsPage as { items: unknown[]; total: number }).total;
-        if (typeof t === 'number') setTotalEndedSessions(t);
+      if (platformStats && typeof (platformStats as any).totalSessions === 'number') {
+        setPlatformTotalSessions((platformStats as any).totalSessions);
       }
-
       const rows = Array.isArray(data) ? data : [];
       const mapped = rows.map((item: any) => ({
         id: item.id,
@@ -471,6 +534,62 @@ export function AIAvatarManager() {
     return undefined;
   }, [portraitPreviewUrl, formData.image, formData.name]);
 
+  // Sessions modal handlers
+  const fetchAvatarSessions = useCallback(async (avatarId: string, page: number) => {
+    setSessionsLoading(true);
+    try {
+      const data = await api.aiAvatars.getAvatarSessions(avatarId, { page, limit: SESSIONS_PAGE_SIZE }) as { items: AvatarSession[]; total: number };
+      setSessionsData({ items: data.items ?? [], total: data.total ?? 0 });
+    } catch {
+      toast.error('Failed to load sessions');
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, []);
+
+  const openSessionsModal = useCallback((avatar: AIAvatar) => {
+    if (avatar.isLocalDefault) return;
+    setSessionsModal({ avatar, open: true });
+    setSessionsPage(1);
+    fetchAvatarSessions(avatar.id, 1);
+  }, [fetchAvatarSessions]);
+
+  const handleSessionsPageChange = useCallback((newPage: number) => {
+    if (!sessionsModal.avatar) return;
+    setSessionsPage(newPage);
+    fetchAvatarSessions(sessionsModal.avatar.id, newPage);
+  }, [sessionsModal.avatar, fetchAvatarSessions]);
+
+  const openTranscript = useCallback(async (session: AvatarSession) => {
+    setTranscriptModal({ open: true, session, messages: [], loading: true });
+    try {
+      const messages = await api.admin.getSessionRecordingTranscript(session.id);
+      setTranscriptModal((prev) => ({
+        ...prev,
+        messages: Array.isArray(messages) ? (messages as TranscriptMessage[]) : [],
+        loading: false,
+      }));
+    } catch {
+      toast.error('Failed to load transcript');
+      setTranscriptModal((prev) => ({ ...prev, loading: false }));
+    }
+  }, []);
+
+  // Users modal handlers
+  const openUsersModal = useCallback(async (avatar: AIAvatar) => {
+    if (avatar.isLocalDefault) return;
+    setUsersModal({ avatar, open: true });
+    setUsersLoading(true);
+    try {
+      const users = await api.aiAvatars.getAvatarUsers(avatar.id);
+      setUsersData(Array.isArray(users) ? (users as AvatarUser[]) : []);
+    } catch {
+      toast.error('Failed to load users');
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
   if (isLoading) {
     return (
       <AdminLayoutNew>
@@ -480,6 +599,8 @@ export function AIAvatarManager() {
       </AdminLayoutNew>
     );
   }
+
+  const sessionsTotalPages = Math.ceil(sessionsData.total / SESSIONS_PAGE_SIZE);
 
   return (
     <AdminLayoutNew>
@@ -533,7 +654,7 @@ export function AIAvatarManager() {
               <div className="flex items-center justify-between mb-2">
                 <Clock className="w-8 h-8 text-blue-600" />
                 <span className="text-2xl font-bold text-gray-900">
-                  {totalEndedSessions != null ? totalEndedSessions.toLocaleString() : stats.totalSessionUsage.toLocaleString()}
+                  {(platformTotalSessions ?? stats.totalSessionUsage).toLocaleString()}
                 </span>
               </div>
               <p className="text-sm text-gray-600">Total Sessions</p>
@@ -602,10 +723,21 @@ export function AIAvatarManager() {
                     <h3 className="text-xl font-bold text-gray-900 mb-1">{avatar.name}</h3>
                     <p className="text-sm text-gray-600 mb-2">{avatar.gender} • {avatar.ageRange} years</p>
                     <div className="flex items-center gap-3 text-xs text-gray-600">
-                      <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => openUsersModal(avatar)}
+                        disabled={avatar.isLocalDefault}
+                        className={cn(
+                          'flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors',
+                          avatar.isLocalDefault
+                            ? 'cursor-default'
+                            : 'hover:bg-indigo-50 hover:text-indigo-700 cursor-pointer'
+                        )}
+                        aria-label={`View ${avatar.totalUsers} users for ${avatar.name}`}
+                      >
                         <Users className="w-4 h-4" />
-                        <span>{avatar.totalUsers.toLocaleString()} users</span>
-                      </div>
+                        <span className="font-medium">{avatar.totalUsers.toLocaleString()} users</span>
+                        {!avatar.isLocalDefault && <span className="text-indigo-400">↗</span>}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -660,18 +792,60 @@ export function AIAvatarManager() {
 
               {/* Stats */}
               <div className="grid grid-cols-3 gap-4 mb-4 pt-4 border-t border-gray-200">
-                <div className="text-center">
-                  <p className="text-lg font-bold text-gray-900">{avatar.totalSessions.toLocaleString()}</p>
-                  <p className="text-xs text-gray-600">Sessions</p>
-                </div>
+                <button
+                  onClick={() => openSessionsModal(avatar)}
+                  disabled={avatar.isLocalDefault}
+                  className={cn(
+                    'text-center rounded-xl p-2 transition-colors',
+                    avatar.isLocalDefault
+                      ? 'cursor-default'
+                      : 'hover:bg-purple-50 cursor-pointer group'
+                  )}
+                  aria-label={`View ${avatar.totalSessions} sessions for ${avatar.name}`}
+                >
+                  <p className={cn('text-lg font-bold text-gray-900', !avatar.isLocalDefault && 'group-hover:text-purple-700 transition-colors')}>
+                    {avatar.totalSessions.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-gray-600 flex items-center justify-center gap-0.5">
+                    Sessions{!avatar.isLocalDefault && <span className="text-purple-400 ml-0.5">↗</span>}
+                  </p>
+                </button>
                 <div className="text-center">
                   <p className="text-lg font-bold text-gray-900">{avatar.avgSessionLength} min</p>
                   <p className="text-xs text-gray-600">Avg Length</p>
                 </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold text-gray-900">{avatar.totalUsers}</p>
-                  <p className="text-xs text-gray-600">Users</p>
+                <button
+                  onClick={() => openUsersModal(avatar)}
+                  disabled={avatar.isLocalDefault}
+                  className={cn(
+                    'text-center rounded-xl p-2 transition-colors',
+                    avatar.isLocalDefault
+                      ? 'cursor-default'
+                      : 'hover:bg-indigo-50 cursor-pointer group'
+                  )}
+                  aria-label={`View ${avatar.totalUsers} users for ${avatar.name}`}
+                >
+                  <p className={cn('text-lg font-bold text-gray-900', !avatar.isLocalDefault && 'group-hover:text-indigo-700 transition-colors')}>
+                    {avatar.totalUsers}
+                  </p>
+                  <p className="text-xs text-gray-600 flex items-center justify-center gap-0.5">
+                    Users{!avatar.isLocalDefault && <span className="text-indigo-400 ml-0.5">↗</span>}
+                  </p>
+                </button>
+              </div>
+
+              {/* Rating placeholder */}
+              <div className="mb-4 px-3 py-2.5 bg-yellow-50 rounded-xl border border-yellow-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Star className="w-4 h-4 text-yellow-400" />
+                  <span className="text-sm font-semibold text-gray-700">Rating</span>
+                  <div className="flex gap-0.5 ml-1">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Star key={s} className="w-3.5 h-3.5 text-gray-200 fill-gray-200" />
+                    ))}
+                  </div>
                 </div>
+                <span className="text-xs text-gray-400 italic">Coming soon</span>
               </div>
 
               {/* Voice Info */}
@@ -729,7 +903,7 @@ export function AIAvatarManager() {
           </div>
         )}
 
-        {/* Same companions users see in Session Lobby — active DB rows + lobby artwork (bottom of page) */}
+        {/* Same companions users see in Session Lobby */}
         <div className="mt-10 rounded-2xl border border-gray-200 bg-gradient-to-br from-slate-50 to-white p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-1">Companions in app</h2>
           <p className="text-sm text-gray-600 mb-4">
@@ -811,7 +985,7 @@ export function AIAvatarManager() {
                 </div>
 
                 <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                  {/* Portrait: upload (stored in Supabase + URL saved on row) or URL / bundled PNG */}
+                  {/* Portrait */}
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Portrait
@@ -1102,6 +1276,302 @@ export function AIAvatarManager() {
                   >
                     Delete Avatar
                   </motion.button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Sessions Modal */}
+        <AnimatePresence>
+          {sessionsModal.open && sessionsModal.avatar && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => setSessionsModal({ avatar: null, open: false })}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col"
+              >
+                {/* Modal Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center">
+                      <Clock className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">Sessions — {sessionsModal.avatar.name}</h3>
+                      <p className="text-xs text-gray-500">{sessionsData.total.toLocaleString()} total sessions</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSessionsModal({ avatar: null, open: false })}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-all"
+                    aria-label="Close"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Sessions list */}
+                <div className="flex-1 overflow-y-auto">
+                  {sessionsLoading ? (
+                    <div className="flex items-center justify-center py-16">
+                      <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+                    </div>
+                  ) : sessionsData.items.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                      <Clock className="w-12 h-12 mb-3" />
+                      <p className="font-medium">No sessions found</p>
+                    </div>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr>
+                          <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Duration</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Messages</th>
+                          <th className="px-4 py-3" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {sessionsData.items.map((session) => (
+                          <tr key={session.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-3">
+                              <div className="font-medium text-gray-900">{session.full_name || 'Unknown'}</div>
+                              <div className="text-xs text-gray-400">{session.email || '—'}</div>
+                            </td>
+                            <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                              <div className="flex items-center gap-1">
+                                <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                                {formatDateTime(session.started_at)}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                              {session.duration_minutes != null ? `${session.duration_minutes} min` : '—'}
+                            </td>
+                            <td className="px-4 py-3 text-gray-600">
+                              <div className="flex items-center gap-1">
+                                <MessageSquare className="w-3.5 h-3.5 text-gray-400" />
+                                {session.message_count}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={() => openTranscript(session)}
+                                className="text-xs font-medium text-purple-600 hover:text-purple-800 hover:underline whitespace-nowrap"
+                              >
+                                View Transcript
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                {/* Pagination */}
+                {sessionsTotalPages > 1 && (
+                  <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 flex-shrink-0">
+                    <p className="text-sm text-gray-500">
+                      Page {sessionsPage} of {sessionsTotalPages}
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleSessionsPageChange(sessionsPage - 1)}
+                        disabled={sessionsPage <= 1 || sessionsLoading}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        aria-label="Previous page"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleSessionsPageChange(sessionsPage + 1)}
+                        disabled={sessionsPage >= sessionsTotalPages || sessionsLoading}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        aria-label="Next page"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Transcript Modal */}
+        <AnimatePresence>
+          {transcriptModal.open && transcriptModal.session && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+              onClick={() => setTranscriptModal({ open: false, session: null, messages: [], loading: false })}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+              >
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Session Transcript</h3>
+                    <p className="text-xs text-gray-500">
+                      {transcriptModal.session.full_name || transcriptModal.session.email || 'Unknown user'} · {formatDateTime(transcriptModal.session.started_at)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setTranscriptModal({ open: false, session: null, messages: [], loading: false })}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-all"
+                    aria-label="Close transcript"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6">
+                  {transcriptModal.loading ? (
+                    <div className="flex items-center justify-center py-16">
+                      <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+                    </div>
+                  ) : transcriptModal.messages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                      <MessageSquare className="w-12 h-12 mb-3" />
+                      <p className="font-medium">No messages in this session</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {transcriptModal.messages.map((msg) => (
+                        <div
+                          key={msg.id}
+                          className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}
+                        >
+                          <div
+                            className={cn(
+                              'max-w-[80%] rounded-2xl px-4 py-3',
+                              msg.role === 'user'
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-gray-100 text-gray-800'
+                            )}
+                          >
+                            <p className={cn('text-[10px] font-semibold mb-1 uppercase tracking-wide', msg.role === 'user' ? 'text-purple-200' : 'text-gray-400')}>
+                              {msg.role === 'user' ? 'User' : sessionsModal.avatar?.name ?? 'AI'}
+                            </p>
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                            <p className={cn('text-[10px] mt-1', msg.role === 'user' ? 'text-purple-300' : 'text-gray-400')}>
+                              {formatDateTime(msg.created_at)}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Users Modal */}
+        <AnimatePresence>
+          {usersModal.open && usersModal.avatar && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => setUsersModal({ avatar: null, open: false })}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+              >
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center">
+                      <Users className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">Users — {usersModal.avatar.name}</h3>
+                      <p className="text-xs text-gray-500">{usersData.length.toLocaleString()} unique users</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setUsersModal({ avatar: null, open: false })}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-all"
+                    aria-label="Close"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto">
+                  {usersLoading ? (
+                    <div className="flex items-center justify-center py-16">
+                      <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+                    </div>
+                  ) : usersData.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                      <Users className="w-12 h-12 mb-3" />
+                      <p className="font-medium">No users found</p>
+                    </div>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr>
+                          <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Last Session</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Sessions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {usersData.map((u) => (
+                          <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-3">
+                              <div className="flex items-center gap-3">
+                                {u.avatar_url ? (
+                                  <img src={u.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover border border-gray-200" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                                    <User className="w-4 h-4 text-indigo-500" />
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="font-medium text-gray-900">{u.full_name || 'Unnamed user'}</div>
+                                  <div className="text-xs text-gray-400">{u.email || '—'}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">
+                              {formatDate(u.last_session)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold">
+                                <Clock className="w-3 h-3" />
+                                {u.session_count}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               </motion.div>
             </motion.div>

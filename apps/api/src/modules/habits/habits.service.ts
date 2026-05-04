@@ -106,10 +106,21 @@ export async function getHabits(userId: string) {
 const ALL_HABITS_CACHE_TTL = 120 * 1000; // 120 seconds
 let allHabitsCache: { data: any[]; timestamp: number } | null = null;
 
-export async function getAllHabitsAdmin() {
-  const now = Date.now();
-  if (allHabitsCache && now - allHabitsCache.timestamp < ALL_HABITS_CACHE_TTL) {
-    return allHabitsCache.data;
+export async function getAllHabitsAdmin(startDate?: Date, endDate?: Date) {
+  const isFiltered = startDate != null || endDate != null;
+
+  if (!isFiltered) {
+    const now = Date.now();
+    if (allHabitsCache && now - allHabitsCache.timestamp < ALL_HABITS_CACHE_TTL) {
+      return allHabitsCache.data;
+    }
+  }
+
+  const logsWhere: any = {};
+  if (startDate || endDate) {
+    logsWhere.completed_at = {};
+    if (startDate) logsWhere.completed_at.gte = startDate;
+    if (endDate) logsWhere.completed_at.lt = endDate;
   }
 
   const result = await prisma.habits.findMany({
@@ -119,14 +130,17 @@ export async function getAllHabitsAdmin() {
         select: { email: true, full_name: true },
       },
       habit_logs: {
+        where: isFiltered ? logsWhere : undefined,
         orderBy: { completed_at: "desc" },
-        take: 60,
+        take: isFiltered ? undefined : 60,
       },
     },
     orderBy: { created_at: "desc" },
   });
 
-  allHabitsCache = { data: result, timestamp: Date.now() };
+  if (!isFiltered) {
+    allHabitsCache = { data: result, timestamp: Date.now() };
+  }
   return result;
 }
 

@@ -7,6 +7,8 @@ import {
   getAvatarById,
   updateAvatar,
   deleteAvatar,
+  getSessionsForAvatar,
+  getUsersForAvatar,
 } from "./ai-avatars.service";
 import { CreateAvatarInput, UpdateAvatarInput } from "./ai-avatars.schema";
 
@@ -92,5 +94,35 @@ export async function deleteAvatarHandler(
   } catch (error) {
     request.log.error(error);
     return reply.code(500).send({ message: "Failed to delete avatar" });
+  }
+}
+
+export async function getAvatarSessionsHandler(
+  request: FastifyRequest<{ Params: { id: string }; Querystring: { page?: string; limit?: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const { id } = request.params;
+    const page = request.query.page ? parseInt(request.query.page, 10) : 1;
+    const limit = request.query.limit ? parseInt(request.query.limit, 10) : 20;
+    const result = await getSessionsForAvatar(id, page, limit);
+    return reply.code(200).send(result);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: "Failed to fetch avatar sessions" });
+  }
+}
+
+export async function getAvatarUsersHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const { id } = request.params;
+    const users = await getUsersForAvatar(id);
+    return reply.code(200).send(users);
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ message: "Failed to fetch avatar users" });
   }
 }

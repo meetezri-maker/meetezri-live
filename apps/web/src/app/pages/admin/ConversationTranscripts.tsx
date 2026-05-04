@@ -18,6 +18,10 @@ import {
   Save,
   Trash2,
   Loader2,
+  Plus,
+  Pencil,
+  Check,
+  StickyNote,
 } from 'lucide-react';
 import { AdminPaginationBar } from '@/app/components/admin/AdminPaginationBar';
 
@@ -51,6 +55,29 @@ interface Transcript {
   crisisIndicators: string[];
   reviewedAt?: string;
   messageCount: number;
+}
+
+interface AdminNote {
+  id: string;
+  text: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+function parseAdminNotes(raw: string): AdminNote[] {
+  if (!raw?.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed as AdminNote[];
+  } catch {
+    // Legacy plain-text note — wrap it as a single note entry.
+  }
+  return [{ id: crypto.randomUUID(), text: raw.trim(), createdAt: new Date().toISOString() }];
+}
+
+function serializeAdminNotes(notes: AdminNote[]): string {
+  if (notes.length === 0) return '';
+  return JSON.stringify(notes);
 }
 
 function mapApiSessionToTranscript(session: any): Transcript {
@@ -239,6 +266,11 @@ export function ConversationTranscripts() {
   const [filterSentiment, setFilterSentiment] = useState<string>('all');
   const [filterFlagged, setFilterFlagged] = useState<boolean | null>(null);
   const [savingAdminNotes, setSavingAdminNotes] = useState(false);
+  const [localNotes, setLocalNotes] = useState<AdminNote[]>([]);
+  const [addingNote, setAddingNote] = useState(false);
+  const [newNoteText, setNewNoteText] = useState('');
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState('');
   const [exportingList, setExportingList] = useState(false);
   const [listPage, setListPage] = useState(1);
   const [listPageSize, setListPageSize] = useState(10);
@@ -447,6 +479,17 @@ export function ConversationTranscripts() {
     setListPage((p) => (p > tp ? tp : p));
   }, [filteredTranscripts.length, listPageSize]);
 
+  // Sync local notes whenever the transcript modal opens/changes.
+  useEffect(() => {
+    if (transcriptModal) {
+      setLocalNotes(parseAdminNotes(transcriptModal.adminNotes));
+      setAddingNote(false);
+      setNewNoteText('');
+      setEditingNoteId(null);
+      setEditingNoteText('');
+    }
+  }, [transcriptModal?.id]);
+
   const transcriptListTotalPages = Math.max(
     1,
     Math.ceil(filteredTranscripts.length / listPageSize) || 1
@@ -581,40 +624,72 @@ export function ConversationTranscripts() {
     }
   };
 
-  const persistAdminNotes = async (id: string, notes: string) => {
-    const updated = await api.admin.updateSessionRecording(id, { review_notes: notes });
+  const persistNotesArray = async (id: string, notes: AdminNote[]) => {
+    const serialized = serializeAdminNotes(notes);
+    const updated = await api.admin.updateSessionRecording(id, { review_notes: serialized });
     mergeSessionUpdate(id, updated);
   };
 
-  const handleSaveAdminNotes = async () => {
-    if (!transcriptModal) return;
+  const handleAddNote = async () => {
+    if (!transcriptModal || !newNoteText.trim()) return;
+    const note: AdminNote = {
+      id: crypto.randomUUID(),
+      text: newNoteText.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    const next = [...localNotes, note];
+    setLocalNotes(next);
+    setNewNoteText('');
+    setAddingNote(false);
     setSavingAdminNotes(true);
     try {
-      await persistAdminNotes(transcriptModal.id, transcriptModal.adminNotes);
-      toast.success('Admin note saved');
+      await persistNotesArray(transcriptModal.id, next);
+      toast.success('Note added');
     } catch (e) {
       console.error(e);
-      toast.error('Could not save admin note');
+      setLocalNotes(localNotes);
+      toast.error('Could not save note');
     } finally {
       setSavingAdminNotes(false);
     }
   };
 
-  const handleRemoveAdminNote = async () => {
-    if (!transcriptModal) return;
-    const hasContent = transcriptModal.adminNotes.trim().length > 0;
-    if (!hasContent) {
-      toast.info('No note to remove');
-      return;
-    }
-    if (!window.confirm('Remove this admin note from this session?')) return;
+  const handleSaveEditNote = async () => {
+    if (!transcriptModal || !editingNoteId || !editingNoteText.trim()) return;
+    const next = localNotes.map((n) =>
+      n.id === editingNoteId
+        ? { ...n, text: editingNoteText.trim(), updatedAt: new Date().toISOString() }
+        : n
+    );
+    setLocalNotes(next);
+    setEditingNoteId(null);
+    setEditingNoteText('');
     setSavingAdminNotes(true);
     try {
-      await persistAdminNotes(transcriptModal.id, '');
-      toast.success('Admin note removed');
+      await persistNotesArray(transcriptModal.id, next);
+      toast.success('Note updated');
     } catch (e) {
       console.error(e);
-      toast.error('Could not remove admin note');
+      setLocalNotes(localNotes);
+      toast.error('Could not update note');
+    } finally {
+      setSavingAdminNotes(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    if (!transcriptModal) return;
+    if (!window.confirm('Delete this note?')) return;
+    const next = localNotes.filter((n) => n.id !== noteId);
+    setLocalNotes(next);
+    setSavingAdminNotes(true);
+    try {
+      await persistNotesArray(transcriptModal.id, next);
+      toast.success('Note deleted');
+    } catch (e) {
+      console.error(e);
+      setLocalNotes(localNotes);
+      toast.error('Could not delete note');
     } finally {
       setSavingAdminNotes(false);
     }
@@ -1184,52 +1259,192 @@ Ezri Mental Health Platform - Admin Dashboard
                   </div>
                 </div>
 
+                {/* Admin Notes — comment-box style */}
                 <div className="mb-6">
-                  <h4 className="text-sm font-bold text-gray-700 mb-2">Admin notes</h4>
-                  <p className="text-xs text-gray-500 mb-2">
-                    Draft is kept locally until you save. Use <strong>Save note</strong> to store it on the session, or{" "}
-                    <strong>Remove note</strong> to delete the saved note.
-                  </p>
-                  <textarea
-                    value={transcriptModal.adminNotes}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setTranscriptModal({ ...transcriptModal, adminNotes: v });
-                      setTranscripts((prev) =>
-                        prev.map((t) => (t.id === transcriptModal.id ? { ...t, adminNotes: v } : t))
-                      );
-                    }}
-                    rows={4}
-                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
-                    placeholder="Add an internal note for your team…"
-                  />
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    <motion.button
-                      type="button"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      disabled={savingAdminNotes}
-                      onClick={() => void handleSaveAdminNotes()}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium disabled:opacity-50 disabled:pointer-events-none"
-                    >
-                      {savingAdminNotes ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                  <div className="flex items-center gap-2 mb-3">
+                    <StickyNote className="w-4 h-4 text-amber-500" />
+                    <h4 className="text-sm font-bold text-gray-700">Admin notes</h4>
+                    {localNotes.length > 0 && (
+                      <span className="text-xs bg-amber-100 text-amber-700 font-semibold px-2 py-0.5 rounded-full">
+                        {localNotes.length}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Notes thread */}
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 overflow-hidden">
+
+                    {/* Empty state */}
+                    {localNotes.length === 0 && !addingNote && (
+                      <div className="flex flex-col items-center justify-center py-8 gap-2">
+                        <StickyNote className="w-8 h-8 text-gray-300" />
+                        <p className="text-sm text-gray-400">No notes yet</p>
+                        <p className="text-xs text-gray-400">Add the first note below</p>
+                      </div>
+                    )}
+
+                    {/* Existing notes */}
+                    <AnimatePresence initial={false}>
+                      {localNotes.map((note, idx) => (
+                        <motion.div
+                          key={note.id}
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                          transition={{ duration: 0.18 }}
+                          className={`bg-white px-4 py-3 ${idx < localNotes.length - 1 || addingNote ? 'border-b border-gray-200' : ''}`}
+                        >
+                          {editingNoteId === note.id ? (
+                            /* ── Edit mode ── */
+                            <div>
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
+                                  <Pencil className="w-3.5 h-3.5 text-amber-600" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-500">Editing note</span>
+                              </div>
+                              <textarea
+                                autoFocus
+                                value={editingNoteText}
+                                onChange={(e) => setEditingNoteText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void handleSaveEditNote();
+                                  if (e.key === 'Escape') { setEditingNoteId(null); setEditingNoteText(''); }
+                                }}
+                                rows={3}
+                                className="w-full bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-amber-400 resize-none"
+                              />
+                              <div className="flex gap-2 mt-2">
+                                <button
+                                  type="button"
+                                  disabled={savingAdminNotes || !editingNoteText.trim()}
+                                  onClick={() => void handleSaveEditNote()}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                                >
+                                  {savingAdminNotes ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                  Save changes
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setEditingNoteId(null); setEditingNoteText(''); }}
+                                  className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-xs font-medium hover:bg-gray-200 transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            /* ── Display mode ── */
+                            <div>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center flex-shrink-0">
+                                    <StickyNote className="w-3.5 h-3.5 text-white" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className="text-xs font-semibold text-gray-700">Admin</span>
+                                    <span className="mx-1.5 text-gray-300">·</span>
+                                    <span className="text-xs text-gray-400">
+                                      {new Date(note.updatedAt ?? note.createdAt).toLocaleString()}
+                                    </span>
+                                    {note.updatedAt && (
+                                      <span className="ml-1 text-xs text-amber-500">(edited)</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingNoteId(note.id); setEditingNoteText(note.text); setAddingNote(false); }}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                    title="Edit note"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={savingAdminNotes}
+                                    onClick={() => void handleDeleteNote(note.id)}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                                    title="Delete note"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed mt-2 ml-9">
+                                {note.text}
+                              </p>
+                            </div>
+                          )}
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+
+                    {/* New note composer */}
+                    <AnimatePresence>
+                      {addingNote ? (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="bg-white px-4 pt-3 pb-4"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center flex-shrink-0">
+                              <StickyNote className="w-3.5 h-3.5 text-white" />
+                            </div>
+                            <span className="text-xs font-semibold text-gray-500">New note</span>
+                          </div>
+                          <textarea
+                            autoFocus
+                            value={newNoteText}
+                            onChange={(e) => setNewNoteText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void handleAddNote();
+                              if (e.key === 'Escape') { setAddingNote(false); setNewNoteText(''); }
+                            }}
+                            rows={3}
+                            placeholder="Write a note for your team… (Ctrl+Enter to save)"
+                            className="w-full ml-9 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-amber-400 resize-none"
+                            style={{ width: 'calc(100% - 2.25rem)' }}
+                          />
+                          <div className="flex gap-2 mt-2 ml-9">
+                            <button
+                              type="button"
+                              disabled={savingAdminNotes || !newNoteText.trim()}
+                              onClick={() => void handleAddNote()}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                            >
+                              {savingAdminNotes ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                              Save note
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setAddingNote(false); setNewNoteText(''); }}
+                              className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-xs font-medium hover:bg-gray-200 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </motion.div>
                       ) : (
-                        <Save className="w-4 h-4" />
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className={`px-4 py-3 ${localNotes.length > 0 ? 'border-t border-gray-200' : ''} bg-white`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => { setAddingNote(true); setEditingNoteId(null); }}
+                            className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-gray-300 text-gray-400 text-sm hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50 transition-all"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Add a note…
+                          </button>
+                        </motion.div>
                       )}
-                      Save note
-                    </motion.button>
-                    <motion.button
-                      type="button"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      disabled={savingAdminNotes || !transcriptModal.adminNotes.trim()}
-                      onClick={() => void handleRemoveAdminNote()}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-800 text-sm font-medium hover:bg-red-100 disabled:opacity-50 disabled:pointer-events-none"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Remove note
-                    </motion.button>
+                    </AnimatePresence>
                   </div>
                 </div>
 

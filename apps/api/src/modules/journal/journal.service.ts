@@ -51,13 +51,25 @@ function clearAllJournalsCache() {
   allJournalsCache = null;
 }
 
-export async function getAllJournalsAdmin() {
-  const now = Date.now();
-  if (allJournalsCache && now - allJournalsCache.timestamp < ALL_JOURNALS_CACHE_TTL) {
-    return allJournalsCache.data;
+export async function getAllJournalsAdmin(startDate?: Date, endDate?: Date) {
+  const isFiltered = startDate != null || endDate != null;
+
+  if (!isFiltered) {
+    const now = Date.now();
+    if (allJournalsCache && now - allJournalsCache.timestamp < ALL_JOURNALS_CACHE_TTL) {
+      return allJournalsCache.data;
+    }
+  }
+
+  const where: any = {};
+  if (startDate || endDate) {
+    where.created_at = {};
+    if (startDate) where.created_at.gte = startDate;
+    if (endDate) where.created_at.lt = endDate;
   }
 
   const result = await prisma.journal_entries.findMany({
+    where,
     orderBy: { created_at: 'desc' },
     include: {
       profiles: {
@@ -69,7 +81,9 @@ export async function getAllJournalsAdmin() {
     },
   });
 
-  allJournalsCache = { data: result, timestamp: Date.now() };
+  if (!isFiltered) {
+    allJournalsCache = { data: result, timestamp: Date.now() };
+  }
   return result;
 }
 

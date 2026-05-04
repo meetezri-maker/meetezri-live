@@ -47,13 +47,25 @@ export async function getSleepEntries(userId: string) {
 const ALL_SLEEP_CACHE_TTL = 120 * 1000; // 120 seconds
 let allSleepCache: { data: any[]; timestamp: number } | null = null;
 
-export async function getAllSleepEntriesAdmin() {
-  const now = Date.now();
-  if (allSleepCache && now - allSleepCache.timestamp < ALL_SLEEP_CACHE_TTL) {
-    return allSleepCache.data;
+export async function getAllSleepEntriesAdmin(startDate?: Date, endDate?: Date) {
+  const isFiltered = startDate != null || endDate != null;
+
+  if (!isFiltered) {
+    const now = Date.now();
+    if (allSleepCache && now - allSleepCache.timestamp < ALL_SLEEP_CACHE_TTL) {
+      return allSleepCache.data;
+    }
+  }
+
+  const where: any = {};
+  if (startDate || endDate) {
+    where.bed_time = {};
+    if (startDate) where.bed_time.gte = startDate;
+    if (endDate) where.bed_time.lt = endDate;
   }
 
   const result = await prisma.sleep_entries.findMany({
+    where,
     orderBy: { bed_time: 'desc' },
     include: {
       profiles: {
@@ -65,7 +77,9 @@ export async function getAllSleepEntriesAdmin() {
     },
   });
 
-  allSleepCache = { data: result, timestamp: Date.now() };
+  if (!isFiltered) {
+    allSleepCache = { data: result, timestamp: Date.now() };
+  }
   return result;
 }
 
