@@ -49,7 +49,7 @@ export async function sttRoutes(app: FastifyInstance) {
         const formData = new FormData();
         formData.append(
           'file',
-          new Blob([audioBuffer], { type: resolvedMime }),
+          new Blob([new Uint8Array(audioBuffer)], { type: resolvedMime }),
           filename,
         );
 
@@ -91,7 +91,7 @@ export async function sttRoutes(app: FastifyInstance) {
       const formData = new FormData();
       formData.append(
         'file',
-        new Blob([audioBuffer], { type: resolvedMime }),
+        new Blob([new Uint8Array(audioBuffer)], { type: resolvedMime }),
         filename,
       );
       formData.append('model', 'whisper-1');
