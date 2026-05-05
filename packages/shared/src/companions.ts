@@ -10,9 +10,9 @@ const LEGACY_AVATAR_LABEL: Record<string, string> = {
   'alex rivera': 'Alex',
   'sarah mitchell': 'Sara Mitchell',
   'sara mitchell': 'Sara Mitchell',
-  'maya chen': 'maya chen',
+  'maya chen': 'Maya Chen',
   /** Onboarding / older clients sometimes persisted short ids */
-  maya: 'maya chen',
+  maya: 'Maya Chen',
   alex: 'Alex',
   jordan: 'Jordan Taylor',
   sarah: 'Sara Mitchell',
@@ -83,7 +83,7 @@ export function companionAnalyticsChartLabel(canonical: string): string {
   const map: Record<string, string> = {
     Alex: 'Alex Rivera',
     'Jordan Taylor': 'Jordan Taylor',
-    'maya chen': 'Maya Chen',
+    'Maya Chen': 'Maya Chen',
     'Sara Mitchell': 'Sara Mitchell',
     'Not set': 'Not set',
     Other: 'Unrecognized avatar',

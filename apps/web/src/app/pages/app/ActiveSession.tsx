@@ -3489,7 +3489,7 @@ export function ActiveSession() {
   }, [permissionsGranted, stream, ezriWsStatus, hasSessionEnded, isSessionPaused]);
 
   const currentAvatar = {
-    name: config?.avatar || "maya chen",
+    name: config?.avatar || "Maya Chen",
     status: "listening",
   };
 

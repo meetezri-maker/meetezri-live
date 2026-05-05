@@ -910,7 +910,7 @@ export function AIAvatarManager() {
               names that match PNG files in{" "}
               <code className="text-xs bg-gray-100 px-1 rounded">public/avatars</code> (e.g.{" "}
               <code className="text-xs">Alex</code>, <code className="text-xs">Jordan Taylor</code>,{" "}
-              <code className="text-xs">maya chen</code>, <code className="text-xs">Sara Mitchell</code>).
+              <code className="text-xs">Maya Chen</code>, <code className="text-xs">Sara Mitchell</code>).
             </p>
           ) : (
             <div className="flex flex-wrap gap-4 justify-start">
@@ -1090,7 +1090,7 @@ export function AIAvatarManager() {
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
-                      placeholder="e.g., maya chen"
+                      placeholder="e.g., Maya Chen"
                     />
                   </div>
 

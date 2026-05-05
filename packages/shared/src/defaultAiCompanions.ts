@@ -1,6 +1,6 @@
 /**
  * Canonical default AI companions — must match `apps/web/public/avatars/*.png` filenames.
- * Order: Alex, Jordan Taylor, maya chen, Sara Mitchell (same as product defaults everywhere).
+ * Order: Alex, Jordan Taylor, Maya Chen, Sara Mitchell (same as product defaults everywhere).
  */
 export type DefaultAiCompanionDefinition = {
   /** Stable id for UI keys (usually same as display name) */
@@ -52,8 +52,8 @@ export const DEFAULT_AI_COMPANIONS: readonly DefaultAiCompanionDefinition[] = [
     rating: 4.7,
   },
   {
-    id: "maya chen",
-    name: "maya chen",
+    id: "Maya Chen",
+    name: "Maya Chen",
     portraitPng: "maya chen.png",
     lobbyTagline: "Kind and patient",
     gender: "Female",

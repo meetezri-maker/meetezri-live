@@ -26,7 +26,7 @@ function normalizeOnboardingAvatarName(raw: string | undefined): string {
   const t = (raw ?? "").trim();
   if (!t) return "";
   const legacy: Record<string, string> = {
-    maya: "maya chen",
+    maya: "Maya Chen",
     alex: "Alex",
     jordan: "Jordan Taylor",
     sarah: "Sara Mitchell",
