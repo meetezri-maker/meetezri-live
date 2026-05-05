@@ -651,20 +651,22 @@ export function Billing() {
               <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <h3 className="font-semibold text-blue-900 dark:text-blue-100">Minutes Balance</h3>
             </div>
-            {userSubscription.accountTotalMinutes != null && (
-              <p className="text-sm text-blue-800/80 dark:text-blue-200/80 mb-4 leading-6">
-                Account:{" "}
-                <span className="font-semibold">{userSubscription.accountRemainingMinutes ?? 0} min</span>{" "}
-                remaining ·{" "}
-                <span className="font-semibold">{userSubscription.accountTotalMinutes} min</span> total ·{" "}
-                <span className="font-semibold">{userSubscription.accountUsedMinutes ?? 0} min</span> used
-              </p>
-            )}
+            <p className="text-sm text-blue-800/80 dark:text-blue-200/80 mb-4 leading-6">
+              <span className="font-semibold">{userSubscription.accountRemainingMinutes ?? 0} min</span> available
+              {userSubscription.payAsYouGoCredits > 0 && (
+                <>
+                  {" "}·{" "}
+                  <span className="font-semibold">{userSubscription.creditsRemaining} min</span> subscription
+                  {" + "}
+                  <span className="font-semibold">{userSubscription.payAsYouGoCredits} min</span> PAYG
+                </>
+              )}
+            </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               {/* Plan Minutes */}
               <div className="p-3 bg-gradient-to-br from-blue-50 to-white dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-blue-100 dark:border-slate-700 shadow-sm">
-                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-[0.18em] mb-2">Monthly Plan</p>
+                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-[0.18em] mb-2">Subscription Balance</p>
                 <div className="flex items-baseline gap-2 mb-2">
                   <span className="text-3xl font-bold text-blue-900 dark:text-blue-100">
                     {userSubscription.creditsRemaining}
@@ -683,7 +685,7 @@ export function Billing() {
                   />
                 </div>
                 <p className="text-xs text-blue-500 dark:text-blue-400">
-                  {usagePercentage.toFixed(0)}% used
+                  {usagePercentage.toFixed(0)}% used this cycle
                 </p>
               </div>
 
@@ -730,10 +732,9 @@ export function Billing() {
                   </p>
                 </div>
                 <div className="rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-100 dark:border-slate-700 p-3">
-                  <p className="text-xs text-muted-foreground">Total remaining</p>
+                  <p className="text-xs text-muted-foreground">Total available</p>
                   <p className="text-lg font-bold text-slate-900 dark:text-white">
-                    {(userSubscription.accountRemainingMinutes ??
-                      userSubscription.creditsRemaining + userSubscription.payAsYouGoCredits) ?? 0} min
+                    {(userSubscription.creditsRemaining + userSubscription.payAsYouGoCredits) ?? 0} min
                   </p>
                 </div>
                 <div className="rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-100 dark:border-slate-700 p-3">
