@@ -1559,30 +1559,72 @@ export function Achievements() {
                   ← Change goal template
                 </button>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <input type="text" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} placeholder="Goal Title" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
-                  <select value={goalCategory} onChange={(e) => setGoalCategory(e.target.value as NonNullable<Achievement['goalCategory']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                    <option value="Mental">Mental</option><option value="Emotional">Emotional</option><option value="Productivity">Productivity</option><option value="Relationships">Relationships</option><option value="Wellness">Wellness</option>
-                  </select>
-                  <input type="text" value={goalDescription} onChange={(e) => setGoalDescription(e.target.value)} placeholder="Goal Description" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
-                  <input type="text" value={goalWhyItMatters} onChange={(e) => setGoalWhyItMatters(e.target.value)} placeholder="Why This Goal Matters" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
-                  <input type="text" value={goalTargetOutcome} onChange={(e) => setGoalTargetOutcome(e.target.value)} placeholder="Target Outcome" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
-                  <select value={goalPriority} onChange={(e) => setGoalPriority(e.target.value as NonNullable<Achievement['priority']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                    <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option>
-                  </select>
-                  <input type="date" value={goalStartDate} onChange={(e) => setGoalStartDate(e.target.value)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
-                  <input type="date" value={goalTargetDate} onChange={(e) => setGoalTargetDate(e.target.value)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
-                  <input type="number" min={0} max={100} value={goalProgress} onChange={(e) => setGoalProgress(e.target.value)} placeholder="Current Progress (0-100)" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
-                  <select value={goalCheckInFrequency} onChange={(e) => setGoalCheckInFrequency(e.target.value as NonNullable<Achievement['checkInFrequency']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                    <option value="Daily">Daily</option><option value="Weekly">Weekly</option><option value="Custom">Custom</option>
-                  </select>
-                  <input type="text" value={goalActionSteps} onChange={(e) => setGoalActionSteps(e.target.value)} placeholder="Small Action Steps" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
-                  <select value={goalMoodTag} onChange={(e) => setGoalMoodTag(e.target.value as NonNullable<Achievement['moodTag']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                    <option value="Stress">Stress</option><option value="Sadness">Sadness</option><option value="Fear">Fear</option><option value="Confidence">Confidence</option><option value="Motivation">Motivation</option>
-                  </select>
-                  <select value={goalSupportType} onChange={(e) => setGoalSupportType(e.target.value as NonNullable<Achievement['supportType']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                    <option value="Encouragement">Encouragement</option><option value="Accountability">Accountability</option><option value="Reflection">Reflection</option><option value="Coping Help">Coping Help</option>
-                  </select>
-                  <input type="text" value={goalNotes} onChange={(e) => setGoalNotes(e.target.value)} placeholder="Notes / Journal Entry" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pg-title" className="text-xs font-medium text-gray-600 dark:text-slate-400">Goal Title</label>
+                    <input id="pg-title" type="text" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} placeholder="e.g. Build a daily meditation habit" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pg-category" className="text-xs font-medium text-gray-600 dark:text-slate-400">Category</label>
+                    <select id="pg-category" value={goalCategory} onChange={(e) => setGoalCategory(e.target.value as NonNullable<Achievement['goalCategory']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
+                      <option value="Mental">Mental</option><option value="Emotional">Emotional</option><option value="Productivity">Productivity</option><option value="Relationships">Relationships</option><option value="Wellness">Wellness</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pg-description" className="text-xs font-medium text-gray-600 dark:text-slate-400">Goal Description</label>
+                    <input id="pg-description" type="text" value={goalDescription} onChange={(e) => setGoalDescription(e.target.value)} placeholder="Briefly describe your goal" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pg-why" className="text-xs font-medium text-gray-600 dark:text-slate-400">Why This Goal Matters</label>
+                    <input id="pg-why" type="text" value={goalWhyItMatters} onChange={(e) => setGoalWhyItMatters(e.target.value)} placeholder="What motivates you to pursue this?" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pg-outcome" className="text-xs font-medium text-gray-600 dark:text-slate-400">Target Outcome</label>
+                    <input id="pg-outcome" type="text" value={goalTargetOutcome} onChange={(e) => setGoalTargetOutcome(e.target.value)} placeholder="What does success look like?" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pg-priority" className="text-xs font-medium text-gray-600 dark:text-slate-400">Priority Level</label>
+                    <select id="pg-priority" value={goalPriority} onChange={(e) => setGoalPriority(e.target.value as NonNullable<Achievement['priority']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
+                      <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pg-start" className="text-xs font-medium text-gray-600 dark:text-slate-400">Start Date</label>
+                    <input id="pg-start" type="date" value={goalStartDate} onChange={(e) => setGoalStartDate(e.target.value)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pg-target" className="text-xs font-medium text-gray-600 dark:text-slate-400">Target Date</label>
+                    <input id="pg-target" type="date" value={goalTargetDate} onChange={(e) => setGoalTargetDate(e.target.value)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pg-progress" className="text-xs font-medium text-gray-600 dark:text-slate-400">Current Progress (0–100%)</label>
+                    <input id="pg-progress" type="number" min={0} max={100} value={goalProgress} onChange={(e) => setGoalProgress(e.target.value)} placeholder="0" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pg-frequency" className="text-xs font-medium text-gray-600 dark:text-slate-400">Check-in Frequency</label>
+                    <select id="pg-frequency" value={goalCheckInFrequency} onChange={(e) => setGoalCheckInFrequency(e.target.value as NonNullable<Achievement['checkInFrequency']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
+                      <option value="Daily">Daily</option><option value="Weekly">Weekly</option><option value="Custom">Custom</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pg-actions" className="text-xs font-medium text-gray-600 dark:text-slate-400">Small Action Steps</label>
+                    <input id="pg-actions" type="text" value={goalActionSteps} onChange={(e) => setGoalActionSteps(e.target.value)} placeholder="Comma-separated steps, e.g. Read 10 pages, Journal 5 min" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pg-mood" className="text-xs font-medium text-gray-600 dark:text-slate-400">Emotion Tag</label>
+                    <select id="pg-mood" value={goalMoodTag} onChange={(e) => setGoalMoodTag(e.target.value as NonNullable<Achievement['moodTag']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
+                      <option value="Stress">Stress</option><option value="Sadness">Sadness</option><option value="Fear">Fear</option><option value="Confidence">Confidence</option><option value="Motivation">Motivation</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pg-support" className="text-xs font-medium text-gray-600 dark:text-slate-400">Support Type Needed</label>
+                    <select id="pg-support" value={goalSupportType} onChange={(e) => setGoalSupportType(e.target.value as NonNullable<Achievement['supportType']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
+                      <option value="Encouragement">Encouragement</option><option value="Accountability">Accountability</option><option value="Reflection">Reflection</option><option value="Coping Help">Coping Help</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="pg-notes" className="text-xs font-medium text-gray-600 dark:text-slate-400">Notes / Journal Entry</label>
+                    <input id="pg-notes" type="text" value={goalNotes} onChange={(e) => setGoalNotes(e.target.value)} placeholder="Any additional notes (optional)" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  </div>
                 </div>
                 <label className="mt-3 flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
                   <input type="checkbox" checked={goalReminderEnabled} onChange={(e) => setGoalReminderEnabled(e.target.checked)} />
