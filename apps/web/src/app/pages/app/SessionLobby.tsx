@@ -746,7 +746,7 @@ export function SessionLobby() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-3xl font-bold mb-2">AI Session with Ezri</h1>
+          <h1 className="text-3xl font-bold mb-2">Chat Time with Solace</h1>
           <p className="text-muted-foreground">
             Start a conversation or schedule a session for later
           </p>

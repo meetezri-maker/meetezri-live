@@ -149,7 +149,7 @@ export function HelpSupport() {
       {
         question: "How do I start a session?",
         answer:
-          "Go to your dashboard and open Session Lobby. Pick a companion, then start your conversation. If the session button is disabled, check your connection and try again.",
+          "Go to your dashboard and open Chat Time. Pick a companion, then start your conversation. If the session button is disabled, check your connection and try again.",
         tags: ["sessions", "getting-started"],
       },
       {
@@ -161,7 +161,7 @@ export function HelpSupport() {
       {
         question: "How can I report a safety concern or harmful content?",
         answer:
-          "Open Crisis Resources for immediate support and contact support with as much detail as you can (what happened, when, and any screenshots).",
+          "Open Just In Case Resources for immediate support and contact support with as much detail as you can (what happened, when, and any screenshots).",
         tags: ["safety", "reporting"],
       },
       {
@@ -182,7 +182,7 @@ export function HelpSupport() {
   const faqs = [
     {
       question: "How do I start an session?",
-      answer: "Navigate to the Session Lobby tab from your dashboard and click 'Start Session'. Choose your preferred companion and begin your conversation."
+      answer: "Navigate to the Chat Time tab from your dashboard and click 'Start Session'. Choose your preferred companion and begin your conversation."
     },
     {
       question: "Is my data private and secure?",
@@ -198,7 +198,7 @@ export function HelpSupport() {
     },
     {
       question: "What are crisis resources?",
-      answer: "Crisis resources provide immediate help during mental health emergencies. Access them 24/7 from the Wellness Tools section or the emergency button on your dashboard."
+      answer: "Just In Case resources provide immediate help during mental health emergencies. Access them 24/7 from the Wellness Tools section or the emergency button on your dashboard."
     },
     {
       question: "How do I change my notification settings?",
@@ -254,7 +254,7 @@ export function HelpSupport() {
         bullets: [
           "Solace is a wellbeing companion — not a replacement for professional care.",
           "Use the dashboard to access sessions, mood check-ins, journal, and tools.",
-          "If you need urgent help, use Crisis Resources or call your local emergency number (U.S.: 988).",
+          "If you need urgent help, use Just In Case Resources or call your local emergency number (U.S.: 988).",
         ],
       },
       {
@@ -262,7 +262,7 @@ export function HelpSupport() {
         title: "Getting started",
         bullets: [
           "Log in and complete onboarding (profile, preferences, permissions).",
-          "From the dashboard, open Session Lobby to start a session.",
+          "From the dashboard, open Chat Time to start a session.",
           "Use Mood Check-In daily to track patterns over time.",
         ],
       },
@@ -270,7 +270,7 @@ export function HelpSupport() {
         id: "sessions",
         title: "Starting a session",
         bullets: [
-          "Go to Session Lobby and pick a companion if prompted.",
+          "Go to Chat Time and pick a companion if prompted.",
           "Start your conversation and use follow-up prompts when you feel stuck.",
           "If a session won’t start, refresh once and confirm your network is stable.",
         ],
@@ -298,7 +298,7 @@ export function HelpSupport() {
         title: "Resources & tools",
         bullets: [
           "Explore Wellness Tools for guided exercises and self-care routines.",
-          "Use Crisis Resources anytime you need immediate support options.",
+          "Use Just In Case Resources anytime you need immediate support options.",
           "Check Progress to see streaks, trends, and engagement over time.",
         ],
       },
@@ -308,7 +308,7 @@ export function HelpSupport() {
         bullets: [
           "Open Settings to manage notifications, appearance, and accessibility.",
           "Use Privacy & Security to review data controls and security options.",
-          "Update Emergency Contacts and your Safety Plan for difficult moments.",
+          "Update Emergency Contacts and your Wellness Plan for difficult moments.",
         ],
       },
       {
@@ -753,7 +753,7 @@ export function HelpSupport() {
                                       to="/app/session-lobby"
                                       className="inline-flex items-center justify-center px-3 py-2 rounded-xl text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 transition-colors"
                                     >
-                                      Session Lobby
+                                      Chat Time
                                     </Link>
                                     <Link
                                       to="/app/settings"
@@ -780,7 +780,7 @@ export function HelpSupport() {
                                     to="/app/session-lobby"
                                     className="inline-flex items-center justify-center px-3 py-2.5 rounded-xl text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 transition-colors"
                                   >
-                                    Go to Session Lobby
+                                    Go to Chat Time
                                   </Link>
                                   <Link
                                     to="/app/settings"
@@ -792,7 +792,7 @@ export function HelpSupport() {
                                     to="/app/crisis-resources"
                                     className="inline-flex items-center justify-center px-3 py-2.5 rounded-xl text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 transition-colors"
                                   >
-                                    Crisis Resources
+                                    Just In Case Resources
                                   </Link>
                                 </div>
                               </div>
@@ -919,7 +919,7 @@ export function HelpSupport() {
                               "Privacy & security",
                               "Mood check-ins",
                               "Notifications",
-                              "Crisis resources",
+                              "Just In Case resources",
                             ].map((t) => (
                               <button
                                 key={t}

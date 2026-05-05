@@ -21,7 +21,7 @@ export function MobileBottomNav({ compact = false }: MobileBottomNavProps) {
 
   const navItems = [
     { path: "/app/dashboard", icon: Home, label: "Home" },
-    { path: "/app/session-lobby", icon: Video, label: "Session" },
+    { path: "/app/session-lobby", icon: Video, label: "Chat Time" },
     { path: "/app/mood-checkin", icon: Heart, label: "Mood" },
     { path: "/app/journal", icon: BookOpen, label: "Journal" },
     { path: "/app/progress", icon: TrendingUp, label: "Progress" }

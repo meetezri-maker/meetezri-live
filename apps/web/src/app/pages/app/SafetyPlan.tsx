@@ -186,7 +186,7 @@ export function SafetyPlan() {
 
     if (error) {
       console.error("Safety plan load:", error);
-      toast.error("Could not load your safety plan. Please try again.");
+      toast.error("Could not load your wellness plan. Please try again.");
       setSections(emptySections());
       setLoadState("error");
       return;
@@ -252,7 +252,7 @@ export function SafetyPlan() {
       }, 2000);
     } catch (e) {
       console.error("Safety plan save:", e);
-      toast.error("Could not save your safety plan. Check your connection.");
+      toast.error("Could not save your wellness plan. Check your connection.");
       setSaveStatus("idle");
     }
   }, [user?.id, isDirty, sections, planId]);
@@ -316,7 +316,7 @@ export function SafetyPlan() {
           </button>
           <div className="flex flex-wrap items-center gap-3 mb-2">
             <Shield className="w-8 h-8 text-primary" />
-            <h1 className="text-3xl font-bold">My Safety Plan</h1>
+            <h1 className="text-3xl font-bold">My Wellness Plan</h1>
             {loadState === "ready" && (
               <span className="text-sm text-muted-foreground flex items-center gap-2">
                 {saveStatus === "saving" && (
@@ -342,7 +342,7 @@ export function SafetyPlan() {
         {loadState === "loading" && (
           <div className="flex items-center justify-center py-24 text-muted-foreground gap-2">
             <Loader2 className="w-6 h-6 animate-spin" />
-            Loading your safety plan…
+            Loading your wellness plan…
           </div>
         )}
 
@@ -373,10 +373,10 @@ export function SafetyPlan() {
                     <BookOpen className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
                     <div>
                       <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-1">
-                        What is a Safety Plan?
+                        What is a Wellness Plan?
                       </h3>
                       <p className="text-sm text-purple-800 dark:text-purple-200">
-                        A safety plan is a personalized, practical plan to help
+                        A wellness plan is a personalized, practical plan to help
                         you recognize warning signs and use coping strategies
                         when you&apos;re in distress. It can help you stay safe
                         during difficult times.
@@ -398,7 +398,7 @@ export function SafetyPlan() {
                     <Phone className="w-8 h-8 flex-shrink-0" />
                     <div className="flex-1">
                       <h3 className="font-bold text-lg mb-3">
-                        Crisis Resources - Available 24/7
+                        Just In Case Resources - Available 24/7
                       </h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <a
@@ -633,7 +633,7 @@ export function SafetyPlan() {
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                       <h3 className="font-bold mb-1 text-foreground">
-                        Keep Your Safety Plan Accessible
+                        Keep Your Wellness Plan Accessible
                       </h3>
                       <p className="text-sm text-muted-foreground">
                         Print or save as PDF from the print dialog so you can
