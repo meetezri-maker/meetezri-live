@@ -160,12 +160,21 @@ const goalsOptions = [
 ];
 
 const triggersOptions = [
-  { value: "violence", label: "Violence" },
-  { value: "self-harm", label: "Self-harm" },
-  { value: "substance-abuse", label: "Substance Abuse" },
-  { value: "eating-disorders", label: "Eating Disorders" },
-  { value: "trauma", label: "Trauma/PTSD" },
-  { value: "none", label: "None of the above" },
+  { value: "crowds", label: "Crowds" },
+  { value: "procrastination", label: "Procrastination" },
+  { value: "overthinking", label: "Overthinking" },
+  { value: "low-energy-days", label: "Low-energy days" },
+  { value: "focus-issues", label: "Focus issues" },
+  { value: "motivation-dips", label: "Motivation dips" },
+  { value: "sleep-routine", label: "Sleep routine" },
+  { value: "time-management", label: "Time management" },
+  { value: "difficult-conversations", label: "Difficult conversations" },
+  { value: "uncertainty", label: "Uncertainty" },
+  { value: "workload-pressure", label: "Workload pressure" },
+  { value: "decision-making", label: "Decision-making" },
+  { value: "distractions", label: "Distractions" },
+  { value: "confidence-dips", label: "Confidence dips" },
+  { value: "social-situations", label: "Social situations" },
 ];
 const pronounsOptions = [
   "she/her",

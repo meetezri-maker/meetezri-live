@@ -1705,6 +1705,7 @@ export function ActiveSession() {
   const [isListening, setIsListening] = useState(false);
   const [sttRestartTrigger, setSttRestartTrigger] = useState(0);
   const [liveUserSpeech, setLiveUserSpeech] = useState("");
+  const subtitleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaRecorderActiveRef = useRef(false);
@@ -2629,7 +2630,16 @@ export function ActiveSession() {
           if (isEzriSpeakingRef.current) {
             return;
           }
-          setLiveUserSpeech(trimmed);
+          // Debounce interim subtitle updates: wait 120ms for recognition to settle
+          // before rendering, so rapid per-word rewrites don't cause visible flickering.
+          // Only show text that is at least 3 characters (filters out noise like "um").
+          if (subtitleDebounceRef.current) clearTimeout(subtitleDebounceRef.current);
+          if (trimmed.length >= 3) {
+            subtitleDebounceRef.current = setTimeout(() => {
+              setLiveUserSpeech(trimmed);
+              subtitleDebounceRef.current = null;
+            }, 120);
+          }
           const now = Date.now();
           if (
             trimmed !== lastInterimTextRef.current ||
@@ -2641,6 +2651,10 @@ export function ActiveSession() {
           return;
         }
 
+        if (subtitleDebounceRef.current) {
+          clearTimeout(subtitleDebounceRef.current);
+          subtitleDebounceRef.current = null;
+        }
         setLiveUserSpeech("");
         const lowerTrimmed = trimmed.toLowerCase();
         console.log(
@@ -2850,10 +2864,6 @@ export function ActiveSession() {
           const errText = await res.text().catch(() => String(res.status));
           console.error("[STT] Server STT request failed:", res.status, errText);
           setLiveUserSpeech("");
-          toast.error("Voice recognition unavailable. For best results use Chrome.", {
-            id: "stt-server-error",
-            duration: 4000,
-          });
           return;
         }
 
