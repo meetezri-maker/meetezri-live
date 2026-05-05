@@ -498,6 +498,15 @@ export function PayAsYouGoManager() {
         </Card>
 
         {/* Transactions Table */}
+        <div className="flex items-end justify-between mb-3">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Pay-as-you-go Transaction Records</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              All PAYG credit purchases — session minutes bought after monthly credits are depleted.{" "}
+              <span className="font-medium text-gray-700">{filteredTransactions.length}</span> result{filteredTransactions.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+        </div>
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">

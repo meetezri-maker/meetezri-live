@@ -124,6 +124,7 @@ function InAppTab({ onSent }: { onSent?: () => void }) {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [audienceCounts, setAudienceCounts] = useState({ all: 0, active: 0, premium: 0, trial: 0 });
   const [allUsers, setAllUsers] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
   const [specificUsers, setSpecificUsers] = useState<string[]>([]);
   const [userSearch, setUserSearch] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
@@ -132,6 +133,7 @@ function InAppTab({ onSent }: { onSent?: () => void }) {
   const [isLoading, setIsLoading] = useState(true);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const msgRef = useRef<HTMLTextAreaElement>(null);
+  const userSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insertMsg = useMessageInserter(message, setMessage, msgRef);
 
   const segmentChoices = useMemo((): Segment[] => {
@@ -142,29 +144,58 @@ function InAppTab({ onSent }: { onSent?: () => void }) {
     return [...quick, ...segments];
   }, [audienceCounts, segments]);
 
+  // Fetch segments + counts only — skip users entirely on mount
   useEffect(() => {
     (async () => {
       setIsLoading(true);
       try {
-        const [segRes, countsRes, usersRes] = await Promise.all([
+        const [segRes, countsRes] = await Promise.all([
           api.admin.getUserSegments(),
           api.admin.getNotificationAudienceCounts(),
-          api.admin.getUsers(),
         ]);
         setSegments(parseUserSegmentsPayload(segRes).map((s: any) => ({
           id: String(s?.id ?? "").trim(), name: String(s?.name ?? "Untitled").trim(), count: Number(s?.user_count ?? 0),
         })).filter((s) => s.id.length > 0));
         setAudienceCounts({ all: countsRes.all || 0, active: countsRes.active || 0, premium: countsRes.premium || 0, trial: countsRes.trial || 0 });
-        setAllUsers((usersRes || []).map((u: any) => ({ id: u.id, name: u.full_name || u.email?.split("@")[0] || "User", email: u.email || "" })));
       } catch (e) { console.error(e); }
       finally { setIsLoading(false); }
     })();
   }, []);
 
+  // Lazy-load users only when "Specific Users" tab is first selected
+  useEffect(() => {
+    if (audienceType !== "specific" || allUsers.length > 0) return;
+    setUsersLoading(true);
+    api.admin.getUsers({ limit: 50 })
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : (res?.users ?? res?.data ?? []);
+        setAllUsers(list.map((u: any) => ({ id: u.id, name: u.full_name || u.email?.split("@")[0] || "User", email: u.email || "" })));
+      })
+      .catch((e: unknown) => console.error(e))
+      .finally(() => setUsersLoading(false));
+  }, [audienceType, allUsers.length]);
+
   useEffect(() => {
     if (audienceType !== "segment" || segmentChoices.length === 0) return;
     setSelectedSegment(prev => segmentChoices.some(s => s.id === prev) ? prev : segmentChoices[0].id);
   }, [audienceType, segmentChoices]);
+
+  // Debounced search — re-fetches from API with search param when available
+  const handleUserSearchChange = useCallback((value: string) => {
+    setUserSearch(value);
+    if (userSearchTimerRef.current) clearTimeout(userSearchTimerRef.current);
+    userSearchTimerRef.current = setTimeout(async () => {
+      setUsersLoading(true);
+      try {
+        const res: any = await api.admin.getUsers({ limit: 50 });
+        const list = Array.isArray(res) ? res : (res?.users ?? res?.data ?? []);
+        const mapped = list.map((u: any) => ({ id: u.id, name: u.full_name || u.email?.split("@")[0] || "User", email: u.email || "" }));
+        const q = value.toLowerCase();
+        setAllUsers(q ? mapped.filter((u: { id: string; name: string; email: string }) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)) : mapped);
+      } catch (e) { console.error(e); }
+      finally { setUsersLoading(false); }
+    }, 350);
+  }, []);
 
   const handleSend = async () => {
     if (!title.trim() || !message.trim()) { toast.error("Please fill in title and message"); return; }
@@ -192,9 +223,7 @@ function InAppTab({ onSent }: { onSent?: () => void }) {
     finally { setIsSending(false); }
   };
 
-  const filteredUsers = allUsers.filter(u =>
-    userSearch ? u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()) : true
-  ).slice(0, 20);
+  const filteredUsers = allUsers.slice(0, 20);
 
   const quickTemplates = [
     { label: "Maintenance Notice", title: "Platform Maintenance Notice", msg: "We will be performing scheduled maintenance. Please save your work and expect a brief interruption." },
@@ -283,9 +312,11 @@ function InAppTab({ onSent }: { onSent?: () => void }) {
               )}
               {audienceType === "specific" && (
                 <div className="border border-gray-200 rounded-lg p-3">
-                  <Input placeholder="Search users..." className="mb-2" value={userSearch} onChange={e => setUserSearch(e.target.value)} />
+                  <Input placeholder="Search users..." className="mb-2" value={userSearch} onChange={e => handleUserSearchChange(e.target.value)} />
                   <div className="max-h-36 overflow-y-auto space-y-1">
-                    {filteredUsers.map(u => (
+                    {usersLoading ? (
+                      <div className="space-y-1">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-8 bg-gray-100 rounded animate-pulse" />)}</div>
+                    ) : filteredUsers.map(u => (
                       <label key={u.id} className="flex items-center gap-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer">
                         <input type="checkbox" checked={specificUsers.includes(u.id)}
                           onChange={e => setSpecificUsers(prev => e.target.checked ? [...prev, u.id] : prev.filter(x => x !== u.id))} />

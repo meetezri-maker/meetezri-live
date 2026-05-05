@@ -193,15 +193,16 @@ function buildRevenueChartRows(
 
 interface Transaction {
   id: string;
+  type: "subscription" | "payg";
   user: string;
   plan: string;
   amount: number;
   status: "completed" | "pending" | "failed" | "refunded";
-  /** Stripe invoice / payment time — used for sort + “last N days” filter */
   date: Date;
-  /** Shown in the Date column: plan/subscription created (or start) when known; else same as `date` */
   displayDate: Date;
   method: string;
+  minutes: number | null;
+  rate: number | null;
 }
 
 export function Billing() {
@@ -256,6 +257,7 @@ export function Billing() {
 
       return {
         id: `stripe_${inv.id}`,
+        type: "subscription" as const,
         user: displayUserFromSubscriptionOrRow(sub, inv),
         plan:
           typeof inv.description === "string" && inv.description.trim()
@@ -269,6 +271,8 @@ export function Billing() {
         date: occurredAt,
         displayDate,
         method: "Card",
+        minutes: null,
+        rate: null,
       };
     });
 
@@ -276,15 +280,19 @@ export function Billing() {
       const occurredAt = parseBillingDate(tx.created);
       const uid = typeof tx.user_id === "string" ? tx.user_id : null;
       const sub = uid ? subMap.get(uid) : undefined;
+      const amount = typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0);
+      const minutes = typeof tx.minutes_purchased === "number" && tx.minutes_purchased > 0
+        ? tx.minutes_purchased : null;
+      const rate = minutes ? Number((amount / minutes).toFixed(4)) : null;
       return {
         id: `payg_${tx.id}`,
+        type: "payg" as const,
         user: displayUserFromSubscriptionOrRow(sub, tx),
         plan:
           typeof tx.plan_type === "string" && tx.plan_type.trim()
             ? tx.plan_type.trim()
             : "Pay as you go",
-        amount:
-          typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0),
+        amount,
         status: mapPaygStatusToTransactionStatus(String(tx.status ?? "completed")),
         date: occurredAt,
         displayDate: occurredAt,
@@ -292,6 +300,8 @@ export function Billing() {
           typeof tx.payment_method === "string" && tx.payment_method.trim()
             ? tx.payment_method.trim()
             : "Card",
+        minutes,
+        rate,
       };
     });
 
@@ -720,25 +730,36 @@ export function Billing() {
           </motion.div>
         </div>
 
-        {/* Recent Transactions */}
+        {/* All Transaction Details */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
           className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
         >
-          <div className="flex items-center justify-between mb-6">
+          {/* Section header */}
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Transactions</h2>
+              <h2 className="text-xl font-bold text-gray-900">All Transaction Details</h2>
               <p className="text-sm text-gray-500 mt-1">
-                Date range and status filters apply to when the charge was processed. The Date column shows plan
-                subscription time (created) when linked to a user; Pay-as-you-go rows show payment time.
+                Stripe subscription invoices and Pay-as-you-go session charges for {rangeBounds.label}.
+                PAYG rows include session minutes and per-minute rate.
               </p>
+              <div className="flex gap-2 mt-2">
+                <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  <CreditCard className="w-3 h-3" />
+                  {filteredTransactions.filter(t => t.type === "subscription").length} subscription
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                  <Filter className="w-3 h-3" />
+                  {filteredTransactions.filter(t => t.type === "payg").length} PAYG
+                </span>
+              </div>
             </div>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+              className="px-4 py-2 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm shrink-0"
             >
               <option value="all">All Status</option>
               <option value="completed">Completed</option>
@@ -752,53 +773,84 @@ export function Billing() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">
-                    User
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    Customer
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
                     Plan
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">
-                    Amount
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    Minutes
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">
-                    Method
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    Rate
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    Total Cost
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
                     Status
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">
-                    Plan / account
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    Date
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 bg-white">
+              <tbody className="divide-y divide-gray-100 bg-white">
                 {isLoading && (
-                  <AdminTableSkeletonRows columns={6} rows={8} padding="compact" />
+                  <AdminTableSkeletonRows columns={7} rows={8} padding="compact" />
                 )}
                 {!isLoading &&
                   filteredTransactions.map((transaction, index) => (
                   <motion.tr
                     key={transaction.id}
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.7 + index * 0.05 }}
-                    className="border-b border-gray-100 hover:bg-gray-50"
+                    transition={{ delay: 0.7 + Math.min(index, 15) * 0.03 }}
+                    className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                   >
                     <td className="py-3 px-4">
-                      <p className="font-medium text-gray-900">{transaction.user}</p>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${transaction.type === "payg" ? "bg-purple-500" : "bg-blue-500"}`} />
+                        <div>
+                          <p className="font-medium text-gray-900">{transaction.user}</p>
+                          <p className="text-xs text-gray-400 capitalize">
+                            {transaction.type === "payg" ? "Pay-as-you-go" : "Subscription"}
+                          </p>
+                        </div>
+                      </div>
                     </td>
-                    <td className="py-3 px-4 text-gray-700">{transaction.plan}</td>
                     <td className="py-3 px-4">
-                      <span className="font-bold text-gray-900">
-                        $
-                        {transaction.amount.toLocaleString(undefined, {
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                        transaction.plan.toLowerCase().includes("pro") || transaction.plan.toLowerCase().includes("clarity")
+                          ? "bg-purple-50 text-purple-700 border-purple-200"
+                          : transaction.plan.toLowerCase().includes("core") || transaction.plan.toLowerCase().includes("habit")
+                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                            : transaction.type === "payg"
+                              ? "bg-orange-50 text-orange-700 border-orange-200"
+                              : "bg-gray-50 text-gray-700 border-gray-200"
+                      }`}>
+                        {transaction.plan}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-gray-700">
+                      {transaction.minutes != null
+                        ? <span className="font-medium">{transaction.minutes}</span>
+                        : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-gray-700">
+                      {transaction.rate != null
+                        ? <span>${transaction.rate.toFixed(2)}/min</span>
+                        : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="font-bold text-green-600">
+                        ${transaction.amount.toLocaleString(undefined, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-gray-700">{transaction.method}</td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 rounded-lg text-xs font-medium ${getStatusColor(transaction.status)}`}>
                         {transaction.status}
@@ -811,7 +863,7 @@ export function Billing() {
                 ))}
                 {!isLoading && filteredTransactions.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-8 px-4 text-center text-sm text-gray-500">
+                    <td colSpan={7} className="py-10 px-4 text-center text-sm text-gray-500">
                       No transactions in this view.
                     </td>
                   </tr>

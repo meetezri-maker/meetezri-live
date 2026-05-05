@@ -1811,7 +1811,12 @@ export function ActiveSession() {
     const shouldSend = opts?.sendPlaybackDone !== false;
     if (!shouldSend) return;
     const now = Date.now();
-    if (now - lastPlaybackDoneAtRef.current < 250) return;
+    // 2000ms debounce: the server echoes our own sendInterrupt() back as an
+    // {"type":"interrupt"} message. The round-trip is typically 300-500ms —
+    // longer than the old 250ms window — so the onInterrupt handler would
+    // schedule a second playback_done ~1500ms later, confusing the server
+    // while Ezri's response is already playing. 2000ms outlasts the echo.
+    if (now - lastPlaybackDoneAtRef.current < 2000) return;
     lastPlaybackDoneAtRef.current = now;
 
     // Default 1500ms is for server-initiated interrupts (echo from physical speakers needs ~800-1200ms to decay).
@@ -2166,23 +2171,45 @@ export function ActiveSession() {
     // ── Step 4: Stop audio and clear queue.
     stopPlaybackAndCooldown({ sendPlaybackDone: false });
 
-    // Restart the browser STT RIGHT NOW — the audio has stopped so there is no echo to
-    // suppress. Deliberately decoupled from the playback_done cooldown timer: the server's
-    // VAD needs the 200ms buffer before it opens its mic, but local STT can start
-    // immediately. Without this, STT stays dead for 350ms+ after the interrupt fires and
-    // the user's interruption words are never captured (they have already stopped speaking
-    // by the time recognition restarts).
+    // Restart browser STT immediately — audio has stopped, no echo to suppress.
     resumeStt();
 
     try {
       wsClientRef.current?.sendInterrupt(source);
     } catch {}
 
-    // Client-initiated interrupt: the browser's AEC (echoCancellation: true) already removes
-    // speaker echo from the PCM stream before it reaches the server, so a 200ms cooldown is
-    // enough. Using the full 1500ms here caused the server to discard the first ~3 words of
-    // user speech while waiting for playback_done.
+    // Client-initiated interrupt: browser AEC removes echo so 200ms cooldown is enough.
     stopPlaybackAndCooldown({ sendPlaybackDone: true, cooldownMs: 200 });
+
+    // ── Safety net 1: verify STT actually started ────────────────────────────
+    // Chrome can silently not fire onstart when start() is called on a recently-
+    // aborted recognizer (no error, no event — just silence). If isRecognitionActiveRef
+    // is still false after 600ms, the start() failed silently. Force a clean reinit.
+    window.setTimeout(() => {
+      if (
+        !suppressSttRef.current &&
+        !isEzriSpeakingRef.current &&
+        !isSessionEndingRef.current &&
+        permissionsGranted &&
+        !isRecognitionActiveRef.current
+      ) {
+        console.warn("[Interrupt] STT did not start after barge-in — forcing fresh reinit.");
+        recognitionRef.current = null;
+        isRecognitionActiveRef.current = false;
+        setSttRestartTrigger((t) => t + 1);
+      }
+    }, 600);
+
+    // ── Safety net 2: release audio suppression if user never speaks ─────────
+    // suppressIncomingAudioRef is only cleared when handleUserText() is called.
+    // If STT fails to capture anything after the interrupt, it stays true forever
+    // and all future Ezri audio is silently blocked. Release it after 20s.
+    window.setTimeout(() => {
+      if (suppressIncomingAudioRef.current) {
+        console.warn("[Interrupt] suppressIncomingAudio still set after 20s — auto-releasing.");
+        suppressIncomingAudioRef.current = false;
+      }
+    }, 20_000);
   };
 
   const normalizeSpeech = (s: string) =>
@@ -2742,7 +2769,9 @@ export function ActiveSession() {
         !isSessionEndingRef.current
       ) {
         const sessionDuration = Date.now() - lastSpeechStartRef.current;
-        const restartDelay = sessionDuration < 1000 ? 2000 : 500;
+        // Keep a small back-off for very short sessions (< 300ms) to avoid rapid
+        // no-speech restart loops. For anything longer, restart promptly.
+        const restartDelay = sessionDuration < 300 ? 1500 : 300;
         console.log(
           `[STT] Recognition ended (ran for ${sessionDuration}ms), restarting in ${restartDelay}ms...`
         );
@@ -3044,8 +3073,8 @@ export function ActiveSession() {
     let raf: number | null = null;
     let aboveSince: number | null = null;
 
-    const THRESH = 22; // tune: higher = less sensitive
-    const HOLD_MS = 220;
+    const THRESH = 14; // tune: higher = less sensitive; 14 ≈ 5% of FFT max
+    const HOLD_MS = 180;
 
     const tick = () => {
       if (isSessionEndingRef.current) return;

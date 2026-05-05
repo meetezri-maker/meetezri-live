@@ -48,11 +48,28 @@ interface Transaction {
   invoice: string;
 }
 
+interface UnifiedTransaction {
+  id: string;
+  displayId: string;
+  type: "subscription" | "payg";
+  date: Date;
+  customer: string;
+  plan: string;
+  minutes: number | null;
+  rate: number | null;
+  amount: number;
+  status: string;
+}
+
 export function BillingSubscriptions() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPlan, setFilterPlan] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"overview" | "subscriptions" | "transactions">("overview");
+  const [searchTxn, setSearchTxn] = useState("");
+  const [filterTxnType, setFilterTxnType] = useState<"all" | "subscription" | "payg">("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [showManageSubscriptionModal, setShowManageSubscriptionModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -155,16 +172,19 @@ export function BillingSubscriptions() {
       ].join("\n");
       filename = `subscriptions-${new Date().toISOString().split("T")[0]}.csv`;
     } else if (activeTab === "transactions") {
-      const headers = ["ID", "Date", "Organization", "Amount", "Status", "Invoice"];
+      const headers = ["Transaction ID", "Type", "Date", "Customer", "Plan", "Minutes", "Rate", "Total Cost", "Status"];
       csvContent = [
         headers.join(","),
-        ...transactions.map(txn => [
+        ...filteredAllTransactions.map(txn => [
           txn.id,
-          txn.date,
-          txn.organization,
-          `$${txn.amount}`,
+          txn.type,
+          txn.date.toISOString().split("T")[0],
+          `"${txn.customer}"`,
+          `"${txn.plan}"`,
+          txn.minutes ?? "—",
+          txn.rate != null ? `$${txn.rate.toFixed(4)}/min` : "—",
+          `$${txn.amount.toFixed(2)}`,
           txn.status,
-          txn.invoice
         ].join(","))
       ].join("\n");
       filename = `transactions-${new Date().toISOString().split("T")[0]}.csv`;
@@ -199,7 +219,6 @@ export function BillingSubscriptions() {
     if (inv.status === "open" || inv.status === "draft") status = "pending";
     if (inv.status === "uncollectible") status = "failed";
     if (inv.status === "void" || inv.status === "refunded") status = "refunded";
-
     return {
       id: inv.id,
       date: inv.created ? new Date(inv.created).toISOString().split("T")[0] : "",
@@ -209,6 +228,82 @@ export function BillingSubscriptions() {
       invoice: inv.id,
     };
   });
+
+  const allTransactions = useMemo((): UnifiedTransaction[] => {
+    const mapInvStatus = (s: string): string => {
+      if (s === "paid") return "paid";
+      if (s === "open" || s === "draft") return "pending";
+      if (s === "uncollectible") return "failed";
+      if (s === "void" || s === "refunded") return "refunded";
+      return "paid";
+    };
+
+    const fromInvoices: UnifiedTransaction[] = invoices.map((inv: any) => ({
+      id: inv.id,
+      displayId: String(inv.id ?? "").slice(0, 28),
+      type: "subscription",
+      date: inv.created ? new Date(inv.created) : new Date(0),
+      customer: inv.user_name || inv.user_email || "Unknown User",
+      plan: typeof inv.description === "string" && inv.description.trim()
+        ? inv.description.trim()
+        : "Subscription",
+      minutes: null,
+      rate: null,
+      amount: typeof inv.amount_due === "number" ? inv.amount_due : Number(inv.amount_due ?? 0),
+      status: mapInvStatus(String(inv.status ?? "")),
+    }));
+
+    const fromPayg: UnifiedTransaction[] = (paygTransactions || []).map((tx: any) => {
+      const amount = typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0);
+      const minutes = typeof tx.minutes_purchased === "number" && tx.minutes_purchased > 0
+        ? tx.minutes_purchased : null;
+      const rate = minutes ? Number((amount / minutes).toFixed(4)) : null;
+      const rawStatus = String(tx.status ?? "completed");
+      return {
+        id: tx.id,
+        displayId: String(tx.id ?? "").slice(0, 28),
+        type: "payg",
+        date: tx.created ? new Date(tx.created) : new Date(0),
+        customer: tx.user_name || tx.user_email || "Unknown User",
+        plan: typeof tx.plan_type === "string" && tx.plan_type.trim()
+          ? tx.plan_type.trim()
+          : "Pay-as-you-go",
+        minutes,
+        rate,
+        amount,
+        status: rawStatus === "completed" ? "paid"
+          : rawStatus === "pending" ? "pending"
+          : rawStatus === "failed" ? "failed"
+          : "paid",
+      };
+    });
+
+    return [...fromInvoices, ...fromPayg].sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [invoices, paygTransactions]);
+
+  const filteredAllTransactions = useMemo(() => {
+    return allTransactions.filter((tx) => {
+      if (filterTxnType !== "all" && tx.type !== filterTxnType) return false;
+      if (searchTxn) {
+        const q = searchTxn.toLowerCase();
+        if (
+          !tx.customer.toLowerCase().includes(q) &&
+          !tx.id.toLowerCase().includes(q)
+        ) return false;
+      }
+      if (dateFrom) {
+        const from = new Date(dateFrom);
+        from.setHours(0, 0, 0, 0);
+        if (tx.date < from) return false;
+      }
+      if (dateTo) {
+        const to = new Date(dateTo);
+        to.setHours(23, 59, 59, 999);
+        if (tx.date > to) return false;
+      }
+      return true;
+    });
+  }, [allTransactions, filterTxnType, searchTxn, dateFrom, dateTo]);
 
   const filteredSubscriptions = subscriptions.filter((sub) => {
     const matchesSearch = sub.organization.toLowerCase().includes(searchQuery.toLowerCase());
@@ -624,80 +719,215 @@ export function BillingSubscriptions() {
         {/* Transactions Tab */}
         {activeTab === "transactions" && (
           <div className="space-y-4">
+            {/* Section heading */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+              className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1"
+            >
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">All Transaction Details</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Stripe subscription invoices + Pay-as-you-go session charges ·{" "}
+                  <span className="font-medium text-gray-700">{filteredAllTransactions.length}</span> result{filteredAllTransactions.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <div className="flex gap-2 items-center">
+                <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  <CreditCard className="w-3 h-3" />
+                  {allTransactions.filter(t => t.type === "subscription").length} invoices
+                </span>
+                <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                  <Zap className="w-3 h-3" />
+                  {allTransactions.filter(t => t.type === "payg").length} PAYG
+                </span>
+              </div>
+            </motion.div>
+
+            {/* Filters */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
+            >
+              <Card className="p-4">
+                <div className="flex flex-col md:flex-row gap-3">
+                  {/* Search */}
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by customer name, email, or transaction ID…"
+                      className="pl-10"
+                      value={searchTxn}
+                      onChange={(e) => setSearchTxn(e.target.value)}
+                    />
+                  </div>
+                  {/* Type filter */}
+                  <select
+                    className="px-3 py-2 border rounded-lg text-sm min-w-[150px]"
+                    value={filterTxnType}
+                    onChange={(e) => setFilterTxnType(e.target.value as "all" | "subscription" | "payg")}
+                  >
+                    <option value="all">All Types</option>
+                    <option value="subscription">Subscription</option>
+                    <option value="payg">Pay-as-you-go</option>
+                  </select>
+                  {/* Date range */}
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                      <input
+                        type="date"
+                        className="pl-8 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        value={dateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        title="From date"
+                      />
+                    </div>
+                    <span className="text-muted-foreground text-sm">—</span>
+                    <div className="relative">
+                      <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                      <input
+                        type="date"
+                        className="pl-8 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        value={dateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        title="To date"
+                      />
+                    </div>
+                    {(dateFrom || dateTo) && (
+                      <button
+                        onClick={() => { setDateFrom(""); setDateTo(""); }}
+                        className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                        title="Clear date range"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+
+            {/* Table */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.45 }}
             >
               <Card className="overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b">
                       <tr>
-                        <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Transaction ID
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Customer
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Plan
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Minutes
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Rate
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Total Cost
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
                           Date
                         </th>
-                        <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
-                          Organization
-                        </th>
-                        <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
-                          Amount
-                        </th>
-                        <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
-                          Invoice
-                        </th>
-                        <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
                           Status
-                        </th>
-                        <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
-                          Actions
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white">
+                    <tbody className="divide-y divide-gray-100 bg-white">
                       {isLoading && (
-                        <AdminTableSkeletonRows columns={6} rows={8} padding="comfortable" />
+                        <AdminTableSkeletonRows columns={8} rows={8} padding="compact" />
                       )}
-                      {!isLoading &&
-                        transactions.map((txn, index) => (
+                      {!isLoading && filteredAllTransactions.map((txn, index) => (
                         <motion.tr
                           key={txn.id}
-                          initial={{ opacity: 0, x: -20 }}
+                          initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.5 + index * 0.05 }}
-                          className="border-b hover:bg-gray-50"
+                          transition={{ delay: 0.5 + Math.min(index, 15) * 0.03 }}
+                          className="hover:bg-gray-50 transition-colors"
                         >
-                          <td className="p-4">{txn.date}</td>
-                          <td className="p-4 font-medium">{txn.organization}</td>
-                          <td className="p-4 font-bold text-green-600">${txn.amount}</td>
-                          <td className="p-4">
-                            <code className="px-2 py-1 bg-gray-100 rounded text-sm">
-                              {txn.invoice}
-                            </code>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${txn.type === "payg" ? "bg-purple-500" : "bg-blue-500"}`} />
+                              <code className="text-xs text-gray-500 font-mono truncate max-w-[180px]" title={txn.id}>
+                                {txn.id}
+                              </code>
+                            </div>
                           </td>
-                          <td className="p-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getTransactionStatusBadge(txn.status)}`}>
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-gray-900 text-sm">{txn.customer}</p>
+                            <p className="text-xs text-gray-400 capitalize">
+                              {txn.type === "payg" ? "Pay-as-you-go" : "Subscription"}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                              txn.plan.toLowerCase().includes("pro") || txn.plan.toLowerCase().includes("clarity")
+                                ? "bg-purple-50 text-purple-700 border-purple-200"
+                                : txn.plan.toLowerCase().includes("core") || txn.plan.toLowerCase().includes("habit")
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : txn.plan.toLowerCase().includes("payg") || txn.plan.toLowerCase().includes("pay")
+                                    ? "bg-orange-50 text-orange-700 border-orange-200"
+                                    : "bg-gray-50 text-gray-700 border-gray-200"
+                            }`}>
+                              {txn.plan}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {txn.minutes != null ? (
+                              <span className="font-medium">{txn.minutes}</span>
+                            ) : (
+                              <span className="text-gray-300">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {txn.rate != null ? (
+                              <span>${txn.rate.toFixed(2)}/min</span>
+                            ) : (
+                              <span className="text-gray-300">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="font-bold text-green-600">
+                              ${txn.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+                            {txn.date.getTime() === 0 ? "—" : txn.date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${getTransactionStatusBadge(txn.status)}`}>
                               {txn.status}
                             </span>
                           </td>
-                          <td className="p-4">
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => {
-                                setSelectedTransaction(txn);
-                                setShowInvoiceModal(true);
-                              }}
-                            >
-                              <Download className="w-4 h-4" />
-                            </Button>
-                          </td>
                         </motion.tr>
                       ))}
-                      {!isLoading && transactions.length === 0 && (
+                      {!isLoading && filteredAllTransactions.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="px-6 py-12 text-center text-sm text-muted-foreground">
-                            No transactions loaded.
+                          <td colSpan={8} className="px-6 py-14 text-center">
+                            <CreditCard className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">No transactions match your filters.</p>
+                            {(searchTxn || filterTxnType !== "all" || dateFrom || dateTo) && (
+                              <button
+                                className="mt-2 text-xs text-primary underline"
+                                onClick={() => { setSearchTxn(""); setFilterTxnType("all"); setDateFrom(""); setDateTo(""); }}
+                              >
+                                Clear all filters
+                              </button>
+                            )}
                           </td>
                         </tr>
                       )}
