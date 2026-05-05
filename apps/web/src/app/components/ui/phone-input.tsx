@@ -84,7 +84,7 @@ export interface PhoneInputProps {
   placeholder?: string
 }
 
-const MAX_PHONE_DIGITS = 12
+const MAX_PHONE_DIGITS = 15
 
 const countDigits = (value: string) => (value.match(/\d/g) || []).length
 
@@ -153,7 +153,7 @@ export function PhoneInput({
   }
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newNumber = e.target.value.replace(/[^0-9\s-().+]/g, "") // Allow digits and formatting
+    const newNumber = e.target.value.replace(/[^0-9\s\-()]/g, "") // digits and common formatting only; + is handled by the dropdown
     const limitedNumber = limitLocalPhoneDigits(newNumber, selectedCountry.value)
     
     setPhoneNumber(limitedNumber)

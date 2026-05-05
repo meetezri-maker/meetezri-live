@@ -39,13 +39,13 @@ const profileSetupSchema = z.object({
         const t = v.trim();
         if (!t) return true;
         return t.startsWith("+");
-      }, { message: "Choose a country code for your phone number" })
+      }, { message: "Select a country from the dropdown first" })
       .refine((v) => {
         const t = v.trim();
         if (!t) return true;
         const n = countPhoneDigits(t);
-        return n === 12;
-      }, { message: "Use country code and exactly 12 digits total" })
+        return n >= 7 && n <= 15;
+      }, { message: "Enter a valid phone number (7–15 digits)" })
   ),
   age: z.string().refine((val) => {
     const num = parseInt(val);
@@ -406,7 +406,7 @@ export function OnboardingProfileSetup() {
                   <FormItem>
                     <FormLabel>Phone (optional)</FormLabel>
                     <p className="text-xs text-muted-foreground -mt-1 mb-1">
-                      Country code and number (exactly 12 digits including code).
+                      Select your country from the dropdown, then enter your local number.
                     </p>
                     <FormControl>
                       <PhoneInput

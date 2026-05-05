@@ -41,13 +41,13 @@ const emergencyContactSchema = z.object({
     .trim()
     .min(1, "Phone is required when adding an emergency contact")
     .refine((v) => v.startsWith("+"), {
-      message: "Choose a country code and enter your contact's number",
+      message: "Select a country from the dropdown first",
     })
     .refine((v) => {
       const n = countPhoneDigits(v);
-      return n === 12;
+      return n >= 7 && n <= 15;
     }, {
-      message: "Use country code and exactly 12 digits total",
+      message: "Enter a valid phone number (7–15 digits)",
     }),
   emergencyRelationship: z
     .string()

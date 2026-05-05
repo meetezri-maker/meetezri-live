@@ -15,11 +15,13 @@ export function countPhoneDigits(value: string): number {
   return (value.match(/\d/g) || []).length;
 }
 
-export const REQUIRED_PHONE_DIGITS = 12;
+export const MIN_PHONE_DIGITS = 7;
+export const MAX_PHONE_DIGITS = 15;
 
-/** Empty is allowed; otherwise require +country code and exactly 12 digits total. */
+/** Empty is allowed; otherwise require +country code and 7–15 digits total (E.164). */
 export function isValidOptionalAppPhone(value: string | undefined | null): boolean {
   const t = (value ?? "").trim();
   if (!t) return true;
-  return t.startsWith("+") && countPhoneDigits(t) === REQUIRED_PHONE_DIGITS;
+  const n = countPhoneDigits(t);
+  return t.startsWith("+") && n >= MIN_PHONE_DIGITS && n <= MAX_PHONE_DIGITS;
 }
