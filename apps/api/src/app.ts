@@ -27,6 +27,7 @@ import { communityRoutes } from './modules/community/community.routes';
 import { goalsRoutes } from './modules/goals/goals.routes';
 import { customAchievementRoutes } from './modules/custom-achievements/custom-achievements.routes';
 import { supportTicketsRoutes } from './modules/support-tickets/support-tickets.routes';
+import { sttRoutes } from './modules/stt/stt.routes';
 import jwkToPem from 'jwk-to-pem';
 import prisma from './lib/prisma';
 const jwtLib = require('jsonwebtoken');
@@ -276,6 +277,7 @@ app.register(communityRoutes, { prefix: '/api/community' });
 app.register(goalsRoutes, { prefix: '/api/goals' });
 app.register(customAchievementRoutes, { prefix: '/api/custom-achievements' });
 app.register(supportTicketsRoutes, { prefix: '/api/support' });
+app.register(sttRoutes);
 
 app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) => {
   // Zod / response validation errors often omit statusCode and would default to 500.

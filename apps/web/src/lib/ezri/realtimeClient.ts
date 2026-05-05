@@ -262,6 +262,13 @@ export class EzriRealtimeClient {
     ws.send(JSON.stringify({ type: "interrupt", source }));
   }
 
+  /** Send a raw Int16 PCM buffer to the server for backend VAD + STT processing. */
+  sendPcm(buffer: ArrayBuffer) {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(buffer);
+  }
+
   disconnect() {
     this.manuallyClosed = true;
     this.clearReconnect();

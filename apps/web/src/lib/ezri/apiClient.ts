@@ -23,6 +23,8 @@ export type EzriSpeakRestRequest = {
   tts_provider: string;
   /** Same voice id as WS; without this, many backends default to a single (often female) voice. */
   voice?: string;
+  /** Optional audio format override (e.g. "mp3", "wav"). Used for Firefox fallback. */
+  format?: string;
 };
 
 export type EzriSpeakRestResult = {

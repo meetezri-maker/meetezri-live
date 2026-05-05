@@ -36,8 +36,9 @@ type SleepEntry = {
 export function SleepTracker() {
   const { session } = useAuth();
   const [showLogModal, setShowLogModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [modalFeedback, setModalFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+  const [modalFeedback, setModalFeedback] = useState<{ kind: "error"; message: string } | null>(null);
   const [sleepFormData, setSleepFormData] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
     bedTime: "",
@@ -108,16 +109,14 @@ export function SleepTracker() {
         notes: "",
       });
 
-      setModalFeedback({
-        kind: "success",
-        message: "Your sleep entry was saved. You can log another night or close this window.",
-      });
+      setShowLogModal(false);
+      setShowSuccessModal(true);
       await fetchSleepEntries({ silent: true });
     } catch (error) {
       console.error("Failed to log sleep", error);
       const message =
         error instanceof Error ? error.message : "Could not save your sleep entry. Please try again.";
-      setModalFeedback({ kind: "error", message });
+      setModalFeedback({ kind: "error", message } as { kind: "error"; message: string });
     } finally {
       setIsSaving(false);
     }
@@ -454,6 +453,59 @@ export function SleepTracker() {
       </div>
       </div>
 
+      {/* Sleep Saved Success Modal */}
+      <AnimatePresence>
+        {showSuccessModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSuccessModal(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              className="fixed inset-4 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-md z-50"
+            >
+              <Card className="p-8 flex flex-col items-center text-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold mb-1">Sleep Logged!</h3>
+                  <p className="text-muted-foreground text-sm">
+                    Your sleep entry was saved. You can log another night or close this window.
+                  </p>
+                </div>
+                <div className="flex gap-3 w-full pt-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setShowSuccessModal(false)}
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    className="flex-1 bg-indigo-500 hover:bg-indigo-600"
+                    onClick={() => {
+                      setShowSuccessModal(false);
+                      setModalFeedback(null);
+                      setShowLogModal(true);
+                    }}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Log Another
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Log Sleep Modal */}
       <AnimatePresence>
         {showLogModal && (
@@ -489,18 +541,10 @@ export function SleepTracker() {
 
                 {modalFeedback && (
                   <div
-                    role="status"
-                    className={`mb-4 flex gap-2 rounded-lg border px-3 py-2.5 text-sm ${
-                      modalFeedback.kind === "success"
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100"
-                        : "border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100"
-                    }`}
+                    role="alert"
+                    className="mb-4 flex gap-2 rounded-lg border px-3 py-2.5 text-sm border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100"
                   >
-                    {modalFeedback.kind === "success" ? (
-                      <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" aria-hidden />
-                    ) : (
-                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden />
-                    )}
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden />
                     <span>{modalFeedback.message}</span>
                   </div>
                 )}
@@ -593,7 +637,7 @@ export function SleepTracker() {
                       disabled={isSaving}
                       className="flex-1"
                     >
-                      {modalFeedback?.kind === "success" ? "Close" : "Cancel"}
+                      Cancel
                     </Button>
                     <Button
                       type="button"

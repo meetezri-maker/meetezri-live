@@ -1466,6 +1466,131 @@ export function ActiveSession() {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
+  const requestMediaAccess = useCallback(async () => {
+    type DOMErr = { name?: string; message?: string; constraint?: string };
+
+    // ── Step 1: microphone (required) ───────────────────────────────────────
+    let audioStream: MediaStream;
+    try {
+      audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
+    } catch (err: unknown) {
+      const e = err as DOMErr;
+      console.error("MEDIA ACCESS FAILED — microphone", {
+        name: e?.name,
+        message: e?.message,
+        constraint: e?.constraint,
+      });
+      if (e?.name === "NotAllowedError") {
+        toast.error(
+          "Microphone access was denied. Please allow microphone access in your browser's address bar and try again."
+        );
+      } else if (e?.name === "NotFoundError") {
+        toast.error(
+          "No microphone found. Please connect a microphone and try again."
+        );
+      } else {
+        toast.error(
+          "Could not access microphone. Please check your device settings and try again."
+        );
+      }
+      // microphone is required — keep modal open
+      return;
+    }
+
+    // ── Step 2: camera (optional — voice-only fallback on any hardware error) ─
+    let videoStream: MediaStream | null = null;
+    try {
+      videoStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+    } catch (err: unknown) {
+      const e = err as DOMErr;
+      console.error("MEDIA ACCESS FAILED — camera", {
+        name: e?.name,
+        message: e?.message,
+        constraint: e?.constraint,
+      });
+      const isCameraUnavailable =
+        e?.name === "AbortError" ||
+        e?.name === "NotReadableError" ||
+        e?.name === "NotFoundError";
+      const isPermissionDenied = e?.name === "NotAllowedError";
+
+      if (isPermissionDenied) {
+        toast.error(
+          "Camera access was denied. Continuing with microphone only."
+        );
+      } else if (isCameraUnavailable) {
+        toast.warning(
+          "Camera could not start. Continuing with microphone only."
+        );
+      } else {
+        toast.warning(
+          "Camera unavailable. Continuing with microphone only."
+        );
+      }
+      setIsCameraOff(true);
+      // videoStream stays null — session continues in voice-only mode
+    }
+
+    // ── Step 3: combine tracks and attach ───────────────────────────────────
+    const tracks = [
+      ...audioStream.getAudioTracks(),
+      ...(videoStream ? videoStream.getVideoTracks() : []),
+    ];
+    const combinedStream = new MediaStream(tracks);
+
+    setStream(combinedStream);
+    if (videoRef.current) videoRef.current.srcObject = combinedStream;
+    setPermissionsGranted(true);
+    setShowPermissionRequest(false);
+
+    // Unlock AudioContext inside this user-gesture so Firefox allows audio.play() later.
+    if (!audioUnlockedRef.current) {
+      try {
+        const AudioCtx =
+          window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          let ctx = playbackAudioContextRef.current;
+          if (!ctx || ctx.state === "closed") {
+            ctx = new AudioCtx();
+            playbackAudioContextRef.current = ctx;
+          }
+          if (ctx.state === "suspended") await ctx.resume();
+          // Play a 0.1s silent buffer to satisfy autoplay policies.
+          const buf = ctx.createBuffer(1, ctx.sampleRate / 10, ctx.sampleRate);
+          const src = ctx.createBufferSource();
+          src.buffer = buf;
+          src.connect(ctx.destination);
+          src.start();
+          audioUnlockedRef.current = true;
+          console.log("[Audio] AudioContext unlocked via user gesture, state:", ctx.state);
+        }
+      } catch (unlockErr) {
+        console.warn("[Audio] AudioContext unlock failed (non-fatal):", unlockErr);
+      }
+    }
+
+    try {
+      if (
+        typeof window !== "undefined" &&
+        typeof window.localStorage !== "undefined"
+      ) {
+        window.localStorage.setItem(permissionStorageKey, JSON.stringify(true));
+      }
+    } catch (storageErr) {
+      console.error("Failed to save media permission flag:", storageErr);
+    }
+  }, [permissionStorageKey]);
+
   const { currentState, updateState } = useSafety();
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
@@ -1578,7 +1703,12 @@ export function ActiveSession() {
   }, [session?.access_token]);
 
   const [isListening, setIsListening] = useState(false);
+  const [sttRestartTrigger, setSttRestartTrigger] = useState(0);
+  const [liveUserSpeech, setLiveUserSpeech] = useState("");
   const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaRecorderActiveRef = useRef(false);
+  const serverSttToastShownRef = useRef(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const lastSpeechStartRef = useRef(0);
   const isRecognitionActiveRef = useRef(false);
@@ -1600,6 +1730,7 @@ export function ActiveSession() {
   /** RMS-ish level from Ezri TTS `<audio>` (mic is quiet while she speaks — must not drive lip sync). */
   const [ezriPlaybackLevel, setEzriPlaybackLevel] = useState(0);
   const playbackAudioContextRef = useRef<AudioContext | null>(null);
+  const audioUnlockedRef = useRef(false);
   const ttsAnalyserRafRef = useRef<number | null>(null);
   const ezriPlaybackSmoothRef = useRef(0);
   const ttsMouthTapOkRef = useRef(false);
@@ -1627,12 +1758,13 @@ export function ActiveSession() {
 
   const pauseStt = () => {
     suppressSttRef.current = true;
-    // Do NOT abort recognition here. Killing the recognizer means it has to cold-restart
-    // when the user interrupts, causing a 150ms+ gap where their words are lost.
-    // Instead, keep it running — onresult already filters all non-barge-in results while
-    // isEzriSpeakingRef.current is true, so echo cannot leak through as user text.
-    // When the interrupt fires, isEzriSpeakingRef.current flips to false and the still-warm
-    // recognizer delivers the user's words immediately with zero restart latency.
+    // Abort recognition while Ezri is speaking. Keeping it alive causes mobile browsers
+    // (Safari, Android Chrome) to emit audio-capture errors when TTS audio plays through
+    // the speaker — those errors mark the recognizer as broken and it never recovers.
+    // After abort(), onend fires (suppressed), then resumeStt() calls start() cleanly.
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch (_) {}
+    }
   };
 
   const resumeStt = () => {
@@ -1648,13 +1780,21 @@ export function ActiveSession() {
       ) {
         return;
       }
+      if (!recognitionRef.current) {
+        // Recognizer was destroyed by a fatal error — trigger full reinit via effect.
+        setSttRestartTrigger((t) => t + 1);
+        return;
+      }
       try {
-        if (recognitionRef.current && !isRecognitionActiveRef.current) {
+        if (!isRecognitionActiveRef.current) {
           recognitionRef.current.start();
         }
       } catch (e) {
-        // If start() throws due to a broken recognizer, the SpeechRecognition effect watchdog
-        // will recreate/restart it as needed.
+        // start() threw — recognizer is in a bad state. Force a full effect reinit.
+        console.error("[STT] start() threw in resumeStt, forcing reinit:", e);
+        recognitionRef.current = null;
+        isRecognitionActiveRef.current = false;
+        setSttRestartTrigger((t) => t + 1);
       }
     }, 150);
   };
@@ -1773,7 +1913,7 @@ export function ActiveSession() {
   const playEzriAudio = async (
     text: string,
     audioSource: any,
-    opts?: { onDone?: () => void }
+    opts?: { onDone?: () => void; onError?: () => void }
   ) => {
     if (typeof window === "undefined") return;
     if (isSoundOffRef.current) {
@@ -1790,6 +1930,7 @@ export function ActiveSession() {
     setSpeechCharIndex(0);
     setIsEzriSpeaking(true);
     isEzriSpeakingRef.current = true;
+    setLiveUserSpeech("");
     pauseStt();
 
     let url = "";
@@ -1833,7 +1974,7 @@ export function ActiveSession() {
         ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
         playbackAudioContextRef.current = ctx;
       }
-      if (ctx.state === "suspended") void ctx.resume();
+      if (ctx.state === "suspended") await ctx.resume();
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 1024;
       analyser.smoothingTimeConstant = 0.45;
@@ -1888,42 +2029,105 @@ export function ActiveSession() {
       // If we cleared src as part of an intentional stop, ignore.
       if (!audio.src) return;
       const me = audio.error;
-      console.error("Ezri audio playback failed", {
+      const sniffedMime = audio.src.startsWith("blob:")
+        ? "(blob — check normalizeAudioSource)"
+        : "(url)";
+      console.error("EZRI AUDIO ONERROR", {
         mediaErrorCode: me?.code,
         mediaErrorMessage: me?.message,
+        audioSrc: audio.src.slice(0, 120),
+        mimeHint: sniffedMime,
+        canPlayMpeg: audio.canPlayType("audio/mpeg"),
+        canPlayWav: audio.canPlayType("audio/wav"),
+        canPlayOgg: audio.canPlayType("audio/ogg"),
+        canPlayWebm: audio.canPlayType("audio/webm"),
       });
       stopAudioAndSpeechDriver();
       resumeStt();
-      toast.error("Audio playback failed (unsupported or interrupted).");
+      opts?.onError?.();
       opts?.onDone?.();
     };
+
+    // Resume AudioContext and pre-load before play to satisfy Firefox autoplay policy.
+    try {
+      const ctx = playbackAudioContextRef.current;
+      if (ctx && ctx.state === "suspended") await ctx.resume();
+    } catch (_) { /* non-fatal */ }
+
+    audio.load();
+
+    console.log("[Audio] canPlayType check", {
+      mpeg: audio.canPlayType("audio/mpeg"),
+      wav: audio.canPlayType("audio/wav"),
+      ogg: audio.canPlayType("audio/ogg"),
+      webm: audio.canPlayType("audio/webm"),
+      src: audio.src.slice(0, 80),
+    });
 
     try {
       await audio.play();
     } catch (e: any) {
       if (seq !== audioPlaySeqRef.current) return;
       if (e?.name === "AbortError") return;
-      console.error("Audio play() failed:", e);
+      const sniffedMime = audio.src.startsWith("blob:")
+        ? "(blob — check normalizeAudioSource)"
+        : "(url)";
+      console.error("EZRI AUDIO PLAY() FAILED", {
+        errorName: e?.name,
+        errorMessage: e?.message,
+        audioSrc: audio.src.slice(0, 120),
+        mimeHint: sniffedMime,
+        canPlayMpeg: audio.canPlayType("audio/mpeg"),
+        canPlayWav: audio.canPlayType("audio/wav"),
+        canPlayOgg: audio.canPlayType("audio/ogg"),
+        canPlayWebm: audio.canPlayType("audio/webm"),
+      });
       stopAudioAndSpeechDriver();
       resumeStt();
-      toast.error("Audio playback failed (autoplay blocked or unsupported).");
+      opts?.onError?.();
       opts?.onDone?.();
     }
   };
 
   const speakViaEzriTts = async (text: string) => {
     if (!ezriApi || !ezriConfig) return;
-    try {
-      const ttsProvider = ezriConfig.defaults.ttsProvider;
-      const res = await ezriApi.speakRest({
-        text,
-        tts_provider: ttsProvider,
-        voice: ezriTtsVoiceId,
+    const ttsProvider = ezriConfig.defaults.ttsProvider;
+
+    const tryPlay = (format?: string): Promise<void> =>
+      new Promise(async (resolve, reject) => {
+        try {
+          const res = await ezriApi.speakRest({
+            text,
+            tts_provider: ttsProvider,
+            voice: ezriTtsVoiceId,
+            ...(format ? { format } : {}),
+          });
+          await playEzriAudio(text, res.audio, {
+            onDone: resolve,
+            onError: () => reject(new Error("playback_error")),
+          });
+        } catch (e) {
+          reject(e);
+        }
       });
-      await playEzriAudio(text, res.audio);
+
+    try {
+      await tryPlay();
     } catch (e: any) {
-      console.error("Ezri speak failed:", e);
-      toast.error(e?.message || "Ezri speak failed");
+      if (e?.message === "playback_error") {
+        // Audio decoded but browser could not play it — retry with explicit mp3.
+        console.warn("[TTS] Primary playback failed — retrying with mp3 format.");
+        toast.warning("Firefox could not play this audio format. Trying fallback.");
+        try {
+          await tryPlay("mp3");
+        } catch (retryErr: any) {
+          console.error("Ezri speak fallback also failed:", retryErr);
+          toast.error(retryErr?.message || "Ezri speak failed");
+        }
+      } else {
+        console.error("Ezri speak failed:", e);
+        toast.error(e?.message || "Ezri speak failed");
+      }
     }
   };
 
@@ -2355,7 +2559,12 @@ export function ActiveSession() {
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      console.log("Speech recognition not supported in this browser");
+      console.log("[STT] Browser STT supported: false");
+      console.log("[STT] Using MediaRecorder STT fallback");
+      if (!serverSttToastShownRef.current) {
+        serverSttToastShownRef.current = true;
+        toast.info("Using server voice recognition for this browser.");
+      }
       return;
     }
 
@@ -2364,6 +2573,11 @@ export function ActiveSession() {
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-US";
+
+    // Tracks whether the last error before onend was fatal (broken recognizer).
+    // Fatal errors require a full recreate; non-fatal ones ('no-speech', 'aborted')
+    // allow a simple restart.
+    let sttErrored = false;
 
     recognition.onstart = () => {
       console.log("Speech recognition started");
@@ -2415,6 +2629,7 @@ export function ActiveSession() {
           if (isEzriSpeakingRef.current) {
             return;
           }
+          setLiveUserSpeech(trimmed);
           const now = Date.now();
           if (
             trimmed !== lastInterimTextRef.current ||
@@ -2422,11 +2637,11 @@ export function ActiveSession() {
           ) {
             lastInterimTextRef.current = trimmed;
             lastInterimToastAtRef.current = now;
-            toast(`Listening: "${trimmed}"`, { id: "ezri-speech-interim" });
           }
           return;
         }
 
+        setLiveUserSpeech("");
         const lowerTrimmed = trimmed.toLowerCase();
         console.log(
           "Heard (Final):",
@@ -2478,16 +2693,33 @@ export function ActiveSession() {
     };
 
     recognition.onerror = (event: any) => {
-      console.error("Speech recognition error", event.error);
-      if (event.error !== "no-speech") setIsListening(false);
+      console.error("[STT] Speech recognition error:", event.error);
+      // 'no-speech' and 'aborted' are non-fatal — recognizer fires onend and can restart.
+      if (event.error === "no-speech" || event.error === "aborted") {
+        sttErrored = false;
+      } else {
+        // 'audio-capture', 'network', 'not-allowed', 'service-not-allowed' — recognizer broken.
+        sttErrored = true;
+        setIsListening(false);
+      }
     };
 
     recognition.onend = () => {
       setIsListening(false);
+      setLiveUserSpeech("");
       isRecognitionActiveRef.current = false;
 
       // While STT is suppressed (Ezri speaking / cooldown), do not restart yet.
+      // resumeStt() will call start() once audio playback finishes.
       if (suppressSttRef.current) return;
+
+      if (sttErrored) {
+        // Fatal error — destroy and recreate the recognizer from scratch.
+        console.warn("[STT] Fatal error detected in onend — destroying recognizer, will recreate.");
+        recognitionRef.current = null;
+        setSttRestartTrigger((t) => t + 1);
+        return;
+      }
 
       if (
         permissionsGranted &&
@@ -2498,7 +2730,7 @@ export function ActiveSession() {
         const sessionDuration = Date.now() - lastSpeechStartRef.current;
         const restartDelay = sessionDuration < 1000 ? 2000 : 500;
         console.log(
-          `Speech recognition ended (ran for ${sessionDuration}ms), restarting in ${restartDelay}ms...`
+          `[STT] Recognition ended (ran for ${sessionDuration}ms), restarting in ${restartDelay}ms...`
         );
 
         setTimeout(() => {
@@ -2513,7 +2745,9 @@ export function ActiveSession() {
               recognitionRef.current.start();
             }
           } catch (e) {
-            console.error("Failed to restart speech recognition", e);
+            console.error("[STT] Failed to restart speech recognition:", e);
+            recognitionRef.current = null;
+            setSttRestartTrigger((t) => t + 1);
           }
         }, restartDelay);
       }
@@ -2537,7 +2771,214 @@ export function ActiveSession() {
       isRecognitionActiveRef.current = false;
       recognitionRef.current = null;
     };
-  }, [permissionsGranted]);
+  }, [permissionsGranted, sttRestartTrigger]);
+
+  // ── Server STT via MediaRecorder (Firefox / non-Chrome fallback) ─────────
+  useEffect(() => {
+    if (!permissionsGranted) return;
+    if (!stream) return;
+
+    // Only activate when the browser does NOT support SpeechRecognition.
+    const hasBrowserStt = !!(
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition
+    );
+    if (hasBrowserStt) return;
+
+    if (typeof MediaRecorder === "undefined") {
+      console.error("[STT] MediaRecorder not supported — no STT available in this browser.");
+      return;
+    }
+
+    console.log("[STT] Browser STT supported: false");
+    console.log("[STT] Using MediaRecorder STT fallback");
+
+    const audioTracks = stream.getAudioTracks();
+    console.log("[STT] MediaRecorder supported:", typeof MediaRecorder !== "undefined");
+    console.log("[STT] mic stream audio tracks:", audioTracks.map((t) => ({
+      label: t.label,
+      readyState: t.readyState,
+      enabled: t.enabled,
+    })));
+
+    if (!audioTracks.length || audioTracks[0].readyState !== "live") {
+      console.warn("[STT] No live audio track available for MediaRecorder.");
+      return;
+    }
+
+    // Priority: webm/opus → ogg/opus → webm (plain) — best Whisper compat across browsers.
+    const mimeType =
+      MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")
+        ? "audio/ogg;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : "";
+    console.log("[STT] selected mimeType:", mimeType || "(browser default)");
+
+    // Route STT through the AI backend's /api/v1/transcribe endpoint (multipart upload).
+    const transcribeUrl = `${(ezriConfig?.apiBase || "").replace(/\/+$/, "")}/api/v1/transcribe`;
+    console.log("[STT] using transcribe URL:", transcribeUrl);
+
+    const sendChunkToStt = async (blob: Blob) => {
+      console.log("[STT] blob size:", blob.size);
+      if (!blob.size) return;
+      if (
+        isMutedRef.current ||
+        isSessionPausedRef.current ||
+        isSessionEndingRef.current ||
+        isEzriSpeakingRef.current
+      )
+        return;
+
+      const ext = mimeType.includes("ogg") ? "ogg" : "webm";
+
+      // Show a processing indicator in the subtitle while waiting for the server.
+      setLiveUserSpeech("🎙 Processing...");
+
+      try {
+        const formData = new FormData();
+        formData.append("file", blob, `audio.${ext}`);
+
+        const res = await fetch(transcribeUrl, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => String(res.status));
+          console.error("[STT] Server STT request failed:", res.status, errText);
+          setLiveUserSpeech("");
+          toast.error("Voice recognition unavailable. For best results use Chrome.", {
+            id: "stt-server-error",
+            duration: 4000,
+          });
+          return;
+        }
+
+        const data = await res.json();
+        const text = (data.transcription || data.text || "").trim();
+        console.log("[STT] transcript result:", text || "(empty)");
+
+        if (!text) {
+          setLiveUserSpeech("");
+          return;
+        }
+        if (isMutedRef.current || isSessionPausedRef.current) {
+          setLiveUserSpeech("");
+          return;
+        }
+
+        // Show the transcribed text as subtitle briefly before clearing.
+        setLiveUserSpeech(text);
+
+        // Apply barge-in filtering (Ezri may have started speaking between chunk start and now).
+        if (isEzriSpeakingRef.current) {
+          if (shouldInterruptForSpeech(text, true)) {
+            requestBargeInInterrupt("speech_final");
+            if (shouldIgnoreEchoBargeIn(text)) {
+              setLiveUserSpeech("");
+              return;
+            }
+            // Fall through — real user barge-in after filtering.
+          } else {
+            setLiveUserSpeech("");
+            return;
+          }
+        }
+
+        // Deduplicate — server STT can repeat if the same audio is sent twice.
+        setTranscript((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.content === text && Date.now() - last.timestamp < 5000)
+            return prev;
+          return [...prev, { role: "user", content: text, timestamp: Date.now() }];
+        });
+
+        // Repeat-last-line shortcut.
+        const lower = text.toLowerCase();
+        if (
+          lower === "repeat question" ||
+          lower === "what did you say" ||
+          lower === "say that again"
+        ) {
+          const lastAssistant = transcriptRef.current
+            .slice()
+            .reverse()
+            .find((t) => t.role === "assistant");
+          void speakViaEzriTts(lastAssistant?.content || "I haven't said anything yet.");
+          setLiveUserSpeech("");
+          return;
+        }
+
+        void handleUserText(text);
+        // Clear subtitle after a short delay so the user can read what was heard.
+        setTimeout(() => setLiveUserSpeech(""), 1500);
+      } catch (e) {
+        console.error("[STT] Server STT error:", e);
+        setLiveUserSpeech("");
+      }
+    };
+
+    const audioOnlyStream = new MediaStream(audioTracks);
+    const recorderOpts: MediaRecorderOptions = mimeType ? { mimeType } : {};
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(audioOnlyStream, recorderOpts);
+    } catch (e) {
+      console.error("[STT] Failed to create MediaRecorder:", e);
+      return;
+    }
+
+    mediaRecorderRef.current = recorder;
+
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        void sendChunkToStt(e.data);
+      }
+    };
+
+    recorder.onstart = () => {
+      mediaRecorderActiveRef.current = true;
+      setIsListening(true);
+      setLiveUserSpeech("🎙 Listening...");
+      console.log("[STT] MediaRecorder started, state:", recorder.state);
+    };
+
+    recorder.onstop = () => {
+      mediaRecorderActiveRef.current = false;
+      setIsListening(false);
+      setLiveUserSpeech("");
+      console.log("[STT] MediaRecorder stopped");
+    };
+
+    recorder.onerror = (e) => {
+      console.error("[STT] MediaRecorder error:", e);
+      mediaRecorderActiveRef.current = false;
+      setIsListening(false);
+      setLiveUserSpeech("");
+    };
+
+    try {
+      // Collect a chunk every 3 seconds.
+      recorder.start(3000);
+    } catch (e) {
+      console.error("[STT] Failed to start MediaRecorder:", e);
+      return;
+    }
+
+    return () => {
+      if (recorder.state !== "inactive") {
+        try {
+          recorder.stop();
+        } catch (_) {}
+      }
+      mediaRecorderRef.current = null;
+      mediaRecorderActiveRef.current = false;
+      setIsListening(false);
+    };
+  }, [permissionsGranted, stream]);
 
   // ── Watchdog ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -2549,13 +2990,22 @@ export function ActiveSession() {
         !isSessionPausedRef.current &&
         !isListening &&
         !isEzriSpeakingRef.current &&
-        recognitionRef.current &&
-        !isRecognitionActiveRef.current
+        !suppressSttRef.current
       ) {
-        console.log("Watchdog: Recognition stopped unexpectedly, restarting...");
-        try {
-          recognitionRef.current.start();
-        } catch (e) {}
+        if (recognitionRef.current && !isRecognitionActiveRef.current) {
+          console.log("[Watchdog] Recognition stopped unexpectedly, restarting...");
+          try {
+            recognitionRef.current.start();
+          } catch (e) {
+            // Recognizer broken — null it so the trigger forces a full reinit.
+            recognitionRef.current = null;
+            setSttRestartTrigger((t) => t + 1);
+          }
+        } else if (!recognitionRef.current) {
+          // Recognizer was destroyed by a fatal error and not yet recreated.
+          console.log("[Watchdog] Recognizer is null, triggering reinit...");
+          setSttRestartTrigger((t) => t + 1);
+        }
       }
 
       if (
@@ -2617,45 +3067,14 @@ export function ActiveSession() {
     };
   }, [permissionsGranted]);
 
-  // ── Media stream ────────────────────────────────────────────────────────
+  // ── Media stream cleanup ─────────────────────────────────────────────────
+  // Media access is initiated only via requestMediaAccess() on user action.
+  // This effect solely handles stopping tracks when the stream is torn down.
   useEffect(() => {
-    if (permissionsGranted && !stream) {
-      const initMedia = async () => {
-        try {
-          const userStream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-            },
-          });
-          setStream(userStream);
-          if (videoRef.current) videoRef.current.srcObject = userStream;
-        } catch (err) {
-          console.error("Failed to access media devices:", err);
-          toast.error("Failed to access camera/microphone");
-          setPermissionsGranted(false);
-          setShowPermissionRequest(true);
-          try {
-            if (
-              typeof window !== "undefined" &&
-              typeof window.localStorage !== "undefined"
-            ) {
-              window.localStorage.removeItem(permissionStorageKey);
-            }
-          } catch (error) {
-            console.error("Failed to clear media permission setting:", error);
-          }
-        }
-      };
-      initMedia();
-    }
-
     return () => {
       if (stream) stream.getTracks().forEach((track) => track.stop());
     };
-  }, [permissionsGranted, stream]);
+  }, [stream]);
 
   // Safety state
   const [showSafetyBoundary, setShowSafetyBoundary] = useState(false);
@@ -2965,6 +3384,63 @@ export function ActiveSession() {
       client.disconnect();
     };
   }, [ezriConfig, ezriUserid, sessionId, hasSessionEnded, companionAvatarLabel, ezriTtsVoiceId]);
+
+  // ── PCM audio streaming → WebSocket (backend VAD + Whisper STT) ──────────
+  // Only active when stt_provider is NOT "browser". When stt_provider=browser
+  // the backend ignores all binary PCM frames, so streaming is wasteful and
+  // creates an unnecessary AudioContext (which can fail or suspend on iOS).
+  useEffect(() => {
+    if (!permissionsGranted || !stream || ezriWsStatus !== "connected") return;
+    if (hasSessionEnded || isSessionPaused) return;
+    if (ezriConfig?.defaults.sttProvider === "browser") return;
+
+    const SAMPLE_RATE = 16000;
+    const BUFFER_SIZE = 4096;
+
+    let audioCtx: AudioContext | null = null;
+    let source: MediaStreamAudioSourceNode | null = null;
+    let processor: ScriptProcessorNode | null = null;
+
+    try {
+      audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+      source = audioCtx.createMediaStreamSource(stream);
+      processor = audioCtx.createScriptProcessor(BUFFER_SIZE, 1, 1);
+
+      processor.onaudioprocess = (e: AudioProcessingEvent) => {
+        if (
+          isEzriSpeakingRef.current ||
+          isMutedRef.current ||
+          isSessionPausedRef.current ||
+          isSessionEndingRef.current
+        )
+          return;
+        const ws = wsClientRef.current;
+        if (!ws || ws.getStatus() !== "connected") return;
+
+        const floats = e.inputBuffer.getChannelData(0);
+        const pcm = new Int16Array(floats.length);
+        for (let i = 0; i < floats.length; i++) {
+          pcm[i] = Math.max(-1, Math.min(1, floats[i])) * 0x7fff;
+        }
+        ws.sendPcm(pcm.buffer);
+      };
+
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+      console.log("[PCM] Streaming started at", SAMPLE_RATE, "Hz, buffer", BUFFER_SIZE);
+    } catch (e) {
+      console.error("[PCM] Failed to start audio streaming:", e);
+    }
+
+    return () => {
+      try {
+        processor?.disconnect();
+        source?.disconnect();
+        audioCtx?.close();
+      } catch {}
+      console.log("[PCM] Streaming stopped");
+    };
+  }, [permissionsGranted, stream, ezriWsStatus, hasSessionEnded, isSessionPaused]);
 
   const currentAvatar = {
     name: config?.avatar || "maya chen",
@@ -3576,6 +4052,26 @@ export function ActiveSession() {
             </motion.div>
           </div>
 
+          {/* Live user speech subtitle */}
+          <AnimatePresence>
+            {liveUserSpeech && !isEzriSpeaking && (
+              <motion.div
+                key="user-subtitle"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6 }}
+                transition={{ duration: 0.15 }}
+                className="absolute bottom-[4.5rem] left-6 right-6 z-20 pointer-events-none"
+              >
+                <div className="bg-black/75 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/15 inline-block max-w-full">
+                  <p className="text-white text-sm font-medium leading-snug">
+                    {liveUserSpeech}
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Status */}
           <div className="absolute bottom-6 left-6">
             <motion.div
@@ -3865,26 +4361,7 @@ export function ActiveSession() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => {
-                    setPermissionsGranted(true);
-                    setShowPermissionRequest(false);
-                    try {
-                      if (
-                        typeof window !== "undefined" &&
-                        typeof window.localStorage !== "undefined"
-                      ) {
-                        window.localStorage.setItem(
-                          permissionStorageKey,
-                          JSON.stringify(true)
-                        );
-                      }
-                    } catch (error) {
-                      console.error(
-                        "Failed to save media permission setting:",
-                        error
-                      );
-                    }
-                  }}
+                  onClick={requestMediaAccess}
                   className="flex-1 px-6 py-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold flex items-center justify-center gap-2 shadow-lg shadow-purple-500/50"
                 >
                   <Check className="w-5 h-5" />
@@ -3892,7 +4369,16 @@ export function ActiveSession() {
                 </motion.button>
               </div>
 
-              <p className="text-xs text-gray-400 text-center mt-4">
+              {!(
+                (window as any).SpeechRecognition ||
+                (window as any).webkitSpeechRecognition
+              ) && (
+                <p className="text-xs text-blue-300 text-center mt-3 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
+                  Using server voice recognition for this browser.
+                </p>
+              )}
+
+              <p className="text-xs text-gray-400 text-center mt-2">
                 Your browser may show an additional permission prompt after
                 clicking "Allow Access"
               </p>
