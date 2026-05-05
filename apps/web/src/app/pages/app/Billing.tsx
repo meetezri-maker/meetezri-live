@@ -876,63 +876,6 @@ export function Billing() {
           </Card>
         )}
 
-        <Card className="p-6 mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <History className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-              <h3 className="text-xl font-bold">Recent Sessions</h3>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportSessions}
-              disabled={userSubscription.usageHistory.length === 0}
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-          </div>
-
-          <div className="space-y-3">
-            {recentUsageHistory.map((record) => (
-              <div 
-                key={record.id}
-                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-border hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Session with {record.avatarName}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(record.date).toLocaleDateString()} at {new Date(record.date).toLocaleTimeString()}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold">{record.minutesUsed} minutes</p>
-                  <p className="text-sm text-muted-foreground">
-                    {record.cost > 0 ? `$${record.cost.toFixed(2)}` : 'Included'}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {userSubscription.usageHistory.length === 0 && (
-            <div className="text-center py-12">
-              <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-              <p className="text-muted-foreground">No sessions yet</p>
-              <Link to="/app/session-lobby">
-                <Button className="mt-4">
-                  Start Your First Session
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </Link>
-            </div>
-          )}
-        </Card>
 
       </div>
 
