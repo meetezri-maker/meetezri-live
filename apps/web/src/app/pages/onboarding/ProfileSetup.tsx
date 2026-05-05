@@ -44,8 +44,8 @@ const profileSetupSchema = z.object({
         const t = v.trim();
         if (!t) return true;
         const n = countPhoneDigits(t);
-        return n >= 7 && n <= 15;
-      }, { message: "Enter a valid phone number (7–15 digits)" })
+        return n === 12;
+      }, { message: "Enter exactly 12 digits total (country code + number)" })
   ),
   age: z.string().refine((val) => {
     const num = parseInt(val);

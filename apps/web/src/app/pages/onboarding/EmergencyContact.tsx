@@ -45,9 +45,9 @@ const emergencyContactSchema = z.object({
     })
     .refine((v) => {
       const n = countPhoneDigits(v);
-      return n >= 7 && n <= 15;
+      return n === 12;
     }, {
-      message: "Enter a valid phone number (7–15 digits)",
+      message: "Enter exactly 12 digits total (country code + number)",
     }),
   emergencyRelationship: z
     .string()

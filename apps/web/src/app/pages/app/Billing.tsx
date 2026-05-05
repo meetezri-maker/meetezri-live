@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { 
   CreditCard, 
   Clock, 
@@ -21,12 +22,21 @@ import {
   Sparkles,
   ChevronRight,
   History,
-  ExternalLink
+  ExternalLink,
+  AlertTriangle
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { AppLayout } from "../../components/AppLayout";
 import { Skeleton } from "../../components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "../../components/ui/dialog";
 import { SUBSCRIPTION_PLANS } from "../../utils/subscriptionPlans";
 import type { PlanTier, UserSubscription, UsageRecord } from "../../utils/subscriptionPlans";
 
@@ -158,6 +168,9 @@ export function Billing() {
     fetchData();
   }, [session?.user?.id, checkoutSuccess]);
 
+  const isCancelled = ['canceled', 'cancelled'].includes(
+    String(userSubscription.status || '').toLowerCase()
+  );
   const currentPlan = SUBSCRIPTION_PLANS[userSubscription.planId] ?? SUBSCRIPTION_PLANS.trial;
   const canCancelSubscription = ['active', 'trialing', 'past_due'].includes(
     String(userSubscription.status || '').toLowerCase()
@@ -179,8 +192,11 @@ export function Billing() {
     ? Math.ceil((billingEndDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
     : null;
   const normalizedDaysUntilRenewal = daysUntilRenewal == null ? null : Math.max(0, daysUntilRenewal);
-  const renewalStatusLabel =
-    userSubscription.planId === 'trial'
+  const renewalStatusLabel = isCancelled
+    ? normalizedDaysUntilRenewal === 0
+      ? 'Access ends today'
+      : `Access ends in ${normalizedDaysUntilRenewal ?? 0} days`
+    : userSubscription.planId === 'trial'
       ? normalizedDaysUntilRenewal === 0
         ? 'Expires today'
         : `Expires in ${normalizedDaysUntilRenewal ?? 0} days`
@@ -190,6 +206,7 @@ export function Billing() {
   const recentUsageHistory = userSubscription.usageHistory.slice(0, 5);
 
   const [showPAYGModal, setShowPAYGModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const [paygMinutes, setPaygMinutes] = useState(60);
   const [processingAction, setProcessingAction] = useState<string | null>(null);
   const isActionLocked = processingAction !== null;
@@ -262,18 +279,21 @@ export function Billing() {
      }
   };
 
-  const handleCancelSubscription = async () => {
+  const handleCancelSubscription = () => {
     if (isActionLocked) return;
-    const confirmed = window.confirm("Are you sure you want to cancel your subscription? You will keep access until the end of the current billing period.");
-    if (!confirmed) return;
+    setShowCancelModal(true);
+  };
+
+  const confirmCancelSubscription = async () => {
+    setShowCancelModal(false);
     setProcessingAction('cancel_subscription');
     try {
       await api.billing.cancelSubscription();
-      alert("Your subscription has been cancelled. It will remain active until the end of the current billing period.");
+      toast.success("Subscription cancelled. You'll keep access until the end of the current billing period.");
       window.location.reload();
     } catch (error) {
       console.error('Failed to cancel subscription:', error);
-      alert('Failed to cancel subscription. Please try again.');
+      toast.error('Failed to cancel subscription. Please try again.');
       setProcessingAction(null);
     }
   };
@@ -396,7 +416,9 @@ export function Billing() {
           <div className="grid md:grid-cols-3 gap-6">
             {(Object.keys(SUBSCRIPTION_PLANS) as PlanTier[]).map((planId) => {
               const plan = SUBSCRIPTION_PLANS[planId];
-              const isCurrent = planId === userSubscription.planId;
+              const isActivePlan = planId === userSubscription.planId && !isCancelled;
+              const isCancellingPlan = planId === userSubscription.planId && isCancelled;
+              const isCurrent = isActivePlan;
               const ctaLabel =
                 planId === 'pro'
                   ? 'Upgrade to Pro'
@@ -408,9 +430,11 @@ export function Billing() {
                 <div
                   key={planId}
                   className={`p-4 rounded-xl border-2 transition-all ${
-                    isCurrent 
-                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' 
-                      : 'border-border bg-muted/30 hover:border-purple-300 dark:hover:border-purple-700'
+                    isCurrent
+                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                      : isCancellingPlan
+                        ? 'border-red-300 bg-red-50/50 dark:bg-red-900/10 dark:border-red-800'
+                        : 'border-border bg-muted/30 hover:border-purple-300 dark:hover:border-purple-700'
                   }`}
                 >
                   <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${plan.gradient} flex items-center justify-center mb-3`}>
@@ -463,6 +487,18 @@ export function Billing() {
                       <Check className="w-4 h-4" />
                       Current Plan
                     </div>
+                  ) : isCancellingPlan ? (
+                    <div className="flex flex-col items-center gap-1 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-lg">
+                      <div className="flex items-center gap-2 font-medium text-sm">
+                        <AlertTriangle className="w-4 h-4" />
+                        Cancelled
+                      </div>
+                      {billingEndIsValid && (
+                        <p className="text-[11px] text-red-500 dark:text-red-500">
+                          Access until {billingEndDate!.toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
                   ) : (
                     <Button 
                       className={
@@ -496,10 +532,30 @@ export function Billing() {
                     <PlanIcon className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-purple-500 dark:text-purple-300">Current Plan</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-purple-500 dark:text-purple-300">Current Plan</p>
+                      {isCancelled && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400">
+                          <AlertTriangle className="w-3 h-3" />
+                          Cancelled
+                        </span>
+                      )}
+                    </div>
                     <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{currentPlan.displayName}</h3>
                   </div>
                 </div>
+                {isCancelled && (
+                  <div className="mt-2 flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                    <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                      Your plan has been cancelled. You'll retain full access until{' '}
+                      <span className="font-semibold">
+                        {billingEndIsValid ? billingEndDate!.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : 'end of billing period'}
+                      </span>
+                      , then revert to the free plan.
+                    </p>
+                  </div>
+                )}
                 <div className="flex items-baseline gap-2 mt-3">
                   <span className="text-3xl font-bold text-purple-700 dark:text-purple-300">
                     ${currentPlan.price}
@@ -981,6 +1037,45 @@ export function Billing() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Cancel Subscription Confirmation Modal */}
+      <Dialog open={showCancelModal} onOpenChange={setShowCancelModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+              </div>
+              <DialogTitle className="text-lg">Cancel Subscription?</DialogTitle>
+            </div>
+            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-1">
+              Are you sure you want to cancel your <span className="font-medium text-foreground">{currentPlan.name}</span> subscription?
+              <br /><br />
+              You'll keep full access to all features until the end of your current billing period
+              {billingEndIsValid && (
+                <> on <span className="font-medium text-foreground">{billingEndDate!.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</span></>
+              )}. After that, your account will revert to the free plan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowCancelModal(false)}
+              disabled={processingAction === 'cancel_subscription'}
+            >
+              Keep Subscription
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmCancelSubscription}
+              isLoading={processingAction === 'cancel_subscription'}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Yes, Cancel Plan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

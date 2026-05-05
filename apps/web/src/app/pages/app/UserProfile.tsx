@@ -224,8 +224,7 @@ const formatTimezoneOptionLabel = (timezone: string) => {
   }
 };
 
-const MIN_PHONE_DIGITS = 7;
-const MAX_PHONE_DIGITS = 15;
+const MAX_PHONE_DIGITS = 12;
 const countPhoneDigits = (v: string) => (v.match(/\d/g) || []).length;
 
 const profileSchema = z.object({
@@ -236,7 +235,7 @@ const profileSchema = z.object({
     .optional()
     .or(z.literal(""))
     .refine((v) => !v || /^\+[\d\s\-().]+$/.test(v), "Select a country from the dropdown first")
-    .refine((v) => !v || (countPhoneDigits(v) >= MIN_PHONE_DIGITS && countPhoneDigits(v) <= MAX_PHONE_DIGITS), "Enter a valid phone number (7–15 digits)"),
+    .refine((v) => !v || countPhoneDigits(v) === MAX_PHONE_DIGITS, "Enter exactly 12 digits total (country code + number)"),
   birthday: z.string().optional(),
   pronouns: z.string().optional(),
   location: z.string().optional(),
@@ -249,7 +248,7 @@ const profileSchema = z.object({
     .optional()
     .or(z.literal(""))
     .refine((v) => !v || /^\+[\d\s\-().]+$/.test(v), "Select a country from the dropdown first")
-    .refine((v) => !v || (countPhoneDigits(v) >= MIN_PHONE_DIGITS && countPhoneDigits(v) <= MAX_PHONE_DIGITS), "Enter a valid phone number (7–15 digits)"),
+    .refine((v) => !v || countPhoneDigits(v) === MAX_PHONE_DIGITS, "Enter exactly 12 digits total (country code + number)"),
   emergency_contact_relationship: z.string().optional(),
 });
 type ProfileFormValues = z.infer<typeof profileSchema>;

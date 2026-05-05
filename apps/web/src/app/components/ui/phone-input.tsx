@@ -84,7 +84,7 @@ export interface PhoneInputProps {
   placeholder?: string
 }
 
-const MAX_PHONE_DIGITS = 15
+const MAX_PHONE_DIGITS = 12
 
 const countDigits = (value: string) => (value.match(/\d/g) || []).length
 

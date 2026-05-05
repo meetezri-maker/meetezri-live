@@ -3453,8 +3453,11 @@ export function ActiveSession() {
       processor = audioCtx.createScriptProcessor(BUFFER_SIZE, 1, 1);
 
       processor.onaudioprocess = (e: AudioProcessingEvent) => {
+        // Only hard-gate on mute/pause/ending — NOT on isEzriSpeakingRef.
+        // The backend's own is_bot_speaking flag suppresses echo while Ezri
+        // is speaking. Gating here too causes the first words after Ezri
+        // stops to be swallowed (the ref clears 1-2 chunks late).
         if (
-          isEzriSpeakingRef.current ||
           isMutedRef.current ||
           isSessionPausedRef.current ||
           isSessionEndingRef.current
