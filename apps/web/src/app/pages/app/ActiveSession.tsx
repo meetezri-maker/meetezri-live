@@ -3289,6 +3289,24 @@ export function ActiveSession() {
             wsTtsDoneReceivedRef.current = false;
           }
         },
+        onSpeakingStart: () => {
+          // step: speaking from backend — bot committed to speaking before first audio byte.
+          // Pause STT now so the recognizer is fully stopped before echo arrives.
+          // This closes the ~100ms race window where STT could mis-detect TTS echo as user speech.
+          if (suppressIncomingAudioRef.current) return;
+          setIsEzriThinking(false);
+          isEzriThinkingRef.current = false;
+          pauseStt();
+        },
+        onAvatarData: (data) => {
+          // Phonemes + sentiment from backend, emitted before each TTS audio chunk.
+          // These arrive with the sentence text and can drive more accurate lip sync.
+          // Stored on a ref for the avatar to consume during playback.
+          // Not yet wired to the 3D viseme driver — logged for future use.
+          if (process.env.NODE_ENV === "development") {
+            console.debug("[Ezri] avatar_data:", data.sentence, data.sentiment);
+          }
+        },
         onInterrupt: () => {
           // If a merge is in progress, the server interrupted the old turn on its
           // own (streaming server behaviour). Clear the drop counter so the merged
@@ -3298,6 +3316,7 @@ export function ActiveSession() {
           }
           // Stop playback immediately; then send playback_done after echo cooldown.
           stopPlaybackAndCooldown({ sendPlaybackDone: true });
+          setLiveUserSpeech("");
           setIsEzriThinking(false);
           isEzriThinkingRef.current = false;
           pendingUserTextRef.current = "";
@@ -3384,6 +3403,23 @@ export function ActiveSession() {
       client.disconnect();
     };
   }, [ezriConfig, ezriUserid, sessionId, hasSessionEnded, companionAvatarLabel, ezriTtsVoiceId]);
+
+  // ── WebSocket keep-alive ping (prevents HF Space nginx 60-second idle timeout) ──
+  // Sends a lightweight {"type":"ping"} every 30 s. The backend responds with "pong"
+  // which the realtimeClient silently discards. Without this, periods of user silence
+  // longer than 60 s (common in a therapy session) cause a silent disconnect.
+  useEffect(() => {
+    if (ezriWsStatus !== "connected") return;
+    if (hasSessionEnded || isSessionPaused) return;
+
+    const interval = window.setInterval(() => {
+      try {
+        wsClientRef.current?.sendPing();
+      } catch {}
+    }, 30_000);
+
+    return () => window.clearInterval(interval);
+  }, [ezriWsStatus, hasSessionEnded, isSessionPaused]);
 
   // ── PCM audio streaming → WebSocket (backend VAD + Whisper STT) ──────────
   // Only active when stt_provider is NOT "browser". When stt_provider=browser

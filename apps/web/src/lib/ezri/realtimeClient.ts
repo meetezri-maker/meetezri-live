@@ -14,12 +14,24 @@ export type EzriRealtimeConnectArgs = {
   voice: string;
 };
 
+export type EzriAvatarData = {
+  sentence: string;
+  phonemes: unknown;
+  sentiment: unknown;
+  chunk_index?: number;
+};
+
 export type EzriRealtimeClientHandlers = {
   onStatus?: (status: EzriWsStatus) => void;
   onAssistantText?: (text: string, kind: "partial" | "final") => void;
   onAudio?: (audio: EzriAudioSource) => void;
   onTtsDone?: () => void;
   onInterrupt?: () => void;
+  /** Fired when the backend commits to speaking (step: speaking) — BEFORE first audio byte.
+   *  Use to pause browser STT as early as possible to prevent mis-detection of echo. */
+  onSpeakingStart?: () => void;
+  /** Backend-computed phonemes + sentiment for each TTS sentence. Useful for lip sync / expressions. */
+  onAvatarData?: (data: EzriAvatarData) => void;
   onError?: (error: unknown, context?: any) => void;
   onUnknownMessage?: (raw: unknown) => void;
 };
@@ -197,6 +209,28 @@ export class EzriRealtimeClient {
         return;
       }
 
+      if (errType === "pong") {
+        // Heartbeat response — nothing to do, connection is alive
+        return;
+      }
+
+      // step: speaking → backend committed to speaking, pause STT before first byte arrives.
+      if (errType === "step" && typeof msg.status === "string" && msg.status === "speaking") {
+        this.handlers.onSpeakingStart?.();
+        return;
+      }
+
+      // avatar_data → per-sentence phonemes + sentiment for lip sync / expressions.
+      if (errType === "avatar_data") {
+        this.handlers.onAvatarData?.({
+          sentence: typeof msg.sentence === "string" ? msg.sentence : "",
+          phonemes: msg.phonemes,
+          sentiment: msg.sentiment,
+          chunk_index: typeof msg.chunk_index === "number" ? msg.chunk_index : undefined,
+        });
+        return;
+      }
+
       const audio = extractAudio(msg);
       if (audio) this.handlers.onAudio?.(audio);
 
@@ -260,6 +294,13 @@ export class EzriRealtimeClient {
       throw new Error("Ezri WebSocket is not connected.");
     }
     ws.send(JSON.stringify({ type: "interrupt", source }));
+  }
+
+  /** Send a heartbeat ping to prevent HF Space nginx idle-timeout (60 s). */
+  sendPing() {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "ping" }));
   }
 
   /** Send a raw Int16 PCM buffer to the server for backend VAD + STT processing. */
