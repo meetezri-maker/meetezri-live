@@ -1066,6 +1066,8 @@ model profiles {
   emergency_contact_name                                String?
   emergency_contact_phone                               String?
   emergency_contact_relationship                        String?
+  /// User acknowledged in-app consent for notifying emergency contacts only in serious safety situations.
+  emergency_consent                                     Boolean                        @default(false)
   in_therapy                                            String?
   notification_preferences                              Json?
   on_medication                                         String?

@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
 export {
+  EMERGENCY_CONTACT_CONSENT_PROMPT,
+  EmergencyContactConsentPromptSchema,
+  type EmergencyContactConsentPrompt,
+} from './prompts/emergencyContactConsent';
+
+export {
   canonicalCompanionDisplayName,
   companionAnalyticsChartLabel,
   mergeCompanionAvatarCounts,

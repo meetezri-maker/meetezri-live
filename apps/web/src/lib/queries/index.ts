@@ -24,6 +24,8 @@ export const queryKeys = {
   },
   profile: {
     all: () => ["profile"] as const,
+    /** Session `/users/me` document (use for features keyed off profile fields, e.g. consent flags). */
+    me: () => ["profile", "me"] as const,
     byUser: (userId: string | undefined) => ["profile", userId] as const,
   },
 } as const;

@@ -138,6 +138,7 @@ export const updateProfileSchema = z.object({
   emergency_contact_name: z.string().optional(),
   emergency_contact_phone: optionalEmergencyPhoneSchema,
   emergency_contact_relationship: z.string().optional(),
+  emergency_consent: z.boolean().optional(),
   notification_preferences: z.record(z.any()).optional(),
   privacy_settings: z.record(z.any()).optional(),
   brain_health_settings: z.record(z.any()).optional(),

@@ -16,10 +16,16 @@ import {
   Loader2
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
+import { queryKeys } from "@/lib/queries";
+import { cn } from "@/app/components/ui/utils";
 import { toast } from "sonner";
+import { EmergencyContactConsentModal } from "../../components/consent/EmergencyContactConsentModal";
 import { Skeleton } from "../../components/ui/skeleton";
 import { PhoneInput } from "../../components/ui/phone-input";
+import { Checkbox } from "../../components/ui/checkbox";
+import { Label } from "../../components/ui/label";
 import {
   normalizeStoredPhoneForInput,
   isValidOptionalAppPhone,
@@ -38,6 +44,33 @@ interface EmergencyContact {
 
 export function EmergencyContacts() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const {
+    data: profile,
+    isLoading: profileLoading,
+    isError: profileError,
+    refetch: refetchProfile,
+  } = useQuery({
+    queryKey: queryKeys.profile.me(),
+    queryFn: () => api.getMe(),
+    staleTime: 5 * 60_000,
+  });
+
+  const consentMutation = useMutation({
+    mutationFn: () => api.updateProfile({ emergency_consent: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile.me() });
+      toast.success("Your consent has been saved.");
+    },
+    onError: () => {
+      toast.error("Could not save consent. Please try again.");
+    },
+  });
+
+  const hasPageConsent = profile?.emergency_consent === true;
+  const showConsentModal =
+    !profileLoading && !profileError && profile != null && !hasPageConsent;
+
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,6 +78,7 @@ export function EmergencyContacts() {
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingContact, setEditingContact] = useState<EmergencyContact | null>(null);
+  const [emergencyConsentChecked, setEmergencyConsentChecked] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     relationship: "",
@@ -70,17 +104,22 @@ export function EmergencyContacts() {
   };
 
   const resetForm = () => {
-    setFormData({ 
-      name: "", 
-      relationship: "", 
-      phone: "", 
+    setFormData({
+      name: "",
+      relationship: "",
+      phone: "",
       email: "",
     });
     setEditingContact(null);
+    setEmergencyConsentChecked(false);
     setShowAddModal(false);
   };
 
   const handleAddContact = async () => {
+    if (!emergencyConsentChecked) {
+      toast.error("Please confirm emergency contact consent before saving");
+      return;
+    }
     if (!formData.name) {
       toast.error("Name is required");
       return;
@@ -119,11 +158,16 @@ export function EmergencyContacts() {
       phone: normalizeStoredPhoneForInput(contact.phone || ""),
       email: contact.email || "",
     });
+    setEmergencyConsentChecked(false);
     setShowAddModal(true);
   };
 
   const handleUpdateContact = async () => {
     if (!editingContact) return;
+    if (!emergencyConsentChecked) {
+      toast.error("Please confirm emergency contact consent before saving");
+      return;
+    }
     if (!formData.name) {
       toast.error("Name is required");
       return;
@@ -170,7 +214,7 @@ export function EmergencyContacts() {
     }
   };
 
-  if (isLoading) {
+  if (profileLoading || isLoading) {
     return (
       <AppLayout>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
@@ -225,9 +269,40 @@ export function EmergencyContacts() {
     );
   }
 
+  if (profileError) {
+    return (
+      <AppLayout>
+        <div className="max-w-4xl mx-auto flex flex-col items-center justify-center gap-4 px-4 py-16 text-center">
+          <AlertCircle className="text-destructive h-10 w-10" aria-hidden />
+          <div>
+            <h2 className="text-lg font-semibold">Couldn&apos;t load your profile</h2>
+            <p className="text-muted-foreground mt-1 text-sm">
+              We need your profile to check emergency contact consent. Please try again.
+            </p>
+          </div>
+          <Button type="button" onClick={() => void refetchProfile()}>
+            Retry
+          </Button>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+      <EmergencyContactConsentModal
+        open={showConsentModal}
+        onConsent={() => consentMutation.mutate()}
+        onCancel={() => navigate("/app/settings")}
+        isSubmitting={consentMutation.isPending}
+      />
+      <div
+        className={cn(
+          "max-w-4xl mx-auto px-4 sm:px-6 py-6",
+          showConsentModal && "pointer-events-none select-none opacity-40",
+        )}
+        aria-hidden={showConsentModal}
+      >
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -253,6 +328,7 @@ export function EmergencyContacts() {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              type="button"
               onClick={() => {
                 resetForm();
                 setShowAddModal(true);
@@ -333,8 +409,10 @@ export function EmergencyContacts() {
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
+                        type="button"
                         onClick={() => handleEditContact(contact)}
                         disabled={deletingId === contact.id}
+                        aria-label="Edit contact"
                         className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                       >
                         <Edit className="w-4 h-4 text-gray-600" />
@@ -369,7 +447,13 @@ export function EmergencyContacts() {
             <Heart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="font-bold text-lg mb-2">No Emergency Contacts Yet</h3>
             <p className="text-muted-foreground mb-4">Add emergency contacts who can support you in crisis situations</p>
-            <Button onClick={() => setShowAddModal(true)}>
+            <Button
+              type="button"
+              onClick={() => {
+                resetForm();
+                setShowAddModal(true);
+              }}
+            >
               <Plus className="w-4 h-4 mr-2" />
               Add Your First Contact
             </Button>
@@ -455,6 +539,29 @@ export function EmergencyContacts() {
                     </div>
                   </div>
 
+                  <div className="rounded-xl border border-rose-100 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 px-3 py-2.5">
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id="emergency-contact-consent-modal"
+                        checked={emergencyConsentChecked}
+                        onCheckedChange={(value) => setEmergencyConsentChecked(value === true)}
+                        className="mt-0.5"
+                        aria-describedby="emergency-contact-consent-modal-desc"
+                      />
+                      <div className="space-y-1 min-w-0">
+                        <Label
+                          htmlFor="emergency-contact-consent-modal"
+                          className="text-xs font-normal cursor-pointer leading-snug text-gray-700 dark:text-gray-300"
+                        >
+                          I confirm this person knows they may be contacted only during urgent wellbeing or safety situations.
+                        </Label>
+                        <p id="emergency-contact-consent-modal-desc" className="text-xs text-muted-foreground">
+                          Required to save changes in this form.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex gap-3 pt-4">
                     <Button
                       onClick={resetForm}
@@ -465,9 +572,10 @@ export function EmergencyContacts() {
                       Cancel
                     </Button>
                     <Button
+                      type="button"
                       onClick={editingContact ? handleUpdateContact : handleAddContact}
                       className="flex-1"
-                      disabled={!formData.name || isSubmitting}
+                      disabled={!formData.name || isSubmitting || !emergencyConsentChecked}
                     >
                       {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                       {editingContact ? "Update Contact" : "Add Contact"}

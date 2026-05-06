@@ -261,7 +261,10 @@ export const api = {
       headers,
       body: JSON.stringify(data),
     });
-    return handleResponse(res, 'Failed to update profile');
+    const result = await handleResponse(res, 'Failed to update profile');
+    shortGetCache.delete('GET:/users/me');
+    getMeInFlight = null;
+    return result;
   },
 
   async getCommunityOverview() {
