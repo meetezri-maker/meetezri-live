@@ -121,7 +121,7 @@ export function OnboardingHealthBackground() {
                 name="inTherapy"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-base mb-3 block">Are you currently working with a companion?</FormLabel>
+                    <FormLabel className="text-base mb-3 block">Are you currently working with a therapist?</FormLabel>
                     <FormControl>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         {["yes", "no", "prefer-not-to-say"].map((option, index) => (

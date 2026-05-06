@@ -102,11 +102,26 @@ function formatEnvironmentLabel(value: string | undefined | null): string {
   return SESSION_ENVIRONMENT_LABELS[value] ?? value;
 }
 
-/** Default / legacy API titles shown in history (new instant sessions use Instant Talk). */
-function formatSessionSummaryTitle(title: string | null | undefined): string {
+/**
+ * Normalizes default API titles for history cards.
+ * Scheduled rows keep `type === "scheduled"` after “Start now” → show Scheduled Talk, not Instant Talk.
+ */
+function formatSessionSummaryTitle(
+  title: string | null | undefined,
+  sessionType: string | undefined
+): string {
   const t = title?.trim();
+  const scheduled = sessionType === "scheduled";
+
+  if (scheduled) {
+    if (!t || t === "Talking" || t === "Scheduled Session") return "Scheduled Talk";
+    if (t === "Instant Session" || t === "Instant Talk") return "Scheduled Talk";
+    return t;
+  }
+
   if (!t) return "Talking";
   if (t === "Instant Session") return "Instant Talk";
+  if (t === "Scheduled Session") return "Scheduled Talk";
   return t;
 }
 
@@ -279,7 +294,7 @@ export function SessionHistory() {
             messagesCount: s._count?.session_messages || 0,
             topicsDiscussed: [],
             thumbnail: `gradient-${(s.id.charCodeAt(0) % 5) + 1}`,
-            summary: formatSessionSummaryTitle(s.title),
+            summary: formatSessionSummaryTitle(s.title, s.type),
             favorite: s.is_favorite || false,
             status: s.status === 'completed' ? 'completed' : 'upcoming',
             recordingUrl: s.recording_url || undefined,
@@ -879,7 +894,7 @@ export function SessionHistory() {
                             );
                           })
                         ) : (
-                          <p className="text-sm text-gray-500 text-center italic">No transcript available for this session.</p>
+                          <p className="text-sm text-gray-500 text-center italic">No transcript available for this Talk.</p>
                         )}
                       </div>
                     </div>
