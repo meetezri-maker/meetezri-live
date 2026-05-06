@@ -365,7 +365,7 @@ export function SecuritySettings() {
                 <Activity className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Active Sessions</p>
+                <p className="text-gray-600 text-sm">Active Talk it out</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.activeSession}</p>
               </div>
             </div>
@@ -670,7 +670,7 @@ export function SecuritySettings() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Max Concurrent Sessions
+                Max Concurrent Talk it out
               </label>
               <select
                 value={form.maxConcurrentSessions}
@@ -715,11 +715,11 @@ export function SecuritySettings() {
             </label>
           </div>
 
-          {/* Terminate All Sessions */}
+          {/* Terminate All Talk it out */}
           <div className="mt-6 pt-6 border-t border-gray-200">
             <div className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-xl">
               <div>
-                <h3 className="font-bold text-gray-900 mb-1">Terminate All Sessions</h3>
+                <h3 className="font-bold text-gray-900 mb-1">Terminate All Talk it out</h3>
                 <p className="text-sm text-gray-600">Sign out all users from all devices immediately. Use with caution.</p>
               </div>
               <motion.button
@@ -735,7 +735,7 @@ export function SecuritySettings() {
                 ) : (
                   <LogOut className="w-4 h-4" />
                 )}
-                {isTerminating ? "Terminating…" : "Terminate All Sessions"}
+                {isTerminating ? "Terminating…" : "Terminate All Talk it out"}
               </motion.button>
             </div>
           </div>

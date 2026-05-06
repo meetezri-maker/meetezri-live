@@ -414,7 +414,15 @@ async function computeChallengeProgressForUser(
         wellness_tools: { category: 'Relaxation' },
       },
     });
-  } else if (metric === 'wellness_sessions' || title.includes('wellness warrior')) {
+  } else if (
+    metric === 'wellness_sessions' ||
+    title.includes('wellness warrior') ||
+    cat === 'exercise' ||
+    title.includes('exercise') ||
+    title.includes('workout') ||
+    title.includes('fitness') ||
+    title.includes('gym')
+  ) {
     raw = await prisma.user_wellness_progress.count({
       where: {
         user_id: userId,

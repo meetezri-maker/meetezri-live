@@ -473,7 +473,7 @@ export function SessionHistory() {
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Sessions</p>
+                  <p className="text-sm text-muted-foreground">Total Talk it out</p>
                   <p className="text-2xl font-bold">{completedSessions.length}</p>
                 </div>
                 <Video className="w-8 h-8 text-primary" />
@@ -520,7 +520,7 @@ export function SessionHistory() {
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
             >
-              Completed Sessions ({completedSessions.length})
+              Completed Talk it out ({completedSessions.length})
               {activeTab === "completed" && (
                 <motion.div
                   layoutId="activeTab"
@@ -540,7 +540,7 @@ export function SessionHistory() {
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
             >
-              Upcoming Sessions ({upcomingSessions.length})
+              Upcoming Talk ({upcomingSessions.length})
               {activeTab === "upcoming" && (
                 <motion.div
                   layoutId="activeTab"
@@ -579,13 +579,13 @@ export function SessionHistory() {
           )}
         </motion.div>
 
-        {/* Sessions List */}
+        {/* Talk it out List */}
         <div className="grid grid-cols-1 gap-4">
           {filteredSessions.length === 0 && (
             <Card className="p-12 text-center">
               <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <h3 className="font-bold text-lg mb-2">
-                {activeTab === "upcoming" ? "No Upcoming Sessions" : "No Sessions Found"}
+                {activeTab === "upcoming" ? "No Upcoming Talk" : "No Talk it out Found"}
               </h3>
               <p className="text-muted-foreground mb-4">
                 {activeTab === "upcoming"

@@ -168,7 +168,7 @@ const NAVIGATION: NavSection[] = [
     icon: Eye,
     roles: ["super_admin", "org_admin", "team_admin"],
     pages: [
-      { name: "Live Sessions", href: "/admin/live-sessions-monitor", icon: Eye, roles: ["super_admin", "org_admin", "team_admin"] },
+      { name: "Live Talk it out", href: "/admin/live-sessions-monitor", icon: Eye, roles: ["super_admin", "org_admin", "team_admin"] },
       { name: "Session Recordings", href: "/admin/session-recordings", icon: Eye, roles: ["super_admin", "org_admin"] },
       { name: "System Health", href: "/admin/system-health-enhanced", icon: Server, roles: ["super_admin"] },
       { name: "Error Tracking", href: "/admin/error-tracking", icon: AlertTriangle, roles: ["super_admin"] },
@@ -429,13 +429,13 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
             </div>
             
             {/* Exit to User App */}
-            <Link 
+            {/* <Link 
               to="/" 
               className="w-full flex items-center justify-start gap-2 px-3 py-2 text-xs h-8 text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg mb-2 transition-all font-medium"
             >
               <Globe className="w-3.5 h-3.5" />
               Exit to User App
-            </Link>
+            </Link> */}
             
             <Button 
               onClick={handleLogout} 
@@ -456,9 +456,9 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
         <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-lg border-b border-gray-200 shadow-sm">
           <div className="flex items-center justify-between px-8 py-4">
             <h2 className="text-lg font-bold text-gray-800">Admin Portal</h2>
-            <Link to="/app/dashboard" className="text-sm text-primary hover:underline font-medium">
+            {/* <Link to="/app/dashboard" className="text-sm text-primary hover:underline font-medium">
               View User App →
-            </Link>
+            </Link> */}
           </div>
         </header>
 

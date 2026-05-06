@@ -253,7 +253,7 @@ ${(d?.hourlyActivity || [])
             transition={{ delay: 0.5 }}
           >
             <Card className="p-6">
-              <h2 className="text-xl font-bold mb-2">Sessions by day (current window)</h2>
+              <h2 className="text-xl font-bold mb-2">Talk it out by day (current window)</h2>
               <p className="text-sm text-muted-foreground mb-4">
                 Daily session counts — labels angle automatically; hover for exact dates.
               </p>
@@ -288,7 +288,7 @@ ${(d?.hourlyActivity || [])
                     strokeWidth={2}
                     dot={false}
                     activeDot={{ r: 5 }}
-                    name="Sessions"
+                    name="Talk it out"
                   />
                 </LineChart>
               </ResponsiveContainer>

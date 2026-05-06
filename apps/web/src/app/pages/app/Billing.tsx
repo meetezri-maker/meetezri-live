@@ -133,6 +133,15 @@ export function Billing() {
             cost: 0 
           }));
 
+        const subscriptionStartDate = subData.start_date || new Date().toISOString();
+        const parsedStartDate = new Date(subscriptionStartDate);
+        const trialFallbackEndDate = new Date(
+          (Number.isNaN(parsedStartDate.getTime()) ? now : parsedStartDate).getTime() + (30 * 24 * 60 * 60 * 1000)
+        ).toISOString();
+        const fallbackEndDate = planId === 'trial'
+          ? trialFallbackEndDate
+          : new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
+
         const subscription: UserSubscription = {
           userId: subData.user_id,
           planId: planId,
@@ -141,8 +150,8 @@ export function Billing() {
           // Show a stacked "total" when users upgrade mid-cycle (e.g., 200 + 400 = 600)
           creditsTotal: creditsData.subscription_total ?? plan.credits,
           billingCycle: {
-            startDate: subData.start_date || new Date().toISOString(),
-            endDate: subData.next_billing_at || new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString(),
+            startDate: subscriptionStartDate,
+            endDate: subData.next_billing_at || fallbackEndDate,
             renewsOn: subData.next_billing_at
           },
           payAsYouGoCredits,
@@ -747,7 +756,7 @@ export function Billing() {
                 <div className="rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-100 dark:border-slate-700 p-3">
                   <p className="text-xs text-muted-foreground">Total available</p>
                   <p className="text-lg font-bold text-slate-900 dark:text-white">
-                    {(userSubscription.creditsRemaining + userSubscription.payAsYouGoCredits) ?? 0} min
+                    {userSubscription.creditsRemaining + userSubscription.payAsYouGoCredits} min
                   </p>
                 </div>
                 <div className="rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-100 dark:border-slate-700 p-3">

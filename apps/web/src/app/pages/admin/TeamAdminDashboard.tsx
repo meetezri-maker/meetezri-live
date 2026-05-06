@@ -313,7 +313,7 @@ export function TeamAdminDashboard() {
                     7d
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Sessions today</p>
+                <p className="text-sm text-muted-foreground mb-1">Talk it out today</p>
                 <motion.div
                   key={todaySessions}
                   initial={{ scale: 1.1 }}
@@ -393,7 +393,7 @@ export function TeamAdminDashboard() {
                     }}
                   />
                   <Legend />
-                  <Bar dataKey="sessions" fill="#06b6d4" radius={[4, 4, 0, 0]} name="Sessions" />
+                  <Bar dataKey="sessions" fill="#06b6d4" radius={[4, 4, 0, 0]} name="Talk it out" />
                   <Bar dataKey="avgDuration" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Avg duration (min)" />
                 </BarChart>
               </ResponsiveContainer>
@@ -497,7 +497,7 @@ export function TeamAdminDashboard() {
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Sessions</span>
+                      <span className="text-muted-foreground">Talk it out</span>
                       <span className="font-bold">{member.sessions}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">

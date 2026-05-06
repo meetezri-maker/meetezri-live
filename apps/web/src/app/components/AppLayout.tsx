@@ -213,8 +213,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navItems = [
     { path: "/app/dashboard", icon: Home, label: "Home" },
-    { path: "/app/session-lobby", icon: Video, label: "Chat Time" },
-    { path: "/app/mood-checkin", icon: Heart, label: "Self-Check-In" },
+    { path: "/app/session-lobby", icon: Video, label: "Talk it out" },
+    { path: "/app/mood-checkin", icon: Heart, label: "Mood" },
     { path: "/app/journal", icon: BookOpen, label: "Journal" },
     { path: "/app/user-profile", icon: User, label: "Profile" }
   ];
@@ -418,7 +418,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 className={`app-sidebar-item ${isRouteActive("/app/session-history") ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
               >
                 <Clock className={navIconClass} />
-                <span className={navLabelClass}>Chat Time History</span>
+                <span className={navLabelClass}>Talk it out History</span>
               </motion.div>
             </Link>
 

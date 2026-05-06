@@ -1359,7 +1359,7 @@ export const api = {
     }
   },
 
-  // Sessions API
+  // Talk it out API
   sessions: {
     async create(data: { type: 'instant' | 'scheduled'; duration_minutes: number; scheduled_at?: string; config?: any }) {
       const headers = await getHeaders();

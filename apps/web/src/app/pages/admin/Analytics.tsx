@@ -323,7 +323,7 @@ export function Analytics() {
             transition={{ delay: 0.3 }}
             className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
           >
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Weekly Sessions</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-6">Weekly Talk it out</h2>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={sessionData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -333,7 +333,7 @@ export function Analytics() {
                   contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px' }}
                 />
                 <Legend />
-                <Bar dataKey="sessions" fill="#3b82f6" radius={[8, 8, 0, 0]} name="Sessions" />
+                <Bar dataKey="sessions" fill="#3b82f6" radius={[8, 8, 0, 0]} name="Talk it out" />
                 <Bar dataKey="duration" fill="#8b5cf6" radius={[8, 8, 0, 0]} name="Avg Duration (min)" />
               </BarChart>
             </ResponsiveContainer>

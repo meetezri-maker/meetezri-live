@@ -42,7 +42,7 @@ export function SystemSettings() {
                 />
               </div>
               <div>
-                <Label htmlFor="maxSessions">Max Daily Sessions Per User</Label>
+                <Label htmlFor="maxSessions">Max Daily Talk it out Per User</Label>
                 <Input id="maxSessions" type="number" defaultValue="10" className="mt-2" />
               </div>
               <Button className="gap-2">

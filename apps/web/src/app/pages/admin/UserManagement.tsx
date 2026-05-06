@@ -399,7 +399,7 @@ export function UserManagement() {
       `${u.name},${u.email},${u.status},${u.subscription},${u.sessions},${u.riskLevel},${u.lastActive}`
     ).join('\n');
     
-    const csvContent = `Name,Email,Status,Subscription,Sessions,Risk Level,Last Active\n${csvData}`;
+    const csvContent = `Name,Email,Status,Subscription,Talk it out,Risk Level,Last Active\n${csvData}`;
     
     // Create a blob and download
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -842,7 +842,7 @@ export function UserManagement() {
                       onClick={() => handleSort("sessions")}
                     >
                       <div className="flex items-center gap-2">
-                        Sessions
+                        Talk it out
                         {sortField === "sessions" && (
                           <ChevronDown
                             className={`w-4 h-4 transition-transform ${

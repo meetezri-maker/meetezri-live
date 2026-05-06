@@ -482,7 +482,7 @@ export function SessionRecordings() {
               onChange={(e) => setFilterStatus(e.target.value)}
               className="px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
             >
-              <option value="all">All Sessions</option>
+              <option value="all">All Talk it out</option>
               <option value="completed">No Issues</option>
               <option value="flagged">Needs Attention</option>
               <option value="escalated">Escalated</option>

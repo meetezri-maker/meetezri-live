@@ -261,7 +261,7 @@ export function UserDetailsEnhanced() {
   };
   
   const statsCards = userData ? [
-    { label: "Total Sessions", value: userData.totalSessions.toString(), icon: MessageSquare, color: "text-blue-600", bg: "bg-blue-100" },
+    { label: "Total Talk it out", value: userData.totalSessions.toString(), icon: MessageSquare, color: "text-blue-600", bg: "bg-blue-100" },
     { label: "Mood Score", value: `${userData.avgMoodScore}/10`, icon: Heart, color: "text-pink-600", bg: "bg-pink-100" },
     { label: "Wellness Streak", value: `${userData.wellnessStreak} entries`, icon: TrendingUp, color: "text-green-600", bg: "bg-green-100" },
     { label: "Journal Entries", value: userData.journalEntries.toString(), icon: Edit, color: "text-purple-600", bg: "bg-purple-100" },
@@ -270,7 +270,7 @@ export function UserDetailsEnhanced() {
   const tabs = [
     { id: "overview", label: "Overview", icon: User },
     { id: "activity", label: "Activity", icon: Activity },
-    { id: "sessions", label: "Sessions", icon: MessageSquare },
+    { id: "sessions", label: "Talk it out", icon: MessageSquare },
     { id: "security", label: "Security", icon: Shield },
   ];
 
@@ -765,7 +765,7 @@ export function UserDetailsEnhanced() {
               <Card className="p-6">
                 <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
                   <MessageSquare className="w-5 h-5 text-primary" />
-                  Recent Sessions
+                  Recent Talk it out
                 </h2>
                 <div className="overflow-x-auto">
                   <table className="w-full">

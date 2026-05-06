@@ -602,7 +602,7 @@ export function SystemSettingsEnhanced() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-2">Max Concurrent Sessions</label>
+                        <label className="block text-sm font-medium mb-2">Max Concurrent Talk it out</label>
                         <Input
                           type="number"
                           value={settings.general.maxConcurrentSessions}
@@ -614,7 +614,7 @@ export function SystemSettingsEnhanced() {
                     </div>
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div>
-                        <p className="font-medium">Allow Anonymous Sessions</p>
+                        <p className="font-medium">Allow Anonymous Talk it out</p>
                         <p className="text-sm text-muted-foreground">
                           Users can chat without creating an account
                         </p>

@@ -538,7 +538,7 @@ export function FeatureFlags() {
                     type="text"
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
-                    placeholder="e.g., AI Voice Sessions"
+                    placeholder="e.g., AI Voice Talk it out"
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
@@ -655,7 +655,7 @@ export function FeatureFlags() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Flag Name</label>
                   <input
                     type="text"
-                    placeholder="e.g., AI Voice Sessions"
+                    placeholder="e.g., AI Voice Talk it out"
                     value={selectedFlag.name}
                     onChange={(e) => {
                       const updatedFlag = { ...selectedFlag, name: e.target.value };

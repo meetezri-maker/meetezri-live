@@ -44,7 +44,7 @@ function formatAnalyticsRangeLabel(from: string, to: string): string {
 }
 
 const ICON_MAP: Record<string, typeof Brain> = {
-  "AI Sessions": Brain,
+  "AI Talk it out": Brain,
   "Mood Tracking": Smile,
   Journal: BookOpen,
   "Wellness Tools": Heart,
@@ -152,7 +152,7 @@ export function FeatureAdoption() {
       description: "relative activity share",
     },
     {
-      label: "Total Sessions",
+      label: "Total Talk it out",
       value: totalSessionsAllTime.toLocaleString(),
       change: `${sessionsInRange.toLocaleString()} in range`,
       trend: "up" as const,
@@ -339,7 +339,7 @@ export function FeatureAdoption() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-xl font-bold text-black mb-1">
-                    Sessions per day (range)
+                    Talk it out per day (range)
                   </h3>
                   <p className="text-sm text-gray-400">
                     From admin session activity for the selected dates (UTC buckets)
@@ -389,7 +389,7 @@ export function FeatureAdoption() {
                     yAxisId="left"
                     dataKey="sessions"
                     fill="#8b5cf6"
-                    name="Sessions"
+                    name="Talk it out"
                     radius={[4, 4, 0, 0]}
                     maxBarSize={32}
                   />
@@ -417,7 +417,7 @@ export function FeatureAdoption() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-xl font-bold text-black mb-1">
-                    Sessions by hour (UTC)
+                    Talk it out by hour (UTC)
                   </h3>
                   <p className="text-sm text-gray-400">
                     Distribution of sessions across the day for the selected range
@@ -447,7 +447,7 @@ export function FeatureAdoption() {
                       color: "#fff",
                     }}
                   />
-                  <Bar dataKey="sessions" fill="#3b82f6" name="Sessions" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="sessions" fill="#3b82f6" name="Talk it out" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </Card>

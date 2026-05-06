@@ -56,7 +56,7 @@ export function Login() {
   };
 
   const onboardingStartRoute =
-    profile?.signup_type === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome';
+    profile?.signup_type === 'trial' ? '/app/dashboard' : '/onboarding/welcome';
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema as any),
@@ -175,7 +175,7 @@ export function Login() {
       if (needsMfa) return;
       const me = await api.getMe();
       const resolvedOnboardingStartRoute =
-        me?.signup_type === "trial" ? "/onboarding/profile-setup" : "/onboarding/welcome";
+        me?.signup_type === "trial" ? "/app/dashboard" : "/onboarding/welcome";
       navigate(
         me?.onboarding_completed === true ? "/app/dashboard" : resolvedOnboardingStartRoute
       );

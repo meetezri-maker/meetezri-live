@@ -326,7 +326,7 @@ export function LiveSessionsMonitor() {
                 <Activity className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold">Live Sessions Monitor</h1>
+                <h1 className="text-3xl font-bold">Live Talk it out Monitor</h1>
                 <p className="text-muted-foreground">
                   Real-time monitoring of active therapy sessions
                 </p>
@@ -347,7 +347,7 @@ export function LiveSessionsMonitor() {
           </div>
         </motion.div>
 
-        {/* Critical Sessions Alert */}
+        {/* Critical Talk it out Alert */}
         {stats.critical > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -380,7 +380,7 @@ export function LiveSessionsMonitor() {
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Active Sessions</p>
+                  <p className="text-sm text-muted-foreground mb-1">Active Talk it out</p>
                   <p className="text-2xl font-bold">{stats.total}</p>
                 </div>
                 <Users className="w-8 h-8 text-primary" />
@@ -514,7 +514,7 @@ export function LiveSessionsMonitor() {
           </Card>
         </motion.div>
 
-        {/* Live Sessions Grid */}
+        {/* Live Talk it out Grid */}
         {isLoading ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {[1, 2].map((i) => (
@@ -687,7 +687,7 @@ export function LiveSessionsMonitor() {
             className="text-center py-12"
           >
             <Activity className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="font-bold text-xl mb-2">No Active Sessions</h3>
+            <h3 className="font-bold text-xl mb-2">No Active Talk it out</h3>
             <p className="text-muted-foreground">
               No sessions match the current filters
             </p>

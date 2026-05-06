@@ -108,7 +108,7 @@ export function SessionAnalytics() {
 
   const statsCards = [
     {
-      title: "Total Sessions",
+      title: "Total Talk it out",
       value: totalSessionsAllTime.toLocaleString(),
       change: "0.0%",
       changeType: "positive",
@@ -118,7 +118,7 @@ export function SessionAnalytics() {
       sub: "all time · completed",
     },
     {
-      title: "Sessions in Period",
+      title: "Talk it out in Period",
       value: sessionsInRange.toLocaleString(),
       change: "0.0%",
       changeType: "positive",
@@ -416,7 +416,7 @@ export function SessionAnalytics() {
             transition={{ delay: 0.6 }}
           >
             <Card className="p-6">
-              <h2 className="text-xl font-bold mb-1">Sessions by Day</h2>
+              <h2 className="text-xl font-bold mb-1">Talk it out by Day</h2>
               <p className="text-sm text-muted-foreground mb-6">Daily session volume in selected range</p>
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart data={topicDistributionData} margin={{ top: 4, right: 12, left: 0, bottom: 8 }}>
@@ -441,7 +441,7 @@ export function SessionAnalytics() {
                       fontSize: 12,
                     }}
                   />
-                  <Bar dataKey="count" name="Sessions" fill="#9b87f5" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="count" name="Talk it out" fill="#9b87f5" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -454,7 +454,7 @@ export function SessionAnalytics() {
             transition={{ delay: 0.7 }}
           >
             <Card className="p-6">
-              <h2 className="text-xl font-bold mb-1">Active Sessions by Hour</h2>
+              <h2 className="text-xl font-bold mb-1">Active Talk it out by Hour</h2>
               <p className="text-sm text-muted-foreground mb-6">Session volume distribution by hour of day</p>
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart data={sessionDurationData} margin={{ top: 4, bottom: 8, left: 0, right: 8 }}>
@@ -479,14 +479,14 @@ export function SessionAnalytics() {
                       fontSize: 12,
                     }}
                   />
-                  <Bar dataKey="count" name="Sessions" fill="#7c3aed" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="count" name="Talk it out" fill="#7c3aed" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
           </motion.div>
         </div>
 
-        {/* Recent Sessions Table */}
+        {/* Recent Talk it out Table */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -494,7 +494,7 @@ export function SessionAnalytics() {
         >
           <Card className="overflow-hidden">
             <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold">Recent Sessions</h2>
+              <h2 className="text-xl font-bold">Recent Talk it out</h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">

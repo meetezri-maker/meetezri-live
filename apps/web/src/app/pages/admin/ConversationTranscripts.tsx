@@ -806,7 +806,7 @@ Ezri Mental Health Platform - Admin Dashboard
                 <MessageSquare className="w-8 h-8 text-blue-600" />
                 <span className="text-2xl font-bold text-gray-900">{stats.total.toLocaleString()}</span>
               </div>
-              <p className="text-sm text-gray-600">Total Sessions</p>
+              <p className="text-sm text-gray-600">Total Talk it out</p>
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
@@ -814,7 +814,7 @@ Ezri Mental Health Platform - Admin Dashboard
                 <Flag className="w-8 h-8 text-yellow-600" />
                 <span className="text-2xl font-bold text-gray-900">{stats.flagged.toLocaleString()}</span>
               </div>
-              <p className="text-sm text-gray-600">Flagged Sessions</p>
+              <p className="text-sm text-gray-600">Flagged Talk it out</p>
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
@@ -822,7 +822,7 @@ Ezri Mental Health Platform - Admin Dashboard
                 <AlertTriangle className="w-8 h-8 text-red-600" />
                 <span className="text-2xl font-bold text-gray-900">{stats.crisis.toLocaleString()}</span>
               </div>
-              <p className="text-sm text-gray-600">Crisis Sessions</p>
+              <p className="text-sm text-gray-600">Crisis Talk it out</p>
             </div>
           </div>
 
@@ -855,7 +855,7 @@ Ezri Mental Health Platform - Admin Dashboard
               onChange={(e) => setFilterFlagged(e.target.value === 'all' ? null : e.target.value === 'flagged')}
               className="bg-white border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:border-purple-500 transition-all"
             >
-              <option value="all">All Sessions</option>
+              <option value="all">All Talk it out</option>
               <option value="flagged">Flagged Only</option>
               <option value="not-flagged">Not Flagged</option>
             </select>

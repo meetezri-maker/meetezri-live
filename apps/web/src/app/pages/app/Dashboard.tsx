@@ -104,7 +104,7 @@ export function Dashboard() {
     }
   };
 
-  // --- Sessions query (replaces useState + useEffect) ---
+  // --- Talk it out query (replaces useState + useEffect) ---
   const { data: sessionsRaw, isLoading } = useQuery({
     queryKey: queryKeys.sessions.list({ status: "scheduled" }),
     queryFn: () => api.sessions.list({ status: "scheduled" }),
@@ -267,11 +267,11 @@ export function Dashboard() {
   const quickActions = [
     {
       icon: Video,
-      label: "Start Session",
-      description: "Talk with Ezri now",
+      label: "Start Talking",
+      description: "Talk with Solace now",
       path: "/app/session-lobby",
       gradient: "from-blue-500 to-cyan-500"
-    },
+    },  
     {
       icon: Heart,
       label: "Mood Check-In",
@@ -313,7 +313,7 @@ export function Dashboard() {
           {
             id: "system:welcome",
             type: "system",
-            text: "Welcome to MeetEzri!",
+            text: "Welcome to Solace!",
             time: "Just now",
             emoji: "👋",
           },
@@ -349,7 +349,7 @@ export function Dashboard() {
 
   const insightDistributionData = [
     {
-      name: "Sessions",
+      name: "Talk it out",
       value: safeStat(profile?.stats?.completed_sessions),
       color: "#8b5cf6",
     },
@@ -405,13 +405,15 @@ export function Dashboard() {
   }
 
   const handleResendVerification = async () => {
-    if (!user?.email) return;
+    if (!user?.email) return false;
     setResendLoading(true);
     try {
       await api.resendVerificationEmail();
       toast.success("Verification email sent. Check your inbox.");
+      return true;
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to send verification email");
+      return false;
     } finally {
       setResendLoading(false);
     }
@@ -453,18 +455,21 @@ export function Dashboard() {
           <DialogFooter className="flex flex-col gap-2 sm:flex-row">
             <Button
               onClick={async () => {
-                // Required behavior: close popup immediately after click.
-                setConfirmEmailDismissed(true);
-                await handleResendVerification();
+                const isSuccess = await handleResendVerification();
+                if (isSuccess) {
+                  setConfirmEmailDismissed(true);
+                }
               }}
+              isLoading={resendLoading}
               disabled={resendLoading}
               className="w-full sm:w-auto"
             >
-              {resendLoading ? "Sending…" : "Email Verification"}
+              Email Verification
             </Button>
             <Button
               variant="outline"
               onClick={() => setConfirmEmailDismissed(true)}
+              disabled={resendLoading}
               className="w-full sm:w-auto"
             >
               Do It Later
@@ -560,7 +565,7 @@ export function Dashboard() {
                   <Calendar className="w-8 h-8" />
                   <Award className="w-8 h-8" />
                 </div>
-                <h3 className="font-semibold mb-1">Upcoming Sessions</h3>
+                <h3 className="font-semibold mb-1">Upcoming Talk</h3>
                 <p className="text-2xl font-bold">{upcomingSessionsCount}</p>
                 <p className="text-xs text-white/80 mt-2">Click to view schedule</p>
               </Card>
@@ -809,7 +814,7 @@ export function Dashboard() {
                     </ResponsiveContainer>
                   ) : (
                     <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                      Complete sessions, mood check-ins, or journals to populate insights.
+                      Complete Talking, mood check-ins, or journals to populate insights.
                     </div>
                   )}
                 </div>

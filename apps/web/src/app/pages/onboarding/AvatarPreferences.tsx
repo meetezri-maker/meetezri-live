@@ -121,7 +121,7 @@ export function OnboardingAvatarPreferences() {
                 <Sparkles className="w-5 h-5 text-purple-600 mt-0.5" />
                 <div>
                   <p className="text-sm font-medium text-purple-900 mb-1">
-                    AI-Powered Video Therapy Sessions
+                    AI-Powered Video Therapy Talk it out
                   </p>
                   <p className="text-xs text-purple-700">
                     Your chosen AI companion will appear as a realistic 3D avatar during video sessions. All conversations are voice-based for a natural, human-like experience.

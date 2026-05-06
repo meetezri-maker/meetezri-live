@@ -149,7 +149,7 @@ export function HelpSupport() {
       {
         question: "How do I start a session?",
         answer:
-          "Go to your dashboard and open Chat Time. Pick a companion, then start your conversation. If the session button is disabled, check your connection and try again.",
+          "Go to your dashboard and open Talk it out. Pick a companion, then start your conversation. If the session button is disabled, check your connection and try again.",
         tags: ["sessions", "getting-started"],
       },
       {
@@ -182,7 +182,7 @@ export function HelpSupport() {
   const faqs = [
     {
       question: "How do I start an session?",
-      answer: "Navigate to the Chat Time tab from your dashboard and click 'Start Session'. Choose your preferred companion and begin your conversation."
+      answer: "Navigate to the Talk it out tab from your dashboard and click 'Start Session'. Choose your preferred companion and begin your conversation."
     },
     {
       question: "Is my data private and secure?",
@@ -262,7 +262,7 @@ export function HelpSupport() {
         title: "Getting started",
         bullets: [
           "Log in and complete onboarding (profile, preferences, permissions).",
-          "From the dashboard, open Chat Time to start a session.",
+          "From the dashboard, open Talk it out to start a session.",
           "Use Mood Check-In daily to track patterns over time.",
         ],
       },
@@ -270,7 +270,7 @@ export function HelpSupport() {
         id: "sessions",
         title: "Starting a session",
         bullets: [
-          "Go to Chat Time and pick a companion if prompted.",
+          "Go to Talk it out and pick a companion if prompted.",
           "Start your conversation and use follow-up prompts when you feel stuck.",
           "If a session won’t start, refresh once and confirm your network is stable.",
         ],
@@ -753,7 +753,7 @@ export function HelpSupport() {
                                       to="/app/session-lobby"
                                       className="inline-flex items-center justify-center px-3 py-2 rounded-xl text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 transition-colors"
                                     >
-                                      Chat Time
+                                      Talk it out
                                     </Link>
                                     <Link
                                       to="/app/settings"
@@ -780,7 +780,7 @@ export function HelpSupport() {
                                     to="/app/session-lobby"
                                     className="inline-flex items-center justify-center px-3 py-2.5 rounded-xl text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 transition-colors"
                                   >
-                                    Go to Chat Time
+                                    Go to Talk it out
                                   </Link>
                                   <Link
                                     to="/app/settings"

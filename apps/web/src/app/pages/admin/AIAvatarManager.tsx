@@ -197,7 +197,7 @@ export function AIAvatarManager() {
   const [selectedAvatar, setSelectedAvatar] = useState<AIAvatar | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Sessions modal state
+  // Talk it out modal state
   const [sessionsModal, setSessionsModal] = useState<{ avatar: AIAvatar | null; open: boolean }>({ avatar: null, open: false });
   const [sessionsData, setSessionsData] = useState<{ items: AvatarSession[]; total: number }>({ items: [], total: 0 });
   const [sessionsPage, setSessionsPage] = useState(1);
@@ -527,7 +527,7 @@ export function AIAvatarManager() {
     return undefined;
   }, [portraitPreviewUrl, formData.image, formData.name]);
 
-  // Sessions modal handlers
+  // Talk it out modal handlers
   const fetchAvatarSessions = useCallback(async (avatarId: string, page: number) => {
     setSessionsLoading(true);
     try {
@@ -650,7 +650,7 @@ export function AIAvatarManager() {
                   {stats.totalSessionUsage.toLocaleString()}
                 </span>
               </div>
-              <p className="text-sm text-gray-600">Total Sessions</p>
+              <p className="text-sm text-gray-600">Total Talk it out</p>
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
@@ -800,7 +800,7 @@ export function AIAvatarManager() {
                     {avatar.totalSessions.toLocaleString()}
                   </p>
                   <p className="text-xs text-gray-600 flex items-center justify-center gap-0.5">
-                    Sessions{!avatar.isLocalDefault && <span className="text-purple-400 ml-0.5">↗</span>}
+                    Talk it out{!avatar.isLocalDefault && <span className="text-purple-400 ml-0.5">↗</span>}
                   </p>
                 </button>
                 <div className="text-center">
@@ -1275,7 +1275,7 @@ export function AIAvatarManager() {
           )}
         </AnimatePresence>
 
-        {/* Sessions Modal */}
+        {/* Talk it out Modal */}
         <AnimatePresence>
           {sessionsModal.open && sessionsModal.avatar && (
             <motion.div
@@ -1299,7 +1299,7 @@ export function AIAvatarManager() {
                       <Clock className="w-5 h-5 text-purple-600" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-gray-900">Sessions — {sessionsModal.avatar.name}</h3>
+                      <h3 className="text-lg font-bold text-gray-900">Talk it out — {sessionsModal.avatar.name}</h3>
                       <p className="text-xs text-gray-500">{sessionsData.total.toLocaleString()} total sessions</p>
                     </div>
                   </div>
@@ -1312,7 +1312,7 @@ export function AIAvatarManager() {
                   </button>
                 </div>
 
-                {/* Sessions list */}
+                {/* Talk it out list */}
                 <div className="flex-1 overflow-y-auto">
                   {sessionsLoading ? (
                     <div className="flex items-center justify-center py-16">
@@ -1530,7 +1530,7 @@ export function AIAvatarManager() {
                         <tr>
                           <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User</th>
                           <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Last Session</th>
-                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Sessions</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Talk it out</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">

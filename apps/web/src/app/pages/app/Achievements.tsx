@@ -461,7 +461,7 @@ export function Achievements() {
 
   const categories = [
     { id: 'all', label: 'All', icon: Trophy },
-    { id: 'sessions', label: 'Sessions', icon: Target },
+    { id: 'sessions', label: 'Talk it out', icon: Target },
     { id: 'mood', label: 'Mood', icon: Heart },
     { id: 'journal', label: 'Journal', icon: Brain },
     { id: 'wellness', label: 'Wellness', icon: Zap },

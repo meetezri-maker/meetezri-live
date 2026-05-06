@@ -1195,7 +1195,7 @@ export function TeamRoleManagement() {
                           { label: "Email", value: selectedMember.email, icon: Mail },
                           { label: "Phone", value: selectedMember.phone || "—", icon: Phone },
                           { label: "Org label", value: selectedMember.org_role || "—", icon: Building2 },
-                          { label: "Sessions", value: String(selectedMember.session_count), icon: Activity },
+                          { label: "Talk it out", value: String(selectedMember.session_count), icon: Activity },
                           { label: "Joined org", value: format(new Date(selectedMember.joined_org_at), "MMM d, yyyy"), icon: Calendar },
                           {
                             label: "Last active",

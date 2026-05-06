@@ -166,7 +166,7 @@ export function UserDetails() {
 
         <div className="grid md:grid-cols-4 gap-4">
           <Card className="p-4">
-            <p className="text-sm text-muted-foreground mb-1">Total Sessions</p>
+            <p className="text-sm text-muted-foreground mb-1">Total Talk it out</p>
             <p className="text-2xl font-bold">{sessions.length}</p>
           </Card>
           <Card className="p-4">

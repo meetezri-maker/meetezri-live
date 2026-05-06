@@ -479,7 +479,7 @@ export function EngagementMetrics() {
                   dataKey="sessions"
                   stroke="#8b5cf6"
                   strokeWidth={2}
-                  name="Sessions"
+                  name="Talk it out"
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -724,7 +724,7 @@ export function EngagementMetrics() {
                   dataKey="sessions"
                   fill="#3b82f6"
                   radius={[8, 8, 0, 0]}
-                  name="Sessions"
+                  name="Talk it out"
                 />
                 <Line
                   yAxisId="left"

@@ -16,9 +16,12 @@ import {
   UserPlus,
   UserMinus,
   Loader2,
+  ArrowRight,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import {
   mapWellnessChallengeDashboardToRows,
   type WellnessChallengeDashboardPayload,
@@ -46,6 +49,39 @@ function formatEndDate(endDate?: string | null) {
   if (diffDays === 0) return "Ends today";
   if (diffDays === 1) return "1 day left";
   return `${diffDays} days left`;
+}
+
+function getUserChallengeStatus(challenge: WellnessChallengeRow): {
+  label: string;
+  className: string;
+  helperText: string;
+} {
+  if (challenge.isLocked) {
+    return {
+      label: "Locked",
+      className: "bg-gray-100 text-gray-700",
+      helperText: "Finish earlier challenges to unlock this one.",
+    };
+  }
+  if (challenge.isCompleted) {
+    return {
+      label: "Completed",
+      className: "bg-green-100 text-green-700",
+      helperText: "Great work. Reward points are already counted.",
+    };
+  }
+  if (challenge.isJoined) {
+    return {
+      label: "In Progress",
+      className: "bg-blue-100 text-blue-700",
+      helperText: "Keep going to reach the target and complete it.",
+    };
+  }
+  return {
+    label: "Not Joined",
+    className: "bg-amber-100 text-amber-700",
+    helperText: "Join this challenge to start tracking progress.",
+  };
 }
 
 export function Challenges() {
@@ -95,14 +131,20 @@ export function Challenges() {
         setChallenges(prev =>
           prev.map(c => c.id === challenge.id ? { ...c, isJoined: false } : c)
         );
+        toast.success(`You left "${challenge.title}"`);
       } else {
         await api.wellness.joinChallenge(challenge.id);
         setChallenges(prev =>
           prev.map(c => c.id === challenge.id ? { ...c, isJoined: true } : c)
         );
+        toast.success(`You joined "${challenge.title}"`);
       }
-    } catch {
-      // Silently fail — user can retry
+    } catch (e) {
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : "Could not update your challenge. Please try again."
+      );
     } finally {
       setJoiningId(null);
     }
@@ -110,14 +152,14 @@ export function Challenges() {
 
   const filteredChallenges = useMemo(() => {
     return challenges.filter((challenge) => {
-      if (activeTab === "active") return !challenge.isCompleted && !challenge.isLocked;
+      if (activeTab === "active") return challenge.isJoined && !challenge.isCompleted && !challenge.isLocked;
       if (activeTab === "completed") return challenge.isCompleted;
       return true;
     });
   }, [activeTab, challenges]);
 
   const stats = [
-    { label: "Active Challenges", value: challenges.filter((c) => !c.isCompleted && !c.isLocked).length, icon: Target },
+    { label: "In Progress", value: challenges.filter((c) => c.isJoined && !c.isCompleted && !c.isLocked).length, icon: Target },
     { label: "Completed", value: challenges.filter((c) => c.isCompleted).length, icon: CheckCircle2 },
     { label: "Total Points", value: summary.totalPoints, icon: Star },
     { label: "Current Level", value: summary.currentLevel, icon: Award },
@@ -142,6 +184,21 @@ export function Challenges() {
           {error && (
             <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">{error}</p>
           )}
+        </motion.div>
+
+        {/* How it works */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+        >
+          <Card className="p-4 mb-6 border-primary/20 bg-primary/5">
+            <h2 className="text-sm font-semibold mb-1">How challenge completion works</h2>
+            <p className="text-sm text-muted-foreground">
+              Join a challenge, then complete the required wellness activities. Your progress updates automatically.
+              When your progress reaches the target, the challenge moves to Completed and points are added.
+            </p>
+          </Card>
         </motion.div>
 
         {/* Level Progress Card */}
@@ -254,6 +311,7 @@ export function Challenges() {
             const badge = formatCategoryBadge(challenge.categoryLabel);
             const timeLeft = formatEndDate(challenge.endDate);
             const isJoiningThis = joiningId === challenge.id;
+            const userStatus = getUserChallengeStatus(challenge);
 
             return (
               <motion.div
@@ -303,6 +361,9 @@ export function Challenges() {
                             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.className}`}>
                               {badge.label}
                             </span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${userStatus.className}`}>
+                              {userStatus.label}
+                            </span>
                           </div>
                           <p className="text-sm text-muted-foreground mb-2">
                             {challenge.description}
@@ -314,11 +375,7 @@ export function Challenges() {
                                 <span>{timeLeft}</span>
                               </div>
                             )}
-                            {challenge.isJoined && !challenge.isCompleted && (
-                              <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                                Enrolled
-                              </span>
-                            )}
+                            <span className="text-xs text-muted-foreground">{userStatus.helperText}</span>
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-2 flex-shrink-0">
@@ -366,6 +423,11 @@ export function Challenges() {
                               </span>
                             )}
                           </div>
+                          {!challenge.isCompleted && (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Complete {Math.max(challenge.target - challenge.progress, 0)} more to finish this challenge.
+                            </p>
+                          )}
                         </>
                       )}
 
@@ -378,7 +440,7 @@ export function Challenges() {
 
                       {/* Join / Leave button */}
                       {!challenge.isLocked && !challenge.isCompleted && (
-                        <div className="mt-3">
+                        <div className="mt-3 flex flex-wrap gap-2">
                           <Button
                             size="sm"
                             variant={challenge.isJoined ? "outline" : "default"}
@@ -396,9 +458,17 @@ export function Challenges() {
                             {isJoiningThis
                               ? "Loading…"
                               : challenge.isJoined
-                              ? "Leave Challenge"
-                              : "Join Challenge"}
+                              ? "Leave This Challenge"
+                              : "Join and Start"}
                           </Button>
+                          {challenge.isJoined && (
+                            <Button asChild size="sm" className="gap-1.5">
+                              <Link to="/app/wellness-tools" aria-label="Open Wellness Tools to continue challenge progress">
+                                Open Wellness Tools
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </Link>
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -420,6 +490,8 @@ export function Challenges() {
             <p className="text-gray-600">
               {activeTab === "completed"
                 ? "You haven't completed any challenges yet. Keep working on your active challenges!"
+                : activeTab === "active"
+                ? "You're not currently enrolled in any active challenges. Join one from All Challenges."
                 : "All challenges completed! Check back soon for new challenges."}
             </p>
           </motion.div>

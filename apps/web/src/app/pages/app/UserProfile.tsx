@@ -865,7 +865,7 @@ export function UserProfile() {
 
                     <div className="flex justify-center gap-4 sm:gap-6 py-4 rounded-2xl bg-gray-50/90 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800">
                       {[
-                        { label: "Sessions", value: userStats.sessions },
+                        { label: "Talk it out", value: userStats.sessions },
                         { label: "Check-ins", value: userStats.checkins },
                         { label: "Days", value: userStats.daysActive },
                       ].map((s) => (

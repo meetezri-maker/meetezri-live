@@ -746,7 +746,7 @@ export function SessionLobby() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-3xl font-bold mb-2">Chat Time with Solace</h1>
+          <h1 className="text-3xl font-bold mb-2">Talk it out with Solace</h1>
           <p className="text-muted-foreground">
             Start a conversation or schedule a session for later
           </p>
@@ -1128,7 +1128,7 @@ export function SessionLobby() {
               <Card className="p-6 shadow-xl">
                 <div className="flex items-center gap-2 mb-4">
                   <Settings className="w-5 h-5 text-primary" />
-                  <h3 className="font-bold">Session Settings</h3>
+                  <h3 className="font-bold">Talking Settings</h3>
                 </div>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
@@ -1217,7 +1217,7 @@ export function SessionLobby() {
               </Card>
             </motion.div>
 
-            {/* Upcoming Sessions */}
+            {/* Upcoming Talk */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -1340,7 +1340,7 @@ export function SessionLobby() {
                       <div>
                         <h2 className="text-2xl font-bold">Customize Voice & Avatar</h2>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Personalize your session experience
+                          Personalize your talking experience
                         </p>
                       </div>
                       <motion.button
@@ -1474,7 +1474,7 @@ export function SessionLobby() {
                       <div ref={environmentSectionRef} className="mb-2 scroll-mt-4">
                         <div className="flex items-center gap-2 mb-4">
                           <Palette className="w-5 h-5 text-primary" />
-                          <h3 className="font-bold text-lg">Session Background</h3>
+                          <h3 className="font-bold text-lg">Talking Background</h3>
                         </div>
                         <p className="text-sm text-muted-foreground mb-4">
                           Choose a calming background for your video sessions

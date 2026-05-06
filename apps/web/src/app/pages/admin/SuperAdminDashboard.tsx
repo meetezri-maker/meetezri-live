@@ -604,8 +604,8 @@ export function SuperAdminDashboard() {
 
   const sessionChartSubtitle = useMemo(() => {
     if (chartPeriod === "year")
-      return `Sessions per day · ${yearRange.from} → ${yearRange.to} (UTC)`;
-    if (activeUtcRange) return `Sessions per day · ${activeUtcRange} (UTC)`;
+      return `Talk it out per day · ${yearRange.from} → ${yearRange.to} (UTC)`;
+    if (activeUtcRange) return `Talk it out per day · ${activeUtcRange} (UTC)`;
     if (chartPeriod === "week")
       return `UTC week view · offset ${sessionWeekOffset === 0 ? "current" : sessionWeekOffset}`;
     return "Last 30 days (UTC) · daily buckets";
@@ -749,7 +749,7 @@ export function SuperAdminDashboard() {
             </Card>
           </motion.div>
 
-          {/* Active Sessions */}
+          {/* Active Talk it out */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -767,7 +767,7 @@ export function SuperAdminDashboard() {
                     <span className="text-xs text-green-600 font-semibold">Live</span>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Active Sessions <span className="text-xs">(last 4h)</span></p>
+                <p className="text-sm text-muted-foreground mb-1">Active Talk it out <span className="text-xs">(last 4h)</span></p>
                 <motion.div
                   key={sessionCount}
                   initial={{ scale: 1.1 }}
@@ -880,13 +880,13 @@ export function SuperAdminDashboard() {
           transition={{ delay: 0.35 }}
         >
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Total AI Sessions */}
+            {/* Total AI Talk it out */}
             <Card className="p-5 flex flex-row items-center gap-4 hover:shadow-md transition-all">
               <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
                 <Brain className="w-5 h-5 text-white" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Total AI Sessions</p>
+                <p className="text-xs text-muted-foreground">Total AI Talk it out</p>
                 <p className="text-2xl font-bold tabular-nums">{totalSessions.toLocaleString()}</p>
                 <p className="text-xs text-muted-foreground truncate">All-time companion conversations</p>
               </div>
@@ -1483,7 +1483,7 @@ export function SuperAdminDashboard() {
                       />
                       <Tooltip
                         contentStyle={CHART_TOOLTIP_STYLE}
-                        formatter={(v: number) => [v, "Sessions"]}
+                        formatter={(v: number) => [v, "Talk it out"]}
                       />
                       <Bar
                         dataKey="sessions"

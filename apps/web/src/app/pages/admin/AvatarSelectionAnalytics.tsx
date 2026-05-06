@@ -164,7 +164,7 @@ export function AvatarSelectionAnalytics() {
                   <Tooltip
                     formatter={(value: number, key: string) => {
                       if (key === "usagePercent") return [formatUsagePercent(value), "Usage"];
-                      return [Number(value).toLocaleString(), "Sessions"];
+                      return [Number(value).toLocaleString(), "Talk it out"];
                     }}
                   />
                   <Bar dataKey="usagePercent" name="Usage %" fill="#6366f1" radius={[6, 6, 0, 0]} />
@@ -230,7 +230,7 @@ export function AvatarSelectionAnalytics() {
                     <th className="pb-3 pr-3 font-medium text-muted-foreground">Avatar</th>
                     <th className="pb-3 pr-3 font-medium text-muted-foreground">Name</th>
                     <th className="pb-3 pr-3 font-medium text-muted-foreground">Created At</th>
-                    <th className="pb-3 pr-3 font-medium text-muted-foreground">Sessions</th>
+                    <th className="pb-3 pr-3 font-medium text-muted-foreground">Talk it out</th>
                     <th className="pb-3 font-medium text-muted-foreground">Usage %</th>
                   </tr>
                 </thead>

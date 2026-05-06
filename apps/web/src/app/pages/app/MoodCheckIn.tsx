@@ -208,7 +208,7 @@ export function MoodCheckIn() {
         >
           <div className="flex items-center gap-3 mb-2">
             <Heart className="w-8 h-8 text-primary" />
-            <h1 className="text-3xl font-bold">Self Check-In</h1>
+            <h1 className="text-3xl font-bold">Mood</h1>
           </div>
           <p className="text-muted-foreground">
             Take a moment to reflect on how you're feeling right now

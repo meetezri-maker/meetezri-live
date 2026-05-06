@@ -279,7 +279,7 @@ export function MemberProfileView() {
 
                     <div className="flex justify-center gap-4 sm:gap-6 py-4 rounded-2xl bg-gray-50/90 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800">
                       {[
-                        { label: "Sessions", value: data.stats.completedSessions },
+                        { label: "Talk it out", value: data.stats.completedSessions },
                         { label: "Check-ins", value: data.stats.totalCheckins },
                         { label: "Days streak", value: data.stats.streakDays },
                       ].map((s) => (
@@ -347,7 +347,7 @@ export function MemberProfileView() {
                     <div className="flex items-start gap-3 rounded-xl border border-gray-100 dark:border-gray-800 p-3" style={{ background: GRAD_SOFT }}>
                       <History className="w-5 h-5 text-fuchsia-500 shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-[10px] uppercase tracking-wider text-gray-400">Sessions</p>
+                        <p className="text-[10px] uppercase tracking-wider text-gray-400">Talk it out</p>
                         <p className="text-2xl font-black bg-gradient-to-r from-orange-500 to-pink-500 bg-clip-text text-transparent tabular-nums">
                           {data.stats.completedSessions}
                         </p>

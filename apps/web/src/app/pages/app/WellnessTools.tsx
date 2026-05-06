@@ -381,7 +381,7 @@ export function WellnessTools() {
 
   const stats = [
     { 
-      label: "Completed Sessions", 
+      label: "Completed Talk it out", 
       value: progress.reduce((acc, curr) => acc + curr.sessionsCompleted, 0).toString(), 
       icon: Star 
     },

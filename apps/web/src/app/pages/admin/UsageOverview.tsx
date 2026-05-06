@@ -373,9 +373,9 @@ export function UsageOverview() {
           </Card>
         </motion.div>
 
-        {/* Sessions & Minutes */}
+        {/* Talk it out & Minutes */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Sessions Chart */}
+          {/* Talk it out Chart */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -385,9 +385,9 @@ export function UsageOverview() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-xl font-bold !text-gray-900 mb-1">
-                    Total Sessions
+                    Total Talk it out
                   </h3>
-                  <p className="text-sm !text-gray-600">Sessions started per day</p>
+                  <p className="text-sm !text-gray-600">Talk it out started per day</p>
                 </div>
                 <Activity className="w-5 h-5 text-purple-600" />
               </div>

@@ -485,7 +485,7 @@ export function CompanionManagement() {
                 <BarChart3 className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Sessions</p>
+                <p className="text-gray-600 text-sm">Talk it out</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.totalSessions}</p>
               </div>
             </div>
@@ -618,7 +618,7 @@ export function CompanionManagement() {
 
                       <div className="grid grid-cols-3 gap-4 text-sm">
                         <div>
-                          <p className="text-gray-600">Sessions</p>
+                          <p className="text-gray-600">Talk it out</p>
                           <p className="font-bold text-gray-900">{companion.sessionsCount}</p>
                         </div>
                         <div>

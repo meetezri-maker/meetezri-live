@@ -325,7 +325,7 @@ export function OrgAdminDashboard() {
                     7d
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground mb-1">Sessions today</p>
+                <p className="text-sm text-muted-foreground mb-1">Talk it out today</p>
                 <motion.div
                   key={todaySessions}
                   initial={{ scale: 1.1 }}
@@ -422,7 +422,7 @@ export function OrgAdminDashboard() {
                     strokeWidth={3}
                     fillOpacity={1}
                     fill="url(#colorSessionsArea)"
-                    name="Sessions"
+                    name="Talk it out"
                   />
                   <Area
                     type="monotone"
@@ -490,7 +490,7 @@ export function OrgAdminDashboard() {
               </div>
               <div className="mt-4 p-3 bg-green-50 rounded-lg">
                 <p className="text-sm text-green-700 font-medium">
-                  AI Sessions reflects live agent usage in the app.
+                  AI Talk it out reflects live agent usage in the app.
                 </p>
               </div>
             </Card>
@@ -633,7 +633,7 @@ export function OrgAdminDashboard() {
                       <span className="font-bold text-green-600">{team.activeToday}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Sessions</span>
+                      <span className="text-muted-foreground">Talk it out</span>
                       <span className="font-bold">{team.sessions}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">

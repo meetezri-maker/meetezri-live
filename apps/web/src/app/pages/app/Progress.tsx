@@ -296,7 +296,7 @@ export function Progress() {
         csvLine([
           "Tool ID",
           "Title",
-          "Sessions completed",
+          "Talk it out completed",
           "Total time (seconds)",
         ])
       );
@@ -338,7 +338,7 @@ export function Progress() {
     return [
       {
         icon: Video,
-        label: "AI Sessions",
+        label: "AI Talk it out",
         value: profile?.stats?.completed_sessions?.toString() || "0",
         change: "Total sessions",
         color: "text-blue-500",

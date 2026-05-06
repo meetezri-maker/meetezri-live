@@ -90,7 +90,7 @@ export function UsageAnalytics() {
   /** All-time completed sessions — matches Conversation Transcripts. */
   const totalSessionsAllTime: number = statsData?.totalSessions ?? 0;
 
-  /** Sessions in the selected date range (for charts only). */
+  /** Talk it out in the selected date range (for charts only). */
   const sessionsInRange = sessionActivity.reduce((sum, item) => sum + (Number(item.sessions) || 0), 0);
 
   /** Weighted average duration across days in range; fall back to backend all-time avg. */
@@ -170,7 +170,7 @@ export function UsageAnalytics() {
     name: item.feature,
     value: item.usage,
     color:
-      item.feature === "AI Sessions"
+      item.feature === "AI Talk it out"
         ? "#3B82F6"
         : item.feature === "Mood Tracking"
         ? "#10B981"
@@ -197,7 +197,7 @@ export function UsageAnalytics() {
   const stats = statsData
     ? [
         {
-          label: "Total Sessions",
+          label: "Total Talk it out",
           value: totalSessionsAllTime.toLocaleString(),
           sub: "all time · completed",
           change: "",
@@ -227,7 +227,7 @@ export function UsageAnalytics() {
           bg: "bg-purple-100",
         },
         {
-          label: "Sessions in Period",
+          label: "Talk it out in Period",
           value: sessionsInRange.toLocaleString(),
           sub: `${dateFrom} – ${dateTo}`,
           change: "",
@@ -367,7 +367,7 @@ export function UsageAnalytics() {
                   size="sm"
                   onClick={() => setSelectedMetric("sessions")}
                 >
-                  Sessions
+                  Talk it out
                 </Button>
                 <Button
                   variant={selectedMetric === "users" ? "default" : "outline"}
@@ -413,8 +413,8 @@ export function UsageAnalytics() {
                     selectedMetric === "avgDuration"
                       ? "Avg duration (min)"
                       : selectedMetric === "users"
-                        ? "Sessions (volume)"
-                        : "Sessions"
+                        ? "Talk it out (volume)"
+                        : "Talk it out"
                   }
                   stroke="#3B82F6"
                   strokeWidth={2.5}

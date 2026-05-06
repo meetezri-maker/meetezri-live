@@ -202,7 +202,7 @@ const navigationItems: NavItem[] = [
     icon: Eye,
     roles: ["super", "org", "team"],
     children: [
-      { name: "Live Sessions", href: "/admin/live-sessions-monitor", icon: Activity, roles: ["super", "org", "team"] },
+      { name: "Live Talk it out", href: "/admin/live-sessions-monitor", icon: Activity, roles: ["super", "org", "team"] },
       { name: "Session Recordings", href: "/admin/session-recordings", icon: Eye, roles: ["super", "org"] },
       { name: "Activity Monitor", href: "/admin/activity-monitor", icon: TrendingUp, roles: ["super", "org"] },
       { name: "System Health", href: "/admin/system-health-enhanced", icon: Server, roles: ["super"] },
