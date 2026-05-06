@@ -1678,6 +1678,8 @@ export function ActiveSession() {
   /** WS TTS queue (declared early for sound-off / stop handlers). */
   const wsAudioQueueRef = useRef<{ subtitle: string; audio: unknown }[]>([]);
   const wsIsPlaybackActiveRef = useRef(false);
+  /** True after backend `step:speaking` until `tts_done` (Ezri Avatar / app.js parity). Used to detect idle server interrupts. */
+  const wsTtsStreamingRef = useRef(false);
   const lastBargeInAtRef = useRef(0);
   const transcriptRef = useRef<
     { role: string; content: string; timestamp: number }[]
@@ -1739,6 +1741,7 @@ export function ActiveSession() {
   const ezriPlaybackTextRef = useRef<string>("");
   const suppressSttRef = useRef(false);
   const lastPlaybackDoneAtRef = useRef(0);
+  const playbackDoneCooldownTimerRef = useRef<number | null>(null);
   // Tracks the in-flight REST request so it can be aborted on interruption.
   const restAbortControllerRef = useRef<AbortController | null>(null);
   // When true, ALL incoming WS audio/text from the server is dropped.
@@ -1810,11 +1813,17 @@ export function ActiveSession() {
   };
 
   const stopPlaybackAndCooldown = (opts?: { sendPlaybackDone?: boolean; cooldownMs?: number }) => {
+    if (playbackDoneCooldownTimerRef.current !== null) {
+      window.clearTimeout(playbackDoneCooldownTimerRef.current);
+      playbackDoneCooldownTimerRef.current = null;
+    }
+
     // Stop all audio immediately, clear queue, and (optionally) send playback_done after cooldown.
     wsAudioQueueRef.current = [];
     wsIsPlaybackActiveRef.current = false;
     wsTtsDoneReceivedRef.current = true; // treat as done so we don't get stuck waiting
     wsPendingFallbackTextRef.current = "";
+    wsTtsStreamingRef.current = false;
     stopAudioAndSpeechDriver();
 
     const shouldSend = opts?.sendPlaybackDone !== false;
@@ -1830,7 +1839,8 @@ export function ActiveSession() {
     // Default 1500ms is for server-initiated interrupts (echo from physical speakers needs ~800-1200ms to decay).
     // Client-initiated interrupts pass a shorter value since the browser's AEC already removes speaker echo.
     const delay = opts?.cooldownMs ?? 1500;
-    window.setTimeout(() => {
+    playbackDoneCooldownTimerRef.current = window.setTimeout(() => {
+      playbackDoneCooldownTimerRef.current = null;
       try {
         wsClientRef.current?.sendPlaybackDone();
       } catch {}
@@ -1924,10 +1934,29 @@ export function ActiveSession() {
     }, 40);
   };
 
+  /** Only reopen STT between WebSocket TTS chunks when the turn is truly finished (Ezri Avatar queue + tts_done). */
+  const maybeResumeMicAfterEzriPlayback = (partOfWsStreamingTurn?: boolean) => {
+    if (!partOfWsStreamingTurn) {
+      resumeStt();
+      return;
+    }
+    if (
+      wsAudioQueueRef.current.length === 0 &&
+      wsTtsDoneReceivedRef.current
+    ) {
+      resumeStt();
+    }
+  };
+
   const playEzriAudio = async (
     text: string,
     audioSource: any,
-    opts?: { onDone?: () => void; onError?: () => void }
+    opts?: {
+      onDone?: () => void;
+      onError?: () => void;
+      /** When true, do not resume STT until all WS chunks played and server sent `tts_done`. */
+      partOfWsStreamingTurn?: boolean;
+    }
   ) => {
     if (typeof window === "undefined") return;
     if (isSoundOffRef.current) {
@@ -2031,7 +2060,7 @@ export function ActiveSession() {
     audio.onended = () => {
       if (seq !== audioPlaySeqRef.current) return;
       stopAudioAndSpeechDriver();
-      resumeStt();
+      maybeResumeMicAfterEzriPlayback(opts?.partOfWsStreamingTurn);
       setSpeechPulse((v) => v + 1);
       // Do NOT call recognition.start() here.
       // Recognition auto-restart is handled centrally by recognition.onend.
@@ -2057,7 +2086,7 @@ export function ActiveSession() {
         canPlayWebm: audio.canPlayType("audio/webm"),
       });
       stopAudioAndSpeechDriver();
-      resumeStt();
+      maybeResumeMicAfterEzriPlayback(opts?.partOfWsStreamingTurn);
       opts?.onError?.();
       opts?.onDone?.();
     };
@@ -2097,7 +2126,7 @@ export function ActiveSession() {
         canPlayWebm: audio.canPlayType("audio/webm"),
       });
       stopAudioAndSpeechDriver();
-      resumeStt();
+      maybeResumeMicAfterEzriPlayback(opts?.partOfWsStreamingTurn);
       opts?.onError?.();
       opts?.onDone?.();
     }
@@ -3084,18 +3113,20 @@ export function ActiveSession() {
     return () => clearInterval(watchdog);
   }, [permissionsGranted, isListening]);
 
-  // ── Mic-level barge-in (works even when STT is paused) ───────────────────
+  // ── Mic-level barge-in (mobile only: STT is aborted during TTS) ─────────
   useEffect(() => {
     if (!permissionsGranted) return;
+    if (!isMobileBrowser) return;
     if (isSessionPausedRef.current) return;
 
     let raf: number | null = null;
     let aboveSince: number | null = null;
 
-    // On desktop: recognition stays alive during TTS, barge-in fires via onresult.
-    // On mobile: recognition is aborted, this AudioAnalyser watchdog is the only
-    // barge-in path — keep thresholds sensitive (AEC attenuates mic during playback).
-    const THRESH = 14; // tune: higher = less sensitive; 14 ≈ 5% of FFT max
+    // Desktop: NEVER use mic RMS as a barge-in signal during TTS — speaker bleed into
+    // the same MediaStream reliably trips this and fires false interrupts. Barge-in is
+    // handled via Web Speech onresult + echo filters only.
+    // Mobile: recognition is aborted during TTS; this analyser path is the only barge-in option.
+    const THRESH = 22; // slightly less sensitive than before to reduce false triggers
     const HOLD_MS = 180;
 
     const tick = () => {
@@ -3126,7 +3157,7 @@ export function ActiveSession() {
     return () => {
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [permissionsGranted]);
+  }, [permissionsGranted, isMobileBrowser]);
 
   // ── Media stream cleanup ─────────────────────────────────────────────────
   // Media access is initiated only via requestMediaAccess() on user action.
@@ -3322,6 +3353,7 @@ export function ActiveSession() {
           // tts_done from an interrupted turn — ignore entirely.
           if (suppressIncomingAudioRef.current) {
             wsTtsDoneReceivedRef.current = false;
+            wsTtsStreamingRef.current = false;
             return;
           }
           // This tts_done closes one old response cycle — decrement the drop counter
@@ -3331,10 +3363,12 @@ export function ActiveSession() {
             wsAudioQueueRef.current = [];
             wsIsPlaybackActiveRef.current = false;
             wsTtsDoneReceivedRef.current = false;
+            wsTtsStreamingRef.current = false;
             return;
           }
 
           wsTtsDoneReceivedRef.current = true;
+          wsTtsStreamingRef.current = false;
 
           // If the server claims TTS finished but we never received any audio frames, use REST speak fallback.
           if (wsAudioSeenTurnRef.current !== wsActiveTurnRef.current && wsPendingFallbackTextRef.current.trim()) {
@@ -3348,6 +3382,8 @@ export function ActiveSession() {
               wsClientRef.current?.sendPlaybackDone();
             } catch {}
             wsTtsDoneReceivedRef.current = false;
+            // Audio ended before tts_done — onended skipped resumeStt; open mic now.
+            resumeStt();
           }
         },
         onSpeakingStart: () => {
@@ -3357,6 +3393,8 @@ export function ActiveSession() {
           if (suppressIncomingAudioRef.current) return;
           setIsEzriThinking(false);
           isEzriThinkingRef.current = false;
+          wsTtsDoneReceivedRef.current = false;
+          wsTtsStreamingRef.current = true;
           pauseStt();
         },
         onAvatarData: (data) => {
@@ -3375,12 +3413,25 @@ export function ActiveSession() {
           if (dropOldResponsesRef.current > 0) {
             dropOldResponsesRef.current = 0;
           }
-          // Stop playback immediately; then send playback_done after echo cooldown.
-          stopPlaybackAndCooldown({ sendPlaybackDone: true });
+
+          // Ezri Avatar app.js parity: idle interrupt (nothing playing/streaming / queued locally)
+          // must not flush server STT buffers with playback_done — only resume listening UI.
+          const wasPlayingOrStreaming =
+            wsIsPlaybackActiveRef.current ||
+            wsAudioQueueRef.current.length > 0 ||
+            wsTtsStreamingRef.current;
+
           setLiveUserSpeech("");
           setIsEzriThinking(false);
           isEzriThinkingRef.current = false;
           pendingUserTextRef.current = "";
+
+          if (!wasPlayingOrStreaming) {
+            resumeStt();
+            return;
+          }
+
+          stopPlaybackAndCooldown({ sendPlaybackDone: true });
         },
         onAudio: (audio) => {
           // Drop audio from the old turn — any chunk arriving while suppressed
@@ -3420,6 +3471,7 @@ export function ActiveSession() {
             }
             wsIsPlaybackActiveRef.current = true;
             void playEzriAudio(next.subtitle, next.audio, {
+              partOfWsStreamingTurn: true,
               onDone: () => {
                 wsIsPlaybackActiveRef.current = false;
                 playNext();
