@@ -1141,7 +1141,7 @@ export function AIAvatarManager() {
                       value={formData.specialty.join(', ')}
                       onChange={(e) => setFormData({ ...formData, specialty: e.target.value.split(',').map(s => s.trim()) })}
                       className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
-                      placeholder="e.g., Anxiety, Depression, Stress Management"
+                      placeholder="e.g., anxiousness, Low morale support, Stress Management"
                     />
                   </div>
 

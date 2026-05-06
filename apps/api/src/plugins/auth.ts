@@ -27,6 +27,7 @@ const APP_API_PREFIXES = [
   '/api/notifications',
   '/api/ai-avatars',
   '/api/emergency-contacts',
+  '/api/safety-resource-interactions',
   '/api/community',
 ];
 

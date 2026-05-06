@@ -4,7 +4,7 @@ import { AppLayout } from '@/app/components/AppLayout';
 import { Brain, CheckCircle, Star, Users, Volume2, Heart, ArrowLeft, RefreshCw, AlertCircle, User } from 'lucide-react';
 import { AnimatedCard } from '@/app/components/AnimatedCard';
 import { Link } from 'react-router-dom';
-import { DEFAULT_AI_COMPANIONS } from '@meetezri/shared';
+import { DEFAULT_AI_COMPANIONS, matchDefaultCompanionByAvatarName } from '@meetezri/shared';
 import {
   companionCardImageUrl,
   effectiveAvatarImageUrlFromDb,
@@ -43,15 +43,20 @@ function mapApiRowToChangeAvatar(row: Record<string, unknown>): AIAvatar {
     ? rawUrl
     : tryResolveCompanionPortraitUrl(name) ?? lobby?.cardImage ?? undefined;
 
-  const specialties = Array.isArray(row.specialties) ? (row.specialties as string[]) : [];
+  const canon = matchDefaultCompanionByAvatarName(name);
+  const dbSpecialties = Array.isArray(row.specialties)
+    ? (row.specialties as string[])
+    : [];
+  const specialty = canon ? [...canon.specialties] : dbSpecialties;
+  const description = canon ? canon.description : String(row.description ?? "");
   return {
     id: String(row.id ?? name),
     name,
     gender: String(row.gender ?? ""),
     ageRange: String(row.age_range ?? ""),
     personality: String(row.personality ?? ""),
-    specialty: specialties,
-    description: String(row.description ?? ""),
+    specialty,
+    description,
     imageUrl,
     voiceType: String(row.voice_type ?? ""),
     accentType: String(row.accent_type ?? ""),

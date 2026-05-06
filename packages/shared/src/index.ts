@@ -13,6 +13,7 @@ export {
 } from './companions';
 export {
   DEFAULT_AI_COMPANIONS,
+  matchDefaultCompanionByAvatarName,
   type DefaultAiCompanionDefinition,
 } from './defaultAiCompanions';
 

@@ -28,4 +28,14 @@ export const queryKeys = {
     me: () => ["profile", "me"] as const,
     byUser: (userId: string | undefined) => ["profile", userId] as const,
   },
+  safetyResourceInteractions: {
+    all: () => ["safetyResourceInteractions"] as const,
+    list: (params: {
+      from?: string;
+      to?: string;
+      userId: string | undefined;
+      /** e.g. `7d` | `all` — distinguishes cache when `from`/`to` are omitted. */
+      window?: string;
+    }) => ["safetyResourceInteractions", "list", params] as const,
+  },
 } as const;

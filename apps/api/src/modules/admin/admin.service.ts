@@ -2441,6 +2441,9 @@ export async function dispatchPushCampaignAsNotifications(campaignId: string) {
     title: c.title,
     message: c.message,
     channel: 'push',
+    ...(typeof m.notification_category === 'string'
+      ? { notification_category: m.notification_category }
+      : {}),
   };
 
   if (m.admin_broadcast) {
@@ -2581,6 +2584,9 @@ export async function createManualNotification(data: any) {
   // Helper to check preferences
   const shouldSend = (prefs: any) => !prefs || prefs.pushEnabled !== false;
 
+  const notificationCategory =
+    data.notification_category === 'emergency' ? 'emergency' : 'general';
+
   if (data.scheduled_for) {
     return prisma.push_campaigns.create({
       data: {
@@ -2594,6 +2600,7 @@ export async function createManualNotification(data: any) {
           segment_id: data.segment_id || null,
           userIds: Array.isArray(data.userIds) ? data.userIds : undefined,
           admin_broadcast: true,
+          notification_category: notificationCategory,
         },
       },
     });
@@ -2605,6 +2612,8 @@ export async function createManualNotification(data: any) {
     segment_id: data.segment_id || null,
     scheduled_for: data.scheduled_for || null,
     schedule_type: data.scheduled_for ? 'scheduled' : 'now',
+    manual_admin_broadcast: true,
+    notification_category: notificationCategory,
   };
 
   if (data.target_audience === 'segment' && data.segment_id) {

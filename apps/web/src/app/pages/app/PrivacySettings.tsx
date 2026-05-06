@@ -297,7 +297,7 @@ export function PrivacySettings() {
                 to="/app/settings/notification-history"
                 className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium underline"
               >
-                View History
+                Emergency notice history
               </Link>
             </div>
 

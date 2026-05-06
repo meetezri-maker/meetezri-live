@@ -151,8 +151,8 @@ export function NotificationSettings() {
       color: "text-rose-600"
     },
     {
-      title: "Crisis Alerts",
-      description: "Important safety and crisis notifications",
+      title: "Emergency & safety alerts",
+      description: "Important safety notifications from Solace",
       icon: Bell,
       key: "crisisAlerts" as const,
       color: "text-red-600"

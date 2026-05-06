@@ -181,7 +181,7 @@ export function OnboardingComplete() {
                 "✅ Your profile is complete and saved",
                 "✅ Ezri is ready for your first session",
                 "✅ You can customize settings anytime",
-                "✅ Crisis resources are available 24/7"
+                "✅ Emergency resources are available 24/7"
               ].map((item, index) => (
                 <motion.li
                   key={index}

@@ -4782,9 +4782,9 @@ export function ActiveSession() {
                 <div className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center mx-auto mb-3">
                   <AlertCircle className="w-7 h-7 text-white" />
                 </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-white">Crisis Alert Detected</h3>
+                <h3 className="text-xl sm:text-2xl font-bold text-white">Emergency alert detected</h3>
                 <p className="text-sm sm:text-base text-red-100 mt-2">
-                  We detected crisis-related language. Please contact emergency support now.
+                  We detected wording that suggests you may need immediate help. Please contact emergency support now.
                 </p>
               </div>
 
@@ -4869,7 +4869,12 @@ export function ActiveSession() {
                 </h4>
                 <div className="space-y-3">
                   {safetyResources.map((resource) => (
-                    <SafetyResourceCard key={resource.id} resource={resource} />
+                    <SafetyResourceCard
+                      key={resource.id}
+                      resource={resource}
+                      contextSessionId={sessionId}
+                      safetyState={currentState}
+                    />
                   ))}
                 </div>
               </div>

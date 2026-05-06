@@ -1,4 +1,4 @@
-import { DEFAULT_AI_COMPANIONS } from "@meetezri/shared";
+import { DEFAULT_AI_COMPANIONS, matchDefaultCompanionByAvatarName } from "@meetezri/shared";
 
 import {
   companionCardImageUrl,
@@ -59,12 +59,17 @@ export function lobbyAvatarsFromApiRows(
         ? r.personality.trim()
         : lobby?.personality?.trim() || "";
 
+    const canon = matchDefaultCompanionByAvatarName(name);
+    const descriptionForCard = canon
+      ? canon.lobbyTagline
+      : (r.description || lobby?.description || "");
+
     return {
       id: r.id ?? r.name,
       name: r.name,
       emoji: "",
       personality: personalityFromDb.slice(0, 280),
-      description: (r.description || lobby?.description || "").slice(0, 160),
+      description: descriptionForCard.slice(0, 160),
       cardImage,
     };
   });

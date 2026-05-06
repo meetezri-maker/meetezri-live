@@ -33,13 +33,13 @@ export const SUBSCRIPTION_PLANS: Record<PlanTier, SubscriptionPlan> = {
     gradient: 'from-gray-500 to-gray-600',
     allowanceDescription: '30 minutes total hard cap',
     features: [
-      'Landing + How Ezri Works',
+      'Landing + How Solace Works',
       'Signup / Login / Verification',
       'FaceTime Basic',
-      'Session Start/End Protocol',
+      'Talking Start/End Protocol',
       'Minutes Deduction Tracking',
-      'Crisis Detection & De-escalation',
-      'Crisis Resources Surfaced'
+      'Emergency Detection & De-escalation',
+      'Emergency Resources Surfaced'
     ],
     notIncluded: [
       'Mood history or trends',
@@ -62,14 +62,14 @@ export const SUBSCRIPTION_PLANS: Record<PlanTier, SubscriptionPlan> = {
     gradient: 'from-blue-500 to-blue-600',
     allowanceDescription: '200 minutes reset monthly',
     features: [
-      'Full FaceTime with Ezri',
+      'Full FaceTime with Solace',
       'Daily mood check-in & history',
       '7-day & 30-day visual trends',
       'Unlimited journals & Rich editor',
       'Curated wellness tools',
       'Avatar customization',
       'Usage dashboard',
-      'Real-time crisis detection'
+      'Real-time emergency detection'
     ],
     notIncluded: [
       '90-day mood trends',

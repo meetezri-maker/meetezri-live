@@ -784,8 +784,8 @@ export function SystemSettingsEnhanced() {
                     </div>
                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div>
-                        <p className="font-medium">Crisis Alerts</p>
-                        <p className="text-sm text-muted-foreground">Immediate alerts for crisis situations</p>
+                        <p className="font-medium">Emergency alerts</p>
+                        <p className="text-sm text-muted-foreground">Immediate alerts for emergency situations</p>
                       </div>
                       <Toggle
                         checked={settings.notifications.crisisAlerts}

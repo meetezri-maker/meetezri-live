@@ -16,8 +16,6 @@ import {
   ArrowLeft,
   LogOut,
   Loader2,
-  Trophy,
-  Users,
   BookOpen,
   Brain,
   Phone,
@@ -27,7 +25,6 @@ import {
   BarChart3,
   History,
   Wind,
-  CreditCard,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
@@ -208,14 +205,6 @@ export function SettingsHub() {
       route: "/app/settings/account"
     },
     {
-      id: "billing",
-      title: "Billing & Subscription",
-      description: "Manage your plan, invoices, and payments",
-      icon: CreditCard,
-      color: "from-emerald-500 to-teal-600",
-      route: "/app/billing"
-    },
-    {
       id: "privacy",
       title: "Privacy & Security",
       description: "Control your data, privacy settings, and security",
@@ -257,22 +246,6 @@ export function SettingsHub() {
       route: "/app/settings/change-avatar"
     },
     {
-      id: "achievements",
-      title: "Achievements",
-      description: "View your badges, milestones, and progress",
-      icon: Trophy,
-      color: "from-yellow-500 to-amber-600",
-      route: "/app/settings/achievements"
-    },
-    {
-      id: "community",
-      title: "Community",
-      description: "Connect with others and share your journey",
-      icon: Users,
-      color: "from-cyan-500 to-blue-600",
-      route: "/app/settings/community"
-    },
-    {
       id: "resources",
       title: "Resources Library",
       description: "Browse articles, videos, and wellness exercises",
@@ -280,14 +253,6 @@ export function SettingsHub() {
       color: "from-indigo-500 to-purple-600",
       route: "/app/settings/resources"
     },
-    {
-      id: "brain",
-      title: "Brain Health",
-      description: "Explore cognitive exercises and brain health tips",
-      icon: Brain,
-      color: "from-teal-500 to-cyan-600",
-      route: "/app/settings/brain-health"
-    }
   ];
 
   const safetySections: SettingSection[] = [
@@ -300,9 +265,9 @@ export function SettingsHub() {
       route: "/app/settings/emergency-contacts"
     },
     {
-      id: "safety-plan",
-      title: "Safety Plan",
-      description: "Personalized safety plan builder (6 sections)",
+      id: "safety-plan",    
+      title: "wellness Plan",
+      description: "Personalized wellness plan builder (6 sections)",
       icon: FileHeart,
       color: "from-orange-500 to-red-600",
       route: "/app/settings/safety-plan"
@@ -317,8 +282,8 @@ export function SettingsHub() {
       badge: "NEW"
     },
     {
-      id: "crisis-resources",
-      title: "Crisis Resources",
+      id: "emergency-resources",
+      title: "Emergency Resources",
       description: "27 international hotlines (6 regions)",
       icon: AlertCircle,
       color: "from-red-600 to-pink-600",
@@ -333,9 +298,9 @@ export function SettingsHub() {
       route: "/app/settings/resource-analytics"
     },
     {
-      id: "Crisis Notification",
-      title: "Crisis Notification ",
-      description: "See all notifications sent",
+      id: "emergency-notification-history",
+      title: "Emergency notification history",
+      description: "Safety-related notices from our team (in-app)",
       icon: History,
       color: "from-blue-500 to-cyan-600",
       route: "/app/settings/notification-history"

@@ -51,6 +51,21 @@ type FeedPost = {
   tags: string[];
 };
 
+function normalizeCommunityTopicLabel(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^#/, "")
+    .replace(/\s+/g, " ");
+}
+
+/** Tags shown under a post as hashtags — excludes any tag that duplicates the category line. */
+function feedHashtagsExcludingDisplayedCategory(post: FeedPost): string[] {
+  const catKey = normalizeCommunityTopicLabel(post.category ?? "");
+  if (!catKey) return post.tags;
+  return post.tags.filter((tag) => normalizeCommunityTopicLabel(tag) !== catKey);
+}
+
 type FeedGroup = {
   id: string;
   name: string;
@@ -712,6 +727,7 @@ export function Community() {
                   </div>
                 ) : (
                   filteredPosts.map((post, index) => {
+                    const hashtagsForDisplay = feedHashtagsExcludingDisplayedCategory(post);
                     const authorRowInteractive =
                       "flex items-start gap-4 mb-4 rounded-xl -mx-2 px-2 pt-2 pb-1 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50";
                     const authorRowStatic = "flex items-start gap-4 mb-4";
@@ -852,16 +868,18 @@ export function Community() {
                           <p className="text-gray-700 dark:text-slate-300 mb-4 leading-relaxed whitespace-pre-wrap">{post.content}</p>
                         )}
 
-                        <div className="flex flex-wrap gap-2 mb-4">
-                          {post.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="text-xs px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
+                        {hashtagsForDisplay.length > 0 ? (
+                          <div className="flex flex-wrap gap-2 mb-4">
+                            {hashtagsForDisplay.map((tag) => (
+                              <span
+                                key={tag}
+                                className="text-xs px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
 
                         <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-slate-800">
                           <div className="flex items-center gap-6 text-sm text-gray-600 dark:text-slate-400">

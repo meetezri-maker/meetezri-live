@@ -353,7 +353,7 @@ export function EmergencyContacts() {
               <div>
                 <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">About Emergency Contacts</h3>
                 <p className="text-sm text-blue-800 dark:text-blue-200">
-                  These contacts may be notified if you're in crisis or need immediate support. Make sure to inform them that they're listed as emergency contacts.
+                  These contacts may be notified if you're in distress or need immediate support. Make sure to inform them that they're listed as emergency contacts.
                 </p>
               </div>
             </div>
@@ -446,7 +446,7 @@ export function EmergencyContacts() {
           >
             <Heart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="font-bold text-lg mb-2">No Emergency Contacts Yet</h3>
-            <p className="text-muted-foreground mb-4">Add emergency contacts who can support you in crisis situations</p>
+            <p className="text-muted-foreground mb-4">Add emergency contacts who can support you in urgent situations</p>
             <Button
               type="button"
               onClick={() => {

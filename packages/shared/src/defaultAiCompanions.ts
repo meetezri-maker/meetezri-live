@@ -29,9 +29,9 @@ export const DEFAULT_AI_COMPANIONS: readonly DefaultAiCompanionDefinition[] = [
     gender: "Male",
     age_range: "30-35",
     personality: "Calm, Patient, Understanding",
-    specialties: ["PTSD", "Trauma", "Life Transitions"],
+    specialties: ["Life Transitions"],
     description:
-      "A gentle and patient listener who creates a safe space for healing. Alex focuses on trauma recovery and navigating life's big changes.",
+      "A gentle and patient listener who creates a safe space for healing. Alex focuses on emotional healing and navigating life's big changes.",
     voice_type: "Deep & Calming",
     accent_type: "Neutral American",
     rating: 4.8,
@@ -59,9 +59,9 @@ export const DEFAULT_AI_COMPANIONS: readonly DefaultAiCompanionDefinition[] = [
     gender: "Female",
     age_range: "35-40",
     personality: "Warm, Empathetic, Supportive",
-    specialties: ["Anxiety", "Depression", "Stress Management"],
+    specialties: ["anxiousness", "Low morale support", "Stress Management"],
     description:
-      "A compassionate AI companion with a warm presence. Maya specializes in helping with anxiety, stress, and building emotional resilience through mindfulness.",
+      "A compassionate AI companion with a warm presence. Maya specializes in helping with anxiousness, stress, and building emotional resilience through mindfulness.",
     voice_type: "Warm & Soothing",
     accent_type: "Neutral American",
     rating: 4.9,
@@ -82,3 +82,41 @@ export const DEFAULT_AI_COMPANIONS: readonly DefaultAiCompanionDefinition[] = [
     rating: 4.9,
   },
 ];
+
+/** Lowercased trimmed `ai_avatars.name` → canonical default `name` / `id` in DEFAULT_AI_COMPANIONS. */
+const AVATAR_NAME_ALIASES: Record<string, string> = {
+  "alex rivera": "Alex",
+  alex: "Alex",
+  "maya chen": "Maya Chen",
+  maya: "Maya Chen",
+  "jordan taylor": "Jordan Taylor",
+  jordan: "Jordan Taylor",
+  "sara mitchell": "Sara Mitchell",
+  "sarah mitchell": "Sara Mitchell",
+  sara: "Sara Mitchell",
+  sarah: "Sara Mitchell",
+};
+
+/**
+ * Resolve a DB or profile avatar label (e.g. `"Alex Rivera"`) to the matching row in DEFAULT_AI_COMPANIONS.
+ * Use on the member app when API rows lag behind seeded product copy.
+ */
+export function matchDefaultCompanionByAvatarName(
+  rawName: string
+): DefaultAiCompanionDefinition | undefined {
+  const key = rawName.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!key) return undefined;
+
+  const viaAlias = AVATAR_NAME_ALIASES[key];
+  if (viaAlias) {
+    const hit = DEFAULT_AI_COMPANIONS.find(
+      (c) => c.name === viaAlias || c.id === viaAlias
+    );
+    if (hit) return hit;
+  }
+
+  return (
+    DEFAULT_AI_COMPANIONS.find((c) => c.name.trim().toLowerCase() === key) ??
+    DEFAULT_AI_COMPANIONS.find((c) => c.id.trim().toLowerCase() === key)
+  );
+}

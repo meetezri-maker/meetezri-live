@@ -129,7 +129,7 @@ export function MemberProfileView() {
       }
       return {
         joinDateLabel: format(d, "MMMM d, yyyy"),
-        tenureLabel: days >= 0 ? `${days} day${days === 1 ? "" : "s"} with Ezri` : "",
+        tenureLabel: days >= 0 ? `${days} day${days === 1 ? "" : "s"} with Solace` : "",
         onboardingDoneLabel,
       };
     } catch {
@@ -268,7 +268,7 @@ export function MemberProfileView() {
                         <Users className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400 shrink-0 mt-0.5" />
                         <div>
                           <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
-                            AI companion
+                            Solace companion
                           </p>
                           <p className="text-sm font-semibold text-gray-900 dark:text-white">
                             {companionLabel}

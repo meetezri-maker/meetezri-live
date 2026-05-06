@@ -32,7 +32,7 @@ export function TrialExpired() {
         "Advanced mood analytics",
         "Full wellness tool library",
         "Priority support",
-        "Crisis resources 24/7"
+        "Emergency resources 24/7"
       ],
       gradient: "from-purple-500 to-pink-500",
       popular: true

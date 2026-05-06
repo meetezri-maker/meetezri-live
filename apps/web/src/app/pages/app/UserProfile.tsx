@@ -438,11 +438,11 @@ export function UserProfile() {
   const milestones = useMemo(() => {
     const { sessions, checkins, daysActive: streak } = userStats;
     return [
-      { id: "join", label: "Joined MeetEzri", unlocked: Boolean(rawProfile?.created_at) },
+      { id: "join", label: "Joined Solace", unlocked: Boolean(rawProfile?.created_at) },
       { id: "onboarding", label: "Completed onboarding", unlocked: Boolean(rawProfile?.onboarding_completed) },
-      { id: "first-session", label: "First session completed", unlocked: sessions >= 1 },
-      { id: "sessions-5", label: "5 sessions completed", unlocked: sessions >= 5 },
-      { id: "sessions-10", label: "10 sessions completed", unlocked: sessions >= 10 },
+      { id: "first-talk", label: "First Talk completed", unlocked: sessions >= 1 },
+      { id: "talks-5", label: "5 Talks completed", unlocked: sessions >= 5 },
+      { id: "talks-10", label: "10 Talks completed", unlocked: sessions >= 10 },
       { id: "checkins-10", label: "10 mood check-ins", unlocked: checkins >= 10 },
       { id: "streak-7", label: "7-day activity streak", unlocked: streak >= 7 },
       { id: "profile-full", label: "Profile fully complete", unlocked: profileCompletion.isComplete },
@@ -460,7 +460,7 @@ export function UserProfile() {
       if (obAt) { try { onboardingDoneLabel = format(parseISO(obAt), "MMM d, yyyy"); } catch {} }
       return {
         joinDateLabel: format(d, "MMMM d, yyyy"),
-        tenureLabel: days >= 0 ? `${days} day${days === 1 ? "" : "s"} with Ezri` : "",
+        tenureLabel: days >= 0 ? `${days} day${days === 1 ? "" : "s"} with Solace` : "",
         onboardingDoneLabel,
         planLabel: typeof rawProfile?.subscription_plan === "string" ? rawProfile.subscription_plan : "trial",
       };
@@ -1491,7 +1491,7 @@ export function UserProfile() {
                           <h2 className="text-gray-900 dark:text-white font-bold text-lg flex items-center gap-2">
                             <Trophy className="w-5 h-5 text-amber-500" /> Milestones
                           </h2>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Track achievements on your MeetEzri journey</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Track achievements on your Solace journey</p>
                         </div>
                       </div>
                     </div>

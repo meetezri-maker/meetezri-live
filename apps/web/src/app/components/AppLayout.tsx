@@ -18,7 +18,9 @@ import {
   Sparkles,
   CreditCard,
   AlertTriangle,
-  Loader2
+  Loader2,
+  Brain,
+  Users
 } from "lucide-react";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { BrandLogo } from "./BrandLogo";
@@ -216,7 +218,12 @@ export function AppLayout({ children }: AppLayoutProps) {
     { path: "/app/session-lobby", icon: Video, label: "Talk It Out" },
     { path: "/app/mood-checkin", icon: Heart, label: "Mood" },
     { path: "/app/journal", icon: BookOpen, label: "Journal" },
-    { path: "/app/user-profile", icon: User, label: "Profile" }
+    {path:"/app/habit-tracker", icon: Target, label: "Habit Tracker"},
+    {path:"/app/sleep-tracker", icon: Moon, label: "Sleep Tracker"},
+    {path:"/app/settings/brain-health", icon: Brain, label: "Brain Health"},
+    { path: "/app/user-profile", icon: User, label: "Profile" },
+
+
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -378,11 +385,13 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Bottom Navigation - Mobile Only */}
       <MobileBottomNav compact={compact} />
 
-      {/* Desktop Sidebar - Hidden on mobile */}
+      {/* Desktop Sidebar - Hidden on mobile; nav scrolls when content exceeds viewport */}
       <div
-        className={`hidden sm:block fixed left-0 bottom-0 ${sidebarTopClass} ${sidebarWidthClass} bg-white/80 dark:bg-slate-900/90 backdrop-blur-lg border-r border-gray-200 dark:border-slate-700 z-30`}
+        className={`hidden sm:flex sm:flex-col sm:overflow-hidden fixed left-0 bottom-0 ${sidebarTopClass} ${sidebarWidthClass} bg-white/80 dark:bg-slate-900/90 backdrop-blur-lg border-r border-gray-200 dark:border-slate-700 z-30`}
       >
-        <nav className={sidebarNavClass}>
+        <nav
+          className={`${sidebarNavClass} flex-1 min-h-0 overflow-y-auto overscroll-y-contain [scrollbar-gutter:stable]`}
+        >
           {navItems.map((item, index) => {
             const Icon = item.icon;
             const active = isActive(item.path);
@@ -418,7 +427,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 className={`app-sidebar-item ${isRouteActive("/app/session-history") ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
               >
                 <Clock className={navIconClass} />
-                <span className={navLabelClass}>Talk it out History</span>
+                <span className={navLabelClass}>Talk It Out History</span>
               </motion.div>
             </Link>
 
@@ -431,7 +440,15 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <span className={navLabelClass}>Wellness Tools</span>
               </motion.div>
             </Link>
-            
+            <Link to="/app/settings/community">
+              <motion.div
+                whileHover={{ scale: 1.02, x: 5 }}
+                className={`app-sidebar-item ${isRouteActive("/app/settings/community") ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
+              >
+                <Users className={navIconClass} />
+                <span className={navLabelClass}>Community</span>
+              </motion.div>
+            </Link>
             <Link to="/app/progress">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
@@ -442,7 +459,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </motion.div>
             </Link>
 
-            <Link to="/app/sleep-tracker">
+            {/* <Link to="/app/sleep-tracker">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
                 className={`app-sidebar-item ${isRouteActive("/app/sleep-tracker") ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
@@ -450,7 +467,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <Moon className={navIconClass} />
                 <span className={navLabelClass}>Sleep Tracker</span>
               </motion.div>
-            </Link>
+            </Link> */}
 
             <Link to="/app/billing">
               <motion.div
@@ -466,7 +483,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </motion.div>
             </Link>
 
-            <Link to="/app/habit-tracker">
+            {/* <Link to="/app/habit-tracker">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
                 className={`app-sidebar-item ${isRouteActive("/app/habit-tracker") ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
@@ -474,7 +491,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <Target className={navIconClass} />
                 <span className={navLabelClass}>Habit Tracker</span>
               </motion.div>
-            </Link>
+            </Link> */}
 
             <Link to="/app/settings/achievements">
               <motion.div

@@ -11,49 +11,20 @@ import {
   TrendingUp,
   ArrowLeft,
   Loader2,
-  Sparkles,
   ExternalLink,
 } from "lucide-react";
 import { AnimatedCard } from "@/app/components/AnimatedCard";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  WELLNESS_TOOL_CATEGORIES,
-  WELLNESS_CATEGORY_GRADIENT,
-  isWellnessToolCategory,
-} from "@/lib/wellnessToolCategories";
-import { WELLNESS_CATEGORY_ICONS } from "@/lib/wellnessCategoryIcons";
+import { WELLNESS_TOOL_CATEGORIES } from "@/lib/wellnessToolCategories";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { WELLNESS_BUILTIN_TOOLS_ADMIN } from "@/lib/wellnessBuiltinToolsMetadata";
-import type { LucideIcon } from "lucide-react";
+import {
+  categoryVisualsForReading,
+  fetchReadingLibraryArticles,
+  type ReadingLibraryArticle,
+} from "@/lib/readingLibraryArticles";
 
-interface Article {
-  id: string;
-  source: "api" | "builtin";
-  title: string;
-  description: string;
-  category: string;
-  duration: string;
-  difficulty: "beginner" | "intermediate" | "advanced";
-  rating: number;
-  views: number;
-  isFavorite: boolean;
-  tags: string[];
-  contentUrl?: string | null;
-}
-
-// NOTE: Built-in articles must use IDs that `ResourceArticlePage` can resolve (`builtin:<id>`),
-// so we take them directly from `WELLNESS_BUILTIN_TOOLS_ADMIN`.
-
-function categoryVisuals(category: string): { gradient: string; Icon: LucideIcon } {
-  if (isWellnessToolCategory(category)) {
-    return {
-      gradient: WELLNESS_CATEGORY_GRADIENT[category],
-      Icon: WELLNESS_CATEGORY_ICONS[category],
-    };
-  }
-  return { gradient: "from-slate-500 to-slate-700", Icon: Sparkles };
-}
+type Article = ReadingLibraryArticle;
 
 export function Resources() {
   const navigate = useNavigate();
@@ -66,53 +37,8 @@ export function Resources() {
     const loadArticles = async () => {
       try {
         setLoading(true);
-        const toolsRes = await api.wellness.getAll();
-
-        const toolList = Array.isArray(toolsRes) ? toolsRes : [];
-        const publishedTools = toolList.filter((t: any) => !t.status || t.status === "published");
-
-        const builtins: Article[] = WELLNESS_BUILTIN_TOOLS_ADMIN.map((t) => ({
-          id: `builtin:${t.id}`,
-          source: "builtin",
-          title: t.title,
-          description: t.description,
-          category: t.category,
-          duration: t.duration,
-          difficulty: "beginner",
-          rating: 0,
-          views: 0,
-          isFavorite: false,
-          tags: [t.category],
-          contentUrl: null,
-        }));
-
-        const apiItems: Article[] = publishedTools.map((t: any) => ({
-          id: t.id,
-          source: "api",
-          title: t.title || "Untitled",
-          description: t.description || "Wellness content",
-          category: t.category || "General",
-          duration:
-            typeof t.duration_seconds === "number" && t.duration_seconds > 0
-              ? `${Math.max(1, Math.round(t.duration_seconds / 60))} min read`
-              : t.duration_minutes
-                ? `${t.duration_minutes} min read`
-                : "—",
-          difficulty:
-            String(t.difficulty || "Beginner").toLowerCase() === "advanced"
-              ? "advanced"
-              : String(t.difficulty || "Beginner").toLowerCase() === "intermediate"
-                ? "intermediate"
-                : "beginner",
-          rating: Number(t.rating) || 0,
-          views: Number(t.usage_count) || 0,
-          isFavorite: Boolean(t.is_favorite),
-          tags: [t.category].filter(Boolean),
-          contentUrl: t.content_url || null,
-        }));
-
-        // Keep built-in reading articles always visible, then add API items.
-        setArticles([...builtins, ...apiItems]);
+        const list = await fetchReadingLibraryArticles();
+        setArticles(list);
       } catch (error) {
         console.error(error);
         toast.error("Failed to load articles");
@@ -253,7 +179,7 @@ export function Resources() {
           ) : !loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
               {filteredArticles.map((article, index) => {
-                const { gradient, Icon: CategoryIcon } = categoryVisuals(article.category);
+                const { gradient, Icon: CategoryIcon } = categoryVisualsForReading(article.category);
                 const showRating = article.rating > 0;
                 const showViews = article.source === "api" && article.views > 0;
 

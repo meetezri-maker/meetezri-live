@@ -148,7 +148,7 @@ export function Progress() {
   const monthlyInsight = useMemo(() => {
     if (monthlyActivity.length < 1) {
       return {
-        body: "Log sessions, moods, journals, and wellness tools to build your trend.",
+        body: "Log Talks, moods, journals, and wellness tools to build your trend.",
         chip1: null as string | null,
       };
     }
@@ -160,7 +160,7 @@ export function Progress() {
     const delta =
       prev > 0 ? Math.round(((curr - prev) / prev) * 100) : null;
     return {
-      body: `This month you logged ${curr} activities (AI sessions, mood check-ins, journals, and wellness completions combined).`,
+      body: `This month you logged ${curr} activities (Talks, mood check-ins, journals, and wellness completions combined).`,
       chip1:
         prev > 0 && delta !== null
           ? `${delta >= 0 ? "+" : ""}${delta}% vs prior month`
@@ -178,8 +178,8 @@ export function Progress() {
     },
     {
       icon: Star,
-      title: "First Session",
-      description: "Completed your first AI session",
+      title: "First Talk",
+      description: "Completed your first Talk",
       unlocked: true,
       color: "from-yellow-400 to-amber-500"
     },
@@ -230,7 +230,7 @@ export function Progress() {
       sections.push(
         csvLine(["Metric", "Value"]),
         csvLine([
-          "AI sessions (total)",
+          "Talks (total)",
           profile?.stats?.completed_sessions ?? 0,
         ]),
         csvLine([
@@ -338,9 +338,9 @@ export function Progress() {
     return [
       {
         icon: Video,
-        label: "AI Talk it out",
+        label: "Talk It Out",
         value: profile?.stats?.completed_sessions?.toString() || "0",
-        change: "Total sessions",
+        change: "Total Talks",
         color: "text-blue-500",
         bgColor: "bg-blue-50"
       },
@@ -493,7 +493,7 @@ export function Progress() {
               <Card className="p-6 shadow-xl">
                 <h2 className="text-xl font-bold mb-1">Weekly Progress</h2>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Counts per week: mood check-ins, completed AI sessions, wellness exercises
+                  Counts per week: mood check-ins, completed Talks, wellness exercises
                 </p>
                 {weeklyProgress.length === 0 ? (
                   <p className="text-muted-foreground text-sm py-12 text-center">No weekly data yet.</p>
@@ -522,7 +522,7 @@ export function Progress() {
                         dataKey="sessions"
                         stroke="#ec4899"
                         strokeWidth={3}
-                        name="AI sessions"
+                        name="Talk"
                       />
                       <Line
                         type="monotone"

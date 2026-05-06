@@ -143,7 +143,7 @@ export function HelpSupport() {
       {
         question: "Is Solace a replacement for professional therapy?",
         answer:
-          "No. Solace can support your wellbeing with tools, guidance, and reflection, but it’s not a substitute for professional medical advice, diagnosis, or treatment. If you’re in danger or need urgent help, use your local emergency number or crisis resources.",
+          "No. Solace can support your wellbeing with tools, guidance, and reflection, but it’s not a substitute for professional medical advice, diagnosis, or treatment. If you’re in danger or need urgent help, use your local emergency number or emergency resources.",
         tags: ["safety", "basics"],
       },
       {
@@ -172,7 +172,7 @@ export function HelpSupport() {
       {
         question: "How fast will support respond?",
         answer:
-          "We aim to respond within 24 hours on business days. If you’re facing an emergency, please use crisis resources or your local emergency number.",
+          "We aim to respond within 24 hours on business days. If you’re facing an emergency, please use emergency resources or your local emergency number.",
         tags: ["support"],
       },
     ],
@@ -197,7 +197,7 @@ export function HelpSupport() {
       answer: "Yes! Go to Privacy & Security settings and select 'Download My Data' to export all your information including journal entries."
     },
     {
-      question: "What are crisis resources?",
+      question: "What are emergency resources?",
       answer: "Just In Case resources provide immediate help during mental health emergencies. Access them 24/7 from the Wellness Tools section or the emergency button on your dashboard."
     },
     {
@@ -648,7 +648,7 @@ export function HelpSupport() {
             <div>
               <h3 className="font-bold text-indigo-900 dark:text-gray-100 mb-2">Support Hours</h3>
               <p className="text-sm text-indigo-700 dark:text-gray-300 mb-3">
-                Our support team is available Monday - Friday, 9am - 6pm EST. For urgent matters outside these hours, please use our crisis hotline.
+                Our support team is available Monday - Friday, 9am - 6pm EST. For urgent matters outside these hours, please use our emergency support line or 988.
               </p>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm text-indigo-800 dark:text-gray-200">

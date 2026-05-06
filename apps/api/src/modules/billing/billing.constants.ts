@@ -13,10 +13,10 @@ export const PLAN_LIMITS = {
   trial: {
     credits: 30, // 30 minutes hard cap
     features: [
-      'Landing + How Ezri Works',
+      'Landing + How Solace Works',
       'Signup / Login / Verification',
       'FaceTime Basic',
-      'Session Start/End Protocol',
+      'Talking Start/End Protocol',
       'Minutes Deduction Tracking'
     ],
     payAsYouGoRate: null, // No PAYG

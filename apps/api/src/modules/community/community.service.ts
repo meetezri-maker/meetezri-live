@@ -551,15 +551,15 @@ export async function getCommunityMemberPublicProfile(
   if (profile.role === 'therapist') authorRole = 'companion';
 
   const milestones = [
-    { id: 'join', label: 'Joined MeetEzri', unlocked: Boolean(profile.created_at) },
+    { id: 'join', label: 'Joined Solace', unlocked: Boolean(profile.created_at) },
     {
       id: 'onboarding',
       label: 'Completed onboarding',
       unlocked: Boolean(profile.onboarding_completed),
     },
-    { id: 'first-session', label: 'First session completed', unlocked: sessions >= 1 },
-    { id: 'sessions-5', label: '5 sessions completed', unlocked: sessions >= 5 },
-    { id: 'sessions-10', label: '10 sessions completed', unlocked: sessions >= 10 },
+    { id: 'first-talk', label: 'First Talk completed', unlocked: sessions >= 1 },
+    { id: 'talks-5', label: '5 Talks completed', unlocked: sessions >= 5 },
+    { id: 'talks-10', label: '10 Talks completed', unlocked: sessions >= 10 },
     { id: 'checkins-10', label: '10 mood check-ins', unlocked: checkins >= 10 },
     { id: 'streak-7', label: '7-day activity streak', unlocked: streakDays >= 7 },
     {

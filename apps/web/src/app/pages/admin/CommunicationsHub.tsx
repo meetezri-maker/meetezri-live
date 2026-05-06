@@ -131,6 +131,8 @@ function InAppTab({ onSent }: { onSent?: () => void }) {
   const [scheduledTime, setScheduledTime] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  /** When true, in-app deliveries are tagged for the member Emergency notification history screen. */
+  const [emergencySafetyNotice, setEmergencySafetyNotice] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const msgRef = useRef<HTMLTextAreaElement>(null);
   const userSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -210,10 +212,13 @@ function InAppTab({ onSent }: { onSent?: () => void }) {
         : audienceType === "segment" ? (builtin ? builtin.audience : "segment")
         : "specific";
       await api.admin.createManualNotification({
-        title: title.trim(), message: message.trim(), channel,
+        title: title.trim(),
+        message: message.trim(),
+        channel,
         target_audience: targetAudience,
+        notification_category: emergencySafetyNotice ? "emergency" : "general",
         ...(audienceType === "segment" && !builtin ? { segment_id: selectedSegment } : {}),
-        ...(audienceType === "specific" ? { user_ids: specificUsers } : {}),
+        ...(audienceType === "specific" ? { userIds: specificUsers } : {}),
         ...(scheduledFor ? { scheduled_for: scheduledFor } : {}),
       });
       toast.success(scheduleType === "scheduled" ? "Notification scheduled!" : "Notification sent!");
@@ -328,6 +333,26 @@ function InAppTab({ onSent }: { onSent?: () => void }) {
                   {specificUsers.length > 0 && <p className="text-xs text-primary mt-1">{specificUsers.length} user(s) selected</p>}
                 </div>
               )}
+            </div>
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-900 dark:bg-amber-950/30">
+              <label className="flex cursor-pointer items-start gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300"
+                  checked={emergencySafetyNotice}
+                  onChange={(e) => setEmergencySafetyNotice(e.target.checked)}
+                />
+                <span>
+                  <span className="font-semibold text-amber-900 dark:text-amber-100">
+                    Emergency / safety notice (in-app only)
+                  </span>
+                  <span className="mt-1 block text-amber-800/90 dark:text-amber-200/90">
+                    When checked, deliveries appear in members’ Emergency notification history. General
+                    announcements should leave this unchecked.
+                  </span>
+                </span>
+              </label>
             </div>
 
             {/* Schedule */}

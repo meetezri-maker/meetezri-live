@@ -15,11 +15,17 @@ import { motion } from 'motion/react';
 interface SafetyResourceCardProps {
   resource: SafetyResource;
   priority?: boolean; // Highlight as priority resource
-  sessionId?: string;
+  /** Conversation / app session id for analytics (optional). */
+  contextSessionId?: string;
   safetyState?: string;
 }
 
-export function SafetyResourceCard({ resource, priority = false, sessionId, safetyState }: SafetyResourceCardProps) {
+export function SafetyResourceCard({
+  resource,
+  priority = false,
+  contextSessionId,
+  safetyState,
+}: SafetyResourceCardProps) {
   const [copied, setCopied] = useState(false);
 
   // Track view on mount
@@ -29,10 +35,10 @@ export function SafetyResourceCard({ resource, priority = false, sessionId, safe
       resource.name,
       resource.type,
       'view',
-      sessionId,
+      contextSessionId,
       safetyState
     );
-  }, [resource.id, resource.name, resource.type, sessionId, safetyState]);
+  }, [resource.id, resource.name, resource.type, contextSessionId, safetyState]);
 
   const handleCall = () => {
     trackResourceInteraction(
@@ -40,7 +46,7 @@ export function SafetyResourceCard({ resource, priority = false, sessionId, safe
       resource.name,
       resource.type,
       'call',
-      sessionId,
+      contextSessionId,
       safetyState
     );
     window.location.href = `tel:${resource.phone}`;
@@ -52,7 +58,7 @@ export function SafetyResourceCard({ resource, priority = false, sessionId, safe
       resource.name,
       resource.type,
       'text',
-      sessionId,
+      contextSessionId,
       safetyState
     );
     window.location.href = `sms:${resource.phone}`;
@@ -64,7 +70,7 @@ export function SafetyResourceCard({ resource, priority = false, sessionId, safe
       resource.name,
       resource.type,
       'visit',
-      sessionId,
+      contextSessionId,
       safetyState
     );
     window.open(resource.url, '_blank', 'noopener,noreferrer');
@@ -73,6 +79,14 @@ export function SafetyResourceCard({ resource, priority = false, sessionId, safe
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(resource.phone || '');
+      trackResourceInteraction(
+        resource.id,
+        resource.name,
+        resource.type,
+        'copy',
+        contextSessionId,
+        safetyState
+      );
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -86,7 +100,7 @@ export function SafetyResourceCard({ resource, priority = false, sessionId, safe
       resource.name,
       resource.type,
       'share',
-      sessionId,
+      contextSessionId,
       safetyState
     );
 

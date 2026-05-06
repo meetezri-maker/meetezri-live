@@ -355,7 +355,7 @@ export function Achievements() {
     {
       id: '1',
       title: 'First Steps',
-      description: 'Complete your first session with Ezri',
+      description: 'Complete your first Talk with Solace',
       icon: 'footprints',
       category: 'sessions',
       progress: sessionsCompleted,
@@ -367,7 +367,7 @@ export function Achievements() {
     {
       id: '2',
       title: 'Consistent Journey',
-      description: 'Complete 10 sessions with Ezri',
+      description: 'Complete 10 Talks with Solace',
       icon: 'target',
       category: 'sessions',
       progress: sessionsCompleted,

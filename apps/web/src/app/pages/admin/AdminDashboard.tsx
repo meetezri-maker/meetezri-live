@@ -72,7 +72,7 @@ export function AdminDashboard() {
             delay={0.1}
           />
           <StatsCard
-            title="Crisis Alerts"
+            title="Emergency alerts"
             value={stats?.crisisAlerts?.toLocaleString() || "0"}
             change={stats?.crisisAlerts > 0 ? "Requires Attention" : "All Good"}
             changeType={stats?.crisisAlerts > 0 ? "negative" : "positive"}
@@ -232,7 +232,7 @@ export function AdminDashboard() {
                   className="p-4 rounded-lg border border-gray-200 hover:border-primary transition-colors text-center group"
                 >
                   <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-warning group-hover:scale-110 transition-transform" />
-                  <p className="font-medium text-sm">Crisis Monitor</p>
+                  <p className="font-medium text-sm">Emergency Monitor</p>
                 </motion.div>
               </Link>
               <Link to="/admin/reports-analytics">

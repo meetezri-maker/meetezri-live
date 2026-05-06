@@ -2629,7 +2629,39 @@ export const api = {
     }
   },
 
+  safetyResourceInteractions: {
+    async record(body: {
+      resource_id: string;
+      resource_name: string;
+      resource_type: string;
+      interaction_type: string;
+      context_session_id?: string;
+      safety_state?: string;
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/safety-resource-interactions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to record resource interaction');
+    },
 
+    async list(params?: { from?: string; to?: string; limit?: number }) {
+      const headers = await getHeaders();
+      const qs = new URLSearchParams();
+      if (params?.from) qs.set('from', params.from);
+      if (params?.to) qs.set('to', params.to);
+      if (params?.limit != null) qs.set('limit', String(params.limit));
+      const q = qs.toString();
+      const res = await fetch(`${API_URL}/safety-resource-interactions${q ? `?${q}` : ''}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to load resource interactions');
+    },
+  },
 
   // Notifications API
   notifications: {

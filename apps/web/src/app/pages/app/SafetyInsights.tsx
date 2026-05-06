@@ -4,6 +4,7 @@
  */
 
 import { useMemo, useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/app/components/AppLayout';
@@ -29,9 +30,15 @@ import {
 } from 'lucide-react';
 import { useSafety } from '@/app/contexts/SafetyContext';
 import { getUserSafetyEvents } from '@/app/utils/safetyLogger';
-import { getMostUsedResources, getInteractionsBySafetyState } from '@/app/utils/resourceTracking';
+import {
+  getMostUsedResources,
+  getInteractionsBySafetyState,
+  mapServerRowsToInteractions,
+} from '@/app/utils/resourceTracking';
 import { getSafetyResources } from '@/app/utils/safetyResources';
 import { useAuth } from '@/app/contexts/AuthContext';
+import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/queries';
 
 export function SafetyInsights() {
   const navigate = useNavigate();
@@ -45,15 +52,31 @@ export function SafetyInsights() {
     return new Map(resources.map((r) => [r.id, r.name]));
   }, []);
 
+  const { data: rawSafetyResourceIx } = useQuery({
+    queryKey: queryKeys.safetyResourceInteractions.list({
+      userId: user?.id,
+      window: 'safety-insights',
+    }),
+    queryFn: async () => {
+      const rows = (await api.safetyResourceInteractions.list({
+        limit: 3000,
+      })) as Array<Record<string, unknown>>;
+      return Array.isArray(rows) ? rows : [];
+    },
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  });
+
+  const resourceInteractions = useMemo(
+    () => mapServerRowsToInteractions(rawSafetyResourceIx ?? []),
+    [rawSafetyResourceIx]
+  );
+
   useEffect(() => {
     const userId = user?.id || 'anonymous';
     const history = getUserSafetyEvents(userId);
     setSafetyHistory(history);
   }, [user?.id]);
-
-  useEffect(() => {
-    calculateInsights();
-  }, [safetyHistory]);
 
   const calculateInsights = () => {
     // Get safety events from history
@@ -100,11 +123,11 @@ export function SafetyInsights() {
         return acc;
       }, {});
 
-    // Most used resources
-    const topResources = getMostUsedResources(3);
+    // Most used resources (persisted server-side when signed in)
+    const topResources = getMostUsedResources(3, resourceInteractions);
 
     // Resource usage by safety state
-    const resourcesByState = getInteractionsBySafetyState();
+    const resourcesByState = getInteractionsBySafetyState(resourceInteractions);
 
     // Calculate trends (comparing last 14 days to previous 14 days)
     const last14Days = events.filter((e: any) => {
@@ -270,6 +293,11 @@ export function SafetyInsights() {
 
     return Math.round(Math.min(100, Math.max(0, score + trendAdjustment)));
   };
+
+  useEffect(() => {
+    calculateInsights();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- full recompute mirrors prior single effect behavior
+  }, [safetyHistory, resourceInteractions, currentState]);
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
