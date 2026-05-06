@@ -777,9 +777,9 @@ export function SessionLobby() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-3xl font-bold mb-2">Talk it out with Solace</h1>
+          <h1 className="text-3xl font-bold mb-2">Talk It Out with Solace</h1>
           <p className="text-muted-foreground">
-            Start a conversation or schedule a session for later
+            Start a conversation or schedule a Talk for later
           </p>
         </motion.div>
 
@@ -793,7 +793,7 @@ export function SessionLobby() {
               transition={{ delay: 0.1 }}
             >
               <Card className="p-6 shadow-xl">
-                <h2 className="text-xl font-bold mb-4">Session Type</h2>
+                <h2 className="text-xl font-bold mb-4">Talk Time</h2>
                 <div className="grid grid-cols-1 gap-4">
                   <motion.button
                     type="button"
@@ -810,7 +810,7 @@ export function SessionLobby() {
                     }`}
                   >
                     <Play className={`w-8 h-8 mb-3 mx-auto ${selectedMode === "now" ? "text-primary" : "text-gray-400"}`} />
-                    <h3 className="font-bold mb-1">Start Now</h3>
+                    <h3 className="font-bold mb-1">Let's Talk</h3>
                     <p className="text-sm text-muted-foreground">Begin immediately</p>
                   </motion.button>
 
@@ -855,7 +855,7 @@ export function SessionLobby() {
                           </motion.button>
                         </div>
                         <p className="relative mt-2 text-sm text-white/90">
-                          Pick how long you want to talk with Ezri today.
+                          Pick how long you want to talk with Solace today.
                         </p>
                       </div>
 
@@ -994,7 +994,7 @@ export function SessionLobby() {
                             className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-2xl hover:shadow-purple-500/50 transition-all"
                           >
                             <Video className="w-4 h-4 mr-2" />
-                            Start Now
+                            Let's Talk Now
                           </Button>
                         </div>
                       </div>
@@ -1050,7 +1050,7 @@ export function SessionLobby() {
                       )}
                     </motion.div>
                     <div>
-                      <h3 className="font-bold text-lg">Ezri is ready</h3>
+                      <h3 className="font-bold text-lg">Solace is ready</h3>
                       <p className="text-white/90 text-sm">Your AI companion</p>
                     </div>
                   </div>
@@ -1138,7 +1138,7 @@ export function SessionLobby() {
                         )}
                       </motion.div>
                       <span className="font-bold">
-                        {isStarting ? "Starting Talking..." : "Start Talking Now"}
+                        {isStarting ? "Starting Talking..." : "Let's Talk Now"}
                       </span>
                       {!isStarting && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
                     </span>
