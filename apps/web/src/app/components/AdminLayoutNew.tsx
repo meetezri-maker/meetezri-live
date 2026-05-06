@@ -168,7 +168,7 @@ const NAVIGATION: NavSection[] = [
     icon: Eye,
     roles: ["super_admin", "org_admin", "team_admin"],
     pages: [
-      { name: "Live Talk it out", href: "/admin/live-sessions-monitor", icon: Eye, roles: ["super_admin", "org_admin", "team_admin"] },
+      { name: "Live Talk It Out", href: "/admin/live-sessions-monitor", icon: Eye, roles: ["super_admin", "org_admin", "team_admin"] },
       { name: "Session Recordings", href: "/admin/session-recordings", icon: Eye, roles: ["super_admin", "org_admin"] },
       { name: "System Health", href: "/admin/system-health-enhanced", icon: Server, roles: ["super_admin"] },
       { name: "Error Tracking", href: "/admin/error-tracking", icon: AlertTriangle, roles: ["super_admin"] },

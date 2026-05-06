@@ -213,7 +213,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navItems = [
     { path: "/app/dashboard", icon: Home, label: "Home" },
-    { path: "/app/session-lobby", icon: Video, label: "Talk it out" },
+    { path: "/app/session-lobby", icon: Video, label: "Talk It Out" },
     { path: "/app/mood-checkin", icon: Heart, label: "Mood" },
     { path: "/app/journal", icon: BookOpen, label: "Journal" },
     { path: "/app/user-profile", icon: User, label: "Profile" }

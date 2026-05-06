@@ -20,6 +20,7 @@ import {
   LogOut,
   ChevronRight,
   AlertTriangle,
+  Info,
   Activity,
   Target,
   Zap,
@@ -315,6 +316,8 @@ export function UserProfile() {
   const [avatarCroppedAreaPixels, setAvatarCroppedAreaPixels] = useState<Area | null>(null);
   const [avatarSourceSize, setAvatarSourceSize] = useState<{ width: number; height: number } | null>(null);
   const [timezoneOpen, setTimezoneOpen] = useState(false);
+  const [emergencyInfoOpen, setEmergencyInfoOpen] = useState(false);
+  const [emergencyConsentChecked, setEmergencyConsentChecked] = useState(false);
   const availableTimezones = useMemo<string[]>(() => {
     try {
       const list = ((Intl as any).supportedValuesOf?.("timeZone") || []) as string[];
@@ -597,11 +600,26 @@ export function UserProfile() {
     form.setValue("emergency_contact_name", rawProfile.emergency_contact_name || "", { shouldDirty: false });
     form.setValue("emergency_contact_relationship", rawProfile.emergency_contact_relationship || "", { shouldDirty: false });
     form.setValue("emergency_contact_phone", rawProfile.emergency_contact_phone || "", { shouldDirty: false });
+    const hasExistingEmergencyContact = Boolean(
+      rawProfile.emergency_contact_name || rawProfile.emergency_contact_phone || rawProfile.emergency_contact_relationship
+    );
+    setEmergencyConsentChecked(hasExistingEmergencyContact);
   }, [isEditing, rawProfile, form]);
 
   const onSubmit = async (data: ProfileFormValues) => {
     setIsSaving(true);
     try {
+      const hasEmergencyContactInput = Boolean(
+        data.emergency_contact_name?.trim() ||
+        data.emergency_contact_phone?.trim() ||
+        data.emergency_contact_relationship?.trim()
+      );
+      if (hasEmergencyContactInput && !emergencyConsentChecked) {
+        toast.error("Please confirm emergency contact consent before saving");
+        scrollToProfileField("emergency_contact_name");
+        setIsSaving(false);
+        return;
+      }
       const dirty = form.formState.dirtyFields;
       const patch: Record<string, unknown> = {};
       const nextPronouns = (data.pronouns || "").trim();
@@ -1519,6 +1537,31 @@ export function UserProfile() {
                             <p className="text-[11px] text-gray-500 dark:text-gray-400">Trusted person we can reach if needed</p>
                           </div>
                         </div>
+                        <Popover open={emergencyInfoOpen} onOpenChange={setEmergencyInfoOpen}>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              onMouseEnter={() => setEmergencyInfoOpen(true)}
+                              onMouseLeave={() => setEmergencyInfoOpen(false)}
+                              onFocus={() => setEmergencyInfoOpen(true)}
+                              onBlur={() => setEmergencyInfoOpen(false)}
+                              className="inline-flex items-center gap-1 rounded-full border border-rose-200 dark:border-rose-900/50 px-2.5 py-1 text-[11px] font-semibold text-rose-600 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                              aria-label="Learn why emergency contact is needed"
+                            >
+                              <Info className="w-3.5 h-3.5" />
+                              Why we ask
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            align="end"
+                            className="max-w-xs text-xs text-gray-600 dark:text-gray-300"
+                            onMouseEnter={() => setEmergencyInfoOpen(true)}
+                            onMouseLeave={() => setEmergencyInfoOpen(false)}
+                          >
+                            We only use this contact during serious safety concerns, such as when we cannot reach you in a
+                            high-risk wellbeing event. It is never used for marketing or regular app notifications.
+                          </PopoverContent>
+                        </Popover>
                       </div>
                       <div className="p-5 grid grid-cols-1 sm:grid-cols-12 gap-3">
                         {[
@@ -1573,6 +1616,21 @@ export function UserProfile() {
                             </FormItem>
                           )}
                         />
+                        {isEditing && (
+                          <div className="sm:col-span-12 mt-1 rounded-xl border border-rose-100 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 px-3 py-2.5">
+                            <label className="flex items-start gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={emergencyConsentChecked}
+                                onChange={(e) => setEmergencyConsentChecked(e.target.checked)}
+                                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-rose-600 focus:ring-rose-400"
+                              />
+                              <span>
+                                I confirm this person knows they may be contacted only during urgent wellbeing or safety situations.
+                              </span>
+                            </label>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </motion.div>

@@ -4865,7 +4865,7 @@ export function ActiveSession() {
 
               <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4">
                 <h4 className="text-white font-semibold text-center mb-3">
-                  Helpful Resources:
+                  Emergency Resources:
                 </h4>
                 <div className="space-y-3">
                   {safetyResources.map((resource) => (

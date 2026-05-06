@@ -589,14 +589,14 @@ export function SessionHistory() {
               </h3>
               <p className="text-muted-foreground mb-4">
                 {activeTab === "upcoming"
-                  ? "Schedule a session to get started"
+                  ? "Schedule a talk to get started"
                   : "Try adjusting your filters"}
               </p>
               {activeTab === "upcoming" && (
                 <Link to="/app/session-lobby">
                   <Button>
                     <Calendar className="w-4 h-4 mr-2" />
-                    Schedule Session
+                     Let's Talk it Out Later
                   </Button>
                 </Link>
               )}

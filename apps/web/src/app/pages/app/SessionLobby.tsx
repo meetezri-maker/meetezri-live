@@ -1176,7 +1176,7 @@ export function SessionLobby() {
               <Card className="p-6 shadow-xl overflow-hidden">
                 <div className="flex items-center gap-2 mb-4">
                   <Calendar className="w-5 h-5 text-primary" />
-                  <h3 className="font-bold">Schedule</h3>
+                  <h3 className="font-bold">Schedule Next Talk</h3>
                 </div>
                 {showCarveoutBanner && (
                   <motion.div
@@ -1210,7 +1210,7 @@ export function SessionLobby() {
                 >
                   <Calendar className="w-5 h-5 mr-2" />
                   <div className="flex flex-col leading-tight">
-                    <span className="font-bold text-sm">Schedule for later</span>
+                    <span className="font-bold text-sm">Let's Talk it Out Later</span>
                     <span className="text-xs text-white/80">Pick a date & time</span>
                   </div>
                 </Button>
@@ -1304,7 +1304,7 @@ export function SessionLobby() {
               <Card className="p-6 shadow-xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 border-amber-200 dark:border-amber-800">
                 <div className="flex items-start gap-2 mb-3">
                   <Sparkles className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                  <h3 className="font-bold text-amber-900 dark:text-amber-200">Session Tip</h3>
+                  <h3 className="font-bold text-amber-900 dark:text-amber-200">Talking Tip</h3>
                 </div>
                 <p className="text-sm text-amber-800 dark:text-amber-300">
                   Try to be present and honest during your session. There's no right or wrong way to feel.
@@ -1575,10 +1575,10 @@ export function SessionLobby() {
                     <div className="flex items-center justify-between p-6 border-b shrink-0">
                       <div>
                         <h2 className="text-2xl font-bold">
-                          {editingScheduledSessionId ? "Edit Scheduled Session" : "Schedule a Session"}
+                          {editingScheduledSessionId ? "Edit Scheduled Talk" : "Schedule a Talk"}
                         </h2>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Pick a date and time for your session
+                          Pick a date and time for your next talk
                         </p>
                       </div>
                       <motion.button
@@ -1599,7 +1599,7 @@ export function SessionLobby() {
                         <div className="flex items-center justify-between gap-2 mb-4">
                           <div className="flex items-center gap-2">
                             <Clock className="w-5 h-5 text-primary" />
-                            <h3 className="font-bold text-lg">Session Minutes</h3>
+                            <h3 className="font-bold text-lg">Talking Minutes</h3>
                           </div>
                           <span className="text-xs text-muted-foreground">
                             Selected: {selectedDuration} min
@@ -1670,36 +1670,8 @@ export function SessionLobby() {
                           <h3 className="font-bold text-lg">Add a note</h3>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-                          <div className="sm:col-span-1 p-4 rounded-xl border-2 dark:border-gray-700 transition-all text-left relative bg-gray-50 dark:bg-gray-800/50">
-                            <label className="block text-xs text-muted-foreground mb-2">Icon</label>
-                            <div className="flex items-center gap-2">
-                              <input
-                                value={scheduleIcon}
-                                onChange={(e) => setScheduleIcon(e.target.value)}
-                                maxLength={2}
-                                className="w-14 text-center text-xl p-2 border-none outline-none bg-transparent dark:text-white"
-                                aria-label="Session icon"
-                              />
-                              <div className="flex flex-wrap gap-1">
-                                {["💬", "🧠", "🌿", "⭐", "📝", "❤️"].map((ic) => (
-                                  <button
-                                    key={ic}
-                                    type="button"
-                                    onClick={() => setScheduleIcon(ic)}
-                                    className={`h-8 w-8 rounded-lg border text-sm transition-colors ${
-                                      scheduleIcon === ic
-                                        ? "border-primary bg-primary/10"
-                                        : "border-border hover:border-primary/40"
-                                    }`}
-                                    aria-label={`Set icon ${ic}`}
-                                  >
-                                    {ic}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
+                        <div className=" ">
+                    
 
                           <div className="sm:col-span-4 p-4 rounded-xl border-2 dark:border-gray-700 transition-all text-left relative bg-gray-50 dark:bg-gray-800/50">
                             <label className="block text-xs text-muted-foreground mb-2">Comment</label>
@@ -1763,9 +1735,9 @@ export function SessionLobby() {
                 <Card className="p-6 shadow-2xl bg-white dark:bg-gray-900">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <h3 className="text-xl font-bold">Session options</h3>
+                      <h3 className="text-xl font-bold">Talking Options</h3>
                       <p className="text-sm text-muted-foreground">
-                        {activeUpcomingSession.avatarName} • choose minutes and action
+                        {activeUpcomingSession.avatarName} • Choose minutes and action
                       </p>
                     </div>
                     <Button
@@ -1860,7 +1832,7 @@ export function SessionLobby() {
                       }}
                       disabled={isCancelingScheduled}
                     >
-                      {isCancelingScheduled ? "Canceling..." : "Cancel Session"}
+                      {isCancelingScheduled ? "Canceling..." : "Cancel Talk"}
                     </Button>
                   </div>
                 </Card>
