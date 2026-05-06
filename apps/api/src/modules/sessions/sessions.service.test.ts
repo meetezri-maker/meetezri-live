@@ -35,7 +35,7 @@ jest.mock('../email/email.service', () => ({
   emailService: mockEmailService,
 }));
 
-import { createSession, endSession, heartbeatSession } from './sessions.service';
+import { createSession, endSession, heartbeatSession, beginScheduledSession } from './sessions.service';
 
 describe('sessions.service createSession', () => {
   beforeEach(() => {
@@ -130,6 +130,61 @@ describe('sessions.service createSession', () => {
           duration_minutes: 10,
         }),
       })
+    );
+  });
+});
+
+describe('sessions.service beginScheduledSession', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('activates scheduled row and stamps started_at', async () => {
+    mockPrisma.app_sessions.findFirst.mockResolvedValue({
+      id: 'sched-1',
+      user_id: 'user-1',
+      status: 'scheduled',
+      duration_minutes: 30,
+      scheduled_at: new Date(Date.now() + 60_000),
+    });
+    mockPrisma.profiles.findUnique.mockResolvedValue({
+      id: 'user-1',
+      credits: 60,
+      purchased_credits: 0,
+      credits_seconds: 3600,
+      purchased_credits_seconds: 0,
+    });
+    mockPrisma.subscriptions.findMany.mockResolvedValue([]);
+    mockPrisma.app_sessions.update.mockResolvedValue({
+      id: 'sched-1',
+      status: 'active',
+      duration_minutes: 15,
+    });
+
+    await beginScheduledSession('user-1', 'sched-1', { duration_minutes: 15 });
+
+    expect(mockPrisma.app_sessions.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'sched-1' },
+        data: expect.objectContaining({
+          status: 'active',
+          started_at: expect.any(Date),
+          duration_minutes: 15,
+        }),
+      })
+    );
+  });
+
+  it('rejects non-scheduled sessions', async () => {
+    mockPrisma.app_sessions.findFirst.mockResolvedValue({
+      id: 's1',
+      user_id: 'user-1',
+      status: 'completed',
+      duration_minutes: 30,
+    });
+
+    await expect(beginScheduledSession('user-1', 's1', {})).rejects.toThrow(
+      'Only scheduled sessions can be started'
     );
   });
 });

@@ -22,14 +22,14 @@ const stripe = new Stripe(stripeKey, {
 const PLANS = [
   {
     key: 'core',
-    name: 'MeetEzri Core Plan',
+    name: 'Solace Core Plan',
     amount: 2500, // $25.00
     currency: 'usd',
     interval: 'month' as Stripe.Price.Recurring.Interval,
   },
   {
     key: 'pro',
-    name: 'MeetEzri Pro Plan',
+    name: 'Solace Pro Plan',
     amount: 4900, // $59.00
     currency: 'usd',
     interval: 'month' as Stripe.Price.Recurring.Interval,

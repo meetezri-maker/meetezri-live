@@ -1360,7 +1360,7 @@ export function UserProfile() {
                             <FormItem id="profile-field-in_therapy" className="scroll-mt-24">
                               <div className="flex items-center gap-2 mb-2">
                                 <Users className="w-4 h-4 text-purple-500" />
-                                <FormLabel className="font-bold text-sm text-gray-700 dark:text-gray-300">Professional Companion</FormLabel>
+                                <FormLabel className="font-bold text-sm text-gray-700 dark:text-gray-300">Therapist</FormLabel>
                               </div>
                               <FormControl>
                                 {isEditing ? (

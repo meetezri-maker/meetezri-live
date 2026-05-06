@@ -1,6 +1,25 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { createSession, getSessions, getSessionById, endSession, createMessage, getSessionTranscript, toggleSessionFavorite, heartbeatSession, cancelScheduledSession, updateScheduledSession } from './sessions.service';
-import { CreateSessionInput, EndSessionInput, CreateMessageInput, HeartbeatSessionInput, UpdateScheduledSessionInput } from './sessions.schema';
+import {
+  createSession,
+  getSessions,
+  getSessionById,
+  endSession,
+  createMessage,
+  getSessionTranscript,
+  toggleSessionFavorite,
+  heartbeatSession,
+  cancelScheduledSession,
+  updateScheduledSession,
+  beginScheduledSession,
+} from './sessions.service';
+import {
+  CreateSessionInput,
+  EndSessionInput,
+  CreateMessageInput,
+  HeartbeatSessionInput,
+  UpdateScheduledSessionInput,
+  BeginScheduledSessionInput,
+} from './sessions.schema';
 
 interface UserPayload {
   sub: string;
@@ -131,6 +150,29 @@ export async function getSessionHandler(
     return reply.code(404).send({ message: 'Session not found' });
   }
   return reply.send(session);
+}
+
+export async function beginScheduledSessionHandler(
+  request: FastifyRequest<{ Params: { id: string }; Body: BeginScheduledSessionInput }>,
+  reply: FastifyReply
+) {
+  try {
+    const user = request.user as UserPayload;
+    const session = await beginScheduledSession(user.sub, request.params.id, request.body);
+    return reply.send(session);
+  } catch (error: any) {
+    if (error.message === 'Session not found') {
+      return reply.code(404).send({ message: error.message });
+    }
+    if (error.message === 'Only scheduled sessions can be started') {
+      return reply.code(400).send({ message: error.message });
+    }
+    const code = error.statusCode;
+    if (typeof code === 'number' && code >= 400 && code < 500) {
+      return reply.code(code).send({ message: error.message });
+    }
+    throw error;
+  }
 }
 
 export async function endSessionHandler(

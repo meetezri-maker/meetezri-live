@@ -1,7 +1,12 @@
 import prisma from '../../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { emailService } from '../email/email.service';
-import { CreateSessionInput, CreateMessageInput, UpdateScheduledSessionInput } from './sessions.schema';
+import {
+  CreateSessionInput,
+  CreateMessageInput,
+  UpdateScheduledSessionInput,
+  BeginScheduledSessionInput,
+} from './sessions.schema';
 import { invalidateUserProfileCache } from '../users/user.service';
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
@@ -24,6 +29,66 @@ function badRequest(message: string): never {
   const err = new Error(message);
   (err as { statusCode?: number }).statusCode = 400;
   throw err;
+}
+
+/**
+ * Trial, profile, and credit checks shared by new instant sessions and starting a scheduled session.
+ */
+async function assertSessionStartAllowed(userId: string, durationMinutes: number) {
+  const profile = await prisma.profiles.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      credits: true,
+      purchased_credits: true,
+      credits_seconds: true,
+      purchased_credits_seconds: true,
+    },
+  });
+
+  if (!profile) {
+    badRequest('User profile not found. Please complete onboarding first.');
+  }
+
+  const activeSubscriptions = await prisma.subscriptions.findMany({
+    where: { user_id: userId, status: 'active' },
+    orderBy: { created_at: 'desc' },
+    select: {
+      plan_type: true,
+      end_date: true,
+    },
+  });
+
+  const hasActivePaidSubscription = activeSubscriptions.some((sub) => sub.plan_type !== 'trial');
+
+  if (!hasActivePaidSubscription) {
+    const latestTrialSubscription = activeSubscriptions.find((sub) => sub.plan_type === 'trial');
+    if (
+      latestTrialSubscription?.end_date &&
+      new Date() > latestTrialSubscription.end_date
+    ) {
+      badRequest('Your trial has expired. Please upgrade to continue.');
+    }
+  }
+
+  const requiredCredits = durationMinutes || 5;
+  const subSeconds =
+    profile.credits_seconds && profile.credits_seconds > 0
+      ? profile.credits_seconds
+      : (profile.credits || 0) * 60;
+  const purSeconds =
+    profile.purchased_credits_seconds && profile.purchased_credits_seconds > 0
+      ? profile.purchased_credits_seconds
+      : (profile.purchased_credits || 0) * 60;
+  const totalSeconds = subSeconds + purSeconds;
+  const requiredSeconds = requiredCredits * 60;
+  const totalCredits = totalSeconds === 0 ? 0 : Math.ceil(totalSeconds / 60);
+
+  if (totalSeconds < requiredSeconds) {
+    badRequest(
+      `Insufficient credits. You need ${requiredCredits} minutes but have ${totalCredits}. Please upgrade your plan.`
+    );
+  }
 }
 
 async function deductCreditsSeconds(db: DbClient, userId: string, secondsUsed: number) {
@@ -70,76 +135,14 @@ async function deductCreditsSeconds(db: DbClient, userId: string, secondsUsed: n
 
 export async function createSession(userId: string, input: CreateSessionInput) {
   try {
-    // Ensure user profile exists to satisfy foreign key constraint
-    const profile = await prisma.profiles.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        credits: true,
-        purchased_credits: true,
-        credits_seconds: true,
-        purchased_credits_seconds: true,
-      }
-    });
-
-    if (!profile) {
-      badRequest('User profile not found. Please complete onboarding first.');
-    }
-
-    // Check active subscription state.
-    // Some legacy users can have both old trial rows and a paid active subscription.
-    // In that case, paid plans must take precedence over expired trial records.
-    const activeSubscriptions = await prisma.subscriptions.findMany({
-      where: { user_id: userId, status: 'active' },
-      orderBy: { created_at: 'desc' },
-      select: {
-        plan_type: true,
-        end_date: true,
-      },
-    });
-
-    const hasActivePaidSubscription = activeSubscriptions.some(
-      (sub) => sub.plan_type !== 'trial'
-    );
-
-    if (!hasActivePaidSubscription) {
-      const latestTrialSubscription = activeSubscriptions.find(
-        (sub) => sub.plan_type === 'trial'
-      );
-      if (
-        latestTrialSubscription?.end_date &&
-        new Date() > latestTrialSubscription.end_date
-      ) {
-        badRequest('Your trial has expired. Please upgrade to continue.');
-      }
-    }
-
-    // Check if user has sufficient credits
-    // For trial users (hard cap), ensure they have enough credits for the entire planned duration
-    const requiredCredits = input.duration_minutes || 5;
-    const subSeconds =
-      (profile.credits_seconds && profile.credits_seconds > 0)
-        ? profile.credits_seconds
-        : (profile.credits || 0) * 60;
-    const purSeconds =
-      (profile.purchased_credits_seconds && profile.purchased_credits_seconds > 0)
-        ? profile.purchased_credits_seconds
-        : (profile.purchased_credits || 0) * 60;
-    const totalSeconds = subSeconds + purSeconds;
-    const requiredSeconds = requiredCredits * 60;
-    const totalCredits = totalSeconds === 0 ? 0 : Math.ceil(totalSeconds / 60);
-    
-    if (totalSeconds < requiredSeconds) {
-      badRequest(
-        `Insufficient credits. You need ${requiredCredits} minutes but have ${totalCredits}. Please upgrade your plan.`
-      );
-    }
+    const plannedMinutes = input.duration_minutes || 5;
+    await assertSessionStartAllowed(userId, plannedMinutes);
 
     const result = await prisma.app_sessions.create({
       data: {
         user_id: userId,
         type: input.type,
-        title: input.title || (input.type === 'instant' ? 'Instant Session' : 'Scheduled Session'),
+        title: input.title || (input.type === 'instant' ? 'Instant Talk' : 'Scheduled Session'),
         duration_minutes: input.duration_minutes,
         scheduled_at: input.scheduled_at,
         config: input.config as any, // Prisma Json type workaround
@@ -391,6 +394,46 @@ export async function getSessionById(userId: string, sessionId: string) {
       user_id: userId,
     },
   });
+}
+
+/**
+ * Turns a scheduled row into an active session (same id) so the lobby/history lists stay consistent.
+ */
+export async function beginScheduledSession(
+  userId: string,
+  sessionId: string,
+  input: BeginScheduledSessionInput
+) {
+  const session = await getSessionById(userId, sessionId);
+  if (!session) throw new Error('Session not found');
+  if (session.status !== 'scheduled') {
+    throw new Error('Only scheduled sessions can be started');
+  }
+
+  const durationMinutes =
+    typeof input.duration_minutes === 'number' && input.duration_minutes > 0
+      ? input.duration_minutes
+      : session.duration_minutes ?? 5;
+
+  await assertSessionStartAllowed(userId, durationMinutes);
+
+  const updated = await prisma.app_sessions.update({
+    where: { id: sessionId },
+    data: {
+      status: 'active',
+      started_at: new Date(),
+      duration_minutes: durationMinutes,
+      updated_at: new Date(),
+    },
+    include: {
+      _count: {
+        select: { session_messages: true },
+      },
+    },
+  });
+
+  invalidateSessionsCache(userId);
+  return updated;
 }
 
 export async function cancelScheduledSession(userId: string, sessionId: string) {

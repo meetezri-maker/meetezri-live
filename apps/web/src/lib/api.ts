@@ -1404,6 +1404,17 @@ export const api = {
       return handleResponse(res, 'Failed to update scheduled session');
     },
 
+    /** Begin a scheduled session in place (same session id → active); removes it from upcoming lists. */
+    async startScheduled(id: string, data?: { duration_minutes?: number }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/sessions/${id}/start`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(data ?? {}),
+      });
+      return handleResponse(res, 'Failed to start scheduled session');
+    },
+
     async list(params?: { status?: string; limit?: number }) {
       const headers = await getHeaders();
       const query = params ? '?' + new URLSearchParams(params as any).toString() : '';

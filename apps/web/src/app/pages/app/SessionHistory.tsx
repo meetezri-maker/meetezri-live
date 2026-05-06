@@ -102,6 +102,14 @@ function formatEnvironmentLabel(value: string | undefined | null): string {
   return SESSION_ENVIRONMENT_LABELS[value] ?? value;
 }
 
+/** Default / legacy API titles shown in history (new instant sessions use Instant Talk). */
+function formatSessionSummaryTitle(title: string | null | undefined): string {
+  const t = title?.trim();
+  if (!t) return "Talking";
+  if (t === "Instant Session") return "Instant Talk";
+  return t;
+}
+
 /**
  * `duration_minutes` is stored as floor(seconds/60), so sub-minute sessions are 0 — but the UI
  * used truthy checks and showed "N/A". Prefer wall-clock (started_at → ended_at) when available.
@@ -165,9 +173,9 @@ export function SessionHistory() {
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock className="w-8 h-8" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Session History is a Core Feature</h2>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Talking History is a Core Feature</h2>
             <p className="text-slate-600 dark:text-slate-300 max-w-md mx-auto mb-8">
-              Upgrade to Core or Pro to unlock detailed session logs and history.
+              Upgrade to Core or Pro to unlock detailed talking logs and history.
             </p>
             <Button onClick={() => navigate('/app/billing')}>
               View Plans
@@ -245,9 +253,11 @@ export function SessionHistory() {
         const mapSession = (s: BackendSession): SessionData => {
           const baseDateString = s.scheduled_at || s.started_at || s.created_at;
           const baseDate = new Date(baseDateString);
-          const isUpcoming =
-            (s.status === 'scheduled' || s.status === 'active') &&
-            baseDate.getTime() >= now.getTime();
+          const scheduledAtMs = s.scheduled_at ? new Date(s.scheduled_at).getTime() : null;
+          const isFutureScheduled =
+            s.status === "scheduled" &&
+            scheduledAtMs !== null &&
+            scheduledAtMs >= now.getTime();
 
           const { label: durationLabel, minutesForStats } = formatSessionDuration(s);
           const resolvedAvatar = resolveHistoryAvatar(s.config?.avatar ?? profile?.selected_avatar);
@@ -269,11 +279,11 @@ export function SessionHistory() {
             messagesCount: s._count?.session_messages || 0,
             topicsDiscussed: [],
             thumbnail: `gradient-${(s.id.charCodeAt(0) % 5) + 1}`,
-            summary: s.title?.trim() || "Session",
+            summary: formatSessionSummaryTitle(s.title),
             favorite: s.is_favorite || false,
             status: s.status === 'completed' ? 'completed' : 'upcoming',
             recordingUrl: s.recording_url || undefined,
-            isUpcoming,
+            isUpcoming: isFutureScheduled,
             avatarName: resolvedAvatar.name,
             avatarImage: resolvedAvatar.image,
             environmentLabel: formatEnvironmentLabel(s.config?.environment ?? profile?.selected_environment),
@@ -454,7 +464,7 @@ export function SessionHistory() {
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <Clock className="w-8 h-8 text-primary" />
-                <h1 className="text-3xl font-bold">Session History</h1>
+                <h1 className="text-3xl font-bold">Talking History</h1>
               </div>
               <p className="text-muted-foreground">
                 Review your past sessions and track your progress
@@ -520,7 +530,7 @@ export function SessionHistory() {
               whileHover={{ y: -2 }}
               whileTap={{ scale: 0.98 }}
             >
-              Completed Talk it out ({completedSessions.length})
+              Completed Talk ({completedSessions.length})
               {activeTab === "completed" && (
                 <motion.div
                   layoutId="activeTab"
@@ -813,7 +823,7 @@ export function SessionHistory() {
 
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <h3 className="font-bold">Session Details</h3>
+                      <h3 className="font-bold">Talking Details</h3>
                       <div className="rounded-lg border border-gray-200 overflow-hidden">
                         <div className="flex items-center justify-between px-4 py-3 text-sm border-b border-gray-200">
                           <span className="text-muted-foreground">Time</span>

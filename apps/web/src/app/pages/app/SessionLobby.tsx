@@ -378,9 +378,14 @@ export function SessionLobby() {
     try {
       setIsLoadingSessions(true);
       const sessions = await api.sessions.list({ status: "scheduled" });
-      const mappedSessions: UpcomingSession[] = (sessions as BackendSession[]).map(
-        mapBackendSessionToUpcoming
-      );
+      const nowMs = Date.now();
+      const mappedSessions: UpcomingSession[] = (sessions as BackendSession[])
+        .filter((s) => {
+          if (s.status !== "scheduled") return false;
+          const at = s.scheduled_at ? new Date(s.scheduled_at).getTime() : 0;
+          return at >= nowMs;
+        })
+        .map(mapBackendSessionToUpcoming);
       setUpcomingSessions(mappedSessions);
     } catch (err) {
       console.error("Failed to load sessions:", err);
@@ -389,31 +394,57 @@ export function SessionLobby() {
     }
   };
 
-  const handleStartSession = async (opts?: { avatarOverride?: string }) => {
+  const handleStartSession = async (opts?: {
+    avatarOverride?: string;
+    /** When set, activates this scheduled row instead of creating a new instant session */
+    scheduledSessionId?: string;
+  }) => {
     setIsStarting(true);
     try {
       const avatarToUse = opts?.avatarOverride || selectedAvatar;
-      const session = await api.sessions.create({
-        type: 'instant',
-        duration_minutes: selectedDuration,
-        config: {
-          voice: selectedVoice,
-          avatar: avatarToUse
-        }
-      });
+      const session = opts?.scheduledSessionId
+        ? await api.sessions.startScheduled(opts.scheduledSessionId, {
+            duration_minutes: selectedDuration,
+          })
+        : await api.sessions.create({
+            type: "instant",
+            duration_minutes: selectedDuration,
+            config: {
+              voice: selectedVoice,
+              avatar: avatarToUse,
+            },
+          });
+
+      if (opts?.scheduledSessionId) {
+        setUpcomingSessions((prev) => prev.filter((s) => s.id !== opts.scheduledSessionId));
+      }
+
+      const sessionConfig =
+        session && typeof session === "object" && "config" in session
+          ? (session as { config?: Record<string, unknown> }).config
+          : undefined;
+      const mergedConfig = {
+        voice: selectedVoice,
+        avatar: avatarToUse,
+        ...(sessionConfig && typeof sessionConfig === "object" ? sessionConfig : {}),
+      };
 
       // Persist sessionId so ActiveSession can recover after refresh
       try {
         window.localStorage.setItem("ezri_active_session_id", session.id);
       } catch {}
 
-      navigate(`/app/active-session?sessionId=${encodeURIComponent(session.id)}`, { 
-        state: { 
+      navigate(`/app/active-session?sessionId=${encodeURIComponent(session.id)}`, {
+        state: {
           sessionId: session.id,
-          config: session.config,
-          duration: session.duration_minutes
-        } 
+          config: mergedConfig,
+          duration:
+            (session as { duration_minutes?: number | null }).duration_minutes ??
+            selectedDuration,
+        },
       });
+
+      void loadUpcomingSessions();
     } catch (err: any) {
       const message = err?.message || "Failed to start session";
       if (message.includes("trial has expired")) {
@@ -1107,7 +1138,7 @@ export function SessionLobby() {
                         )}
                       </motion.div>
                       <span className="font-bold">
-                        {isStarting ? "Starting Session..." : "Start Session Now"}
+                        {isStarting ? "Starting Talking..." : "Start Talking Now"}
                       </span>
                       {!isStarting && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
                     </span>
@@ -1788,7 +1819,10 @@ export function SessionLobby() {
                       type="button"
                       className="flex-1 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white"
                       onClick={() => {
-                        void handleStartSession({ avatarOverride: activeUpcomingSession.avatarName });
+                        void handleStartSession({
+                          avatarOverride: activeUpcomingSession.avatarName,
+                          scheduledSessionId: activeUpcomingSession.id,
+                        });
                         setShowUpcomingActionModal(false);
                       }}
                       disabled={isStarting || selectedDuration > minutesAvailable || selectedDuration < 1}
