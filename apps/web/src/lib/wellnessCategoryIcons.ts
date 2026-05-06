@@ -20,14 +20,14 @@ import {
 } from "./wellnessToolCategories";
 
 export const WELLNESS_CATEGORY_ICONS: Record<WellnessToolCategory, LucideIcon> = {
-  "Anxiety Management": Heart,
+  Anxiousness: Heart,
   "Stress Management": Wind,
   Meditation: Brain,
   "Sleep Health": Moon,
   Exercise: Activity,
   "Self-Care": Sparkles,
   Relaxation: Music,
-  "Depression Support": HeartPulse,
+  "Low morale support": HeartPulse,
   Mindfulness: Leaf,
 };
 

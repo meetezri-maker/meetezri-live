@@ -11,8 +11,8 @@ export const WELLNESS_CATEGORY_DURATION_MMSS: Record<WellnessToolCategory, strin
   "Self-Care": "12:32",
   Relaxation: "11:07",
   "Stress Management": "5:12",
-  "Anxiety Management": "2:00",
-  "Depression Support": "5:05",
+  Anxiousness: "2:00",
+  "Low morale support": "5:05",
   /** No dedicated track listed — reasonable default */
   Exercise: "10:00",
 };

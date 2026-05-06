@@ -15,9 +15,9 @@ export type WellnessBuiltinToolMeta = {
 export const WELLNESS_BUILTIN_TOOLS_ADMIN: WellnessBuiltinToolMeta[] = [
   {
     id: "grounding-54321",
-    category: "Anxiety Management",
+    category: "Anxiousness",
     title: "Grounding 5-4-3-2-1",
-    duration: WELLNESS_CATEGORY_DURATION_MMSS["Anxiety Management"],
+    duration: WELLNESS_CATEGORY_DURATION_MMSS["Anxiousness"],
     description:
       "Name five things you see, four you feel, three you hear, two you smell, one you taste",
   },
@@ -65,9 +65,9 @@ export const WELLNESS_BUILTIN_TOOLS_ADMIN: WellnessBuiltinToolMeta[] = [
   },
   {
     id: "compassion-pause",
-    category: "Depression Support",
+    category: "Low morale support",
     title: "Compassion Pause",
-    duration: WELLNESS_CATEGORY_DURATION_MMSS["Depression Support"],
+    duration: WELLNESS_CATEGORY_DURATION_MMSS["Low morale support"],
     description: "A short pause with kind phrases you can repeat softly",
   },
   {

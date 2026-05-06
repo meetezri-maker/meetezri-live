@@ -12,27 +12,27 @@ export function isWellnessPlaceholderId(id: string): boolean {
 
 /** Tailwind gradient token → approximate icon tint for CMS cards */
 export const CATEGORY_ICON_HEX: Record<WellnessToolCategory, string> = {
-  "Anxiety Management": "#e11d48",
+  Anxiousness: "#e11d48",
   "Stress Management": "#ea580c",
   Meditation: "#a855f7",
   "Sleep Health": "#6366f1",
   Exercise: "#16a34a",
   "Self-Care": "#d97706",
   Relaxation: "#0891b2",
-  "Depression Support": "#0284c7",
+  "Low morale support": "#0284c7",
   Mindfulness: "#0d9488",
 };
 
 /** Lucide icon name used with admin `iconMap` */
 export const CATEGORY_ICON_NAME: Record<WellnessToolCategory, string> = {
-  "Anxiety Management": "Heart",
+  Anxiousness: "Heart",
   "Stress Management": "Wind",
   Meditation: "Brain",
   "Sleep Health": "Moon",
   Exercise: "Activity",
   "Self-Care": "Sparkles",
   Relaxation: "Music",
-  "Depression Support": "HeartPulse",
+  "Low morale support": "HeartPulse",
   Mindfulness: "Leaf",
 };
 

@@ -317,7 +317,9 @@ export function ambientKindForExercise(exercise: AmbientExerciseLike | null | un
   if (key === "rain & thunder|relaxation") return "rain";
   if (key === "box breathing|relaxation") return "relaxation_music";
   if (key === "tension release scan|stress management") return "stress_management_music";
+  if (key === "grounding 5-4-3-2-1|anxiousness") return "anxiety_management_music";
   if (key === "grounding 5-4-3-2-1|anxiety management") return "anxiety_management_music";
+  if (key === "compassion pause|low morale support") return "depression_support_music";
   if (key === "compassion pause|depression support") return "depression_support_music";
   if (key === "mindful anchor breath|mindfulness") return "mindfulness_music";
   if (key === "body scan meditation|meditation") return "meditation_music";

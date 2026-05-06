@@ -2,14 +2,14 @@ import { z } from 'zod';
 
 /** Must match apps/web/src/lib/wellnessToolCategories.ts */
 export const WELLNESS_TOOL_CATEGORIES = [
-  'Anxiety Management',
+  'Anxiousness',
   'Stress Management',
   'Meditation',
   'Sleep Health',
   'Exercise',
   'Self-Care',
   'Relaxation',
-  'Depression Support',
+  'Low morale support',
   'Mindfulness',
 ] as const;
 

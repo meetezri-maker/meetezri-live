@@ -90,13 +90,13 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
   const raw: Omit<WellnessExerciseItem, "source" | "favorite">[] = [
     {
       id: "grounding-54321",
-      category: "Anxiety Management",
+      category: "Anxiousness",
       title: "Grounding 5-4-3-2-1",
       description: "Name five things you see, four you feel, three you hear, two you smell, one you taste",
-      duration: WELLNESS_CATEGORY_DURATION_MMSS["Anxiety Management"],
+      duration: WELLNESS_CATEGORY_DURATION_MMSS["Anxiousness"],
       difficulty: "Beginner",
-      icon: getWellnessCategoryIcon("Anxiety Management"),
-      color: WELLNESS_CATEGORY_GRADIENT["Anxiety Management"],
+      icon: getWellnessCategoryIcon("Anxiousness"),
+      color: WELLNESS_CATEGORY_GRADIENT["Anxiousness"],
     },
     {
       id: "stress-release-waves",
@@ -160,13 +160,13 @@ function getBuiltinWellnessExercises(): WellnessExerciseItem[] {
     },
     {
       id: "compassion-pause",
-      category: "Depression Support",
+      category: "Low morale support",
       title: "Compassion Pause",
       description: "A short pause with kind phrases you can repeat softly",
-      duration: WELLNESS_CATEGORY_DURATION_MMSS["Depression Support"],
+      duration: WELLNESS_CATEGORY_DURATION_MMSS["Low morale support"],
       difficulty: "Beginner",
-      icon: getWellnessCategoryIcon("Depression Support"),
-      color: WELLNESS_CATEGORY_GRADIENT["Depression Support"],
+      icon: getWellnessCategoryIcon("Low morale support"),
+      color: WELLNESS_CATEGORY_GRADIENT["Low morale support"],
     },
     {
       id: "mindful-anchor",

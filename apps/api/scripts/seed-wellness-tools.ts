@@ -15,14 +15,14 @@ const prisma = new PrismaClient();
 
 /** Lucide icon names — aligned with `mergeAdminWellnessTools` CATEGORY_ICON_NAME */
 const CATEGORY_ICON: Record<string, string> = {
-  "Anxiety Management": "Heart",
+  Anxiousness: "Heart",
   "Stress Management": "Wind",
   Meditation: "Brain",
   "Sleep Health": "Moon",
   Exercise: "Activity",
   "Self-Care": "Sparkles",
   Relaxation: "Music",
-  "Depression Support": "HeartPulse",
+  "Low morale support": "HeartPulse",
   Mindfulness: "Leaf",
 };
 
@@ -55,7 +55,7 @@ const BUILTIN_TOOLS: Array<{
   {
     key: "grounding-54321",
     title: "Grounding 5-4-3-2-1",
-    category: "Anxiety Management",
+    category: "Anxiousness",
     mmss: "2:00",
     description:
       "Name five things you see, four you feel, three you hear, two you smell, one you taste",
@@ -112,7 +112,7 @@ const BUILTIN_TOOLS: Array<{
   {
     key: "compassion-pause",
     title: "Compassion Pause",
-    category: "Depression Support",
+    category: "Low morale support",
     mmss: "5:05",
     description: "A short pause with kind phrases you can repeat softly",
     difficulty: "Beginner",
