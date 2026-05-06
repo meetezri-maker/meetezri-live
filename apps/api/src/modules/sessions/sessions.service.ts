@@ -20,6 +20,12 @@ export function invalidateSessionsCache(userId: string) {
   }
 }
 
+function badRequest(message: string): never {
+  const err = new Error(message);
+  (err as { statusCode?: number }).statusCode = 400;
+  throw err;
+}
+
 async function deductCreditsSeconds(db: DbClient, userId: string, secondsUsed: number) {
   if (secondsUsed <= 0) return;
   // Single atomic update: avoids read/modify/write loops and reduces lock contention
@@ -77,7 +83,7 @@ export async function createSession(userId: string, input: CreateSessionInput) {
     });
 
     if (!profile) {
-      throw new Error('User profile not found. Please complete onboarding first.');
+      badRequest('User profile not found. Please complete onboarding first.');
     }
 
     // Check active subscription state.
@@ -104,7 +110,7 @@ export async function createSession(userId: string, input: CreateSessionInput) {
         latestTrialSubscription?.end_date &&
         new Date() > latestTrialSubscription.end_date
       ) {
-        throw new Error('Your trial has expired. Please upgrade to continue.');
+        badRequest('Your trial has expired. Please upgrade to continue.');
       }
     }
 
@@ -124,7 +130,7 @@ export async function createSession(userId: string, input: CreateSessionInput) {
     const totalCredits = totalSeconds === 0 ? 0 : Math.ceil(totalSeconds / 60);
     
     if (totalSeconds < requiredSeconds) {
-      throw new Error(
+      badRequest(
         `Insufficient credits. You need ${requiredCredits} minutes but have ${totalCredits}. Please upgrade your plan.`
       );
     }
@@ -151,7 +157,10 @@ export async function createSession(userId: string, input: CreateSessionInput) {
     invalidateSessionsCache(userId);
     return result;
   } catch (error) {
-    console.error('Error in createSession service:', error);
+    const code = (error as { statusCode?: number })?.statusCode;
+    if (!(typeof code === 'number' && code >= 400 && code < 500)) {
+      console.error('Error in createSession service:', error);
+    }
     throw error;
   }
 }

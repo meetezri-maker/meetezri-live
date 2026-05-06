@@ -1757,13 +1757,22 @@ export function ActiveSession() {
   // message's response is played. Decremented on each tts_done / server interrupt.
   const dropOldResponsesRef = useRef(0);
 
+  // True for iOS / Android where keeping recognition alive during TTS playback
+  // triggers hardware audio-capture errors that permanently break the recognizer.
+  // On desktop Chrome/Firefox/Edge, recognition can safely run while audio plays.
+  const isMobileBrowser = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
   const pauseStt = () => {
     suppressSttRef.current = true;
-    // Abort recognition while Ezri is speaking. Keeping it alive causes mobile browsers
-    // (Safari, Android Chrome) to emit audio-capture errors when TTS audio plays through
-    // the speaker — those errors mark the recognizer as broken and it never recovers.
-    // After abort(), onend fires (suppressed), then resumeStt() calls start() cleanly.
-    if (recognitionRef.current) {
+    // On mobile: abort recognition to avoid audio-capture hardware conflicts
+    // (iOS audio session and Android Chrome both fail when mic + speaker run together).
+    // On desktop: keep recognition ALIVE so the user can barge-in via onresult
+    // while Ezri speaks. The AudioAnalyser mic-level is unreliable here because
+    // the browser's AEC suppresses the mic signal during speaker playback — meaning
+    // audioLevel drops near-zero even when the user speaks clearly, so the
+    // AudioAnalyser watchdog never fires. SpeechRecognition uses a more sensitive
+    // internal VAD that still detects voice through AEC attenuation.
+    if (isMobileBrowser && recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch (_) {}
     }
   };
@@ -1811,7 +1820,11 @@ export function ActiveSession() {
     const shouldSend = opts?.sendPlaybackDone !== false;
     if (!shouldSend) return;
     const now = Date.now();
-    if (now - lastPlaybackDoneAtRef.current < 250) return;
+    // 2000ms debounce: after an interrupt the server echoes {"type":"interrupt"} back,
+    // which our handler calls stopPlaybackAndCooldown() again. Without this guard,
+    // a second playback_done fires ~200ms after the first, confusing the server's
+    // pipeline state machine and causing it to open the mic twice.
+    if (now - lastPlaybackDoneAtRef.current < 2000) return;
     lastPlaybackDoneAtRef.current = now;
 
     // Default 1500ms is for server-initiated interrupts (echo from physical speakers needs ~800-1200ms to decay).
@@ -2183,6 +2196,35 @@ export function ActiveSession() {
     // enough. Using the full 1500ms here caused the server to discard the first ~3 words of
     // user speech while waiting for playback_done.
     stopPlaybackAndCooldown({ sendPlaybackDone: true, cooldownMs: 200 });
+
+    // ── Safety net 1: on mobile (where pauseStt aborts recognition), verify STT
+    // actually restarted. Chrome can silently swallow start() on a recently-aborted
+    // recognizer with no onstart, no onerror — just silence. Force a clean reinit
+    // if still inactive after 600ms.
+    window.setTimeout(() => {
+      if (
+        !suppressSttRef.current &&
+        !isEzriSpeakingRef.current &&
+        !isSessionEndingRef.current &&
+        permissionsGranted &&
+        !isRecognitionActiveRef.current
+      ) {
+        console.warn("[Interrupt] STT did not start after barge-in — forcing fresh reinit.");
+        recognitionRef.current = null;
+        isRecognitionActiveRef.current = false;
+        setSttRestartTrigger((t) => t + 1);
+      }
+    }, 600);
+
+    // ── Safety net 2: suppressIncomingAudio is cleared by handleUserText(). If
+    // STT never captures the user's post-interrupt words, it stays true forever
+    // and all future Ezri audio is silently blocked. Auto-release after 20s.
+    window.setTimeout(() => {
+      if (suppressIncomingAudioRef.current) {
+        console.warn("[Interrupt] suppressIncomingAudio still set after 20s — auto-releasing.");
+        suppressIncomingAudioRef.current = false;
+      }
+    }, 20_000);
   };
 
   const normalizeSpeech = (s: string) =>
@@ -2232,15 +2274,19 @@ export function ActiveSession() {
     if (shouldIgnoreEchoBargeIn(candidate)) return false;
 
     const words = candidate.split(" ").filter(Boolean);
-    const micLevel = audioLevelForWatchdogRef.current;
 
-    // Interim results are noisy; require stronger evidence.
+    // No micLevel gate: Chrome's AEC suppresses the mic signal while the speaker
+    // is playing, so audioLevel is near-zero even when the user speaks clearly.
+    // SpeechRecognition uses its own internal VAD — if it fires, the user spoke.
+    // shouldIgnoreEchoBargeIn() is the echo protection layer.
+
+    // Interim: need 2+ words to avoid single-word fragments misfiring.
     if (!isFinal) {
-      return words.length >= 2 && candidate.length >= 8 && micLevel >= 18;
+      return words.length >= 2 && candidate.length >= 6;
     }
 
-    // Final transcript: allow slightly looser thresholds but still avoid tiny echoes.
-    return (words.length >= 2 && candidate.length >= 6) || micLevel >= 26;
+    // Final: even a single clear word (≥4 chars) is a valid barge-in signal.
+    return candidate.length >= 4;
   };
 
   const autoEmergencyDialTriggeredRef = useRef(false);
@@ -2742,7 +2788,9 @@ export function ActiveSession() {
         !isSessionEndingRef.current
       ) {
         const sessionDuration = Date.now() - lastSpeechStartRef.current;
-        const restartDelay = sessionDuration < 1000 ? 2000 : 500;
+        // Small back-off only for very short runs (< 300ms) to prevent tight
+        // no-speech loops. Otherwise restart promptly so the user isn't kept waiting.
+        const restartDelay = sessionDuration < 300 ? 1500 : 300;
         console.log(
           `[STT] Recognition ended (ran for ${sessionDuration}ms), restarting in ${restartDelay}ms...`
         );
@@ -3044,8 +3092,11 @@ export function ActiveSession() {
     let raf: number | null = null;
     let aboveSince: number | null = null;
 
-    const THRESH = 22; // tune: higher = less sensitive
-    const HOLD_MS = 220;
+    // On desktop: recognition stays alive during TTS, barge-in fires via onresult.
+    // On mobile: recognition is aborted, this AudioAnalyser watchdog is the only
+    // barge-in path — keep thresholds sensitive (AEC attenuates mic during playback).
+    const THRESH = 14; // tune: higher = less sensitive; 14 ≈ 5% of FFT max
+    const HOLD_MS = 180;
 
     const tick = () => {
       if (isSessionEndingRef.current) return;

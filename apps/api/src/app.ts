@@ -292,7 +292,9 @@ app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) =
       : inferredFromName ?? 500;
 
   const isServerError = statusCode >= 500;
-  let message = isServerError ? 'An unexpected error occurred' : (error?.message || 'Request failed');
+  let message = isServerError
+    ? 'Something went wrong on Server side. Please try again in a moment.'
+    : (error?.message || 'Request failed');
 
   // Friendly copy for Zod / schema validation (avoid raw JSON in message)
   if (!isServerError && Array.isArray(error?.validation) && error.validation.length > 0) {
