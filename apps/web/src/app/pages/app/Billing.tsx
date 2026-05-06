@@ -219,7 +219,7 @@ export function Billing() {
     try {
       const result = await api.billing.syncCredits();
       if (result.added > 0) {
-        alert(`Synced ${result.added} credits from past purchases.`);
+        toast.success(`Synced ${result.added} credits from past purchases.`);
         window.location.reload();
       } else {
         // Just refresh the data silently if nothing new found, but show a toast if possible (using alert for now)
@@ -244,7 +244,9 @@ export function Billing() {
       }
     } catch (error) {
       console.error('Failed to start credit purchase:', error);
-      alert('Failed to start purchase. Please try again.');
+      toast.error('Could not start checkout', {
+        description: 'Please wait a moment and try again.',
+      });
       setProcessingAction(null);
     }
   };
@@ -259,24 +261,35 @@ export function Billing() {
       }
     } catch (error) {
       console.error('Failed to start subscription:', error);
-      alert('Failed to start subscription. Please try again.');
+      toast.error('Could not start checkout', {
+        description: 'Please wait a moment and try again.',
+      });
       setProcessingAction(null);
     }
   };
 
   const handleManageBilling = async () => {
-     if (isActionLocked) return;
-     setProcessingAction('manage_billing');
-     try {
-       const response = await api.billing.createPortalSession();
-       if (response.portalUrl) {
-         window.location.href = response.portalUrl;
-       }
-     } catch (error) {
-       console.error('Failed to open billing portal:', error);
-       alert('Failed to open billing portal. Please try again.');
-       setProcessingAction(null);
-     }
+    if (isActionLocked) return;
+    setProcessingAction('manage_billing');
+    const portalErrorToast = () => {
+      toast.error('Unable to load Manage Billing', {
+        description:
+          'The billing page link did not open. Check your connection, try again in a moment, or contact support if you are on trial or have not completed a paid checkout yet.',
+      });
+    };
+    try {
+      const response = await api.billing.createPortalSession();
+      if (response.portalUrl) {
+        window.location.href = response.portalUrl;
+        return;
+      }
+      portalErrorToast();
+    } catch (error) {
+      console.error('Failed to open billing portal:', error);
+      portalErrorToast();
+    } finally {
+      setProcessingAction(null);
+    }
   };
 
   const handleCancelSubscription = () => {
