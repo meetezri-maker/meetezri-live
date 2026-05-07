@@ -43,6 +43,7 @@ import { resolveVerificationRedirectForFlow } from "@/lib/verificationRedirect";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Progress } from "../../components/ui/progress";
 import { Switch } from "../../components/ui/switch";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -1407,7 +1408,7 @@ export function UserProfile() {
                                           onClick={() => field.onChange(selected ? field.value!.filter((v: string) => v !== g.value) : [...(field.value || []), g.value])}
                                           className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl text-sm font-semibold text-left transition-all border-2 ${selected ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300" : "border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-emerald-200"}`}
                                         >
-                                          <span className="text-base">{g.emoji}</span> {g.label}
+                                          <FluentEmoji emoji={g.emoji} size={18} className="shrink-0" /> {g.label}
                                         </button>
                                       );
                                     })}
@@ -1417,8 +1418,8 @@ export function UserProfile() {
                                     {field.value?.length ? field.value.map((v: string, i: number) => {
                                       const opt = goalsOptions.find(o => o.value === v);
                                       return (
-                                        <span key={i} className={`${PILL} bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800`}>
-                                          {opt?.emoji} {opt?.label || v}
+                                        <span key={i} className={`${PILL} bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1`}>
+                                          {opt?.emoji ? <FluentEmoji emoji={opt.emoji} size={18} /> : null} {opt?.label || v}
                                         </span>
                                       );
                                     }) : <p className="text-sm text-gray-400 italic">No goals selected</p>}

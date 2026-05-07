@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../../lib/api";
 import { Heart, RefreshCw } from "lucide-react";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import {
   Area,
   AreaChart,
@@ -377,7 +378,9 @@ export function AllUsersMoodAnalytics() {
                 topMoods.map(([m, c]) => (
                   <div key={m} className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-2">
-                      <span aria-hidden>{moodEmoji(m)}</span>
+                      <span aria-hidden>
+                        <FluentEmoji emoji={moodEmoji(m)} size={20} />
+                      </span>
                       <span className="capitalize">{m}</span>
                     </span>
                     <span className="font-semibold">{c}</span>
@@ -553,7 +556,9 @@ export function AllUsersMoodAnalytics() {
                             <td className="px-4 py-3 text-sm text-muted-foreground">{email}</td>
                             <td className="px-4 py-3 text-sm">
                               <span className="inline-flex items-center gap-2">
-                                <span aria-hidden>{moodEmoji(r.mood)}</span>
+                                <span aria-hidden>
+                                  <FluentEmoji emoji={moodEmoji(r.mood)} size={20} />
+                                </span>
                                 <span className="font-medium">{moodName}</span>
                               </span>
                             </td>

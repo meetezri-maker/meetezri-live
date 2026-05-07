@@ -17,6 +17,7 @@ import {
   FormLabel,
   FormMessage,
 } from "../../components/ui/form";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 const wellnessBaselineSchema = z.object({
   currentMood: z.string().optional(),
@@ -173,7 +174,7 @@ export function OnboardingWellnessBaseline() {
                             }`}
                           >
                             <div className="flex items-center gap-3">
-                              <span className="text-2xl">{goal.emoji}</span>
+                              <FluentEmoji emoji={goal.emoji} size={28} className="shrink-0" />
                               <span className="font-medium">{goal.label}</span>
                               {(field.value || []).includes(goal.value) && (
                                 <motion.div

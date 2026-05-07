@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type ChangeEventHandler } from "react";
 import { toast } from "sonner";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -802,7 +803,9 @@ export function ContentManagement() {
                             {resource.views.toLocaleString()}
                           </td>
                           <td className="px-6 py-4 text-sm font-medium">
-                            ⭐ {resource.rating}
+                            <span className="inline-flex items-center gap-1">
+                              <FluentEmoji emoji="⭐" size={18} /> {resource.rating}
+                            </span>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex gap-2">

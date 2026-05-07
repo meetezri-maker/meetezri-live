@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -25,6 +25,7 @@ import {
   ExternalLink,
   AlertTriangle
 } from "lucide-react";
+import { AdminPaginationBar } from "@/app/components/admin/AdminPaginationBar";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { AppLayout } from "../../components/AppLayout";
@@ -40,13 +41,60 @@ import {
 import { SUBSCRIPTION_PLANS } from "../../utils/subscriptionPlans";
 import type { PlanTier, UserSubscription, UsageRecord } from "../../utils/subscriptionPlans";
 
+const BILLING_LIST_PAGE_OPTIONS = [10, 20, 50] as const;
+
+/** DB `subscriptions.amount` is often unset until Stripe sync — use catalog monthly price as fallback */
+function subscriptionHistoryPaymentDisplay(entry: {
+  amount?: unknown;
+  plan_type?: string | null;
+}) {
+  const raw = entry?.amount;
+  if (raw !== null && raw !== undefined && raw !== "") {
+    const n = typeof raw === "number" ? raw : Number(raw);
+    if (Number.isFinite(n)) return { dollars: n, source: "record" as const };
+  }
+  const rawPlan = String(entry?.plan_type ?? "").toLowerCase();
+  const tier: PlanTier | null =
+    rawPlan === "pro" ? "pro" : rawPlan === "core" ? "core" : rawPlan === "trial" ? "trial" : null;
+  if (tier != null && SUBSCRIPTION_PLANS[tier]) {
+    return { dollars: SUBSCRIPTION_PLANS[tier].price, source: "plan" as const };
+  }
+  return null;
+}
+
 export function Billing() {
   const { session, profile } = useAuth();
   const [searchParams] = useSearchParams();
   const checkoutSuccess = searchParams.get('success') === 'true';
   const [isLoading, setIsLoading] = useState(true);
   const [billingHistory, setBillingHistory] = useState<any[]>([]);
+  /** DB `subscriptions.id` for the subscription row shown as "current" in GET /billing — matches exactly one row in history when present */
+  const [currentSubscriptionRecordId, setCurrentSubscriptionRecordId] = useState<string | null>(null);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [subscriptionHistoryPage, setSubscriptionHistoryPage] = useState(1);
+  const [subscriptionHistoryPageSize, setSubscriptionHistoryPageSize] = useState(10);
+  const [invoiceListPage, setInvoiceListPage] = useState(1);
+  const [invoiceListPageSize, setInvoiceListPageSize] = useState(10);
+
+  const subscriptionHistoryTotalPages = Math.max(
+    1,
+    Math.ceil(billingHistory.length / subscriptionHistoryPageSize)
+  );
+  const subscriptionHistorySafePage = Math.min(
+    Math.max(1, subscriptionHistoryPage),
+    subscriptionHistoryTotalPages
+  );
+  const paginatedBillingHistory = useMemo(() => {
+    const start = (subscriptionHistorySafePage - 1) * subscriptionHistoryPageSize;
+    return billingHistory.slice(start, start + subscriptionHistoryPageSize);
+  }, [billingHistory, subscriptionHistorySafePage, subscriptionHistoryPageSize]);
+
+  const invoiceTotalPages = Math.max(1, Math.ceil(invoices.length / invoiceListPageSize));
+  const invoiceSafePage = Math.min(Math.max(1, invoiceListPage), invoiceTotalPages);
+  const paginatedInvoices = useMemo(() => {
+    const start = (invoiceSafePage - 1) * invoiceListPageSize;
+    return invoices.slice(start, start + invoiceListPageSize);
+  }, [invoices, invoiceSafePage, invoiceListPageSize]);
   const [userSubscription, setUserSubscription] = useState<UserSubscription>({
     userId: "",
     planId: "trial",
@@ -93,6 +141,9 @@ export function Billing() {
         ]);
 
         const subData = (subDataRaw && typeof subDataRaw === "object") ? subDataRaw as Record<string, any> : {};
+        const subRowId =
+          typeof subData.id === "string" && subData.id.length > 0 ? subData.id : null;
+        setCurrentSubscriptionRecordId(subRowId);
         const sessionsData = Array.isArray(sessionsDataRaw) ? sessionsDataRaw : [];
         const historyData = Array.isArray(historyDataRaw) ? historyDataRaw : [];
         const invoiceData = Array.isArray(invoiceDataRaw) ? invoiceDataRaw : [];
@@ -169,6 +220,7 @@ export function Billing() {
         setInvoices(invoiceData);
       } catch (error) {
         console.error('Failed to fetch billing data:', error);
+        setCurrentSubscriptionRecordId(null);
       } finally {
         setIsLoading(false);
       }
@@ -616,7 +668,7 @@ export function Billing() {
                 </span> 
                 <span className="text-muted-foreground"> • 
                   {userSubscription.planId === 'trial' ? ' Expiry: ' : ' Next billing: '}
-                  {billingEndIsValid ? billingEndDate!.toLocaleDateString() : 'N/A'}
+                  {billingEndIsValid ? billingEndDate!.toLocaleDateString() : '–'}
                 </span>
               </span>
             </div>
@@ -764,7 +816,7 @@ export function Billing() {
                   <p className="text-sm font-semibold text-slate-900 dark:text-white">
                     {userSubscription.billingCycle.startDate
                       ? new Date(userSubscription.billingCycle.startDate).toLocaleDateString()
-                      : 'N/A'}
+                      : '–'}
                   </p>
                 </div>
                 <div className="rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-100 dark:border-slate-700 p-3">
@@ -772,7 +824,7 @@ export function Billing() {
                   <p className="text-sm font-semibold text-slate-900 dark:text-white">
                     {userSubscription.billingCycle.endDate
                       ? new Date(userSubscription.billingCycle.endDate).toLocaleDateString()
-                      : 'N/A'}
+                      : '–'}
                   </p>
                 </div>
               </div>
@@ -855,7 +907,22 @@ export function Billing() {
               <div className="mb-6">
                 <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Subscription history</h4>
                 <div className="space-y-3">
-                  {billingHistory.map((entry) => (
+                  {paginatedBillingHistory.map((entry) => {
+                    const entryId = String(entry?.id ?? "");
+                    const isCurrentRow =
+                      !!currentSubscriptionRecordId && entryId === currentSubscriptionRecordId;
+                    const rawStatus = String(entry?.status ?? "").toLowerCase();
+                    const historyStatusLabel = isCurrentRow
+                      ? "Current activated plan"
+                      : rawStatus === "canceled" || rawStatus === "cancelled"
+                        ? "Cancelled"
+                        : "Last activated plan";
+                    const historyStatusClass = isCurrentRow
+                      ? "text-green-700 dark:text-green-400 font-semibold"
+                      : "text-muted-foreground";
+                    const paymentInfo = subscriptionHistoryPaymentDisplay(entry);
+
+                    return (
                     <div
                       key={entry.id}
                       className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-border"
@@ -868,17 +935,39 @@ export function Billing() {
                           {entry.start_date ? new Date(entry.start_date).toLocaleDateString() : ''}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm capitalize">{entry.status}</p>
-                        {entry.amount != null && (
-                          <p className="text-xs text-muted-foreground">
-                            ${Number(entry.amount).toFixed(2)}
-                          </p>
+                      <div className="text-right space-y-0.5">
+                        {paymentInfo != null ? (
+                          <>
+                            <p className="text-sm font-semibold tabular-nums">
+                              ${paymentInfo.dollars.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </p>
+                            {paymentInfo.source === "plan" && (
+                              <p className="text-[10px] text-muted-foreground">
+                                Listed monthly rate
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Amount unavailable</p>
                         )}
+                        <p className={`text-xs ${historyStatusClass}`}>{historyStatusLabel}</p>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
+                <AdminPaginationBar
+                  total={billingHistory.length}
+                  page={subscriptionHistoryPage}
+                  pageSize={subscriptionHistoryPageSize}
+                  onPageChange={setSubscriptionHistoryPage}
+                  onPageSizeChange={setSubscriptionHistoryPageSize}
+                  selectId="billing-subscription-history-page-size"
+                  pageSizeOptions={[...BILLING_LIST_PAGE_OPTIONS]}
+                />
               </div>
             )}
 
@@ -889,8 +978,9 @@ export function Billing() {
                   You don’t have any invoices yet. Once a payment is processed, your invoices will appear here with links to view and download them.
                 </p>
               ) : (
+                <>
                 <div className="space-y-3">
-                  {invoices.map((invoice) => (
+                  {paginatedInvoices.map((invoice) => (
                     <div
                       key={invoice.id}
                       className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-border"
@@ -950,6 +1040,16 @@ export function Billing() {
                     </div>
                   ))}
                 </div>
+                <AdminPaginationBar
+                  total={invoices.length}
+                  page={invoiceListPage}
+                  pageSize={invoiceListPageSize}
+                  onPageChange={setInvoiceListPage}
+                  onPageSizeChange={setInvoiceListPageSize}
+                  selectId="billing-stripe-invoices-page-size"
+                  pageSizeOptions={[...BILLING_LIST_PAGE_OPTIONS]}
+                />
+                </>
               )}
             </div>
           </Card>

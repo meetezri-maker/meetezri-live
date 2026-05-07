@@ -39,6 +39,7 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { Skeleton } from "../../components/ui/skeleton";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import {
   formatWellnessDuration,
   wellnessProgressTotalSeconds,
@@ -741,7 +742,9 @@ export function Progress() {
             <div className="flex items-start gap-3">
               <Trophy className="w-8 h-8 flex-shrink-0 mt-1" />
               <div>
-                <h3 className="font-bold text-lg mb-2">You're Doing Great! 🎉</h3>
+                <h3 className="font-bold text-lg mb-2 inline-flex items-center gap-2 flex-wrap">
+                  You&apos;re Doing Great! <FluentEmoji emoji="🎉" size={24} />
+                </h3>
                 <p className="text-white/90 mb-4">{monthlyInsight.body}</p>
                 {monthlyInsight.chip1 && (
                   <div className="flex flex-wrap gap-3">

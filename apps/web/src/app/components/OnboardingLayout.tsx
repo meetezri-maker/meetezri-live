@@ -8,7 +8,7 @@ interface OnboardingLayoutProps {
   children: ReactNode;
   currentStep: number;
   totalSteps: number;
-  title: string;
+  title: ReactNode;
   subtitle?: string;
   showBack?: boolean;
   onBack?: () => void;
@@ -91,7 +91,7 @@ export function OnboardingLayout({
           transition={{ duration: 0.5 }}
           className="text-center mb-8"
         >
-          <h1 className="text-3xl md:text-4xl font-bold mb-2">{title}</h1>
+          <h1 className="text-3xl md:text-4xl font-bold mb-2 inline-flex flex-wrap items-center justify-center gap-2">{title}</h1>
           {subtitle && (
             <p className="text-muted-foreground text-lg">{subtitle}</p>
           )}

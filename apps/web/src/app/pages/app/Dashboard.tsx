@@ -24,6 +24,7 @@ import {
 } from "../../components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { queryKeys } from "@/lib/queries";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 interface BackendSession {
   id: string;
@@ -539,9 +540,9 @@ export function Dashboard() {
                   <motion.div
                     animate={{ rotate: [0, 10, -10, 0] }}
                     transition={{ duration: 2, repeat: Infinity }}
-                    className="text-3xl"
+                    className="text-3xl leading-none"
                   >
-                    🔥
+                    <FluentEmoji emoji="🔥" size={36} />
                   </motion.div>
                 </div>
                 <h3 className="font-semibold mb-1">Current Streak</h3>
@@ -735,7 +736,7 @@ export function Dashboard() {
                     whileHover={{ x: 5 }}
                     className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                   >
-                    <span className="text-2xl">{activity.emoji}</span>
+                    <FluentEmoji emoji={activity.emoji} size={28} className="shrink-0" />
                     <div className="flex-1">
                       <p className="font-medium text-sm">{activity.text}</p>
                       <p className="text-xs text-muted-foreground">{activity.time}</p>

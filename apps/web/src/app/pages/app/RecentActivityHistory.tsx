@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { api } from "@/lib/api";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 interface RecentActivityItem {
   id: string;
@@ -184,7 +185,7 @@ export function RecentActivityHistory() {
                   transition={{ delay: Math.min(index * 0.02, 0.25) }}
                   className="flex items-center gap-3 p-3 rounded-lg border border-transparent hover:border-border hover:bg-muted/40 transition-colors"
                 >
-                  <span className="text-2xl">{entry.emoji}</span>
+                  <FluentEmoji emoji={entry.emoji} size={28} className="shrink-0" />
                   <div className="flex-1">
                     <p className="font-medium text-sm">{entry.text}</p>
                     <p className="text-xs text-muted-foreground">{entry.relativeTime}</p>

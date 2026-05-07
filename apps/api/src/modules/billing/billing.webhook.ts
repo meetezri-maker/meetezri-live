@@ -620,7 +620,7 @@ async function sendRenewalConfirmationEmail({
     const currency = String(invoice.currency || 'usd').toUpperCase();
     const nextBillingDate = subscription?.current_period_end
       ? new Date(subscription.current_period_end * 1000).toLocaleDateString('en-US')
-      : 'N/A';
+      : '–';
     const invoiceUrl = invoice.hosted_invoice_url as string | undefined;
     const billingUrl = `${process.env.CLIENT_URL || 'https://meetezri-live-web.vercel.app'}/app/billing`;
 

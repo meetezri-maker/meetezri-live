@@ -132,7 +132,7 @@ export function UserDetailsEnhanced() {
             id: s.id,
             type: "sleep",
             title: "Sleep Log",
-            description: `Sleep Quality: ${s.quality_rating || 'N/A'}/5`,
+            description: `Sleep Quality: ${s.quality_rating || '–'}/5`,
             time: new Date(s.created_at).toLocaleString(),
             timestamp: new Date(s.created_at).getTime(),
             icon: Moon,

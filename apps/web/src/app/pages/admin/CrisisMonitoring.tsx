@@ -19,6 +19,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../../lib/api";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 interface CrisisEvent {
   id: string;
@@ -412,7 +413,11 @@ export function CrisisMonitoring() {
                           >
                             {event.status === "pending" && "⏳ Pending Review"}
                             {event.status === "contacted" && "📞 User Contacted"}
-                            {event.status === "resolved" && "✅ Resolved"}
+                            {event.status === "resolved" && (
+                              <span className="inline-flex items-center gap-1">
+                                <FluentEmoji emoji="✅" size={16} /> Resolved
+                              </span>
+                            )}
                           </span>
                           <span className="text-xs text-muted-foreground">
                             AI Confidence: {event.aiConfidence}%
@@ -603,7 +608,11 @@ export function CrisisMonitoring() {
                   <span className={`px-4 py-2 rounded-full text-sm font-medium border ${getStatusColor(selectedEvent.status)}`}>
                     {selectedEvent.status === "pending" && "⏳ Pending Review"}
                     {selectedEvent.status === "contacted" && "📞 User Contacted"}
-                    {selectedEvent.status === "resolved" && "✅ Resolved"}
+                    {selectedEvent.status === "resolved" && (
+                      <span className="inline-flex items-center gap-1">
+                        <FluentEmoji emoji="✅" size={16} /> Resolved
+                      </span>
+                    )}
                   </span>
                 </div>
 

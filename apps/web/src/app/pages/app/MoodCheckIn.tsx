@@ -14,6 +14,7 @@ import { useState, useEffect } from "react";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
 import { useAuth } from "../../contexts/AuthContext";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 const MOOD_OPTIONS = [
   { value: "happy", emoji: "😊", label: "Happy", color: "from-yellow-400 to-orange-500" },
@@ -172,9 +173,9 @@ export function MoodCheckIn() {
                 rotate: [0, 360]
               }}
               transition={{ duration: 0.6 }}
-              className="w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center text-5xl mx-auto mb-6 shadow-2xl"
+              className="w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl"
             >
-              ✅
+              <FluentEmoji emoji="✅" size={56} label="Success" />
             </motion.div>
             <h2 className="text-3xl font-bold mb-4">Check-in Complete!</h2>
             <p className="text-muted-foreground mb-6">
@@ -248,9 +249,9 @@ export function MoodCheckIn() {
                           : {}
                       }
                       transition={{ duration: 0.5 }}
-                      className="text-4xl mb-2"
+                      className="text-4xl mb-2 flex justify-center"
                     >
-                      {mood.emoji}
+                      <FluentEmoji emoji={mood.emoji} size={40} />
                     </motion.div>
                     <p className="font-semibold text-sm">{mood.label}</p>
                   </motion.button>
@@ -329,7 +330,9 @@ export function MoodCheckIn() {
                         : "border-border hover:border-primary/50 dark:hover:border-primary/50 bg-card dark:bg-card"
                     }`}
                   >
-                    <div className="text-2xl mb-1">{activity.emoji}</div>
+                    <div className="text-2xl mb-1 flex justify-center">
+                      <FluentEmoji emoji={activity.emoji} size={28} />
+                    </div>
                     <p className="text-sm font-medium">{activity.label}</p>
                   </motion.button>
                 ))}
@@ -379,7 +382,8 @@ export function MoodCheckIn() {
                       <>
                         You&apos;ve checked in {monthCheckinCount}{" "}
                         {monthCheckinCount === 1 ? "time" : "times"} this month! Your most
-                        common mood is &quot;{topMoodInsight.label}&quot; {topMoodInsight.emoji}
+                        common mood is &quot;{topMoodInsight.label}&quot;{" "}
+                        <FluentEmoji emoji={topMoodInsight.emoji} size={20} className="inline-block align-text-bottom" />
                       </>
                     ) : (
                       <>

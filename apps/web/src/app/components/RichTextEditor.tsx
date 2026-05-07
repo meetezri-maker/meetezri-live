@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "./ui/utils";
 import { htmlToPlainText } from "../../lib/htmlPlainText";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 interface RichTextEditorProps {
   value: string;
@@ -144,6 +145,11 @@ export const RichTextEditor = memo(function RichTextEditor({
     return { wordCount: words, charCount: plain.length };
   }, [value]);
 
+  const selectedMoodEmoji = useMemo(
+    () => MOODS.find((m) => m.label === selectedMood)?.emoji,
+    [selectedMood],
+  );
+
   return (
     <div className={cn("border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800", className)}>
       {/* Toolbar */}
@@ -240,7 +246,7 @@ export const RichTextEditor = memo(function RichTextEditor({
                   }`}
                   title={mood.label}
                 >
-                  {mood.emoji}
+                  <FluentEmoji emoji={mood.emoji} size={28} />
                 </motion.button>
               ))}
             </div>
@@ -298,7 +304,7 @@ export const RichTextEditor = memo(function RichTextEditor({
           <div className="flex items-center gap-2">
             <span>Mood:</span>
             <span className="font-medium">{selectedMood}</span>
-            <span>{MOODS.find((m) => m.label === selectedMood)?.emoji}</span>
+            {selectedMoodEmoji ? <FluentEmoji emoji={selectedMoodEmoji} size={18} /> : null}
           </div>
         )}
       </div>

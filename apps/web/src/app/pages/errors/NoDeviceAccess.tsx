@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { Camera, Mic, VideoOff, MicOff, AlertCircle, RefreshCw, Home, HelpCircle, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { EmojiText } from "@/components/ui/EmojiText";
 
 interface NoDeviceAccessProps {
   type?: "camera" | "microphone" | "both";
@@ -240,19 +241,27 @@ export function NoDeviceAccess({ type = "both", onRetry }: NoDeviceAccessProps) 
           </p>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="bg-white rounded-lg p-3">
-              <p className="text-gray-900 font-medium">📝 Journal</p>
+              <p className="text-gray-900 font-medium">
+                <EmojiText emojiSize={18}>📝 Journal</EmojiText>
+              </p>
               <p className="text-gray-600">Write and reflect</p>
             </div>
             <div className="bg-white rounded-lg p-3">
-              <p className="text-gray-900 font-medium">😊 Mood Tracking</p>
+              <p className="text-gray-900 font-medium">
+                <EmojiText emojiSize={18}>😊 Mood Tracking</EmojiText>
+              </p>
               <p className="text-gray-600">Log your emotions</p>
             </div>
             <div className="bg-white rounded-lg p-3">
-              <p className="text-gray-900 font-medium">🧘 Wellness Tools</p>
+              <p className="text-gray-900 font-medium">
+                <EmojiText emojiSize={18}>🧘 Wellness Tools</EmojiText>
+              </p>
               <p className="text-gray-600">Guided exercises</p>
             </div>
             <div className="bg-white rounded-lg p-3">
-              <p className="text-gray-900 font-medium">📊 Progress</p>
+              <p className="text-gray-900 font-medium">
+                <EmojiText emojiSize={18}>📊 Progress</EmojiText>
+              </p>
               <p className="text-gray-600">View insights</p>
             </div>
           </div>

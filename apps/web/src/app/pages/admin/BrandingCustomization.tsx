@@ -19,6 +19,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 const BRANDING_LS_KEY = "ezri_branding";
 
@@ -330,7 +331,14 @@ export function BrandingCustomization() {
 
         {/* Live-apply banner */}
         <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-sm text-purple-800">
-          <strong>⚡ Live preview:</strong> Color, font, logo, and title changes apply to the app instantly as you make them. Click <strong>Save Changes</strong> to persist across sessions.
+          <span className="inline-flex items-center gap-1.5 flex-wrap">
+            <FluentEmoji emoji="⚡" size={20} />
+            <strong>Live preview:</strong>
+            <span>
+              Color, font, logo, and title changes apply to the app instantly as you make them. Click{" "}
+              <strong>Save Changes</strong> to persist across sessions.
+            </span>
+          </span>
         </div>
 
         {/* Stats */}

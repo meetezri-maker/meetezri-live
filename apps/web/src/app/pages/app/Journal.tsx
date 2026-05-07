@@ -26,6 +26,7 @@ import { htmlToPlainText, truncatePreview } from "../../../lib/htmlPlainText";
 import { useAuth } from "../../contexts/AuthContext";
 import { Skeleton } from "../../components/ui/skeleton";
 import { toast } from "sonner";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 interface JournalEntry {
   id: string;
@@ -570,7 +571,7 @@ export function Journal() {
                                 : "hover:bg-gray-100 dark:hover:bg-gray-800"
                             }`}
                           >
-                            {mood.emoji}
+                            <FluentEmoji emoji={mood.emoji} size={36} />
                           </motion.button>
                         ))}
                       </div>
@@ -856,7 +857,7 @@ export function Journal() {
                               : "hover:bg-gray-100"
                           }`}
                         >
-                          {mood.emoji}
+                          <FluentEmoji emoji={mood.emoji} size={30} />
                         </motion.button>
                       ))}
                     </div>

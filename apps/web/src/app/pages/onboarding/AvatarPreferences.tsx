@@ -19,6 +19,7 @@ import {
   FormLabel,
   FormMessage,
 } from "../../components/ui/form";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { companionCardImageUrl } from "@/lib/avatar/companionModelUrl";
 
 /** Older onboarding stored short ids (e.g. `maya`); profile uses canonical display names. */
@@ -304,7 +305,9 @@ export function OnboardingAvatarPreferences() {
                             }`}
                           >
                             <div className={`h-24 bg-gradient-to-br ${env.gradient} flex items-center justify-center`}>
-                              <span className="text-4xl">{env.emoji}</span>
+                              <span className="text-4xl leading-none flex items-center justify-center">
+                                <FluentEmoji emoji={env.emoji} size={48} />
+                              </span>
                             </div>
                             <div className="p-2 bg-white">
                               <p className="text-sm font-medium">{env.label}</p>

@@ -41,6 +41,7 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { EmojiText } from "@/components/ui/EmojiText";
 import { analyzeTextForSafety } from "@/app/utils/safetyDetection";
 import { SafetyStateIndicator } from "@/app/components/safety/SafetyStateIndicator";
 import { SafetyBoundaryMessage } from "@/app/components/safety/SafetyBoundaryMessage";
@@ -4350,7 +4351,9 @@ export function ActiveSession() {
               >
                 <div className="bg-black/75 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/15 inline-block max-w-full">
                   <p className="text-white text-sm font-medium leading-snug">
-                    {liveUserSpeech}
+                    <EmojiText emojiSize={20} className="text-white">
+                      {liveUserSpeech}
+                    </EmojiText>
                   </p>
                 </div>
               </motion.div>

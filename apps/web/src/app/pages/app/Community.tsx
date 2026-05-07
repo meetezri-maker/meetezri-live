@@ -33,6 +33,8 @@ import { Switch } from "@/app/components/ui/switch";
 import { Label } from "@/app/components/ui/label";
 import { cn } from "@/app/components/ui/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
+import { EmojiText } from "@/components/ui/EmojiText";
 
 type FeedPost = {
   id: string;
@@ -865,7 +867,9 @@ export function Community() {
                             </div>
                           </div>
                         ) : (
-                          <p className="text-gray-700 dark:text-slate-300 mb-4 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                          <p className="text-gray-700 dark:text-slate-300 mb-4 leading-relaxed whitespace-pre-wrap">
+                            <EmojiText emojiSize={22}>{post.content}</EmojiText>
+                          </p>
                         )}
 
                         {hashtagsForDisplay.length > 0 ? (
@@ -1027,7 +1031,7 @@ export function Community() {
                                                         setEmojiPickerOpenEditByPostId((m) => ({ ...m, [post.id]: false }));
                                                       }}
                                                     >
-                                                      {emo}
+                                                      <FluentEmoji emoji={emo} size={22} />
                                                     </button>
                                                   ))}
                                                 </div>
@@ -1073,7 +1077,11 @@ export function Community() {
                                           return (
                                             <div className="mt-1">
                                               <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap break-words">
-                                                {icon ? <span className="mr-1">{icon}</span> : null}
+                                                {icon ? (
+                                                  <span className="mr-1 inline-flex align-middle">
+                                                    <FluentEmoji emoji={icon} size={18} />
+                                                  </span>
+                                                ) : null}
                                                 {text}
                                               </p>
                                               {c.isByCurrentUser ? (
@@ -1154,7 +1162,7 @@ export function Community() {
                                             setEmojiPickerOpenByPostId((m) => ({ ...m, [post.id]: false }));
                                           }}
                                         >
-                                          {emo}
+                                          <FluentEmoji emoji={emo} size={22} />
                                         </button>
                                       ))}
                                     </div>

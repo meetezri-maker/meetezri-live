@@ -13,6 +13,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -284,7 +285,9 @@ function InAppTab({ onSent }: { onSent?: () => void }) {
                       <div className="absolute bottom-8 right-0 bg-white border border-gray-200 rounded-xl shadow-lg p-3 grid grid-cols-6 gap-1 z-20 w-56">
                         {QUICK_EMOJIS.map(e => (
                           <button key={e} onClick={() => { insertMsg(e); setEmojiOpen(false); }}
-                            className="text-lg hover:bg-gray-100 rounded p-0.5">{e}</button>
+                            className="text-lg hover:bg-gray-100 rounded p-0.5 flex items-center justify-center">
+                            <FluentEmoji emoji={e} size={22} />
+                          </button>
                         ))}
                       </div>
                     )}

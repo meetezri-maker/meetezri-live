@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import {
   Settings,
   Mail,
@@ -1072,7 +1073,9 @@ export function SystemSettingsEnhanced() {
                     ].map((int) => (
                       <div key={int.name} className="flex items-center justify-between p-4 border rounded-lg">
                         <div className="flex items-center gap-3">
-                          <span className="text-2xl">{int.icon}</span>
+                          <span className="text-2xl inline-flex">
+                            <FluentEmoji emoji={int.icon} size={28} />
+                          </span>
                           <div>
                             <p className="font-medium">{int.name}</p>
                             <p className="text-sm text-muted-foreground">{int.desc}</p>
@@ -1160,8 +1163,8 @@ export function SystemSettingsEnhanced() {
                 <Card className="p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-xl font-bold">Appearance Settings</h2>
-                    <span className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-full px-3 py-1 font-medium">
-                      ⚡ Colors apply instantly
+                    <span className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-full px-3 py-1 font-medium inline-flex items-center gap-1">
+                      <FluentEmoji emoji="⚡" size={14} /> Colors apply instantly
                     </span>
                   </div>
                   <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">

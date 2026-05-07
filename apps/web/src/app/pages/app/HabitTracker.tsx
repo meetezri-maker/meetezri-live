@@ -22,6 +22,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { format, isToday, isSameDay, subDays, startOfWeek, endOfWeek, isWithinInterval, differenceInDays } from "date-fns";
 
 interface HabitLog {
@@ -543,7 +544,7 @@ export function HabitTracker() {
                     {/* Habit Info */}
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-2xl">{habit.icon}</span>
+                        <FluentEmoji emoji={habit.icon} size={28} className="shrink-0" />
                         <h3 className={`font-bold dark:text-white ${habit.completedToday ? "text-green-700 dark:text-green-400" : ""}`}>
                           {habit.name}
                         </h3>
@@ -651,9 +652,15 @@ export function HabitTracker() {
               </motion.div>
               <div className="flex-1">
                 <h3 className="font-bold text-xl mb-2">You're doing amazing!</h3>
-                <p className="text-white/90 mb-4">
-                  You've completed {completedToday} out of {totalHabits} habits today. Keep up the great work!
-                  {completionRate === 100 && " 🎉 Perfect day!"}
+                <p className="text-white/90 mb-4 inline">
+                  You&apos;ve completed {completedToday} out of {totalHabits} habits today. Keep up the great work!
+                  {completionRate === 100 ? (
+                    <>
+                      {" "}
+                      <FluentEmoji emoji="🎉" size={22} className="inline-block align-[-0.15em] mx-0.5" />
+                      <span> Perfect day!</span>
+                    </>
+                  ) : null}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <div className="px-3 py-1 bg-white/20 rounded-full text-sm flex items-center gap-1">

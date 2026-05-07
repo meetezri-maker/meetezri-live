@@ -31,6 +31,7 @@ import {
 import { api } from "../../../lib/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { Skeleton } from "../../components/ui/skeleton";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { useNavigate } from "react-router-dom";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, eachDayOfInterval, isSameDay, subMonths, addMonths, subWeeks, addWeeks, subYears, addYears } from "date-fns";
 
@@ -888,8 +889,8 @@ export function MoodHistory() {
                     >
                       <span className="text-xs text-gray-400 font-medium">{day.day}</span>
                       {day.emoji && (
-                        <div className="absolute inset-0 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-                          {day.emoji}
+                        <div className="absolute inset-0 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <FluentEmoji emoji={day.emoji} size={28} />
                         </div>
                       )}
                     </div>
@@ -957,7 +958,7 @@ export function MoodHistory() {
                     >
                       <Card className="p-4 shadow-md hover:shadow-lg transition-all">
                         <div className="flex items-center gap-4">
-                          <span className="text-3xl">{info?.emoji || "🙂"}</span>
+                          <FluentEmoji emoji={info?.emoji || "🙂"} size={32} className="shrink-0" />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
                               <span className="font-semibold">{info?.label || entry.mood}</span>
@@ -977,7 +978,7 @@ export function MoodHistory() {
                                     className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 text-xs"
                                     title={a.label}
                                   >
-                                    <span className="text-sm leading-none">{a.emoji}</span>
+                                    <FluentEmoji emoji={a.emoji} size={16} className="shrink-0" />
                                     <span className="leading-none">{a.label}</span>
                                   </span>
                                 ))}

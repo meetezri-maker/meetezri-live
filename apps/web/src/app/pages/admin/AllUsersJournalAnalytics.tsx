@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Fragment, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
@@ -7,6 +7,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../../lib/api";
 import { BookOpen, RefreshCw, Eye } from "lucide-react";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import {
   Bar,
   BarChart,
@@ -78,11 +79,19 @@ function emojiName(tag: string) {
   return map[t] || "";
 }
 
-function formatTag(t: string) {
+function formatTag(t: string): ReactNode {
   const raw = String(t || "").trim();
   if (!raw) return "";
   const name = emojiName(raw);
-  return name ? `${raw} ${name}` : raw;
+  if (name) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <FluentEmoji emoji={raw} size={16} />
+        <span className="capitalize">{name}</span>
+      </span>
+    );
+  }
+  return raw;
 }
 
 type AdminUserRow = { id: string; name?: string; email?: string };
@@ -359,7 +368,7 @@ export function AllUsersJournalAnalytics() {
               ) : (
                 topTags.map(([t, c]) => (
                   <div key={t} className="flex items-center justify-between text-sm">
-                    <span className="capitalize">{formatTag(t)}</span>
+                    <span>{formatTag(t)}</span>
                     <span className="font-semibold">{c}</span>
                   </div>
                 ))
@@ -542,7 +551,7 @@ export function AllUsersJournalAnalytics() {
                         const email =
                           (r.profiles?.email || dir?.email || "unknown").trim() || "unknown";
                         const title = (r.title || "").trim() || "—";
-                        const tags = (r.mood_tags || [])
+                        const tags: ReactNode[] = (r.mood_tags || [])
                           .map((t) => String(t || "").trim())
                           .filter(Boolean)
                           .map(formatTag);
@@ -554,7 +563,18 @@ export function AllUsersJournalAnalytics() {
                             <td className="px-4 py-3 text-sm text-muted-foreground">{email}</td>
                             <td className="px-4 py-3 text-sm max-w-[26rem] truncate">{title}</td>
                             <td className="px-4 py-3 text-sm text-muted-foreground">
-                              {tags.length ? tags.join(", ") : "—"}
+                              {tags.length ? (
+                                <span className="inline-flex flex-wrap items-center gap-x-1">
+                                  {tags.map((tag, i) => (
+                                    <Fragment key={i}>
+                                      {i > 0 ? <span>, </span> : null}
+                                      {tag}
+                                    </Fragment>
+                                  ))}
+                                </span>
+                              ) : (
+                                "—"
+                              )}
                             </td>
                             <td className="px-4 py-3 text-center">
                               {userId ? (

@@ -16,6 +16,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -706,7 +707,9 @@ function TemplatesTab() {
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="font-bold text-gray-900 truncate">{t.name}</h3>
                         <div className="flex gap-1.5 shrink-0">
-                          <span className="text-lg">{typeEmoji(t.type)}</span>
+                          <span className="text-lg leading-none inline-flex">
+                            <FluentEmoji emoji={typeEmoji(t.type)} size={22} />
+                          </span>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${t.status === "active" ? "bg-green-50 text-green-700 border-green-200" : t.status === "draft" ? "bg-orange-50 text-orange-700 border-orange-200" : "bg-gray-50 text-gray-700 border-gray-200"}`}>{t.status}</span>
                         </div>
                       </div>
@@ -751,7 +754,7 @@ function TemplatesTab() {
                 <div><p className="text-xs text-gray-500">Name</p><p className="font-semibold">{viewModal.name}</p></div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><p className="text-xs text-gray-500">Category</p><p className="text-sm">{viewModal.category}</p></div>
-                  <div><p className="text-xs text-gray-500">Type</p><p className="text-sm">{typeEmoji(viewModal.type)} {viewModal.type}</p></div>
+                  <div><p className="text-xs text-gray-500">Type</p><p className="text-sm inline-flex items-center gap-1"><FluentEmoji emoji={typeEmoji(viewModal.type)} size={18} /> {viewModal.type}</p></div>
                 </div>
                 <div className="p-3 bg-gray-50 rounded-lg border">
                   <p className="font-semibold text-sm mb-1">{viewModal.title}</p>

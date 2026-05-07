@@ -30,6 +30,7 @@ import {
   resolveCompanionModelUrl,
 } from "@/lib/avatar/companionModelUrl";
 import { LOBBY_AVATARS, lobbyAvatarByName, lobbyAvatarsFromApiRows } from "@/lib/avatar/lobbyAvatars";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 interface BackendSession {
   id: string;
@@ -1292,8 +1293,8 @@ export function SessionLobby() {
                             </div>
                           )}
                           {session.icon ? (
-                            <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-white dark:bg-gray-900 flex items-center justify-center text-[11px] shadow ring-1 ring-black/5 dark:ring-white/10">
-                              {session.icon}
+                            <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-white dark:bg-gray-900 flex items-center justify-center shadow ring-1 ring-black/5 dark:ring-white/10 overflow-hidden">
+                              <FluentEmoji emoji={session.icon} size={14} />
                             </div>
                           ) : null}
                         </div>
@@ -1530,7 +1531,9 @@ export function SessionLobby() {
                               <div
                                 className={`h-20 bg-gradient-to-br ${env.gradient} flex items-center justify-center dark:opacity-95`}
                               >
-                                <span className="text-3xl">{env.emoji}</span>
+                                <span className="text-3xl leading-none flex items-center justify-center">
+                                  <FluentEmoji emoji={env.emoji} size={36} />
+                                </span>
                               </div>
                               <div className="p-2 bg-white dark:bg-gray-950">
                                 <p className="text-sm font-medium">{env.label}</p>

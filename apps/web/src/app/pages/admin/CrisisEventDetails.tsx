@@ -23,6 +23,7 @@ import {
 import { Link, useLocation } from "react-router-dom";
 import { api } from "../../../lib/api";
 import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 interface CrisisEvent {
   id: string;
@@ -1608,11 +1609,27 @@ export function CrisisEventDetails() {
                   selectedStatus === "resolved" ? "bg-green-50 border-green-300" :
                   "bg-red-50 border-red-300"
                 }`}>
-                  <p className="font-bold text-lg">
-                    {selectedStatus === "contacted" && "📞 Mark as Contacted"}
-                    {selectedStatus === "in-progress" && "⚙️ In Progress"}
-                    {selectedStatus === "resolved" && "✅ Resolve Case"}
-                    {selectedStatus === "escalated" && "⚠️ Escalate"}
+                  <p className="font-bold text-lg inline-flex flex-wrap items-center gap-2">
+                    {selectedStatus === "contacted" && (
+                      <>
+                        <FluentEmoji emoji="📞" size={22} /> Mark as Contacted
+                      </>
+                    )}
+                    {selectedStatus === "in-progress" && (
+                      <>
+                        <FluentEmoji emoji="⚙️" size={22} /> In Progress
+                      </>
+                    )}
+                    {selectedStatus === "resolved" && (
+                      <>
+                        <FluentEmoji emoji="✅" size={22} /> Resolve Case
+                      </>
+                    )}
+                    {selectedStatus === "escalated" && (
+                      <>
+                        <FluentEmoji emoji="⚠️" size={22} /> Escalate
+                      </>
+                    )}
                   </p>
                   <p className="text-sm text-gray-600 mt-1">
                     {selectedStatus === "contacted" && "User has been contacted and initial assessment completed"}
