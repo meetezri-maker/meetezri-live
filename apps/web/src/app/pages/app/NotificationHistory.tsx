@@ -1,3 +1,4 @@
+import { CrisisResourcesCallout } from "@/app/components/safety/CrisisResourcesCallout";
 import { AppLayout } from "@/app/components/AppLayout";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -115,20 +116,16 @@ export function NotificationHistory() {
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <Bell className="w-8 h-8 text-primary" />
-                <h1 className="text-3xl font-bold">Emergency notification history</h1>
+                <h1 className="text-3xl font-bold">Emergency Notifications</h1>
               </div>
               <p className="text-muted-foreground">
-                Notices flagged as emergency/safety-related by our team appear here. Routine app alerts stay in{" "}
-                <Link to="/app/notifications" className="text-primary underline font-medium">
-                  Notifications
-                </Link>
-                .
+                Notices flagged as emergency or safety notifications.
               </p>
             </div>
           </div>
         </motion.div>
 
-        <motion.div
+        {/* <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -146,7 +143,7 @@ export function NotificationHistory() {
               </div>
             </div>
           </Card>
-        </motion.div>
+        </motion.div> */}
 
         <div className="space-y-4">
           {notifications.length === 0 ? (
@@ -161,12 +158,12 @@ export function NotificationHistory() {
                 When our team sends you a safety-related in-app notice, it will appear here. For all other alerts, open
                 Notifications.
               </p>
-              <Button asChild variant="outline">
+              {/* <Button asChild variant="outline">
                 <Link to="/app/notifications">
                   <Bell className="w-4 h-4 mr-2" />
                   Open Notifications
                 </Link>
-              </Button>
+              </Button> */}
             </motion.div>
           ) : (
             notifications.map((notification, index) => (
@@ -251,6 +248,8 @@ export function NotificationHistory() {
             </Card>
           </motion.div>
         )}
+
+        <CrisisResourcesCallout />
       </div>
     </AppLayout>
   );

@@ -197,11 +197,11 @@ export function ChangeAvatar() {
                 <Brain className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Change AI Companion</h1>
-                <p className="text-gray-600 dark:text-slate-400">Switch to a different AI companion for your sessions</p>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Change Solace Avatar</h1>
+                <p className="text-gray-600 dark:text-slate-400">Switch to a different Avatar for your talks</p>
               </div>
             </div>
-          </div>
+          </div>  
 
           {/* Current Avatar */}
           {currentAvatar && (
@@ -209,7 +209,7 @@ export function ChangeAvatar() {
               <div className="bg-gradient-to-br from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 rounded-2xl border-2 border-purple-300 dark:border-purple-700 p-6 mb-8">
                 <div className="flex items-center gap-3 mb-4">
                   <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Current AI Companion</h2>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Current Avatar</h2>
                 </div>
 
                 <div className="flex items-start gap-6">
@@ -266,7 +266,7 @@ export function ChangeAvatar() {
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <RefreshCw className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-              Choose a New AI Companion
+              Choose a New Avatar
             </h2>
             <p className="text-gray-600 dark:text-slate-400 mb-6">
               Select a different AI companion that better fits your needs. Your session history will be preserved.

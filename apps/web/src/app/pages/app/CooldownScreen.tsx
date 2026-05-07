@@ -11,6 +11,7 @@ import { Button } from '@/app/components/ui/button';
 import { AppLayout } from '@/app/components/AppLayout';
 import { GroundingExercises } from '@/app/components/safety/GroundingExercises';
 import { BreathingExercises } from '@/app/components/safety/BreathingExercises';
+import { CrisisResourcesCallout } from '@/app/components/safety/CrisisResourcesCallout';
 import { useSafety } from '@/app/contexts/SafetyContext';
 import {
   Heart,
@@ -390,6 +391,8 @@ export function CooldownScreen() {
               </Button>
             </div>
           </motion.div>
+
+          <CrisisResourcesCallout />
         </div>
       </AppLayout>
     );
@@ -461,6 +464,8 @@ export function CooldownScreen() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          <CrisisResourcesCallout />
         </motion.div>
       </div>
     </AppLayout>

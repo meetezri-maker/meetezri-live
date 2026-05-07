@@ -1681,6 +1681,16 @@ export function ActiveSession() {
   /** True after backend `step:speaking` until `tts_done` (Ezri Avatar / app.js parity). Used to detect idle server interrupts. */
   const wsTtsStreamingRef = useRef(false);
   const lastBargeInAtRef = useRef(0);
+  /** After barge-in, don't treat overlap with the last assistant line as Ezri echo (common follow-ups share words). */
+  const bargeInEchoGraceUntilRef = useRef(0);
+
+  /** True while Solace may still be streaming or playing TTS (covers gaps between WS audio chunks). */
+  const ezriWsAudioPipelineActive = (): boolean =>
+    isEzriSpeakingRef.current ||
+    wsTtsStreamingRef.current ||
+    wsIsPlaybackActiveRef.current ||
+    wsAudioQueueRef.current.length > 0;
+
   const transcriptRef = useRef<
     { role: string; content: string; timestamp: number }[]
   >([]);
@@ -1742,6 +1752,8 @@ export function ActiveSession() {
   const suppressSttRef = useRef(false);
   const lastPlaybackDoneAtRef = useRef(0);
   const playbackDoneCooldownTimerRef = useRef<number | null>(null);
+  /** Bumped on interrupt/pause — invalidates awaited work inside `playEzriAudio`. */
+  const audioPlaySeqRef = useRef<number>(0);
   // Tracks the in-flight REST request so it can be aborted on interruption.
   const restAbortControllerRef = useRef<AbortController | null>(null);
   // When true, ALL incoming WS audio/text from the server is dropped.
@@ -1766,23 +1778,25 @@ export function ActiveSession() {
   const isMobileBrowser = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   const pauseStt = () => {
-    suppressSttRef.current = true;
-    // On mobile: abort recognition to avoid audio-capture hardware conflicts
-    // (iOS audio session and Android Chrome both fail when mic + speaker run together).
-    // On desktop: keep recognition ALIVE so the user can barge-in via onresult
-    // while Ezri speaks. The AudioAnalyser mic-level is unreliable here because
-    // the browser's AEC suppresses the mic signal during speaker playback — meaning
-    // audioLevel drops near-zero even when the user speaks clearly, so the
-    // AudioAnalyser watchdog never fires. SpeechRecognition uses a more sensitive
-    // internal VAD that still detects voice through AEC attenuation.
-    if (isMobileBrowser && recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch (_) {}
+    // Mobile: abort mic + suppress onend auto-restart — concurrent capture + playback breaks many devices.
+    // Desktop: MUST NOT set suppressSttRef. While true, recognition.onend bails without restarting;
+    // sessions often end mid–TTS (timeouts), leaving no mic until resumeStt() — users lose the first
+    // words right after interrupt. Desktop keeps streaming; overlap with Ezri audio is gated by
+    // ezriWsAudioPipelineActive(), shouldInterruptForSpeech, and shouldIgnoreEchoBargeIn().
+    if (isMobileBrowser) {
+      suppressSttRef.current = true;
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (_) {}
+      }
     }
   };
 
-  const resumeStt = () => {
+  /** Pass `delayMs: 0` after barge-in so the mic opens immediately — long delays clip the user's first words. */
+  const resumeStt = (delayMs = 150) => {
     suppressSttRef.current = false;
-    // Short delay to let echo tail die down before reopening STT.
+    // Short delay to let speaker echo decay after normal TTS (not needed right after client barge-in).
     window.setTimeout(() => {
       if (
         !permissionsGranted ||
@@ -1794,29 +1808,52 @@ export function ActiveSession() {
         return;
       }
       if (!recognitionRef.current) {
-        // Recognizer was destroyed by a fatal error — trigger full reinit via effect.
-        setSttRestartTrigger((t) => t + 1);
+        const SR =
+          typeof window !== "undefined" &&
+          ((window as any).SpeechRecognition ||
+            (window as any).webkitSpeechRecognition);
+        if (SR) setSttRestartTrigger((t) => t + 1);
         return;
       }
       try {
         if (!isRecognitionActiveRef.current) {
           recognitionRef.current.start();
         }
-      } catch (e) {
+      } catch (e: unknown) {
+        const nm =
+          typeof e === "object" &&
+          e !== null &&
+          "name" in e &&
+          typeof (e as { name: unknown }).name === "string"
+            ? (e as { name: string }).name
+            : "";
+        // Chrome fires InvalidStateError if start() races a session that is already listening.
+        if (nm === "InvalidStateError") {
+          return;
+        }
         // start() threw — recognizer is in a bad state. Force a full effect reinit.
         console.error("[STT] start() threw in resumeStt, forcing reinit:", e);
         recognitionRef.current = null;
         isRecognitionActiveRef.current = false;
         setSttRestartTrigger((t) => t + 1);
       }
-    }, 150);
+    }, delayMs);
   };
 
-  const stopPlaybackAndCooldown = (opts?: { sendPlaybackDone?: boolean; cooldownMs?: number }) => {
+  const stopPlaybackAndCooldown = (opts?: {
+    sendPlaybackDone?: boolean;
+    cooldownMs?: number;
+    /** Bypass 2s debounce (needed for explicit user barge-in so we always ACK playback_done to the server). */
+    bypassPlaybackDoneDebounce?: boolean;
+  }) => {
     if (playbackDoneCooldownTimerRef.current !== null) {
       window.clearTimeout(playbackDoneCooldownTimerRef.current);
       playbackDoneCooldownTimerRef.current = null;
     }
+
+    // Drop any in-flight playEzriAudio (await normalizeSource / await play) — otherwise a chunk
+    // that finishes decoding after interrupt can start playing and Ezri keeps talking.
+    audioPlaySeqRef.current += 1;
 
     // Stop all audio immediately, clear queue, and (optionally) send playback_done after cooldown.
     wsAudioQueueRef.current = [];
@@ -1829,11 +1866,17 @@ export function ActiveSession() {
     const shouldSend = opts?.sendPlaybackDone !== false;
     if (!shouldSend) return;
     const now = Date.now();
-    // 2000ms debounce: after an interrupt the server echoes {"type":"interrupt"} back,
-    // which our handler calls stopPlaybackAndCooldown() again. Without this guard,
-    // a second playback_done fires ~200ms after the first, confusing the server's
-    // pipeline state machine and causing it to open the mic twice.
-    if (now - lastPlaybackDoneAtRef.current < 2000) return;
+    // 2000ms debounce: server echo interrupt can call this twice; avoids duplicate playback_done.
+    // Client-initiated interrupts pass bypassPlaybackDoneDebounce — otherwise the ACK is skipped,
+    // the server stays “bot speaking”, and STT/backend VAD never accepts user audio.
+    if (
+      !opts?.bypassPlaybackDoneDebounce &&
+      now - lastPlaybackDoneAtRef.current < 2000
+    ) {
+      // Still reopen local STT — skipping only the duplicate playback_done send.
+      resumeStt();
+      return;
+    }
     lastPlaybackDoneAtRef.current = now;
 
     // Default 1500ms is for server-initiated interrupts (echo from physical speakers needs ~800-1200ms to decay).
@@ -1998,6 +2041,16 @@ export function ActiveSession() {
       return;
     }
 
+    if (seq !== audioPlaySeqRef.current) {
+      try {
+        revoke?.();
+      } catch {
+        /* noop */
+      }
+      opts?.onDone?.();
+      return;
+    }
+
     audioUrlRevokeRef.current = revoke ?? null;
 
     const audio = new Audio();
@@ -2130,6 +2183,26 @@ export function ActiveSession() {
       opts?.onError?.();
       opts?.onDone?.();
     }
+
+    // play() resolves before first frame; interrupt during decode/scheduling otherwise leaves audio audible.
+    if (seq !== audioPlaySeqRef.current) {
+      try {
+        audio.pause();
+        audio.onended = null;
+        audio.onerror = null;
+        audio.onloadedmetadata = null;
+        audio.removeAttribute("src");
+        audio.load();
+      } catch {
+        /* noop */
+      }
+      try {
+        revoke?.();
+      } catch {
+        /* noop */
+      }
+      opts?.onDone?.();
+    }
   };
 
   const speakViaEzriTts = async (text: string) => {
@@ -2184,8 +2257,12 @@ export function ActiveSession() {
 
   const requestBargeInInterrupt = (source: string) => {
     const now = Date.now();
-    if (now - lastBargeInAtRef.current < 400) return;
+    // speech_final may arrive shortly after speech_interim; still treat as one user action.
+    if (now - lastBargeInAtRef.current < 400 && source !== "speech_final") {
+      return;
+    }
     lastBargeInAtRef.current = now;
+    bargeInEchoGraceUntilRef.current = now + 8000;
 
     // ── Step 1: Suppress ALL incoming WS audio/text until the new user
     // message is sent. This is the only reliable way to discard late audio
@@ -2205,26 +2282,39 @@ export function ActiveSession() {
       restAbortControllerRef.current = null;
     }
 
-    // ── Step 4: Stop audio and clear queue.
+    // ── Step 4: Stop audio and clear queue (local only — no delayed WS ACK yet).
     stopPlaybackAndCooldown({ sendPlaybackDone: false });
 
-    // Restart the browser STT RIGHT NOW — the audio has stopped so there is no echo to
-    // suppress. Deliberately decoupled from the playback_done cooldown timer: the server's
-    // VAD needs the 200ms buffer before it opens its mic, but local STT can start
-    // immediately. Without this, STT stays dead for 350ms+ after the interrupt fires and
-    // the user's interruption words are never captured (they have already stopped speaking
-    // by the time recognition restarts).
-    resumeStt();
+    // Many backends expect interrupt first (cancel synthesis), then playback_done ACK.
+    const ws = wsClientRef.current;
+    if (ws && ws.getStatus() === "connected") {
+      ws.sendInterrupt(source);
+    }
+    if (ws && ws.getStatus() === "connected") {
+      const ok = ws.sendPlaybackDone();
+      if (ok) lastPlaybackDoneAtRef.current = Date.now();
+    }
 
-    try {
-      wsClientRef.current?.sendInterrupt(source);
-    } catch {}
+    suppressSttRef.current = false;
+    const SpeechRecognitionCtor =
+      typeof window !== "undefined" &&
+      ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 
-    // Client-initiated interrupt: the browser's AEC (echoCancellation: true) already removes
-    // speaker echo from the PCM stream before it reaches the server, so a 200ms cooldown is
-    // enough. Using the full 1500ms here caused the server to discard the first ~3 words of
-    // user speech while waiting for playback_done.
-    stopPlaybackAndCooldown({ sendPlaybackDone: true, cooldownMs: 200 });
+    // Desktop: NEVER recreate SpeechRecognition here — teardown costs ~300–800ms and drops the user's
+    // first words right after interrupt. Mobile: pauseStt() aborted during TTS; full recreate only on the
+    // final segment (when utterance bookkeeping is coherent). Interim/teardown-before-final is avoided elsewhere.
+    const shouldRecreateSttAfterBargeIn =
+      !!SpeechRecognitionCtor && isMobileBrowser && source === "speech_final";
+
+    if (!SpeechRecognitionCtor) {
+      // MediaRecorder/server STT path — no SpeechRecognition instance to restart.
+    } else if (shouldRecreateSttAfterBargeIn) {
+      isRecognitionActiveRef.current = false;
+      setIsListening(false);
+      setSttRestartTrigger((t) => t + 1);
+    } else {
+      resumeStt(0);
+    }
 
     // ── Safety net 1: on mobile (where pauseStt aborts recognition), verify STT
     // actually restarted. Chrome can silently swallow start() on a recently-aborted
@@ -2684,14 +2774,19 @@ export function ActiveSession() {
       if (transcriptText.trim()) {
         const trimmed = transcriptText.trim();
 
-        // While TTS plays, ignore mic input unless it looks like a deliberate barge-in (not echo).
-        if (isEzriSpeakingRef.current) {
+        // While TTS plays (including between WS chunks — isEzriSpeaking can flicker false), only
+        // treat speech as barge-in through the echo filters below.
+        if (ezriWsAudioPipelineActive()) {
           if (shouldInterruptForSpeech(trimmed, isFinal)) {
             requestBargeInInterrupt(isFinal ? "speech_final" : "speech_interim");
             if (!isFinal) {
               return;
             }
-            if (shouldIgnoreEchoBargeIn(trimmed)) {
+            const dropAsEzriEchoDup =
+              Date.now() < bargeInEchoGraceUntilRef.current
+                ? false
+                : shouldIgnoreEchoBargeIn(trimmed);
+            if (dropAsEzriEchoDup) {
               return;
             }
             // Final transcript after real interrupt — fall through to user handling.
@@ -2702,7 +2797,7 @@ export function ActiveSession() {
 
         if (!isFinal) {
           console.log("Interim:", trimmed);
-          if (isEzriSpeakingRef.current) {
+          if (ezriWsAudioPipelineActive()) {
             return;
           }
           // Debounce interim subtitle updates: wait 120ms for recognition to settle
@@ -2731,14 +2826,39 @@ export function ActiveSession() {
           subtitleDebounceRef.current = null;
         }
         setLiveUserSpeech("");
-        const lowerTrimmed = trimmed.toLowerCase();
+
+        // Web Speech often emits a final segment that drops the leading tokens already shown in the
+        // last interim — especially after restart / barge-in. Prepend recent interim when safe.
+        const interimSnapshot = lastInterimTextRef.current.trim();
+        let textForUtterance = trimmed;
+        const interimRecent =
+          interimSnapshot.length >= 5 &&
+          Date.now() - lastInterimToastAtRef.current < 2000;
+        const allowInterimCarry =
+          !ezriWsAudioPipelineActive() || Date.now() < bargeInEchoGraceUntilRef.current;
+        if (interimRecent && allowInterimCarry && !shouldIgnoreEchoBargeIn(interimSnapshot)) {
+          const fl = trimmed.toLowerCase();
+          const il = interimSnapshot.toLowerCase();
+          const head = il.slice(0, Math.min(16, il.length));
+          const firstWd = interimSnapshot.split(/\s+/).find((w) => w.length >= 3);
+          const firstLc = firstWd?.toLowerCase() ?? "";
+          if (fl.startsWith(il) || (head.length >= 4 && fl.startsWith(head))) {
+            textForUtterance =
+              trimmed.length >= interimSnapshot.length ? trimmed : interimSnapshot;
+          } else if (firstLc && !fl.includes(firstLc)) {
+            textForUtterance = `${interimSnapshot} ${trimmed}`.replace(/\s+/g, " ").trim();
+          }
+        }
+        lastInterimTextRef.current = "";
+
+        const lowerTrimmed = textForUtterance.toLowerCase();
         console.log(
           "Heard (Final):",
           lowerTrimmed,
           "Current Step:",
           scriptStepRef.current
         );
-        toast.success(`Heard: "${trimmed}"`, {
+        toast.success(`Heard: "${textForUtterance}"`, {
           id: "ezri-speech-final",
           duration: 2000,
         });
@@ -2747,14 +2867,14 @@ export function ActiveSession() {
           const lastEntry = prev[prev.length - 1];
           if (
             lastEntry &&
-            lastEntry.content === trimmed &&
+            lastEntry.content === textForUtterance &&
             Date.now() - lastEntry.timestamp < 1000
           ) {
             return prev;
           }
           return [
             ...prev,
-            { role: "user", content: trimmed, timestamp: Date.now() },
+            { role: "user", content: textForUtterance, timestamp: Date.now() },
           ];
         });
 
@@ -2777,7 +2897,7 @@ export function ActiveSession() {
           return;
         }
 
-        void handleUserText(trimmed);
+        void handleUserText(textForUtterance);
       }
     };
 
@@ -2817,9 +2937,18 @@ export function ActiveSession() {
         !isSessionEndingRef.current
       ) {
         const sessionDuration = Date.now() - lastSpeechStartRef.current;
-        // Small back-off only for very short runs (< 300ms) to prevent tight
-        // no-speech loops. Otherwise restart promptly so the user isn't kept waiting.
-        const restartDelay = sessionDuration < 300 ? 1500 : 300;
+        const recentBargeIn =
+          Date.now() - lastBargeInAtRef.current < 3000 && lastBargeInAtRef.current > 0;
+        // Small back-off only for very short runs (< 300ms) to prevent tight no-speech loops.
+        // After user barge-in, restart ASAP so speech right after interrupt is not clipped.
+        const restartDelay =
+          sessionDuration < 300
+            ? recentBargeIn
+              ? 50
+              : 1500
+            : recentBargeIn
+              ? 80
+              : 300;
         console.log(
           `[STT] Recognition ended (ran for ${sessionDuration}ms), restarting in ${restartDelay}ms...`
         );
@@ -2919,7 +3048,7 @@ export function ActiveSession() {
         isMutedRef.current ||
         isSessionPausedRef.current ||
         isSessionEndingRef.current ||
-        isEzriSpeakingRef.current
+        ezriWsAudioPipelineActive()
       )
         return;
 
@@ -2960,11 +3089,15 @@ export function ActiveSession() {
         // Show the transcribed text as subtitle briefly before clearing.
         setLiveUserSpeech(text);
 
-        // Apply barge-in filtering (Ezri may have started speaking between chunk start and now).
-        if (isEzriSpeakingRef.current) {
+        // Apply barge-in filtering (covers inter-chunk gaps where isEzriSpeaking is briefly false).
+        if (ezriWsAudioPipelineActive()) {
           if (shouldInterruptForSpeech(text, true)) {
             requestBargeInInterrupt("speech_final");
-            if (shouldIgnoreEchoBargeIn(text)) {
+            const dropAsEzriEchoDup =
+              Date.now() < bargeInEchoGraceUntilRef.current
+                ? false
+                : shouldIgnoreEchoBargeIn(text);
+            if (dropAsEzriEchoDup) {
               setLiveUserSpeech("");
               return;
             }
@@ -3131,8 +3264,8 @@ export function ActiveSession() {
 
     const tick = () => {
       if (isSessionEndingRef.current) return;
-      const speaking = isEzriSpeakingRef.current;
-      if (!speaking) {
+      const pipelineActive = ezriWsAudioPipelineActive();
+      if (!pipelineActive) {
         aboveSince = null;
         raf = requestAnimationFrame(tick);
         return;
@@ -3195,6 +3328,7 @@ export function ActiveSession() {
   useEffect(() => {
     if (isSessionPaused) {
       // Stop any assistant playback immediately
+      audioPlaySeqRef.current += 1;
       wsAudioQueueRef.current = [];
       wsIsPlaybackActiveRef.current = false;
       try {
@@ -3293,6 +3427,7 @@ export function ActiveSession() {
   useEffect(() => {
     isSoundOffRef.current = isSoundOff;
     if (!isSoundOff) return;
+    audioPlaySeqRef.current += 1;
     wsAudioQueueRef.current = [];
     wsIsPlaybackActiveRef.current = false;
     try {
@@ -3306,7 +3441,6 @@ export function ActiveSession() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRevokeRef = useRef<(() => void) | null>(null);
   const speechDriverIntervalRef = useRef<number | null>(null);
-  const audioPlaySeqRef = useRef<number>(0);
 
   // ── Ezri WebSocket (primary realtime) ────────────────────────────────────
   useEffect(() => {
@@ -3387,15 +3521,14 @@ export function ActiveSession() {
           }
         },
         onSpeakingStart: () => {
-          // step: speaking from backend — bot committed to speaking before first audio byte.
-          // Pause STT now so the recognizer is fully stopped before echo arrives.
-          // This closes the ~100ms race window where STT could mis-detect TTS echo as user speech.
-          if (suppressIncomingAudioRef.current) return;
-          setIsEzriThinking(false);
-          isEzriThinkingRef.current = false;
+          // Always pause local STT as soon as the server commits to TTS (Ezri Avatar app.js parity).
           wsTtsDoneReceivedRef.current = false;
           wsTtsStreamingRef.current = true;
           pauseStt();
+          // While discarding a dead turn's audio, don't update thinking/buffer state from stray "speaking" steps.
+          if (suppressIncomingAudioRef.current) return;
+          setIsEzriThinking(false);
+          isEzriThinkingRef.current = false;
         },
         onAvatarData: (data) => {
           // Phonemes + sentiment from backend, emitted before each TTS audio chunk.
@@ -4272,9 +4405,16 @@ export function ActiveSession() {
                     />
                   </motion.div>
                   <span className="text-sm font-medium">
-                    {isListening ? "Listening" : "Connecting..."}
+                    {isListening
+                      ? "Listening"
+                      : isMuted
+                        ? "Mic off"
+                        : "Starting mic"}
                     {audioLevel > 10 && (
-                      <span className="text-xs ml-1 text-green-200">
+                      <span
+                        className="text-xs ml-1 text-green-200 tabular-nums"
+                        title="Microphone signal level"
+                      >
                         ({Math.round(audioLevel)})
                       </span>
                     )}

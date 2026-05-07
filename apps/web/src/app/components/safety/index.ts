@@ -6,3 +6,4 @@
 export { SafetyStateIndicator } from './SafetyStateIndicator';
 export { SafetyResourceCard } from './SafetyResourceCard';
 export { SafetyBoundaryMessage, SafetyRefusalMessage } from './SafetyBoundaryMessage';
+export { CrisisResourcesCallout } from './CrisisResourcesCallout';

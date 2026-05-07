@@ -1,8 +1,9 @@
+import { CrisisResourcesCallout } from "@/app/components/safety/CrisisResourcesCallout";
 import { AppLayout } from "../../components/AppLayout";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { motion, AnimatePresence } from "motion/react";
-import { useNavigate, Link } from "react-router";
+import { useNavigate } from "react-router";
 import {
   Shield,
   Plus,
@@ -17,15 +18,12 @@ import {
   Users,
   Download,
   Loader2,
-  ExternalLink,
-  Mail,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
 
 interface SafetyPlanSection {
   id: string;
@@ -33,15 +31,6 @@ interface SafetyPlanSection {
   icon: LucideIcon;
   items: string[];
   placeholder: string;
-}
-
-interface EmergencyContact {
-  id: string;
-  name: string;
-  relationship: string | null;
-  phone: string | null;
-  email: string | null;
-  is_trusted: boolean;
 }
 
 const SECTION_BLUEPRINT: Omit<SafetyPlanSection, "items">[] = [
@@ -158,16 +147,6 @@ export function SafetyPlan() {
 
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [newItem, setNewItem] = useState("");
-
-  const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
-  const [ecLoading, setEcLoading] = useState(true);
-
-  useEffect(() => {
-    api.emergencyContacts.getAll()
-      .then((data) => setEmergencyContacts(data as EmergencyContact[]))
-      .catch(() => toast.error("Could not load emergency contacts."))
-      .finally(() => setEcLoading(false));
-  }, []);
 
   const loadPlan = useCallback(async () => {
     if (!user?.id) {
@@ -398,7 +377,7 @@ export function SafetyPlan() {
                     <Phone className="w-8 h-8 flex-shrink-0" />
                     <div className="flex-1">
                       <h3 className="font-bold text-lg mb-3">
-                        Just In Case Resources - Available 24/7
+                        Helpful Resources - Available 24/7
                       </h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <a
@@ -432,94 +411,6 @@ export function SafetyPlan() {
                       </div>
                     </div>
                   </div>
-                </Card>
-              </motion.div>
-
-              {/* Emergency Contacts */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="mb-6"
-              >
-                <Card className="p-6 shadow-lg">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-primary/10 rounded-lg">
-                        <Phone className="w-5 h-5 text-primary" />
-                      </div>
-                      <h3 className="font-bold text-lg">Emergency Contacts</h3>
-                    </div>
-                    <Link
-                      to="/app/emergency-contacts"
-                      className="flex items-center gap-1 text-sm text-primary hover:underline"
-                    >
-                      Manage
-                      <ExternalLink className="w-3 h-3" />
-                    </Link>
-                  </div>
-
-                  {ecLoading ? (
-                    <div className="flex items-center gap-2 text-muted-foreground text-sm py-4">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading contacts…
-                    </div>
-                  ) : emergencyContacts.length === 0 ? (
-                    <div className="text-center py-6">
-                      <Users className="w-10 h-10 text-muted-foreground/40 mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground mb-3">
-                        No emergency contacts added yet.
-                      </p>
-                      <Link to="/app/emergency-contacts">
-                        <Button type="button" size="sm" variant="outline">
-                          <Plus className="w-4 h-4 mr-1" />
-                          Add Emergency Contact
-                        </Button>
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {emergencyContacts.map((contact, idx) => (
-                        <motion.div
-                          key={contact.id}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: idx * 0.05 }}
-                          className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
-                        >
-                          <div className="w-9 h-9 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                            {contact.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-sm">{contact.name}</p>
-                            {contact.relationship && (
-                              <p className="text-xs text-muted-foreground capitalize">{contact.relationship}</p>
-                            )}
-                            <div className="flex flex-wrap gap-3 mt-1">
-                              {contact.phone && (
-                                <a
-                                  href={`tel:${contact.phone}`}
-                                  className="flex items-center gap-1 text-xs text-primary hover:underline"
-                                >
-                                  <Phone className="w-3 h-3" />
-                                  {contact.phone}
-                                </a>
-                              )}
-                              {contact.email && (
-                                <a
-                                  href={`mailto:${contact.email}`}
-                                  className="flex items-center gap-1 text-xs text-primary hover:underline"
-                                >
-                                  <Mail className="w-3 h-3" />
-                                  {contact.email}
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  )}
                 </Card>
               </motion.div>
 
@@ -659,6 +550,8 @@ export function SafetyPlan() {
             </>
           )}
         </AnimatePresence>
+
+        <CrisisResourcesCallout />
       </div>
     </AppLayout>
   );

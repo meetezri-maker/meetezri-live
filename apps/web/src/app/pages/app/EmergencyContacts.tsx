@@ -21,6 +21,7 @@ import { api } from "../../../lib/api";
 import { queryKeys } from "@/lib/queries";
 import { cn } from "@/app/components/ui/utils";
 import { toast } from "sonner";
+import { CrisisResourcesCallout } from "@/app/components/safety/CrisisResourcesCallout";
 import { EmergencyContactConsentModal } from "../../components/consent/EmergencyContactConsentModal";
 import { Skeleton } from "../../components/ui/skeleton";
 import { PhoneInput } from "../../components/ui/phone-input";
@@ -586,6 +587,8 @@ export function EmergencyContacts() {
             </motion.div>
           </>
         )}
+
+        <CrisisResourcesCallout />
       </div>
     </AppLayout>
   );

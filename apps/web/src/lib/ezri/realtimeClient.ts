@@ -280,20 +280,31 @@ export class EzriRealtimeClient {
     ws.send(JSON.stringify({ type: "chat", text }));
   }
 
-  sendPlaybackDone() {
+  /** Best-effort (matches ping/pcm) — barge-in must not throw if the socket is mid-flush. */
+  sendPlaybackDone(): boolean {
     const ws = this.ws;
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      throw new Error("Ezri WebSocket is not connected.");
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    try {
+      ws.send(JSON.stringify({ type: "playback_done" }));
+      return true;
+    } catch {
+      return false;
     }
-    ws.send(JSON.stringify({ type: "playback_done" }));
   }
 
-  sendInterrupt(source = "client_barge_in") {
+  /**
+   * Tell the server to cancel the current TTS/brain turn. Reference UI only handles
+   * incoming `{type:"interrupt"}`; we also send `source` for logging when supported.
+   */
+  sendInterrupt(source = "client_barge_in"): boolean {
     const ws = this.ws;
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      throw new Error("Ezri WebSocket is not connected.");
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    try {
+      ws.send(JSON.stringify({ type: "interrupt", source }));
+      return true;
+    } catch {
+      return false;
     }
-    ws.send(JSON.stringify({ type: "interrupt", source }));
   }
 
   /** Send a heartbeat ping to prevent HF Space nginx idle-timeout (60 s). */

@@ -842,7 +842,7 @@ export function SessionLobby() {
                         <div className="relative flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2">
                             <Clock className="w-5 h-5 text-white" />
-                            <h2 className="text-xl font-bold">Choose session minutes</h2>
+                            <h2 className="text-xl font-bold">Choose talk duration</h2>
                           </div>
                           <motion.button
                             type="button"

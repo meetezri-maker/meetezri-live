@@ -7,6 +7,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { CrisisResourcesCallout } from '@/app/components/safety/CrisisResourcesCallout';
 import { AppLayout } from '@/app/components/AppLayout';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -599,6 +600,8 @@ export function ResourceAnalyticsPage() {
             </motion.div>
           </>
         )}
+
+        <CrisisResourcesCallout />
       </div>
     </AppLayout>
   );

@@ -7,6 +7,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
+import { CrisisResourcesCallout } from '@/app/components/safety/CrisisResourcesCallout';
 import { AppLayout } from '@/app/components/AppLayout';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -648,6 +649,8 @@ export function SafetyInsights() {
             </div>
           </Card>
         </motion.div>
+
+        <CrisisResourcesCallout />
       </div>
     </AppLayout>
   );

@@ -161,7 +161,7 @@ export function HelpSupport() {
       {
         question: "How can I report a safety concern or harmful content?",
         answer:
-          "Open Just In Case Resources for immediate support and contact support with as much detail as you can (what happened, when, and any screenshots).",
+          "Open Helpfull Resources for immediate support and contact support with as much detail as you can (what happened, when, and any screenshots).",
         tags: ["safety", "reporting"],
       },
       {
@@ -198,7 +198,7 @@ export function HelpSupport() {
     },
     {
       question: "What are emergency resources?",
-      answer: "Just In Case resources provide immediate help during mental health emergencies. Access them 24/7 from the Wellness Tools section or the emergency button on your dashboard."
+      answer: "Helpful resources provide immediate help during mental health emergencies. Access them 24/7 from the Wellness Tools section or the emergency button on your dashboard."
     },
     {
       question: "How do I change my notification settings?",
@@ -298,7 +298,7 @@ export function HelpSupport() {
         title: "Resources & tools",
         bullets: [
           "Explore Wellness Tools for guided exercises and self-care routines.",
-          "Use Just In Case Resources anytime you need immediate support options.",
+          "Use Helpful Resources anytime you need immediate support options.",
           "Check Progress to see streaks, trends, and engagement over time.",
         ],
       },
@@ -792,7 +792,7 @@ export function HelpSupport() {
                                     to="/app/crisis-resources"
                                     className="inline-flex items-center justify-center px-3 py-2.5 rounded-xl text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 transition-colors"
                                   >
-                                    Just In Case Resources
+                                    Helpful Resources
                                   </Link>
                                 </div>
                               </div>

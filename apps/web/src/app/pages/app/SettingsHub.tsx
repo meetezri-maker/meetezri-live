@@ -239,8 +239,8 @@ export function SettingsHub() {
     },
     {
       id: "change-avatar",
-      title: "Change AI Companion",
-      description: "Switch to a different AI companion for your sessions",
+      title: "Change Solace Avatar",
+      description: "Switch to a different Avatar for your talks",
       icon: Brain,
       color: "from-blue-500 to-cyan-600",
       route: "/app/settings/change-avatar"
@@ -266,8 +266,8 @@ export function SettingsHub() {
     },
     {
       id: "safety-plan",    
-      title: "wellness Plan",
-      description: "Personalized wellness plan builder (6 sections)",
+      title: "Wellness Plan",
+      description: "Personalized wellness plan builder",
       icon: FileHeart,
       color: "from-orange-500 to-red-600",
       route: "/app/settings/safety-plan"
@@ -279,7 +279,7 @@ export function SettingsHub() {
       icon: TrendingUp,
       color: "from-green-500 to-emerald-600",
       route: "/app/settings/safety-insights",
-      badge: "NEW"
+      // badge: "NEW"
     },
     {
       id: "emergency-resources",
@@ -299,8 +299,8 @@ export function SettingsHub() {
     },
     {
       id: "emergency-notification-history",
-      title: "Emergency notification history",
-      description: "Safety-related notices from our team (in-app)",
+      title: "Emergency Notifications",
+      description: "Safety-related notifications",
       icon: History,
       color: "from-blue-500 to-cyan-600",
       route: "/app/settings/notification-history"
@@ -488,7 +488,7 @@ export function SettingsHub() {
               <span>Made with care for your wellbeing</span>
             </div>
             <p className="text-xs text-gray-400 dark:text-gray-500">
-              Ezri v1.0.0 • © 2024 • <Link to="/privacy" className="underline">Privacy</Link> • <Link to="/terms" className="underline">Terms</Link>
+              Solace v1.0.0 • © 2024 • <Link to="/privacy" className="underline">Privacy</Link> • <Link to="/terms" className="underline">Terms</Link>
             </p>
           </div>
 
