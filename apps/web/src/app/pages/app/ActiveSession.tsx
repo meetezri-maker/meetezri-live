@@ -4,8 +4,6 @@ import {
   PhoneOff,
   Video,
   VideoOff,
-  Sparkles,
-  Circle,
   AlertCircle,
   Maximize,
   Minimize,
@@ -22,7 +20,10 @@ import {
   Pause,
   Play,
   Loader2,
-  GripHorizontal,
+  LayoutGrid,
+  CloudSun,
+  Activity,
+  Gauge,
 } from "lucide-react";
 import {
   useState,
@@ -41,9 +42,7 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { EmojiText } from "@/components/ui/EmojiText";
 import { analyzeTextForSafety } from "@/app/utils/safetyDetection";
-import { SafetyStateIndicator } from "@/app/components/safety/SafetyStateIndicator";
 import { SafetyBoundaryMessage } from "@/app/components/safety/SafetyBoundaryMessage";
 import { SafetyResourceCard } from "@/app/components/safety/SafetyResourceCard";
 import { getSafetyResources } from "@/app/utils/safetyResources";
@@ -1390,8 +1389,23 @@ export default ThreeAvatar;
 export function ActiveSession() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, refreshProfile, session } = useAuth();
+  const { user, profile, refreshProfile, session } = useAuth();
   const { sessionId: stateSessionId, duration, config } = location.state || {};
+
+  const viewerFirstName = useMemo(() => {
+    const full =
+      typeof profile?.full_name === "string" ? profile.full_name.trim() : "";
+    if (full) return full.split(/\s+/)[0] || "You";
+    const metaFull =
+      typeof (user?.user_metadata as { full_name?: string } | undefined)
+        ?.full_name === "string"
+        ? String(
+            (user?.user_metadata as { full_name?: string }).full_name
+          ).trim()
+        : "";
+    if (metaFull) return metaFull.split(/\s+/)[0] || "You";
+    return "You";
+  }, [profile?.full_name, user?.user_metadata]);
 
   const companionAvatarLabel =
     typeof config?.avatar === "string" ? config.avatar : undefined;
@@ -1604,8 +1618,9 @@ export function ActiveSession() {
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  /** User PiP position (px from right / bottom); default matches previous Tailwind right-10 bottom-28. */
-  const [pipPos, setPipPos] = useState({ right: 40, bottom: 112 });
+  const [sessionStatsOpen, setSessionStatsOpen] = useState(true);
+  /** User PiP position (px from right / bottom). */
+  const [pipPos, setPipPos] = useState({ right: 24, bottom: 100 });
   const pipDragRef = useRef<{
     id: number;
     sx: number;
@@ -1635,7 +1650,7 @@ export function ActiveSession() {
       const d = pipDragRef.current;
       if (!d || e.pointerId !== d.id) return;
       const margin = 8;
-      const reserveBottom = 120;
+      const reserveBottom = 88;
       const maxRight = window.innerWidth - PIP_W - margin;
       const maxBottom = window.innerHeight - reserveBottom - margin;
       const deltaX = e.clientX - d.sx;
@@ -1661,6 +1676,7 @@ export function ActiveSession() {
     []
   );
   const sessionContainerRef = useRef<HTMLDivElement>(null);
+
   const [showPermissionRequest, setShowPermissionRequest] = useState(false);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [permissionStateInitialized, setPermissionStateInitialized] =
@@ -4096,14 +4112,17 @@ export function ActiveSession() {
     toast.info("Resetting Session...");
   };
 
+  const glassPanel =
+    "rounded-2xl border border-white/15 bg-white/[0.08] backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.35)]";
+
   return (
     <div
       ref={sessionContainerRef}
-      className="h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col overflow-hidden relative"
+      className="relative h-screen overflow-hidden bg-[#07041C] text-white"
     >
       {/* Immediate takeover while ending — avoids flash of session UI after confirm closes */}
       {isEndingSession && (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-md px-6">
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#07041C]/95 backdrop-blur-md px-6">
           <Loader2 className="h-12 w-12 text-purple-400 animate-spin mb-4" />
           <p className="text-lg font-semibold text-white text-center">
             Ending session…
@@ -4114,110 +4133,30 @@ export function ActiveSession() {
         </div>
       )}
 
-      {/* Header */}
-      <motion.div
-        initial={{ y: -50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="bg-black/30 backdrop-blur-xl border-b border-white/10 px-6 py-4 z-20"
+      {/* Main stage: curved frame on outer shell; flat in fullscreen */}
+      <div
+        className={`absolute inset-0 z-0 box-border ${
+          isFullscreen ? "" : "p-3 sm:p-4 md:p-6"
+        }`}
       >
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <motion.div
-              animate={{
-                boxShadow: [
-                  "0 0 20px rgba(139, 92, 246, 0.5)",
-                  "0 0 40px rgba(139, 92, 246, 0.8)",
-                  "0 0 20px rgba(139, 92, 246, 0.5)",
-                ],
-              }}
-              transition={{ duration: 2, repeat: Infinity }}
-              className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center"
-            >
-              <Sparkles className="w-6 h-6 text-white" />
-            </motion.div>
-            <div>
-              <h2 className="font-bold text-white text-lg">
-                Video Session with {currentAvatar.name}
-              </h2>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <motion.div
-                    animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                    className="w-2 h-2 bg-green-400 rounded-full"
-                  />
-                  <span className="text-sm text-gray-300">Live</span>
-                </div>
-                <span className="text-sm text-gray-400">•</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-purple-200">
-                    Ezri:
-                    <span className="ml-1 font-semibold">
-                      {ezriWsStatus === "connected"
-                        ? "Connected"
-                        : ezriWsStatus === "connecting"
-                        ? "Connecting"
-                        : ezriWsStatus === "reconnecting"
-                        ? "Reconnecting"
-                        : "Disconnected"}
-                    </span>
-                  </span>
-                </div>
-                <span className="text-sm text-gray-400">•</span>
-                <span className="text-sm text-gray-300 font-mono">
-                  {formatTime(sessionTime)}
-                </span>
-                <span className="text-sm text-gray-400">•</span>
-                <div className="flex items-center gap-1">
-                  <Circle
-                    className={`w-3 h-3 ${getConnectionColor()} fill-current`}
-                  />
-                  <span className={`text-xs ${getConnectionColor()}`}>
-                    {connectionQuality.charAt(0).toUpperCase() +
-                      connectionQuality.slice(1)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white hover:bg-white/10"
-              onClick={toggleFullscreen}
-              aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
-            >
-              {isFullscreen ? (
-                <Minimize className="w-4 h-4" />
-              ) : (
-                <Maximize className="w-4 h-4" />
-              )}
-            </Button>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Video Session Area — plain divs (no layout/scale motion on the avatar card). */}
-      <div className="flex-1 relative overflow-hidden p-6">
-        <div className="w-full h-full rounded-3xl overflow-hidden relative bg-gradient-to-br from-amber-900/30 via-orange-900/20 to-purple-900/30 backdrop-blur-xl border-2 border-white/10 shadow-2xl">
-          <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+        <div
+          className={`relative h-full w-full overflow-hidden ${
+            isFullscreen ? "rounded-none" : "rounded-[1.75rem] sm:rounded-[2.5rem] md:rounded-[3rem]"
+          } shadow-[0_24px_80px_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/[0.08]`}
+        >
+          <div className="absolute inset-0">
+            <div className="h-full w-full">
             <AnimatePresence>
               {isEzriSpeaking && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="absolute inset-0 bg-gradient-to-b from-purple-500/15 via-transparent to-transparent pointer-events-none"
-                >
-                  <div className="absolute inset-0 bg-gradient-radial from-purple-500/20 to-transparent blur-3xl opacity-50" />
-                </motion.div>
+                  className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-sky-950/25 via-transparent to-transparent"
+                />
               )}
             </AnimatePresence>
-
-            {/* Stable container — do not animate `y` here or the whole avatar bobs up/down. */}
-            <div className="relative z-10 w-full h-full">
+            <div className="relative z-[2] h-full w-full">
               {sessionUsesCompanion3d ? (
                 <ThreeAvatar
                   modelUrl={companionModelUrl}
@@ -4236,20 +4175,19 @@ export function ActiveSession() {
                 />
               )}
             </div>
-
             {isEzriSpeaking && (
               <motion.div
-                className="absolute bottom-0 left-0 right-0 h-24 pointer-events-none"
+                className="pointer-events-none absolute bottom-0 left-0 right-0 z-[3] h-28"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <div className="absolute inset-0 bg-gradient-to-t from-purple-900/80 to-transparent" />
-                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-1">
+                <div className="absolute inset-0 bg-gradient-to-t from-[#07041C]/92 to-transparent" />
+                <div className="absolute bottom-10 left-1/2 flex -translate-x-1/2 items-center gap-1">
                   {[...Array(5)].map((_, i) => (
                     <motion.div
                       key={i}
-                      className="w-1 bg-purple-400 rounded-full"
+                      className="w-1 rounded-full bg-sky-400/90"
                       animate={{ height: [10, 30, 15, 25, 10] }}
                       transition={{
                         duration: 1,
@@ -4263,309 +4201,259 @@ export function ActiveSession() {
               </motion.div>
             )}
           </div>
-
-          {/* Avatar Name */}
-          <div className="absolute top-6 left-6 bg-black/60 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/20 z-20">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-purple-400" />
-              <p className="text-sm font-semibold text-white">
-                {currentAvatar.name}
-              </p>
-            </div>
-          </div>
-
-          {/* Connection & Credits */}
-          <div className="absolute top-6 right-6 flex flex-col gap-2 items-end">
-            <div className="bg-black/60 backdrop-blur-xl px-3 py-2 rounded-lg border border-white/20 flex items-center gap-2">
-              <Circle
-                className={`w-2 h-2 ${getConnectionColor()} fill-current animate-pulse`}
-              />
-              <span className="text-xs text-white font-medium">
-                {connectionQuality === "excellent"
-                  ? "HD"
-                  : connectionQuality === "good"
-                  ? "SD"
-                  : "Low Quality"}
-              </span>
-            </div>
-
-            <motion.div
-              animate={{
-                scale:
-                  remainingWholeMinutes !== null &&
-                  remainingWholeMinutes <= 10
-                    ? [1, 1.05, 1]
-                    : 1,
-              }}
-              transition={{
-                duration: 1,
-                repeat:
-                  remainingWholeMinutes !== null &&
-                  remainingWholeMinutes <= 10
-                    ? Infinity
-                    : 0,
-              }}
-              className={`px-4 py-2 rounded-xl border flex items-center gap-2 ${
-                remainingWholeMinutes !== null && remainingWholeMinutes <= 10
-                  ? "bg-red-500/90 border-red-300"
-                  : remainingWholeMinutes !== null &&
-                    remainingWholeMinutes <= 30
-                  ? "bg-amber-500/90 border-amber-300"
-                  : "bg-black/60 backdrop-blur-xl border-white/20"
-              }`}
-            >
-              <Clock
-                className={`w-4 h-4 ${
-                  remainingWholeMinutes !== null && remainingWholeMinutes <= 10
-                    ? "text-white"
-                    : "text-blue-300"
-                }`}
-              />
-              <div>
-                <p
-                  className={`text-xs ${
-                    remainingWholeMinutes !== null && remainingWholeMinutes <= 10
-                      ? "text-white"
-                      : "text-gray-300"
-                  }`}
-                >
-                  Minutes Left
-                </p>
-                <p className="text-lg font-bold text-white font-mono">
-                  {remainingSeconds !== null ? formatTime(remainingSeconds) : "—"}
-                </p>
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Live user speech subtitle */}
-          <AnimatePresence>
-            {liveUserSpeech && !isEzriSpeaking && (
-              <motion.div
-                key="user-subtitle"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 6 }}
-                transition={{ duration: 0.15 }}
-                className="absolute bottom-[4.5rem] left-6 right-6 z-20 pointer-events-none"
-              >
-                <div className="bg-black/75 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/15 inline-block max-w-full">
-                  <p className="text-white text-sm font-medium leading-snug">
-                    <EmojiText emojiSize={20} className="text-white">
-                      {liveUserSpeech}
-                    </EmojiText>
-                  </p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Status */}
-          <div className="absolute bottom-6 left-6">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-black/60 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/20"
-            >
-              {isEzriSpeaking ? (
-                <div className="flex items-center gap-2 text-purple-300">
-                  <motion.div
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ duration: 0.5, repeat: Infinity }}
-                  >
-                    <Volume2 className="w-4 h-4" />
-                  </motion.div>
-                  <span className="text-sm font-medium">Speaking...</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-green-300">
-                  <div className="flex items-end gap-[2px] h-4">
-                    {[1, 2, 3].map((bar) => (
-                      <motion.div
-                        key={bar}
-                        className="w-1 bg-green-400 rounded-t-sm"
-                        animate={{
-                          height: Math.max(4, Math.min(16, (audioLevel / 2) * bar)),
-                        }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 300,
-                          damping: 20,
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <motion.div
-                    animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                  >
-                    <Circle
-                      className={`w-3 h-3 ${
-                        isListening
-                          ? "fill-current"
-                          : "fill-transparent stroke-current"
-                      }`}
-                    />
-                  </motion.div>
-                  <span className="text-sm font-medium">
-                    {isListening
-                      ? "Listening"
-                      : isMuted
-                        ? "Mic off"
-                        : "Starting mic"}
-                    {audioLevel > 10 && (
-                      <span
-                        className="text-xs ml-1 text-green-200 tabular-nums"
-                        title="Microphone signal level"
-                      >
-                        ({Math.round(audioLevel)})
-                      </span>
-                    )}
-                  </span>
-                </div>
-              )}
-            </motion.div>
-          </div>
         </div>
-
-        {/* User PiP camera — draggable */}
-        <motion.div
-          initial={{ opacity: 0, x: 100 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.3 }}
-          className="absolute w-64 h-48 rounded-2xl overflow-hidden bg-gradient-to-br from-slate-700 to-slate-900 border-2 border-white/20 shadow-2xl z-30 touch-none select-none cursor-grab active:cursor-grabbing"
-          style={{ right: pipPos.right, bottom: pipPos.bottom }}
-          onPointerDown={handlePipPointerDown}
-          onPointerMove={handlePipPointerMove}
-          onPointerUp={handlePipPointerUp}
-          onPointerCancel={handlePipPointerUp}
-        >
-          <div
-            className="absolute top-0 left-0 right-0 h-7 z-10 flex items-center justify-center bg-black/35 rounded-t-[0.9rem] pointer-events-none"
-            aria-hidden
-          >
-            <GripHorizontal className="w-5 h-5 text-white/70" />
-          </div>
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className={`w-full h-full object-cover ${
-              isCameraOff ? "hidden" : "block"
-            }`}
-          />
-          {isCameraOff && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black">
-              <div className="text-center">
-                <VideoOff className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-400">Camera Off</p>
-              </div>
-            </div>
-          )}
-          {isMuted && !isCameraOff && (
-            <div className="absolute bottom-2 left-2 bg-red-500 p-2 rounded-full">
-              <MicOff className="w-4 h-4 text-white" />
-            </div>
-          )}
-        </motion.div>
+        {/* Navy radial tint — same hue stops as design, with alpha so the avatar stays visible underneath */}
+        <div
+          className="pointer-events-none absolute inset-0 z-[4] bg-[radial-gradient(ellipse_125%_110%_at_0%_0%,rgba(23,68,119,0.58)_0%,rgba(19,63,112,0.52)_8%,rgba(3,23,66,0.48)_43%,rgba(4,6,41,0.42)_73%,rgba(7,4,28,0.36)_100%)]"
+          aria-hidden
+        />
+        </div>
       </div>
 
-      {/* Notice */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="px-6 pb-2"
-      >
-        <div className="max-w-7xl mx-auto bg-blue-500/10 backdrop-blur-xl border border-blue-500/30 rounded-xl p-3 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
-          <p className="text-sm text-blue-200">
-            <span className="font-semibold">Voice-Only Session:</span> This is a
-            video call with voice interaction. There is no chat feature — speak
-            naturally with your AI companion.
-          </p>
-        </div>
-      </motion.div>
-
-      {/* Controls */}
-      <motion.div
-        initial={{ y: 100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        className="bg-black/30 backdrop-blur-xl border-t border-white/10 px-6 py-6"
-      >
-        <div className="max-w-7xl mx-auto flex items-center justify-center gap-4">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsMuted(!isMuted)}
-            className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
-              isMuted
-                ? "bg-red-500 hover:bg-red-600"
-                : "bg-white/10 hover:bg-white/20 border-2 border-white/20"
-            }`}
-          >
-            {isMuted ? (
-              <MicOff className="w-7 h-7 text-white" />
-            ) : (
-              <Mic className="w-7 h-7 text-white" />
-            )}
-          </motion.button>
-
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsCameraOff(!isCameraOff)}
-            className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
-              isCameraOff
-                ? "bg-red-500 hover:bg-red-600"
-                : "bg-white/10 hover:bg-white/20 border-2 border-white/20"
-            }`}
-          >
-            {isCameraOff ? (
-              <VideoOff className="w-7 h-7 text-white" />
-            ) : (
-              <Video className="w-7 h-7 text-white" />
-            )}
-          </motion.button>
-
+      {/* Top bar — session stats toggle + fullscreen + profile */}
+      <header className="relative z-20 flex justify-end p-4 md:p-6 pointer-events-none">
+        <div className="pointer-events-auto flex shrink-0 items-center gap-2 md:gap-3">
           <motion.button
             type="button"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsSoundOff((prev) => !prev)}
-            className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
-              isSoundOff
-                ? "bg-red-500 hover:bg-red-600"
-                : "bg-white/10 hover:bg-white/20 border-2 border-white/20"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setSessionStatsOpen((o) => !o)}
+            className={`flex size-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 backdrop-blur-md transition-colors hover:bg-white/15 ${
+              sessionStatsOpen ? "text-white ring-2 ring-white/25" : "text-white/85"
             }`}
-            aria-label={isSoundOff ? "Turn sound on" : "Turn sound off"}
+            aria-expanded={sessionStatsOpen}
+            aria-controls="session-widgets-panel"
+            aria-label={
+              sessionStatsOpen ? "Hide session stats" : "Show session stats"
+            }
           >
-            {isSoundOff ? (
-              <VolumeX className="w-7 h-7 text-white" />
+            <Gauge className="size-5" aria-hidden />
+          </motion.button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/15"
+            onClick={toggleFullscreen}
+            aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
+          >
+            {isFullscreen ? (
+              <Minimize className="size-4" />
             ) : (
-              <Volume2 className="w-7 h-7 text-white" />
+              <Maximize className="size-4" />
             )}
-          </motion.button>
+          </Button>
+          {typeof profile?.avatar_url === "string" && profile.avatar_url ? (
+            <img
+              src={profile.avatar_url}
+              alt=""
+              className="size-10 shrink-0 rounded-full border-2 border-white/20 object-cover shadow-md"
+            />
+          ) : (
+            <div
+              className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-white/20 bg-white/10 text-sm font-semibold text-white/90 shadow-md"
+              aria-hidden
+            >
+              {viewerFirstName.slice(0, 1).toUpperCase()}
+            </div>
+          )}
+        </div>
+      </header>
 
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowEndConfirm(true)}
-            className="w-16 h-16 rounded-full bg-gradient-to-br from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 flex items-center justify-center shadow-lg shadow-red-500/50 transition-all"
-          >
-            <PhoneOff className="w-7 h-7 text-white" />
-          </motion.button>
+      {/* Right-side session stats (Session + Watchlist) */}
+      <aside
+        id="session-widgets-panel"
+        className={`absolute right-4 top-[min(42vh,22rem)] z-20 w-[min(19rem,calc(100vw-2rem))] flex-col gap-3 md:right-6 md:top-28 md:w-72 ${
+          sessionStatsOpen ? "flex" : "hidden"
+        }`}
+        aria-hidden={!sessionStatsOpen}
+      >
+        <div className={`${glassPanel} flex items-center gap-3 px-3 py-2.5`}>
+          <CloudSun className="size-8 shrink-0 text-amber-200" aria-hidden />
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-white/60">
+              <Activity className="size-3.5 text-emerald-400" aria-hidden />
+              Talk It Out
+            </p>
+            <p className="truncate text-sm font-semibold text-white">
+              {ezriWsStatus === "connected"
+                ? "Connected"
+                : ezriWsStatus === "connecting"
+                  ? "Connecting…"
+                  : ezriWsStatus === "reconnecting"
+                    ? "Reconnecting…"
+                    : "Offline"}
+            </p>
+            <p className="text-xs text-white/45">Live with {currentAvatar.name}</p>
+          </div>
         </div>
 
-        <div className="max-w-7xl mx-auto flex items-center justify-center gap-4 mt-3">
-          <span className="text-xs text-gray-400 w-16 text-center">
-            {isMuted ? "Unmute" : "Mute"}
-          </span>
-          <span className="text-xs text-gray-400 w-16 text-center">Camera</span>
-          <span className="text-xs text-gray-400 w-16 text-center">Sound</span>
-          <span className="text-xs text-gray-400 w-16 text-center">End</span>
+        <div className={`${glassPanel} p-3`}>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-white">Watchlist</span>
+            <span className="flex items-center gap-1 text-xs text-emerald-300">
+              <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+              Live
+            </span>
+          </div>
+          <ul className="space-y-2 text-sm">
+            <li className="flex justify-between gap-2 border-b border-white/10 py-2 first:pt-0">
+              <span className="text-white/70">Talk time</span>
+              <span className="font-mono font-semibold text-white">
+                {formatTime(sessionTime)}
+              </span>
+            </li>
+            <li className="flex justify-between gap-2 border-b border-white/10 py-2">
+              <span className="text-white/70">Minutes left</span>
+              <span
+                className={`font-mono font-semibold ${
+                  remainingWholeMinutes !== null && remainingWholeMinutes <= 10
+                    ? "text-red-300"
+                    : "text-emerald-300"
+                }`}
+              >
+                {remainingSeconds !== null ? formatTime(remainingSeconds) : "—"}
+              </span>
+            </li>
+            <li className="flex justify-between gap-2 py-2">
+              <span className="text-white/70">Quality</span>
+              <span className={`font-medium capitalize ${getConnectionColor()}`}>
+                {connectionQuality}
+              </span>
+            </li>
+          </ul>
         </div>
+      </aside>
+
+      {/* Floating glass controls */}
+      <motion.div
+        initial={{ y: 24, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.15 }}
+        className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/15 bg-black/40 px-2 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl md:bottom-8 md:gap-2 md:px-3 md:py-2.5"
+      >
+        <motion.button
+          type="button"
+          whileHover={{ scale: 1.06 }}
+          whileTap={{ scale: 0.94 }}
+          onClick={() => setIsSessionPaused(!isSessionPaused)}
+          className={`flex size-12 shrink-0 items-center justify-center rounded-full border-2 transition-all md:size-14 ${
+            isSessionPaused
+              ? "border-emerald-400/50 bg-emerald-500 text-white"
+              : "border-white/20 bg-white/10 text-white hover:bg-white/15"
+          }`}
+          aria-label={isSessionPaused ? "Resume session" : "Pause session"}
+        >
+          {isSessionPaused ? (
+            <Play className="size-6 md:size-7" />
+          ) : (
+            <Pause className="size-6 md:size-7" />
+          )}
+        </motion.button>
+        <div className="mx-1 hidden h-8 w-px bg-white/15 sm:block" aria-hidden />
+        <motion.button
+          type="button"
+          whileHover={{ scale: 1.06 }}
+          whileTap={{ scale: 0.94 }}
+          onClick={() => setIsMuted(!isMuted)}
+          className={`flex size-12 items-center justify-center rounded-full border-2 transition-all md:size-14 ${
+            isMuted
+              ? "border-transparent bg-red-500 text-white"
+              : "border-white/20 bg-white/10 text-white hover:bg-white/15"
+          }`}
+          aria-label={isMuted ? "Unmute" : "Mute"}
+        >
+          {isMuted ? (
+            <MicOff className="size-6 md:size-7" />
+          ) : (
+            <Mic className="size-6 md:size-7" />
+          )}
+        </motion.button>
+        <motion.button
+          type="button"
+          whileHover={{ scale: 1.06 }}
+          whileTap={{ scale: 0.94 }}
+          onClick={() => setIsCameraOff(!isCameraOff)}
+          className={`flex size-12 items-center justify-center rounded-full border-2 transition-all md:size-14 ${
+            isCameraOff
+              ? "border-transparent bg-red-500 text-white"
+              : "border-white/20 bg-white/10 text-white hover:bg-white/15"
+          }`}
+          aria-label={isCameraOff ? "Turn camera on" : "Turn camera off"}
+        >
+          {isCameraOff ? (
+            <VideoOff className="size-6 md:size-7" />
+          ) : (
+            <Video className="size-6 md:size-7" />
+          )}
+        </motion.button>
+        <motion.button
+          type="button"
+          whileHover={{ scale: 1.06 }}
+          whileTap={{ scale: 0.94 }}
+          onClick={() => setIsSoundOff((prev) => !prev)}
+          className={`flex size-12 items-center justify-center rounded-full border-2 transition-all md:size-14 ${
+            isSoundOff
+              ? "border-transparent bg-red-500 text-white"
+              : "border-white/20 bg-white/10 text-white hover:bg-white/15"
+          }`}
+          aria-label={isSoundOff ? "Turn sound on" : "Turn sound off"}
+        >
+          {isSoundOff ? (
+            <VolumeX className="size-6 md:size-7" />
+          ) : (
+            <Volume2 className="size-6 md:size-7" />
+          )}
+        </motion.button>
+        <motion.button
+          type="button"
+          whileHover={{ scale: 1.06 }}
+          whileTap={{ scale: 0.94 }}
+          onClick={() => setShowEndConfirm(true)}
+          className="flex size-12 items-center justify-center rounded-full bg-red-600 shadow-lg shadow-red-600/30 transition-all hover:bg-red-500 md:size-14"
+          aria-label="End session"
+        >
+          <PhoneOff className="size-6 text-white md:size-7" />
+        </motion.button>
+      </motion.div>
+
+      {/* User PiP — draggable, glass frame */}
+      <motion.div
+        initial={{ opacity: 0, x: 48 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.25, type: "spring", stiffness: 260, damping: 28 }}
+        className="fixed z-30 w-52 overflow-hidden rounded-2xl border border-white/20 bg-black/30 shadow-2xl backdrop-blur-md touch-none select-none cursor-grab active:cursor-grabbing sm:w-64 sm:h-48 h-[11.5rem]"
+        style={{ right: pipPos.right, bottom: pipPos.bottom }}
+        onPointerDown={handlePipPointerDown}
+        onPointerMove={handlePipPointerMove}
+        onPointerUp={handlePipPointerUp}
+        onPointerCancel={handlePipPointerUp}
+      >
+        <div
+          className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex h-7 items-center justify-center rounded-t-[0.9rem] bg-black/40"
+          aria-hidden
+        >
+          <LayoutGrid className="size-4 text-white/70" />
+        </div>
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className={`size-full object-cover ${isCameraOff ? "hidden" : "block"}`}
+        />
+        {isCameraOff && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+            <div className="text-center">
+              <VideoOff className="mx-auto mb-2 size-10 text-white/40" />
+              <p className="text-xs text-white/50">Camera off</p>
+            </div>
+          </div>
+        )}
+        {isMuted && !isCameraOff && (
+          <div className="absolute bottom-2 left-2 rounded-full bg-red-500 p-2">
+            <MicOff className="size-4 text-white" />
+          </div>
+        )}
       </motion.div>
 
       {/* Permission Modal */}
@@ -4779,7 +4667,7 @@ export function ActiveSession() {
 
               <div className="bg-black/40 backdrop-blur-xl rounded-2xl p-6 mb-6 border border-white/10">
                 <div className="text-center mb-4">
-                  <p className="text-gray-300 mb-2">Your session time:</p>
+                  <p className="text-gray-300 mb-2">Your Talk time:</p>
                   <p className="text-4xl font-bold text-white font-mono">
                     {formatTime(sessionTime)}
                   </p>
@@ -5086,26 +4974,6 @@ export function ActiveSession() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      <SafetyStateIndicator />
-
-      {/* Pause Button */}
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setIsSessionPaused(!isSessionPaused)}
-        className={`absolute bottom-16 left-16 w-16 h-16 rounded-full flex items-center justify-center transition-all ${
-          isSessionPaused
-            ? "bg-green-500 hover:bg-green-600"
-            : "bg-white/10 hover:bg-white/20 border-2 border-white/20"
-        }`}
-      >
-        {isSessionPaused ? (
-          <Play className="w-7 h-7 text-white" />
-        ) : (
-          <Pause className="w-7 h-7 text-white" />
-        )}
-      </motion.button>
     </div>
   );
 }
