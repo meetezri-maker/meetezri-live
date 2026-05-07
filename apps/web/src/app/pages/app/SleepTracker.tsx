@@ -18,12 +18,13 @@ import {
   CheckCircle2,
   AlertCircle
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { format, differenceInMinutes, parseISO } from "date-fns";
 import { Skeleton } from "../../components/ui/skeleton";
+import { AdminPaginationBar } from "@/app/components/admin/AdminPaginationBar";
 
 type SleepEntry = {
   id: string;
@@ -32,6 +33,8 @@ type SleepEntry = {
   quality_rating: number | null;
   notes: string | null;
 };
+
+const SLEEP_HISTORY_PAGE_OPTIONS = [10, 20, 50] as const;
 
 export function SleepTracker() {
   const { session } = useAuth();
@@ -49,6 +52,8 @@ export function SleepTracker() {
   
   const [sleepEntries, setSleepEntries] = useState<SleepEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [sleepHistoryPage, setSleepHistoryPage] = useState(1);
+  const [sleepHistoryPageSize, setSleepHistoryPageSize] = useState(10);
 
   useEffect(() => {
     fetchSleepEntries();
@@ -176,6 +181,17 @@ export function SleepTracker() {
         quality: safeNumber(entry.quality_rating ?? 0),
       };
     });
+
+  const sleepHistoryTotalPages = Math.max(1, Math.ceil(sleepEntries.length / sleepHistoryPageSize));
+  const sleepHistorySafePage = Math.min(Math.max(1, sleepHistoryPage), sleepHistoryTotalPages);
+  const paginatedSleepEntries = useMemo(() => {
+    const start = (sleepHistorySafePage - 1) * sleepHistoryPageSize;
+    return sleepEntries.slice(start, start + sleepHistoryPageSize);
+  }, [sleepEntries, sleepHistorySafePage, sleepHistoryPageSize]);
+
+  useEffect(() => {
+    setSleepHistoryPage((p) => (p > sleepHistoryTotalPages ? sleepHistoryTotalPages : p));
+  }, [sleepHistoryTotalPages]);
 
   if (isLoading) {
     return (
@@ -369,7 +385,7 @@ export function SleepTracker() {
                 </h3>
               </div>
               <div className="space-y-4">
-                {sleepEntries.slice(0, 5).map((log) => (
+                {paginatedSleepEntries.map((log) => (
                   <div
                     key={log.id}
                     className="p-4 rounded-xl border border-border hover:border-primary/50 transition-colors"
@@ -407,6 +423,17 @@ export function SleepTracker() {
                   </div>
                 )}
               </div>
+              {sleepEntries.length > 0 && (
+                <AdminPaginationBar
+                  total={sleepEntries.length}
+                  page={sleepHistoryPage}
+                  pageSize={sleepHistoryPageSize}
+                  onPageChange={setSleepHistoryPage}
+                  onPageSizeChange={setSleepHistoryPageSize}
+                  selectId="sleep-tracker-history-page-size"
+                  pageSizeOptions={[...SLEEP_HISTORY_PAGE_OPTIONS]}
+                />
+              )}
             </Card>
           </motion.div>
 

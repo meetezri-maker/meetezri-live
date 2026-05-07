@@ -18,7 +18,8 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { AdminPaginationBar } from "@/app/components/admin/AdminPaginationBar";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
@@ -77,6 +78,8 @@ const habitEmojiOptions = [
   "⭐"
 ] as const;
 
+const HABIT_LIST_PAGE_OPTIONS = [10, 20, 50] as const;
+
 export function HabitTracker() {
   const { session } = useAuth();
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -93,6 +96,8 @@ export function HabitTracker() {
     frequency: "daily" as "daily" | "weekly",
     color: "from-blue-400 to-cyan-500"
   });
+  const [habitListPage, setHabitListPage] = useState(1);
+  const [habitListPageSize, setHabitListPageSize] = useState(10);
 
   useEffect(() => {
     if (session) {
@@ -374,6 +379,17 @@ export function HabitTracker() {
   const completionRate = totalHabits > 0 ? Math.round((completedToday / totalHabits) * 100) : 0;
   const longestStreak = totalHabits > 0 ? Math.max(...habits.map(h => h.currentStreak)) : 0;
 
+  const habitListTotalPages = Math.max(1, Math.ceil(habits.length / habitListPageSize));
+  const habitListSafePage = Math.min(Math.max(1, habitListPage), habitListTotalPages);
+  const paginatedHabits = useMemo(() => {
+    const start = (habitListSafePage - 1) * habitListPageSize;
+    return habits.slice(start, start + habitListPageSize);
+  }, [habits, habitListSafePage, habitListPageSize]);
+
+  useEffect(() => {
+    setHabitListPage((p) => (p > habitListTotalPages ? habitListTotalPages : p));
+  }, [habitListTotalPages]);
+
   const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   
   if (isLoading) {
@@ -512,12 +528,14 @@ export function HabitTracker() {
             Today's Habits
           </h2>
           <div className="space-y-3">
-            {habits.map((habit, index) => (
+            {paginatedHabits.map((habit, index) => {
+              const listIndex = (habitListSafePage - 1) * habitListPageSize + index;
+              return (
               <motion.div
                 key={habit.id}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.15 + index * 0.05 }}
+                transition={{ delay: 0.15 + Math.min(listIndex, 40) * 0.05 }}
               >
                 <Card className={`p-4 transition-all dark:bg-gray-800 ${
                   habit.completedToday ? "ring-2 ring-green-500 shadow-lg" : "hover:shadow-md"
@@ -625,7 +643,19 @@ export function HabitTracker() {
                   </div>
                 </Card>
               </motion.div>
-            ))}
+              );
+            })}
+            {habits.length > 0 && (
+              <AdminPaginationBar
+                total={habits.length}
+                page={habitListPage}
+                pageSize={habitListPageSize}
+                onPageChange={setHabitListPage}
+                onPageSizeChange={setHabitListPageSize}
+                selectId="habit-tracker-list-page-size"
+                pageSizeOptions={[...HABIT_LIST_PAGE_OPTIONS]}
+              />
+            )}
           </div>
         </motion.div>
 

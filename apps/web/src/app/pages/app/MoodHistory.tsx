@@ -14,6 +14,7 @@ import {
   Star
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
+import { AdminPaginationBar } from "@/app/components/admin/AdminPaginationBar";
 import {
   LineChart,
   Line,
@@ -102,6 +103,8 @@ const getMoodInfo = (mood: string) => {
   return null;
 };
 
+const MOOD_HISTORY_PAGE_OPTIONS = [10, 20, 50] as const;
+
 const ACTIVITY_MAPPING: Record<string, { label: string; emoji: string }> = {
   work: { label: "Work", emoji: "💼" },
   exercise: { label: "Exercise", emoji: "🏃" },
@@ -144,6 +147,8 @@ export function MoodHistory() {
   const [loading, setLoading] = useState(true);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [favoriteEntryIds, setFavoriteEntryIds] = useState<string[]>([]);
+  const [checkInListPage, setCheckInListPage] = useState(1);
+  const [checkInListPageSize, setCheckInListPageSize] = useState(10);
 
   const getPeriodRange = () => {
     if (selectedView === "week") {
@@ -291,7 +296,9 @@ export function MoodHistory() {
 
   const recentCheckIns = useMemo(() => {
     const fromCheckIns = entries.filter((entry) => entry.source === "check-in");
-    return fromCheckIns.slice(0, 12);
+    return fromCheckIns.sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   }, [entries]);
 
   const favoriteCount = useMemo(
@@ -299,7 +306,7 @@ export function MoodHistory() {
     [recentCheckIns, favoriteEntryIds]
   );
 
-  const displayedCheckIns = useMemo(
+  const displayedCheckInsPool = useMemo(
     () =>
       showFavoritesOnly
         ? recentCheckIns.filter((entry) => favoriteEntryIds.includes(getEntryKey(entry)))
@@ -307,7 +314,20 @@ export function MoodHistory() {
     [showFavoritesOnly, recentCheckIns, favoriteEntryIds]
   );
 
+  const checkInTotalPages = Math.max(1, Math.ceil(displayedCheckInsPool.length / checkInListPageSize));
+  const checkInSafePage = Math.min(Math.max(1, checkInListPage), checkInTotalPages);
+  const paginatedDisplayedCheckIns = useMemo(() => {
+    const start = (checkInSafePage - 1) * checkInListPageSize;
+    return displayedCheckInsPool.slice(start, start + checkInListPageSize);
+  }, [displayedCheckInsPool, checkInSafePage, checkInListPageSize]);
 
+  useEffect(() => {
+    setCheckInListPage(1);
+  }, [showFavoritesOnly, entries.length]);
+
+  useEffect(() => {
+    setCheckInListPage((prev) => (prev > checkInTotalPages ? checkInTotalPages : prev));
+  }, [checkInTotalPages]);
 
   // Process data based on selected view and date
   const { chartData, distributionData, calendarData, insightsData } = useMemo(() => {
@@ -924,7 +944,7 @@ export function MoodHistory() {
               </div>
 
               <div className="space-y-3">
-                {displayedCheckIns.length === 0 && (
+                {displayedCheckInsPool.length === 0 && (
                   <Card className="p-8 text-center text-muted-foreground shadow-md">
                     <Heart className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                     <p>
@@ -935,7 +955,7 @@ export function MoodHistory() {
                   </Card>
                 )}
 
-                {displayedCheckIns.map((entry) => {
+                {paginatedDisplayedCheckIns.map((entry) => {
                   const info = getMoodInfo(entry.mood);
                   const isFavorite = favoriteEntryIds.includes(getEntryKey(entry));
                   const activities = (entry.activities || [])
@@ -1011,6 +1031,17 @@ export function MoodHistory() {
                   );
                 })}
               </div>
+              {displayedCheckInsPool.length > 0 && (
+                <AdminPaginationBar
+                  total={displayedCheckInsPool.length}
+                  page={checkInListPage}
+                  pageSize={checkInListPageSize}
+                  onPageChange={setCheckInListPage}
+                  onPageSizeChange={setCheckInListPageSize}
+                  selectId="mood-history-checkins-page-size"
+                  pageSizeOptions={[...MOOD_HISTORY_PAGE_OPTIONS]}
+                />
+              )}
             </motion.div>
           </>
         )}

@@ -20,13 +20,16 @@ import {
   Loader2
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { AdminPaginationBar } from "@/app/components/admin/AdminPaginationBar";
 import { api } from "../../../lib/api";
 import { htmlToPlainText, truncatePreview } from "../../../lib/htmlPlainText";
 import { useAuth } from "../../contexts/AuthContext";
 import { Skeleton } from "../../components/ui/skeleton";
 import { toast } from "sonner";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
+
+const JOURNAL_LIST_PAGE_OPTIONS = [10, 20, 50] as const;
 
 interface JournalEntry {
   id: string;
@@ -43,6 +46,15 @@ interface JournalEntry {
   mood?: string;
   favorite?: boolean;
 }
+
+const JOURNAL_MOODS = [
+  { value: "happy", emoji: "😊" },
+  { value: "calm", emoji: "😌" },
+  { value: "anxious", emoji: "😰" },
+  { value: "sad", emoji: "😢" },
+  { value: "excited", emoji: "🤩" },
+  { value: "angry", emoji: "😡" },
+] as const;
 
 export function Journal() {
   const { session, profile, user } = useAuth();
@@ -92,15 +104,8 @@ export function Journal() {
   const [togglingFavoriteId, setTogglingFavoriteId] = useState<string | null>(null);
   const [showSaveFeedbackModal, setShowSaveFeedbackModal] = useState(false);
   const [saveFeedbackMessage, setSaveFeedbackMessage] = useState("");
-
-  const moods = [
-    { value: "happy", emoji: "😊" },
-    { value: "calm", emoji: "😌" },
-    { value: "anxious", emoji: "😰" },
-    { value: "sad", emoji: "😢" },
-    { value: "excited", emoji: "🤩" },
-    { value: "angry", emoji: "😡" }
-  ];
+  const [journalListPage, setJournalListPage] = useState(1);
+  const [journalListPageSize, setJournalListPageSize] = useState(10);
 
   const getTextBasedSaveMessage = (
     contentHtml: string,
@@ -161,7 +166,7 @@ export function Journal() {
         if (entry.mood_tags && entry.mood_tags.length > 0) {
           const rawMood = entry.mood_tags[0];
           // Try to match with our known moods (check emoji or value)
-          const moodObj = moods.find(m => 
+          const moodObj = JOURNAL_MOODS.find(m => 
             m.emoji === rawMood || 
             m.value.toLowerCase() === rawMood.toLowerCase()
           );
@@ -266,7 +271,7 @@ export function Journal() {
       let moodToSelect = "";
       if (entry.mood_tags && entry.mood_tags.length > 0) {
         const rawMood = entry.mood_tags[0];
-        const moodObj = moods.find(m => 
+        const moodObj = JOURNAL_MOODS.find(m => 
           m.emoji === rawMood || 
           m.value.toLowerCase() === rawMood.toLowerCase()
         );
@@ -295,48 +300,67 @@ export function Journal() {
   };
 
   // Filter logic
-  const filteredEntries = entries.filter(entry => {
-    // Search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      const titleMatch = entry.title?.toLowerCase().includes(query);
-      const contentMatch = entry.content?.toLowerCase().includes(query);
-      if (!titleMatch && !contentMatch) return false;
-    }
+  const filteredEntries = useMemo(
+    () =>
+      entries.filter((entry) => {
+        // Search query
+        if (searchQuery) {
+          const query = searchQuery.toLowerCase();
+          const titleMatch = entry.title?.toLowerCase().includes(query);
+          const contentMatch = entry.content?.toLowerCase().includes(query);
+          if (!titleMatch && !contentMatch) return false;
+        }
 
-    // Mood filter
-    if (filterMood) {
-      // filterMood is emoji
-      const moodValue = moods.find(m => m.emoji === filterMood)?.value;
-      const entryMood = entry.mood_tags?.[0];
-      
-      if (!entryMood) return false;
-      
-      // Check for exact match (emoji) or case-insensitive value match
-      const isMatch = 
-        entryMood === filterMood || 
-        (moodValue && entryMood.toLowerCase() === moodValue.toLowerCase());
-        
-      if (!isMatch) return false;
-    }
+        // Mood filter
+        if (filterMood) {
+          // filterMood is emoji
+          const moodValue = JOURNAL_MOODS.find((m) => m.emoji === filterMood)?.value;
+          const entryMood = entry.mood_tags?.[0];
 
-    // Date range filter
-    if (filterDateRange !== 'all') {
-      const entryDate = new Date(entry.created_at);
-      const now = new Date();
-      const diffTime = Math.abs(now.getTime() - entryDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
-      if (filterDateRange === 'week' && diffDays > 7) return false;
-      if (filterDateRange === 'month' && diffDays > 30) return false;
-      if (filterDateRange === 'year' && diffDays > 365) return false;
-    }
+          if (!entryMood) return false;
 
-    // Favorites filter
-    if (filterFavorites && !entry.favorite) return false;
+          // Check for exact match (emoji) or case-insensitive value match
+          const isMatch =
+            entryMood === filterMood ||
+            (moodValue && entryMood.toLowerCase() === moodValue.toLowerCase());
 
-    return true;
-  });
+          if (!isMatch) return false;
+        }
+
+        // Date range filter
+        if (filterDateRange !== "all") {
+          const entryDate = new Date(entry.created_at);
+          const now = new Date();
+          const diffTime = Math.abs(now.getTime() - entryDate.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          if (filterDateRange === "week" && diffDays > 7) return false;
+          if (filterDateRange === "month" && diffDays > 30) return false;
+          if (filterDateRange === "year" && diffDays > 365) return false;
+        }
+
+        // Favorites filter
+        if (filterFavorites && !entry.favorite) return false;
+
+        return true;
+      }),
+    [entries, searchQuery, filterMood, filterDateRange, filterFavorites]
+  );
+
+  const journalTotalPages = Math.max(1, Math.ceil(filteredEntries.length / journalListPageSize));
+  const journalSafePage = Math.min(Math.max(1, journalListPage), journalTotalPages);
+  const paginatedJournalEntries = useMemo(() => {
+    const start = (journalSafePage - 1) * journalListPageSize;
+    return filteredEntries.slice(start, start + journalListPageSize);
+  }, [filteredEntries, journalSafePage, journalListPageSize]);
+
+  useEffect(() => {
+    setJournalListPage(1);
+  }, [searchQuery, filterMood, filterDateRange, filterFavorites]);
+
+  useEffect(() => {
+    setJournalListPage((prev) => (prev > journalTotalPages ? journalTotalPages : prev));
+  }, [journalTotalPages]);
 
   // Stats calculation
   const totalEntries = entries.length;
@@ -559,7 +583,7 @@ export function Journal() {
                     <div>
                       <label className="block text-sm font-medium mb-2">How are you feeling?</label>
                       <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                        {moods.map((mood) => (
+                        {JOURNAL_MOODS.map((mood) => (
                           <motion.button
                             key={mood.value}
                             whileHover={{ scale: 1.1 }}
@@ -705,7 +729,8 @@ export function Journal() {
           ) : filteredEntries.length === 0 ? (
              <div className="text-center py-10 text-muted-foreground">No entries found. Start writing!</div>
           ) : (
-            filteredEntries.map((entry, index) => (
+            <>
+            {paginatedJournalEntries.map((entry, index) => (
               <motion.div
                 key={entry.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -773,7 +798,17 @@ export function Journal() {
                   <p className="text-muted-foreground line-clamp-2">{entry.preview}</p>
                 </Card>
               </motion.div>
-            ))
+            ))}
+            <AdminPaginationBar
+              total={filteredEntries.length}
+              page={journalListPage}
+              pageSize={journalListPageSize}
+              onPageChange={setJournalListPage}
+              onPageSizeChange={setJournalListPageSize}
+              selectId="journal-entries-page-size"
+              pageSizeOptions={[...JOURNAL_LIST_PAGE_OPTIONS]}
+            />
+            </>
           )}
         </div>
 
@@ -845,7 +880,7 @@ export function Journal() {
                   <div className="mb-6">
                     <label className="block text-sm font-medium mb-3">Filter by Mood</label>
                     <div className="flex gap-2 flex-wrap">
-                      {moods.map((mood) => (
+                      {JOURNAL_MOODS.map((mood) => (
                         <motion.button
                           key={mood.value}
                           whileHover={{ scale: 1.1 }}

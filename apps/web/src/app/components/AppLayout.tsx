@@ -293,7 +293,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   return (
-    <div className={`h-screen overflow-auto ${backgroundClass} flex flex-col`} style={gradientBackgroundStyle}>
+    <div
+      className={`flex h-dvh max-h-dvh flex-col overflow-hidden ${backgroundClass}`}
+      style={gradientBackgroundStyle}
+    >
       {/* Header */}
       <motion.header
         initial={{ y: -100 }}
@@ -358,7 +361,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       </motion.header>
 
       {/* Main Content */}
-      <main className={`flex-1 overflow-y-auto ${mainPaddingClass}`}>
+      <main className={`flex-1 min-h-0 overflow-y-auto overscroll-contain ${mainPaddingClass}`}>
         {isUnverified && (
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-4 m-4 rounded shadow-sm">
             <div className="flex">

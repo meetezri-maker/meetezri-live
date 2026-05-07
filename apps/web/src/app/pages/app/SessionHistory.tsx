@@ -21,6 +21,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../../lib/api";
 import { Skeleton } from "../../components/ui/skeleton";
+import { AdminPaginationBar } from "@/app/components/admin/AdminPaginationBar";
 import {
   companionCardImageUrl,
   tryResolveCompanionPortraitUrl,
@@ -770,49 +771,16 @@ export function SessionHistory() {
         </div>
 
         {filteredSessions.length > 0 && (
-          <div className="mt-6 flex flex-col gap-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <label htmlFor="session-history-page-size" className="text-sm text-muted-foreground">
-                Rows
-              </label>
-              <select
-                id="session-history-page-size"
-                value={pageSize}
-                onChange={(e) => setPageSize(Number(e.target.value))}
-                className="rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm"
-              >
-                {[5, 10, 20, 50].map((size) => (
-                  <option key={size} value={size}>
-                    {size} / page
-                  </option>
-                ))}
-              </select>
-              <span className="text-sm text-muted-foreground">
-                {pageStart + 1}-{Math.min(pageStart + pageSize, filteredSessions.length)} of {filteredSessions.length}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={safeCurrentPage <= 1}
-              >
-                Previous
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                Page {safeCurrentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={safeCurrentPage >= totalPages}
-              >
-                Next
-              </Button>
-            </div>
+          <div className="mt-6 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+            <AdminPaginationBar
+              total={filteredSessions.length}
+              page={currentPage}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              selectId="session-history-page-size"
+              pageSizeOptions={[5, 10, 20, 50]}
+            />
           </div>
         )}
 
