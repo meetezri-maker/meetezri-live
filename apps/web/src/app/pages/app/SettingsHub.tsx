@@ -284,7 +284,7 @@ export function SettingsHub() {
     {
       id: "emergency-resources",
       title: "Emergency Resources",
-      description: "27 international hotlines (6 regions)",
+      description: "International hotlines",
       icon: AlertCircle,
       color: "from-red-600 to-pink-600",
       route: "/app/crisis-resources"
@@ -308,7 +308,7 @@ export function SettingsHub() {
     {
       id: "cooldown-screen",
       title: "Cooldown Screen",
-      description: "Recovery exercises after tough sessions",
+      description: "Recovery exercises after tough talks",
       icon: Wind,
       color: "from-cyan-500 to-teal-600",
       route: "/app/settings/cooldown-screen"

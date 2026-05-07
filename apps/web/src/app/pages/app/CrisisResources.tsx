@@ -453,8 +453,8 @@ export function CrisisResources() {
                   Articles & readings
                 </h2>
                 <p className="text-sm text-muted-foreground max-w-xl">
-                  Short reads from Ezri and your team—the same library as Reading library in Settings. Open any card to continue in the app.
-                </p>
+              Short reads and guided reflections from Solace, organized by topic.
+              </p>
               </div>
               <Button variant="outline" size="sm" className="shrink-0" asChild>
                 <Link to="/app/settings/resources">Browse full library</Link>
