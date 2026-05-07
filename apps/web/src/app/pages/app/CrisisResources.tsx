@@ -29,7 +29,7 @@ import {
   type ReadingLibraryArticle,
 } from "@/lib/readingLibraryArticles";
 
-const LIBRARY_PREVIEW_LIMIT = 12;
+const CRISIS_RESOURCES_ARTICLE_LIMIT = 4;
 
 interface EmergencyContact {
   id: string;
@@ -162,6 +162,9 @@ export function CrisisResources() {
       content: "Remove means and contact emergency services"
     }
   ];
+
+  const displayedArticles = libraryArticles.slice(0, CRISIS_RESOURCES_ARTICLE_LIMIT);
+  const hasMoreArticles = libraryArticles.length > CRISIS_RESOURCES_ARTICLE_LIMIT;
 
   return (
     <AppLayout>
@@ -457,7 +460,7 @@ export function CrisisResources() {
               </p>
               </div>
               <Button variant="outline" size="sm" className="shrink-0" asChild>
-                <Link to="/app/settings/resources">Browse full library</Link>
+                <Link to="/app/settings/resources">View all</Link>
               </Button>
             </div>
 
@@ -472,7 +475,7 @@ export function CrisisResources() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {libraryArticles.slice(0, LIBRARY_PREVIEW_LIMIT).map((article, index) => {
+                {displayedArticles.map((article, index) => {
                   const { Icon } = categoryVisualsForReading(article.category);
                   const to = `/app/settings/resources/article/${encodeURIComponent(article.id)}`;
 
@@ -557,13 +560,18 @@ export function CrisisResources() {
                 })}
               </div>
             )}
-            {!isLoadingLibrary && libraryArticles.length > LIBRARY_PREVIEW_LIMIT ? (
-              <p className="text-sm text-muted-foreground mt-4 text-center">
-                Showing first {LIBRARY_PREVIEW_LIMIT}.{" "}
-                <Link className="text-primary font-medium underline underline-offset-2" to="/app/settings/resources">
-                  View all
-                </Link>
-              </p>
+
+            {!isLoadingLibrary && libraryArticles.length > 0 ? (
+              <div className="mt-6 flex flex-col items-center gap-3">
+                {hasMoreArticles ? (
+                  <p className="text-center text-sm text-muted-foreground">
+                    Showing {displayedArticles.length} of {libraryArticles.length} articles.
+                  </p>
+                ) : null}
+                <Button variant="default" size="lg" className="min-w-[220px] shadow-sm" asChild>
+                  <Link to="/app/settings/resources">View all</Link>
+                </Button>
+              </div>
             ) : null}
           </Card>
         </motion.div>

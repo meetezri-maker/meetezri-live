@@ -17,7 +17,8 @@ import {
   CheckCircle,
   AlertCircle,
   ShieldAlert,
-  X
+  X,
+  ChevronDown,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
@@ -25,6 +26,7 @@ import { AppLayout } from "@/app/components/AppLayout";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDistanceToNow, parseISO } from "date-fns";
+import { cn } from "@/app/components/ui/utils";
 
 export function HelpSupport() {
   const [showContactForm, setShowContactForm] = useState(false);
@@ -181,8 +183,8 @@ export function HelpSupport() {
 
   const faqs = [
     {
-      question: "How do I start an session?",
-      answer: "Navigate to the Talk it out tab from your dashboard and click 'Start Session'. Choose your preferred companion and begin your conversation."
+      question: "How do I start a Talk?",
+      answer: "Navigate to the Talk It Out tab from your dashboard and click 'Start Talk'. Choose your preferred Avatar and begin your talk."
     },
     {
       question: "Is my data private and secure?",
@@ -198,11 +200,11 @@ export function HelpSupport() {
     },
     {
       question: "What are emergency resources?",
-      answer: "Helpful resources provide immediate help during mental health emergencies. Access them 24/7 from the Wellness Tools section or the emergency button on your dashboard."
+      answer: "Helpful resources provide immediate help emergencies. Access them 24/7 from the Wellness Tools section or the emergency button on your dashboard."
     },
     {
       question: "How do I change my notification settings?",
-      answer: "Go to Settings > Notifications to customize alerts, reminders, and updates according to your preferences."
+      answer: "Go to Settings > Notifications to Customize Alerts, Reminders, and Updates according to your preferences."
     }
   ];
 
@@ -617,12 +619,20 @@ export function HelpSupport() {
                   <button
                     type="button"
                     onClick={() => setOpenGeneralFaq(open ? null : idx)}
-                    className="w-full text-left px-4 py-3 bg-gray-50 dark:bg-slate-800/60"
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left bg-gray-50 dark:bg-slate-800/60 hover:bg-gray-100/80 dark:hover:bg-slate-800 transition-colors"
+                    aria-expanded={open}
                   >
-                    <div className="font-semibold text-gray-900 dark:text-gray-100 flex items-start gap-2">
-                      <HelpCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                    <div className="flex min-w-0 flex-1 items-start gap-2 font-semibold text-gray-900 dark:text-gray-100">
+                      <HelpCircle className="w-5 h-5 shrink-0 text-blue-600 dark:text-blue-400 mt-0.5" />
                       <span>{faq.question}</span>
                     </div>
+                    <ChevronDown
+                      className={cn(
+                        "h-5 w-5 shrink-0 text-gray-500 transition-transform duration-200 dark:text-gray-400",
+                        open && "rotate-180",
+                      )}
+                      aria-hidden
+                    />
                   </button>
 
                   {open && (
