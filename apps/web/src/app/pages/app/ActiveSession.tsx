@@ -4622,10 +4622,22 @@ export function ActiveSession() {
     "rounded-full border-0 text-white shadow-none ring-0 outline-none backdrop-blur-xl transition-[background-color] hover:shadow-none [background-color:rgba(255,255,255,0.12)] hover:[background-color:rgba(255,255,255,0.18)]";
   /** One scale for every side: outer shell (all modes) + header corner + panel offsets from the room edge. */
   const stageShellPadding = "p-4 sm:p-5 md:p-6";
+  /** One rounded token for outer shell + inner clip layer (keeps 3D clipped; chrome shares same box). */
+  const stageRoundClass = isFullscreen
+    ? "rounded-none"
+    : "rounded-[1.75rem] sm:rounded-[2.5rem] md:rounded-[3rem]";
   const stageSidePanelInsetL =
-    "top-20 sm:top-22 md:top-24 left-4 sm:left-5 md:left-6";
+    "top-20 sm:top-22 md:top-24 start-4 sm:start-5 md:start-6";
   const stageSidePanelInsetR =
-    "top-20 sm:top-22 md:top-24 right-4 sm:right-5 md:right-6";
+    "top-20 sm:top-22 md:top-24 end-4 sm:end-5 md:end-6";
+  /** Same horizontal inset as side rails so header controls line up with panel edges */
+  const stageHeaderInset =
+    "top-0 end-0 pt-4 pe-4 sm:pt-5 sm:pe-5 md:pt-6 md:pe-6";
+  /** Match rails: left uses w-full + max; right uses explicit w-* (avoid w-full with end-* absolute). */
+  const stageRailWidthLeftClass =
+    "w-full max-w-[min(18rem,calc(100%-1.25rem))] sm:max-w-[min(18rem,calc(100%-1.5rem))] md:w-72 md:max-w-none shrink-0";
+  const stageRailWidthRightClass =
+    "w-[min(18rem,calc(100%-1.25rem))] sm:w-[min(18rem,calc(100%-1.5rem))] md:w-72 shrink-0";
   const stageBottomBar = "bottom-4 sm:bottom-5 md:bottom-6";
 
   return (
@@ -4650,11 +4662,9 @@ export function ActiveSession() {
       {/* Main stage: curved frame on outer shell; flat in fullscreen — equal padding on all sides for every mode */}
       <div className={`absolute inset-0 z-0 box-border ${stageShellPadding}`}>
         <div
-          className={`relative h-full w-full overflow-hidden ${
-            isFullscreen ? "rounded-none" : "rounded-[1.75rem] sm:rounded-[2.5rem] md:rounded-[3rem]"
-          } shadow-[0_24px_80px_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/[0.08]`}
+          className={`relative h-full w-full overflow-hidden ${stageRoundClass} shadow-[0_24px_80px_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/[0.08]`}
         >
-          <div className="absolute inset-0">
+          <div className={`absolute inset-0 overflow-hidden ${stageRoundClass}`}>
             {/* Mood atmosphere — z-0 behind companion; same clip as rounded stage */}
             <div
               className="pointer-events-none absolute inset-0 z-0 min-h-full w-full"
@@ -4763,13 +4773,12 @@ export function ActiveSession() {
             )}
             </div>
           </div>
-        </div>
 
-        {/* Session chrome — positioned inside the rounded room (not the viewport) so panels align with the stage */}
+        {/* Session chrome — inside the rounded stage so left/right insets match the room edge symmetrically */}
         {/* Left: greeting + live transcript */}
         <aside
           aria-label="Session greeting and transcript"
-          className={`pointer-events-none absolute ${stageSidePanelInsetL} z-30 hidden max-h-[min(100dvh-5rem,100%)] w-full max-w-[min(calc(100%-3rem),19rem)] shrink-0 flex-col gap-0 overflow-x-hidden overflow-y-auto overscroll-contain pb-2 md:flex lg:max-w-sm`}
+          className={`pointer-events-none absolute ${stageSidePanelInsetL} z-30 hidden max-h-[min(100dvh-5rem,100%)] ${stageRailWidthLeftClass} flex-col gap-0 overflow-x-hidden overflow-y-auto overscroll-contain pb-2 md:flex`}
         >
         <div
           ref={leftSessionChromeRef}
@@ -4820,9 +4829,9 @@ export function ActiveSession() {
         </div>
       </aside>
 
-      {/* Top bar — session stats toggle + fullscreen + profile (inside stage = aligned with room) */}
+      {/* Top bar — same inline-end inset as right rail (not full shell padding) */}
       <header
-        className={`pointer-events-none absolute right-0 top-0 z-[48] flex justify-end ${stageShellPadding}`}
+        className={`pointer-events-none absolute z-[48] flex justify-end ${stageHeaderInset}`}
       >
         <div className="pointer-events-auto flex shrink-0 items-center gap-2 md:gap-3">
           <motion.button
@@ -4874,7 +4883,7 @@ export function ActiveSession() {
       {/* Right-side session stats (connection + session snapshot + moods) */}
       <aside
         id="session-widgets-panel"
-        className={`absolute ${stageSidePanelInsetR} z-[48] w-[min(18rem,calc(100%-3rem))] flex-col gap-3 md:w-72 ${
+        className={`absolute ${stageSidePanelInsetR} z-[48] ${stageRailWidthRightClass} flex-col gap-3 ${
           sessionStatsOpen ? "flex" : "hidden"
         }`}
         aria-hidden={!sessionStatsOpen}
@@ -5207,6 +5216,7 @@ export function ActiveSession() {
             </div>
         </PopoverContent>
       </Popover>
+        </div>
       </div>
 
       {/* User camera PiP — full-session drag (clamped to screen); dock z-50 stays tappable on top */}
