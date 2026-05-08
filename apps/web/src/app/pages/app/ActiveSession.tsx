@@ -45,6 +45,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  PopoverAnchor,
 } from "@/app/components/ui/popover";
 import { useSafety } from "@/app/contexts/SafetyContext";
 import { useAuth } from "@/app/contexts/AuthContext";
@@ -2155,13 +2156,20 @@ export function ActiveSession() {
     [sessionBackdropPreference, sortedMoodPreview],
   );
 
-  const selectedRoomMoodOption = useMemo(
-    () =>
-      SESSION_BACKDROP_EMOJI_OPTIONS.find(
-        (o) => o.value === sessionBackdropPreference,
-      ) ?? SESSION_BACKDROP_EMOJI_OPTIONS[0],
-    [sessionBackdropPreference],
-  );
+  const selectedRoomMoodOption = useMemo(() => {
+    const fromList = SESSION_BACKDROP_EMOJI_OPTIONS.find(
+      (o) => o.value === sessionBackdropPreference,
+    );
+    if (fromList) return fromList;
+    if (sessionBackdropPreference === "solace") {
+      return {
+        value: "solace" as const,
+        emoji: "💠",
+        label: "Solace — brand default",
+      };
+    }
+    return SESSION_BACKDROP_EMOJI_OPTIONS[0];
+  }, [sessionBackdropPreference]);
 
   useEffect(() => {
     try {
@@ -4783,7 +4791,7 @@ export function ActiveSession() {
             <div
               lang="en"
               ref={transcriptListRef}
-              className="min-h-[6rem] max-h-[min(36vh,15rem)] space-y-2 overflow-y-auto rounded-xl border border-white/[0.028] bg-black/[0.05] px-3 py-2 text-sm sm:min-h-[8rem] sm:max-h-[min(42vh,18rem)]"
+              className="min-h-[6rem] max-h-[min(36vh,15rem)] space-y-2 overflow-y-auto rounded-xl border border-white/[0.028] bg-black/[0.05] px-3 py-2 text-sm sm:min-h-[8rem] sm:max-h-[min(42vh,18rem)] [scrollbar-width:thin] [scrollbar-color:rgba(78,205,196,0.65)_rgba(255,255,255,0.06)] [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-white/[0.06] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[#4ECDC4]/55 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb:hover]:bg-[#4ECDC4]/80"
             >
               {transcript.length === 0 ? (
                 <p className="text-xs text-white/50">
@@ -5029,13 +5037,15 @@ export function ActiveSession() {
         </div>
       </aside>
 
-      {/* Floating glass controls */}
-      <motion.div
-        initial={{ y: 24, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.15 }}
-        className={`absolute ${stageBottomBar} left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 px-0 py-0 md:gap-3 ${glassControlDock}`}
-      >
+      {/* Floating glass controls — mood popover anchors to whole bar so palette sits above buttons */}
+      <Popover open={roomMoodPickerOpen} onOpenChange={setRoomMoodPickerOpen}>
+        <PopoverAnchor asChild>
+          <motion.div
+            initial={{ y: 24, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.15 }}
+            className={`absolute ${stageBottomBar} left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 px-0 py-0 md:gap-3 ${glassControlDock}`}
+          >
         <motion.button
           type="button"
           whileHover={{ scale: 1.06 }}
@@ -5054,89 +5064,26 @@ export function ActiveSession() {
             <Pause className="size-6 md:size-7" />
           )}
         </motion.button>
-        <Popover open={roomMoodPickerOpen} onOpenChange={setRoomMoodPickerOpen}>
-          <PopoverTrigger asChild>
-            <motion.button
-              type="button"
-              whileHover={{ scale: 1.06 }}
-              whileTap={{ scale: 0.94 }}
-              className={`flex size-12 shrink-0 items-center justify-center rounded-full md:size-14 ${glassControlBtn}`}
-              aria-label={`Room mood: ${selectedRoomMoodOption.label}. Open color palette.`}
-              aria-expanded={roomMoodPickerOpen}
-              aria-haspopup="dialog"
-            >
-              <span
-                className="size-9 shrink-0 rounded-[0.65rem] border border-white/35 shadow-md ring-1 ring-white/15 sm:size-10"
-                style={{
-                  background:
-                    SESSION_MOOD_SWATCH_GRADIENT[sessionBackdropPreference],
-                }}
-                aria-hidden
-              />
-            </motion.button>
-          </PopoverTrigger>
-          <PopoverContent
-            side="top"
-            align="center"
-            sideOffset={12}
-            collisionPadding={16}
-            className="z-[200] w-[min(calc(100vw-2rem),22rem)] max-h-[min(80dvh,28rem)] overflow-hidden border border-white/12 bg-[#0A0F1E]/96 p-0 text-white shadow-2xl backdrop-blur-2xl"
+        <PopoverTrigger asChild>
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.06 }}
+            whileTap={{ scale: 0.94 }}
+            className={`flex size-12 shrink-0 items-center justify-center rounded-full md:size-14 ${glassControlBtn}`}
+            aria-label={`Room mood: ${selectedRoomMoodOption.label}. Open color palette.`}
+            aria-expanded={roomMoodPickerOpen}
+            aria-haspopup="dialog"
           >
-            <div className="border-b border-white/[0.06] px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">
-                Room color mood
-              </p>
-              <p className="mt-0.5 text-xs leading-snug text-white/65">
-                Tap a gradient that fits how you feel — saved on this device.{" "}
-                <span className="text-white/45">
-                  Auto syncs to your latest check-in.
-                </span>
-              </p>
-            </div>
-            <div
-              className="grid max-h-[min(58dvh,22rem)] grid-cols-2 gap-2 overflow-y-auto overscroll-contain p-3 sm:grid-cols-3"
-              role="listbox"
-              aria-label="Room mood color options"
-            >
-              {SESSION_BACKDROP_EMOJI_OPTIONS.map((o) => {
-                const selected = sessionBackdropPreference === o.value;
-                return (
-                  <button
-                    key={o.value}
-                    type="button"
-                    role="option"
-                    aria-selected={selected}
-                    aria-label={o.label}
-                    onClick={() => {
-                      setSessionBackdropPreference(o.value);
-                      setRoomMoodPickerOpen(false);
-                    }}
-                    style={{
-                      background: SESSION_MOOD_SWATCH_GRADIENT[o.value],
-                    }}
-                    className={`group relative aspect-[5/4] min-h-[4.75rem] overflow-hidden rounded-xl border text-left shadow-lg transition-transform hover:scale-[1.03] hover:shadow-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4ECDC4] active:scale-[0.98] ${
-                      selected
-                        ? "border-[#4ECDC4] ring-2 ring-[#4ECDC4]/90 ring-offset-2 ring-offset-[#0A0F1E]"
-                        : "border-white/15 hover:border-white/35"
-                    }`}
-                  >
-                    {selected ? (
-                      <span className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm">
-                        <Check
-                          className="size-3.5 text-[#4ECDC4]"
-                          aria-hidden
-                        />
-                      </span>
-                    ) : null}
-                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/82 via-black/45 to-transparent px-1.5 pb-2 pt-7 text-center text-[10px] font-bold uppercase tracking-wide text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
-                      {SESSION_MOOD_TILE_CAPTION[o.value]}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </PopoverContent>
-        </Popover>
+            <span
+              className="size-9 shrink-0 rounded-[0.65rem] border border-white/35 shadow-md ring-1 ring-white/15 sm:size-10"
+              style={{
+                background:
+                  SESSION_MOOD_SWATCH_GRADIENT[sessionBackdropPreference],
+              }}
+              aria-hidden
+            />
+          </motion.button>
+        </PopoverTrigger>
         <div className="mx-1 hidden h-8 w-px shrink-0 bg-white/12 sm:block" aria-hidden />
         <motion.button
           type="button"
@@ -5196,8 +5143,70 @@ export function ActiveSession() {
         >
           <PhoneOff className="size-6 text-white md:size-7" />
         </motion.button>
-      </motion.div>
-        </div>
+          </motion.div>
+        </PopoverAnchor>
+        <PopoverContent
+          side="top"
+          align="center"
+          sideOffset={10}
+          collisionPadding={16}
+          className="z-[200] w-[min(calc(100vw-2rem),28rem)] border border-white/12 bg-[#0A0F1E]/96 p-0 text-white shadow-2xl backdrop-blur-2xl"
+        >
+            <div className="border-b border-white/[0.06] px-2.5 py-2 sm:px-3 sm:py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                Room color mood
+              </p>
+              <p className="mt-0.5 text-[11px] leading-snug text-white/65 sm:text-xs">
+                Tap a gradient that fits how you feel — saved on this device.{" "}
+                <span className="text-white/45">
+                  Auto syncs to your latest check-in.
+                </span>
+              </p>
+            </div>
+            <div
+              className="grid grid-cols-4 grid-rows-2 gap-1.5 p-2.5 sm:gap-2 sm:p-3"
+              role="listbox"
+              aria-label="Room mood color options"
+            >
+              {SESSION_BACKDROP_EMOJI_OPTIONS.map((o) => {
+                const selected = sessionBackdropPreference === o.value;
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    aria-label={o.label}
+                    onClick={() => {
+                      setSessionBackdropPreference(o.value);
+                      setRoomMoodPickerOpen(false);
+                    }}
+                    style={{
+                      background: SESSION_MOOD_SWATCH_GRADIENT[o.value],
+                    }}
+                    className={`group relative h-[3.25rem] min-h-0 overflow-hidden rounded-lg border text-left shadow-md transition-transform hover:scale-[1.02] hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4ECDC4] active:scale-[0.98] sm:h-[3.55rem] sm:rounded-xl ${
+                      selected
+                        ? "border-[#4ECDC4] ring-2 ring-[#4ECDC4]/90 ring-offset-2 ring-offset-[#0A0F1E]"
+                        : "border-white/15 hover:border-white/35"
+                    }`}
+                  >
+                    {selected ? (
+                      <span className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm sm:right-1.5 sm:top-1.5 sm:size-6">
+                        <Check
+                          className="size-3 text-[#4ECDC4] sm:size-3.5"
+                          aria-hidden
+                        />
+                      </span>
+                    ) : null}
+                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/82 via-black/45 to-transparent px-0.5 pb-1.5 pt-5 text-center text-[8px] font-bold uppercase tracking-wide text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] sm:px-1.5 sm:pb-2 sm:pt-6 sm:text-[9px]">
+                      {SESSION_MOOD_TILE_CAPTION[o.value]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+        </PopoverContent>
+      </Popover>
       </div>
 
       {/* User camera PiP — full-session drag (clamped to screen); dock z-50 stays tappable on top */}

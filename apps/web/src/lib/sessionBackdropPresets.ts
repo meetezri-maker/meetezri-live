@@ -234,14 +234,13 @@ export function resolveSessionBackdropPresetKey(
   return preference as SessionBackdropPresetKey;
 }
 
-/** Left-column emoji picker — same order / values as dropdown had. */
+/** Picker tiles (8) — 4×2 grid. "Solace" is still a valid saved preference & auto fallback, but no separate tile (use Auto). */
 export const SESSION_BACKDROP_EMOJI_OPTIONS: {
   value: SessionBackdropPreference;
   emoji: string;
   label: string;
 }[] = [
   { value: "auto", emoji: "✨", label: "Auto — match latest check-in" },
-  { value: "solace", emoji: "💠", label: "Solace — brand default" },
   { value: "happy", emoji: "😊", label: "Happy" },
   { value: "calm", emoji: "😌", label: "Calm" },
   { value: "anxious", emoji: "😰", label: "Anxious (soothing)" },
@@ -255,6 +254,7 @@ export function parseSessionBackdropPreference(
   raw: string | null,
 ): SessionBackdropPreference {
   if (!raw) return "auto";
+  if (raw === "solace") return "solace";
   const allowed = new Set(
     SESSION_BACKDROP_EMOJI_OPTIONS.map((o) => o.value) as string[],
   );
