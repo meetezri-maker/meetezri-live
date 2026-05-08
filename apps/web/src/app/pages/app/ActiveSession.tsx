@@ -1772,6 +1772,8 @@ export function ActiveSession() {
   }, [user?.id]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  /** One-shot: after localStorage says the user already consented, call getUserMedia (see permission init effect). */
+  const autoMediaKickoffRef = useRef(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -1809,7 +1811,8 @@ export function ActiveSession() {
           "Could not access microphone. Please check your device settings and try again."
         );
       }
-      // microphone is required — keep modal open
+      // microphone is required — let the user retry from the permission modal
+      setShowPermissionRequest(true);
       return;
     }
 
@@ -1922,6 +1925,54 @@ export function ActiveSession() {
         : "auto",
     );
   const [roomMoodPickerOpen, setRoomMoodPickerOpen] = useState(false);
+
+  /** Toggle camera — if the session started mic-only (camera denied / failed), turning “on” must acquire video. */
+  const handleCameraToggle = useCallback(async () => {
+    if (!stream) {
+      setIsCameraOff((v) => !v);
+      return;
+    }
+    if (!isCameraOff) {
+      setIsCameraOff(true);
+      return;
+    }
+    const hasUsableVideo = stream
+      .getVideoTracks()
+      .some((t) => t.readyState === "live");
+    if (hasUsableVideo) {
+      setIsCameraOff(false);
+      return;
+    }
+    try {
+      const vs = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
+      stream.getVideoTracks().forEach((t) => {
+        try {
+          t.stop();
+        } catch {
+          /* noop */
+        }
+      });
+      const nextTracks = [...stream.getAudioTracks(), ...vs.getVideoTracks()];
+      const nextStream = new MediaStream(nextTracks);
+      setStream(nextStream);
+      if (videoRef.current) videoRef.current.srcObject = nextStream;
+      setIsCameraOff(false);
+      toast.success("Camera on");
+    } catch (err: unknown) {
+      const e = err as { name?: string };
+      console.error("Camera could not be enabled:", err);
+      toast.error(
+        e?.name === "NotAllowedError"
+          ? "Camera is blocked. Allow camera in the site settings (address bar), then try again."
+          : "Could not start the camera. Check permissions or that no other app is using it."
+      );
+      setIsCameraOff(true);
+    }
+  }, [stream, isCameraOff]);
+
   const sessionContainerRef = useRef<HTMLDivElement>(null);
   /** User camera PiP — px from left / bottom within the full session view (root container). */
   const [pipPos, setPipPos] = useState({ left: 0, bottom: 0 });
@@ -3187,6 +3238,16 @@ export function ActiveSession() {
     };
   }, [stream]);
 
+  /** Attach MediaStream to the PiP <video>; play() is required after srcObject changes (Chrome/Safari). */
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !stream) return;
+    el.srcObject = stream;
+    void el.play().catch((err) => {
+      console.warn("[ActiveSession] camera preview play():", err);
+    });
+  }, [stream]);
+
   useEffect(() => {
     isMutedRef.current = isMuted;
   }, [isMuted]);
@@ -3208,7 +3269,8 @@ export function ActiveSession() {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed === true || parsed === "granted") {
-          setPermissionsGranted(true);
+          // Do NOT setPermissionsGranted here — that flag must only flip after getUserMedia
+          // succeeds. Otherwise stream stays null, STT/video never bind, and PiP stays black.
           setShowPermissionRequest(false);
           setPermissionStateInitialized(true);
           return;
@@ -3222,6 +3284,29 @@ export function ActiveSession() {
       setPermissionStateInitialized(true);
     }
   }, [permissionStorageKey, permissionStateInitialized]);
+
+  // Repeat visitors: localStorage recorded consent but we must still call getUserMedia or stream
+  // is never created (previous bug set permissionsGranted without acquiring tracks).
+  useEffect(() => {
+    if (!permissionStateInitialized) return;
+    if (stream) return;
+    if (autoMediaKickoffRef.current) return;
+
+    let hasStoredConsent = false;
+    try {
+      const stored = window.localStorage.getItem(permissionStorageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        hasStoredConsent = parsed === true || parsed === "granted";
+      }
+    } catch {
+      /* noop */
+    }
+    if (!hasStoredConsent) return;
+
+    autoMediaKickoffRef.current = true;
+    void requestMediaAccess();
+  }, [permissionStateInitialized, stream, permissionStorageKey, requestMediaAccess]);
 
   // ── Speech recognition ──────────────────────────────────────────────────
   useEffect(() => {
@@ -4633,9 +4718,9 @@ export function ActiveSession() {
   /** Same horizontal inset as side rails so header controls line up with panel edges */
   const stageHeaderInset =
     "top-0 end-0 pt-4 pe-4 sm:pt-5 sm:pe-5 md:pt-6 md:pe-6";
-  /** Match rails: left uses w-full + max; right uses explicit w-* (avoid w-full with end-* absolute). */
+  /** Wider left rail (2× previous 18rem cap) for greeting + transcript. */
   const stageRailWidthLeftClass =
-    "w-full max-w-[min(18rem,calc(100%-1.25rem))] sm:max-w-[min(18rem,calc(100%-1.5rem))] md:w-72 md:max-w-none shrink-0";
+    "w-full max-w-[min(36rem,calc(100%-1.25rem))] sm:max-w-[min(36rem,calc(100%-1.5rem))] md:w-[36rem] md:max-w-none shrink-0";
   const stageRailWidthRightClass =
     "w-[min(18rem,calc(100%-1.25rem))] sm:w-[min(18rem,calc(100%-1.5rem))] md:w-72 shrink-0";
   const stageBottomBar = "bottom-4 sm:bottom-5 md:bottom-6";
@@ -4778,11 +4863,11 @@ export function ActiveSession() {
         {/* Left: greeting + live transcript */}
         <aside
           aria-label="Session greeting and transcript"
-          className={`pointer-events-none absolute ${stageSidePanelInsetL} z-30 hidden max-h-[min(100dvh-5rem,100%)] ${stageRailWidthLeftClass} flex-col gap-0 overflow-x-hidden overflow-y-auto overscroll-contain pb-2 md:flex`}
+          className={`pointer-events-none absolute ${stageSidePanelInsetL} z-30 flex max-h-[min(100dvh-5rem,100%)] ${stageRailWidthLeftClass} flex-col gap-0 overflow-x-hidden overflow-y-auto overscroll-contain pb-2`}
         >
         <div
           ref={leftSessionChromeRef}
-          className={`pointer-events-auto ${glassPanel} flex min-h-0 max-h-[min(100dvh-8rem,36rem)] flex-1 flex-col space-y-3 overflow-hidden p-4 sm:p-5`}
+          className={`pointer-events-auto ${glassPanel} flex min-h-0 max-h-[min(100dvh-8rem,42rem)] shrink-0 flex-col space-y-3 overflow-hidden p-4 sm:p-5`}
         >
           <div className="shrink-0">
             <h2 className="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">
@@ -4793,20 +4878,28 @@ export function ActiveSession() {
               feels right in this moment.
             </p>
           </div>
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 shrink-0 flex-col">
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/45">
               Transcript
             </p>
             <div
               lang="en"
               ref={transcriptListRef}
-              className="min-h-[6rem] max-h-[min(36vh,15rem)] space-y-2 overflow-y-auto rounded-xl border border-white/[0.028] bg-black/[0.05] px-3 py-2 text-sm sm:min-h-[8rem] sm:max-h-[min(42vh,18rem)] [scrollbar-width:thin] [scrollbar-color:rgba(78,205,196,0.65)_rgba(255,255,255,0.06)] [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-white/[0.06] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[#4ECDC4]/55 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb:hover]:bg-[#4ECDC4]/80"
+              className="h-[16.5rem] shrink-0 space-y-2 overflow-y-auto rounded-xl border border-white/[0.028] bg-black/[0.05] px-3 py-2 text-sm sm:h-[17.5rem] [scrollbar-width:thin] [scrollbar-color:rgba(78,205,196,0.65)_rgba(255,255,255,0.06)] [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-white/[0.06] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[#4ECDC4]/55 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb:hover]:bg-[#4ECDC4]/80"
             >
-              {transcript.length === 0 ? (
+              {liveUserSpeech.trim() ? (
+                <div className="rounded-lg border border-[#4ECDC4]/30 bg-[#4ECDC4]/[0.07] px-2.5 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#4ECDC4]/90">
+                    You · speaking
+                  </p>
+                  <p className="mt-0.5 leading-snug text-white/90">{liveUserSpeech}</p>
+                </div>
+              ) : null}
+              {transcript.length === 0 && !liveUserSpeech.trim() ? (
                 <p className="text-xs text-white/50">
                   Nothing yet — your conversation will appear here.
                 </p>
-              ) : (
+              ) : transcript.length > 0 ? (
                 transcript.slice(-80).map((line, i) => {
                   const isUser = line.role === "user";
                   return (
@@ -4823,7 +4916,7 @@ export function ActiveSession() {
                     </div>
                   );
                 })
-              )}
+              ) : null}
             </div>
           </div>
         </div>
@@ -5114,7 +5207,7 @@ export function ActiveSession() {
           type="button"
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.94 }}
-          onClick={() => setIsCameraOff(!isCameraOff)}
+          onClick={() => void handleCameraToggle()}
           className={`flex size-12 items-center justify-center rounded-full md:size-14 ${
             isCameraOff ? glassControlBtnDanger : glassControlBtn
           }`}
