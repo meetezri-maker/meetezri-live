@@ -127,7 +127,7 @@ export function Resources() {
               Reading library
             </h1>
             <p className="text-slate-600 dark:text-slate-300 text-base max-w-2xl leading-relaxed">
-              Short reads and guided reflections from Solace , organized by topic.
+              Short reads and guided reflections from Solace and  only, organized by topic.
             </p>
           </header>
 

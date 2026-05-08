@@ -21,9 +21,11 @@ import {
   Play,
   Loader2,
   LayoutGrid,
-  CloudSun,
+  Wifi,
+  WifiOff,
   Activity,
   Gauge,
+  Smile,
 } from "lucide-react";
 import {
   useState,
@@ -35,6 +37,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/app/components/ui/button";
 import { useSafety } from "@/app/contexts/SafetyContext";
@@ -463,6 +466,8 @@ function ThreeAvatar({
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     rendererRef.current = renderer;
 
     // Make the canvas fill the container exactly so it never overflows (which
@@ -477,15 +482,158 @@ function ThreeAvatar({
     container.appendChild(renderer.domElement);
 
     // Lights
-    scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+    scene.add(new THREE.AmbientLight(0xc8d4e8, 0.55));
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
-    keyLight.position.set(3, 5, 5);
+    const keyLight = new THREE.DirectionalLight(0xfff4e8, 1.35);
+    keyLight.position.set(3, 6, 5);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.setScalar(1024);
+    keyLight.shadow.camera.near = 0.5;
+    keyLight.shadow.camera.far = 40;
+    keyLight.shadow.camera.left = -14;
+    keyLight.shadow.camera.right = 14;
+    keyLight.shadow.camera.top = 14;
+    keyLight.shadow.camera.bottom = -14;
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    fillLight.position.set(-3, 2, 4);
+    const fillLight = new THREE.DirectionalLight(0xb8c8e8, 0.65);
+    fillLight.position.set(-4, 4, 4);
     scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0x4466aa, 0.35);
+    rimLight.position.set(-2, 5, -4);
+    scene.add(rimLight);
+
+    const roomWarmth = new THREE.PointLight(0xffc9a8, 0.45, 28);
+    roomWarmth.position.set(1.5, 3.5, 2);
+    scene.add(roomWarmth);
+
+    /** Cyclorama-style room: curved backdrop (center recesses) + sides nearer the figure. */
+    let sessionRoomGroup: THREE.Group | null = null;
+    const room = new THREE.Group();
+    room.name = "ezriSessionRoom";
+
+    const wallProps: THREE.MeshStandardMaterialParameters = {
+      color: 0x2c3a4e,
+      roughness: 0.94,
+      metalness: 0.03,
+      side: THREE.DoubleSide,
+    };
+    const curvedWallMat = new THREE.MeshStandardMaterial(wallProps);
+    const sideWallMatL = new THREE.MeshStandardMaterial(wallProps);
+    const sideWallMatR = new THREE.MeshStandardMaterial(wallProps);
+    const floorMat = new THREE.MeshStandardMaterial({
+      color: 0x1a2434,
+      roughness: 0.91,
+      metalness: 0.06,
+    });
+    const ceilMat = new THREE.MeshStandardMaterial({
+      color: 0x232f3f,
+      roughness: 1,
+      metalness: 0,
+    });
+
+    const arcSpan = Math.PI * 1.12;
+    const thetaStart = -Math.PI / 2 - arcSpan / 2;
+
+    /** Deeper outer bend — reads clearly on screen as a curved “bowl” behind the figure. */
+    const BACK_CY_R_OUT = 26;
+    const BACK_CY_Z_OUT = 9.5;
+    const wallMatDeep = new THREE.MeshStandardMaterial({
+      color: 0x1a2838,
+      roughness: 0.96,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+    });
+    const curvedBackdropOuter = new THREE.Mesh(
+      new THREE.CylinderGeometry(
+        BACK_CY_R_OUT,
+        BACK_CY_R_OUT,
+        36,
+        96,
+        1,
+        true,
+        thetaStart,
+        arcSpan
+      ),
+      wallMatDeep
+    );
+    curvedBackdropOuter.position.set(0, 9, BACK_CY_Z_OUT);
+    curvedBackdropOuter.receiveShadow = true;
+    room.add(curvedBackdropOuter);
+
+    const BACK_CY_R = 14.25;
+    /** Inner cylinder — tighter radius makes the arc read as a stronger curve in perspective. */
+    const BACK_CY_Z = 4.35;
+
+    const curvedBackdrop = new THREE.Mesh(
+      new THREE.CylinderGeometry(
+        BACK_CY_R,
+        BACK_CY_R,
+        34,
+        96,
+        1,
+        true,
+        thetaStart,
+        arcSpan
+      ),
+      curvedWallMat
+    );
+    curvedBackdrop.position.set(0, 9, BACK_CY_Z);
+    curvedBackdrop.receiveShadow = true;
+    room.add(curvedBackdrop);
+
+    /* Curved floor: stronger sweep into the wall for a studio-cyclorama read. */
+    const floorGeo = new THREE.PlaneGeometry(48, 32, 40, 24);
+    const floorPos = floorGeo.attributes.position;
+    for (let i = 0; i < floorPos.count; i++) {
+      const xl = floorPos.getX(i);
+      const yl = floorPos.getY(i);
+      const worldZ = -yl;
+      const t = THREE.MathUtils.clamp((-worldZ - 2) / 18, 0, 1);
+      const lift = t * t * 2.35;
+      floorPos.setZ(i, lift);
+      /* Bowl: bring lateral floor edges a bit closer to the avatar. */
+      const side = Math.min(1, Math.abs(xl) / 20);
+      floorPos.setY(i, yl - side * side * 0.38 * t);
+    }
+    floorPos.needsUpdate = true;
+    floorGeo.computeVertexNormals();
+
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, -2.35, 2);
+    floor.receiveShadow = true;
+    room.add(floor);
+
+    /* Side wings: bring lateral background to a similar depth as the figure. */
+    const sidePanelH = 28;
+    const sidePanelW = 14;
+    const leftWing = new THREE.Mesh(
+      new THREE.PlaneGeometry(sidePanelW, sidePanelH),
+      sideWallMatL
+    );
+    leftWing.position.set(-13.2, 9, -2.4);
+    leftWing.rotation.set(0, Math.PI * 0.38, 0);
+    leftWing.receiveShadow = true;
+    room.add(leftWing);
+
+    const rightWing = new THREE.Mesh(
+      new THREE.PlaneGeometry(sidePanelW, sidePanelH),
+      sideWallMatR
+    );
+    rightWing.position.set(13.2, 9, -2.4);
+    rightWing.rotation.set(0, -Math.PI * 0.38, 0);
+    rightWing.receiveShadow = true;
+    room.add(rightWing);
+
+    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(52, 52), ceilMat);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.set(0, 21.25, 0);
+    room.add(ceiling);
+
+    scene.add(room);
+    sessionRoomGroup = room;
 
     // Reset refs
     mouthBindingsRef.current = [];
@@ -1252,6 +1400,20 @@ function ThreeAvatar({
 
       clearBlinkState();
 
+      if (sessionRoomGroup && sceneRef.current) {
+        sceneRef.current.remove(sessionRoomGroup);
+        sessionRoomGroup.traverse((child: any) => {
+          if (child.isMesh) {
+            child.geometry?.dispose?.();
+            const mat = child.material;
+            if (Array.isArray(mat))
+              mat.forEach((m: THREE.Material) => m?.dispose?.());
+            else (mat as THREE.Material | undefined)?.dispose?.();
+          }
+        });
+        sessionRoomGroup = null;
+      }
+
       if (modelRef.current && sceneRef.current) {
         sceneRef.current.remove(modelRef.current);
 
@@ -1406,6 +1568,19 @@ export function ActiveSession() {
     if (metaFull) return metaFull.split(/\s+/)[0] || "You";
     return "You";
   }, [profile?.full_name, user?.user_metadata]);
+
+  const [wallNow, setWallNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setWallNow(new Date()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const sessionGreeting = useMemo(() => {
+    const h = wallNow.getHours();
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    return "Good evening";
+  }, [wallNow]);
 
   const companionAvatarLabel =
     typeof config?.avatar === "string" ? config.avatar : undefined;
@@ -1684,6 +1859,7 @@ export function ActiveSession() {
   const [transcript, setTranscript] = useState<
     { role: string; content: string; timestamp: number }[]
   >([]);
+  const transcriptListRef = useRef<HTMLDivElement | null>(null);
   const speechTimeoutRef = useRef<number | null>(null);
   const isMutedRef = useRef(isMuted);
   const isSoundOffRef = useRef(isSoundOff);
@@ -1715,6 +1891,34 @@ export function ActiveSession() {
   useEffect(() => {
     transcriptRef.current = transcript;
   }, [transcript]);
+
+  useEffect(() => {
+    const el = transcriptListRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [transcript]);
+
+  const { data: moodPreview = [] } = useQuery({
+    queryKey: ["activeSession", "moodsPreview", user?.id ?? "anon"],
+    queryFn: async () => {
+      const rows = (await api.moods.getMyMoods()) as {
+        mood: string;
+        created_at: string;
+        intensity?: number;
+      }[];
+      return Array.isArray(rows) ? rows.slice(0, 12) : [];
+    },
+    enabled: Boolean(user?.id),
+    staleTime: 60_000,
+  });
+
+  const sortedMoodPreview = useMemo(() => {
+    if (!moodPreview.length) return [];
+    return [...moodPreview].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+  }, [moodPreview]);
 
   const apiSessionIdRef = useRef<string | null>(null);
   const sessionTimeRef = useRef(0);
@@ -4113,7 +4317,17 @@ export function ActiveSession() {
   };
 
   const glassPanel =
-    "rounded-2xl border border-white/15 bg-white/[0.08] backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.35)]";
+    "rounded-2xl border border-white/12 bg-white/[0.05] backdrop-blur-xl backdrop-saturate-150 shadow-[0_8px_32px_rgba(0,0,0,0.28)]";
+  /**
+   * Dock: vivid indigo → magenta (reference), still glassy via blur + translucent stops.
+   * Buttons use translucent white so that gradient shows through the circles.
+   */
+  const glassControlDock =
+    "isolate rounded-2xl border border-white/30 bg-[linear-gradient(92deg,rgba(23,68,119,0.78)_0%,rgba(67,56,202,0.62)_45%,rgba(192,38,211,0.7)_72%,rgba(236,72,153,0.65)_100%)] shadow-[0_10px_36px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] backdrop-blur-xl backdrop-saturate-150 md:rounded-[1.12rem]";
+  const glassControlBtn =
+    "rounded-full border border-white/40 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] backdrop-blur-2xl backdrop-saturate-200 transition-colors hover:border-white/50 [background-color:rgba(255,255,255,0.22)] hover:[background-color:rgba(255,255,255,0.3)]";
+  const glassControlBtnDanger =
+    "rounded-full border border-red-200/45 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] backdrop-blur-2xl backdrop-saturate-200 transition-colors hover:border-red-100/50 [background-color:rgba(220,38,38,0.4)] hover:[background-color:rgba(220,38,38,0.52)]";
 
   return (
     <div
@@ -4156,7 +4370,11 @@ export function ActiveSession() {
                 />
               )}
             </AnimatePresence>
-            <div className="relative z-[2] h-full w-full">
+            {/* Elliptical mask: outer frame is a rounded rect (flat bottom center); this
+                fades the render on a curved boundary so the bust blends into the stage. */}
+            <div
+              className="relative z-[2] h-full w-full [-webkit-mask-image:radial-gradient(ellipse_118%_96%_at_50%_32%,#fff_0%,#fff_45%,rgba(255,255,255,0.55)_68%,transparent_84%)] [mask-image:radial-gradient(ellipse_118%_96%_at_50%_32%,#fff_0%,#fff_45%,rgba(255,255,255,0.55)_68%,transparent_84%)] [mask-repeat:no-repeat] [mask-size:100%_100%] [mask-position:center]"
+            >
               {sessionUsesCompanion3d ? (
                 <ThreeAvatar
                   modelUrl={companionModelUrl}
@@ -4210,6 +4428,54 @@ export function ActiveSession() {
         </div>
       </div>
 
+      {/* Left: greeting + live transcript */}
+      <aside className="pointer-events-none absolute left-4 top-20 z-30 hidden max-w-[min(100%,19rem)] flex-col md:left-6 md:top-24 md:flex lg:max-w-sm">
+        <div className={`pointer-events-auto ${glassPanel} max-h-[min(100vh-6rem,36rem)] space-y-3 overflow-hidden p-4`}>
+          <div className="shrink-0">
+            <h2 className="text-xl font-bold tracking-tight text-white md:text-2xl">
+              {sessionGreeting}, {viewerFirstName}!
+            </h2>
+            <p className="mt-2 border-l-2 border-sky-400/45 pl-3 text-xs leading-relaxed text-white/80 md:text-sm">
+              This time is for you—take it at your own pace, and share only what
+              feels right in this moment.
+            </p>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col">
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/45">
+              Transcript
+            </p>
+            <div
+              lang="en"
+              ref={transcriptListRef}
+              className="min-h-[8rem] max-h-[min(42vh,18rem)] space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm"
+            >
+              {transcript.length === 0 ? (
+                <p className="text-xs text-white/50">
+                  Nothing yet — your conversation will appear here.
+                </p>
+              ) : (
+                transcript.slice(-80).map((line, i) => {
+                  const isUser = line.role === "user";
+                  return (
+                    <div
+                      key={`${line.timestamp}-${i}`}
+                      className={`rounded-lg px-2.5 py-2 ${
+                        isUser ? "bg-white/[0.12]" : "bg-violet-500/[0.18]"
+                      }`}
+                    >
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-white/55">
+                        {isUser ? "You" : currentAvatar.name}
+                      </p>
+                      <p className="mt-0.5 leading-snug text-white/90">{line.content}</p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </aside>
+
       {/* Top bar — session stats toggle + fullscreen + profile */}
       <header className="relative z-20 flex justify-end p-4 md:p-6 pointer-events-none">
         <div className="pointer-events-auto flex shrink-0 items-center gap-2 md:gap-3">
@@ -4218,8 +4484,8 @@ export function ActiveSession() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setSessionStatsOpen((o) => !o)}
-            className={`flex size-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 backdrop-blur-md transition-colors hover:bg-white/15 ${
-              sessionStatsOpen ? "text-white ring-2 ring-white/25" : "text-white/85"
+            className={`flex size-10 shrink-0 items-center justify-center rounded-full ${glassControlBtn} transition-transform ${
+              sessionStatsOpen ? "ring-2 ring-white/35" : ""
             }`}
             aria-expanded={sessionStatsOpen}
             aria-controls="session-widgets-panel"
@@ -4232,7 +4498,7 @@ export function ActiveSession() {
           <Button
             variant="ghost"
             size="sm"
-            className="rounded-full border border-white/15 bg-white/10 text-white hover:bg-white/15"
+            className={`rounded-full ${glassControlBtn} size-10 px-0 text-white hover:text-white`}
             onClick={toggleFullscreen}
             aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
           >
@@ -4246,11 +4512,11 @@ export function ActiveSession() {
             <img
               src={profile.avatar_url}
               alt=""
-              className="size-10 shrink-0 rounded-full border-2 border-white/20 object-cover shadow-md"
+              className="size-10 shrink-0 rounded-full border border-white/30 object-cover shadow-md"
             />
           ) : (
             <div
-              className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-white/20 bg-white/10 text-sm font-semibold text-white/90 shadow-md"
+              className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/30 bg-white/[0.12] text-sm font-semibold text-white/90 shadow-md backdrop-blur-xl"
               aria-hidden
             >
               {viewerFirstName.slice(0, 1).toUpperCase()}
@@ -4268,7 +4534,17 @@ export function ActiveSession() {
         aria-hidden={!sessionStatsOpen}
       >
         <div className={`${glassPanel} flex items-center gap-3 px-3 py-2.5`}>
-          <CloudSun className="size-8 shrink-0 text-amber-200" aria-hidden />
+          {ezriWsStatus === "connected" ? (
+            <Wifi className="size-8 shrink-0 text-emerald-300" aria-hidden />
+          ) : ezriWsStatus === "connecting" ||
+            ezriWsStatus === "reconnecting" ? (
+            <Loader2
+              className="size-8 shrink-0 animate-spin text-amber-300"
+              aria-hidden
+            />
+          ) : (
+            <WifiOff className="size-8 shrink-0 text-white/45" aria-hidden />
+          )}
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 text-xs font-medium text-white/60">
               <Activity className="size-3.5 text-emerald-400" aria-hidden />
@@ -4322,6 +4598,80 @@ export function ActiveSession() {
             </li>
           </ul>
         </div>
+
+        <div className={`${glassPanel} p-4`}>
+          <div className="mb-3 flex items-center gap-2">
+            <Smile className="size-4 shrink-0 text-amber-200" aria-hidden />
+            <span className="text-sm font-semibold text-white">Moods</span>
+          </div>
+          {sortedMoodPreview.length === 0 ? (
+            <p className="text-xs leading-relaxed text-white/55">
+              No recent mood check-ins. Log one from{" "}
+              <span className="text-white/80">Mood Check-In</span> to see your
+              latest mood here.
+            </p>
+          ) : (
+            <>
+              <div className="mb-4 min-h-[7.5rem] rounded-2xl border border-violet-400/40 bg-gradient-to-br from-violet-500/[0.22] to-sky-600/15 px-4 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                  Latest check-in
+                </p>
+                <p className="mt-2 text-2xl font-bold capitalize leading-tight tracking-tight text-white md:text-[1.65rem]">
+                  {String(sortedMoodPreview[0]?.mood ?? "")
+                    .replace(/-/g, " ")
+                    .trim() || "—"}
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/65">
+                  <time dateTime={sortedMoodPreview[0].created_at}>
+                    {new Date(sortedMoodPreview[0].created_at).toLocaleString(
+                      undefined,
+                      {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      },
+                    )}
+                  </time>
+                  {typeof sortedMoodPreview[0].intensity === "number" ? (
+                    <span className="rounded-md border border-white/15 bg-black/25 px-2 py-0.5 tabular-nums text-white/80">
+                      Intensity {sortedMoodPreview[0].intensity}/10
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              {sortedMoodPreview.length > 1 ? (
+                <>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/45">
+                    Recent
+                  </p>
+                  <ul className="max-h-44 space-y-2 overflow-y-auto text-sm">
+                    {sortedMoodPreview.slice(1).map((m, idx) => (
+                      <li
+                        key={`${m.created_at}-${idx}`}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/25 px-2.5 py-2"
+                      >
+                        <span className="min-w-0 truncate font-medium capitalize text-white">
+                          {String(m.mood || "").replace(/-/g, " ") || "—"}
+                        </span>
+                        <span className="shrink-0 text-[10px] tabular-nums text-white/45">
+                          {new Date(m.created_at).toLocaleDateString(
+                            undefined,
+                            {
+                              month: "short",
+                              day: "numeric",
+                            },
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+            </>
+          )}
+        </div>
       </aside>
 
       {/* Floating glass controls */}
@@ -4329,17 +4679,17 @@ export function ActiveSession() {
         initial={{ y: 24, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.15 }}
-        className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/15 bg-black/40 px-2 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl md:bottom-8 md:gap-2 md:px-3 md:py-2.5"
+        className={`fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 px-2 py-2 md:bottom-8 md:gap-2 md:px-3 md:py-2.5 ${glassControlDock}`}
       >
         <motion.button
           type="button"
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.94 }}
           onClick={() => setIsSessionPaused(!isSessionPaused)}
-          className={`flex size-12 shrink-0 items-center justify-center rounded-full border-2 transition-all md:size-14 ${
+          className={`flex size-12 shrink-0 items-center justify-center rounded-full transition-all md:size-14 ${
             isSessionPaused
-              ? "border-emerald-400/50 bg-emerald-500 text-white"
-              : "border-white/20 bg-white/10 text-white hover:bg-white/15"
+              ? "rounded-full border border-emerald-200/45 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-2xl backdrop-saturate-200 [background-color:rgba(16,185,129,0.38)] hover:[background-color:rgba(16,185,129,0.48)]"
+              : glassControlBtn
           }`}
           aria-label={isSessionPaused ? "Resume session" : "Pause session"}
         >
@@ -4349,16 +4699,14 @@ export function ActiveSession() {
             <Pause className="size-6 md:size-7" />
           )}
         </motion.button>
-        <div className="mx-1 hidden h-8 w-px bg-white/15 sm:block" aria-hidden />
+        <div className="mx-1 hidden h-8 w-px bg-white/30 sm:block" aria-hidden />
         <motion.button
           type="button"
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.94 }}
           onClick={() => setIsMuted(!isMuted)}
-          className={`flex size-12 items-center justify-center rounded-full border-2 transition-all md:size-14 ${
-            isMuted
-              ? "border-transparent bg-red-500 text-white"
-              : "border-white/20 bg-white/10 text-white hover:bg-white/15"
+          className={`flex size-12 items-center justify-center rounded-full md:size-14 ${
+            isMuted ? glassControlBtnDanger : glassControlBtn
           }`}
           aria-label={isMuted ? "Unmute" : "Mute"}
         >
@@ -4373,10 +4721,8 @@ export function ActiveSession() {
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.94 }}
           onClick={() => setIsCameraOff(!isCameraOff)}
-          className={`flex size-12 items-center justify-center rounded-full border-2 transition-all md:size-14 ${
-            isCameraOff
-              ? "border-transparent bg-red-500 text-white"
-              : "border-white/20 bg-white/10 text-white hover:bg-white/15"
+          className={`flex size-12 items-center justify-center rounded-full md:size-14 ${
+            isCameraOff ? glassControlBtnDanger : glassControlBtn
           }`}
           aria-label={isCameraOff ? "Turn camera on" : "Turn camera off"}
         >
@@ -4391,10 +4737,8 @@ export function ActiveSession() {
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.94 }}
           onClick={() => setIsSoundOff((prev) => !prev)}
-          className={`flex size-12 items-center justify-center rounded-full border-2 transition-all md:size-14 ${
-            isSoundOff
-              ? "border-transparent bg-red-500 text-white"
-              : "border-white/20 bg-white/10 text-white hover:bg-white/15"
+          className={`flex size-12 items-center justify-center rounded-full md:size-14 ${
+            isSoundOff ? glassControlBtnDanger : glassControlBtn
           }`}
           aria-label={isSoundOff ? "Turn sound on" : "Turn sound off"}
         >
@@ -4409,7 +4753,7 @@ export function ActiveSession() {
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.94 }}
           onClick={() => setShowEndConfirm(true)}
-          className="flex size-12 items-center justify-center rounded-full bg-red-600 shadow-lg shadow-red-600/30 transition-all hover:bg-red-500 md:size-14"
+          className={`flex size-12 items-center justify-center rounded-full md:size-14 ${glassControlBtnDanger}`}
           aria-label="End session"
         >
           <PhoneOff className="size-6 text-white md:size-7" />
