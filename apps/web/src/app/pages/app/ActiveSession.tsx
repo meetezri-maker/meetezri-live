@@ -26,6 +26,14 @@ import {
   Activity,
   Gauge,
   Smile,
+  Laugh,
+  Frown,
+  Meh,
+  CloudRain,
+  Moon,
+  Annoyed,
+  Brain,
+  type LucideIcon,
 } from "lucide-react";
 import {
   useState,
@@ -1548,6 +1556,27 @@ export default ThreeAvatar;
 // ─────────────────────────────────────────────────────────────────────────────
 // ActiveSession component  (unchanged from original except imports above)
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** Icon for the latest mood label (keyword heuristics; defaults to Smile). */
+function moodIconForLabel(raw: string): LucideIcon {
+  const s = raw.toLowerCase().replace(/-/g, " ").replace(/\s+/g, " ").trim();
+  if (!s) return Smile;
+  if (/\b(happy|joy|great|good|grateful|hopeful|content|cheerful)\b/.test(s))
+    return Laugh;
+  if (/\b(excited|awesome|energized|pumped|elated|thrilled)\b/.test(s)) return Zap;
+  if (/\b(sad|down|blue|depressed|grieving|lonely|gloomy|melancholy)\b/.test(s))
+    return CloudRain;
+  if (/\b(angry|mad|furious|frustrated|irritated|rage|annoyed)\b/.test(s))
+    return Annoyed;
+  if (/\b(anxious|worried|stressed|nervous|overwhelm|panic|uneasy)\b/.test(s))
+    return Brain;
+  if (/\b(calm|peaceful|relaxed|okay|ok|fine|steady|serene)\b/.test(s)) return Heart;
+  if (/\b(neutral|meh|unsure|mixed|indifferent)\b/.test(s)) return Meh;
+  if (/\b(tired|exhausted|sleepy|burnt|weary|fatigue)\b/.test(s)) return Moon;
+  if (/\b(bad|rough|terrible|awful|low|cry|crying)\b/.test(s)) return Frown;
+  return Smile;
+}
+
 export function ActiveSession() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1919,6 +1948,11 @@ export function ActiveSession() {
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     );
   }, [moodPreview]);
+
+  const LatestMoodIcon = useMemo(
+    () => moodIconForLabel(String(sortedMoodPreview[0]?.mood ?? "")),
+    [sortedMoodPreview],
+  );
 
   const apiSessionIdRef = useRef<string | null>(null);
   const sessionTimeRef = useRef(0);
@@ -4317,17 +4351,19 @@ export function ActiveSession() {
   };
 
   const glassPanel =
-    "rounded-2xl border border-white/12 bg-white/[0.05] backdrop-blur-xl backdrop-saturate-150 shadow-[0_8px_32px_rgba(0,0,0,0.28)]";
+    "rounded-2xl border border-white/12 bg-white/[0.05] backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.28)]";
   /**
-   * Dock: vivid indigo → magenta (reference), still glassy via blur + translucent stops.
-   * Buttons use translucent white so that gradient shows through the circles.
+   * Control strip: colorless frosted glass — only rgba(255,255,255,α) + backdrop blur.
+   * No border; depth from layered shadow only.
    */
   const glassControlDock =
-    "isolate rounded-2xl border border-white/30 bg-[linear-gradient(92deg,rgba(23,68,119,0.78)_0%,rgba(67,56,202,0.62)_45%,rgba(192,38,211,0.7)_72%,rgba(236,72,153,0.65)_100%)] shadow-[0_10px_36px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.4)] backdrop-blur-xl backdrop-saturate-150 md:rounded-[1.12rem]";
+    "isolate rounded-[1.35rem] border-0 bg-white/[0.09] shadow-[0_4px_20px_rgba(0,0,0,0.28),0_16px_48px_rgba(0,0,0,0.4)] ring-0 outline-none backdrop-blur-[32px] md:rounded-[1.55rem]";
+  /** Borderless glass caps; soft shadow only (no ring/outline). */
   const glassControlBtn =
-    "rounded-full border border-white/40 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] backdrop-blur-2xl backdrop-saturate-200 transition-colors hover:border-white/50 [background-color:rgba(255,255,255,0.22)] hover:[background-color:rgba(255,255,255,0.3)]";
+    "rounded-full border-0 text-white shadow-[0_2px_14px_rgba(0,0,0,0.22)] ring-0 outline-none backdrop-blur-xl transition-[background-color,box-shadow] hover:shadow-[0_4px_18px_rgba(0,0,0,0.28)] [background-color:rgba(255,255,255,0.16)] hover:[background-color:rgba(255,255,255,0.22)]";
+  /** Muted / end: faint red glow in shadow, no border. */
   const glassControlBtnDanger =
-    "rounded-full border border-red-200/45 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] backdrop-blur-2xl backdrop-saturate-200 transition-colors hover:border-red-100/50 [background-color:rgba(220,38,38,0.4)] hover:[background-color:rgba(220,38,38,0.52)]";
+    "rounded-full border-0 text-white shadow-[0_2px_14px_rgba(220,38,38,0.35)] ring-0 outline-none backdrop-blur-xl transition-[background-color,box-shadow] hover:shadow-[0_4px_18px_rgba(220,38,38,0.45)] [background-color:rgba(255,255,255,0.12)] hover:[background-color:rgba(255,255,255,0.18)]";
 
   return (
     <div
@@ -4613,32 +4649,42 @@ export function ActiveSession() {
           ) : (
             <>
               <div className="mb-4 min-h-[7.5rem] rounded-2xl border border-violet-400/40 bg-gradient-to-br from-violet-500/[0.22] to-sky-600/15 px-4 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">
-                  Latest check-in
-                </p>
-                <p className="mt-2 text-2xl font-bold capitalize leading-tight tracking-tight text-white md:text-[1.65rem]">
-                  {String(sortedMoodPreview[0]?.mood ?? "")
-                    .replace(/-/g, " ")
-                    .trim() || "—"}
-                </p>
-                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/65">
-                  <time dateTime={sortedMoodPreview[0].created_at}>
-                    {new Date(sortedMoodPreview[0].created_at).toLocaleString(
-                      undefined,
-                      {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      },
-                    )}
-                  </time>
-                  {typeof sortedMoodPreview[0].intensity === "number" ? (
-                    <span className="rounded-md border border-white/15 bg-black/25 px-2 py-0.5 tabular-nums text-white/80">
-                      Intensity {sortedMoodPreview[0].intensity}/10
-                    </span>
-                  ) : null}
+                <div className="flex gap-3">
+                  <div
+                    className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/[0.12] text-amber-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]"
+                    aria-hidden
+                  >
+                    <LatestMoodIcon className="size-7" strokeWidth={1.75} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                      Latest check-in
+                    </p>
+                    <p className="mt-2 text-2xl font-bold capitalize leading-tight tracking-tight text-white md:text-[1.65rem]">
+                      {String(sortedMoodPreview[0]?.mood ?? "")
+                        .replace(/-/g, " ")
+                        .trim() || "—"}
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/65">
+                      <time dateTime={sortedMoodPreview[0].created_at}>
+                        {new Date(sortedMoodPreview[0].created_at).toLocaleString(
+                          undefined,
+                          {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          },
+                        )}
+                      </time>
+                      {typeof sortedMoodPreview[0].intensity === "number" ? (
+                        <span className="rounded-md border border-white/15 bg-black/25 px-2 py-0.5 tabular-nums text-white/80">
+                          Intensity {sortedMoodPreview[0].intensity}/10
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               </div>
               {sortedMoodPreview.length > 1 ? (
@@ -4647,7 +4693,7 @@ export function ActiveSession() {
                     Recent
                   </p>
                   <ul className="max-h-44 space-y-2 overflow-y-auto text-sm">
-                    {sortedMoodPreview.slice(1).map((m, idx) => (
+                    {sortedMoodPreview.slice(1, 3).map((m, idx) => (
                       <li
                         key={`${m.created_at}-${idx}`}
                         className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/25 px-2.5 py-2"
@@ -4679,7 +4725,7 @@ export function ActiveSession() {
         initial={{ y: 24, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.15 }}
-        className={`fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 px-2 py-2 md:bottom-8 md:gap-2 md:px-3 md:py-2.5 ${glassControlDock}`}
+        className={`fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 px-5 py-4 sm:px-6 sm:py-4 md:bottom-8 md:gap-3 md:px-8 md:py-5 ${glassControlDock}`}
       >
         <motion.button
           type="button"
@@ -4688,7 +4734,7 @@ export function ActiveSession() {
           onClick={() => setIsSessionPaused(!isSessionPaused)}
           className={`flex size-12 shrink-0 items-center justify-center rounded-full transition-all md:size-14 ${
             isSessionPaused
-              ? "rounded-full border border-emerald-200/45 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-2xl backdrop-saturate-200 [background-color:rgba(16,185,129,0.38)] hover:[background-color:rgba(16,185,129,0.48)]"
+              ? "rounded-full border-0 text-white shadow-[0_2px_14px_rgba(0,0,0,0.24)] ring-0 backdrop-blur-xl [background-color:rgba(255,255,255,0.2)] hover:[background-color:rgba(255,255,255,0.26)]"
               : glassControlBtn
           }`}
           aria-label={isSessionPaused ? "Resume session" : "Pause session"}
@@ -4699,7 +4745,7 @@ export function ActiveSession() {
             <Pause className="size-6 md:size-7" />
           )}
         </motion.button>
-        <div className="mx-1 hidden h-8 w-px bg-white/30 sm:block" aria-hidden />
+        <div className="mx-1 hidden h-8 w-px shrink-0 bg-white/12 sm:block" aria-hidden />
         <motion.button
           type="button"
           whileHover={{ scale: 1.06 }}
