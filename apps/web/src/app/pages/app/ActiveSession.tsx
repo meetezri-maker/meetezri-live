@@ -20,16 +20,17 @@ import {
   Pause,
   Play,
   Loader2,
-  LayoutGrid,
   Wifi,
   WifiOff,
   Activity,
   Gauge,
   Smile,
+  GripVertical,
 } from "lucide-react";
 import {
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   useMemo,
   useCallback,
@@ -40,9 +41,23 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/app/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/app/components/ui/popover";
 import { useSafety } from "@/app/contexts/SafetyContext";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
+import {
+  parseSessionBackdropPreference,
+  resolveSessionBackdropLayers,
+  SESSION_BACKDROP_EMOJI_OPTIONS,
+  SESSION_BACKDROP_STORAGE_KEY,
+  SESSION_MOOD_SWATCH_GRADIENT,
+  SESSION_MOOD_TILE_CAPTION,
+  type SessionBackdropPreference,
+} from "@/lib/sessionBackdropPresets";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { analyzeTextForSafety } from "@/app/utils/safetyDetection";
@@ -541,12 +556,12 @@ function ThreeAvatar({
       metalness: 0,
     });
 
-    const arcSpan = Math.PI * 1.12;
+    const arcSpan = Math.PI * 1.26;
     const thetaStart = -Math.PI / 2 - arcSpan / 2;
 
     /** Deeper outer bend — reads clearly on screen as a curved “bowl” behind the figure. */
-    const BACK_CY_R_OUT = 26;
-    const BACK_CY_Z_OUT = 9.5;
+    const BACK_CY_R_OUT = 28.5;
+    const BACK_CY_Z_OUT = 10.75;
     const wallMatDeep = new THREE.MeshStandardMaterial({
       color: 0x1a2838,
       roughness: 0.96,
@@ -596,8 +611,8 @@ function ThreeAvatar({
       new THREE.CylinderGeometry(
         BACK_CY_R_OUT,
         BACK_CY_R_OUT,
-        36,
-        160,
+        38,
+        192,
         1,
         true,
         thetaStart,
@@ -610,16 +625,16 @@ function ThreeAvatar({
     curvedBackdropOuter.receiveShadow = false;
     room.add(curvedBackdropOuter);
 
-    const BACK_CY_R = 14.25;
-    /** Inner cylinder — tighter radius makes the arc read as a stronger curve in perspective. */
-    const BACK_CY_Z = 4.35;
+    const BACK_CY_R = 11.75;
+    /** Tighter radius + pushed back reads as a stronger “news cyclorama” wrap on camera. */
+    const BACK_CY_Z = 4.65;
 
     const curvedBackdrop = new THREE.Mesh(
       new THREE.CylinderGeometry(
         BACK_CY_R,
         BACK_CY_R,
-        34,
-        160,
+        36,
+        192,
         1,
         true,
         thetaStart,
@@ -631,7 +646,7 @@ function ThreeAvatar({
     curvedBackdrop.receiveShadow = false;
     room.add(curvedBackdrop);
 
-    /* Curved floor: stronger sweep into the wall for a studio-cyclorama read. */
+    /* Curved floor: stronger infinity-cove sweep (floor → wall) like a broadcast studio. */
     const floorGeo = new THREE.PlaneGeometry(48, 32, 40, 24);
     const floorPos = floorGeo.attributes.position;
     for (let i = 0; i < floorPos.count; i++) {
@@ -639,11 +654,11 @@ function ThreeAvatar({
       const yl = floorPos.getY(i);
       const worldZ = -yl;
       const t = THREE.MathUtils.clamp((-worldZ - 2) / 18, 0, 1);
-      const lift = t * t * 2.35;
+      const lift = t * t * 3.05;
       floorPos.setZ(i, lift);
       /* Bowl: bring lateral floor edges a bit closer to the avatar. */
       const side = Math.min(1, Math.abs(xl) / 20);
-      floorPos.setY(i, yl - side * side * 0.38 * t);
+      floorPos.setY(i, yl - side * side * 0.52 * t);
     }
     floorPos.needsUpdate = true;
     floorGeo.computeVertexNormals();
@@ -654,15 +669,15 @@ function ThreeAvatar({
     floor.receiveShadow = true;
     room.add(floor);
 
-    /* Side wings: bring lateral background to a similar depth as the figure. */
-    const sidePanelH = 28;
+    /* Side wings: angle farther back so they meet a tighter cyclorama without a flat corner. */
+    const sidePanelH = 29;
     const sidePanelW = 14;
     const leftWing = new THREE.Mesh(
       new THREE.PlaneGeometry(sidePanelW, sidePanelH),
       sideWallMatL
     );
-    leftWing.position.set(-13.2, 9, -2.4);
-    leftWing.rotation.set(0, Math.PI * 0.38, 0);
+    leftWing.position.set(-12.85, 9, -3.15);
+    leftWing.rotation.set(0, Math.PI * 0.445, 0);
     leftWing.receiveShadow = false;
     room.add(leftWing);
 
@@ -670,8 +685,8 @@ function ThreeAvatar({
       new THREE.PlaneGeometry(sidePanelW, sidePanelH),
       sideWallMatR
     );
-    rightWing.position.set(13.2, 9, -2.4);
-    rightWing.rotation.set(0, -Math.PI * 0.38, 0);
+    rightWing.position.set(12.85, 9, -3.15);
+    rightWing.rotation.set(0, -Math.PI * 0.445, 0);
     rightWing.receiveShadow = false;
     room.add(rightWing);
 
@@ -1897,8 +1912,18 @@ export function ActiveSession() {
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sessionStatsOpen, setSessionStatsOpen] = useState(true);
-  /** User PiP position (px from left / bottom — default bottom-left). */
-  const [pipPos, setPipPos] = useState({ left: 24, bottom: 100 });
+  const [sessionBackdropPreference, setSessionBackdropPreference] =
+    useState<SessionBackdropPreference>(() =>
+      typeof window !== "undefined"
+        ? parseSessionBackdropPreference(
+            localStorage.getItem(SESSION_BACKDROP_STORAGE_KEY),
+          )
+        : "auto",
+    );
+  const [roomMoodPickerOpen, setRoomMoodPickerOpen] = useState(false);
+  const sessionContainerRef = useRef<HTMLDivElement>(null);
+  /** User camera PiP — px from left / bottom within the full session view (root container). */
+  const [pipPos, setPipPos] = useState({ left: 0, bottom: 0 });
   const pipDragRef = useRef<{
     id: number;
     sx: number;
@@ -1906,9 +1931,15 @@ export function ActiveSession() {
     sl: number;
     sb: number;
   } | null>(null);
-  const PIP_W = 256;
-  const pipClamp = (n: number, lo: number, hi: number) =>
-    Math.min(hi, Math.max(lo, n));
+  /** Greeting + transcript glass card — used to place PiP just below it on first layout. */
+  const leftSessionChromeRef = useRef<HTMLDivElement>(null);
+  const pipDefaultPlacedRef = useRef(false);
+  /** Approx. PiP size for initial anchor (matches `w-[15.5rem]` × `sm:h-48`). */
+  const PIP_LAYOUT_W = 248;
+  const PIP_LAYOUT_H = 192;
+  const pipClamp = useCallback((n: number, lo: number, hi: number) => {
+    return Math.min(hi, Math.max(lo, n));
+  }, []);
   const handlePipPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       if (e.button !== 0) return;
@@ -1921,16 +1952,22 @@ export function ActiveSession() {
       };
       e.currentTarget.setPointerCapture(e.pointerId);
     },
-    [pipPos.left, pipPos.bottom]
+    [pipPos.left, pipPos.bottom],
   );
   const handlePipPointerMove = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       const d = pipDragRef.current;
       if (!d || e.pointerId !== d.id) return;
-      const margin = 8;
-      const reserveBottom = 88;
-      const maxLeft = window.innerWidth - PIP_W - margin;
-      const maxBottom = window.innerHeight - reserveBottom - margin;
+      const boundsEl = sessionContainerRef.current;
+      if (!boundsEl) return;
+      const el = e.currentTarget;
+      const bw = boundsEl.clientWidth;
+      const bh = boundsEl.clientHeight;
+      const pipW = el.offsetWidth;
+      const pipH = el.offsetHeight;
+      const margin = 4;
+      const maxLeft = Math.max(margin, bw - pipW - margin);
+      const maxBottom = Math.max(margin, bh - pipH - margin);
       const deltaX = e.clientX - d.sx;
       const deltaY = e.clientY - d.sy;
       setPipPos({
@@ -1938,7 +1975,7 @@ export function ActiveSession() {
         bottom: pipClamp(d.sb - deltaY, margin, maxBottom),
       });
     },
-    []
+    [pipClamp],
   );
   const handlePipPointerUp = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -1951,9 +1988,88 @@ export function ActiveSession() {
         /* ignore */
       }
     },
-    []
+    [],
   );
-  const sessionContainerRef = useRef<HTMLDivElement>(null);
+
+  /** First meaningful layout: tuck PiP under the left transcript card (md+); else bottom-left. */
+  const anchorPipBelowTranscriptOnce = useCallback(() => {
+    if (pipDefaultPlacedRef.current) return;
+    const root = sessionContainerRef.current;
+    const card = leftSessionChromeRef.current;
+    if (!root) return;
+
+    const margin = 8;
+    const gap = 12;
+    const pipW = PIP_LAYOUT_W;
+    const pipH = PIP_LAYOUT_H;
+    const rootRect = root.getBoundingClientRect();
+
+    if (card) {
+      const cardRect = card.getBoundingClientRect();
+      if (cardRect.width >= 24 && cardRect.height >= 24) {
+        const leftDesired = cardRect.left - rootRect.left;
+        const bottomDesired =
+          rootRect.bottom - cardRect.bottom - gap - pipH;
+        setPipPos({
+          left: pipClamp(
+            leftDesired,
+            margin,
+            Math.max(margin, root.clientWidth - pipW - margin),
+          ),
+          bottom: pipClamp(
+            bottomDesired,
+            margin,
+            Math.max(margin, root.clientHeight - pipH - margin),
+          ),
+        });
+        pipDefaultPlacedRef.current = true;
+        return;
+      }
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 767.98px)").matches
+    ) {
+      setPipPos({ left: margin, bottom: margin });
+      pipDefaultPlacedRef.current = true;
+    }
+  }, [pipClamp]);
+
+  useLayoutEffect(() => {
+    const run = () => anchorPipBelowTranscriptOnce();
+
+    run();
+    let rafOuter = 0;
+    let rafInner = 0;
+    rafOuter = requestAnimationFrame(() => {
+      rafInner = requestAnimationFrame(run);
+    });
+
+    const card = leftSessionChromeRef.current;
+    let ro: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(run);
+      if (card) ro.observe(card);
+    }
+
+    window.addEventListener("resize", run);
+
+    const safety = window.setTimeout(() => {
+      if (!pipDefaultPlacedRef.current) {
+        setPipPos({ left: 8, bottom: 8 });
+        pipDefaultPlacedRef.current = true;
+      }
+    }, 2500);
+
+    return () => {
+      cancelAnimationFrame(rafOuter);
+      cancelAnimationFrame(rafInner);
+      ro?.disconnect();
+      window.removeEventListener("resize", run);
+      window.clearTimeout(safety);
+    };
+  }, [anchorPipBelowTranscriptOnce]);
 
   const [showPermissionRequest, setShowPermissionRequest] = useState(false);
   const [permissionsGranted, setPermissionsGranted] = useState(false);
@@ -1979,6 +2095,8 @@ export function ActiveSession() {
   const lastBargeInAtRef = useRef(0);
   /** After barge-in, don't treat overlap with the last assistant line as Ezri echo (common follow-ups share words). */
   const bargeInEchoGraceUntilRef = useRef(0);
+  /** After user barge-in: relax echo heuristics + show interims without debounce so every word can be captured. */
+  const listenEveryWordUntilRef = useRef(0);
 
   /** True while Solace may still be streaming or playing TTS (covers gaps between WS audio chunks). */
   const ezriWsAudioPipelineActive = (): boolean =>
@@ -2027,6 +2145,34 @@ export function ActiveSession() {
     () => moodEmojiForLabel(String(sortedMoodPreview[0]?.mood ?? "")),
     [sortedMoodPreview],
   );
+
+  const sessionBackdropLayers = useMemo(
+    () =>
+      resolveSessionBackdropLayers(
+        sessionBackdropPreference,
+        sortedMoodPreview[0]?.mood ?? null,
+      ),
+    [sessionBackdropPreference, sortedMoodPreview],
+  );
+
+  const selectedRoomMoodOption = useMemo(
+    () =>
+      SESSION_BACKDROP_EMOJI_OPTIONS.find(
+        (o) => o.value === sessionBackdropPreference,
+      ) ?? SESSION_BACKDROP_EMOJI_OPTIONS[0],
+    [sessionBackdropPreference],
+  );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        SESSION_BACKDROP_STORAGE_KEY,
+        sessionBackdropPreference,
+      );
+    } catch {
+      /* private mode */
+    }
+  }, [sessionBackdropPreference]);
 
   const apiSessionIdRef = useRef<string | null>(null);
   const sessionTimeRef = useRef(0);
@@ -2586,12 +2732,13 @@ export function ActiveSession() {
 
   const requestBargeInInterrupt = (source: string) => {
     const now = Date.now();
-    // speech_final may arrive shortly after speech_interim; still treat as one user action.
-    if (now - lastBargeInAtRef.current < 400 && source !== "speech_final") {
+    // Only dedupe rapid interim hypotheses — mic-level and finals must always run so audio stops.
+    if (now - lastBargeInAtRef.current < 400 && source === "speech_interim") {
       return;
     }
     lastBargeInAtRef.current = now;
     bargeInEchoGraceUntilRef.current = now + 8000;
+    listenEveryWordUntilRef.current = now + 20_000;
 
     // ── Step 1: Suppress ALL incoming WS audio/text until the new user
     // message is sent. This is the only reliable way to discard late audio
@@ -2685,6 +2832,26 @@ export function ActiveSession() {
   const shouldIgnoreEchoBargeIn = (candidateRaw: string) => {
     const candidate = normalizeSpeech(candidateRaw);
     if (!candidate) return true;
+
+    // Right after user interrupt: only drop near‑verbatim repeats of Ezri's last line, not normal
+    // follow‑ups that share common words ("I", "you", "that") — those were eating real user speech.
+    if (Date.now() < listenEveryWordUntilRef.current) {
+      const lastAsst = transcriptRef.current
+        .slice()
+        .reverse()
+        .find((t) => t.role === "assistant")?.content || "";
+      const asstN = normalizeSpeech(lastAsst);
+      if (
+        asstN.length >= 12 &&
+        candidate.length >= 8 &&
+        (candidate === asstN ||
+          (asstN.includes(candidate) && candidate.length >= asstN.length * 0.72))
+      ) {
+        return true;
+      }
+      return false;
+    }
+
     if (candidate.length < 4) return true;
 
     const refs = [
@@ -2719,18 +2886,20 @@ export function ActiveSession() {
   const shouldInterruptForSpeech = (candidateRaw: string, isFinal: boolean) => {
     const candidate = normalizeSpeech(candidateRaw);
     if (!candidate) return false;
-    if (shouldIgnoreEchoBargeIn(candidate)) return false;
+
+    // Do NOT use shouldIgnoreEchoBargeIn() here — it matched shared words with the *last assistant
+    // turn* and blocked real interrupts ("stop", "wait", "I need to say something"). Echo after an
+    // actual interrupt is handled separately (dropAsEzriEchoDup + listen window).
 
     const words = candidate.split(" ").filter(Boolean);
 
     // No micLevel gate: Chrome's AEC suppresses the mic signal while the speaker
     // is playing, so audioLevel is near-zero even when the user speaks clearly.
     // SpeechRecognition uses its own internal VAD — if it fires, the user spoke.
-    // shouldIgnoreEchoBargeIn() is the echo protection layer.
 
-    // Interim: need 2+ words to avoid single-word fragments misfiring.
+    // Interim: single word ≥3 chars ("hey", "wait", "stop") stops Ezri fast.
     if (!isFinal) {
-      return words.length >= 2 && candidate.length >= 6;
+      return words.length >= 1 && candidate.length >= 3;
     }
 
     // Final: even a single clear word (≥4 chars) is a valid barge-in signal.
@@ -3129,18 +3298,24 @@ export function ActiveSession() {
           if (ezriWsAudioPipelineActive()) {
             return;
           }
-          // Debounce interim subtitle updates: wait 120ms for recognition to settle
-          // before rendering, so rapid per-word rewrites don't cause visible flickering.
-          // Only show text that is at least 3 characters (filters out noise like "um").
+          // After barge-in, show interims immediately (even 1 char) so carry-into-final has full text.
+          const urgentListen = Date.now() < listenEveryWordUntilRef.current;
           if (subtitleDebounceRef.current) clearTimeout(subtitleDebounceRef.current);
-          if (trimmed.length >= 3) {
-            subtitleDebounceRef.current = setTimeout(() => {
+          const minLen = urgentListen ? 1 : 3;
+          const debounceMs = urgentListen ? 0 : 120;
+          if (trimmed.length >= minLen) {
+            if (urgentListen) {
               setLiveUserSpeech(trimmed);
-              subtitleDebounceRef.current = null;
-            }, 120);
+            } else {
+              subtitleDebounceRef.current = setTimeout(() => {
+                setLiveUserSpeech(trimmed);
+                subtitleDebounceRef.current = null;
+              }, debounceMs);
+            }
           }
           const now = Date.now();
           if (
+            urgentListen ||
             trimmed !== lastInterimTextRef.current ||
             now - lastInterimToastAtRef.current > 450
           ) {
@@ -3160,9 +3335,12 @@ export function ActiveSession() {
         // last interim — especially after restart / barge-in. Prepend recent interim when safe.
         const interimSnapshot = lastInterimTextRef.current.trim();
         let textForUtterance = trimmed;
+        const urgentListen = Date.now() < listenEveryWordUntilRef.current;
+        const interimMinLen = urgentListen ? 2 : 5;
+        const interimFreshMs = urgentListen ? 4500 : 2000;
         const interimRecent =
-          interimSnapshot.length >= 5 &&
-          Date.now() - lastInterimToastAtRef.current < 2000;
+          interimSnapshot.length >= interimMinLen &&
+          Date.now() - lastInterimToastAtRef.current < interimFreshMs;
         const allowInterimCarry =
           !ezriWsAudioPipelineActive() || Date.now() < bargeInEchoGraceUntilRef.current;
         if (interimRecent && allowInterimCarry && !shouldIgnoreEchoBargeIn(interimSnapshot)) {
@@ -3373,14 +3551,10 @@ export function ActiveSession() {
     const sendChunkToStt = async (blob: Blob) => {
       console.log("[STT] blob size:", blob.size);
       if (!blob.size) return;
-      if (
-        isMutedRef.current ||
-        isSessionPausedRef.current ||
-        isSessionEndingRef.current ||
-        ezriWsAudioPipelineActive()
-      )
-        return;
+      if (isMutedRef.current || isSessionPausedRef.current || isSessionEndingRef.current) return;
 
+      // Always upload chunks while TTS plays — backend can filter echo; skipping here made
+      // Firefox/MediaRecorder sessions unable to barge-in at all during playback.
       const ext = mimeType.includes("ogg") ? "ogg" : "webm";
 
       // Show a processing indicator in the subtitle while waiting for the server.
@@ -3575,24 +3749,27 @@ export function ActiveSession() {
     return () => clearInterval(watchdog);
   }, [permissionsGranted, isListening]);
 
-  // ── Mic-level barge-in (mobile only: STT is aborted during TTS) ─────────
+  // ── Mic-level barge-in (always when TTS pipeline active) ─────────────────
+  // Mobile: Web Speech is aborted during TTS — mic level is the main path.
+  // Desktop: Web Speech often yields no/lazy results under AEC; RMS stops playback when the user
+  // clearly talks over Ezri. Desktop uses a higher threshold + longer hold than mobile to limit
+  // false triggers from speaker bleed.
   useEffect(() => {
     if (!permissionsGranted) return;
-    if (!isMobileBrowser) return;
-    if (isSessionPausedRef.current) return;
 
     let raf: number | null = null;
     let aboveSince: number | null = null;
 
-    // Desktop: NEVER use mic RMS as a barge-in signal during TTS — speaker bleed into
-    // the same MediaStream reliably trips this and fires false interrupts. Barge-in is
-    // handled via Web Speech onresult + echo filters only.
-    // Mobile: recognition is aborted during TTS; this analyser path is the only barge-in option.
-    const THRESH = 22; // slightly less sensitive than before to reduce false triggers
-    const HOLD_MS = 180;
+    const THRESH = isMobileBrowser ? 18 : 34;
+    const HOLD_MS = isMobileBrowser ? 130 : 220;
 
     const tick = () => {
       if (isSessionEndingRef.current) return;
+      if (isMutedRef.current || isSessionPausedRef.current) {
+        aboveSince = null;
+        raf = requestAnimationFrame(tick);
+        return;
+      }
       const pipelineActive = ezriWsAudioPipelineActive();
       if (!pipelineActive) {
         aboveSince = null;
@@ -4446,7 +4623,8 @@ export function ActiveSession() {
   return (
     <div
       ref={sessionContainerRef}
-      className="relative h-screen overflow-hidden bg-[#07041C] text-white"
+      className="relative h-screen overflow-hidden text-white transition-[background-color] duration-500"
+      style={{ backgroundColor: sessionBackdropLayers.rootBg }}
     >
       {/* Immediate takeover while ending — avoids flash of session UI after confirm closes */}
       {isEndingSession && (
@@ -4469,14 +4647,52 @@ export function ActiveSession() {
           } shadow-[0_24px_80px_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/[0.08]`}
         >
           <div className="absolute inset-0">
-            <div className="h-full w-full">
+            {/* Mood atmosphere — z-0 behind companion; same clip as rounded stage */}
+            <div
+              className="pointer-events-none absolute inset-0 z-0 min-h-full w-full"
+              style={{ backgroundColor: sessionBackdropLayers.rootBg }}
+              aria-hidden
+            >
+              <div
+                className="absolute inset-0"
+                style={{
+                  backgroundImage: sessionBackdropLayers.radialPrimary,
+                }}
+              />
+              <div
+                className="absolute inset-0"
+                style={{
+                  backgroundImage: sessionBackdropLayers.radialFloor,
+                }}
+              />
+              <div
+                className="absolute inset-0"
+                style={{
+                  backgroundImage: sessionBackdropLayers.linearAccent,
+                }}
+              />
+              <div
+                className="absolute inset-0 opacity-[0.045] mix-blend-soft-light"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+                }}
+              />
+              <div
+                className="absolute inset-0 opacity-[0.035] mix-blend-overlay"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.35' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E")`,
+                }}
+              />
+            </div>
+            <div className="relative z-[1] h-full min-h-0 w-full">
             <AnimatePresence>
               {isEzriSpeaking && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-sky-950/25 via-transparent to-transparent"
+                  className="pointer-events-none absolute inset-0 z-[1]"
+                  style={{ background: sessionBackdropLayers.speakingWash }}
                 />
               )}
             </AnimatePresence>
@@ -4510,14 +4726,21 @@ export function ActiveSession() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                {/* Short vignette — keep glow above the dock; avoid a tall wash behind the buttons */}
-                <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#07041C]/70 to-transparent md:h-16" />
+                <div
+                  className="absolute inset-x-0 bottom-0 h-16 md:h-[4.5rem]"
+                  style={{
+                    background: sessionBackdropLayers.speakingBottomVignette,
+                  }}
+                />
                 {/* Voice bars: lifted clear of the circular control row (dock + bottom inset) */}
                 <div className="absolute bottom-[6.25rem] left-1/2 flex -translate-x-1/2 items-end gap-1.5 sm:bottom-[6.75rem] md:bottom-[7.25rem] md:gap-2">
                   {[...Array(5)].map((_, i) => (
                     <motion.div
                       key={i}
-                      className="w-0.5 rounded-full bg-sky-400/90 md:w-1"
+                      className="w-0.5 rounded-full opacity-[0.92] md:w-1"
+                      style={{
+                        backgroundColor: sessionBackdropLayers.voiceBar,
+                      }}
                       animate={{ height: [10, 30, 15, 25, 10] }}
                       transition={{
                         duration: 1,
@@ -4530,31 +4753,22 @@ export function ActiveSession() {
                 </div>
               </motion.div>
             )}
+            </div>
           </div>
-        </div>
-        {/* Navy tint + dual film grain (CSS radial alone causes concentric “rings” on some displays) */}
-        <div className="pointer-events-none absolute inset-0 z-[4]" aria-hidden>
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_125%_110%_at_0%_0%,rgba(23,68,119,0.52)_0%,rgba(19,63,112,0.44)_12%,rgba(8,32,72,0.4)_40%,rgba(4,6,41,0.36)_68%,rgba(7,4,28,0.32)_100%)]" />
-          <div
-            className="absolute inset-0 opacity-[0.09] mix-blend-soft-light"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-            }}
-          />
-          <div
-            className="absolute inset-0 opacity-[0.06] mix-blend-overlay"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.35' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E")`,
-            }}
-          />
         </div>
 
         {/* Session chrome — positioned inside the rounded room (not the viewport) so panels align with the stage */}
         {/* Left: greeting + live transcript */}
-        <aside className={`pointer-events-none absolute ${stageSidePanelInsetL} z-30 hidden max-w-[min(calc(100%-3rem),19rem)] flex-col md:flex lg:max-w-sm`}>
-        <div className={`pointer-events-auto ${glassPanel} max-h-[min(100vh-6rem,36rem)] space-y-3 overflow-hidden p-4`}>
+        <aside
+          aria-label="Session greeting and transcript"
+          className={`pointer-events-none absolute ${stageSidePanelInsetL} z-30 hidden max-h-[min(100dvh-5rem,100%)] w-full max-w-[min(calc(100%-3rem),19rem)] shrink-0 flex-col gap-0 overflow-x-hidden overflow-y-auto overscroll-contain pb-2 md:flex lg:max-w-sm`}
+        >
+        <div
+          ref={leftSessionChromeRef}
+          className={`pointer-events-auto ${glassPanel} flex min-h-0 max-h-[min(100dvh-8rem,36rem)] flex-1 flex-col space-y-3 overflow-hidden p-4 sm:p-5`}
+        >
           <div className="shrink-0">
-            <h2 className="text-xl font-bold tracking-tight text-white md:text-2xl">
+            <h2 className="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">
               {sessionGreeting}, {viewerFirstName}!
             </h2>
             <p className="mt-2 border-l-2 border-sky-400/45 pl-3 text-xs leading-relaxed text-white/80 md:text-sm">
@@ -4569,7 +4783,7 @@ export function ActiveSession() {
             <div
               lang="en"
               ref={transcriptListRef}
-              className="min-h-[8rem] max-h-[min(42vh,18rem)] space-y-2 overflow-y-auto rounded-xl border border-white/[0.028] bg-black/[0.05] px-3 py-2 text-sm"
+              className="min-h-[6rem] max-h-[min(36vh,15rem)] space-y-2 overflow-y-auto rounded-xl border border-white/[0.028] bg-black/[0.05] px-3 py-2 text-sm sm:min-h-[8rem] sm:max-h-[min(42vh,18rem)]"
             >
               {transcript.length === 0 ? (
                 <p className="text-xs text-white/50">
@@ -4600,7 +4814,7 @@ export function ActiveSession() {
 
       {/* Top bar — session stats toggle + fullscreen + profile (inside stage = aligned with room) */}
       <header
-        className={`pointer-events-none absolute right-0 top-0 z-20 flex justify-end ${stageShellPadding}`}
+        className={`pointer-events-none absolute right-0 top-0 z-[48] flex justify-end ${stageShellPadding}`}
       >
         <div className="pointer-events-auto flex shrink-0 items-center gap-2 md:gap-3">
           <motion.button
@@ -4652,7 +4866,7 @@ export function ActiveSession() {
       {/* Right-side session stats (connection + session snapshot + moods) */}
       <aside
         id="session-widgets-panel"
-        className={`absolute ${stageSidePanelInsetR} z-20 w-[min(18rem,calc(100%-3rem))] flex-col gap-3 md:w-72 ${
+        className={`absolute ${stageSidePanelInsetR} z-[48] w-[min(18rem,calc(100%-3rem))] flex-col gap-3 md:w-72 ${
           sessionStatsOpen ? "flex" : "hidden"
         }`}
         aria-hidden={!sessionStatsOpen}
@@ -4726,7 +4940,7 @@ export function ActiveSession() {
         <div className={`${glassPanel} p-4`}>
           <div className="mb-3 flex items-center gap-2">
             <Smile className="size-4 shrink-0 text-amber-200" aria-hidden />
-            <span className="text-sm font-semibold text-white">Moods</span>
+            <span className="text-sm font-semibold text-white">Feelings</span>
           </div>
           {sortedMoodPreview.length === 0 ? (
             <p className="text-xs leading-relaxed text-white/55">
@@ -4820,7 +5034,7 @@ export function ActiveSession() {
         initial={{ y: 24, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.15 }}
-        className={`absolute ${stageBottomBar} left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 px-0 py-0 md:gap-3 ${glassControlDock}`}
+        className={`absolute ${stageBottomBar} left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 px-0 py-0 md:gap-3 ${glassControlDock}`}
       >
         <motion.button
           type="button"
@@ -4840,6 +5054,89 @@ export function ActiveSession() {
             <Pause className="size-6 md:size-7" />
           )}
         </motion.button>
+        <Popover open={roomMoodPickerOpen} onOpenChange={setRoomMoodPickerOpen}>
+          <PopoverTrigger asChild>
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.06 }}
+              whileTap={{ scale: 0.94 }}
+              className={`flex size-12 shrink-0 items-center justify-center rounded-full md:size-14 ${glassControlBtn}`}
+              aria-label={`Room mood: ${selectedRoomMoodOption.label}. Open color palette.`}
+              aria-expanded={roomMoodPickerOpen}
+              aria-haspopup="dialog"
+            >
+              <span
+                className="size-9 shrink-0 rounded-[0.65rem] border border-white/35 shadow-md ring-1 ring-white/15 sm:size-10"
+                style={{
+                  background:
+                    SESSION_MOOD_SWATCH_GRADIENT[sessionBackdropPreference],
+                }}
+                aria-hidden
+              />
+            </motion.button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="center"
+            sideOffset={12}
+            collisionPadding={16}
+            className="z-[200] w-[min(calc(100vw-2rem),22rem)] max-h-[min(80dvh,28rem)] overflow-hidden border border-white/12 bg-[#0A0F1E]/96 p-0 text-white shadow-2xl backdrop-blur-2xl"
+          >
+            <div className="border-b border-white/[0.06] px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                Room color mood
+              </p>
+              <p className="mt-0.5 text-xs leading-snug text-white/65">
+                Tap a gradient that fits how you feel — saved on this device.{" "}
+                <span className="text-white/45">
+                  Auto syncs to your latest check-in.
+                </span>
+              </p>
+            </div>
+            <div
+              className="grid max-h-[min(58dvh,22rem)] grid-cols-2 gap-2 overflow-y-auto overscroll-contain p-3 sm:grid-cols-3"
+              role="listbox"
+              aria-label="Room mood color options"
+            >
+              {SESSION_BACKDROP_EMOJI_OPTIONS.map((o) => {
+                const selected = sessionBackdropPreference === o.value;
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    aria-label={o.label}
+                    onClick={() => {
+                      setSessionBackdropPreference(o.value);
+                      setRoomMoodPickerOpen(false);
+                    }}
+                    style={{
+                      background: SESSION_MOOD_SWATCH_GRADIENT[o.value],
+                    }}
+                    className={`group relative aspect-[5/4] min-h-[4.75rem] overflow-hidden rounded-xl border text-left shadow-lg transition-transform hover:scale-[1.03] hover:shadow-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4ECDC4] active:scale-[0.98] ${
+                      selected
+                        ? "border-[#4ECDC4] ring-2 ring-[#4ECDC4]/90 ring-offset-2 ring-offset-[#0A0F1E]"
+                        : "border-white/15 hover:border-white/35"
+                    }`}
+                  >
+                    {selected ? (
+                      <span className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm">
+                        <Check
+                          className="size-3.5 text-[#4ECDC4]"
+                          aria-hidden
+                        />
+                      </span>
+                    ) : null}
+                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/82 via-black/45 to-transparent px-1.5 pb-2 pt-7 text-center text-[10px] font-bold uppercase tracking-wide text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
+                      {SESSION_MOOD_TILE_CAPTION[o.value]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        </Popover>
         <div className="mx-1 hidden h-8 w-px shrink-0 bg-white/12 sm:block" aria-hidden />
         <motion.button
           type="button"
@@ -4903,45 +5200,49 @@ export function ActiveSession() {
         </div>
       </div>
 
-      {/* User PiP — draggable, glass frame */}
-      <motion.div
-        initial={{ opacity: 0, x: -48 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.25, type: "spring", stiffness: 260, damping: 28 }}
-        className="fixed z-30 w-52 overflow-hidden rounded-2xl border border-white/[0.07] bg-black/[0.08] shadow-2xl backdrop-blur-md touch-none select-none cursor-grab active:cursor-grabbing sm:w-64 sm:h-48 h-[11.5rem]"
-        style={{ left: pipPos.left, bottom: pipPos.bottom }}
-        onPointerDown={handlePipPointerDown}
-        onPointerMove={handlePipPointerMove}
-        onPointerUp={handlePipPointerUp}
-        onPointerCancel={handlePipPointerUp}
-      >
-        <div
-          className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex h-7 items-center justify-center rounded-t-[0.9rem] bg-black/12"
-          aria-hidden
+      {/* User camera PiP — full-session drag (clamped to screen); dock z-50 stays tappable on top */}
+      <div className="pointer-events-none absolute inset-0 z-[45]">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, type: "spring", stiffness: 260, damping: 28 }}
+          className="pointer-events-auto absolute z-10 w-[15.5rem] max-w-[calc(100%-1rem)] cursor-grab overflow-hidden rounded-2xl border border-white/[0.07] bg-black/[0.08] shadow-lg backdrop-blur-md touch-none select-none active:cursor-grabbing h-[11.5rem] sm:h-48"
+          style={{ left: pipPos.left, bottom: pipPos.bottom }}
+          aria-label="Your camera preview — drag to move anywhere on screen"
+          onPointerDown={handlePipPointerDown}
+          onPointerMove={handlePipPointerMove}
+          onPointerUp={handlePipPointerUp}
+          onPointerCancel={handlePipPointerUp}
         >
-          <LayoutGrid className="size-4 text-white/70" />
-        </div>
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className={`size-full object-cover ${isCameraOff ? "hidden" : "block"}`}
-        />
-        {isCameraOff && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-            <div className="text-center">
-              <VideoOff className="mx-auto mb-2 size-10 text-white/40" />
-              <p className="text-xs text-white/50">Camera off</p>
+          <div
+            className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex h-7 items-center gap-1.5 rounded-t-[0.9rem] bg-black/12 px-2"
+            aria-hidden
+          >
+            <GripVertical className="size-3.5 shrink-0 text-white/45" aria-hidden />
+            <Video className="size-4 text-white/70" aria-hidden />
+          </div>
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            className={`pointer-events-none size-full object-cover ${isCameraOff ? "hidden" : "block"}`}
+          />
+          {isCameraOff && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+              <div className="text-center">
+                <VideoOff className="mx-auto mb-2 size-10 text-white/40" />
+                <p className="text-xs text-white/50">Camera off</p>
+              </div>
             </div>
-          </div>
-        )}
-        {isMuted && !isCameraOff && (
-          <div className="absolute bottom-2 left-2 rounded-full bg-red-500 p-2">
-            <MicOff className="size-4 text-white" />
-          </div>
-        )}
-      </motion.div>
+          )}
+          {isMuted && !isCameraOff && (
+            <div className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-red-500 p-2">
+              <MicOff className="size-4 text-white" />
+            </div>
+          )}
+        </motion.div>
+      </div>
 
       {/* Permission Modal */}
       <AnimatePresence>
