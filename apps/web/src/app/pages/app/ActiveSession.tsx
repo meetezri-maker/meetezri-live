@@ -26,14 +26,6 @@ import {
   Activity,
   Gauge,
   Smile,
-  Laugh,
-  Frown,
-  Meh,
-  CloudRain,
-  Moon,
-  Annoyed,
-  Brain,
-  type LucideIcon,
 } from "lucide-react";
 import {
   useState,
@@ -476,6 +468,9 @@ function ThreeAvatar({
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    /** Softer rolloff in dark tones — reduces stepped “rings” on large curved surfaces. */
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1;
     rendererRef.current = renderer;
 
     // Make the canvas fill the container exactly so it never overflows (which
@@ -490,12 +485,15 @@ function ThreeAvatar({
     container.appendChild(renderer.domElement);
 
     // Lights
-    scene.add(new THREE.AmbientLight(0xc8d4e8, 0.55));
+    scene.add(new THREE.AmbientLight(0xc8d4e8, 0.52));
+    scene.add(new THREE.HemisphereLight(0x9eb6d4, 0x1e2838, 0.38));
 
-    const keyLight = new THREE.DirectionalLight(0xfff4e8, 1.35);
+    const keyLight = new THREE.DirectionalLight(0xfff4e8, 1.25);
     keyLight.position.set(3, 6, 5);
     keyLight.castShadow = true;
-    keyLight.shadow.mapSize.setScalar(1024);
+    keyLight.shadow.mapSize.setScalar(2048);
+    keyLight.shadow.bias = -0.00025;
+    keyLight.shadow.normalBias = 0.045;
     keyLight.shadow.camera.near = 0.5;
     keyLight.shadow.camera.far = 40;
     keyLight.shadow.camera.left = -14;
@@ -520,6 +518,8 @@ function ThreeAvatar({
     let sessionRoomGroup: THREE.Group | null = null;
     const room = new THREE.Group();
     room.name = "ezriSessionRoom";
+    /** Shared grain texture — breaks up 8-bit banding on large smooth surfaces (not from the GLB). */
+    let roomGrainTexture: THREE.DataTexture | null = null;
 
     const wallProps: THREE.MeshStandardMaterialParameters = {
       color: 0x2c3a4e,
@@ -553,12 +553,51 @@ function ThreeAvatar({
       metalness: 0.02,
       side: THREE.DoubleSide,
     });
+
+    {
+      const grainSize = 196;
+      const grainData = new Uint8Array(grainSize * grainSize * 4);
+      for (let i = 0; i < grainSize * grainSize; i++) {
+        const g = 160 + Math.floor(Math.random() * 95);
+        grainData[i * 4] = g;
+        grainData[i * 4 + 1] = g;
+        grainData[i * 4 + 2] = g;
+        grainData[i * 4 + 3] = 255;
+      }
+      roomGrainTexture = new THREE.DataTexture(
+        grainData,
+        grainSize,
+        grainSize,
+        THREE.RGBAFormat
+      );
+      roomGrainTexture.wrapS = THREE.RepeatWrapping;
+      roomGrainTexture.wrapT = THREE.RepeatWrapping;
+      roomGrainTexture.repeat.set(12, 12);
+      roomGrainTexture.colorSpace = THREE.NoColorSpace;
+      roomGrainTexture.needsUpdate = true;
+    }
+    const roomMatsWithGrain: THREE.MeshStandardMaterial[] = [
+      curvedWallMat,
+      sideWallMatL,
+      sideWallMatR,
+      floorMat,
+      ceilMat,
+      wallMatDeep,
+    ];
+    for (const mat of roomMatsWithGrain) {
+      mat.roughnessMap = roomGrainTexture;
+      mat.roughness = 0.88;
+      /* Tiny lift in albedo — eases 8-bit banding on navy surfaces. */
+      mat.emissive = new THREE.Color(0x0d1522);
+      mat.emissiveIntensity = 0.07;
+    }
+
     const curvedBackdropOuter = new THREE.Mesh(
       new THREE.CylinderGeometry(
         BACK_CY_R_OUT,
         BACK_CY_R_OUT,
         36,
-        96,
+        160,
         1,
         true,
         thetaStart,
@@ -567,7 +606,8 @@ function ThreeAvatar({
       wallMatDeep
     );
     curvedBackdropOuter.position.set(0, 9, BACK_CY_Z_OUT);
-    curvedBackdropOuter.receiveShadow = true;
+    /* No receive — shadow maps on huge curves read as vertical “stripes” / layers. */
+    curvedBackdropOuter.receiveShadow = false;
     room.add(curvedBackdropOuter);
 
     const BACK_CY_R = 14.25;
@@ -579,7 +619,7 @@ function ThreeAvatar({
         BACK_CY_R,
         BACK_CY_R,
         34,
-        96,
+        160,
         1,
         true,
         thetaStart,
@@ -588,7 +628,7 @@ function ThreeAvatar({
       curvedWallMat
     );
     curvedBackdrop.position.set(0, 9, BACK_CY_Z);
-    curvedBackdrop.receiveShadow = true;
+    curvedBackdrop.receiveShadow = false;
     room.add(curvedBackdrop);
 
     /* Curved floor: stronger sweep into the wall for a studio-cyclorama read. */
@@ -623,7 +663,7 @@ function ThreeAvatar({
     );
     leftWing.position.set(-13.2, 9, -2.4);
     leftWing.rotation.set(0, Math.PI * 0.38, 0);
-    leftWing.receiveShadow = true;
+    leftWing.receiveShadow = false;
     room.add(leftWing);
 
     const rightWing = new THREE.Mesh(
@@ -632,7 +672,7 @@ function ThreeAvatar({
     );
     rightWing.position.set(13.2, 9, -2.4);
     rightWing.rotation.set(0, -Math.PI * 0.38, 0);
-    rightWing.receiveShadow = true;
+    rightWing.receiveShadow = false;
     room.add(rightWing);
 
     const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(52, 52), ceilMat);
@@ -1414,13 +1454,27 @@ function ThreeAvatar({
           if (child.isMesh) {
             child.geometry?.dispose?.();
             const mat = child.material;
-            if (Array.isArray(mat))
-              mat.forEach((m: THREE.Material) => m?.dispose?.());
-            else (mat as THREE.Material | undefined)?.dispose?.();
+            const mats: THREE.Material[] = Array.isArray(mat)
+              ? mat
+              : mat
+                ? [mat]
+                : [];
+            for (const m of mats) {
+              const std = m as THREE.MeshStandardMaterial;
+              if (
+                std?.isMeshStandardMaterial &&
+                std.roughnessMap === roomGrainTexture
+              ) {
+                std.roughnessMap = null;
+              }
+              m?.dispose?.();
+            }
           }
         });
         sessionRoomGroup = null;
       }
+      roomGrainTexture?.dispose();
+      roomGrainTexture = null;
 
       if (modelRef.current && sceneRef.current) {
         sceneRef.current.remove(modelRef.current);
@@ -1557,24 +1611,44 @@ export default ThreeAvatar;
 // ActiveSession component  (unchanged from original except imports above)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Icon for the latest mood label (keyword heuristics; defaults to Smile). */
-function moodIconForLabel(raw: string): LucideIcon {
-  const s = raw.toLowerCase().replace(/-/g, " ").replace(/\s+/g, " ").trim();
-  if (!s) return Smile;
-  if (/\b(happy|joy|great|good|grateful|hopeful|content|cheerful)\b/.test(s))
-    return Laugh;
-  if (/\b(excited|awesome|energized|pumped|elated|thrilled)\b/.test(s)) return Zap;
+/** Native emoji for mood label (keyword match, or first grapheme emoji if the label already contains one). */
+function moodEmojiForLabel(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "🙂";
+
+  try {
+    if (typeof Intl !== "undefined" && "Segmenter" in Intl) {
+      const seg = new Intl.Segmenter("en", { granularity: "grapheme" });
+      for (const { segment } of seg.segment(trimmed)) {
+        if (/\p{Extended_Pictographic}/u.test(segment)) return segment;
+      }
+    } else if (/\p{Extended_Pictographic}/u.test(trimmed)) {
+      const m = trimmed.match(/\p{Extended_Pictographic}/gu);
+      if (m?.[0]) return m[0];
+    }
+  } catch {
+    /* engine without Unicode property escapes */
+  }
+
+  const s = trimmed.toLowerCase().replace(/-/g, " ").replace(/\s+/g, " ");
+  if (/\b(love|loving|loved)\b/.test(s)) return "🥰";
+  if (/\b(happy|joy|great|good|grateful|hopeful|content|cheerful|glad)\b/.test(s))
+    return "😊";
+  if (/\b(excited|awesome|energized|pumped|elated|thrilled)\b/.test(s)) return "🤩";
   if (/\b(sad|down|blue|depressed|grieving|lonely|gloomy|melancholy)\b/.test(s))
-    return CloudRain;
+    return "😢";
   if (/\b(angry|mad|furious|frustrated|irritated|rage|annoyed)\b/.test(s))
-    return Annoyed;
+    return "😠";
   if (/\b(anxious|worried|stressed|nervous|overwhelm|panic|uneasy)\b/.test(s))
-    return Brain;
-  if (/\b(calm|peaceful|relaxed|okay|ok|fine|steady|serene)\b/.test(s)) return Heart;
-  if (/\b(neutral|meh|unsure|mixed|indifferent)\b/.test(s)) return Meh;
-  if (/\b(tired|exhausted|sleepy|burnt|weary|fatigue)\b/.test(s)) return Moon;
-  if (/\b(bad|rough|terrible|awful|low|cry|crying)\b/.test(s)) return Frown;
-  return Smile;
+    return "😰";
+  if (/\b(calm|peaceful|relaxed|okay|ok|fine|steady|serene)\b/.test(s)) return "😌";
+  if (/\b(neutral|meh|unsure|mixed|indifferent)\b/.test(s)) return "😐";
+  if (/\b(tired|exhausted|sleepy|burnt|weary|fatigue)\b/.test(s)) return "😴";
+  if (/\b(bad|rough|terrible|awful|low|cry|crying)\b/.test(s)) return "😭";
+  if (/\b(sick|ill|unwell)\b/.test(s)) return "🤒";
+  if (/\b(confused|lost)\b/.test(s)) return "😕";
+
+  return "🙂";
 }
 
 export function ActiveSession() {
@@ -1823,13 +1897,13 @@ export function ActiveSession() {
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sessionStatsOpen, setSessionStatsOpen] = useState(true);
-  /** User PiP position (px from right / bottom). */
-  const [pipPos, setPipPos] = useState({ right: 24, bottom: 100 });
+  /** User PiP position (px from left / bottom — default bottom-left). */
+  const [pipPos, setPipPos] = useState({ left: 24, bottom: 100 });
   const pipDragRef = useRef<{
     id: number;
     sx: number;
     sy: number;
-    sr: number;
+    sl: number;
     sb: number;
   } | null>(null);
   const PIP_W = 256;
@@ -1842,12 +1916,12 @@ export function ActiveSession() {
         id: e.pointerId,
         sx: e.clientX,
         sy: e.clientY,
-        sr: pipPos.right,
+        sl: pipPos.left,
         sb: pipPos.bottom,
       };
       e.currentTarget.setPointerCapture(e.pointerId);
     },
-    [pipPos.right, pipPos.bottom]
+    [pipPos.left, pipPos.bottom]
   );
   const handlePipPointerMove = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -1855,12 +1929,12 @@ export function ActiveSession() {
       if (!d || e.pointerId !== d.id) return;
       const margin = 8;
       const reserveBottom = 88;
-      const maxRight = window.innerWidth - PIP_W - margin;
+      const maxLeft = window.innerWidth - PIP_W - margin;
       const maxBottom = window.innerHeight - reserveBottom - margin;
       const deltaX = e.clientX - d.sx;
       const deltaY = e.clientY - d.sy;
       setPipPos({
-        right: pipClamp(d.sr - deltaX, margin, maxRight),
+        left: pipClamp(d.sl + deltaX, margin, maxLeft),
         bottom: pipClamp(d.sb - deltaY, margin, maxBottom),
       });
     },
@@ -1949,8 +2023,8 @@ export function ActiveSession() {
     );
   }, [moodPreview]);
 
-  const LatestMoodIcon = useMemo(
-    () => moodIconForLabel(String(sortedMoodPreview[0]?.mood ?? "")),
+  const latestMoodEmoji = useMemo(
+    () => moodEmojiForLabel(String(sortedMoodPreview[0]?.mood ?? "")),
     [sortedMoodPreview],
   );
 
@@ -4351,19 +4425,23 @@ export function ActiveSession() {
   };
 
   const glassPanel =
-    "rounded-2xl border border-white/12 bg-white/[0.05] backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.28)]";
-  /**
-   * Control strip: colorless frosted glass — only rgba(255,255,255,α) + backdrop blur.
-   * No border; depth from layered shadow only.
-   */
+    "rounded-2xl border border-white/[0.032] bg-white/[0.01] backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.06)]";
+  /** Control strip: no bar — only circular buttons (no drop shadow). */
   const glassControlDock =
-    "isolate rounded-[1.35rem] border-0 bg-white/[0.09] shadow-[0_4px_20px_rgba(0,0,0,0.28),0_16px_48px_rgba(0,0,0,0.4)] ring-0 outline-none backdrop-blur-[32px] md:rounded-[1.55rem]";
-  /** Borderless glass caps; soft shadow only (no ring/outline). */
+    "bg-transparent shadow-none backdrop-blur-none ring-0 outline-none border-0";
+  /** Borderless glass caps; no shadow (avoids a halo behind the dock). */
   const glassControlBtn =
-    "rounded-full border-0 text-white shadow-[0_2px_14px_rgba(0,0,0,0.22)] ring-0 outline-none backdrop-blur-xl transition-[background-color,box-shadow] hover:shadow-[0_4px_18px_rgba(0,0,0,0.28)] [background-color:rgba(255,255,255,0.16)] hover:[background-color:rgba(255,255,255,0.22)]";
-  /** Muted / end: faint red glow in shadow, no border. */
+    "rounded-full border-0 text-white shadow-none ring-0 outline-none backdrop-blur-xl transition-[background-color] hover:shadow-none [background-color:rgba(255,255,255,0.16)] hover:[background-color:rgba(255,255,255,0.22)]";
+  /** Muted / end: no drop shadow; slight red tint on hover via background only. */
   const glassControlBtnDanger =
-    "rounded-full border-0 text-white shadow-[0_2px_14px_rgba(220,38,38,0.35)] ring-0 outline-none backdrop-blur-xl transition-[background-color,box-shadow] hover:shadow-[0_4px_18px_rgba(220,38,38,0.45)] [background-color:rgba(255,255,255,0.12)] hover:[background-color:rgba(255,255,255,0.18)]";
+    "rounded-full border-0 text-white shadow-none ring-0 outline-none backdrop-blur-xl transition-[background-color] hover:shadow-none [background-color:rgba(255,255,255,0.12)] hover:[background-color:rgba(255,255,255,0.18)]";
+  /** One scale for every side: outer shell (all modes) + header corner + panel offsets from the room edge. */
+  const stageShellPadding = "p-4 sm:p-5 md:p-6";
+  const stageSidePanelInsetL =
+    "top-20 sm:top-22 md:top-24 left-4 sm:left-5 md:left-6";
+  const stageSidePanelInsetR =
+    "top-20 sm:top-22 md:top-24 right-4 sm:right-5 md:right-6";
+  const stageBottomBar = "bottom-4 sm:bottom-5 md:bottom-6";
 
   return (
     <div
@@ -4383,12 +4461,8 @@ export function ActiveSession() {
         </div>
       )}
 
-      {/* Main stage: curved frame on outer shell; flat in fullscreen */}
-      <div
-        className={`absolute inset-0 z-0 box-border ${
-          isFullscreen ? "" : "p-3 sm:p-4 md:p-6"
-        }`}
-      >
+      {/* Main stage: curved frame on outer shell; flat in fullscreen — equal padding on all sides for every mode */}
+      <div className={`absolute inset-0 z-0 box-border ${stageShellPadding}`}>
         <div
           className={`relative h-full w-full overflow-hidden ${
             isFullscreen ? "rounded-none" : "rounded-[1.75rem] sm:rounded-[2.5rem] md:rounded-[3rem]"
@@ -4431,17 +4505,19 @@ export function ActiveSession() {
             </div>
             {isEzriSpeaking && (
               <motion.div
-                className="pointer-events-none absolute bottom-0 left-0 right-0 z-[3] h-28"
+                className="pointer-events-none absolute inset-x-0 bottom-0 z-[3]"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <div className="absolute inset-0 bg-gradient-to-t from-[#07041C]/92 to-transparent" />
-                <div className="absolute bottom-10 left-1/2 flex -translate-x-1/2 items-center gap-1">
+                {/* Short vignette — keep glow above the dock; avoid a tall wash behind the buttons */}
+                <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#07041C]/70 to-transparent md:h-16" />
+                {/* Voice bars: lifted clear of the circular control row (dock + bottom inset) */}
+                <div className="absolute bottom-[6.25rem] left-1/2 flex -translate-x-1/2 items-end gap-1.5 sm:bottom-[6.75rem] md:bottom-[7.25rem] md:gap-2">
                   {[...Array(5)].map((_, i) => (
                     <motion.div
                       key={i}
-                      className="w-1 rounded-full bg-sky-400/90"
+                      className="w-0.5 rounded-full bg-sky-400/90 md:w-1"
                       animate={{ height: [10, 30, 15, 25, 10] }}
                       transition={{
                         duration: 1,
@@ -4456,16 +4532,26 @@ export function ActiveSession() {
             )}
           </div>
         </div>
-        {/* Navy radial tint — same hue stops as design, with alpha so the avatar stays visible underneath */}
-        <div
-          className="pointer-events-none absolute inset-0 z-[4] bg-[radial-gradient(ellipse_125%_110%_at_0%_0%,rgba(23,68,119,0.58)_0%,rgba(19,63,112,0.52)_8%,rgba(3,23,66,0.48)_43%,rgba(4,6,41,0.42)_73%,rgba(7,4,28,0.36)_100%)]"
-          aria-hidden
-        />
+        {/* Navy tint + dual film grain (CSS radial alone causes concentric “rings” on some displays) */}
+        <div className="pointer-events-none absolute inset-0 z-[4]" aria-hidden>
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_125%_110%_at_0%_0%,rgba(23,68,119,0.52)_0%,rgba(19,63,112,0.44)_12%,rgba(8,32,72,0.4)_40%,rgba(4,6,41,0.36)_68%,rgba(7,4,28,0.32)_100%)]" />
+          <div
+            className="absolute inset-0 opacity-[0.09] mix-blend-soft-light"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+            }}
+          />
+          <div
+            className="absolute inset-0 opacity-[0.06] mix-blend-overlay"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.35' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E")`,
+            }}
+          />
         </div>
-      </div>
 
-      {/* Left: greeting + live transcript */}
-      <aside className="pointer-events-none absolute left-4 top-20 z-30 hidden max-w-[min(100%,19rem)] flex-col md:left-6 md:top-24 md:flex lg:max-w-sm">
+        {/* Session chrome — positioned inside the rounded room (not the viewport) so panels align with the stage */}
+        {/* Left: greeting + live transcript */}
+        <aside className={`pointer-events-none absolute ${stageSidePanelInsetL} z-30 hidden max-w-[min(calc(100%-3rem),19rem)] flex-col md:flex lg:max-w-sm`}>
         <div className={`pointer-events-auto ${glassPanel} max-h-[min(100vh-6rem,36rem)] space-y-3 overflow-hidden p-4`}>
           <div className="shrink-0">
             <h2 className="text-xl font-bold tracking-tight text-white md:text-2xl">
@@ -4483,7 +4569,7 @@ export function ActiveSession() {
             <div
               lang="en"
               ref={transcriptListRef}
-              className="min-h-[8rem] max-h-[min(42vh,18rem)] space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm"
+              className="min-h-[8rem] max-h-[min(42vh,18rem)] space-y-2 overflow-y-auto rounded-xl border border-white/[0.028] bg-black/[0.05] px-3 py-2 text-sm"
             >
               {transcript.length === 0 ? (
                 <p className="text-xs text-white/50">
@@ -4496,7 +4582,7 @@ export function ActiveSession() {
                     <div
                       key={`${line.timestamp}-${i}`}
                       className={`rounded-lg px-2.5 py-2 ${
-                        isUser ? "bg-white/[0.12]" : "bg-violet-500/[0.18]"
+                        isUser ? "bg-white/[0.02]" : "bg-violet-500/[0.03]"
                       }`}
                     >
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-white/55">
@@ -4512,8 +4598,10 @@ export function ActiveSession() {
         </div>
       </aside>
 
-      {/* Top bar — session stats toggle + fullscreen + profile */}
-      <header className="relative z-20 flex justify-end p-4 md:p-6 pointer-events-none">
+      {/* Top bar — session stats toggle + fullscreen + profile (inside stage = aligned with room) */}
+      <header
+        className={`pointer-events-none absolute right-0 top-0 z-20 flex justify-end ${stageShellPadding}`}
+      >
         <div className="pointer-events-auto flex shrink-0 items-center gap-2 md:gap-3">
           <motion.button
             type="button"
@@ -4552,7 +4640,7 @@ export function ActiveSession() {
             />
           ) : (
             <div
-              className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/30 bg-white/[0.12] text-sm font-semibold text-white/90 shadow-md backdrop-blur-xl"
+              className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/[0.18] bg-white/[0.03] text-sm font-semibold text-white/90 shadow-md backdrop-blur-xl"
               aria-hidden
             >
               {viewerFirstName.slice(0, 1).toUpperCase()}
@@ -4561,10 +4649,10 @@ export function ActiveSession() {
         </div>
       </header>
 
-      {/* Right-side session stats (Session + Watchlist) */}
+      {/* Right-side session stats (connection + session snapshot + moods) */}
       <aside
         id="session-widgets-panel"
-        className={`absolute right-4 top-[min(42vh,22rem)] z-20 w-[min(19rem,calc(100vw-2rem))] flex-col gap-3 md:right-6 md:top-28 md:w-72 ${
+        className={`absolute ${stageSidePanelInsetR} z-20 w-[min(18rem,calc(100%-3rem))] flex-col gap-3 md:w-72 ${
           sessionStatsOpen ? "flex" : "hidden"
         }`}
         aria-hidden={!sessionStatsOpen}
@@ -4601,20 +4689,20 @@ export function ActiveSession() {
 
         <div className={`${glassPanel} p-3`}>
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold text-white">Watchlist</span>
+            <span className="text-sm font-semibold text-white">Session snapshot</span>
             <span className="flex items-center gap-1 text-xs text-emerald-300">
               <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
               Live
             </span>
           </div>
           <ul className="space-y-2 text-sm">
-            <li className="flex justify-between gap-2 border-b border-white/10 py-2 first:pt-0">
+            <li className="flex justify-between gap-2 border-b border-white/[0.032] py-2 first:pt-0">
               <span className="text-white/70">Talk time</span>
               <span className="font-mono font-semibold text-white">
                 {formatTime(sessionTime)}
               </span>
             </li>
-            <li className="flex justify-between gap-2 border-b border-white/10 py-2">
+            <li className="flex justify-between gap-2 border-b border-white/[0.032] py-2">
               <span className="text-white/70">Minutes left</span>
               <span
                 className={`font-mono font-semibold ${
@@ -4648,14 +4736,8 @@ export function ActiveSession() {
             </p>
           ) : (
             <>
-              <div className="mb-4 min-h-[7.5rem] rounded-2xl border border-violet-400/40 bg-gradient-to-br from-violet-500/[0.22] to-sky-600/15 px-4 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
-                <div className="flex gap-3">
-                  <div
-                    className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/[0.12] text-amber-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]"
-                    aria-hidden
-                  >
-                    <LatestMoodIcon className="size-7" strokeWidth={1.75} />
-                  </div>
+              <div className="mb-4 min-h-[7.5rem] rounded-2xl border border-violet-400/[0.09] bg-gradient-to-br from-violet-500/[0.035] to-sky-600/[0.025] px-4 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.018)]">
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">
                       Latest check-in
@@ -4679,12 +4761,19 @@ export function ActiveSession() {
                         )}
                       </time>
                       {typeof sortedMoodPreview[0].intensity === "number" ? (
-                        <span className="rounded-md border border-white/15 bg-black/25 px-2 py-0.5 tabular-nums text-white/80">
+                        <span className="rounded-md border border-white/[0.032] bg-black/[0.05] px-2 py-0.5 tabular-nums text-white/80">
                           Intensity {sortedMoodPreview[0].intensity}/10
                         </span>
                       ) : null}
                     </div>
                   </div>
+                  <span
+                    className="shrink-0 select-none text-[2rem] leading-none [font-family:ui-sans-serif,system-ui,'Segoe_UI_Emoji','Apple_Color_Emoji','Noto_Color_Emoji',sans-serif]"
+                    role="img"
+                    aria-label={`Mood: ${String(sortedMoodPreview[0]?.mood ?? "").replace(/-/g, " ")}`}
+                  >
+                    {latestMoodEmoji}
+                  </span>
                 </div>
               </div>
               {sortedMoodPreview.length > 1 ? (
@@ -4696,10 +4785,16 @@ export function ActiveSession() {
                     {sortedMoodPreview.slice(1, 3).map((m, idx) => (
                       <li
                         key={`${m.created_at}-${idx}`}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/25 px-2.5 py-2"
+                        className="flex items-center gap-2 rounded-lg border border-white/[0.028] bg-black/[0.035] px-2.5 py-2"
                       >
-                        <span className="min-w-0 truncate font-medium capitalize text-white">
+                        <span className="min-w-0 flex-1 truncate font-medium capitalize text-white">
                           {String(m.mood || "").replace(/-/g, " ") || "—"}
+                        </span>
+                        <span
+                          className="shrink-0 text-xl leading-none [font-family:ui-sans-serif,system-ui,'Segoe_UI_Emoji','Apple_Color_Emoji','Noto_Color_Emoji',sans-serif]"
+                          aria-hidden
+                        >
+                          {moodEmojiForLabel(String(m.mood ?? ""))}
                         </span>
                         <span className="shrink-0 text-[10px] tabular-nums text-white/45">
                           {new Date(m.created_at).toLocaleDateString(
@@ -4725,7 +4820,7 @@ export function ActiveSession() {
         initial={{ y: 24, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.15 }}
-        className={`fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 px-5 py-4 sm:px-6 sm:py-4 md:bottom-8 md:gap-3 md:px-8 md:py-5 ${glassControlDock}`}
+        className={`absolute ${stageBottomBar} left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 px-0 py-0 md:gap-3 ${glassControlDock}`}
       >
         <motion.button
           type="button"
@@ -4734,7 +4829,7 @@ export function ActiveSession() {
           onClick={() => setIsSessionPaused(!isSessionPaused)}
           className={`flex size-12 shrink-0 items-center justify-center rounded-full transition-all md:size-14 ${
             isSessionPaused
-              ? "rounded-full border-0 text-white shadow-[0_2px_14px_rgba(0,0,0,0.24)] ring-0 backdrop-blur-xl [background-color:rgba(255,255,255,0.2)] hover:[background-color:rgba(255,255,255,0.26)]"
+              ? "rounded-full border-0 text-white shadow-none ring-0 backdrop-blur-xl [background-color:rgba(255,255,255,0.2)] hover:[background-color:rgba(255,255,255,0.26)]"
               : glassControlBtn
           }`}
           aria-label={isSessionPaused ? "Resume session" : "Pause session"}
@@ -4805,21 +4900,23 @@ export function ActiveSession() {
           <PhoneOff className="size-6 text-white md:size-7" />
         </motion.button>
       </motion.div>
+        </div>
+      </div>
 
       {/* User PiP — draggable, glass frame */}
       <motion.div
-        initial={{ opacity: 0, x: 48 }}
+        initial={{ opacity: 0, x: -48 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: 0.25, type: "spring", stiffness: 260, damping: 28 }}
-        className="fixed z-30 w-52 overflow-hidden rounded-2xl border border-white/20 bg-black/30 shadow-2xl backdrop-blur-md touch-none select-none cursor-grab active:cursor-grabbing sm:w-64 sm:h-48 h-[11.5rem]"
-        style={{ right: pipPos.right, bottom: pipPos.bottom }}
+        className="fixed z-30 w-52 overflow-hidden rounded-2xl border border-white/[0.07] bg-black/[0.08] shadow-2xl backdrop-blur-md touch-none select-none cursor-grab active:cursor-grabbing sm:w-64 sm:h-48 h-[11.5rem]"
+        style={{ left: pipPos.left, bottom: pipPos.bottom }}
         onPointerDown={handlePipPointerDown}
         onPointerMove={handlePipPointerMove}
         onPointerUp={handlePipPointerUp}
         onPointerCancel={handlePipPointerUp}
       >
         <div
-          className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex h-7 items-center justify-center rounded-t-[0.9rem] bg-black/40"
+          className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex h-7 items-center justify-center rounded-t-[0.9rem] bg-black/12"
           aria-hidden
         >
           <LayoutGrid className="size-4 text-white/70" />
