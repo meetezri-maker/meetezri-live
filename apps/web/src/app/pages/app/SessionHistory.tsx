@@ -483,13 +483,13 @@ export function SessionHistory() {
                 <h1 className="text-3xl font-bold">Talking History</h1>
               </div>
               <p className="text-muted-foreground">
-                Review your past sessions and track your progress
+                Review your past talks and track your progress
               </p>
             </div>
             <Link to="/app/session-lobby">
               <Button className="gap-2">
                 <Video className="w-4 h-4" />
-                New Session
+                New Talk
               </Button>
             </Link>
           </div>

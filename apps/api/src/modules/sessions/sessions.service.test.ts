@@ -90,9 +90,29 @@ describe('sessions.service createSession', () => {
       createSession('user-1', { type: 'instant', duration_minutes: 5 })
     ).rejects.toMatchObject({
       message:
-        'Insufficient credits. You need 5 minutes but have 1. Please upgrade your plan.',
+        'Insufficient credits. You requested 5 minutes for this session but only have 1 full minutes available (60s). Shorten the session or upgrade your plan.',
       statusCode: 400,
     });
+  });
+
+  it('allows session when minutes column is ahead of stale credits_seconds (healed balance)', async () => {
+    mockPrisma.profiles.findUnique.mockResolvedValue({
+      id: 'user-1',
+      credits: 2008,
+      purchased_credits: 0,
+      // Stale seconds imply 2000 min; minutes column implies 2008 — should use max.
+      credits_seconds: 2000 * 60,
+      purchased_credits_seconds: 0,
+    });
+    mockPrisma.subscriptions.findMany.mockResolvedValue([]);
+    mockPrisma.app_sessions.create.mockResolvedValue({
+      id: 'session-1',
+      type: 'instant',
+      status: 'active',
+    });
+
+    await createSession('user-1', { type: 'instant', duration_minutes: 2000 });
+    expect(mockPrisma.app_sessions.create).toHaveBeenCalled();
   });
 
   it('creates instant sessions with active status and start timestamp', async () => {

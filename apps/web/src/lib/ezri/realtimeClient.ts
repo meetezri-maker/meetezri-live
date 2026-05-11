@@ -24,6 +24,8 @@ export type EzriAvatarData = {
 export type EzriRealtimeClientHandlers = {
   onStatus?: (status: EzriWsStatus) => void;
   onAssistantText?: (text: string, kind: "partial" | "final") => void;
+  /** HF / reference backend: `{ type: "transcription", user, ai }` — user line for the UI. */
+  onUserTranscript?: (text: string) => void;
   onAudio?: (audio: EzriAudioSource) => void;
   onTtsDone?: () => void;
   onInterrupt?: () => void;
@@ -53,11 +55,8 @@ function extractText(msg: AnyObj): { text: string; kind: "partial" | "final" } |
   // - status: {text}
   // - debug/warning: telemetry
   if (type === "step" || type === "status" || type === "debug" || type === "warning") return null;
-  // HF Space / reference backend sends: { type:"transcription", user:"...", ai:"..." }
-  if (type === "transcription") {
-    if (typeof msg.ai === "string" && msg.ai.trim()) return { text: msg.ai, kind: "final" };
-    // user transcription is handled elsewhere in the app; ignore here
-  }
+  // `transcription` is handled in onmessage (user + ai); do not route through here.
+  if (type === "transcription") return null;
   const text =
     (typeof msg.text === "string" && msg.text) ||
     (typeof msg.message === "string" && msg.message) ||
@@ -228,6 +227,44 @@ export class EzriRealtimeClient {
           sentiment: msg.sentiment,
           chunk_index: typeof msg.chunk_index === "number" ? msg.chunk_index : undefined,
         });
+        return;
+      }
+
+      // Reference `app.js`: append both user and assistant from one message.
+      if (errType === "transcription") {
+        const audioTn = extractAudio(msg);
+        if (audioTn) this.handlers.onAudio?.(audioTn);
+
+        const nested =
+          msg.data !== null &&
+          typeof msg.data === "object" &&
+          !Array.isArray(msg.data)
+            ? (msg.data as AnyObj)
+            : null;
+
+        const userRaw =
+          (typeof msg.user === "string" && msg.user) ||
+          (typeof msg.user_text === "string" && msg.user_text) ||
+          (typeof msg.userText === "string" && msg.userText) ||
+          (nested && typeof nested.user === "string" && nested.user) ||
+          (nested && typeof nested.user_text === "string" && nested.user_text) ||
+          "";
+        const userT = userRaw.trim();
+
+        const aiRaw =
+          (typeof msg.ai === "string" && msg.ai) ||
+          (typeof msg.assistant === "string" && msg.assistant) ||
+          (nested && typeof nested.ai === "string" && nested.ai) ||
+          (nested && typeof nested.assistant === "string" && nested.assistant) ||
+          "";
+        const aiT = aiRaw.trim();
+
+        if (userT) this.handlers.onUserTranscript?.(userT);
+        if (aiT) this.handlers.onAssistantText?.(aiT, "final");
+
+        if (!audioTn && !userT && !aiT) {
+          this.handlers.onUnknownMessage?.(msg);
+        }
         return;
       }
 

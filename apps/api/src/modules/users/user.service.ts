@@ -4,7 +4,7 @@ import { supabaseAdmin } from '../../config/supabase';
 import { OnboardingInput, UpdateProfileInput } from './user.schema';
 import { PLAN_LIMITS } from '../billing/billing.constants';
 import * as billingService from '../billing/billing.service';
-import { getLifetimeUsedSeconds } from '../billing/credit-balance.service';
+import { getLifetimeUsedSeconds, resolveBucketSeconds } from '../billing/credit-balance.service';
 import { pbkdf2Sync, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import { emailService } from '../email/email.service';
 import { sharedDel, sharedGetJson, sharedSetJson } from '../../lib/sharedCache';
@@ -1000,15 +1000,14 @@ export async function getProfile(userId: string) {
       "trial") as keyof typeof PLAN_LIMITS;
     const planDetails = PLAN_LIMITS[internalPlanType];
 
-    const subscriptionSeconds =
-      (profileResult.credits_seconds && profileResult.credits_seconds > 0)
-        ? profileResult.credits_seconds
-        : (profileResult.credits || 0) * 60;
-    const purchasedSeconds =
-      (profileResult.purchased_credits_seconds &&
-        profileResult.purchased_credits_seconds > 0)
-        ? profileResult.purchased_credits_seconds
-        : (profileResult.purchased_credits || 0) * 60;
+    const subscriptionSeconds = resolveBucketSeconds(
+      profileResult.credits,
+      profileResult.credits_seconds
+    );
+    const purchasedSeconds = resolveBucketSeconds(
+      profileResult.purchased_credits,
+      profileResult.purchased_credits_seconds
+    );
     const totalSeconds = subscriptionSeconds + purchasedSeconds;
 
     result = {
@@ -1173,15 +1172,14 @@ export async function getCredits(userId: string) {
       }),
     ]);
 
-    const subscriptionSeconds =
-      (profile?.credits_seconds && profile.credits_seconds > 0)
-        ? profile.credits_seconds
-        : (profile?.credits || 0) * 60;
-    const purchasedSeconds =
-      (profile?.purchased_credits_seconds &&
-        profile.purchased_credits_seconds > 0)
-        ? profile.purchased_credits_seconds
-        : (profile?.purchased_credits || 0) * 60;
+    const subscriptionSeconds = resolveBucketSeconds(
+      profile?.credits,
+      profile?.credits_seconds
+    );
+    const purchasedSeconds = resolveBucketSeconds(
+      profile?.purchased_credits,
+      profile?.purchased_credits_seconds
+    );
     const remainingSeconds = subscriptionSeconds + purchasedSeconds;
 
     const ceilMin = (sec: number) => (sec === 0 ? 0 : Math.ceil(sec / 60));

@@ -403,6 +403,20 @@ export function SessionLobby() {
     setIsStarting(true);
     try {
       const avatarToUse = opts?.avatarOverride || selectedAvatar;
+
+      try {
+        const fresh = await api.getCredits({ bypassCache: true });
+        const sec =
+          typeof fresh?.credits_seconds === "number"
+            ? Math.max(0, fresh.credits_seconds)
+            : typeof fresh?.credits === "number"
+              ? Math.max(0, fresh.credits) * 60
+              : null;
+        if (sec !== null) setLiveCreditsSeconds(sec);
+      } catch {
+        /* non-blocking: server is source of truth at create time */
+      }
+
       const session = opts?.scheduledSessionId
         ? await api.sessions.startScheduled(opts.scheduledSessionId, {
             duration_minutes: selectedDuration,

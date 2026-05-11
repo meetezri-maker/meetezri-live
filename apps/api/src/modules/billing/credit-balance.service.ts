@@ -2,6 +2,33 @@ import { Prisma } from '@prisma/client';
 import prisma from '../../lib/prisma';
 
 /**
+ * Single balance bucket: sub-minute precision lives in `*_seconds` columns; whole-minute fallbacks
+ * use `credits` / `purchased_credits`. If both are present but disagree (sync lag, legacy writes),
+ * take the max so we never treat someone as below their higher, authoritative minutes column.
+ */
+export function resolveBucketSeconds(
+  minutesCol: number | null | undefined,
+  secondsCol: number | null | undefined
+): number {
+  const fromMin = Math.max(0, Number(minutesCol ?? 0) || 0) * 60;
+  const rawSec = secondsCol != null && Number(secondsCol) > 0 ? Math.floor(Number(secondsCol)) : 0;
+  if (rawSec > 0) return Math.max(fromMin, rawSec);
+  return fromMin;
+}
+
+export function resolveProfileRemainingSeconds(profile: {
+  credits?: number | null;
+  purchased_credits?: number | null;
+  credits_seconds?: number | null;
+  purchased_credits_seconds?: number | null;
+}): number {
+  return (
+    resolveBucketSeconds(profile.credits, profile.credits_seconds) +
+    resolveBucketSeconds(profile.purchased_credits, profile.purchased_credits_seconds)
+  );
+}
+
+/**
  * Add plan-granted minutes to the subscription bucket (profiles.credits / credits_seconds).
  * Stack-safe: never replaces existing remaining time.
  */

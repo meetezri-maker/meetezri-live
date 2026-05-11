@@ -15,11 +15,13 @@ import {
   Type,
   AlignLeft,
   AlignCenter,
-  AlignRight
+  AlignRight,
+  Keyboard,
 } from "lucide-react";
 import { cn } from "./ui/utils";
 import { htmlToPlainText } from "../../lib/htmlPlainText";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 interface RichTextEditorProps {
   value: string;
@@ -37,6 +39,16 @@ const MOODS = [
   { emoji: "🤩", label: "Excited", color: "text-purple-500" },
   { emoji: "😡", label: "Angry", color: "text-red-500" },
 ];
+
+/** Common emojis for the in-editor keyboard picker (toolbar). */
+const EMOJI_KEYBOARD_GRID = [
+  "😀", "😃", "😄", "😁", "😅", "😂", "🤣", "😊",
+  "😇", "🥰", "😍", "🤩", "😘", "😋", "🤪", "😛",
+  "🙂", "😐", "😒", "🙄", "😔", "😢", "😭", "😤",
+  "😠", "😡", "🤬", "😰", "😱", "🥺", "😴", "🤔",
+  "🤗", "🙏", "👍", "👎", "👏", "✌️", "🤞", "💪",
+  "❤️", "💙", "💜", "🔥", "✨", "💯", "⭐", "🎉",
+] as const;
 
 const TOOLBAR_BUTTONS: Array<{
   icon: any;
@@ -65,6 +77,7 @@ export const RichTextEditor = memo(function RichTextEditor({
   hideMoodSelector = false,
 }: RichTextEditorProps) {
   const [selectedMood, setSelectedMood] = useState<string>("");
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,7 +112,7 @@ export const RichTextEditor = memo(function RichTextEditor({
 
   const handleFormat = useCallback((action: string, value?: string) => {
     focusEditor();
-    const ok = document.execCommand(action, false, value ?? null);
+    const ok = document.execCommand(action, false, value);
     if (!ok) {
       // Fallback for browsers where some execCommand actions are flaky.
       const selectedText = (window.getSelection()?.toString() || "").trim();
@@ -137,6 +150,18 @@ export const RichTextEditor = memo(function RichTextEditor({
     document.execCommand("insertHTML", false, `<a href="${url}" target="_blank" rel="noopener noreferrer">${file.name}</a>`);
     if (editorRef.current) onChange(editorRef.current.innerHTML);
   }, [onChange]);
+
+  const insertEmoji = useCallback(
+    (emoji: string) => {
+      if (!editorRef.current) return;
+      editorRef.current.focus();
+      restoreSelection();
+      document.execCommand("insertText", false, emoji);
+      if (editorRef.current) onChange(editorRef.current.innerHTML);
+      setEmojiPickerOpen(false);
+    },
+    [onChange],
+  );
 
   const stats = useMemo(() => {
     if (!value) return { wordCount: 0, charCount: 0 };
@@ -213,6 +238,57 @@ export const RichTextEditor = memo(function RichTextEditor({
           >
             <Image className="w-4 h-4 text-gray-700 dark:text-gray-300" />
           </motion.button>
+          <Popover
+            open={emojiPickerOpen}
+            onOpenChange={(open) => {
+              setEmojiPickerOpen(open);
+              if (open) saveSelection();
+            }}
+          >
+            <PopoverTrigger asChild>
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  saveSelection();
+                }}
+                className="p-1.5 sm:p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+                title="Emoji keyboard"
+                aria-label="Open emoji keyboard"
+              >
+                <Keyboard className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+              </motion.button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              side="bottom"
+              sideOffset={6}
+              className="w-auto max-w-[min(100vw-2rem,20rem)] p-2"
+              onOpenAutoFocus={(e) => e.preventDefault()}
+            >
+              <div
+                className="grid grid-cols-8 gap-1 max-h-52 overflow-y-auto pr-1"
+                role="listbox"
+                aria-label="Choose an emoji"
+              >
+                {EMOJI_KEYBOARD_GRID.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    role="option"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => insertEmoji(emoji)}
+                    className="flex size-9 items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    aria-label={`Insert ${emoji}`}
+                  >
+                    <FluentEmoji emoji={emoji} size={24} label={emoji} />
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}

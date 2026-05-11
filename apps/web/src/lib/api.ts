@@ -615,7 +615,11 @@ export const api = {
     return handleResponse(res, 'Failed to fetch settings');
   },
 
-  async getCredits(): Promise<any> {
+  async getCredits(opts?: { bypassCache?: boolean }): Promise<any> {
+    if (opts?.bypassCache) {
+      shortGetCache.delete('GET:/users/credits');
+      getCreditsInFlight = null;
+    }
     if (!getCreditsInFlight) {
       const cached = getCached<any>('GET:/users/credits', 5_000);
       if (cached !== null) return cached;

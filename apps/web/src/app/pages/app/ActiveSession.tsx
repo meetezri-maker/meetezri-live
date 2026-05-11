@@ -3464,7 +3464,22 @@ export function ActiveSession() {
         });
 
         setTranscript((prev) => {
+          const mergeWindowMs = 14_000;
           const lastEntry = prev[prev.length - 1];
+          if (lastEntry?.role === "user" && Date.now() - lastEntry.timestamp < mergeWindowMs) {
+            const a = lastEntry.content.trim();
+            const al = a.toLowerCase();
+            const bl = textForUtterance.toLowerCase();
+            if (bl.startsWith(al) && textForUtterance.length >= a.length && textForUtterance !== a) {
+              return [
+                ...prev.slice(0, -1),
+                { role: "user", content: textForUtterance, timestamp: Date.now() },
+              ];
+            }
+            if (al.startsWith(bl) && a.length > textForUtterance.length) {
+              return prev;
+            }
+          }
           if (
             lastEntry &&
             lastEntry.content === textForUtterance &&
@@ -3494,6 +3509,16 @@ export function ActiveSession() {
             .find((t) => t.role === "assistant");
           const toRepeat = lastAssistant?.content || "I haven't said anything yet.";
           void speakViaEzriTts(toRepeat);
+          return;
+        }
+
+        const serverOwnsSendChatIdle =
+          Boolean(ezriConfig?.apiBase?.trim()) &&
+          String(ezriConfig?.defaults?.sttProvider ?? "").toLowerCase() !== "browser" &&
+          wsClientRef.current?.getStatus() === "connected" &&
+          !ezriWsAudioPipelineActive();
+
+        if (serverOwnsSendChatIdle) {
           return;
         }
 
@@ -3591,7 +3616,7 @@ export function ActiveSession() {
       isRecognitionActiveRef.current = false;
       recognitionRef.current = null;
     };
-  }, [permissionsGranted, sttRestartTrigger]);
+  }, [permissionsGranted, sttRestartTrigger, ezriConfig?.defaults?.sttProvider, ezriConfig?.apiBase]);
 
   // ── Server STT via MediaRecorder (Firefox / non-Chrome fallback) ─────────
   useEffect(() => {
@@ -3682,13 +3707,16 @@ export function ActiveSession() {
           return;
         }
 
-        // Show the transcribed text as subtitle briefly before clearing.
+        // Show what was transcribed locally (Firefox has no SpeechRecognition interim text).
         setLiveUserSpeech(text);
 
-        // Apply barge-in filtering (covers inter-chunk gaps where isEzriSpeaking is briefly false).
-        if (ezriWsAudioPipelineActive()) {
+        /** When assistant audio is streaming, STT REST chunks can overlap TTS playback. */
+        const pipActive = ezriWsAudioPipelineActive();
+        let bargeFromChunk = false;
+        if (pipActive) {
           if (shouldInterruptForSpeech(text, true)) {
             requestBargeInInterrupt("speech_final");
+            bargeFromChunk = true;
             const dropAsEzriEchoDup =
               Date.now() < bargeInEchoGraceUntilRef.current
                 ? false
@@ -3697,18 +3725,31 @@ export function ActiveSession() {
               setLiveUserSpeech("");
               return;
             }
-            // Fall through — real user barge-in after filtering.
-          } else {
-            setLiveUserSpeech("");
-            return;
           }
+          // Important: Do NOT exit here — that hid every user line in Firefox while PCM STT still
+          // drove replies (Ezri sounded “in sync” but the transcript showed only Maya).
         }
 
-        // Deduplicate — server STT can repeat if the same audio is sent twice.
+        const serverSideSttMr =
+          Boolean(ezriConfig?.apiBase?.trim()) &&
+          String(ezriConfig?.defaults?.sttProvider ?? "").toLowerCase() !== "browser";
+
+        // Deduplicate / merge with a prior WS `onUserTranscript` line (same turn, longer REST text).
         setTranscript((prev) => {
+          const mergeWindowMs = 14_000;
           const last = prev[prev.length - 1];
-          if (last && last.content === text && Date.now() - last.timestamp < 5000)
-            return prev;
+          if (last?.role === "user" && Date.now() - last.timestamp < mergeWindowMs) {
+            const a = last.content.trim();
+            const al = a.toLowerCase();
+            const bl = text.toLowerCase();
+            if (bl.startsWith(al) && text.length >= a.length && text !== a) {
+              return [...prev.slice(0, -1), { role: "user", content: text, timestamp: Date.now() }];
+            }
+            if (al.startsWith(bl) && a.length > text.length) {
+              return prev;
+            }
+          }
+          if (last && last.content === text && Date.now() - last.timestamp < 5000) return prev;
           return [...prev, { role: "user", content: text, timestamp: Date.now() }];
         });
 
@@ -3725,6 +3766,21 @@ export function ActiveSession() {
             .find((t) => t.role === "assistant");
           void speakViaEzriTts(lastAssistant?.content || "I haven't said anything yet.");
           setLiveUserSpeech("");
+          return;
+        }
+
+        // With server STT (PCM on WS), the backend already hears the mic during TTS — skip a second sendChat from this REST chunk unless we barged-in.
+        if (pipActive && !bargeFromChunk && serverSideSttMr) {
+          setTimeout(() => setLiveUserSpeech(""), 1500);
+          return;
+        }
+
+        if (
+          !pipActive &&
+          serverSideSttMr &&
+          wsClientRef.current?.getStatus() === "connected"
+        ) {
+          setTimeout(() => setLiveUserSpeech(""), 1500);
           return;
         }
 
@@ -3794,7 +3850,7 @@ export function ActiveSession() {
       mediaRecorderActiveRef.current = false;
       setIsListening(false);
     };
-  }, [permissionsGranted, stream]);
+  }, [permissionsGranted, stream, ezriConfig]);
 
   // ── Watchdog ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -4081,6 +4137,36 @@ export function ActiveSession() {
           setIsEzriThinking(false);
           isEzriThinkingRef.current = false;
           pendingUserTextRef.current = "";
+        },
+        onUserTranscript: (text) => {
+          if (suppressIncomingAudioRef.current) return;
+          if (dropOldResponsesRef.current > 0) return;
+          const t = text.trim();
+          if (!t) return;
+          const mergeWindowMs = 14_000;
+          setTranscript((prev) => {
+            const last = prev[prev.length - 1];
+            if (last?.role === "user" && Date.now() - last.timestamp < mergeWindowMs) {
+              const a = last.content.trim();
+              const al = a.toLowerCase();
+              const bl = t.toLowerCase();
+              if (bl.startsWith(al) && t.length >= a.length && t !== a) {
+                return [...prev.slice(0, -1), { role: "user", content: t, timestamp: Date.now() }];
+              }
+              if (al.startsWith(bl) && a.length > t.length) {
+                return prev;
+              }
+            }
+            if (
+              last &&
+              last.role === "user" &&
+              last.content === t &&
+              Date.now() - last.timestamp < 5000
+            ) {
+              return prev;
+            }
+            return [...prev, { role: "user", content: t, timestamp: Date.now() }];
+          });
         },
         onTtsDone: () => {
           // tts_done from an interrupted turn — ignore entirely.

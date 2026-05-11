@@ -1,5 +1,6 @@
 import prisma from '../../lib/prisma';
 import { Prisma } from '@prisma/client';
+import { resolveProfileRemainingSeconds } from '../billing/credit-balance.service';
 import { emailService } from '../email/email.service';
 import {
   CreateSessionInput,
@@ -72,21 +73,13 @@ async function assertSessionStartAllowed(userId: string, durationMinutes: number
   }
 
   const requiredCredits = durationMinutes || 5;
-  const subSeconds =
-    profile.credits_seconds && profile.credits_seconds > 0
-      ? profile.credits_seconds
-      : (profile.credits || 0) * 60;
-  const purSeconds =
-    profile.purchased_credits_seconds && profile.purchased_credits_seconds > 0
-      ? profile.purchased_credits_seconds
-      : (profile.purchased_credits || 0) * 60;
-  const totalSeconds = subSeconds + purSeconds;
+  const totalSeconds = resolveProfileRemainingSeconds(profile);
   const requiredSeconds = requiredCredits * 60;
-  const totalCredits = totalSeconds === 0 ? 0 : Math.ceil(totalSeconds / 60);
+  const haveFullMinutes = Math.floor(totalSeconds / 60);
 
   if (totalSeconds < requiredSeconds) {
     badRequest(
-      `Insufficient credits. You need ${requiredCredits} minutes but have ${totalCredits}. Please upgrade your plan.`
+      `Insufficient credits. You requested ${requiredCredits} minutes for this session but only have ${haveFullMinutes} full minutes available (${totalSeconds}s). Shorten the session or upgrade your plan.`
     );
   }
 }
