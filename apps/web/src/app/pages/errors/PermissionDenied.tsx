@@ -15,7 +15,7 @@ export function PermissionDenied({ type = "all", onRetry }: PermissionDeniedProp
     camera: {
       icon: Camera,
       title: "Camera Access Denied",
-      description: "Ezri needs camera access to provide face-to-face therapy sessions with your AI companion.",
+      description: "Ezri needs camera access to provide face-to-face therapy sessions with your Solace avatar.",
       required: "Camera access is required for video sessions with Ezri."
     },
     microphone: {
@@ -129,7 +129,7 @@ export function PermissionDenied({ type = "all", onRetry }: PermissionDeniedProp
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-900 mb-1">Camera Access</p>
                   <p className="text-xs text-gray-600">
-                    For face-to-face video sessions with Ezri, your AI mental health companion
+                    For face-to-face video sessions with Solace, your Solace avatar
                   </p>
                 </div>
               </div>

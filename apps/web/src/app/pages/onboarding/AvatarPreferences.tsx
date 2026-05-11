@@ -106,8 +106,8 @@ export function OnboardingAvatarPreferences() {
     <OnboardingLayout
       currentStep={5}
       totalSteps={8}
-      title="Choose Your AI Companion"
-      subtitle="Select the AI companion who will support your wellness journey"
+      title="Choose Your Solace Companion"
+      subtitle="Select the Solace companion who will support your wellness journey"
     >
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -141,10 +141,10 @@ export function OnboardingAvatarPreferences() {
             <div className="mb-4">
               <Label className="text-base font-semibold flex items-center gap-2">
                 <Brain className="w-5 h-5 text-primary" />
-                Select Your AI Companion
+                Your Solace Avatar
               </Label>
               <p className="text-sm text-muted-foreground mt-1">
-                Choose the AI companion that feels right for you. You can change this later in settings.
+                Choose the avatar that feels right for you. You can change this later in settings.
               </p>
             </div>
 
@@ -330,8 +330,8 @@ export function OnboardingAvatarPreferences() {
             transition={{ delay: 0.9 }}
           >
             <Card className="p-4 bg-blue-50 border-blue-200">
-              <p className="text-sm text-blue-900">
-                💡 <span className="font-medium">Tip:</span> You can change your AI companion and session preferences anytime in your settings
+              <p className="text-sm text-blue-900"> 
+                💡 <span className="font-medium">Tip:</span> You can change your Solace avatar and session preferences anytime in your settings
               </p>
             </Card>
           </motion.div>

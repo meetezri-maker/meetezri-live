@@ -5495,7 +5495,7 @@ export function ActiveSession() {
                     <div>
                       <p className="text-white font-medium">Microphone Access</p>
                       <p className="text-sm text-gray-400">
-                        So you can speak naturally with your AI companion
+                        So you can speak naturally with your Solace avatar
                       </p>
                     </div>
                   </div>

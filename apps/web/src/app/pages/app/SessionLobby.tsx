@@ -1066,7 +1066,7 @@ export function SessionLobby() {
                     </motion.div>
                     <div>
                       <h3 className="font-bold text-lg">Solace is ready</h3>
-                      <p className="text-white/90 text-sm">Your AI companion</p>
+                      <p className="text-white/90 text-sm">Your Solace avatar</p>
                     </div>
                   </div>
                   <p className="text-white/90 mb-4">

@@ -127,7 +127,7 @@ export function Landing() {
             transition={{ delay: 0.4 }}
             className="text-lg md:text-xl text-muted-foreground mb-8 px-4"
           >
-            Connect with your AI wellness companion through FaceTime-style sessions. 
+            Connect with your Solace avatar through FaceTime-style sessions. 
             Available 24/7 for support, mood tracking, and guided wellness tools.
           </motion.p>
           
