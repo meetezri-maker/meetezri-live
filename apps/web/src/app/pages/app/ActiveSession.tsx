@@ -1667,6 +1667,141 @@ function moodEmojiForLabel(raw: string): string {
   return "🙂";
 }
 
+/** Firefox MediaRecorder → `/transcribe`: smaller slice = faster first transcript (more uploads). Default was 3s. */
+const MEDIA_RECORDER_TIMESLICE_MS = 1250;
+/** After TTS: wait before `playback_done` + reopening mic — balance echo vs snappy back-and-forth. */
+const PLAYBACK_DONE_COOLDOWN_MS = 1000;
+/** Delay before restarting Web Speech post-TTS so room/speaker echo fades. */
+const RESUME_STT_AFTER_TTS_MS = 95;
+/** ScriptProcessor @ 16kHz — 2048 ≈ 128ms per PCM frame (4096 ≈ 256ms). */
+const EZRI_PCM_BUFFER_SIZE = 2048;
+
+interface TranscriptLine {
+  role: string;
+  content: string;
+  timestamp: number;
+}
+
+const USER_TRANSCRIPT_MERGE_WINDOW_MS = 16_000;
+/** If two user lines arrive within this gap, treat overlaps as one utterance split by STT (not a “new chat”). */
+const USER_SAME_SPEECH_BURST_MS = 6200;
+
+/** Strip for fuzzy duplicate detection (Web Speech vs WS vs REST). */
+function stripUserUtteranceForCompare(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function userUtteranceWordJaccard(a: string, b: string): number {
+  const wordSet = (s: string) => {
+    const st = stripUserUtteranceForCompare(s);
+    return new Set(st.split(" ").filter((w) => w.length >= 3));
+  };
+  const A = wordSet(a);
+  const B = wordSet(b);
+  if (A.size === 0 && B.size === 0) return 0;
+  let inter = 0;
+  for (const w of A) if (B.has(w)) inter++;
+  const union = A.size + B.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+/** STT restarted mid-thought — stitch when tail of A equals head of B. */
+function glueOverlappingFragments(a: string, b: string): string | null {
+  const aa = a.trim();
+  const bb = b.trim();
+  const maxProbe = Math.min(90, aa.length, bb.length);
+  for (let len = maxProbe; len >= 12; len--) {
+    const tail = aa.slice(-len).toLowerCase();
+    const head = bb.slice(0, len).toLowerCase();
+    if (tail === head) return `${aa.slice(0, -len)} ${bb}`.replace(/\s+/g, " ").trim();
+  }
+  return null;
+}
+
+function roughSharedSubstringInStripped(a: string, b: string, minLen = 14): boolean {
+  const al = stripUserUtteranceForCompare(a);
+  const bl = stripUserUtteranceForCompare(b);
+  if (al.length < minLen || bl.length < minLen) return false;
+  for (let i = 0; i + minLen <= al.length; i++) {
+    const chunk = al.slice(i, i + minLen).trim();
+    if (chunk.length >= minLen && bl.includes(chunk)) return true;
+  }
+  return false;
+}
+
+function userUtterancesDuplicate(a: string, b: string): boolean {
+  const na = stripUserUtteranceForCompare(a);
+  const nb = stripUserUtteranceForCompare(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const short = na.length <= nb.length ? na : nb;
+  const long = na.length > nb.length ? na : nb;
+  if (short.length >= 10 && long.startsWith(short)) return true;
+  if (short.length >= 10 && long.endsWith(short)) return true;
+  return false;
+}
+
+/** Single merge path for user lines from Web Speech, WS `transcription.user`, and MediaRecorder REST. */
+function mergeUserTranscriptAppend(
+  prev: TranscriptLine[],
+  newText: string,
+  mergeWindowMs = USER_TRANSCRIPT_MERGE_WINDOW_MS,
+): TranscriptLine[] {
+  const t = newText.trim();
+  if (!t) return prev;
+  const now = Date.now();
+  const last = prev[prev.length - 1];
+  const gap = last ? now - last.timestamp : Infinity;
+
+  const canMerge =
+    last != null &&
+    last.role === "user" &&
+    gap < mergeWindowMs;
+
+  if (!canMerge) {
+    return [...prev, { role: "user", content: t, timestamp: now }];
+  }
+
+  const withinBurst =
+    gap < USER_SAME_SPEECH_BURST_MS;
+
+  const a = last.content.trim();
+  const al = a.toLowerCase();
+  const bl = t.toLowerCase();
+  if (bl.startsWith(al) && t.length >= a.length && t !== a) {
+    return [...prev.slice(0, -1), { role: "user", content: t, timestamp: now }];
+  }
+  if (al.startsWith(bl) && a.length > t.length) {
+    return prev;
+  }
+  if (userUtterancesDuplicate(a, t)) {
+    const keep = t.length >= a.length ? t : a;
+    return [...prev.slice(0, -1), { role: "user", content: keep, timestamp: last.timestamp }];
+  }
+  if (a === t) return prev;
+
+  // Split STT passes on the same thought (short gap) → one bubble via glue / overlap signals.
+  if (withinBurst) {
+    const glued = glueOverlappingFragments(a, t);
+    if (glued !== null) {
+      return [...prev.slice(0, -1), { role: "user", content: glued, timestamp: last.timestamp }];
+    }
+    const jac = userUtteranceWordJaccard(a, t);
+    if (jac >= 0.065 || roughSharedSubstringInStripped(a, t, 12)) {
+      const richer = jac >= 0.12 ? (t.length >= a.length ? t : a) : (stripUserUtteranceForCompare(t).length >= stripUserUtteranceForCompare(a).length ? t : a);
+      return [...prev.slice(0, -1), { role: "user", content: richer, timestamp: last.timestamp }];
+    }
+  }
+
+  return [...prev, { role: "user", content: t, timestamp: now }];
+}
+
 export function ActiveSession() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1772,8 +1907,6 @@ export function ActiveSession() {
   }, [user?.id]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  /** One-shot: after localStorage says the user already consented, call getUserMedia (see permission init effect). */
-  const autoMediaKickoffRef = useRef(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -2165,12 +2298,6 @@ export function ActiveSession() {
     transcriptRef.current = transcript;
   }, [transcript]);
 
-  useEffect(() => {
-    const el = transcriptListRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [transcript]);
-
   const { data: moodPreview = [] } = useQuery({
     queryKey: ["activeSession", "moodsPreview", user?.id ?? "anon"],
     queryFn: async () => {
@@ -2251,6 +2378,14 @@ export function ActiveSession() {
   const [isListening, setIsListening] = useState(false);
   const [sttRestartTrigger, setSttRestartTrigger] = useState(0);
   const [liveUserSpeech, setLiveUserSpeech] = useState("");
+  useEffect(() => {
+    const el = transcriptListRef.current;
+    if (!el) return;
+    const id = requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [transcript, liveUserSpeech]);
   const subtitleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -2286,6 +2421,8 @@ export function ActiveSession() {
   const suppressSttRef = useRef(false);
   const lastPlaybackDoneAtRef = useRef(0);
   const playbackDoneCooldownTimerRef = useRef<number | null>(null);
+  /** If `tts_done` never arrives after the last chunk, server can wait forever for `playback_done` — recover. */
+  const playbackStaleRecoveryTimerRef = useRef<number | null>(null);
   /** Bumped on interrupt/pause — invalidates awaited work inside `playEzriAudio`. */
   const audioPlaySeqRef = useRef<number>(0);
   // Tracks the in-flight REST request so it can be aborted on interruption.
@@ -2328,10 +2465,9 @@ export function ActiveSession() {
   };
 
   /** Pass `delayMs: 0` after barge-in so the mic opens immediately — long delays clip the user's first words. */
-  const resumeStt = (delayMs = 150) => {
+  const resumeStt = (delayMs = RESUME_STT_AFTER_TTS_MS) => {
     suppressSttRef.current = false;
-    // Short delay to let speaker echo decay after normal TTS (not needed right after client barge-in).
-    window.setTimeout(() => {
+    const tryStartBrowserStt = () => {
       if (
         !permissionsGranted ||
         isSessionEndingRef.current ||
@@ -2361,16 +2497,20 @@ export function ActiveSession() {
           typeof (e as { name: unknown }).name === "string"
             ? (e as { name: string }).name
             : "";
-        // Chrome fires InvalidStateError if start() races a session that is already listening.
         if (nm === "InvalidStateError") {
           return;
         }
-        // start() threw — recognizer is in a bad state. Force a full effect reinit.
         console.error("[STT] start() threw in resumeStt, forcing reinit:", e);
         recognitionRef.current = null;
         isRecognitionActiveRef.current = false;
         setSttRestartTrigger((t) => t + 1);
       }
+    };
+
+    window.setTimeout(() => {
+      tryStartBrowserStt();
+      // Ref/React can lag audio teardown by a frame — second kick unsticks "mic never restarts".
+      window.setTimeout(tryStartBrowserStt, 340);
     }, delayMs);
   };
 
@@ -2383,6 +2523,10 @@ export function ActiveSession() {
     if (playbackDoneCooldownTimerRef.current !== null) {
       window.clearTimeout(playbackDoneCooldownTimerRef.current);
       playbackDoneCooldownTimerRef.current = null;
+    }
+    if (playbackStaleRecoveryTimerRef.current !== null) {
+      window.clearTimeout(playbackStaleRecoveryTimerRef.current);
+      playbackStaleRecoveryTimerRef.current = null;
     }
 
     // Drop any in-flight playEzriAudio (await normalizeSource / await play) — otherwise a chunk
@@ -2413,9 +2557,8 @@ export function ActiveSession() {
     }
     lastPlaybackDoneAtRef.current = now;
 
-    // Default 1500ms is for server-initiated interrupts (echo from physical speakers needs ~800-1200ms to decay).
-    // Client-initiated interrupts pass a shorter value since the browser's AEC already removes speaker echo.
-    const delay = opts?.cooldownMs ?? 1500;
+    // Increase PLAYBACK_DONE_COOLDOWN_MS if open mics pick up speaker bleed after Maya speaks.
+    const delay = opts?.cooldownMs ?? PLAYBACK_DONE_COOLDOWN_MS;
     playbackDoneCooldownTimerRef.current = window.setTimeout(() => {
       playbackDoneCooldownTimerRef.current = null;
       try {
@@ -3269,9 +3412,9 @@ export function ActiveSession() {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed === true || parsed === "granted") {
-          // Do NOT setPermissionsGranted here — that flag must only flip after getUserMedia
-          // succeeds. Otherwise stream stays null, STT/video never bind, and PiP stays black.
-          setShowPermissionRequest(false);
+          // Past consent is stored only for UX; never call getUserMedia until "Allow Access"
+          // (still need a real MediaStream — same rule as first visit).
+          setShowPermissionRequest(true);
           setPermissionStateInitialized(true);
           return;
         }
@@ -3284,29 +3427,6 @@ export function ActiveSession() {
       setPermissionStateInitialized(true);
     }
   }, [permissionStorageKey, permissionStateInitialized]);
-
-  // Repeat visitors: localStorage recorded consent but we must still call getUserMedia or stream
-  // is never created (previous bug set permissionsGranted without acquiring tracks).
-  useEffect(() => {
-    if (!permissionStateInitialized) return;
-    if (stream) return;
-    if (autoMediaKickoffRef.current) return;
-
-    let hasStoredConsent = false;
-    try {
-      const stored = window.localStorage.getItem(permissionStorageKey);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        hasStoredConsent = parsed === true || parsed === "granted";
-      }
-    } catch {
-      /* noop */
-    }
-    if (!hasStoredConsent) return;
-
-    autoMediaKickoffRef.current = true;
-    void requestMediaAccess();
-  }, [permissionStateInitialized, stream, permissionStorageKey, requestMediaAccess]);
 
   // ── Speech recognition ──────────────────────────────────────────────────
   useEffect(() => {
@@ -3395,7 +3515,7 @@ export function ActiveSession() {
           const urgentListen = Date.now() < listenEveryWordUntilRef.current;
           if (subtitleDebounceRef.current) clearTimeout(subtitleDebounceRef.current);
           const minLen = urgentListen ? 1 : 3;
-          const debounceMs = urgentListen ? 0 : 120;
+          const debounceMs = urgentListen ? 0 : 72;
           if (trimmed.length >= minLen) {
             if (urgentListen) {
               setLiveUserSpeech(trimmed);
@@ -3463,35 +3583,7 @@ export function ActiveSession() {
           duration: 2000,
         });
 
-        setTranscript((prev) => {
-          const mergeWindowMs = 14_000;
-          const lastEntry = prev[prev.length - 1];
-          if (lastEntry?.role === "user" && Date.now() - lastEntry.timestamp < mergeWindowMs) {
-            const a = lastEntry.content.trim();
-            const al = a.toLowerCase();
-            const bl = textForUtterance.toLowerCase();
-            if (bl.startsWith(al) && textForUtterance.length >= a.length && textForUtterance !== a) {
-              return [
-                ...prev.slice(0, -1),
-                { role: "user", content: textForUtterance, timestamp: Date.now() },
-              ];
-            }
-            if (al.startsWith(bl) && a.length > textForUtterance.length) {
-              return prev;
-            }
-          }
-          if (
-            lastEntry &&
-            lastEntry.content === textForUtterance &&
-            Date.now() - lastEntry.timestamp < 1000
-          ) {
-            return prev;
-          }
-          return [
-            ...prev,
-            { role: "user", content: textForUtterance, timestamp: Date.now() },
-          ];
-        });
+        setTranscript((prev) => mergeUserTranscriptAppend(prev, textForUtterance));
 
         if (speechTimeoutRef.current)
           window.clearTimeout(speechTimeoutRef.current);
@@ -3734,24 +3826,7 @@ export function ActiveSession() {
           Boolean(ezriConfig?.apiBase?.trim()) &&
           String(ezriConfig?.defaults?.sttProvider ?? "").toLowerCase() !== "browser";
 
-        // Deduplicate / merge with a prior WS `onUserTranscript` line (same turn, longer REST text).
-        setTranscript((prev) => {
-          const mergeWindowMs = 14_000;
-          const last = prev[prev.length - 1];
-          if (last?.role === "user" && Date.now() - last.timestamp < mergeWindowMs) {
-            const a = last.content.trim();
-            const al = a.toLowerCase();
-            const bl = text.toLowerCase();
-            if (bl.startsWith(al) && text.length >= a.length && text !== a) {
-              return [...prev.slice(0, -1), { role: "user", content: text, timestamp: Date.now() }];
-            }
-            if (al.startsWith(bl) && a.length > text.length) {
-              return prev;
-            }
-          }
-          if (last && last.content === text && Date.now() - last.timestamp < 5000) return prev;
-          return [...prev, { role: "user", content: text, timestamp: Date.now() }];
-        });
+        setTranscript((prev) => mergeUserTranscriptAppend(prev, text));
 
         // Repeat-last-line shortcut.
         const lower = text.toLowerCase();
@@ -3833,8 +3908,7 @@ export function ActiveSession() {
     };
 
     try {
-      // Collect a chunk every 3 seconds.
-      recorder.start(3000);
+      recorder.start(MEDIA_RECORDER_TIMESLICE_MS);
     } catch (e) {
       console.error("[STT] Failed to start MediaRecorder:", e);
       return;
@@ -4101,6 +4175,7 @@ export function ActiveSession() {
   useEffect(() => {
     if (!ezriConfig) return;
     if (hasSessionEnded) return;
+    if (!permissionsGranted) return;
 
     const client =
       wsClientRef.current ||
@@ -4143,32 +4218,13 @@ export function ActiveSession() {
           if (dropOldResponsesRef.current > 0) return;
           const t = text.trim();
           if (!t) return;
-          const mergeWindowMs = 14_000;
-          setTranscript((prev) => {
-            const last = prev[prev.length - 1];
-            if (last?.role === "user" && Date.now() - last.timestamp < mergeWindowMs) {
-              const a = last.content.trim();
-              const al = a.toLowerCase();
-              const bl = t.toLowerCase();
-              if (bl.startsWith(al) && t.length >= a.length && t !== a) {
-                return [...prev.slice(0, -1), { role: "user", content: t, timestamp: Date.now() }];
-              }
-              if (al.startsWith(bl) && a.length > t.length) {
-                return prev;
-              }
-            }
-            if (
-              last &&
-              last.role === "user" &&
-              last.content === t &&
-              Date.now() - last.timestamp < 5000
-            ) {
-              return prev;
-            }
-            return [...prev, { role: "user", content: t, timestamp: Date.now() }];
-          });
+          setTranscript((prev) => mergeUserTranscriptAppend(prev, t));
         },
         onTtsDone: () => {
+          if (playbackStaleRecoveryTimerRef.current !== null) {
+            window.clearTimeout(playbackStaleRecoveryTimerRef.current);
+            playbackStaleRecoveryTimerRef.current = null;
+          }
           // tts_done from an interrupted turn — ignore entirely.
           if (suppressIncomingAudioRef.current) {
             wsTtsDoneReceivedRef.current = false;
@@ -4280,10 +4336,47 @@ export function ActiveSession() {
             const next = wsAudioQueueRef.current.shift();
             if (!next) {
               if (wsTtsDoneReceivedRef.current) {
+                if (playbackStaleRecoveryTimerRef.current !== null) {
+                  window.clearTimeout(playbackStaleRecoveryTimerRef.current);
+                  playbackStaleRecoveryTimerRef.current = null;
+                }
                 try {
                   wsClientRef.current?.sendPlaybackDone();
                 } catch {}
                 wsTtsDoneReceivedRef.current = false;
+              } else {
+                if (playbackStaleRecoveryTimerRef.current !== null) {
+                  window.clearTimeout(playbackStaleRecoveryTimerRef.current);
+                }
+                playbackStaleRecoveryTimerRef.current = window.setTimeout(() => {
+                  playbackStaleRecoveryTimerRef.current = null;
+                  if (
+                    suppressIncomingAudioRef.current ||
+                    isSessionEndingRef.current ||
+                    isSessionPausedRef.current
+                  )
+                    return;
+                  if (
+                    wsAudioQueueRef.current.length > 0 ||
+                    wsIsPlaybackActiveRef.current ||
+                    wsTtsStreamingRef.current
+                  ) {
+                    return;
+                  }
+                  const c = wsClientRef.current;
+                  if (!c || c.getStatus() !== "connected") return;
+                  console.warn(
+                    "[Ezri] Recovered missing tts_done: forcing playback_done so the server accepts mic input again."
+                  );
+                  try {
+                    c.sendPlaybackDone();
+                  } catch {
+                    /* noop */
+                  }
+                  wsTtsDoneReceivedRef.current = false;
+                  wsTtsStreamingRef.current = false;
+                  resumeStt(0);
+                }, 1700);
               }
               return;
             }
@@ -4327,13 +4420,17 @@ export function ActiveSession() {
     });
 
     return () => {
+      if (playbackStaleRecoveryTimerRef.current !== null) {
+        window.clearTimeout(playbackStaleRecoveryTimerRef.current);
+        playbackStaleRecoveryTimerRef.current = null;
+      }
       if (wsSpeakFallbackTimerRef.current) {
         window.clearTimeout(wsSpeakFallbackTimerRef.current);
         wsSpeakFallbackTimerRef.current = null;
       }
       client.disconnect();
     };
-  }, [ezriConfig, ezriUserid, sessionId, hasSessionEnded, companionAvatarLabel, ezriTtsVoiceId]);
+  }, [ezriConfig, ezriUserid, sessionId, hasSessionEnded, companionAvatarLabel, ezriTtsVoiceId, permissionsGranted]);
 
   // ── WebSocket keep-alive ping (prevents HF Space nginx 60-second idle timeout) ──
   // Sends a lightweight {"type":"ping"} every 30 s. The backend responds with "pong"
@@ -4362,16 +4459,16 @@ export function ActiveSession() {
     if (ezriConfig?.defaults.sttProvider === "browser") return;
 
     const SAMPLE_RATE = 16000;
-    const BUFFER_SIZE = 4096;
 
     let audioCtx: AudioContext | null = null;
     let source: MediaStreamAudioSourceNode | null = null;
     let processor: ScriptProcessorNode | null = null;
+    let onVisibility: (() => void) | undefined;
 
     try {
       audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
       source = audioCtx.createMediaStreamSource(stream);
-      processor = audioCtx.createScriptProcessor(BUFFER_SIZE, 1, 1);
+      processor = audioCtx.createScriptProcessor(EZRI_PCM_BUFFER_SIZE, 1, 1);
 
       processor.onaudioprocess = (e: AudioProcessingEvent) => {
         // Only hard-gate on mute/pause/ending — NOT on isEzriSpeakingRef.
@@ -4397,12 +4494,24 @@ export function ActiveSession() {
 
       source.connect(processor);
       processor.connect(audioCtx.destination);
-      console.log("[PCM] Streaming started at", SAMPLE_RATE, "Hz, buffer", BUFFER_SIZE);
+      console.log("[PCM] Streaming started at", SAMPLE_RATE, "Hz, buffer", EZRI_PCM_BUFFER_SIZE);
+
+      onVisibility = () => {
+        if (document.visibilityState === "visible" && audioCtx?.state === "suspended") {
+          void audioCtx.resume().catch(() => {
+            /* non-fatal */
+          });
+        }
+      };
+      document.addEventListener("visibilitychange", onVisibility);
     } catch (e) {
       console.error("[PCM] Failed to start audio streaming:", e);
     }
 
     return () => {
+      if (onVisibility) {
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
       try {
         processor?.disconnect();
         source?.disconnect();
@@ -4433,6 +4542,7 @@ export function ActiveSession() {
 
   useEffect(() => {
     if (isSessionPaused || hasSessionEnded) return;
+    if (!permissionsGranted) return;
 
     const timer = setInterval(() => {
       // Keep accurate time in a ref (no React render).
@@ -4443,12 +4553,13 @@ export function ActiveSession() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isSessionPaused, hasSessionEnded]);
+  }, [isSessionPaused, hasSessionEnded, permissionsGranted]);
 
   // Heartbeat: deduct credits during the live session (server-side).
   useEffect(() => {
     if (!apiSessionId) return;
     if (isSessionPaused || hasSessionEnded) return;
+    if (!permissionsGranted) return;
 
     let cancelled = false;
     let lastSent = 0;
@@ -4477,7 +4588,7 @@ export function ActiveSession() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [apiSessionId, isSessionPaused, hasSessionEnded]);
+  }, [apiSessionId, isSessionPaused, hasSessionEnded, permissionsGranted]);
 
   const remainingSeconds =
     initialCreditsSeconds !== null
@@ -4971,8 +5082,31 @@ export function ActiveSession() {
             <div
               lang="en"
               ref={transcriptListRef}
-              className="h-[16.5rem] shrink-0 space-y-2 overflow-y-auto rounded-xl border border-white/[0.028] bg-black/[0.05] px-3 py-2 text-sm sm:h-[17.5rem] [scrollbar-width:thin] [scrollbar-color:rgba(78,205,196,0.65)_rgba(255,255,255,0.06)] [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-white/[0.06] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[#4ECDC4]/55 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb:hover]:bg-[#4ECDC4]/80"
+              className="flex h-[16.5rem] shrink-0 flex-col gap-2 overflow-y-auto rounded-xl border border-white/[0.028] bg-black/[0.05] px-3 py-2 text-sm sm:h-[17.5rem] [scrollbar-width:thin] [scrollbar-color:rgba(78,205,196,0.65)_rgba(255,255,255,0.06)] [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-white/[0.06] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[#4ECDC4]/55 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb:hover]:bg-[#4ECDC4]/80"
             >
+              {transcript.length === 0 && !liveUserSpeech.trim() ? (
+                <p className="text-xs text-white/50">
+                  Nothing yet — your conversation will appear here.
+                </p>
+              ) : null}
+              {transcript.length > 0
+                ? transcript.slice(-80).map((line, i) => {
+                    const isUser = line.role === "user";
+                    return (
+                      <div
+                        key={`${line.timestamp}-${i}`}
+                        className={`rounded-lg px-2.5 py-2 ${
+                          isUser ? "bg-white/[0.02]" : "bg-violet-500/[0.03]"
+                        }`}
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-white/55">
+                          {isUser ? "You" : currentAvatar.name}
+                        </p>
+                        <p className="mt-0.5 leading-snug text-white/90">{line.content}</p>
+                      </div>
+                    );
+                  })
+                : null}
               {liveUserSpeech.trim() ? (
                 <div className="rounded-lg border border-[#4ECDC4]/30 bg-[#4ECDC4]/[0.07] px-2.5 py-2">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-[#4ECDC4]/90">
@@ -4980,28 +5114,6 @@ export function ActiveSession() {
                   </p>
                   <p className="mt-0.5 leading-snug text-white/90">{liveUserSpeech}</p>
                 </div>
-              ) : null}
-              {transcript.length === 0 && !liveUserSpeech.trim() ? (
-                <p className="text-xs text-white/50">
-                  Nothing yet — your conversation will appear here.
-                </p>
-              ) : transcript.length > 0 ? (
-                transcript.slice(-80).map((line, i) => {
-                  const isUser = line.role === "user";
-                  return (
-                    <div
-                      key={`${line.timestamp}-${i}`}
-                      className={`rounded-lg px-2.5 py-2 ${
-                        isUser ? "bg-white/[0.02]" : "bg-violet-500/[0.03]"
-                      }`}
-                    >
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-white/55">
-                        {isUser ? "You" : currentAvatar.name}
-                      </p>
-                      <p className="mt-0.5 leading-snug text-white/90">{line.content}</p>
-                    </div>
-                  );
-                })
               ) : null}
             </div>
           </div>
