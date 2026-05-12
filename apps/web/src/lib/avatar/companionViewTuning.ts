@@ -58,6 +58,14 @@ const TUNING_PATCHES: Partial<
     cameraDistanceMultiplier: 1,
     mouthDriveMultiplier: 1,
   },
+  /** `jordan Taylor.glb` — RFv2 morph-driven upper-body video-call framing. */
+  jordan: {
+    scaleMultiplier: 1,
+    offsetY: 0,
+    cameraDistanceMultiplier: 1,
+    lookAtYOffsetFraction: 0.18,
+    mouthDriveMultiplier: 1,
+  },
 };
 
 export function getCompanionViewTuning(

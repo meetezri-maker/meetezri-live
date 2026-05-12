@@ -1,0 +1,81 @@
+/**
+ * Solace — locked cinematic wellness shell (member app)
+ * Use with class "solace-app" on layout root.
+ */
+.solace-app {
+  --solace-bg: #060711;
+  --solace-bg-deep: #03040a;
+  --solace-bg-elevated: #0b0d16;
+  --solace-panel: rgba(16, 18, 30, 0.82);
+  --solace-panel-soft: rgba(20, 22, 36, 0.52);
+  --solace-border: rgba(255, 255, 255, 0.065);
+  --solace-border-bright: rgba(255, 255, 255, 0.1);
+  --solace-text: rgba(244, 244, 245, 0.97);
+  --solace-muted: rgba(148, 148, 163, 0.82);
+  --solace-muted-soft: rgba(113, 113, 128, 0.55);
+  --solace-purple: #a78bfa;
+  --solace-cyan: #22d3ee;
+  --solace-amber: #fbbf24;
+  --solace-rose: #fb7185;
+  --solace-glow-purple: 0 0 48px rgba(109, 40, 217, 0.18);
+  --solace-glow-cyan: 0 0 40px rgba(34, 211, 238, 0.12);
+  --solace-glow-warm: 0 0 36px rgba(251, 191, 36, 0.1);
+  --solace-sidebar-w: 248px;
+}
+
+/**
+ * Full-page cinematic depth — use on dashboard main wrapper only.
+ * Foreground content stays sharper via z-index in components.
+ */
+.solace-canvas-bg {
+  position: relative;
+  isolation: isolate;
+}
+
+.solace-canvas-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 100% 65% at 50% -18%, rgba(76, 29, 149, 0.16), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 0% 45%, rgba(14, 165, 233, 0.055), transparent 50%),
+    radial-gradient(ellipse 45% 55% at 100% 60%, rgba(167, 139, 250, 0.05), transparent 48%),
+    radial-gradient(ellipse 120% 80% at 50% 100%, rgba(3, 4, 12, 0.75), transparent 55%);
+  opacity: 1;
+}
+
+.solace-canvas-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+/* Custom dark scrollbar (WebKit + thin standard) */
+.solace-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 92, 246, 0.28) rgba(255, 255, 255, 0.03);
+}
+.solace-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.solace-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 999px;
+}
+.solace-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.4), rgba(34, 211, 238, 0.2));
+  border-radius: 999px;
+}
+
+/* Memory list fade — bottom of scroll area */
+.solace-memory-fade {
+  mask-image: linear-gradient(to bottom, black 0%, black 78%, transparent 100%);
+}
