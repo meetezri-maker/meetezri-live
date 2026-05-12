@@ -66,13 +66,21 @@ export function portraitUrlFromAvatarsFolderFile(
 
 /**
  * Companions that use a 3D GLB in the live session (`ActiveSession`).
- * Only Sarah uses GLB; Jordan and everyone else use a static PNG portrait (no GLB).
+ * Sarah uses the legacy GLB path; Jordan/RFv2 uses morph-only GLB mode.
  */
 export function companionSessionUses3dModel(
   avatarLabel: string | null | undefined
 ): boolean {
   const id = normalizeCompanionId(avatarLabel);
-  return id === "sarah";
+  return id === "sarah" || id === "jordan";
+}
+
+/** RFv2-style avatars are morph-driven and should not use facial bone mouth fallback. */
+export function companionSessionUsesRfv2Morphs(
+  avatarLabel: string | null | undefined
+): boolean {
+  const id = normalizeCompanionId(avatarLabel);
+  return id === "jordan";
 }
 
 /**
@@ -142,7 +150,7 @@ export function resolveCompanionModelUrl(
     case "maya":
       return avatarAssetFile("maya chen.glb");
     case "jordan":
-      return DEFAULT_AVATAR_MODEL_URL;
+      return "/avatars/jordan%20Taylor.glb";
     default:
       return DEFAULT_AVATAR_MODEL_URL;
   }

@@ -1,98 +1,67 @@
 import { motion } from "motion/react";
 import { Link, useLocation } from "react-router";
-import {
-  Home,
-  Video,
-  Heart,
-  BookOpen,
-  TrendingUp,
-  Menu
-} from "lucide-react";
-import { useState } from "react";
+import { Home, Video, BookOpen, Menu, Sparkles } from "lucide-react";
 
 interface MobileBottomNavProps {
   /** Tighter bottom bar when Appearance → Compact mode is on */
   compact?: boolean;
 }
 
+/** Reflect → Progress / inner life rhythm (locked mobile reference). */
 export function MobileBottomNav({ compact = false }: MobileBottomNavProps) {
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState(location.pathname);
 
   const navItems = [
     { path: "/app/dashboard", icon: Home, label: "Home" },
-    { path: "/app/session-lobby", icon: Video, label: "Talk it out" },
-    { path: "/app/mood-checkin", icon: Heart, label: "Mood" },
+    { path: "/app/session-lobby", icon: Video, label: "Talk" },
+    { path: "/app/progress", icon: Sparkles, label: "Reflect" },
     { path: "/app/journal", icon: BookOpen, label: "Journal" },
-    { path: "/app/progress", icon: TrendingUp, label: "Progress" }
+    { path: "/app/settings", icon: Menu, label: "More" },
   ];
 
   return (
     <motion.div
       initial={{ y: 100 }}
       animate={{ y: 0 }}
-      className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 safe-area-pb lg:hidden"
+      className="solace-app fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[color-mix(in_srgb,var(--solace-bg)_88%,transparent)] shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl safe-area-pb lg:hidden"
     >
-      <div className={`flex items-center justify-around px-2 ${compact ? "py-1" : "py-2"}`}>
+      <div className={`flex items-stretch justify-around px-1 ${compact ? "py-1.5" : "py-2"}`}>
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname === item.path;
+          const isActive =
+            item.path === "/app/settings"
+              ? location.pathname.startsWith("/app/settings")
+              : location.pathname === item.path;
 
           return (
-            <Link
-              key={item.path}
-              to={item.path}
-              onClick={() => setActiveTab(item.path)}
-              className="relative flex-1"
-            >
+            <Link key={item.path} to={item.path} className="relative min-w-0 flex-1">
               <motion.div
-                whileTap={{ scale: 0.9 }}
-                className={`flex flex-col items-center relative ${compact ? "gap-0 py-1" : "gap-1 py-2"}`}
+                whileTap={{ scale: 0.94 }}
+                className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 ${compact ? "py-1" : "py-1.5"}`}
               >
-                {/* Active Indicator */}
                 {isActive && (
                   <motion.div
-                    layoutId="activeTab"
-                    className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-12 h-1 bg-primary rounded-full"
-                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                    layoutId="solaceMobileTab"
+                    className="absolute -top-px left-1/2 h-0.5 w-10 -translate-x-1/2 rounded-full bg-gradient-to-r from-violet-400 to-cyan-400 opacity-90 shadow-[0_0_14px_rgba(139,92,246,0.55)]"
+                    transition={{ type: "spring", stiffness: 420, damping: 32 }}
                   />
                 )}
-
-                {/* Icon */}
-                <motion.div
-                  animate={{
-                    scale: isActive ? 1.1 : 1,
-                    y: isActive ? -2 : 0
-                  }}
-                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                  className={`rounded-xl transition-colors ${
-                    compact ? "p-1.5" : "p-2"
-                  } ${
+                <span
+                  className={`flex h-10 w-10 items-center justify-center rounded-2xl border transition-colors ${
                     isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-gray-500"
+                      ? "border-violet-400/35 bg-violet-500/15 text-violet-200 shadow-[var(--solace-glow-purple)]"
+                      : "border-transparent bg-transparent text-zinc-500"
                   }`}
                 >
-                  <Icon className={compact ? "w-4 h-4" : "w-5 h-5"} />
-                </motion.div>
-
-                {/* Label */}
+                  <Icon className={compact ? "h-[18px] w-[18px]" : "h-5 w-5"} aria-hidden />
+                </span>
                 <span
-                  className={`font-medium transition-colors ${
-                    compact ? "text-[10px] leading-tight" : "text-xs"
-                  } ${isActive ? "text-primary" : "text-gray-500"}`}
+                  className={`truncate font-medium ${
+                    compact ? "max-w-[4.5rem] text-[10px] leading-tight" : "max-w-[4.75rem] text-[11px]"
+                  } ${isActive ? "text-zinc-100" : "text-zinc-500"}`}
                 >
                   {item.label}
                 </span>
-
-                {/* Notification Badge (example) */}
-                {item.path === "/app/session" && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="absolute top-1 right-2 w-2 h-2 bg-red-500 rounded-full"
-                  />
-                )}
               </motion.div>
             </Link>
           );
