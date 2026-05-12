@@ -155,7 +155,7 @@ export function MemberProfileView() {
         <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-4">
           <p className="text-muted-foreground">This profile isn’t available or doesn’t exist.</p>
           <Button variant="outline" asChild>
-            <Link to="/app/settings/community">
+            <Link to="/app/community">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to community
             </Link>
@@ -182,7 +182,7 @@ export function MemberProfileView() {
         <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8">
           <div className="mb-6 flex flex-wrap items-center gap-2">
             <Button variant="ghost" size="sm" className="-ml-2 text-gray-600 dark:text-gray-300" asChild>
-              <Link to="/app/settings/community">
+              <Link to="/app/community">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Community
               </Link>

@@ -295,7 +295,7 @@ export function ResourceAnalyticsPage() {
               <ol className="list-decimal pl-5 space-y-2">
                 <li>
                   Open{' '}
-                  <Link className="text-primary underline underline-offset-2 font-medium" to="/app/crisis-resources">
+                  <Link className="text-primary underline underline-offset-2 font-medium" to="/app/emergency-resources">
                     Emergency resources
                   </Link>{' '}
                   from Settings (or tap hotlines inside a live session’s safety-resources panel).
@@ -344,8 +344,8 @@ export function ResourceAnalyticsPage() {
             <Card className="p-4 mb-6 border-blue-200 bg-blue-50/80 dark:bg-blue-950/30 dark:border-blue-900">
               <p className="text-sm text-blue-900 dark:text-blue-100">
                 No synced history for this window yet—we’re showing what this browser logged. Tap a few resources on{' '}
-                <Link className="font-semibold underline" to="/app/crisis-resources">
-                  Crisis resources
+                <Link className="font-semibold underline" to="/app/emergency-resources">
+                  Emergency resources
                 </Link>{' '}
                 then tap <strong>Refresh</strong> here (after migrations, events save to your account too).
               </p>
@@ -426,11 +426,11 @@ export function ResourceAnalyticsPage() {
                 {mostUsed.length === 0 ? (
                   <Card className="p-6 text-center space-y-3">
                     <p className="text-muted-foreground">
-                      Nothing recorded in this period yet—open Crisis resources or use the safety-resources panel during
+                      Nothing recorded in this period yet—open Emergency resources or use the safety-resources panel during
                       a session, tap a phone number or link, then tap <strong>Refresh</strong> above.
                     </p>
                     <Button type="button" variant="outline" asChild>
-                      <Link to="/app/crisis-resources">Go to Crisis resources</Link>
+                      <Link to="/app/emergency-resources">Go to Emergency resources</Link>
                     </Button>
                   </Card>
                 ) : (

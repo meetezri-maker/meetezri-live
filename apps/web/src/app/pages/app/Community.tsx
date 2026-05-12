@@ -418,7 +418,7 @@ export function Community() {
   };
 
   const handleSharePost = async (postId: string) => {
-    const url = `${window.location.origin}/app/settings/community#post-${postId}`;
+    const url = `${window.location.origin}/app/community#post-${postId}`;
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Link copied");

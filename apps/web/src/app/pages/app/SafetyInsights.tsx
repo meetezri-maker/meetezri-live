@@ -221,7 +221,7 @@ export function SafetyInsights() {
         title: 'Common Trigger Identified',
         description: `"${topTrigger[0]}" has been detected ${topTrigger[1]} times. Consider adding coping strategies for this trigger to your Safety Plan.`,
         action: 'Update Safety Plan',
-        actionLink: '/app/settings/safety-plan'
+        actionLink: '/app/settings/wellness-plan'
       });
     }
 
@@ -233,7 +233,7 @@ export function SafetyInsights() {
         title: 'Explore Support Resources',
         description: 'You have resources available but haven\'t used them recently. Having quick access to support can be helpful during difficult moments.',
         action: 'View Resources',
-        actionLink: '/app/crisis-resources'
+        actionLink: '/app/emergency-resources'
       });
     }
 
@@ -422,11 +422,11 @@ export function SafetyInsights() {
                 </div>
               </div>
               <div className="flex gap-3">
-                <Button onClick={() => navigate('/app/settings/safety-plan')}>
+                <Button onClick={() => navigate('/app/settings/wellness-plan')}>
                   <Target className="w-4 h-4 mr-2" />
                   Safety Plan
                 </Button>
-                <Button variant="outline" onClick={() => navigate('/app/crisis-resources')}>
+                <Button variant="outline" onClick={() => navigate('/app/emergency-resources')}>
                   <Phone className="w-4 h-4 mr-2" />
                   Resources
                 </Button>
@@ -617,7 +617,7 @@ export function SafetyInsights() {
               <Button
                 variant="outline"
                 className="h-auto flex-col py-4 gap-2"
-                onClick={() => navigate('/app/settings/safety-plan')}
+                onClick={() => navigate('/app/settings/wellness-plan')}
               >
                 <Target className="w-6 h-6" />
                 <span className="text-xs">Safety Plan</span>

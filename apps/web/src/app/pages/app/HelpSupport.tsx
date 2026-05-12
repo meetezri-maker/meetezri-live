@@ -799,7 +799,7 @@ export function HelpSupport() {
                                     Open Settings
                                   </Link>
                                   <Link
-                                    to="/app/crisis-resources"
+                                    to="/app/emergency-resources"
                                     className="inline-flex items-center justify-center px-3 py-2.5 rounded-xl text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 transition-colors"
                                   >
                                     Helpful Resources
@@ -848,7 +848,7 @@ export function HelpSupport() {
                           </p>
                           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <Link
-                              to="/app/settings/community"
+                              to="/app/community"
                               onClick={() => setShowResourceModal(false)}
                               className="inline-flex items-center justify-center px-3 py-2.5 rounded-xl text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 transition-colors"
                             >

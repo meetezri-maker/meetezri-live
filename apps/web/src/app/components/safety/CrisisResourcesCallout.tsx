@@ -13,7 +13,7 @@ interface CrisisResourcesCalloutProps {
 export function CrisisResourcesCallout({ className }: CrisisResourcesCalloutProps) {
   return (
     <section
-      aria-labelledby="crisis-resources-callout-heading"
+      aria-labelledby="emergency-resources-callout-heading"
       className={
         
         'rounded-xl p-6 mt-6 bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-xl'
@@ -29,7 +29,7 @@ export function CrisisResourcesCallout({ className }: CrisisResourcesCalloutProp
             <Phone className="size-6 text-white" strokeWidth={1.75} />
           </div>
           <h2
-            id="crisis-resources-callout-heading"
+            id="emergency-resources-callout-heading"
             className="text-lg font-semibold leading-snug tracking-tight text-white sm:text-xl"
           >
             Helpful Resources — Available 24/7
@@ -43,7 +43,7 @@ export function CrisisResourcesCallout({ className }: CrisisResourcesCalloutProp
 
         {/* Primary navigation — full crisis directory */}
         <Link
-          to="/app/crisis-resources"
+          to="/app/emergency-resources"
           className={cn(
             'group mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/40',
             'bg-white px-4 py-3.5 text-center text-sm font-semibold text-red-600',

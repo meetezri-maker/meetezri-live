@@ -434,7 +434,7 @@ export function CrisisResources() {
               </div>
               <Button
                 className="w-full mt-4"
-                onClick={() => navigate('/app/settings/safety-plan')}
+                onClick={() => navigate('/app/settings/wellness-plan')}
               >
                 View Full Safety Plan
               </Button>

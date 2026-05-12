@@ -220,7 +220,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { path: "/app/journal", icon: BookOpen, label: "Journal" },
     {path:"/app/habit-tracker", icon: Target, label: "Habit Tracker"},
     {path:"/app/sleep-tracker", icon: Moon, label: "Sleep Tracker"},
-    {path:"/app/settings/brain-health", icon: Brain, label: "Brain Health"},
+    { path: "/app/brain-health", icon: Brain, label: "Brain Health" },
     { path: "/app/user-profile", icon: User, label: "Profile" },
 
 
@@ -443,10 +443,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <span className={navLabelClass}>Wellness Tools</span>
               </motion.div>
             </Link>
-            <Link to="/app/settings/community">
+            <Link to="/app/community">
               <motion.div
                 whileHover={{ scale: 1.02, x: 5 }}
-                className={`app-sidebar-item ${isRouteActive("/app/settings/community") ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
+                className={`app-sidebar-item ${isRouteActive("/app/community") ? "app-sidebar-item--active" : ""} flex items-center ${navItemPadClass} rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all`}
               >
                 <Users className={navIconClass} />
                 <span className={navLabelClass}>Community</span>

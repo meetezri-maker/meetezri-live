@@ -265,12 +265,12 @@ export function SettingsHub() {
       route: "/app/settings/emergency-contacts"
     },
     {
-      id: "safety-plan",    
+      id: "wellness-plan",
       title: "Wellness Plan",
       description: "Personalized wellness plan builder",
       icon: FileHeart,
       color: "from-orange-500 to-red-600",
-      route: "/app/settings/safety-plan"
+      route: "/app/settings/wellness-plan"
     },
     {
       id: "safety-insights",
@@ -287,7 +287,7 @@ export function SettingsHub() {
       description: "International hotlines",
       icon: AlertCircle,
       color: "from-red-600 to-pink-600",
-      route: "/app/crisis-resources"
+      route: "/app/emergency-resources"
     },
     {
       id: "resource-analytics",
@@ -298,12 +298,12 @@ export function SettingsHub() {
       route: "/app/settings/resource-analytics"
     },
     {
-      id: "emergency-notification-history",
+      id: "emergency-notifications",
       title: "Emergency Notifications",
       description: "Safety-related notifications",
       icon: History,
       color: "from-blue-500 to-cyan-600",
-      route: "/app/settings/notification-history"
+      route: "/app/settings/emergency-notifications"
     },
     {
       id: "cooldown-screen",

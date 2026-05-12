@@ -1106,7 +1106,7 @@ export function UserProfile() {
                   items: [
                     { icon: <Heart className="w-4 h-4" />, label: "Emergency Contacts", link: "/app/settings/emergency-contacts" },
                     { icon: <Mail className="w-4 h-4" />, label: "Contact Support", link: "/app/settings/help-support" },
-                    { icon: <Shield className="w-4 h-4" />, label: "Safety Plan", link: "/app/settings/safety-plan" },
+                    { icon: <Shield className="w-4 h-4" />, label: "Wellness Plan", link: "/app/settings/wellness-plan" },
                   ],
                 },
               ].map((section, si) => (
