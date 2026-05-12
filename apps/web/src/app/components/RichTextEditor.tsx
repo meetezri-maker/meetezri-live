@@ -16,7 +16,6 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
-  Keyboard,
 } from "lucide-react";
 import { cn } from "./ui/utils";
 import { htmlToPlainText } from "../../lib/htmlPlainText";
@@ -258,7 +257,9 @@ export const RichTextEditor = memo(function RichTextEditor({
                 title="Emoji keyboard"
                 aria-label="Open emoji keyboard"
               >
-                <Keyboard className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                <span aria-hidden className="flex shrink-0 items-center justify-center">
+                  <FluentEmoji emoji="😀" size={20} label="" className="shrink-0" />
+                </span>
               </motion.button>
             </PopoverTrigger>
             <PopoverContent
