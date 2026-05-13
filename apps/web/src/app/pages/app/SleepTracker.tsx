@@ -1,4 +1,3 @@
-import { AppLayout } from "../../components/AppLayout";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { motion, AnimatePresence } from "motion/react";
@@ -195,8 +194,7 @@ export function SleepTracker() {
 
   if (isLoading) {
     return (
-      <AppLayout>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
           <div className="mb-8">
             <Skeleton className="h-8 w-64 mb-2" />
             <Skeleton className="h-4 w-80" />
@@ -223,13 +221,12 @@ export function SleepTracker() {
             ))}
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+    <>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -682,6 +679,6 @@ export function SleepTracker() {
           </>
         )}
       </AnimatePresence>
-    </AppLayout>
+    </>
   );
 }

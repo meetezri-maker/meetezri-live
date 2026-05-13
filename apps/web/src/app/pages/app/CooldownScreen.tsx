@@ -8,7 +8,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
-import { AppLayout } from '@/app/components/AppLayout';
 import { GroundingExercises } from '@/app/components/safety/GroundingExercises';
 import { BreathingExercises } from '@/app/components/safety/BreathingExercises';
 import { CrisisResourcesCallout } from '@/app/components/safety/CrisisResourcesCallout';
@@ -151,8 +150,7 @@ export function CooldownScreen() {
     const hasActivity = completedActivities.length > 0;
 
     return (
-      <AppLayout>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
           {/* Back to Settings Button */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -394,14 +392,12 @@ export function CooldownScreen() {
 
           <CrisisResourcesCallout />
         </div>
-      </AppLayout>
     );
   }
 
   // Activity Views
   return (
-    <AppLayout>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -468,6 +464,5 @@ export function CooldownScreen() {
           <CrisisResourcesCallout />
         </motion.div>
       </div>
-    </AppLayout>
   );
 }

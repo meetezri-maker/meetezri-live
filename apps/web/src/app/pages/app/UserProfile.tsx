@@ -1,4 +1,3 @@
-import { AppLayout } from "../../components/AppLayout";
 import { motion } from "motion/react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
@@ -692,8 +691,7 @@ export function UserProfile() {
   /* ─── loading skeleton ─── */
   if (isLoading) {
     return (
-      <AppLayout>
-        <div className="relative min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] overflow-hidden">
+      <div className="relative min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] overflow-hidden">
           <div className="pointer-events-none absolute -top-24 -right-24 h-80 w-80 rounded-[2.5rem] bg-gradient-to-br from-orange-400/25 via-pink-400/20 to-fuchsia-500/15 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-32 -left-16 h-72 w-72 rounded-[2rem] bg-gradient-to-tr from-amber-300/20 to-pink-500/15 blur-3xl" />
           <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -710,13 +708,12 @@ export function UserProfile() {
             </div>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   /* ─── main render ─── */
   return (
-    <AppLayout>
+    <>
       {/* ── page background (dashboard-style) ── */}
       <div className="relative min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] overflow-hidden">
         <div className="pointer-events-none absolute -top-28 -right-20 h-[28rem] w-[28rem] rounded-[3rem] bg-gradient-to-bl from-orange-400/30 via-pink-400/15 to-transparent blur-3xl" />
@@ -1665,6 +1662,6 @@ export function UserProfile() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppLayout>
+    </>
   );
 }

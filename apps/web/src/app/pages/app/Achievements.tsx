@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { AppLayout } from '@/app/components/AppLayout';
 import { Trophy, Award, Star, Lock, Calendar, TrendingUp, Target, Zap, Heart, Brain, Moon, CheckCircle, ArrowLeft, Users } from 'lucide-react';
 import { AnimatedCard } from '@/app/components/AnimatedCard';
 import { Link } from 'react-router-dom';
@@ -963,8 +962,8 @@ export function Achievements() {
   };
 
   return (
-    <AppLayout>
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
+    <>
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <div className="mb-8">
@@ -1650,6 +1649,6 @@ export function Achievements() {
           </motion.div>
         </motion.div>
       )}
-    </AppLayout>
+    </>
   );
 }

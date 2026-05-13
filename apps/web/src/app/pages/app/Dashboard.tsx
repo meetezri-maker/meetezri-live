@@ -1,4 +1,3 @@
-import { AppLayout } from "../../components/AppLayout";
 import { Button } from "../../components/ui/button";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Link, useLocation } from "react-router-dom";
@@ -478,20 +477,18 @@ export function Dashboard() {
 
   if (isLoading) {
     return (
-      <AppLayout>
-        <div className="min-h-full bg-[#07080d] px-4 py-8 sm:px-5">
-          <div className="mx-auto max-w-[1600px] space-y-6">
-            <Skeleton className="h-10 w-56 bg-zinc-800" />
-            <Skeleton className="h-4 w-40 bg-zinc-800" />
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              {[0, 1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-28 rounded-2xl bg-zinc-800/80" />
-              ))}
-            </div>
-            <Skeleton className="h-72 w-full rounded-3xl bg-zinc-800/70" />
+      <div className="min-h-full bg-[#07080d] px-4 py-8 sm:px-5">
+        <div className="mx-auto max-w-[1600px] space-y-6">
+          <Skeleton className="h-10 w-56 bg-zinc-800" />
+          <Skeleton className="h-4 w-40 bg-zinc-800" />
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-28 rounded-2xl bg-zinc-800/80" />
+            ))}
           </div>
+          <Skeleton className="h-72 w-full rounded-3xl bg-zinc-800/70" />
         </div>
-      </AppLayout>
+      </div>
     );
   }
 
@@ -540,7 +537,7 @@ export function Dashboard() {
   );
 
   return (
-    <AppLayout>
+    <>
       <SolaceDashboardView
         firstName={firstName}
         greeting={greeting}
@@ -589,6 +586,6 @@ export function Dashboard() {
         }
         emailDialog={emailDialog}
       />
-    </AppLayout>
+    </>
   );
 }

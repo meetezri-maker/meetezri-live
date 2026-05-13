@@ -17,7 +17,6 @@ import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useSafetyConsent } from "@/app/contexts/SafetyContext";
 import { useAuth } from "@/app/contexts/AuthContext";
-import { AppLayout } from "@/app/components/AppLayout";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -202,8 +201,7 @@ export function PrivacySettings() {
   };
 
   return (
-    <AppLayout>
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <motion.div
@@ -546,6 +544,5 @@ export function PrivacySettings() {
           </motion.div>
         </div>
       </div>
-    </AppLayout>
   );
 }

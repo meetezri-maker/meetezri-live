@@ -13,7 +13,6 @@ import {
   Trophy,
   Users,
 } from "lucide-react";
-import { AppLayout } from "@/app/components/AppLayout";
 import { Button } from "@/app/components/ui/button";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -139,20 +138,17 @@ export function MemberProfileView() {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="relative min-h-[50vh] bg-[#eef0f4] dark:bg-[#0c0e12]">
+      <div className="relative min-h-[50vh] bg-[#eef0f4] dark:bg-[#0c0e12]">
           <div className="flex min-h-[40vh] items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   if (!data || !userId) {
     return (
-      <AppLayout>
-        <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-4">
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-4">
           <p className="text-muted-foreground">This profile isn’t available or doesn’t exist.</p>
           <Button variant="outline" asChild>
             <Link to="/app/community">
@@ -161,7 +157,6 @@ export function MemberProfileView() {
             </Link>
           </Button>
         </div>
-      </AppLayout>
     );
   }
 
@@ -174,8 +169,7 @@ export function MemberProfileView() {
       : null;
 
   return (
-    <AppLayout>
-      <div className="relative min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] overflow-hidden">
+    <div className="relative min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] overflow-hidden">
         <div className="pointer-events-none absolute -top-28 -right-20 h-[28rem] w-[28rem] rounded-[3rem] bg-gradient-to-bl from-orange-400/30 via-pink-400/15 to-transparent blur-3xl" />
         <div className="pointer-events-none absolute top-1/3 -left-24 h-80 w-80 rounded-[2.5rem] bg-gradient-to-tr from-fuchsia-500/12 to-amber-300/10 blur-3xl" />
 
@@ -414,6 +408,5 @@ export function MemberProfileView() {
           </p>
         </div>
       </div>
-    </AppLayout>
   );
 }

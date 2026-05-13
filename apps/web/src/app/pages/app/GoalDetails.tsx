@@ -1,6 +1,5 @@
 import { ArrowLeft } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { AppLayout } from '@/app/components/AppLayout';
 import { Button } from '@/app/components/ui/button';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { GoalCheckInForm } from '@/app/features/goals/components/GoalCheckInForm';
@@ -17,15 +16,12 @@ export function GoalDetails() {
 
   if (!goal) {
     return (
-      <AppLayout>
-        <div className="p-10 text-center text-gray-600">Goal not found.</div>
-      </AppLayout>
+      <div className="p-10 text-center text-gray-600">Goal not found.</div>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Link to="/app/settings/goals" className="inline-flex items-center gap-2 text-gray-700 dark:text-slate-300 mb-4">
             <ArrowLeft className="w-4 h-4" /> Back to Goals
@@ -100,6 +96,5 @@ export function GoalDetails() {
           </div>
         </div>
       </div>
-    </AppLayout>
   );
 }

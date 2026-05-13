@@ -23,7 +23,6 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useState, useEffect, useMemo, useRef } from "react";
-import { AppLayout } from "@/app/components/AppLayout";
 import { PasswordStrengthMeter } from "@/app/components/ui/PasswordStrengthMeter";
 import { api } from "@/lib/api";
 import { useAuth } from "@/app/contexts/AuthContext";
@@ -1002,17 +1001,14 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 transition-colors duration-300">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <motion.div
@@ -2140,6 +2136,5 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
           )}
         </div>
       </div>
-    </AppLayout>
   );
 }

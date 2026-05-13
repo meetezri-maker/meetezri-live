@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { AppLayout } from "@/app/components/AppLayout";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -161,7 +160,6 @@ export function NotificationSettings() {
 
   if (isLoading && !profile) {
     return (
-      <AppLayout>
       <div className="min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12]">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="mb-8">
@@ -182,13 +180,11 @@ export function NotificationSettings() {
             </div>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] transition-colors duration-300">
+    <div className="min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] transition-colors duration-300">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <motion.div
@@ -432,6 +428,5 @@ export function NotificationSettings() {
           </motion.div>
         </div>
       </div>
-    </AppLayout>
   );
 }

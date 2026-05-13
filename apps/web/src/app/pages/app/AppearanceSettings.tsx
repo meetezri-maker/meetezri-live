@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
-import { AppLayout } from "@/app/components/AppLayout";
 import { useAuth } from "@/app/contexts/AuthContext";
 
 type AppearanceSettingsState = {
@@ -211,8 +210,7 @@ export function AppearanceSettings() {
   const dense = settings.compactMode;
 
   return (
-    <AppLayout>
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
         <div
           className={`max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 ${dense ? "py-4" : "py-8"}`}
         >
@@ -520,6 +518,5 @@ export function AppearanceSettings() {
           )}
         </div>
       </div>
-    </AppLayout>
   );
 }

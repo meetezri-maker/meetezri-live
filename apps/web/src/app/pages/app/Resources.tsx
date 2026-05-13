@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { AppLayout } from "@/app/components/AppLayout";
 import {
   FileText,
   Search,
@@ -93,8 +92,7 @@ export function Resources() {
   };
 
   return (
-    <AppLayout>
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-violet-50/40 dark:from-slate-950 dark:via-slate-950 dark:to-violet-950/20 transition-colors duration-300">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-violet-50/40 dark:from-slate-950 dark:via-slate-950 dark:to-violet-950/20 transition-colors duration-300">
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {loading ? (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 dark:bg-slate-950/60 backdrop-blur-sm">
@@ -301,6 +299,5 @@ export function Resources() {
           ) : null}
         </div>
       </div>
-    </AppLayout>
   );
 }

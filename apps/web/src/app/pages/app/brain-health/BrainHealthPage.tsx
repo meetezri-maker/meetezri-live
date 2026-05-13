@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
-import { AppLayout } from "@/app/components/AppLayout";
 import { cn } from "@/app/components/ui/utils";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
@@ -291,8 +290,7 @@ export function BrainHealthPage() {
   };
 
   return (
-    <AppLayout>
-      <div
+    <div
         className={cn(
           "relative min-h-screen transition-[filter,background-color] duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]",
           "bg-gradient-to-b from-background via-background to-muted/35 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900",
@@ -531,6 +529,5 @@ export function BrainHealthPage() {
           </section>
         </main>
       </div>
-    </AppLayout>
   );
 }

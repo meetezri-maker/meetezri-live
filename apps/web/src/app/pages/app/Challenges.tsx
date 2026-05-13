@@ -1,4 +1,3 @@
-import { AppLayout } from "@/app/components/AppLayout";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { motion } from "motion/react";
@@ -166,8 +165,7 @@ export function Challenges() {
   ];
 
   return (
-    <AppLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -497,6 +495,5 @@ export function Challenges() {
           </motion.div>
         )}
       </div>
-    </AppLayout>
   );
 }

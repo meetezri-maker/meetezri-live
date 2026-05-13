@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion } from "motion/react";
 import { formatDistanceToNow, parseISO } from "date-fns";
-import { AppLayout } from "@/app/components/AppLayout";
 import {
   Users,
   MessageCircle,
@@ -542,17 +541,15 @@ export function Community() {
 
   if (loadingPosts && postsData.length === 0) {
     return (
-      <AppLayout>
-        <div className="min-h-[50vh] flex items-center justify-center bg-gray-50 dark:bg-slate-950">
+      <div className="min-h-[50vh] flex items-center justify-center bg-gray-50 dark:bg-slate-950">
           <Loader2 className="w-10 h-10 animate-spin text-purple-600" />
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
+    <>
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="mb-8">
             {/* <Link
@@ -1414,6 +1411,6 @@ export function Community() {
           </motion.div>
         </motion.div>
       )}
-    </AppLayout>
+    </>
   );
 }

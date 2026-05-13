@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { motion } from "motion/react";
-import { AppLayout } from "@/app/components/AppLayout";
 import { ArrowLeft, BookOpen, Clock, ExternalLink, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { WELLNESS_BUILTIN_TOOLS_ADMIN } from "@/lib/wellnessBuiltinToolsMetadata";
@@ -143,17 +142,14 @@ export function ResourceArticlePage() {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="min-h-[50vh] flex items-center justify-center bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
+      <div className="min-h-[50vh] flex items-center justify-center bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
           <Loader2 className="h-10 w-10 animate-spin text-violet-600" aria-label="Loading" />
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-violet-50/40 dark:from-slate-950 dark:via-slate-950 dark:to-violet-950/20 transition-colors duration-300">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-violet-50/40 dark:from-slate-950 dark:via-slate-950 dark:to-violet-950/20 transition-colors duration-300">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-16">
           <Link
             to="/app/settings/resources"
@@ -278,6 +274,5 @@ export function ResourceArticlePage() {
           </motion.article>
         </div>
       </div>
-    </AppLayout>
   );
 }
