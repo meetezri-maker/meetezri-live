@@ -3424,7 +3424,8 @@ export default ThreeAvatar;
       };
     }, [anchorPipBelowTranscriptOnce]);
 
-    const [showPermissionRequest, setShowPermissionRequest] = useState(false);
+    /** Start true so we never paint one frame of “live session” before the consent UI (and never connect WS/STT without a stream). */
+    const [showPermissionRequest, setShowPermissionRequest] = useState(true);
     const [permissionsGranted, setPermissionsGranted] = useState(false);
     const [permissionStateInitialized, setPermissionStateInitialized] =
       useState(false);
@@ -3607,6 +3608,11 @@ export default ThreeAvatar;
     // Text of the most recent message sent to the backend that has NOT yet produced
     // any audio response. Used to merge follow-up user speech during the silence gap.
     const pendingUserTextRef = useRef<string>("");
+    /** Blocks duplicate `sendChat` if Web Speech fires two finals for the same phrase. */
+    const lastSentUserChatFingerprintRef = useRef<{ n: string; t: number }>({
+      n: "",
+      t: 0,
+    });
     // How many old in-flight server responses to silently drop before playing the
     // next one. Incremented each time a merge fires so that only the LATEST merged
     // message's response is played. Decremented on each tts_done / server interrupt.
@@ -4319,6 +4325,19 @@ export default ThreeAvatar;
       const trimmed = text.trim();
       if (!trimmed) return;
 
+      const fp = normalizeSpeech(trimmed);
+      if (fp.length >= 4) {
+        const now = Date.now();
+        const prevFp = lastSentUserChatFingerprintRef.current;
+        if (prevFp.n === fp && now - prevFp.t < 4500) {
+          if (import.meta.env.DEV) {
+            console.warn("[chat] Deduped duplicate sendChat (same utterance within 4.5s).");
+          }
+          return;
+        }
+        lastSentUserChatFingerprintRef.current = { n: fp, t: now };
+      }
+
       // ── Silence-gap merge ────────────────────────────────────────────────────
       // If the backend is still processing the previous message (thinking, not yet
       // speaking), cancel that request and re-send both texts as a single message.
@@ -4599,7 +4618,7 @@ export default ThreeAvatar;
 
     // ── Speech recognition ──────────────────────────────────────────────────
     useEffect(() => {
-      if (!permissionsGranted) return;
+      if (!permissionsGranted || !stream) return;
 
       const SpeechRecognition =
         (window as any).SpeechRecognition ||
@@ -4732,6 +4751,22 @@ export default ThreeAvatar;
           lastInterimTextRef.current = "";
 
           const lowerTrimmed = textForUtterance.toLowerCase();
+          const wsLive = wsClientRef.current;
+          const sttProv = String(ezriConfig?.defaults?.sttProvider ?? "").toLowerCase();
+          // Mic PCM → server VAD/STT already turns speech into `{ type: "transcription" }` + replies.
+          // Browser Web Speech must NOT also `sendChat` or every line is processed twice (two assistant answers).
+          const serverOwnsUserTurn =
+            wsLive?.getStatus() === "connected" && sttProv !== "browser";
+
+          if (serverOwnsUserTurn) {
+            if (import.meta.env.DEV) {
+              console.log(
+                "[STT] Skipping client sendChat + duplicate YOU line — server PCM/STT owns this utterance.",
+              );
+            }
+            return;
+          }
+
           console.log(
             "Heard (Final):",
             lowerTrimmed,
@@ -4743,20 +4778,7 @@ export default ThreeAvatar;
             duration: 2000,
           });
 
-          setTranscript((prev) => {
-            const lastEntry = prev[prev.length - 1];
-            if (
-              lastEntry &&
-              lastEntry.content === textForUtterance &&
-              Date.now() - lastEntry.timestamp < 1000
-            ) {
-              return prev;
-            }
-            return [
-              ...prev,
-              { role: "user", content: textForUtterance, timestamp: Date.now() },
-            ];
-          });
+          setTranscript((prev) => mergeUserTranscriptAppend(prev, textForUtterance));
 
           if (speechTimeoutRef.current)
             window.clearTimeout(speechTimeoutRef.current);
@@ -4871,7 +4893,7 @@ export default ThreeAvatar;
         isRecognitionActiveRef.current = false;
         recognitionRef.current = null;
       };
-    }, [permissionsGranted, sttRestartTrigger, ezriConfig?.defaults?.sttProvider, ezriConfig?.apiBase]);
+    }, [permissionsGranted, stream, sttRestartTrigger, ezriConfig?.defaults?.sttProvider, ezriConfig?.apiBase]);
 
     // ── Server STT via MediaRecorder (Firefox / non-Chrome fallback) ─────────
     useEffect(() => {
@@ -5329,6 +5351,9 @@ export default ThreeAvatar;
     useEffect(() => {
       if (!ezriConfig) return;
       if (hasSessionEnded) return;
+      // Do not open realtime (or let the server attach this session) until the user
+      // has completed our “Allow Access” flow and we hold a real MediaStream.
+      if (!permissionsGranted) return;
 
       const client =
         wsClientRef.current ||
@@ -5542,7 +5567,15 @@ export default ThreeAvatar;
         }
         client.disconnect();
       };
-    }, [ezriConfig, ezriUserid, sessionId, hasSessionEnded, companionAvatarLabel, ezriTtsVoiceId]);
+    }, [
+      ezriConfig,
+      ezriUserid,
+      sessionId,
+      hasSessionEnded,
+      companionAvatarLabel,
+      ezriTtsVoiceId,
+      permissionsGranted,
+    ]);
 
     // ── WebSocket keep-alive ping (prevents HF Space nginx 60-second idle timeout) ──
     // Sends a lightweight {"type":"ping"} every 30 s. The backend responds with "pong"
@@ -5997,7 +6030,7 @@ export default ThreeAvatar;
             recognitionRef.current.abort();
           } catch (e) { }
         }
-        setPermissionsGranted(true);
+        setPermissionsGranted(false);
         window.location.reload();
       }, 100);
       toast.info("Resetting Session...");
@@ -6616,7 +6649,8 @@ export default ThreeAvatar;
           </div>
         </div>
 
-        {/* User camera PiP — full-session drag (clamped to screen); dock z-50 stays tappable on top */}
+        {/* User camera PiP — only after media consent + stream (no `<video>` / layout until then). */}
+        {permissionsGranted && stream ? (
         <div className="pointer-events-none absolute inset-0 z-[45]">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -6659,6 +6693,7 @@ export default ThreeAvatar;
             )}
           </motion.div>
         </div>
+        ) : null}
 
         {/* Permission Modal */}
         <AnimatePresence>
