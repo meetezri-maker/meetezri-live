@@ -1,5 +1,4 @@
 import { CrisisResourcesCallout } from "@/app/components/safety/CrisisResourcesCallout";
-import { AppLayout } from "@/app/components/AppLayout";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { motion } from "motion/react";
@@ -98,8 +97,7 @@ export function NotificationHistory() {
   };
 
   return (
-    <AppLayout>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -251,6 +249,5 @@ export function NotificationHistory() {
 
         <CrisisResourcesCallout />
       </div>
-    </AppLayout>
   );
 }

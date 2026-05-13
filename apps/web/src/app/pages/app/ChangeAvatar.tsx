@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { AppLayout } from '@/app/components/AppLayout';
 import { Brain, CheckCircle, Star, Users, Volume2, Heart, ArrowLeft, RefreshCw, AlertCircle, User } from 'lucide-react';
 import { AnimatedCard } from '@/app/components/AnimatedCard';
 import { Link } from 'react-router-dom';
@@ -142,14 +141,12 @@ export function ChangeAvatar() {
 
   if (avatarsLoading || aiAvatars.length === 0) {
     return (
-      <AppLayout>
-        <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 text-gray-600 dark:text-slate-400">
             <RefreshCw className="w-10 h-10 animate-spin text-purple-500" />
             <p>Loading companions…</p>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
@@ -179,8 +176,7 @@ export function ChangeAvatar() {
   };
 
   return (
-    <AppLayout>
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <div className="mb-8">
@@ -488,6 +484,5 @@ export function ChangeAvatar() {
           )}
         </div>
       </div>
-    </AppLayout>
   );
 }

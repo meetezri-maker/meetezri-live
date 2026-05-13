@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
-import { AppLayout } from "@/app/components/AppLayout";
 
 export function AccessibilitySettings() {
   const getDefaultSettings = () => ({
@@ -160,8 +159,7 @@ export function AccessibilitySettings() {
       : "text-base";
 
   return (
-    <AppLayout>
-      <div className={`min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300 ${containerFontSize}`}>
+    <div className={`min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300 ${containerFontSize}`}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <motion.div
@@ -484,6 +482,5 @@ export function AccessibilitySettings() {
           )}
         </div>
       </div>
-    </AppLayout>
   );
 }

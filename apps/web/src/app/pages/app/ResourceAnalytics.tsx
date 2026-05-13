@@ -8,7 +8,6 @@ import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { CrisisResourcesCallout } from '@/app/components/safety/CrisisResourcesCallout';
-import { AppLayout } from '@/app/components/AppLayout';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import {
@@ -212,30 +211,25 @@ export function ResourceAnalyticsPage() {
 
   if (authLoading) {
     return (
-      <AppLayout>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 flex flex-col items-center gap-4 text-muted-foreground">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 flex flex-col items-center gap-4 text-muted-foreground">
           <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden />
           <p>Loading your settings…</p>
         </div>
-      </AppLayout>
     );
   }
 
   if (!userId) {
     return (
-      <AppLayout>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
           <Card className="p-6 text-center">
             <p className="text-muted-foreground">Sign in to view resource analytics.</p>
           </Card>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -603,6 +597,5 @@ export function ResourceAnalyticsPage() {
 
         <CrisisResourcesCallout />
       </div>
-    </AppLayout>
   );
 }

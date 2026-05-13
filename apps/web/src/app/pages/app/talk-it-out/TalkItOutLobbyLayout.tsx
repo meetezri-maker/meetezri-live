@@ -1,0 +1,650 @@
+import { Link } from "react-router-dom";
+import { motion } from "motion/react";
+import {
+  ArrowRight,
+  Calendar,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  Flower2,
+  Heart,
+  Loader2,
+  MessageCircle,
+  Mic,
+  Shield,
+  Sparkles,
+  Text as TextIcon,
+  User,
+  Video,
+  Waves,
+  Wind,
+  Check,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
+import { Button } from "@/app/components/ui/button";
+import { cn } from "@/lib/utils";
+import { SolaceHeroAtmosphere } from "@/app/solace/SolaceHeroAtmosphere";
+import {
+  SOLACE_HERO_LANDSCAPE_SRC,
+  TALK_ENV_CANDLE,
+  TALK_ENV_FOREST,
+  TALK_ENV_LAKE,
+  TALK_ENV_STUDIO,
+} from "@/lib/solace/referenceImagery";
+import type { ReactNode } from "react";
+import { TalkItOutBottomDock } from "./TalkItOutBottomDock";
+
+interface ChecklistItem {
+  label: string;
+  checked: boolean;
+}
+
+interface UpcomingSessionLite {
+  id: string;
+  avatarName: string;
+  avatarImage?: string;
+  icon?: string;
+  comment?: string;
+  type: string;
+  date: string;
+  duration: string;
+  isExpired: boolean;
+}
+
+interface TalkItOutLobbyLayoutProps {
+  companionPill: string;
+  companionPortraitUrl?: string;
+  companionAlt: string;
+  companionDisplayName: string;
+  companionTraitsLine: string;
+  heroMessageLine1: string;
+  heroMessageLine2: string;
+  heroSupporting: string;
+  getSupportSlot: ReactNode;
+  minutesAvailable: number;
+  durations: readonly number[];
+  durationDisabled: Map<number, boolean>;
+  selectedDuration: number;
+  applyDurationPreset: (minutes: number) => void;
+  isFreeFlowActive: boolean;
+  onSelectFreeFlow: () => void;
+  selectedMode: "now" | "schedule";
+  setSelectedMode: (m: "now" | "schedule") => void;
+  setShowMinutesPicker: (open: boolean) => void;
+  isStarting: boolean;
+  showCarveoutBanner: boolean;
+  checklistItems: ChecklistItem[];
+  toggleChecklist: (index: number) => void;
+  connectMode: "voice" | "text" | "deep" | "quick";
+  setConnectMode: (m: "voice" | "text" | "deep" | "quick") => void;
+  conversationEnergy: "gentle" | "reflective" | "grounding" | "open";
+  setConversationEnergy: (e: "gentle" | "reflective" | "grounding" | "open") => void;
+  selectedEnvironment: string;
+  onEnvironmentSelect: (value: string) => void;
+  onOpenCustomize: () => void;
+  onOpenSchedule: () => void;
+  upcomingSessions: UpcomingSessionLite[];
+  isLoadingUpcoming: boolean;
+  onSelectUpcomingRow: (session: UpcomingSessionLite) => void;
+  onStartFreely: () => void;
+  onStartGuided: () => void;
+  onStartDeep: () => void;
+  onQuickCheckInNavigate: () => void;
+}
+
+function mattePanelClass(extra?: string) {
+  return cn(
+    "rounded-[1.2rem] border border-white/[0.065] bg-black/22 shadow-[0_24px_72px_-52px_rgba(0,0,0,0.88),inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl",
+    extra
+  );
+}
+
+const RAIL_ENVIRONMENT_THUMBS: { label: string; image: string; value: string }[] = [
+  { label: "Night Lake", image: TALK_ENV_LAKE, value: "mountains" },
+  { label: "Forest Calm", image: TALK_ENV_FOREST, value: "forest" },
+  { label: "Warm Studio", image: TALK_ENV_STUDIO, value: "minimal" },
+  { label: "Candle Room", image: TALK_ENV_CANDLE, value: "beach" },
+];
+
+const SAFETY_ITEMS = [
+  "This is a private space",
+  "No judgement, ever",
+  "End-to-end encrypted",
+  "Pause or stop anytime",
+];
+
+export function TalkItOutLobbyLayout({
+  companionPill,
+  companionPortraitUrl,
+  companionAlt,
+  companionDisplayName,
+  companionTraitsLine,
+  heroMessageLine1,
+  heroMessageLine2,
+  heroSupporting,
+  getSupportSlot,
+  minutesAvailable,
+  durations,
+  durationDisabled,
+  selectedDuration,
+  applyDurationPreset,
+  isFreeFlowActive,
+  onSelectFreeFlow,
+  selectedMode,
+  setSelectedMode,
+  setShowMinutesPicker,
+  isStarting,
+  showCarveoutBanner,
+  checklistItems,
+  toggleChecklist,
+  connectMode,
+  setConnectMode,
+  conversationEnergy,
+  setConversationEnergy,
+  selectedEnvironment,
+  onEnvironmentSelect,
+  onOpenCustomize,
+  onOpenSchedule,
+  upcomingSessions,
+  isLoadingUpcoming,
+  onSelectUpcomingRow,
+  onStartFreely,
+  onStartGuided,
+  onStartDeep,
+  onQuickCheckInNavigate,
+}: TalkItOutLobbyLayoutProps) {
+  const sessionModes: { id: "voice" | "text" | "deep" | "quick"; label: string; Icon: LucideIcon }[] = [
+    { id: "voice", label: "Voice", Icon: Mic },
+    { id: "text", label: "Text", Icon: TextIcon },
+    { id: "deep", label: "Deep Reflection", Icon: Sparkles },
+    { id: "quick", label: "Quick Release", Icon: Wind },
+  ];
+
+  const energyOptions: { id: "gentle" | "reflective" | "grounding" | "open"; label: string }[] = [
+    { id: "gentle", label: "Gentle" },
+    { id: "reflective", label: "Reflective" },
+    { id: "grounding", label: "Grounding" },
+    { id: "open", label: "Open" },
+  ];
+
+  const startCards: {
+    title: string;
+    body: string;
+    Icon: LucideIcon;
+    onClick: () => void;
+  }[] = [
+    { title: "Talk freely", body: "Open conversation about anything", Icon: MessageCircle, onClick: onStartFreely },
+    { title: "Guided talk", body: "Answer a few questions to get started", Icon: Sparkles, onClick: onStartGuided },
+    { title: "Deep reflection", body: "Explore your thoughts in depth", Icon: Flower2, onClick: onStartDeep },
+    { title: "Quick check-in", body: "Share how you're feeling right now", Icon: Heart, onClick: onQuickCheckInNavigate },
+  ];
+
+  const checklistIcons = ["text-emerald-400", "text-sky-400", "text-violet-400", "text-amber-400"] as const;
+
+  return (
+    <>
+      <div className="relative min-h-[calc(100dvh-5rem)] overflow-x-hidden pb-28 text-[var(--solace-text)] lg:pb-10 solace-canvas-bg">
+        <div className="relative z-[1] mx-auto max-w-[1680px] px-4 sm:px-5 lg:px-8">
+          <header className="mb-8 border-b border-white/[0.05] pb-8">
+            <h1 className="font-serif text-[1.75rem] font-normal tracking-tight text-zinc-50 sm:text-[2rem]">
+              Talk It Out
+            </h1>
+            <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[var(--solace-muted)]">
+              A safe space to share, reflect and grow.
+            </p>
+          </header>
+
+          <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_308px] xl:items-start xl:gap-x-10">
+            {/* Center column */}
+            <div className="min-w-0 space-y-9">
+              {showCarveoutBanner && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={mattePanelClass("relative overflow-hidden p-5")}
+                >
+                  <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-violet-500/15 blur-3xl" />
+                  <div className="relative flex gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-violet-500/15 text-violet-200 shadow-[var(--solace-glow-purple)]">
+                      <Sparkles className="h-5 w-5" aria-hidden />
+                    </div>
+                    <p className="text-[14px] leading-relaxed text-zinc-200/95">
+                      Do you want to carve out time for the next time we talk?
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+
+              <motion.section
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn(
+                  "relative overflow-hidden rounded-[1.75rem] border border-white/[0.07]",
+                  "shadow-[0_56px_120px_-58px_rgba(0,0,0,0.92),0_0_0_1px_rgba(139,92,246,0.1)]"
+                )}
+              >
+                <img
+                  src={SOLACE_HERO_LANDSCAPE_SRC}
+                  alt=""
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+                />
+                <SolaceHeroAtmosphere className="rounded-none" />
+                {/* Candle warmth — bottom left */}
+                <div
+                  className="pointer-events-none absolute bottom-0 left-0 h-[42%] w-[55%] bg-[radial-gradient(ellipse_80%_90%_at_10%_100%,rgba(251,191,36,0.14)_0%,transparent_65%)]"
+                  aria-hidden
+                />
+                <div className="relative z-[2] flex min-h-[420px] flex-col items-center px-5 pb-10 pt-10 text-center sm:px-8 sm:pb-12 sm:pt-12">
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#060711]/55 via-[#060711]/75 to-[#060711]/92" />
+                  <div className="relative z-[3] flex w-full max-w-lg flex-col items-center">
+                    <div className="relative mb-7">
+                      <div className="absolute inset-0 scale-110 rounded-full bg-violet-500/25 blur-2xl" aria-hidden />
+                      <div className="relative h-[108px] w-[108px] overflow-hidden rounded-full border-2 border-violet-400/45 bg-black/40 shadow-[0_0_48px_rgba(139,92,246,0.45)] ring-4 ring-violet-500/15">
+                        {companionPortraitUrl ? (
+                          <img src={companionPortraitUrl} alt={companionAlt} className="h-full w-full object-cover object-top" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-zinc-500">
+                            <User className="h-12 w-12" aria-hidden />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.1] bg-black/35 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.22em] text-violet-200/88">
+                      <Sparkles className="h-3.5 w-3.5 text-violet-300" aria-hidden />
+                      {companionPill}
+                    </p>
+                    <h2 className="font-serif text-[1.65rem] font-normal leading-[1.18] tracking-tight text-zinc-50 sm:text-[1.95rem]">
+                      {heroMessageLine1}
+                      <br />
+                      {heroMessageLine2}
+                    </h2>
+                    <p className="mt-5 max-w-md text-[14.5px] leading-[1.65] text-zinc-400/95">{heroSupporting}</p>
+                    <div className="mt-9 flex w-full max-w-sm flex-col items-center gap-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedMode("now");
+                          setShowMinutesPicker(true);
+                        }}
+                        disabled={isStarting || minutesAvailable <= 0}
+                        className="group relative inline-flex min-h-[52px] w-full max-w-xs items-center justify-center gap-3 overflow-hidden rounded-full bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 px-8 py-3.5 text-[15px] font-medium text-white shadow-[0_0_52px_rgba(109,40,217,0.42)] transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/55 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        {isStarting ? (
+                          <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                        ) : (
+                          <Video className="h-5 w-5 opacity-95" aria-hidden />
+                        )}
+                        Let&apos;s Talk Now
+                        <Waves className="h-4 w-4 opacity-90" aria-hidden />
+                      </button>
+                      <p className="flex items-center gap-2 text-[12px] text-zinc-500">
+                        <Shield className="h-3.5 w-3.5 text-cyan-400/80" aria-hidden />
+                        Private · Secure · Judgement-free
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </motion.section>
+
+              <section aria-label="How to start">
+                <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">How would you like to start?</h3>
+                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {startCards.map(({ title, body, Icon, onClick }) => (
+                    <button
+                      key={title}
+                      type="button"
+                      onClick={onClick}
+                      className={cn(
+                        mattePanelClass(
+                          "min-h-[44px] w-full px-4 py-4 text-left transition-[transform,border-color,background-color] duration-300 hover:border-violet-400/28 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
+                        )
+                      )}
+                    >
+                      <div className="mb-3 inline-flex rounded-xl border border-white/[0.08] bg-violet-500/[0.1] p-2 text-violet-200">
+                        <Icon className="h-5 w-5" aria-hidden strokeWidth={1.6} />
+                      </div>
+                      <p className="font-medium text-zinc-100">{title}</p>
+                      <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--solace-muted)]">{body}</p>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section aria-label="Preparation guidance">
+                <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">Before we begin</h3>
+                <div className={cn(mattePanelClass("relative mt-5 overflow-hidden"))}>
+                  <div className="pointer-events-none absolute -right-4 bottom-0 top-0 w-[38%] max-w-[200px] opacity-[0.14]">
+                    <div className="h-full w-full bg-[radial-gradient(circle_at_70%_80%,rgba(167,139,250,0.9)_0%,transparent_72%)]" />
+                    <Flower2 className="absolute bottom-8 right-10 h-28 w-28 text-violet-300/50" aria-hidden strokeWidth={1} />
+                  </div>
+                  <div className="relative z-[1] flex flex-col gap-0 lg:flex-row lg:flex-wrap lg:items-stretch">
+                    {checklistItems.map((item, idx) => {
+                      const IconClass = checklistIcons[idx % checklistIcons.length];
+                      return (
+                        <button
+                          key={item.label}
+                          type="button"
+                          onClick={() => toggleChecklist(idx)}
+                          className={cn(
+                            "flex min-h-[72px] min-w-0 flex-1 gap-4 px-6 py-5 text-left transition-colors hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-400/35 lg:max-w-[25%]",
+                            idx < checklistItems.length - 1 &&
+                              "border-b border-white/[0.06] lg:border-b-0 lg:border-r"
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-black/35 transition-colors",
+                              item.checked
+                                ? cn("border-white/[0.12]", IconClass)
+                                : "border-white/[0.08] text-zinc-600"
+                            )}
+                          >
+                            {item.checked ? (
+                              <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+                            ) : (
+                              <span className="h-2 w-2 rounded-full bg-zinc-600/80" aria-hidden />
+                            )}
+                          </div>
+                          <p
+                            className={cn(
+                              "text-[13.5px] leading-snug text-zinc-200/92",
+                              item.checked && "text-zinc-400/85"
+                            )}
+                          >
+                            {item.label}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+
+              {/* Schedule entry point — preserves scheduling flow */}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <Button
+                  type="button"
+                  disabled={minutesAvailable <= 0 || selectedDuration > minutesAvailable}
+                  className={cn(
+                    "min-h-[48px] w-full rounded-[1rem] bg-gradient-to-r from-violet-600/92 to-indigo-700/92 text-[14px] text-white shadow-[0_24px_64px_-32px_rgba(76,29,149,0.55)] sm:w-auto",
+                    "hover:from-violet-500 hover:to-indigo-600"
+                  )}
+                  onClick={() => {
+                    setSelectedMode("schedule");
+                    setShowMinutesPicker(false);
+                    onOpenSchedule();
+                  }}
+                >
+                  <Calendar className="mr-2 h-5 w-5 opacity-95" aria-hidden />
+                  Schedule a session
+                  <ArrowRight className="ml-2 h-4 w-4 opacity-85" aria-hidden />
+                </Button>
+                {!isLoadingUpcoming ? (
+                  <p className="text-center text-[12px] text-[var(--solace-muted)] sm:text-left">
+                    Minutes available · <span className="font-medium text-zinc-200">{minutesAvailable}</span>
+                  </p>
+                ) : null}
+              </div>
+
+              <section aria-label="Upcoming sessions" className={mattePanelClass("p-5 sm:p-6")}>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="font-medium text-zinc-100">Upcoming</h3>
+                  <Link
+                    to="/app/session-history"
+                    className="text-[11px] font-medium text-violet-300/90 hover:text-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
+                  >
+                    View history
+                  </Link>
+                </div>
+                {upcomingSessions.length === 0 ? (
+                  <p className="text-[13px] text-[var(--solace-muted)]">No upcoming sessions scheduled.</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {upcomingSessions.map((session) => (
+                      <button
+                        key={session.id}
+                        type="button"
+                        disabled={session.isExpired}
+                        onClick={() => onSelectUpcomingRow(session)}
+                        className={cn(
+                          "flex w-full items-center gap-3 rounded-xl border border-white/[0.055] bg-black/25 px-4 py-3 text-left transition-colors hover:border-violet-400/28 hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-45",
+                          session.isExpired && "border-rose-500/15 hover:border-rose-500/25"
+                        )}
+                      >
+                        <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full border border-white/[0.08] bg-black/40">
+                          {session.avatarImage ? (
+                            <img src={session.avatarImage} alt="" className="h-full w-full object-cover object-top" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <User className="h-5 w-5 text-zinc-500" aria-hidden />
+                            </div>
+                          )}
+                          {session.icon ? (
+                            <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-900 ring ring-black/80">
+                              <FluentEmoji emoji={session.icon} size={13} />
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13px] font-medium text-zinc-100">{session.avatarName}</p>
+                          <p className="text-[11px] text-[var(--solace-muted)]">{session.date}</p>
+                          {session.comment ? (
+                            <p className="mt-0.5 line-clamp-1 text-[11px] text-zinc-500/75">{session.comment}</p>
+                          ) : null}
+                        </div>
+                        <Clock className="h-4 w-4 shrink-0 text-zinc-600" aria-hidden />
+                        <span className="hidden text-[11px] text-zinc-500 sm:inline">{session.duration}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+
+            {/* Right rail */}
+            <aside className="min-w-0 space-y-5 xl:sticky xl:top-[5.5rem] xl:self-start">
+              <div className={mattePanelClass("p-5")}>
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
+                  Session mode
+                </p>
+                <p className="mt-1 text-[12px] text-[var(--solace-muted)]">Choose how you want to connect</p>
+                <div className="mt-5 grid grid-cols-4 gap-2">
+                  {sessionModes.map(({ id, label, Icon }) => {
+                    const active = connectMode === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setConnectMode(id)}
+                        aria-pressed={active}
+                        title={label}
+                        className={cn(
+                          "flex min-h-[68px] min-w-[44px] flex-col items-center justify-center gap-1.5 rounded-xl border px-1 py-2 text-[9.5px] font-medium uppercase tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/38",
+                          active
+                            ? "border-violet-400/42 bg-violet-500/[0.12] text-violet-100 shadow-[0_0_28px_rgba(139,92,246,0.25)]"
+                            : "border-white/[0.06] bg-black/25 text-zinc-500 hover:border-white/[0.1]"
+                        )}
+                      >
+                        <Icon className="h-5 w-5 opacity-95" aria-hidden strokeWidth={1.5} />
+                        <span className="line-clamp-2 text-center leading-tight">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className={mattePanelClass("p-5")}>
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
+                  Companion
+                </p>
+                <button
+                  type="button"
+                  onClick={onOpenCustomize}
+                  className="mt-4 flex min-h-[48px] w-full items-start justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/28 px-3 py-3 text-left transition-colors hover:border-violet-400/28 hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
+                  aria-expanded={false}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-white/[0.1] bg-black/40">
+                      {companionPortraitUrl ? (
+                        <img src={companionPortraitUrl} alt="" className="h-full w-full object-cover object-top" />
+                      ) : (
+                        <User className="m-3 h-5 w-5 text-zinc-500" aria-hidden />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[13.5px] font-medium text-zinc-100">{companionDisplayName}</p>
+                      <p className="mt-0.5 text-[11px] text-[var(--solace-muted)]">{companionTraitsLine}</p>
+                    </div>
+                  </div>
+                  <ChevronDown className="mt-2 h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+                </button>
+              </div>
+
+              <div className={mattePanelClass("p-5")}>
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
+                  Environment
+                </p>
+                <p className="mt-1 text-[12px] text-[var(--solace-muted)]">Set the mood for your session</p>
+                <div className="mt-5 grid grid-cols-4 gap-2">
+                  {RAIL_ENVIRONMENT_THUMBS.map((env) => {
+                    const active = selectedEnvironment === env.value;
+                    return (
+                      <button
+                        key={env.label}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => onEnvironmentSelect(env.value)}
+                        title={env.label}
+                        className={cn(
+                          "group overflow-hidden rounded-lg border bg-black/30 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
+                          active ? "border-violet-400/55 ring-1 ring-violet-400/25" : "border-white/[0.06]"
+                        )}
+                      >
+                        <span className="relative block aspect-[4/5] overflow-hidden">
+                          <img src={env.image} alt="" className="h-full w-full object-cover opacity-95 transition-opacity group-hover:opacity-100" />
+                          <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                        </span>
+                        <span className="block px-2 py-1.5 text-[9px] font-medium uppercase tracking-wide text-zinc-400">
+                          {env.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  className="mt-4 inline-block text-[11px] font-medium text-violet-300/92 hover:text-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
+                  onClick={onOpenCustomize}
+                >
+                  View all →
+                </button>
+              </div>
+
+              <div className={mattePanelClass("p-5")}>
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
+                  Conversation Energy
+                </p>
+                <p className="mt-1 text-[12px] text-[var(--solace-muted)]">
+                  How would you like this session to feel?
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {energyOptions.map(({ id, label }) => {
+                    const active = conversationEnergy === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setConversationEnergy(id)}
+                        className={cn(
+                          "min-h-[40px] rounded-full border px-4 py-2 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35",
+                          active
+                            ? "border-violet-400/42 bg-violet-500/[0.16] text-violet-50 shadow-[0_0_20px_rgba(139,92,246,0.2)]"
+                            : "border-white/[0.07] bg-black/28 text-zinc-400 hover:border-white/[0.12]"
+                        )}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className={mattePanelClass("p-5")}>
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
+                  Session Length
+                </p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {durations.map((d) => {
+                    const dis = !!durationDisabled.get(d);
+                    const active = selectedDuration === d && !isFreeFlowActive;
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        disabled={dis}
+                        aria-pressed={active}
+                        onClick={() => {
+                          setSelectedMode("now");
+                          applyDurationPreset(d);
+                        }}
+                        className={cn(
+                          "min-h-[42px] min-w-[4.75rem] rounded-full border px-4 py-2 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35",
+                          dis && "cursor-not-allowed opacity-35",
+                          active
+                            ? "border-violet-400/45 bg-violet-500/[0.16] text-violet-50"
+                            : !dis && "border-white/[0.07] bg-black/28 text-zinc-400 hover:border-white/[0.12]"
+                        )}
+                      >
+                        {d} min
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    aria-pressed={isFreeFlowActive}
+                    disabled={minutesAvailable <= 0}
+                    onClick={() => {
+                      setSelectedMode("now");
+                      onSelectFreeFlow();
+                    }}
+                    className={cn(
+                      "min-h-[42px] rounded-full border px-4 py-2 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35 disabled:opacity-35",
+                      isFreeFlowActive
+                        ? "border-violet-400/45 bg-violet-500/[0.16] text-violet-50"
+                        : "border-white/[0.07] bg-black/28 text-zinc-400 hover:border-white/[0.12]"
+                    )}
+                  >
+                    Free flow
+                  </button>
+                </div>
+                <p className="mt-3 text-[11px] text-[var(--solace-muted)]">
+                  Selected for next session · <span className="text-zinc-300">{selectedDuration} min</span>
+                </p>
+              </div>
+
+              <div className={mattePanelClass("p-5")}>
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
+                  Safety &amp; Comfort
+                </p>
+                <ul className="mt-4 space-y-2.5">
+                  {SAFETY_ITEMS.map((line) => (
+                    <li key={line} className="flex items-start gap-2.5 text-[12.5px] text-zinc-300/95">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-cyan-400/85" aria-hidden />
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </aside>
+          </div>
+
+          <div className="mt-14">
+            <TalkItOutBottomDock getSupportSlot={getSupportSlot} />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}

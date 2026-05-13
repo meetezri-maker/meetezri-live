@@ -1,4 +1,3 @@
-import { AppLayout } from "../../components/AppLayout";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { motion } from "motion/react";
@@ -167,8 +166,7 @@ export function CrisisResources() {
   const hasMoreArticles = libraryArticles.length > CRISIS_RESOURCES_ARTICLE_LIMIT;
 
   return (
-    <AppLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -596,6 +594,5 @@ export function CrisisResources() {
           </Card>
         </motion.div>
       </div>
-    </AppLayout>
   );
 }

@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { AppLayout } from "@/app/components/AppLayout";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDistanceToNow, parseISO } from "date-fns";
@@ -340,8 +339,7 @@ export function HelpSupport() {
   }, []);
 
   return (
-    <AppLayout>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -1127,6 +1125,5 @@ export function HelpSupport() {
           </motion.div>
         )}
       </div>
-    </AppLayout>
   );
 }

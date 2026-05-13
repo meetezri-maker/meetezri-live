@@ -1,5 +1,5 @@
-import { ReactNode, useEffect, useState, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState, useMemo } from "react";
+import { Link, useNavigate, Outlet } from "react-router-dom";
 import { motion } from "motion/react";
 import { 
   Bell,
@@ -26,11 +26,11 @@ import {
   AlertDialogTitle,
 } from "./ui/alert-dialog";
 
-interface AppLayoutProps {
-  children: ReactNode;
-}
-
-export function AppLayout({ children }: AppLayoutProps) {
+/**
+ * Exactly one member shell per tree: sidebar, header, main scroll region, mobile nav.
+ * Child routes render via `<Outlet />` — do not nest another AppLayout inside pages.
+ */
+export function AppLayout() {
   const navigate = useNavigate();
   const { signOut, user, profile } = useAuth();
   const { unreadCount } = useNotifications();
@@ -193,10 +193,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   const compact = appearance.compactMode;
   const headerHeightClass = compact ? "h-14" : "h-16";
   const headerInnerClass = compact ? "px-3 sm:px-4" : "px-4 sm:px-6";
-  /** Mobile bottom nav + optional breathing room; desktop clears for Solace sidebar */
+  /** Mobile bottom nav fills <lg; Solace sidebar is lg+ only — avoids duplicated nav stacks (tablet). */
   const mainPaddingClass = compact
-    ? "pb-[5.25rem] sm:pb-5 sm:pl-[280px]"
-    : "pb-[5.75rem] sm:pb-8 sm:pl-[280px]";
+    ? "pb-[5.25rem] lg:pb-5 lg:pl-[280px]"
+    : "pb-[5.75rem] lg:pb-8 lg:pl-[280px]";
 
   // Prefer backend-derived verification (source of truth), fall back to Supabase session flags.
   // Supabase user metadata can remain stale in the client session after verification.
@@ -318,14 +318,14 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           </div>
         )}
-        {children}
+        <Outlet />
       </main>
 
       <MobileBottomNav compact={compact} />
 
       {/* Environmental sidebar — desktop / tablet */}
       <aside
-        className={`pointer-events-none fixed bottom-3 left-3 z-30 hidden w-[var(--solace-sidebar-w)] sm:block ${compact ? "top-[calc(3.5rem+0.5rem)]" : "top-[calc(4rem+0.5rem)]"}`}
+        className={`pointer-events-none fixed bottom-3 left-3 z-30 hidden w-[var(--solace-sidebar-w)] lg:block ${compact ? "top-[calc(3.5rem+0.5rem)]" : "top-[calc(4rem+0.5rem)]"}`}
       >
         <div className="pointer-events-auto flex h-full flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-[color-mix(in_oklab,var(--solace-panel)_96%,transparent)] shadow-[var(--solace-glow-purple),0_20px_60px_-28px_rgba(0,0,0,0.75)] backdrop-blur-xl">
           <SolaceSidebar />

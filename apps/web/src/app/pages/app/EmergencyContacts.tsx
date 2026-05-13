@@ -1,4 +1,3 @@
-import { AppLayout } from "../../components/AppLayout";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { motion } from "motion/react";
@@ -217,8 +216,7 @@ export function EmergencyContacts() {
 
   if (profileLoading || isLoading) {
     return (
-      <AppLayout>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
           <div className="mb-8">
             <Skeleton className="h-4 w-24 mb-4" />
             <div className="flex items-center justify-between">
@@ -266,14 +264,12 @@ export function EmergencyContacts() {
             ))}
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   if (profileError) {
     return (
-      <AppLayout>
-        <div className="max-w-4xl mx-auto flex flex-col items-center justify-center gap-4 px-4 py-16 text-center">
+      <div className="max-w-4xl mx-auto flex flex-col items-center justify-center gap-4 px-4 py-16 text-center">
           <AlertCircle className="text-destructive h-10 w-10" aria-hidden />
           <div>
             <h2 className="text-lg font-semibold">Couldn&apos;t load your profile</h2>
@@ -285,13 +281,12 @@ export function EmergencyContacts() {
             Retry
           </Button>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <EmergencyContactConsentModal
+    <>
+    <EmergencyContactConsentModal
         open={showConsentModal}
         onConsent={() => consentMutation.mutate()}
         onCancel={() => navigate("/app/settings")}
@@ -590,7 +585,7 @@ export function EmergencyContacts() {
 
         <CrisisResourcesCallout />
       </div>
-    </AppLayout>
+    </>
   );
 }
 

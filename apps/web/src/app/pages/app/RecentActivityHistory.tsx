@@ -1,4 +1,3 @@
-import { AppLayout } from "@/app/components/AppLayout";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Skeleton } from "@/app/components/ui/skeleton";
@@ -118,8 +117,7 @@ export function RecentActivityHistory() {
   const currentPageItems = mapped.slice(startIndex, endIndex);
 
   return (
-    <AppLayout>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -261,6 +259,5 @@ export function RecentActivityHistory() {
           )}
         </Card>
       </div>
-    </AppLayout>
   );
 }

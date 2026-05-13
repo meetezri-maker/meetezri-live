@@ -1,4 +1,3 @@
-import { AppLayout } from "../../components/AppLayout";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { motion, AnimatePresence } from "motion/react";
@@ -254,8 +253,7 @@ export function WellnessTools() {
   // Feature Gate for Trial Users
   if (profile?.subscription_plan === 'trial') {
     return (
-      <AppLayout>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
           <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock className="w-8 h-8" />
@@ -269,7 +267,6 @@ export function WellnessTools() {
             </Button>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
@@ -656,8 +653,7 @@ export function WellnessTools() {
 
   if (isLoading) {
     return (
-      <AppLayout>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
           <div className="mb-8">
             <Skeleton className="h-8 w-64 mb-2" />
             <Skeleton className="h-4 w-80" />
@@ -686,13 +682,12 @@ export function WellnessTools() {
             ))}
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+    <>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1187,6 +1182,6 @@ export function WellnessTools() {
           duration={exercises.find(ex => ex.id === guidedExercise)!.duration}
         />
       )}
-    </AppLayout>
+    </>
   );
 }

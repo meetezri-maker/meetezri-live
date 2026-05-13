@@ -8,7 +8,6 @@ import { useQuery } from '@tanstack/react-query';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { CrisisResourcesCallout } from '@/app/components/safety/CrisisResourcesCallout';
-import { AppLayout } from '@/app/components/AppLayout';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import {
@@ -316,19 +315,16 @@ export function SafetyInsights() {
 
   if (!insights) {
     return (
-      <AppLayout>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -652,6 +648,5 @@ export function SafetyInsights() {
 
         <CrisisResourcesCallout />
       </div>
-    </AppLayout>
   );
 }

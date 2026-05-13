@@ -28,7 +28,6 @@ import {
 import { AdminPaginationBar } from "@/app/components/admin/AdminPaginationBar";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
-import { AppLayout } from "../../components/AppLayout";
 import { Skeleton } from "../../components/ui/skeleton";
 import {
   Dialog,
@@ -414,8 +413,7 @@ export function Billing() {
 
   if (isLoading) {
     return (
-      <AppLayout>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="mb-8">
             <Skeleton className="h-8 w-64 mb-2" />
             <Skeleton className="h-4 w-80" />
@@ -464,13 +462,12 @@ export function Billing() {
             </Card>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Billing & Subscription</h1>
           <p className="text-muted-foreground">
@@ -1055,7 +1052,6 @@ export function Billing() {
           </Card>
         )}
 
-
       </div>
 
       {/* PAYG Purchase Modal */}
@@ -1199,6 +1195,6 @@ export function Billing() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </AppLayout>
+    </>
   );
 }

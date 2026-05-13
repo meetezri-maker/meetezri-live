@@ -1,25 +1,20 @@
-import { AppLayout } from "../../components/AppLayout";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { motion, AnimatePresence } from "motion/react";
-import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams, Link } from "react-router-dom";
 import {
   Video,
   Calendar,
   Clock,
   Sparkles,
-  CheckCircle,
   User,
   Volume2,
-  Settings,
-  ArrowRight,
-  Play,
   X,
   Check,
   Palette,
   Loader2,
 } from "lucide-react";
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -31,6 +26,7 @@ import {
 } from "@/lib/avatar/companionModelUrl";
 import { LOBBY_AVATARS, lobbyAvatarByName, lobbyAvatarsFromApiRows } from "@/lib/avatar/lobbyAvatars";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
+import { TalkItOutLobbyLayout } from "./talk-it-out/TalkItOutLobbyLayout";
 
 interface BackendSession {
   id: string;
@@ -66,6 +62,8 @@ const SESSION_ENVIRONMENTS = [
   { value: "minimal", label: "Minimal Studio", emoji: "⬜", gradient: "from-gray-100 to-gray-300" }
 ];
 
+const LOBBY_DURATION_PRESETS: readonly number[] = [10, 25, 45];
+
 function environmentLabel(value: string | undefined | null): string {
   if (!value) return "Default";
   const found = SESSION_ENVIRONMENTS.find((e) => e.value === value);
@@ -87,9 +85,9 @@ export function SessionLobby() {
   const environmentSectionRef = useRef<HTMLDivElement>(null);
   const [showCarveoutBanner, setShowCarveoutBanner] = useState(false);
   const [selectedMode, setSelectedMode] = useState<"now" | "schedule">("now");
-  const [selectedDuration, setSelectedDuration] = useState(30);
+  const [selectedDuration, setSelectedDuration] = useState(25);
   const [showMinutesPicker, setShowMinutesPicker] = useState(false);
-  const [customMinutesInput, setCustomMinutesInput] = useState("30");
+  const [customMinutesInput, setCustomMinutesInput] = useState("25");
   const [showCustomizeModal, setShowCustomizeModal] = useState(false);
   const [isSavingCustomize, setIsSavingCustomize] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -103,6 +101,11 @@ export function SessionLobby() {
   const [scheduleAvatarOverride, setScheduleAvatarOverride] = useState<string | null>(null);
   const [editingScheduledSessionId, setEditingScheduledSessionId] = useState<string | null>(null);
   const [isCancelingScheduled, setIsCancelingScheduled] = useState(false);
+  const [sessionLengthKind, setSessionLengthKind] = useState<"fixed" | "free">("fixed");
+  const [connectMode, setConnectMode] = useState<"voice" | "text" | "deep" | "quick">("voice");
+  const [conversationEnergy, setConversationEnergy] = useState<
+    "gentle" | "reflective" | "grounding" | "open"
+  >("gentle");
 
   // Temporary state for modal
   const [tempSelectedVoice, setTempSelectedVoice] = useState(selectedVoice);
@@ -253,16 +256,22 @@ export function SessionLobby() {
     profile?.purchased_credits,
   ]);
 
-  const durations = [15, 30, 45, 60];
+  const durations = LOBBY_DURATION_PRESETS;
   const durationDisabled = useMemo(() => {
     const map = new Map<number, boolean>();
     for (const d of durations) map.set(d, minutesAvailable < d);
     return map;
-  }, [minutesAvailable]);
+  }, [minutesAvailable, durations]);
 
   useEffect(() => {
-    // If user's remaining minutes drop below selection, snap to the largest allowed duration.
     if (minutesAvailable <= 0) return;
+    if (sessionLengthKind === "free") {
+      setSelectedDuration((prev) => {
+        const next = Math.max(1, minutesAvailable);
+        return prev === next ? prev : next;
+      });
+      return;
+    }
     if (selectedDuration <= minutesAvailable) return;
     const allowed = durations.filter((d) => d <= minutesAvailable);
     if (allowed.length > 0) {
@@ -270,7 +279,7 @@ export function SessionLobby() {
     } else {
       setSelectedDuration(Math.max(1, Math.floor(minutesAvailable)));
     }
-  }, [minutesAvailable, selectedDuration]);
+  }, [minutesAvailable, selectedDuration, sessionLengthKind, durations]);
 
   useEffect(() => {
     if (!showMinutesPicker) return;
@@ -286,7 +295,7 @@ export function SessionLobby() {
     setCustomMinutesInput(String(selectedDuration));
   }, [showMinutesPicker, selectedDuration]);
 
-  const isOnOwnPace = minutesAvailable > 0 && selectedDuration === minutesAvailable;
+  const isOnOwnPace = sessionLengthKind === "free";
   const customMinutesValue = Number(customMinutesInput);
   const isCustomMinutesValid =
     customMinutesInput.trim() !== "" &&
@@ -299,6 +308,7 @@ export function SessionLobby() {
       toast.error(`Enter minutes between 1 and ${minutesAvailable}.`);
       return;
     }
+    setSessionLengthKind("fixed");
     setSelectedDuration(Math.floor(customMinutesValue));
   };
 
@@ -708,657 +718,324 @@ export function SessionLobby() {
     setChecklistItems(newItems);
   };
 
+  const companionTraitsLine = useMemo(() => {
+    const pty = selectedCompanionPreview.personality?.trim();
+    if (!pty) return "Calm • Empathetic • Supportive";
+    const parts = pty
+      .split(/[,•|]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.length >= 2) return parts.slice(0, 3).join(" • ");
+    return pty;
+  }, [selectedCompanionPreview]);
+
+  const applyDurationPreset = useCallback((d: number) => {
+    setSessionLengthKind("fixed");
+    setSelectedDuration(d);
+  }, []);
+
+  const selectFreeFlow = useCallback(() => {
+    setSessionLengthKind("free");
+    setSelectedDuration(Math.max(1, minutesAvailable));
+  }, [minutesAvailable]);
+
+  const persistEnvironmentSelection = useCallback(
+    async (value: string) => {
+      setSelectedEnvironment(value);
+      setTempSelectedEnvironment(value);
+      try {
+        await api.updateProfile({ selected_environment: value });
+        await refreshProfile();
+      } catch (err) {
+        console.error(err);
+        toast.error("Could not update environment");
+      }
+    },
+    [refreshProfile]
+  );
+
+  const openScheduleFlow = useCallback(() => {
+    setEditingScheduledSessionId(null);
+    setScheduleAvatarOverride(null);
+    setShowMinutesPicker(false);
+    setSelectedMode("schedule");
+    setShowScheduleModal(true);
+  }, []);
+
   if (isLoadingSessions) {
     return (
-      <AppLayout>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-          <div className="mb-8">
-            <Skeleton className="h-8 w-64 mb-2" />
-            <Skeleton className="h-4 w-80" />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="p-6 shadow-xl">
-                <Skeleton className="h-5 w-40 mb-4" />
-                <div className="grid grid-cols-2 gap-4">
-                  {[0, 1].map((i) => (
-                    <Skeleton key={i} className="h-24 w-full rounded-xl" />
-                  ))}
-                </div>
-              </Card>
-              <Card className="p-6 shadow-xl">
-                <Skeleton className="h-5 w-44 mb-4" />
-                <div className="grid grid-cols-4 gap-3">
-                  {[0, 1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-16 w-full rounded-xl" />
-                  ))}
-                </div>
-              </Card>
-              <Card className="p-6 shadow-xl">
-                <Skeleton className="h-5 w-40 mb-4" />
-                <Skeleton className="h-10 w-full mb-3 rounded-lg" />
-                <Skeleton className="h-24 w-full rounded-lg" />
-              </Card>
+      <div className="solace-canvas-bg relative min-h-[calc(100dvh-5rem)] pb-28 text-[var(--solace-text)] lg:pb-12">
+          <div className="relative z-[1] mx-auto max-w-[1680px] px-4 sm:px-5 lg:px-8">
+            <div className="mb-8 flex flex-col gap-2 border-b border-white/[0.05] pb-8 pt-6">
+              <Skeleton className="h-10 w-[14rem] rounded-lg bg-white/[0.06]" />
+              <Skeleton className="h-4 w-[20rem] max-w-full rounded-md bg-white/[0.05]" />
             </div>
-            <div className="space-y-6">
-              <Card className="p-6 shadow-xl">
-                <div className="flex items-center gap-3 mb-4">
-                  <Skeleton className="w-12 h-12 rounded-full" />
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-3 w-24" />
-                  </div>
-                </div>
-                <Skeleton className="h-10 w-full mb-4 rounded-lg" />
-                <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_308px]">
+              <div className="min-w-0 space-y-9">
+                <Skeleton className="h-[440px] w-full rounded-[1.75rem] bg-white/[0.05]" />
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <Skeleton className="w-4 h-4 rounded" />
-                      <Skeleton className="h-3 w-48" />
-                    </div>
+                    <Skeleton key={i} className="h-28 rounded-[1.2rem] bg-white/[0.05]" />
                   ))}
                 </div>
-              </Card>
-              <Card className="p-6 shadow-xl">
-                <Skeleton className="h-5 w-40 mb-4" />
-                <div className="space-y-3">
-                  {[0, 1].map((i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Skeleton className="w-10 h-10 rounded-full" />
-                        <div className="space-y-2">
-                          <Skeleton className="h-3 w-32" />
-                          <Skeleton className="h-3 w-20" />
-                        </div>
-                      </div>
-                      <Skeleton className="h-8 w-24 rounded-lg" />
-                    </div>
-                  ))}
-                </div>
-              </Card>
+                <Skeleton className="h-24 w-full rounded-[1.2rem] bg-white/[0.05]" />
+                <Skeleton className="h-40 w-full rounded-[1.2rem] bg-white/[0.05]" />
+              </div>
+              <div className="hidden min-w-0 space-y-5 xl:block">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <Skeleton key={i} className="h-32 w-full rounded-[1.2rem] bg-white/[0.05]" />
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      </AppLayout>
+      </div>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <h1 className="text-3xl font-bold mb-2">Talk It Out with Solace</h1>
-          <p className="text-muted-foreground">
-            Start a conversation or schedule a Talk for later
-          </p>
-        </motion.div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Session Card */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Mode Selection */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
+    <>
+      <TalkItOutLobbyLayout
+        companionPill={`Your companion, ${selectedCompanionPreview.name}`}
+        companionPortraitUrl={selectedCompanionPreview.cardImage}
+        companionAlt=""
+        companionDisplayName={selectedCompanionPreview.name}
+        companionTraitsLine={companionTraitsLine}
+        heroMessageLine1="I'm here to listen"
+        heroMessageLine2="and support you."
+        heroSupporting="Whatever is on your mind, you don't have to carry it alone."
+        getSupportSlot={
+          <Link to="/app/emergency-resources" className="inline-flex">
+            <Button
+              type="button"
+              className="min-h-[44px] rounded-full bg-gradient-to-r from-violet-600/90 to-indigo-600/90 px-6 text-[13px] text-white shadow-[0_0_28px_rgba(76,29,149,0.35)] hover:from-violet-500 hover:to-indigo-500"
             >
-              <Card className="p-6 shadow-xl">
-                <h2 className="text-xl font-bold mb-4">Talk Time</h2>
-                <div className="grid grid-cols-1 gap-4">
-                  <motion.button
-                    type="button"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      setSelectedMode("now");
-                      setShowMinutesPicker(true);
-                    }}
-                    className={`p-6 rounded-xl border-2 transition-all w-full ${
-                      selectedMode === "now"
-                        ? "border-primary bg-primary/10 shadow-lg"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    <Play className={`w-8 h-8 mb-3 mx-auto ${selectedMode === "now" ? "text-primary" : "text-gray-400"}`} />
-                    <h3 className="font-bold mb-1">Let's Talk</h3>
-                    <p className="text-sm text-muted-foreground">Begin immediately</p>
-                  </motion.button>
+              Get Support
+            </Button>
+          </Link>
+        }
+        minutesAvailable={minutesAvailable}
+        durations={durations}
+        durationDisabled={durationDisabled}
+        selectedDuration={selectedDuration}
+        applyDurationPreset={applyDurationPreset}
+        isFreeFlowActive={sessionLengthKind === "free"}
+        onSelectFreeFlow={selectFreeFlow}
+        selectedMode={selectedMode}
+        setSelectedMode={setSelectedMode}
+        setShowMinutesPicker={setShowMinutesPicker}
+        isStarting={isStarting}
+        showCarveoutBanner={showCarveoutBanner}
+        checklistItems={checklistItems}
+        toggleChecklist={toggleChecklist}
+        connectMode={connectMode}
+        setConnectMode={setConnectMode}
+        conversationEnergy={conversationEnergy}
+        setConversationEnergy={setConversationEnergy}
+        selectedEnvironment={selectedEnvironment}
+        onEnvironmentSelect={(v) => void persistEnvironmentSelection(v)}
+        onOpenCustomize={() => setShowCustomizeModal(true)}
+        onOpenSchedule={openScheduleFlow}
+        upcomingSessions={upcomingSessions}
+        isLoadingUpcoming={false}
+        onSelectUpcomingRow={(s) => {
+          setActiveUpcomingSession(s as UpcomingSession);
+          setShowUpcomingActionModal(true);
+        }}
+        onStartFreely={() => {
+          setConnectMode("voice");
+          setSelectedMode("now");
+          setShowMinutesPicker(true);
+        }}
+        onStartGuided={() => {
+          setSelectedMode("now");
+          setShowMinutesPicker(true);
+          toast("We'll begin with a few gentle questions when you're ready.");
+        }}
+        onStartDeep={() => {
+          setConnectMode("deep");
+          setSelectedMode("now");
+          setShowMinutesPicker(true);
+        }}
+        onQuickCheckInNavigate={() => navigate("/app/mood-checkin")}
+      />
 
-                </div>
-              </Card>
-            </motion.div>
-
-            {/* Duration Selection Popup */}
-            <AnimatePresence>
-              {selectedMode === "now" && showMinutesPicker && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  onClick={() => setShowMinutesPicker(false)}
-                  className="fixed left-0 top-0 w-screen h-[100dvh] bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"
-                >
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-full max-w-xl flex flex-col"
-                  >
-                    <Card className="p-0 shadow-2xl bg-white dark:bg-gray-900 overflow-hidden border-0">
-                      <div className="relative px-6 py-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white">
-                        <div className="absolute -top-10 -right-10 w-28 h-28 rounded-full bg-white/20 blur-2xl" />
-                        <div className="absolute -bottom-12 -left-8 w-24 h-24 rounded-full bg-white/15 blur-2xl" />
-                        <div className="relative flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-5 h-5 text-white" />
-                            <h2 className="text-xl font-bold">Choose talk duration</h2>
-                          </div>
-                          <motion.button
-                            type="button"
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => setShowMinutesPicker(false)}
-                            className="p-2 rounded-full hover:bg-white/20 transition-colors"
-                          >
-                            <X className="w-5 h-5" />
-                          </motion.button>
+        <AnimatePresence>
+          {selectedMode === "now" && showMinutesPicker && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMinutesPicker(false)}
+              className="fixed left-0 top-0 z-50 flex h-[100dvh] w-screen items-center justify-center bg-black/60 backdrop-blur-sm"
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.94 }}
+                onClick={(e) => e.stopPropagation()}
+                className="flex w-full max-w-xl flex-col px-4"
+              >
+                <Card className="overflow-hidden rounded-[1.25rem] border border-white/[0.08] bg-zinc-950/95 text-zinc-100 shadow-2xl">
+                  <div className="relative border-b border-white/[0.06] bg-black/35 px-6 py-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-5 w-5 shrink-0 text-violet-300" aria-hidden />
+                        <div>
+                          <h2 className="text-lg font-semibold text-zinc-50">Choose talk duration</h2>
+                          <p className="mt-1 text-sm text-zinc-500">
+                            Pick how long you want to talk today.
+                          </p>
                         </div>
-                        <p className="relative mt-2 text-sm text-white/90">
-                          Pick how long you want to talk with Solace today.
-                        </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowMinutesPicker(false)}
+                        className="rounded-full p-2 text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
+                        aria-label="Close"
+                      >
+                        <X className="h-5 w-5" aria-hidden />
+                      </button>
+                    </div>
+                  </div>
 
-                      <div className="p-6">
-                      <div className="flex items-center justify-between gap-3 mb-5 text-sm">
-                        <p className="text-muted-foreground">
-                          Remaining: <span className="font-semibold text-foreground">{minutesAvailable} min</span>
-                        </p>
-                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
-                          Selected: {selectedDuration} min
-                        </span>
-                      </div>
+                  <div className="space-y-5 p-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                      <p className="text-zinc-500">
+                        Remaining:{" "}
+                        <span className="font-semibold text-zinc-200">{minutesAvailable} min</span>
+                      </p>
+                      <span className="rounded-full border border-violet-400/35 bg-violet-500/[0.12] px-3 py-1 text-xs font-medium text-violet-100">
+                        Selected: {selectedDuration} min
+                      </span>
+                    </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {durations.map((duration, index) => {
-                          const isDisabled = !!durationDisabled.get(duration);
-                          const isSelected = selectedDuration === duration;
-                          return (
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {durations.map((duration, index) => {
+                        const isDisabled = !!durationDisabled.get(duration);
+                        const isSelected = selectedDuration === duration && sessionLengthKind === "fixed";
+                        return (
                           <motion.button
                             key={duration}
                             type="button"
-                            initial={{ opacity: 0, scale: 0.8 }}
+                            initial={{ opacity: 0, scale: 0.96 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.06 + index * 0.05 }}
-                            whileHover={isDisabled ? undefined : { y: -2, scale: 1.04 }}
-                            whileTap={{ scale: 0.96 }}
+                            transition={{ delay: 0.04 + index * 0.03 }}
                             onClick={() => {
                               if (isDisabled) return;
-                              setSelectedDuration(duration);
+                              applyDurationPreset(duration);
                             }}
                             disabled={isDisabled}
-                            className={`relative p-4 rounded-2xl border transition-all text-left ${
-                              isDisabled
-                                ? "border-border bg-muted/20 opacity-45 cursor-not-allowed"
-                                : isSelected
-                                ? "border-primary bg-gradient-to-br from-primary/15 to-fuchsia-500/10 shadow-lg ring-2 ring-primary/20"
-                                : "border-border bg-background hover:border-primary/40 hover:bg-primary/5"
-                            }`}
                             aria-pressed={isSelected}
+                            className={`relative rounded-2xl border p-4 text-left transition-all ${
+                              isDisabled
+                                ? "cursor-not-allowed border-white/[0.06] opacity-40"
+                                : isSelected
+                                  ? "border-violet-400/45 bg-violet-500/[0.12] shadow-[0_0_24px_rgba(139,92,246,0.2)]"
+                                  : "border-white/[0.08] bg-black/28 hover:border-violet-400/25"
+                            }`}
                           >
-                            <div className="text-2xl font-bold">{duration}</div>
-                            <div className="text-xs mt-1 text-muted-foreground">minutes</div>
-                            {isSelected && (
-                              <Check className="absolute top-3 right-3 w-4 h-4 text-primary" />
-                            )}
+                            <div className="text-2xl font-semibold">{duration}</div>
+                            <div className="mt-1 text-xs text-zinc-500">minutes</div>
+                            {isSelected ? (
+                              <Check
+                                className="absolute right-3 top-3 h-4 w-4 text-violet-300"
+                                aria-hidden
+                              />
+                            ) : null}
                           </motion.button>
-                        )})}
-                      </div>
+                        );
+                      })}
+                    </div>
 
-                      <div className="mt-4 rounded-2xl border border-border/70 bg-muted/20 p-3">
-                        <div className="flex items-center justify-between gap-3 mb-2">
-                          <p className="text-sm font-medium">Custom minutes</p>
-                          <p className="text-xs text-muted-foreground">
-                            1 - {minutesAvailable} min
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min={1}
-                            max={minutesAvailable}
-                            step={1}
-                            inputMode="numeric"
-                            value={customMinutesInput}
-                            onChange={(e) => setCustomMinutesInput(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") applyCustomMinutes();
-                            }}
-                            className="h-10 w-32 rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                            placeholder="e.g. 22"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="h-10"
-                            onClick={applyCustomMinutes}
-                            disabled={!isCustomMinutesValid}
-                          >
-                            Apply
-                          </Button>
-                        </div>
-                        {customMinutesInput.trim() !== "" && !isCustomMinutesValid && (
-                          <p className="mt-2 text-xs text-red-600 dark:text-red-400">
-                            Please enter a valid value between 1 and {minutesAvailable}.
-                          </p>
-                        )}
+                    <div className="rounded-2xl border border-white/[0.06] bg-black/25 p-4">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-zinc-100">Custom minutes</p>
+                        <p className="text-xs text-zinc-500">1 – {minutesAvailable} min</p>
                       </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          max={minutesAvailable}
+                          step={1}
+                          inputMode="numeric"
+                          value={customMinutesInput}
+                          onChange={(e) => setCustomMinutesInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") applyCustomMinutes();
+                          }}
+                          className="h-11 w-full min-w-[120px] max-w-[12rem] rounded-xl border border-white/[0.1] bg-black/35 px-3 text-sm text-zinc-100 outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35 sm:w-auto"
+                          placeholder="e.g. 22"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-11 border-white/[0.12] bg-transparent text-zinc-100 hover:bg-white/[0.04]"
+                          onClick={applyCustomMinutes}
+                          disabled={!isCustomMinutesValid}
+                        >
+                          Apply
+                        </Button>
+                      </div>
+                      {customMinutesInput.trim() !== "" && !isCustomMinutesValid ? (
+                        <p className="mt-2 text-xs text-rose-400">
+                          Enter a valid value between 1 and {minutesAvailable}.
+                        </p>
+                      ) : null}
+                    </div>
 
+                    <button
+                      type="button"
+                      onClick={() => selectFreeFlow()}
+                      disabled={minutesAvailable <= 0}
+                      aria-pressed={isOnOwnPace}
+                      className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${
+                        isOnOwnPace
+                          ? "border-amber-400/35 bg-amber-500/[0.1] shadow-[0_0_22px_rgba(245,158,11,0.12)]"
+                          : "border-white/[0.08] bg-black/28 hover:border-amber-400/25"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="flex items-center gap-2 font-semibold text-zinc-100">
+                          {isOnOwnPace ? (
+                            <Check className="h-4 w-4 text-amber-300" aria-hidden />
+                          ) : null}
+                          Free flow · use full balance
+                        </span>
+                        <span className="text-sm text-zinc-500">{minutesAvailable} min</span>
+                      </div>
+                    </button>
+
+                    <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => {
-                          if (minutesAvailable <= 0) return;
-                          setSelectedDuration(minutesAvailable);
-                        }}
-                        disabled={minutesAvailable <= 0}
-                        className={`mt-4 w-full h-12 border-amber-200 dark:border-amber-800 transition-all hover:text-black dark:hover:text-white ${
-                          isOnOwnPace
-                            ? "bg-gradient-to-r from-amber-100 to-orange-200 dark:from-amber-900/40 dark:to-orange-900/40 ring-2 ring-amber-500/30 shadow-md"
-                            : "bg-gradient-to-r from-amber-50 to-orange-100 dark:from-amber-900/25 dark:to-orange-900/25 hover:from-amber-100 hover:to-orange-200 dark:hover:from-amber-900/40 dark:hover:to-orange-900/40"
-                        }`}
-                        aria-pressed={isOnOwnPace}
+                        className="border-white/[0.1] bg-transparent text-zinc-100 hover:bg-white/[0.04]"
+                        onClick={() => setShowMinutesPicker(false)}
                       >
-                        <div className="flex items-center justify-between w-full gap-3">
-                          <div className="flex items-center gap-2">
-                            {isOnOwnPace ? <Check className="w-4 h-4 text-amber-700" /> : null}
-                            <span className="font-semibold">At your own pace</span>
-                          </div>
-                          <span className="text-sm text-muted-foreground">
-                            Use all {minutesAvailable} min
-                          </span>
-                        </div>
+                        Cancel
                       </Button>
-
-                      <div className="mt-5 flex items-center justify-between gap-3">
-                        <p className="text-xs text-muted-foreground">
-                          Selected duration: <span className="font-medium text-foreground">{selectedDuration} min</span>
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setShowMinutesPicker(false)}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            type="button"
-                            onClick={() => void handleStartSession()}
-                            disabled={
-                              isStarting ||
-                              minutesAvailable <= 0 ||
-                              selectedDuration > minutesAvailable ||
-                              selectedDuration < 1
-                            }
-                            className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-2xl hover:shadow-purple-500/50 transition-all"
-                          >
-                            <Video className="w-4 h-4 mr-2" />
-                            Let's Talk Now
-                          </Button>
-                        </div>
-                      </div>
-                      </div>
-                    </Card>
-                  </motion.div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Ezri Preview */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Card className="p-6 shadow-xl bg-gradient-to-br from-blue-500 to-purple-600 text-white overflow-hidden relative">
-                <motion.div
-                  animate={{
-                    scale: [1, 1.2, 1],
-                    opacity: [0.3, 0.5, 0.3]
-                  }}
-                  transition={{ duration: 4, repeat: Infinity }}
-                  className="absolute -top-10 -right-10 w-40 h-40 bg-white/20 rounded-full blur-3xl"
-                />
-                <motion.div
-                  animate={{
-                    scale: [1, 1.3, 1],
-                    opacity: [0.2, 0.4, 0.2]
-                  }}
-                  transition={{ duration: 5, repeat: Infinity }}
-                  className="absolute -bottom-10 -left-10 w-40 h-40 bg-white/20 rounded-full blur-3xl"
-                />
-                
-                <div className="relative z-10">
-                  <div className="flex items-center gap-4 mb-4">
-                    <motion.div
-                      animate={{ 
-                        y: [0, -10, 0],
-                        rotate: [0, 5, -5, 0]
-                      }}
-                      transition={{ duration: 3, repeat: Infinity }}
-                      className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-4xl overflow-hidden ring-2 ring-white/30"
-                    >
-                      {selectedCompanionPreview.cardImage ? (
-                        <img
-                          src={selectedCompanionPreview.cardImage}
-                          alt=""
-                          className="h-full w-full object-cover object-top"
-                        />
-                      ) : (
-                        <User className="h-10 w-10 text-white/90" aria-hidden />
-                      )}
-                    </motion.div>
-                    <div>
-                      <h3 className="font-bold text-lg">Solace is ready</h3>
-                      <p className="text-white/90 text-sm">Your Solace avatar</p>
-                    </div>
-                  </div>
-                  <p className="text-white/90 mb-4">
-                    "I'm here to listen and support you. Let's have a meaningful conversation together."
-                  </p>
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="w-4 h-4" />
-                    <span>Available 24/7 • Private & Secure</span>
-                  </div>
-                </div>
-              </Card>
-            </motion.div>
-
-            {/* Pre-Session Checklist */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-            >
-              <Card className="p-6 shadow-xl">
-                <h2 className="text-xl font-bold mb-4">Before You Start</h2>
-                <div className="space-y-3">
-                  {checklistItems.map((item, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.6 + index * 0.05 }}
-                      onClick={() => toggleChecklist(index)}
-                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
-                    >
-                      <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                          item.checked
-                            ? "bg-green-500 border-green-500"
-                            : "border-gray-300 dark:border-gray-600"
-                        }`}
+                      <Button
+                        type="button"
+                        onClick={() => void handleStartSession()}
+                        disabled={
+                          isStarting ||
+                          minutesAvailable <= 0 ||
+                          selectedDuration > minutesAvailable ||
+                          selectedDuration < 1
+                        }
+                        className="bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 text-white shadow-[0_0_32px_rgba(139,92,246,0.35)] hover:opacity-95"
                       >
-                        {item.checked && (
-                          <CheckCircle className="w-4 h-4 text-white" />
-                        )}
-                      </div>
-                      <span className={item.checked ? "text-muted-foreground line-through transition-colors" : "transition-colors"}>
-                        {item.label}
-                      </span>
-                    </motion.div>
-                  ))}
-                </div>
-              </Card>
-            </motion.div>
-
-            {/* Start Button */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7 }}
-            >
-              {selectedMode === "now" ? (
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Button 
-                    type="button"
-                    className="w-full h-16 text-lg group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:shadow-2xl hover:shadow-purple-500/50 transition-all"
-                    onClick={() => setShowMinutesPicker(true)}
-                    disabled={isStarting || selectedDuration > minutesAvailable}
-                  >
-                    <motion.div
-                      className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 pointer-events-none"
-                      initial={{ x: "-100%" }}
-                      whileHover={{ x: 0 }}
-                      transition={{ duration: 0.3 }}
-                    />
-                    <span className="relative z-10 flex items-center justify-center gap-3">
-                      <motion.div
-                        animate={{ scale: [1, 1.1, 1] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                      >
-                        {isStarting ? (
-                          <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Video className="w-6 h-6" />
-                        )}
-                      </motion.div>
-                      <span className="font-bold">
-                        {isStarting ? "Starting Talking..." : "Let's Talk Now"}
-                      </span>
-                      {!isStarting && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
-                    </span>
-                  </Button>
-                </motion.div>
-              ) : null}
-            </motion.div>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Session Settings */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card className="p-6 shadow-xl">
-                <div className="flex items-center gap-2 mb-4">
-                  <Settings className="w-5 h-5 text-primary" />
-                  <h3 className="font-bold">Talking Settings</h3>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <Volume2 className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">Voice</span>
+                        <Video className="mr-2 h-4 w-4 shrink-0" aria-hidden />
+                        Let&apos;s Talk Now
+                      </Button>
                     </div>
-                    <span className="text-sm font-medium">{selectedVoice}</span>
                   </div>
-                  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">Avatar</span>
-                    </div>
-                    <span className="text-sm font-medium">{selectedAvatar}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <Palette className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">Environment</span>
-                    </div>
-                    <span className="text-sm font-medium text-right max-w-[55%] truncate">
-                      {environmentLabel(selectedEnvironment)}
-                    </span>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => setShowCustomizeModal(true)}
-                  >
-                    Customize
-                  </Button>
-                </div>
-              </Card>
+                </Card>
+              </motion.div>
             </motion.div>
-
-            {/* Schedule (moved above Upcoming) */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Card className="p-6 shadow-xl overflow-hidden">
-                <div className="flex items-center gap-2 mb-4">
-                  <Calendar className="w-5 h-5 text-primary" />
-                  <h3 className="font-bold">Schedule Next Talk</h3>
-                </div>
-                {showCarveoutBanner && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.35 }}
-                    className="mb-4 relative rounded-2xl border-2 border-purple-400/40 bg-gradient-to-br from-violet-500/15 via-fuchsia-500/10 to-amber-400/15 dark:from-violet-500/25 dark:via-fuchsia-500/15 dark:to-amber-500/10 p-4 shadow-lg shadow-purple-500/10"
-                  >
-                    <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-gradient-to-br from-pink-400/30 to-purple-500/20 blur-2xl pointer-events-none" />
-                    <div className="relative flex items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-md">
-                        <Sparkles className="h-5 w-5" />
-                      </div>
-                      <p className="text-sm sm:text-base font-semibold leading-snug text-foreground">
-                        Do you want to carve out time for the next time we talk?
-                      </p>
-                    </div>
-                  </motion.div>
-                )}
-                <Button
-                  type="button"
-                  disabled={minutesAvailable <= 0 || selectedDuration > minutesAvailable}
-                  className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-purple-500/10 hover:from-indigo-500 hover:to-purple-500 transition-all flex items-center gap-3 px-4"
-                  onClick={() => {
-                    setSelectedMode("schedule");
-                    setShowMinutesPicker(false);
-                    setEditingScheduledSessionId(null);
-                    setScheduleAvatarOverride(null);
-                    setShowScheduleModal(true);
-                  }}
-                >
-                  <Calendar className="w-5 h-5 mr-2" />
-                  <div className="flex flex-col leading-tight">
-                    <span className="font-bold text-sm">Let's Talk it Out Later</span>
-                    <span className="text-xs text-white/80">Pick a date & time</span>
-                  </div>
-                </Button>
-              </Card>
-            </motion.div>
-
-            {/* Upcoming Talk */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Card className="p-6 shadow-xl">
-                <div className="flex items-center gap-2 mb-4">
-                  <Calendar className="w-5 h-5 text-primary" />
-                  <h3 className="font-bold">Upcoming</h3>
-                </div>
-                <div className="space-y-3">
-                  {upcomingSessions.map((session, index) => (
-                    <motion.div
-                      key={session.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5 + index * 0.1 }}
-                      whileHover={session.isExpired ? undefined : { y: -2 }}
-                      onClick={() => {
-                        if (session.isExpired) return;
-                        setActiveUpcomingSession(session);
-                        setShowUpcomingActionModal(true);
-                      }}
-                      className={`rounded-xl border p-3 transition-all ${
-                        session.isExpired
-                          ? "opacity-60 border-red-200/70 bg-red-50/50 dark:border-red-900/50 dark:bg-red-950/20"
-                          : "border-gray-200 bg-gradient-to-r from-white to-violet-50/40 hover:border-primary/30 hover:shadow-md dark:border-gray-800 dark:from-gray-900 dark:to-violet-950/20 cursor-pointer"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="relative h-11 w-11 rounded-full overflow-hidden ring-2 ring-white/80 dark:ring-gray-900 shadow-sm shrink-0 bg-muted/60">
-                          {session.avatarImage ? (
-                            <img
-                              src={session.avatarImage}
-                              alt={session.avatarName}
-                              className="h-full w-full object-cover object-top"
-                            />
-                          ) : (
-                            <div className="h-full w-full flex items-center justify-center">
-                              <User className="h-5 w-5 text-muted-foreground" aria-hidden />
-                            </div>
-                          )}
-                          {session.icon ? (
-                            <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-white dark:bg-gray-900 flex items-center justify-center shadow ring-1 ring-black/5 dark:ring-white/10 overflow-hidden">
-                              <FluentEmoji emoji={session.icon} size={14} />
-                            </div>
-                          ) : null}
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-semibold text-sm">{session.avatarName}</p>
-                          <p className="text-xs text-muted-foreground">{session.date}</p>
-                          {session.comment ? (
-                            <p className="mt-1 text-[11px] text-muted-foreground line-clamp-1">
-                              {session.comment}
-                            </p>
-                          ) : null}
-                        </div>
-                        <span
-                          className={`text-[10px] uppercase tracking-wide font-semibold px-2 py-1 rounded-full ${
-                            session.isExpired
-                              ? "text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-900/40"
-                              : "text-indigo-700 bg-indigo-100 dark:text-indigo-300 dark:bg-indigo-900/40"
-                          }`}
-                        >
-                          {session.isExpired ? "Expired" : session.type}
-                        </span>
-                      </div>
-                      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                        <Clock className="w-3 h-3" />
-                        {session.duration}
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </Card>
-            </motion.div>
-
-            {/* Tips */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5 }}
-            >
-              <Card className="p-6 shadow-xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 border-amber-200 dark:border-amber-800">
-                <div className="flex items-start gap-2 mb-3">
-                  <Sparkles className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                  <h3 className="font-bold text-amber-900 dark:text-amber-200">Talking Tip</h3>
-                </div>
-                <p className="text-sm text-amber-800 dark:text-amber-300">
-                  Try to be present and honest during your session. There's no right or wrong way to feel.
-                </p>
-              </Card>
-            </motion.div>
-          </div>
-        </div>
+          )}
+        </AnimatePresence>
 
         {/* Customize Modal */}
         <AnimatePresence>
@@ -1809,7 +1486,7 @@ export function SessionLobby() {
                           disabled={isDisabled}
                           onClick={() => {
                             if (isDisabled) return;
-                            setSelectedDuration(duration);
+                            applyDurationPreset(duration);
                           }}
                           className={`rounded-xl border p-3 text-center transition-all ${
                             isDisabled
@@ -1891,7 +1568,6 @@ export function SessionLobby() {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
-    </AppLayout>
+    </>
   );
 }

@@ -1,5 +1,4 @@
 import { motion } from "motion/react";
-import { AppLayout } from "@/app/components/AppLayout";
 import { 
   Bell, 
   Heart, 
@@ -57,8 +56,7 @@ export function Notifications() {
 
   if (isLoading) {
     return (
-      <AppLayout>
-        <div className="min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] max-w-4xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
+      <div className="min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] max-w-4xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
           <div className="mb-6">
             <div className="flex items-center gap-3">
               <Skeleton className="w-12 h-12 rounded-2xl" />
@@ -83,13 +81,11 @@ export function Notifications() {
             ))}
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] max-w-4xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
+    <div className="min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] max-w-4xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -232,6 +228,5 @@ export function Notifications() {
           </motion.div>
         )}
       </div>
-    </AppLayout>
   );
 }

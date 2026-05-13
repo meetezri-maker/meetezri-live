@@ -501,66 +501,66 @@ export default function App() {
                 </Route>
               </Route>
 
-              {/* App Routes */}
-              <Route path="/app/dashboard" element={<Dashboard />} />
-              <Route path="/app/mood-checkin" element={<MoodCheckIn />} />
-              <Route path="/app/mood-history" element={<MoodHistory />} />
-              <Route path="/app/journal" element={<Journal />} />
-              <Route path="/app/wellness-tools" element={<WellnessTools />} />
+              {/* App Routes — one member shell (Outlet); pages must not wrap AppLayout */}
+              <Route element={<AppLayout />}>
+                <Route path="/app/dashboard" element={<Dashboard />} />
+                <Route path="/app/mood-checkin" element={<MoodCheckIn />} />
+                <Route path="/app/mood-history" element={<MoodHistory />} />
+                <Route path="/app/journal" element={<Journal />} />
+                <Route path="/app/wellness-tools" element={<WellnessTools />} />
 
-              <Route path="/app/session-lobby" element={<SessionLobby />} />
-              <Route path= "/app/session-history" element={<SessionHistory />} />
-              <Route path="/app/settings" element={<SettingsHub />} />
-              <Route path="/app/settings/account" element={<AccountSettings />} />
-              <Route path="/app/settings/emergency-contacts" element={<EmergencyContacts />} />
-             <Route path="/app/notifications" element={<Notifications />} />
-              <Route
-                path="/app/active-session"
-                element={
-                  <Suspense fallback={<PageLoader />}>
-                    <ActiveSession />
-                  </Suspense>
-                }
-              />
-              <Route path = "/app/settings/privacy" element={<PrivacySettings />} />
-              <Route path = "/app/settings/accessibility" element={<AccessibilitySettings />} />
-              <Route path = "/app/settings/appearance" element={<AppearanceSettings />} />
-              <Route path = "/app/settings/change-avatar" element={<ChangeAvatar />} />
-              <Route path = "/app/settings/achievements" element={<Achievements />} />
-              {/* <Route path = "/app/settings/goals" element={<GoalsList />} /> */}
-              {/* <Route path = "/app/settings/goals/:goalId" element={<GoalDetails />} /> */}
-              <Route
-                path="/app/settings/notification-history"
-                element={<Navigate to="/app/settings/emergency-notifications" replace />}
-              />
-              <Route path="/app/settings/emergency-notifications" element={<NotificationHistory />} />
-              <Route path="/app/recent-activity-history" element={<RecentActivityHistory />} />
-              <Route path="/app/profile/:userId" element={<MemberProfileView />} />
-              <Route path="/profile/:userId" element={<MemberProfileView />} />
-              <Route path="/app/profile" element={<Navigate to="/app/user-profile" replace />} />
-              <Route path="/app/user-profile" element={<UserProfile />} />
-              <Route path="/app/crisis-resources" element={<Navigate to="/app/emergency-resources" replace />} />
-              <Route path="/app/emergency-resources" element={<CrisisResources />} />
-              <Route path="/app/settings/resource-analytics" element={<ResourceAnalyticsPage />} />
-              <Route path ="/app/settings/cooldown-screen" element={<CooldownScreen />} />
-              <Route path = "/app/settings/help-support" element={<HelpSupport />} />
-              <Route path="/app/progress" element={<Progress />} />
-              <Route path="/app/settings/safety-insights" element={<SafetyInsights />} />
-              <Route path="/app/billing" element={<Billing />} />
-              <Route path="/app/invite/create-password" element={<InviteCreatePassword />} />
-              <Route path="/app/sleep-tracker" element={<SleepTracker />} />
-              <Route path="/app/habit-tracker" element={<HabitTracker />} />
-              <Route path="/app/brain-health" element={<BrainHealth />} />
-              <Route path="/app/settings/notifications" element={<Notifications />} />
-              <Route path="/app/settings/brain-health" element={<Navigate to="/app/brain-health" replace />} />
-              <Route path="/app/settings/resources" element={<Resources />} />
-              <Route path="/app/challenges" element={<Challenges />} />
-              <Route path="/app/community" element={<Community />} />
-              <Route path="/app/settings/resources/article/:articleId" element={<ResourceArticlePage />} />
-              <Route path="/app/settings/community" element={<Navigate to="/app/community" replace />} />
-              <Route path="/app/settings/safety-plan" element={<Navigate to="/app/settings/wellness-plan" replace />} />
-              <Route path="/app/settings/wellness-plan" element={<SafetyPlan />} />
-              <Route path="/app/*" element={<AppLayout><ComingSoon /></AppLayout>} />
+                <Route path="/app/session-lobby" element={<SessionLobby />} />
+                <Route path="/app/session-history" element={<SessionHistory />} />
+                <Route path="/app/settings" element={<SettingsHub />} />
+                <Route path="/app/settings/account" element={<AccountSettings />} />
+                <Route path="/app/settings/emergency-contacts" element={<EmergencyContacts />} />
+                <Route path="/app/notifications" element={<Notifications />} />
+                <Route
+                  path="/app/active-session"
+                  element={
+                    <Suspense fallback={<PageLoader />}>
+                      <ActiveSession />
+                    </Suspense>
+                  }
+                />
+                <Route path="/app/settings/privacy" element={<PrivacySettings />} />
+                <Route path="/app/settings/accessibility" element={<AccessibilitySettings />} />
+                <Route path="/app/settings/appearance" element={<AppearanceSettings />} />
+                <Route path="/app/settings/change-avatar" element={<ChangeAvatar />} />
+                <Route path="/app/settings/achievements" element={<Achievements />} />
+                <Route
+                  path="/app/settings/notification-history"
+                  element={<Navigate to="/app/settings/emergency-notifications" replace />}
+                />
+                <Route path="/app/settings/emergency-notifications" element={<NotificationHistory />} />
+                <Route path="/app/recent-activity-history" element={<RecentActivityHistory />} />
+                <Route path="/app/profile/:userId" element={<MemberProfileView />} />
+                <Route path="/profile/:userId" element={<MemberProfileView />} />
+                <Route path="/app/profile" element={<Navigate to="/app/user-profile" replace />} />
+                <Route path="/app/user-profile" element={<UserProfile />} />
+                <Route path="/app/crisis-resources" element={<Navigate to="/app/emergency-resources" replace />} />
+                <Route path="/app/emergency-resources" element={<CrisisResources />} />
+                <Route path="/app/settings/resource-analytics" element={<ResourceAnalyticsPage />} />
+                <Route path="/app/settings/cooldown-screen" element={<CooldownScreen />} />
+                <Route path="/app/settings/help-support" element={<HelpSupport />} />
+                <Route path="/app/progress" element={<Progress />} />
+                <Route path="/app/settings/safety-insights" element={<SafetyInsights />} />
+                <Route path="/app/billing" element={<Billing />} />
+                <Route path="/app/invite/create-password" element={<InviteCreatePassword />} />
+                <Route path="/app/sleep-tracker" element={<SleepTracker />} />
+                <Route path="/app/habit-tracker" element={<HabitTracker />} />
+                <Route path="/app/brain-health" element={<BrainHealth />} />
+                <Route path="/app/settings/notifications" element={<Notifications />} />
+                <Route path="/app/settings/brain-health" element={<Navigate to="/app/brain-health" replace />} />
+                <Route path="/app/settings/resources" element={<Resources />} />
+                <Route path="/app/challenges" element={<Challenges />} />
+                <Route path="/app/community" element={<Community />} />
+                <Route path="/app/settings/resources/article/:articleId" element={<ResourceArticlePage />} />
+                <Route path="/app/settings/community" element={<Navigate to="/app/community" replace />} />
+                <Route path="/app/settings/safety-plan" element={<Navigate to="/app/settings/wellness-plan" replace />} />
+                <Route path="/app/settings/wellness-plan" element={<SafetyPlan />} />
+                <Route path="/app/*" element={<ComingSoon />} />
+              </Route>
             </Route>
 
             {/* ── Boundary 4: Admin Routes ──────────────────────────────── */}
