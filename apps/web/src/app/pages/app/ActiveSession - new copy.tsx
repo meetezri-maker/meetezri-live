@@ -100,7 +100,6 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 // Crisis keyword popup (public, user-facing).
 const CRISIS_KEYWORD_MODAL_ENABLED = false;
 const DEBUG_JORDAN_PHONEMES = true;
-const DEBUG_JORDAN_EXPRESSION_TEST = true;
 // ─────────────────────────────────────────────────────────────────────────────
 // Keyword lists — covers Ready Player Me, Blender ARKit, Mixamo, CC3/CC4,
 // MetaHuman, and most custom Blender rigs.
@@ -235,49 +234,15 @@ const JORDAN_BLINK_MORPH_NAMES: JordanMorphName[] = [
 ];
 
 const JORDAN_RFV2_REQUIRED_DRIVER_MORPHS: JordanMorphName[] = [
-  "mouthSmileLeft",
-  "mouthSmileRight",
-  "mouthFrownLeft",
-  "mouthFrownRight",
-  "cheekSquintLeft",
-  "cheekSquintRight",
-  "eyebrows",
-  "sad",
   "eyeBlinkLeft",
   "eyeBlinkRight",
   "jawOpen",
-  "eyeLookUpLeft",
-  "eyeLookUpRight",
-  "eyeLookDownLeft",
-  "eyeLookDownRight",
-];
-
-const JORDAN_RFV2_EXPRESSION_AUDIT_MORPHS: JordanMorphName[] = [
   "mouthSmileLeft",
   "mouthSmileRight",
   "mouthFrownLeft",
   "mouthFrownRight",
   "cheekSquintLeft",
   "cheekSquintRight",
-  "eyebrows",
-  "sad",
-  "jawOpen",
-  "eyeLookUpLeft",
-  "eyeLookUpRight",
-  "eyeLookDownLeft",
-  "eyeLookDownRight",
-  "eyeBlinkLeft",
-  "eyeBlinkRight",
-];
-
-const JORDAN_RFV2_EXPRESSION_TEST_SEQUENCE: JordanMorphName[] = [
-  "mouthSmileLeft",
-  "mouthSmileRight",
-  "cheekSquintLeft",
-  "cheekSquintRight",
-  "eyebrows",
-  "mouthFrownLeft",
-  "mouthFrownRight",
   "eyeLookUpLeft",
   "eyeLookUpRight",
   "eyeLookDownLeft",
@@ -297,15 +262,15 @@ const JORDAN_RFV2_FACE_TUNING = {
 const JORDAN_RFV2_IDLE_TUNING = {
   breathingSpeed: 0.00125,
   breathingAmount: 0.006,
-  idleRestMin: 0.16,
-  idleRestMax: 0.22,
-  idleSmileMax: 0.086,
-  idleBrowMax: 0.068,
-  idleCheekMax: 0.052,
+  idleRestMin: 0.12,
+  idleRestMax: 0.18,
+  idleSmileMax: 0.038,
+  idleBrowMax: 0.034,
+  idleCheekMax: 0.026,
   gazeMax: 0.052,
   gazeChangeIntervalMin: 4200,
   gazeChangeIntervalMax: 7600,
-  idleBlendSpeed: 1.85,
+  idleBlendSpeed: 2.6,
 } as const;
 
 const PHONEME_TO_JORDAN_VISEME: Record<string, JordanMorphName> = {
@@ -1701,26 +1666,6 @@ function ThreeAvatar({
           "[Avatar] Cheek bone usage — bones:",
           cheekBonesRef.current.map((b) => b.name)
         );
-        if (process.env.NODE_ENV === "development" && useRfv2Morphs) {
-          console.group("[Jordan Expression] Binding audit");
-          JORDAN_RFV2_EXPRESSION_AUDIT_MORPHS.forEach((name) => {
-            const bindings = jordanMorphBindingsRef.current.get(name) ?? [];
-            if (bindings.length === 0) {
-              console.warn(`[Jordan Expression] Missing morph: ${name}`);
-              return;
-            }
-            bindings.forEach(({ mesh, index }) => {
-              console.log("[Jordan Expression] Morph binding", {
-                name,
-                found: true,
-                meshName: mesh.name || "(unnamed mesh)",
-                morphIndex: index,
-                currentInfluenceValue: mesh.morphTargetInfluences?.[index] ?? null,
-              });
-            });
-          });
-          console.groupEnd();
-        }
 
         // if (
         //   mouthBindingsRef.current.length === 0 &&
@@ -2106,15 +2051,16 @@ function ThreeAvatar({
                     thinking: isThinkingRef.current,
                   });
                   jordanPresenceStateRef.current = presenceState;
+                  const idleLayerSuppressed = presenceState === "speaking";
                   const idlePhase = now * JORDAN_RFV2_IDLE_TUNING.breathingSpeed;
                   const idleBreath = (Math.sin(idlePhase) + 1) * 0.5;
-                  const idlePresenceAlpha = presenceState === "speaking"
-                    ? 0.22
+                  const idlePresenceAlpha = idleLayerSuppressed
+                    ? 0
                     : presenceState === "listening"
                       ? 1
                       : presenceState === "thinking"
                         ? 0.82
-                        : 0.86;
+                        : 0.72;
                   const idleRestTarget = THREE.MathUtils.lerp(
                     JORDAN_RFV2_IDLE_TUNING.idleRestMin,
                     JORDAN_RFV2_IDLE_TUNING.idleRestMax,
@@ -2122,24 +2068,24 @@ function ThreeAvatar({
                   ) * idlePresenceAlpha;
                   const idleSmileTarget =
                     (presenceState === "listening"
-                      ? JORDAN_RFV2_IDLE_TUNING.idleSmileMax * 0.78
+                      ? JORDAN_RFV2_IDLE_TUNING.idleSmileMax * 0.66
                       : presenceState === "thinking"
-                        ? JORDAN_RFV2_IDLE_TUNING.idleSmileMax * 0.22
-                        : JORDAN_RFV2_IDLE_TUNING.idleSmileMax * (0.78 + idleBreath * 0.22)) *
+                        ? 0
+                        : JORDAN_RFV2_IDLE_TUNING.idleSmileMax * (0.48 + idleBreath * 0.28)) *
                     idlePresenceAlpha;
                   const idleBrowTarget =
                     (presenceState === "listening"
                       ? JORDAN_RFV2_IDLE_TUNING.idleBrowMax
                       : presenceState === "thinking"
-                        ? JORDAN_RFV2_IDLE_TUNING.idleBrowMax * (0.58 + idleBreath * 0.18)
-                        : JORDAN_RFV2_IDLE_TUNING.idleBrowMax * (0.68 + idleBreath * 0.22)) *
+                        ? JORDAN_RFV2_IDLE_TUNING.idleBrowMax * (0.46 + idleBreath * 0.24)
+                        : JORDAN_RFV2_IDLE_TUNING.idleBrowMax * (0.44 + idleBreath * 0.26)) *
                     idlePresenceAlpha;
                   const idleCheekTarget =
                     (presenceState === "listening"
-                      ? JORDAN_RFV2_IDLE_TUNING.idleCheekMax * 0.9
+                      ? JORDAN_RFV2_IDLE_TUNING.idleCheekMax * 0.82
                       : presenceState === "thinking"
-                        ? JORDAN_RFV2_IDLE_TUNING.idleCheekMax * 0.5
-                        : JORDAN_RFV2_IDLE_TUNING.idleCheekMax * (0.66 + idleBreath * 0.24)) *
+                        ? JORDAN_RFV2_IDLE_TUNING.idleCheekMax * 0.38
+                        : JORDAN_RFV2_IDLE_TUNING.idleCheekMax * (0.52 + idleBreath * 0.24)) *
                     idlePresenceAlpha;
           
                   if (process.env.NODE_ENV === "development" && DEBUG_JORDAN_PHONEMES) {
@@ -2232,39 +2178,30 @@ function ThreeAvatar({
                     0,
                     1
                   );
-                  const speakingSupportAlpha = speaking ? speechEnergy : 0;
-                  const positiveSentiment = isPositiveSentiment(sentiment);
-                  const sadSentiment = isSadSentiment(sentiment);
-                  const sadOverlay = sadSentiment
-                    ? THREE.MathUtils.clamp(0.04 + speakingSupportAlpha * 0.04, 0, 0.08)
-                    : 0;
-                  const smileOverlay = positiveSentiment
-                    ? THREE.MathUtils.clamp(0.03 + speakingSupportAlpha * 0.05, 0, 0.08)
-                    : 0;
-                  const frownOverlay = sadSentiment
-                    ? THREE.MathUtils.clamp(0.03 + speakingSupportAlpha * 0.05, 0, 0.08)
-                    : 0;
+                  const sadOverlay = isSadSentiment(sentiment) ? 0.2 : 0;
+                  const smileOverlay = isPositiveSentiment(sentiment) ? 0.12 : 0;
+                  const frownOverlay = sadOverlay > 0 ? 0.14 : 0;
                   const cheekOverlay = THREE.MathUtils.clamp(
-                    (speaking ? 0.03 + speechEnergy * 0.05 : 0) + smileOverlay * 0.18,
+                    smileOverlay * 0.55 + speechEnergy * 0.045,
                     0,
-                    0.08
+                    0.1
                   );
                   const browOverlay = THREE.MathUtils.clamp(
-                    (speaking ? 0.03 + Math.pow(speechEnergy, 1.15) * 0.04 : 0) + sadOverlay * 0.18,
+                    (speaking ? 0.035 + audioNorm * 0.055 : 0) + sadOverlay * 0.22,
                     0,
-                    0.07
+                    0.14
                   );
           
                   targets.set("sad", sadOverlay);
-                  targets.set("mouthSmileLeft", THREE.MathUtils.clamp(Math.max(smileOverlay, idleSmileTarget) * 0.95, 0, 0.08));
-                  targets.set("mouthSmileRight", THREE.MathUtils.clamp(Math.max(smileOverlay, idleSmileTarget) * 1.05, 0, 0.08));
-                  targets.set("mouthFrownLeft", THREE.MathUtils.clamp(frownOverlay * 0.95, 0, 0.08));
-                  targets.set("mouthFrownRight", THREE.MathUtils.clamp(frownOverlay * 1.05, 0, 0.08));
-                  targets.set("cheekSquintLeft", THREE.MathUtils.clamp(Math.max(cheekOverlay, idleCheekTarget) * 0.95, 0, 0.08));
-                  targets.set("cheekSquintRight", THREE.MathUtils.clamp(Math.max(cheekOverlay, idleCheekTarget) * 1.05, 0, 0.08));
+                  targets.set("mouthSmileLeft", Math.max(smileOverlay * 0.96, idleSmileTarget * 0.96));
+                  targets.set("mouthSmileRight", Math.max(smileOverlay * 1.04, idleSmileTarget * 1.04));
+                  targets.set("mouthFrownLeft", frownOverlay * 1.03);
+                  targets.set("mouthFrownRight", frownOverlay * 0.97);
+                  targets.set("cheekSquintLeft", Math.max(cheekOverlay * 0.94, idleCheekTarget * 0.94));
+                  targets.set("cheekSquintRight", Math.max(cheekOverlay * 1.06, idleCheekTarget * 1.06));
                   targets.set(
                     "eyebrows",
-                    THREE.MathUtils.clamp(Math.max(browOverlay, idleBrowTarget), 0, 0.08)
+                    Math.max(browOverlay, idleBrowTarget)
                   );
           
                   const safeAmplitudeFallbackJaw =
@@ -2307,19 +2244,6 @@ function ThreeAvatar({
                   targets.set("eyeLookUpRight", THREE.MathUtils.clamp(gazeUp - gazeAsym, 0, JORDAN_RFV2_IDLE_TUNING.gazeMax));
                   targets.set("eyeLookDownLeft", THREE.MathUtils.clamp(gazeDown - gazeAsym, 0, JORDAN_RFV2_IDLE_TUNING.gazeMax));
                   targets.set("eyeLookDownRight", THREE.MathUtils.clamp(gazeDown + gazeAsym, 0, JORDAN_RFV2_IDLE_TUNING.gazeMax));
-
-                  if (DEBUG_JORDAN_EXPRESSION_TEST) {
-                    const expressionIndex = Math.floor(now / 1500) % JORDAN_RFV2_EXPRESSION_TEST_SEQUENCE.length;
-                    const activeExpressionMorph = JORDAN_RFV2_EXPRESSION_TEST_SEQUENCE[expressionIndex];
-                    JORDAN_RFV2_EXPRESSION_TEST_SEQUENCE.forEach((name) => targets.set(name, 0));
-                    targets.set(activeExpressionMorph, activeExpressionMorph === "eyebrows" ? 0.14 : 0.18);
-                    if (process.env.NODE_ENV === "development" && now - lastJordanPresenceLogRef.current > 1400) {
-                      console.log("[Jordan Expression] Test morph active", {
-                        activeExpressionMorph,
-                        found: (jordanMorphBindingsRef.current.get(activeExpressionMorph)?.length ?? 0) > 0,
-                      });
-                    }
-                  }
 
                   if (!speaking && jordanIdlePresenceBonesRef.current.length > 0) {
                     const breathRotation =
@@ -2441,9 +2365,7 @@ function ThreeAvatar({
                       lastJordanPresenceLogRef.current = now;
                       console.log("[Jordan] Idle presence diagnostics:", {
                         presenceState,
-                        idleLayerSuppressed: presenceState === "speaking",
-                        sentimentLabel: getSentimentLabel(sentiment),
-                        speechEnergy,
+                        idleLayerSuppressed,
                         idleMorphTargets: {
                           viseme_rest: targets.get("viseme_rest") ?? 0,
                           mouthSmileLeft: targets.get("mouthSmileLeft") ?? 0,
@@ -2452,20 +2374,6 @@ function ThreeAvatar({
                           cheekSquintLeft: targets.get("cheekSquintLeft") ?? 0,
                           cheekSquintRight: targets.get("cheekSquintRight") ?? 0,
                         },
-                        speakingExpressionTargets: {
-                          sad: targets.get("sad") ?? 0,
-                          mouthFrownLeft: targets.get("mouthFrownLeft") ?? 0,
-                          mouthFrownRight: targets.get("mouthFrownRight") ?? 0,
-                          cheekSquintLeft: targets.get("cheekSquintLeft") ?? 0,
-                          cheekSquintRight: targets.get("cheekSquintRight") ?? 0,
-                          eyebrows: targets.get("eyebrows") ?? 0,
-                        },
-                        appliedExpressionMorphValues: Object.fromEntries(
-                          JORDAN_RFV2_EXPRESSION_AUDIT_MORPHS.map((name) => [
-                            name,
-                            jordanMorphValuesRef.current.get(name) ?? 0,
-                          ])
-                        ),
                         gazeTargets: {
                           eyeLookUpLeft: targets.get("eyeLookUpLeft") ?? 0,
                           eyeLookUpRight: targets.get("eyeLookUpRight") ?? 0,
@@ -2478,15 +2386,9 @@ function ThreeAvatar({
                     }
                   }
           
-                  const jordanSpeechDiagnosticKey = `${activeViseme ?? "none"}:${timeline?.sentiment ?? "none"}`;
-                  if (
-                    process.env.NODE_ENV === "development" &&
-                    speaking &&
-                    (now - lastJordanDiagnosticLogRef.current > 900 ||
-                      jordanSpeechDiagnosticKey !== lastJordanDiagnosticVisemeRef.current)
-                  ) {
+                  if (process.env.NODE_ENV === "development" && speaking) {
                     lastJordanDiagnosticLogRef.current = now;
-                    lastJordanDiagnosticVisemeRef.current = jordanSpeechDiagnosticKey;
+                    lastJordanDiagnosticVisemeRef.current = `${activeViseme ?? "none"}:${timeline?.sentiment ?? "none"}`;
                     let activePhonemeLabel: string | null = null;
                     if (timeline) {
                       for (let i = 0; i < timeline.phonemes.length; i += 1) {
@@ -2519,9 +2421,6 @@ function ThreeAvatar({
                       morphTargetFound: activeVisemeBindings.length > 0,
                       targetMorphValue: activeVisemeTargetValue,
                       actualMorphInfluenceValue: activeVisemeActualInfluence,
-                      presenceState,
-                      speechEnergy,
-                      sentimentLabel: getSentimentLabel(timeline?.sentiment ?? ""),
                       lookAheadSeconds: JORDAN_RFV2_FACE_TUNING.lookAheadSeconds,
                       lookAheadMs: JORDAN_RFV2_FACE_TUNING.lookAheadSeconds * 1000,
                       facialTuning: JORDAN_RFV2_FACE_TUNING,
@@ -2540,12 +2439,6 @@ function ThreeAvatar({
                         cheekSquintRight: jordanMorphValuesRef.current.get("cheekSquintRight") ?? 0,
                         eyebrows: jordanMorphValuesRef.current.get("eyebrows") ?? 0,
                       },
-                      appliedExpressionMorphValues: Object.fromEntries(
-                        JORDAN_RFV2_EXPRESSION_AUDIT_MORPHS.map((name) => [
-                          name,
-                          jordanMorphValuesRef.current.get(name) ?? 0,
-                        ])
-                      ),
                     });
                   }
                 }
@@ -3562,29 +3455,6 @@ export default ThreeAvatar;
       }
     }, [permissionStorageKey]);
 
-    useEffect(() => {
-      const restoreMediaPermissions = async () => {
-        try {
-          const saved = localStorage.getItem(permissionStorageKey);
-
-          if (saved === "true") {
-            setPermissionsGranted(true);
-            setShowPermissionRequest(false);
-
-            // silently restore previously granted devices
-            await requestMediaAccess();
-          } else {
-            setShowPermissionRequest(true);
-          }
-        } catch (err) {
-          console.error("Failed to restore media permissions:", err);
-          setShowPermissionRequest(true);
-        }
-      };
-
-      restoreMediaPermissions();
-    }, [permissionStorageKey, requestMediaAccess]);
-
     const { currentState, updateState } = useSafety();
     const [isMuted, setIsMuted] = useState(false);
     const [isCameraOff, setIsCameraOff] = useState(false);
@@ -3805,8 +3675,7 @@ export default ThreeAvatar;
       };
     }, [anchorPipBelowTranscriptOnce]);
 
-    /** Start true so we never paint one frame of “live session” before the consent UI (and never connect WS/STT without a stream). */
-    const [showPermissionRequest, setShowPermissionRequest] = useState(true);
+    const [showPermissionRequest, setShowPermissionRequest] = useState(false);
     const [permissionsGranted, setPermissionsGranted] = useState(false);
     const [permissionStateInitialized, setPermissionStateInitialized] =
       useState(false);
@@ -3989,11 +3858,6 @@ export default ThreeAvatar;
     // Text of the most recent message sent to the backend that has NOT yet produced
     // any audio response. Used to merge follow-up user speech during the silence gap.
     const pendingUserTextRef = useRef<string>("");
-    /** Blocks duplicate `sendChat` if Web Speech fires two finals for the same phrase. */
-    const lastSentUserChatFingerprintRef = useRef<{ n: string; t: number }>({
-      n: "",
-      t: 0,
-    });
     // How many old in-flight server responses to silently drop before playing the
     // next one. Incremented each time a merge fires so that only the LATEST merged
     // message's response is played. Decremented on each tts_done / server interrupt.
@@ -4706,19 +4570,6 @@ export default ThreeAvatar;
       const trimmed = text.trim();
       if (!trimmed) return;
 
-      const fp = normalizeSpeech(trimmed);
-      if (fp.length >= 4) {
-        const now = Date.now();
-        const prevFp = lastSentUserChatFingerprintRef.current;
-        if (prevFp.n === fp && now - prevFp.t < 4500) {
-          if (import.meta.env.DEV) {
-            console.warn("[chat] Deduped duplicate sendChat (same utterance within 4.5s).");
-          }
-          return;
-        }
-        lastSentUserChatFingerprintRef.current = { n: fp, t: now };
-      }
-
       // ── Silence-gap merge ────────────────────────────────────────────────────
       // If the backend is still processing the previous message (thinking, not yet
       // speaking), cancel that request and re-send both texts as a single message.
@@ -4999,7 +4850,7 @@ export default ThreeAvatar;
 
     // ── Speech recognition ──────────────────────────────────────────────────
     useEffect(() => {
-      if (!permissionsGranted || !stream) return;
+      if (!permissionsGranted) return;
 
       const SpeechRecognition =
         (window as any).SpeechRecognition ||
@@ -5132,22 +4983,6 @@ export default ThreeAvatar;
           lastInterimTextRef.current = "";
 
           const lowerTrimmed = textForUtterance.toLowerCase();
-          const wsLive = wsClientRef.current;
-          const sttProv = String(ezriConfig?.defaults?.sttProvider ?? "").toLowerCase();
-          // Mic PCM → server VAD/STT already turns speech into `{ type: "transcription" }` + replies.
-          // Browser Web Speech must NOT also `sendChat` or every line is processed twice (two assistant answers).
-          const serverOwnsUserTurn =
-            wsLive?.getStatus() === "connected" && sttProv !== "browser";
-
-          if (serverOwnsUserTurn) {
-            if (import.meta.env.DEV) {
-              console.log(
-                "[STT] Skipping client sendChat + duplicate YOU line — server PCM/STT owns this utterance.",
-              );
-            }
-            return;
-          }
-
           console.log(
             "Heard (Final):",
             lowerTrimmed,
@@ -5159,7 +4994,20 @@ export default ThreeAvatar;
             duration: 2000,
           });
 
-          setTranscript((prev) => mergeUserTranscriptAppend(prev, textForUtterance));
+          setTranscript((prev) => {
+            const lastEntry = prev[prev.length - 1];
+            if (
+              lastEntry &&
+              lastEntry.content === textForUtterance &&
+              Date.now() - lastEntry.timestamp < 1000
+            ) {
+              return prev;
+            }
+            return [
+              ...prev,
+              { role: "user", content: textForUtterance, timestamp: Date.now() },
+            ];
+          });
 
           if (speechTimeoutRef.current)
             window.clearTimeout(speechTimeoutRef.current);
@@ -5274,7 +5122,7 @@ export default ThreeAvatar;
         isRecognitionActiveRef.current = false;
         recognitionRef.current = null;
       };
-    }, [permissionsGranted, stream, sttRestartTrigger, ezriConfig?.defaults?.sttProvider, ezriConfig?.apiBase]);
+    }, [permissionsGranted, sttRestartTrigger, ezriConfig?.defaults?.sttProvider, ezriConfig?.apiBase]);
 
     // ── Server STT via MediaRecorder (Firefox / non-Chrome fallback) ─────────
     useEffect(() => {
@@ -5732,9 +5580,6 @@ export default ThreeAvatar;
     useEffect(() => {
       if (!ezriConfig) return;
       if (hasSessionEnded) return;
-      // Do not open realtime (or let the server attach this session) until the user
-      // has completed our “Allow Access” flow and we hold a real MediaStream.
-      if (!permissionsGranted) return;
 
       const client =
         wsClientRef.current ||
@@ -5948,15 +5793,7 @@ export default ThreeAvatar;
         }
         client.disconnect();
       };
-    }, [
-      ezriConfig,
-      ezriUserid,
-      sessionId,
-      hasSessionEnded,
-      companionAvatarLabel,
-      ezriTtsVoiceId,
-      permissionsGranted,
-    ]);
+    }, [ezriConfig, ezriUserid, sessionId, hasSessionEnded, companionAvatarLabel, ezriTtsVoiceId]);
 
     // ── WebSocket keep-alive ping (prevents HF Space nginx 60-second idle timeout) ──
     // Sends a lightweight {"type":"ping"} every 30 s. The backend responds with "pong"
@@ -6411,7 +6248,7 @@ export default ThreeAvatar;
             recognitionRef.current.abort();
           } catch (e) { }
         }
-        setPermissionsGranted(false);
+        setPermissionsGranted(true);
         window.location.reload();
       }, 100);
       toast.info("Resetting Session...");
@@ -7032,8 +6869,7 @@ export default ThreeAvatar;
           </div>
         </div>
 
-        {/* User camera PiP — only after media consent + stream (no `<video>` / layout until then). */}
-        {permissionsGranted && stream ? (
+        {/* User camera PiP — full-session drag (clamped to screen); dock z-50 stays tappable on top */}
         <div className="pointer-events-none absolute inset-0 z-[45]">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -7076,7 +6912,6 @@ export default ThreeAvatar;
             )}
           </motion.div>
         </div>
-        ) : null}
 
         {/* Permission Modal */}
         <AnimatePresence>
