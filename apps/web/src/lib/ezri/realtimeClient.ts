@@ -14,9 +14,15 @@ export type EzriRealtimeConnectArgs = {
   voice: string;
 };
 
+export type EzriTimestampedPhoneme = {
+  phoneme: string;
+  start: number;
+  end: number;
+};
+
 export type EzriAvatarData = {
   sentence: string;
-  phonemes: unknown;
+  phonemes: string[] | EzriTimestampedPhoneme[];
   sentiment: unknown;
   chunk_index?: number;
 };
