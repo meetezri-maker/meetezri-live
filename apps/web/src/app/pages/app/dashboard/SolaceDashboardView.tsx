@@ -150,10 +150,10 @@ function ReflectMetric({
 }) {
   return (
     <SolacePanel className="p-4 sm:p-5" glow="none" soft>
-      <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[var(--solace-muted-soft)]">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--solace-muted)]">
         {label}
       </p>
-      <p className="mt-2.5 text-[13.5px] leading-snug text-zinc-200/95">{sub}</p>
+      <p className="mt-2 text-sm text-zinc-200">{sub}</p>
       <div className="mt-4">
         {bar ? (
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
@@ -184,13 +184,13 @@ function RightRailContent({
   showTrialChip: boolean;
 }) {
   return (
-    <div className="space-y-7">
+    <div className="space-y-6">
       {showTrialChip && (
-        <SolacePanel glow="violet" soft className="p-5">
-          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[var(--solace-muted-soft)]">
+        <SolacePanel glow="violet" className="p-4">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--solace-muted)]">
             Trial plan
           </p>
-          <p className="mt-2.5 text-[13px] leading-relaxed text-zinc-200/95">
+          <p className="mt-2 text-sm text-zinc-200">
             Space to breathe in — explore what feels kind for you.
           </p>
           <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
@@ -199,23 +199,19 @@ function RightRailContent({
         </SolacePanel>
       )}
 
-      <SolacePanel glow="cyan" soft className="p-6">
-        <span className="font-serif text-4xl leading-none text-violet-400/28" aria-hidden>
+      <SolacePanel glow="cyan" soft className="p-5">
+        <span className="font-serif text-4xl leading-none text-violet-400/35" aria-hidden>
           “
         </span>
-        <p className="-mt-2 font-serif text-[17px] leading-[1.65] tracking-tight text-zinc-200/95">
+        <p className="-mt-2 font-serif text-[17px] leading-relaxed text-zinc-200">
           Small steps taken with awareness create real change.
         </p>
-        <p className="mt-4 text-[11px] tracking-[0.12em] text-[var(--solace-muted-soft)]">
-          — Solace
-        </p>
+        <p className="mt-3 text-xs text-[var(--solace-muted)]">— Solace</p>
       </SolacePanel>
 
-      <SolacePanel glow="none" soft className="p-6">
-        <div className="mb-5 flex items-center justify-between gap-2">
-          <h2 className="font-serif text-[1.15rem] font-normal tracking-tight text-zinc-100/95">
-            Your insights
-          </h2>
+      <SolacePanel glow="none" className="p-5">
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h2 className="font-serif text-lg font-normal text-[var(--solace-text)]">Your insights</h2>
           <Link
             to="/app/progress"
             className="rounded-sm text-xs font-medium text-violet-300/90 transition-colors hover:text-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
@@ -234,18 +230,13 @@ function RightRailContent({
                   : "text-sky-300/80";
             return (
               <li key={index}>
-                <div className="flex gap-3 rounded-[1rem] border border-white/[0.045] bg-gradient-to-br from-black/22 to-black/10 p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:border-white/[0.07] hover:bg-white/[0.025]">
-                  <div
-                    className={cn(
-                      "mt-0.5 rounded-xl border border-white/[0.06] bg-black/20 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
-                      accent
-                    )}
-                  >
+                <div className="flex gap-3 rounded-xl border border-white/[0.04] bg-black/15 p-3 transition-colors hover:bg-white/[0.03]">
+                  <div className={cn("mt-0.5 rounded-lg border border-white/[0.06] p-2", accent)}>
                     <Icon className="h-4 w-4" aria-hidden />
                   </div>
                   <div>
-                    <p className="text-[14px] font-medium text-zinc-100/95">{insight.title}</p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-[var(--solace-muted-soft)]">
+                    <p className="text-sm font-medium text-zinc-100">{insight.title}</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-[var(--solace-muted)]">
                       {insight.description}
                     </p>
                   </div>
@@ -255,7 +246,7 @@ function RightRailContent({
           })}
         </ul>
 
-        <div className="mt-5 rounded-[1.1rem] border border-white/[0.07] bg-gradient-to-b from-black/35 to-black/20 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+        <div className="mt-5 rounded-xl border border-white/[0.06] bg-black/25 p-3">
           <div className="h-44 w-full md:h-48">
             {insightDistributionChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -376,13 +367,18 @@ export function SolaceDashboardView({
     <>
       {emailDialog}
 
-      <div className="relative min-h-full overflow-x-hidden pb-28 text-[var(--solace-text)] lg:pb-10 solace-canvas-bg">
-        <p className="mb-5 text-center font-serif text-[16px] font-normal leading-relaxed tracking-wide text-zinc-500/95 lg:hidden">
-          {greeting}, <span className="text-zinc-100">{firstName}</span>
-        </p>
+      <div className="relative min-h-full overflow-x-hidden pb-28 text-[var(--solace-text)] lg:pb-10">
+        <div
+          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_100%_60%_at_50%_-10%,rgba(76,29,149,0.2),transparent_52%),radial-gradient(ellipse_70%_50%_at_100%_40%,rgba(14,165,233,0.06),transparent_42%)]"
+          aria-hidden
+        />
 
         <div className="relative z-[1] mx-auto max-w-[1680px] px-3 sm:px-5">
-          <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_min(100%,340px)] xl:items-start xl:gap-y-10 xl:gap-x-12">
+          <p className="mb-5 text-center font-serif text-[15px] text-zinc-400 lg:hidden">
+            {greeting}, <span className="text-zinc-100">{firstName}</span>
+          </p>
+
+          <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_min(100%,340px)] xl:items-start xl:gap-10">
             {/* Center column */}
             <div className="min-w-0 space-y-8 lg:space-y-10">
               {/* Hero */}
@@ -391,34 +387,29 @@ export function SolaceDashboardView({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
               >
-                <SolacePanel
-                  glow="violet"
-                  className="overflow-hidden rounded-[1.85rem] border-white/[0.09] p-0 shadow-[0_44px_120px_-52px_rgba(30,0,60,0.65),0_0_0_1px_rgba(139,92,246,0.12)]"
-                >
-                  <div className="relative min-h-[300px] md:min-h-[400px]">
+                <SolacePanel glow="violet" className="overflow-hidden p-0">
+                  <div className="relative min-h-[300px] md:min-h-[380px]">
                     <SolaceHeroAtmosphere />
-                    <div className="relative z-[2] grid min-h-[300px] md:min-h-[400px] md:grid-cols-[42%_1fr]">
+                    <div className="relative z-[2] grid min-h-[300px] md:min-h-[380px] md:grid-cols-[42%_1fr]">
                       <div className="relative min-h-[220px] md:min-h-0">
-                        {/* Blend companion into scene — multi-stop, no hard rectangle */}
-                        <div className="absolute inset-0 z-[2] bg-gradient-to-t from-[#060711] via-transparent to-[#060711]/30 md:bg-gradient-to-r md:from-[#060711]/95 md:via-[#060711]/25 md:to-transparent" />
-                        <div className="absolute inset-0 z-[2] bg-[radial-gradient(ellipse_90%_80%_at_70%_50%,transparent_0%,rgba(6,7,17,0.5)_100%)] md:opacity-90" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#050508] via-transparent to-transparent md:bg-gradient-to-r md:from-black/75 md:via-black/20 md:to-transparent" />
                         <img
                           src={portraitUrl}
                           alt={companionImageAlt}
-                          className="relative z-[1] h-full w-full scale-[1.02] object-cover object-top"
+                          className="h-full w-full object-cover object-top"
                           loading="eager"
                         />
-                        <div className="absolute inset-0 z-[3] shadow-[inset_0_0_60px_rgba(0,0,0,0.35),inset_12px_0_80px_-12px_rgba(88,28,135,0.08)]" />
+                        <div className="absolute inset-0 ring-1 ring-inset ring-white/[0.08]" />
                       </div>
-                      <div className="relative z-10 flex flex-col justify-center px-5 py-8 sm:px-8 sm:py-10 md:py-12 md:pl-10">
-                        <p className="mb-3 inline-flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.28em] text-violet-200/75">
-                          <Sparkles className="h-3.5 w-3.5 text-violet-300/80" aria-hidden />
+                      <div className="relative z-10 flex flex-col justify-center px-5 py-8 sm:px-8 sm:py-10 md:py-12">
+                        <p className="mb-3 inline-flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.26em] text-violet-200/85">
+                          <Sparkles className="h-3.5 w-3.5 text-violet-300/90" aria-hidden />
                           {companionTag}
                         </p>
-                        <h1 className="hidden font-serif text-[1.65rem] font-normal leading-[1.2] tracking-tight text-zinc-50 md:block md:text-[2rem] lg:text-[2.15rem]">
+                        <h1 className="hidden font-serif text-2xl font-normal leading-snug tracking-tight text-zinc-50 md:block lg:text-3xl">
                           {greeting}, {firstName}
                         </h1>
-                        <p className="mt-3 max-w-lg text-[15px] leading-[1.65] text-zinc-500 md:mt-5">
+                        <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-zinc-400 md:mt-4">
                           {heroSubtext}
                         </p>
                         <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -432,7 +423,7 @@ export function SolaceDashboardView({
                             </span>
                           </Link>
                           {lastSessionLabel && (
-                            <p className="text-[12px] text-zinc-500/85">
+                            <p className="text-[13px] text-zinc-500">
                               Last session · {lastSessionLabel}
                             </p>
                           )}
@@ -499,11 +490,9 @@ export function SolaceDashboardView({
 
               {/* Journey */}
               <section aria-label="Continue your journey">
-                <div className="mb-5">
-                  <h2 className="font-serif text-[1.35rem] font-normal tracking-tight text-zinc-100">
-                    Continue your journey
-                  </h2>
-                  <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--solace-muted)]">
+                <div className="mb-4">
+                  <h2 className="font-serif text-xl font-normal text-zinc-100">Continue your journey</h2>
+                  <p className="mt-1 text-sm text-[var(--solace-muted)]">
                     Landscapes for your nervous system — start gently.
                   </p>
                 </div>
@@ -514,10 +503,9 @@ export function SolaceDashboardView({
                       to={card.to}
                       className="group relative min-w-[82%] shrink-0 snap-start sm:min-w-[48%] lg:min-w-0"
                     >
-                      <div className="relative flex min-h-[300px] flex-col justify-end overflow-hidden rounded-[1.35rem] border border-white/[0.1] shadow-[0_32px_90px_-44px_rgba(0,0,0,0.92),inset_0_1px_0_rgba(255,255,255,0.06)] transition-[transform,box-shadow] duration-[580ms] ease-out hover:-translate-y-1 hover:shadow-[0_44px_100px_-38px_rgba(76,29,149,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45">
+                      <div className="relative flex min-h-[280px] flex-col justify-end overflow-hidden rounded-2xl border border-white/[0.08] shadow-[0_28px_80px_-48px_rgba(0,0,0,0.9)] transition-[transform,box-shadow] duration-500 ease-out hover:-translate-y-1 hover:shadow-[0_36px_90px_-40px_rgba(76,29,149,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45">
                         <SolaceJourneyCardVisual ambiance={card.ambiance} />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-black/20" />
-                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_90%_70%_at_50%_100%,rgba(0,0,0,0.65)_0%,transparent_65%)]" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/55 to-transparent" />
                         <div className="absolute bottom-4 right-4 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-black/40 text-white shadow-[0_0_26px_rgba(139,92,246,0.3)] backdrop-blur-sm transition-transform duration-500 group-hover:scale-105">
                           <Play className="h-4 w-4" fill="currentColor" aria-hidden />
                         </div>
@@ -538,9 +526,7 @@ export function SolaceDashboardView({
 
               {/* Quick actions */}
               <section aria-label="Quick actions">
-                <h2 className="font-serif text-[1.35rem] font-normal tracking-tight text-zinc-100">
-                  Quick actions
-                </h2>
+                <h2 className="font-serif text-xl font-normal text-zinc-100">Quick actions</h2>
                 <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
                   {quickActions.map((action) => {
                     const Icon = action.icon;
@@ -565,10 +551,8 @@ export function SolaceDashboardView({
                 </div>
               </section>
 
-              <section aria-label="Rhythm" className="space-y-4">
-                <h2 className="font-serif text-[1.35rem] font-normal tracking-tight text-zinc-100">
-                  Your rhythm
-                </h2>
+              <section aria-label="Rhythm" className="space-y-3">
+                <h2 className="font-serif text-xl font-normal text-zinc-100">Your rhythm</h2>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <ReflectMetric
                     label="Mindful presence"
@@ -600,16 +584,9 @@ export function SolaceDashboardView({
 
               {/* Recent moments — timeline */}
               <section aria-label="Recent moments">
-                <SolacePanel glow="none" soft className="p-5 sm:p-7">
-                  <div className="mb-5 flex items-center justify-between gap-3">
-                    <div>
-                      <h2 className="font-serif text-[1.2rem] font-normal text-zinc-100">
-                        Recent moments
-                      </h2>
-                      <p className="mt-1 text-[12px] leading-relaxed text-[var(--solace-muted-soft)]">
-                        Gentle echoes from your week — nothing you need to manage.
-                      </p>
-                    </div>
+                <SolacePanel glow="none" soft className="p-5 sm:p-6">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <h2 className="font-serif text-lg font-normal text-zinc-100">Recent moments</h2>
                     <Link
                       to="/app/recent-activity-history"
                       className="rounded-sm text-xs font-medium text-violet-300/90 hover:text-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
@@ -617,20 +594,17 @@ export function SolaceDashboardView({
                       View history
                     </Link>
                   </div>
-                  <ul className="solace-scroll solace-memory-fade relative max-h-52 space-y-0 overflow-y-auto pr-2 md:max-h-60">
-                    <li className="pointer-events-none absolute bottom-0 left-[11px] top-3 w-px bg-gradient-to-b from-transparent via-violet-400/25 to-transparent" />
-                    <li className="pointer-events-none absolute left-[10px] top-3 h-3 w-3 -translate-x-[3px] rounded-full bg-gradient-to-b from-violet-400/30 to-cyan-400/10 blur-[1px]" />
+                  <ul className="solace-scroll relative max-h-52 space-y-0 overflow-y-auto pr-2 md:max-h-60">
+                    <li className="pointer-events-none absolute bottom-0 left-[11px] top-2 w-px bg-gradient-to-b from-violet-500/45 via-cyan-500/20 to-transparent" />
                     {recentActivities.map((activity, index) => (
-                      <li key={activity.id || index} className="relative flex gap-4 pb-6 last:pb-0">
-                        <span className="relative z-[1] mt-1.5 h-2 w-2 shrink-0 rounded-full border border-violet-400/25 bg-zinc-950 shadow-[0_0_14px_rgba(139,92,246,0.35)]" />
-                        <div className="min-w-0 flex-1 border-b border-white/[0.035] pb-6 last:border-0 last:pb-0">
-                          <div className="flex items-start gap-3">
-                            <FluentEmoji emoji={activity.emoji} size={22} className="shrink-0 opacity-95" />
+                      <li key={activity.id || index} className="relative flex gap-3 pb-5 last:pb-0">
+                        <span className="relative z-[1] mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full border border-violet-400/40 bg-zinc-900 shadow-[0_0_12px_rgba(139,92,246,0.4)]" />
+                        <div className="min-w-0 flex-1 pt-0.5">
+                          <div className="flex items-start gap-2">
+                            <FluentEmoji emoji={activity.emoji} size={22} className="shrink-0" />
                             <div>
-                              <p className="text-[14px] font-normal leading-snug text-zinc-200/95">
-                                {activity.text}
-                              </p>
-                              <p className="mt-1.5 text-[11px] tracking-wide text-[var(--solace-muted-soft)]">
+                              <p className="text-sm text-zinc-200">{activity.text}</p>
+                              <p className="mt-0.5 text-[11px] text-[var(--solace-muted)]">
                                 {activity.time}
                               </p>
                             </div>
@@ -665,9 +639,7 @@ export function SolaceDashboardView({
                   <p className="font-serif text-[17px] leading-relaxed text-zinc-100/95">
                     {quoteLines.line}
                   </p>
-                  <p className="mt-3 text-[13px] text-[var(--solace-muted-soft)]">
-                    {quoteLines.attribution}
-                  </p>
+                  <p className="mt-3 text-sm text-[var(--solace-muted)]">{quoteLines.attribution}</p>
                 </SolacePanel>
               </motion.div>
 
@@ -675,7 +647,7 @@ export function SolaceDashboardView({
             </div>
 
             {/* Right rail — xl+ sticky; stacks below on smaller breakpoints via grid */}
-            <aside className="min-w-0 space-y-1 xl:sticky xl:top-24 xl:self-start xl:border-l xl:border-white/[0.045] xl:pl-8">
+            <aside className="min-w-0 xl:sticky xl:top-24 xl:self-start">
               <RightRailContent
                 insights={insights}
                 insightDistributionChartData={insightDistributionChartData}
@@ -686,8 +658,8 @@ export function SolaceDashboardView({
             </aside>
           </div>
 
-          {/* Bottom cinematic strips */}
-          <div className="mt-10 space-y-5">
+          {/* Bottom cinematic strips — full bleed of content column */}
+          <div className="mt-10 space-y-4">
             <SolaceSupportStrip getSupportSlot={supportCta} />
             <SolaceAmbientBar />
           </div>
@@ -739,13 +711,13 @@ function SnapStatus({
         )}
       >
         <div className="mb-2 flex items-start justify-between gap-2">
-          <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--solace-muted-soft)]">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--solace-muted)]">
             {label}
           </span>
-          <Icon className="h-4 w-4 shrink-0 text-zinc-600/65" aria-hidden />
+          <Icon className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
         </div>
         <div className="text-lg font-medium tracking-tight text-zinc-100">{value}</div>
-        <p className="mt-auto pt-2.5 text-[10px] tracking-wide text-zinc-600/90 transition-colors group-hover:text-zinc-500/95">
+        <p className="mt-auto pt-2 text-[10px] text-zinc-500 transition-colors group-hover:text-zinc-400">
           {hint}
         </p>
       </SolacePanel>

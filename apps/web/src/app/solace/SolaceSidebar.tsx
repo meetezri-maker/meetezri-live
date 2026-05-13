@@ -45,7 +45,7 @@ const mainNav: NavItem[] = [
   { path: "/app/billing", label: "Billing & Credits", icon: CreditCard },
   { path: "/app/settings/achievements", label: "Achievements", icon: Trophy },
   { path: "/app/settings", label: "Settings", icon: Settings },
-  { path: "/app/settings/help-support", label: "Support", icon: LifeBuoy },
+  { path: "/app/settings/resources", label: "Support", icon: LifeBuoy },
 ];
 
 export function SolaceSidebar() {
@@ -87,12 +87,12 @@ export function SolaceSidebar() {
   return (
     <div
       className={cn(
-        "solace-scroll flex h-full min-h-0 flex-col gap-0.5 overflow-y-auto overscroll-y-contain px-2.5 pb-4 pt-3",
+        "solace-scroll flex h-full min-h-0 flex-col gap-1 overflow-y-auto overscroll-y-contain px-2 pb-3 pt-2",
         "[scrollbar-gutter:stable]"
       )}
     >
-      <div className="px-2.5 pb-3">
-        <p className="text-[10px] font-medium uppercase tracking-[0.32em] text-zinc-600/95">Solace</p>
+      <div className="px-2 pb-2">
+        <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Solace</p>
       </div>
 
       {mainNav.map((item) => {
@@ -101,52 +101,50 @@ export function SolaceSidebar() {
         return (
           <Link key={item.path} to={item.path} className="block">
             <motion.div
-              whileHover={{ x: 1 }}
-              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              whileHover={{ x: 2 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
               className={cn(
-                "flex items-center gap-3 rounded-[0.85rem] px-3 py-2.5 text-[13.5px] transition-colors duration-500",
+                "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-all duration-300",
                 active
-                  ? "bg-gradient-to-r from-violet-500/15 to-cyan-500/8 text-zinc-50 shadow-[0_0_36px_-8px_rgba(109,40,217,0.22),inset_0_0_0_1px_rgba(139,92,246,0.22)]"
-                  : "text-zinc-500/95 hover:bg-white/[0.035] hover:text-zinc-300/95"
+                  ? "bg-gradient-to-r from-violet-500/18 to-cyan-500/10 text-zinc-50 shadow-[0_0_28px_rgba(139,92,246,0.18),inset_0_0_0_1px_rgba(139,92,246,0.28)]"
+                  : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
               )}
             >
               <Icon
                 className={cn(
-                  "h-[17px] w-[17px] shrink-0 transition-colors duration-500",
-                  active ? "text-violet-300/95" : "text-zinc-600/90"
+                  "h-[18px] w-[18px] shrink-0",
+                  active ? "text-violet-300" : "text-zinc-500"
                 )}
               />
-              <span className="truncate font-normal tracking-tight">{item.label}</span>
+              <span className="truncate">{item.label}</span>
             </motion.div>
           </Link>
         );
       })}
 
-      <div className="mt-auto space-y-3.5 border-t border-white/[0.045] pt-4">
-        <div className="rounded-[1rem] border border-white/[0.06] bg-gradient-to-br from-black/30 to-black/18 p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_48px_-28px_rgba(0,0,0,0.55)]">
+      <div className="mt-auto space-y-3 border-t border-white/[0.06] pt-3">
+        <div className="rounded-xl border border-white/[0.07] bg-black/25 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-gradient-to-br from-violet-500/25 to-cyan-500/12 text-[13px] font-medium text-zinc-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-violet-500/30 to-cyan-500/15 text-sm font-medium text-zinc-100">
               {(firstName[0] || "?").toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13.5px] font-medium tracking-tight text-zinc-100/95">
-                {firstName}
-              </p>
+              <p className="truncate text-sm font-medium text-zinc-100">{firstName}</p>
               {premiumish ? (
-                <span className="mt-1 inline-block rounded-full border border-violet-400/20 bg-violet-500/[0.09] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-violet-200/80">
+                <span className="mt-0.5 inline-block rounded-full border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-violet-200/90">
                   Premium
                 </span>
               ) : (
-                <p className="truncate text-[11px] text-zinc-600/95">{user?.email}</p>
+                <p className="truncate text-[11px] text-zinc-500">{user?.email}</p>
               )}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 rounded-[0.85rem] border border-white/[0.055] bg-black/18 px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2.5">
           <div>
-            <p className="text-[12.5px] font-medium text-zinc-300/95">Focus mode</p>
-            <p className="text-[10px] leading-relaxed text-zinc-600/90">Minimize distractions</p>
+            <p className="text-xs font-medium text-zinc-200">Focus mode</p>
+            <p className="text-[10px] text-zinc-500">Minimize distractions</p>
           </div>
           <button
             type="button"
