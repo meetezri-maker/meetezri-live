@@ -1,21 +1,10 @@
-import { 
+import {
   User,
   Shield,
   Bell,
   Eye,
   Palette,
   HelpCircle,
-  Lock,
-  Mail,
-  Globe,
-  Smartphone,
-  Moon,
-  Zap,
-  Heart,
-  ChevronRight,
-  ArrowLeft,
-  LogOut,
-  Loader2,
   BookOpen,
   Brain,
   Phone,
@@ -25,13 +14,27 @@ import {
   BarChart3,
   History,
   Wind,
+  ChevronRight,
+  ArrowLeft,
+  LogOut,
+  Loader2,
+  Moon,
+  Mail,
+  Smartphone,
+  Heart,
+  Lock,
+  Sparkles,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
+import { motion } from "motion/react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useNotifications } from "@/app/contexts/NotificationsContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { formatSubscriptionPlanLabel } from "@/app/pages/app/profile/profileUi";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,30 +45,90 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
+import {
+  SETTINGS_HERO_IMG,
+  SETTINGS_HELP_IMG,
+  settingsPageAtmosphere,
+  settingsPageGlowTop,
+  settingsPageFogMid,
+  settingsPageVignette,
+  settingsCard,
+  settingsSectionTitle,
+  settingsRowLink,
+  settingsIconChip,
+  settingsBtnPrimary,
+  settingsQuickCard,
+  settingsCompactToolCard,
+} from "@/app/pages/app/settings-hub/settingsUi";
 
 interface SettingSection {
   id: string;
   title: string;
   description: string;
-  icon: any;
-  color: string;
+  icon: LucideIcon;
+  tone: "violet" | "pink" | "cyan" | "amber" | "rose" | "emerald" | "blue" | "orange";
   route?: string;
   badge?: string;
 }
 
+interface QuickSettingItem {
+  icon: LucideIcon;
+  label: string;
+  enabled: boolean;
+  key: string;
+  tone: "violet" | "pink" | "cyan" | "amber";
+  statusOn: string;
+  statusOff: string;
+}
+
+function quickStatus(item: QuickSettingItem): string {
+  return item.enabled ? item.statusOn : item.statusOff;
+}
+
 export function SettingsHub() {
   const navigate = useNavigate();
-  const { profile, refreshProfile, user, signOut } = useAuth();
+  const { profile, user, signOut } = useAuth();
   const { unreadCount } = useNotifications();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
-  
-  // Quick Settings State
-  const [quickSettings, setQuickSettings] = useState([
-    { icon: Moon, label: "Dark Mode", enabled: false, key: "darkMode" },
-    { icon: Bell, label: "Notifications", enabled: true, key: "pushEnabled" },
-    { icon: Smartphone, label: "Mobile Alerts", enabled: true, key: "smsEnabled" },
-    { icon: Mail, label: "Email Updates", enabled: false, key: "emailEnabled" }
+
+  const [quickSettings, setQuickSettings] = useState<QuickSettingItem[]>([
+    {
+      icon: Moon,
+      label: "Dark mode",
+      enabled: false,
+      key: "darkMode",
+      tone: "violet",
+      statusOn: "On",
+      statusOff: "Off",
+    },
+    {
+      icon: Bell,
+      label: "Notifications",
+      enabled: true,
+      key: "pushEnabled",
+      tone: "pink",
+      statusOn: "Enabled",
+      statusOff: "Disabled",
+    },
+    {
+      icon: Smartphone,
+      label: "Mobile alerts",
+      enabled: true,
+      key: "smsEnabled",
+      tone: "cyan",
+      statusOn: "On",
+      statusOff: "Off",
+    },
+    {
+      icon: Mail,
+      label: "Email updates",
+      enabled: false,
+      key: "emailEnabled",
+      tone: "amber",
+      statusOn: "Weekly",
+      statusOff: "Off",
+    },
   ]);
 
   const appearanceStorageKey = useMemo(() => {
@@ -77,43 +140,42 @@ export function SettingsHub() {
   const readAppearanceSettings = () => {
     try {
       const raw = localStorage.getItem(appearanceStorageKey);
-      if (!raw) return {} as Record<string, any>;
+      if (!raw) return {} as Record<string, unknown>;
       const parsed = JSON.parse(raw);
       return parsed && typeof parsed === "object" ? parsed : {};
     } catch {
-      return {} as Record<string, any>;
+      return {} as Record<string, unknown>;
     }
   };
 
-  // Sync state from profile and localStorage
   useEffect(() => {
     const syncSettings = () => {
-      // 1. Appearance (LocalStorage)
       const appearanceSettings = readAppearanceSettings();
       const isDarkMode = appearanceSettings.theme === "dark";
-
-      // 2. Notifications (Profile)
       const prefs = profile?.notification_preferences || {};
-      
-      setQuickSettings(prev => prev.map(setting => {
-          if (setting.key === 'darkMode') return { ...setting, enabled: isDarkMode };
-          if (setting.key === 'pushEnabled') return { ...setting, enabled: prefs.pushEnabled ?? true };
-          if (setting.key === 'smsEnabled') return { ...setting, enabled: prefs.smsEnabled ?? false };
-          if (setting.key === 'emailEnabled') return { ...setting, enabled: prefs.emailEnabled ?? true };
+
+      setQuickSettings((prev) =>
+        prev.map((setting) => {
+          if (setting.key === "darkMode") return { ...setting, enabled: isDarkMode };
+          if (setting.key === "pushEnabled") return { ...setting, enabled: prefs.pushEnabled ?? true };
+          if (setting.key === "smsEnabled") return { ...setting, enabled: prefs.smsEnabled ?? false };
+          if (setting.key === "emailEnabled") return { ...setting, enabled: prefs.emailEnabled ?? true };
           return setting;
-      }));
+        })
+      );
     };
 
     syncSettings();
 
-    // Listen for appearance changes from other components
     const handleAppearanceChange = (event: Event) => {
-      const custom = event as CustomEvent<any>;
+      const custom = event as CustomEvent<{ theme?: string }>;
       const detail = custom.detail || {};
-      setQuickSettings(prev => prev.map(setting => {
-        if (setting.key === 'darkMode') return { ...setting, enabled: detail.theme === 'dark' };
-        return setting;
-      }));
+      setQuickSettings((prev) =>
+        prev.map((setting) => {
+          if (setting.key === "darkMode") return { ...setting, enabled: detail.theme === "dark" };
+          return setting;
+        })
+      );
     };
 
     window.addEventListener("ezri-appearance-change", handleAppearanceChange);
@@ -121,65 +183,46 @@ export function SettingsHub() {
   }, [profile, appearanceStorageKey]);
 
   const toggleQuickSetting = async (key: string) => {
-    // Optimistic update
-    setQuickSettings(prevSettings =>
-      prevSettings.map(setting =>
+    setQuickSettings((prevSettings) =>
+      prevSettings.map((setting) =>
         setting.key === key ? { ...setting, enabled: !setting.enabled } : setting
       )
     );
 
     try {
-        if (key === 'darkMode') {
-            // Handle Appearance
-            const currentSettings = readAppearanceSettings();
-            const newTheme = currentSettings.theme === 'dark' ? 'light' : 'dark';
-            
-            const newSettings = { ...currentSettings, theme: newTheme };
-            localStorage.setItem(appearanceStorageKey, JSON.stringify(newSettings));
-            
-            // Apply immediately
-            if (newTheme === 'dark') {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-            }
+      if (key === "darkMode") {
+        const currentSettings = readAppearanceSettings();
+        const newTheme = currentSettings.theme === "dark" ? "light" : "dark";
+        const newSettings = { ...currentSettings, theme: newTheme };
+        localStorage.setItem(appearanceStorageKey, JSON.stringify(newSettings));
 
-            window.dispatchEvent(
-              new CustomEvent("ezri-appearance-change", { detail: newSettings })
-            );
-            toast.success(`Dark mode ${newTheme === 'dark' ? 'enabled' : 'disabled'}`);
+        if (newTheme === "dark") {
+          document.documentElement.classList.add("dark");
         } else {
-            // Handle Notification Preferences
-            const currentPrefs = profile?.notification_preferences || {};
-            const newPrefs = {
-                ...currentPrefs,
-                [key]: !currentPrefs[key] // toggle based on current profile state to be safe, or we can use the state. 
-                // Using state is safer for optimistic UI if we assume state is up to date. 
-                // But let's just toggle the value we know we are flipping.
-            };
-            
-            // Fix: we need to know the *new* value. 
-            // The optimistic update flipped it. Let's find the setting in the array *before* update or just infer.
-            const setting = quickSettings.find(s => s.key === key);
-            const newValue = !setting?.enabled; // New value is opposite of current state
-            
-            newPrefs[key] = newValue;
-
-            await api.updateProfile({
-                notification_preferences: newPrefs
-            });
-            // refreshProfile(); // Optional, but good to keep sync
-            toast.success("Settings saved");
+          document.documentElement.classList.remove("dark");
         }
+
+        window.dispatchEvent(new CustomEvent("ezri-appearance-change", { detail: newSettings }));
+        toast.success(`Dark mode ${newTheme === "dark" ? "enabled" : "disabled"}`);
+      } else {
+        const currentPrefs = profile?.notification_preferences || {};
+        const setting = quickSettings.find((s) => s.key === key);
+        const newValue = !setting?.enabled;
+        const newPrefs = { ...currentPrefs, [key]: newValue };
+
+        await api.updateProfile({
+          notification_preferences: newPrefs,
+        });
+        toast.success("Settings saved");
+      }
     } catch (error) {
-        console.error("Failed to update setting:", error);
-        toast.error("Failed to update setting");
-        // Revert on error
-        setQuickSettings(prevSettings =>
-            prevSettings.map(setting =>
-              setting.key === key ? { ...setting, enabled: !setting.enabled } : setting
-            )
-        );
+      console.error("Failed to update setting:", error);
+      toast.error("Failed to update setting");
+      setQuickSettings((prevSettings) =>
+        prevSettings.map((setting) =>
+          setting.key === key ? { ...setting, enabled: !setting.enabled } : setting
+        )
+      );
     }
   };
 
@@ -194,336 +237,535 @@ export function SettingsHub() {
     }
   };
 
-  const settingSections: SettingSection[] = [
+  const accountSections: SettingSection[] = [
     {
       id: "account",
-      title: "Account Settings",
+      title: "Account settings",
       description: "Manage your profile, email, and password",
       icon: User,
-      color: "from-blue-500 to-indigo-600",
-      route: "/app/settings/account"
+      tone: "violet",
+      route: "/app/settings/account",
     },
     {
       id: "privacy",
-      title: "Privacy & Security",
+      title: "Privacy & security",
       description: "Control your data, privacy settings, and security",
       icon: Shield,
-      color: "from-purple-500 to-pink-600",
-      route: "/app/settings/privacy"
+      tone: "pink",
+      route: "/app/settings/privacy",
     },
     {
       id: "notifications",
       title: "Notifications",
       description: "Customize alerts, reminders, and updates",
       icon: Bell,
-      color: "from-yellow-500 to-orange-600",
+      tone: "amber",
       route: "/app/settings/notifications",
-      badge: unreadCount > 0 ? String(unreadCount) : undefined
+      badge: unreadCount > 0 ? String(unreadCount) : undefined,
     },
     {
       id: "accessibility",
       title: "Accessibility",
       description: "Screen reader, text size, and assistive features",
       icon: Eye,
-      color: "from-green-500 to-emerald-600",
-      route: "/app/settings/accessibility"
+      tone: "emerald",
+      route: "/app/settings/accessibility",
     },
     {
       id: "appearance",
       title: "Appearance",
       description: "Theme, colors, and visual preferences",
       icon: Palette,
-      color: "from-pink-500 to-rose-600",
-      route: "/app/settings/appearance"
+      tone: "rose",
+      route: "/app/settings/appearance",
     },
     {
       id: "change-avatar",
-      title: "Change Solace Avatar",
-      description: "Switch to a different Avatar for your talks",
+      title: "Change Solace avatar",
+      description: "Switch to a different avatar for your talks",
       icon: Brain,
-      color: "from-blue-500 to-cyan-600",
-      route: "/app/settings/change-avatar"
+      tone: "blue",
+      route: "/app/settings/change-avatar",
     },
     {
       id: "resources",
-      title: "Resources Library",
+      title: "Resources library",
       description: "Browse articles, videos, and wellness exercises",
       icon: BookOpen,
-      color: "from-indigo-500 to-purple-600",
-      route: "/app/settings/resources"
+      tone: "violet",
+      route: "/app/settings/resources",
     },
   ];
 
-  const safetySections: SettingSection[] = [
+  const wellbeingSections: SettingSection[] = [
     {
       id: "emergency-contacts",
-      title: "Emergency Contacts",
+      title: "Emergency contacts",
       description: "Add trusted contacts who get notified",
       icon: Phone,
-      color: "from-red-500 to-rose-600",
-      route: "/app/settings/emergency-contacts"
+      tone: "rose",
+      route: "/app/settings/emergency-contacts",
     },
     {
       id: "wellness-plan",
-      title: "Wellness Plan",
+      title: "Wellness plan",
       description: "Personalized wellness plan builder",
       icon: FileHeart,
-      color: "from-orange-500 to-red-600",
-      route: "/app/settings/wellness-plan"
+      tone: "orange",
+      route: "/app/settings/wellness-plan",
     },
     {
       id: "safety-insights",
-      title: "Safety Insights",
+      title: "Safety insights",
       description: "Your safety score, patterns, recommendations",
       icon: TrendingUp,
-      color: "from-green-500 to-emerald-600",
+      tone: "emerald",
       route: "/app/settings/safety-insights",
-      // badge: "NEW"
     },
     {
       id: "emergency-resources",
-      title: "Emergency Resources",
-      description: "International hotlines",
+      title: "Emergency resources",
+      description: "International hotlines and local resources",
       icon: AlertCircle,
-      color: "from-red-600 to-pink-600",
-      route: "/app/emergency-resources"
+      tone: "rose",
+      route: "/app/emergency-resources",
     },
+  ];
+
+  const systemToolCards: SettingSection[] = [
     {
       id: "resource-analytics",
-      title: "Resource Analytics",
-      description: "Track which resources you use",
+      title: "Resource analytics",
+      description: "Track which resources you use most",
       icon: BarChart3,
-      color: "from-purple-500 to-indigo-600",
-      route: "/app/settings/resource-analytics"
+      tone: "violet",
+      route: "/app/settings/resource-analytics",
     },
     {
       id: "emergency-notifications",
-      title: "Emergency Notifications",
-      description: "Safety-related notifications",
+      title: "Emergency notifications",
+      description: "Safety-related notifications & alerts",
       icon: History,
-      color: "from-blue-500 to-cyan-600",
-      route: "/app/settings/emergency-notifications"
+      tone: "blue",
+      route: "/app/settings/emergency-notifications",
     },
     {
       id: "cooldown-screen",
-      title: "Cooldown Screen",
+      title: "Cooldown screen",
       description: "Recovery exercises after tough talks",
       icon: Wind,
-      color: "from-cyan-500 to-teal-600",
-      route: "/app/settings/cooldown-screen"
-    }
+      tone: "cyan",
+      route: "/app/settings/cooldown-screen",
+    },
   ];
 
+  const displayName =
+    (typeof profile?.full_name === "string" && profile.full_name.trim()) ||
+    user?.email?.split("@")[0] ||
+    "Member";
+
+  const premiumish =
+    ["pro", "core", "active"].includes(String(profile?.subscription_plan || "").toLowerCase()) ||
+    String(profile?.subscription_status || "").toLowerCase() === "active";
+
+  const planLabel = formatSubscriptionPlanLabel(
+    typeof profile?.subscription_plan === "string" ? profile.subscription_plan : undefined
+  );
+
+  const avatarUrl = typeof profile?.avatar_url === "string" ? profile.avatar_url : null;
+  const initials = (displayName[0] || "?").toUpperCase();
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header */}
-          <div className="mb-8">
-            <Link
-              to="/app/dashboard"
-              className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white mb-6 transition-colors"
+    <motion.div
+      className={settingsPageAtmosphere}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35 }}
+    >
+      <motion.div className={settingsPageGlowTop} aria-hidden />
+      <motion.div className={settingsPageFogMid} aria-hidden />
+      <motion.div className={settingsPageVignette} aria-hidden />
+
+      <div className="relative z-10 mx-auto w-full max-w-[1600px] px-1 sm:px-2">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
+          {/* Main content ~70% */}
+          <motion.div
+            className="min-w-0 flex-[7] space-y-6"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+          >
+            {/* Hero */}
+            <section
+              className={cn(
+                settingsCard,
+                "relative overflow-hidden border-violet-500/10 shadow-[0_0_56px_-20px_rgba(139,92,246,0.35)]"
+              )}
             >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Dashboard
-            </Link>
-
-            <div className="flex items-center gap-4 mb-2">
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg transition-transform hover:scale-[1.02]">
-                <Zap className="w-8 h-8 text-white" />
+              <div className="absolute inset-0">
+                <img
+                  src={SETTINGS_HERO_IMG}
+                  alt=""
+                  className="h-full w-full object-cover object-right brightness-[0.55] contrast-[0.95] saturate-[1.08]"
+                />
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-r from-[#0a0b18] via-[#0a0b18]/88 to-[#0a0b18]/25"
+                  aria-hidden
+                />
+                <div
+                  className="absolute inset-0 bg-[radial-gradient(ellipse_70%_80%_at_85%_50%,rgba(192,132,252,0.18),transparent_55%)]"
+                  aria-hidden
+                />
               </div>
-              <div>
-                <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
-                <p className="text-gray-600 dark:text-gray-400">Customize your Ezri experience</p>
-              </div>
-            </div>
-          </div>
 
-          {/* Quick Settings */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 mb-6">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Quick Settings</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {quickSettings.map((setting) => {
-                const Icon = setting.icon;
-                return (
-                  <button
-                    type="button"
-                    key={setting.label}
-                    className={`p-4 rounded-xl border-2 transition-all hover:scale-[1.03] active:scale-[0.97] ${
-                      setting.enabled
-                        ? "border-blue-500 bg-blue-50 dark:bg-blue-950"
-                        : "border-gray-200 bg-gray-50 dark:bg-slate-800 dark:border-slate-700"
-                    }`}
-                    onClick={() => toggleQuickSetting(setting.key)}
-                  >
-                    <Icon className={`w-6 h-6 mx-auto mb-2 ${
-                      setting.enabled ? "text-blue-600 dark:text-blue-400" : "text-gray-400"
-                    }`} />
-                    <p className={`text-xs font-medium ${
-                      setting.enabled ? "text-blue-900 dark:text-blue-100" : "text-gray-600 dark:text-gray-400"
-                    }`}>
-                      {setting.label}
+              <div className="relative px-5 pb-5 pt-5 sm:px-7 sm:pb-6 sm:pt-6">
+                <Link
+                  to="/app/dashboard"
+                  className="inline-flex min-h-[44px] items-center gap-2 text-sm text-[rgba(255,255,255,0.62)] transition-colors hover:text-white"
+                >
+                  <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+                  Back to Dashboard
+                </Link>
+
+                <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="max-w-lg">
+                    <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Settings</h1>
+                    <p className="mt-2 text-sm text-[rgba(255,255,255,0.65)] sm:text-base">
+                      Customize your Solace experience
                     </p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Main Settings Sections */}
-          <div className="space-y-4">
-            {settingSections.map((section) => {
-              const Icon = section.icon;
-              const sectionCard = (
-                <div className="flex items-start gap-4">
-                  <div className={`settings-hub-icon-chip p-3 rounded-xl bg-gradient-to-br ${section.color} shrink-0`}>
-                    <Icon className="w-6 h-6 text-white" />
                   </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-bold text-gray-900 dark:text-gray-100 break-words">{section.title}</h3>
-                      {section.badge && (
-                        <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">
-                          {section.badge}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 break-words">{section.description}</p>
-                  </div>
-
-                  <ChevronRight className="w-5 h-5 text-gray-400 shrink-0 mt-1" />
                 </div>
-              );
 
-              return (
-                <div key={section.id}>
+                <div className="mt-8">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(255,255,255,0.5)]">
+                    Quick settings
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                    {quickSettings.map((setting) => {
+                      const Icon = setting.icon;
+                      return (
+                        <button
+                          type="button"
+                          key={setting.key}
+                          className={settingsQuickCard}
+                          onClick={() => toggleQuickSetting(setting.key)}
+                          aria-pressed={setting.enabled}
+                          aria-label={`${setting.label}: ${quickStatus(setting)}. Tap to toggle.`}
+                        >
+                          <div className={settingsIconChip(setting.tone)}>
+                            <Icon className="h-4 w-4" aria-hidden />
+                          </div>
+                          <span className="text-xs font-medium text-[rgba(255,255,255,0.88)]">{setting.label}</span>
+                          <span
+                            className={cn(
+                              "text-[11px] font-semibold",
+                              setting.enabled ? "text-violet-200" : "text-[rgba(255,255,255,0.4)]"
+                            )}
+                          >
+                            {quickStatus(setting)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <SettingsGroup title="Account & preferences" sections={accountSections} />
+
+            <SettingsGroup title="Wellbeing & support" sections={wellbeingSections} />
+
+            {/* System & tools */}
+            <section className="space-y-3">
+              <h2 className={settingsSectionTitle}>System & tools</h2>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {systemToolCards.map((card) => (
+                  <SystemToolCard key={card.id} section={card} />
+                ))}
+              </div>
+              <motion.div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Link
+                  to="/app/settings/help-support"
+                  className={cn(
+                    settingsCompactToolCard,
+                    "min-h-[88px] flex-row items-center gap-4 sm:flex-row"
+                  )}
+                >
+                  <div className={settingsIconChip("blue")}>
+                    <HelpCircle className="h-5 w-5" aria-hidden />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-[rgba(255,255,255,0.94)]">Help & support</p>
+                    <p className="mt-0.5 text-xs text-[rgba(255,255,255,0.48)]">
+                      Get help, contact support, and FAQs
+                    </p>
+                  </div>
+                  <ChevronRight className="h-5 w-5 shrink-0 text-[rgba(255,255,255,0.35)] group-hover:text-violet-300" />
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutModal(true)}
+                  className={cn(
+                    settingsCompactToolCard,
+                    "min-h-[88px] w-full flex-row items-center gap-4 border-rose-500/15 text-left",
+                    "hover:border-rose-400/30 hover:bg-rose-500/[0.08] hover:shadow-[0_0_32px_-10px_rgba(244,63,94,0.25)]"
+                  )}
+                >
+                  <div className={settingsIconChip("rose")}>
+                    <LogOut className="h-5 w-5" aria-hidden />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-rose-200/95">Log out</p>
+                    <p className="mt-0.5 text-xs text-[rgba(255,255,255,0.48)]">End your current session</p>
+                  </div>
+                  <ChevronRight className="h-5 w-5 shrink-0 text-rose-300/40" aria-hidden />
+                </button>
+              </motion.div>
+            </section>
+
+            <footer className="pb-2 pt-2 text-center">
+              <div className="mb-2 flex items-center justify-center gap-2 text-sm text-[rgba(255,255,255,0.42)]">
+                <Heart className="h-4 w-4 text-fuchsia-400/70" aria-hidden />
+                <span>Made with care for your wellbeing</span>
+              </div>
+              <p className="text-xs text-[rgba(255,255,255,0.32)]">
+                Solace v1.0.0 • © 2024 •{" "}
+                <Link to="/privacy" className="underline-offset-2 hover:text-violet-300/80 hover:underline">
+                  Privacy
+                </Link>{" "}
+                •{" "}
+                <Link to="/terms" className="underline-offset-2 hover:text-violet-300/80 hover:underline">
+                  Terms
+                </Link>
+              </p>
+            </footer>
+          </motion.div>
+
+          {/* Right rail ~30% */}
+          <aside className="w-full shrink-0 space-y-4 xl:sticky xl:top-4 xl:w-[min(100%,380px)] xl:flex-[3] xl:self-start">
+            <div className={cn(settingsCard, "overflow-hidden p-5")}>
+              <h2 className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">Your profile</h2>
+              <div className="mt-4 flex flex-col items-center text-center">
+                <div className="relative">
+                  <div className="absolute -inset-1 rounded-full bg-gradient-to-br from-violet-500/40 to-fuchsia-500/20 blur-md" />
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt=""
+                      className="relative h-20 w-20 rounded-full border-2 border-white/10 object-cover"
+                    />
+                  ) : (
+                    <div className="relative flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-violet-500/30 to-cyan-500/15 text-2xl font-semibold text-white">
+                      {initials}
+                    </div>
+                  )}
+                </div>
+                <p className="mt-3 text-lg font-semibold text-white">{displayName}</p>
+                {premiumish ? (
+                  <span className="mt-1.5 inline-flex rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-200/90">
+                    Premium member
+                  </span>
+                ) : null}
+                <Link
+                  to="/app/billing"
+                  className="mt-4 flex w-full min-h-[44px] items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3 text-sm transition-colors hover:border-violet-400/20 hover:bg-violet-500/[0.06]"
+                >
+                  <span className="text-[rgba(255,255,255,0.55)]">Plan</span>
+                  <span className="flex items-center gap-1 font-medium text-[rgba(255,255,255,0.9)]">
+                    {planLabel}
+                    <ChevronRight className="h-4 w-4 text-[rgba(255,255,255,0.35)]" />
+                  </span>
+                </Link>
+                <Link to="/app/billing" className={cn(settingsBtnPrimary, "mt-3")}>
+                  Manage plan
+                </Link>
+              </div>
+            </div>
+
+            <div className={cn(settingsCard, "p-5")}>
+              <h2 className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">Settings tips</h2>
+              <ul className="mt-4 divide-y divide-white/[0.06]">
+                <TipRow
+                  icon={Bell}
+                  tone="violet"
+                  title="Customize your alerts"
+                  description="Stay on track with smart reminders."
+                />
+                <TipRow
+                  icon={Shield}
+                  tone="pink"
+                  title="Protect your privacy"
+                  description="Review your data and security settings."
+                />
+                <TipRow
+                  icon={Sparkles}
+                  tone="cyan"
+                  title="Explore wellness tools"
+                  description="Make the most of Solace resources."
+                />
+              </ul>
+            </div>
+
+            <div className={cn(settingsCard, "relative overflow-hidden p-0")}>
+              <div className="relative h-28 overflow-hidden">
+                <img src={SETTINGS_HELP_IMG} alt="" className="h-full w-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0b18] via-[#0a0b18]/55 to-transparent" />
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_90%,rgba(251,146,60,0.18),transparent_60%)]" />
+              </div>
+              <div className="relative p-5 pt-0">
+                <h2 className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">Need help?</h2>
+                <p className="mt-1.5 text-sm text-[rgba(255,255,255,0.55)]">We&apos;re here for you</p>
+                <Link to="/app/settings/help-support" className={cn(settingsBtnPrimary, "mt-4")}>
+                  Contact support
+                </Link>
+              </div>
+            </div>
+
+            <div
+              className={cn(
+                settingsCard,
+                "border-emerald-500/10 p-5 shadow-[0_0_40px_-16px_rgba(52,211,153,0.2)]"
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <div className={settingsIconChip("emerald")}>
+                  <Lock className="h-5 w-5" aria-hidden />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">Your data is safe</h2>
+                  <p className="mt-2 text-xs leading-relaxed text-[rgba(255,255,255,0.5)]">
+                    We use advanced encryption to keep your information private and secure.
+                  </p>
                   <Link
-                    to={section.route || "/app/settings"}
-                    className="block bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all hover:scale-[1.01] active:scale-[0.99]"
+                    to="/privacy"
+                    className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-violet-300 transition hover:text-violet-200"
                   >
-                    {sectionCard}
+                    Learn more
+                    <ChevronRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>
-              );
-            })}
-          </div>
-
-          {/* Safety & Support Section */}
-          <div className="mt-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="settings-hub-icon-chip p-3 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg">
-                <Shield className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Safety & Support</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Your wellbeing is our priority</p>
               </div>
             </div>
-
-            <div className="space-y-4">
-              {safetySections.map((section) => {
-                const Icon = section.icon;
-                return (
-                  <div key={section.id}>
-                <Link
-                  to={section.route || "/app/settings"}
-                  className="block bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all hover:scale-[1.01] active:scale-[0.99]"
-                >
-                      <div className="flex items-start gap-4">
-                        <div className={`settings-hub-icon-chip p-3 rounded-xl bg-gradient-to-br ${section.color} shrink-0`}>
-                          <Icon className="w-6 h-6 text-white" />
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-bold text-gray-900 dark:text-gray-100 break-words">{section.title}</h3>
-                            {section.badge && (
-                              <span className="px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">
-                                {section.badge}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 break-words">{section.description}</p>
-                        </div>
-
-                        <ChevronRight className="w-5 h-5 text-gray-400 shrink-0 mt-1" />
-                      </div>
-                    </Link>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Additional Options */}
-          <div className="mt-6 space-y-3">
-            <Link
-              to="/app/settings/help-support"
-              className="block bg-white dark:bg-slate-900 rounded-xl p-4 shadow-md border border-gray-100 dark:border-slate-700 hover:shadow-lg transition-all"
-            >
-              <div className="flex items-center gap-3">
-                <HelpCircle className="w-5 h-5 text-blue-600" />
-                <span className="font-medium text-gray-900 dark:text-gray-100">Help & Support</span>
-                <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-500 ml-auto" />
-              </div>
-            </Link>
-
-            <button
-              onClick={() => setShowLogoutModal(true)}
-              className="w-full bg-white rounded-xl p-4 shadow-md border border-gray-100 hover:shadow-lg transition-all"
-            >
-              <div className="flex items-center gap-3">
-                <LogOut className="w-5 h-5 text-red-600" />
-                <span className="font-medium text-red-600">Log Out</span>
-              </div>
-            </button>
-          </div>
-
-          {/* App Info */}
-          <div className="mt-8 text-center">
-            <div className="flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400 text-sm mb-2">
-              <Heart className="w-4 h-4" />
-              <span>Made with care for your wellbeing</span>
-            </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500">
-              Solace v1.0.0 • © 2024 • <Link to="/privacy" className="underline">Privacy</Link> • <Link to="/terms" className="underline">Terms</Link>
-            </p>
-          </div>
-
-          <AlertDialog
-            open={showLogoutModal}
-            onOpenChange={(open) => {
-              if (logoutLoading) return;
-              setShowLogoutModal(open);
-            }}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Log out?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to log out of your account?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={logoutLoading}>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={confirmLogout}
-                  className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
-                  disabled={logoutLoading}
-                >
-                  {logoutLoading ? (
-                    <span className="inline-flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Logging out...
-                    </span>
-                  ) : (
-                    "Log Out"
-                  )}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          </aside>
         </div>
       </div>
+
+      <AlertDialog
+        open={showLogoutModal}
+        onOpenChange={(open) => {
+          if (logoutLoading) return;
+          setShowLogoutModal(open);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Log out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out of your account?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={logoutLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmLogout}
+              className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
+              disabled={logoutLoading}
+            >
+              {logoutLoading ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Logging out...
+                </span>
+              ) : (
+                "Log Out"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </motion.div>
+  );
+}
+
+interface SettingsGroupProps {
+  title: string;
+  sections: SettingSection[];
+}
+
+function SettingsGroup({ title, sections }: SettingsGroupProps) {
+  return (
+    <section className="space-y-3">
+      <h2 className={settingsSectionTitle}>{title}</h2>
+      <div className={cn(settingsCard, "overflow-hidden divide-y divide-white/[0.05]")}>
+        {sections.map((section) => (
+          <SettingRowLink key={section.id} section={section} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SettingRowLink({ section }: { section: SettingSection }) {
+  const Icon = section.icon;
+  return (
+    <Link to={section.route || "/app/settings"} className={settingsRowLink}>
+      <div className={settingsIconChip(section.tone)}>
+        <Icon className="h-5 w-5" aria-hidden />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-[rgba(255,255,255,0.94)]">{section.title}</h3>
+          {section.badge ? (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
+              {section.badge}
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-0.5 text-xs leading-relaxed text-[rgba(255,255,255,0.48)]">{section.description}</p>
+      </div>
+      <ChevronRight
+        className="h-5 w-5 shrink-0 text-[rgba(255,255,255,0.3)] transition group-hover:text-violet-300"
+        aria-hidden
+      />
+    </Link>
+  );
+}
+
+function SystemToolCard({ section }: { section: SettingSection }) {
+  const Icon = section.icon;
+  return (
+    <Link to={section.route || "/app/settings"} className={settingsCompactToolCard}>
+      <div className={settingsIconChip(section.tone)}>
+        <Icon className="h-5 w-5" aria-hidden />
+      </div>
+      <motion.div>
+        <p className="font-semibold text-[rgba(255,255,255,0.92)]">{section.title}</p>
+        <p className="mt-1 text-xs leading-relaxed text-[rgba(255,255,255,0.45)]">{section.description}</p>
+      </motion.div>
+      <ChevronRight className="mt-3 h-4 w-4 text-[rgba(255,255,255,0.28)]" aria-hidden />
+    </Link>
+  );
+}
+
+interface TipRowProps {
+  icon: LucideIcon;
+  tone: "violet" | "pink" | "cyan";
+  title: string;
+  description: string;
+}
+
+function TipRow({ icon: Icon, tone, title, description }: TipRowProps) {
+  return (
+    <li className="flex gap-3 py-3.5 first:pt-0 last:pb-0">
+      <div className={settingsIconChip(tone)}>
+        <Icon className="h-4 w-4" aria-hidden />
+      </div>
+      <div>
+        <p className="text-sm font-medium text-[rgba(255,255,255,0.9)]">{title}</p>
+        <p className="mt-0.5 text-xs text-[rgba(255,255,255,0.45)]">{description}</p>
+      </div>
+    </li>
   );
 }

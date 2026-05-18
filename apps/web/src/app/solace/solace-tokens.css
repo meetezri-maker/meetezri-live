@@ -17,6 +17,21 @@
   --solace-glow-purple: 0 0 42px rgba(139, 92, 246, 0.22);
   --solace-glow-cyan: 0 0 36px rgba(34, 211, 238, 0.16);
   --solace-sidebar-w: 248px;
+
+  /* Design system foundation (Phase 1) — billing + shared surfaces */
+  --solace-ds-bg-deep: #050816;
+  --solace-ds-bg: #070a14;
+  --solace-ds-bg-raised: #0b1020;
+  --solace-ds-surface: rgba(15, 18, 32, 0.82);
+  --solace-ds-border-glow: rgba(168, 85, 247, 0.22);
+  --solace-ds-glow-purple: rgba(168, 85, 247, 0.35);
+  --solace-ds-glow-pink: rgba(236, 72, 153, 0.28);
+  --solace-ds-glow-cyan: rgba(34, 211, 238, 0.18);
+  --solace-ds-text: #f7f3ff;
+  --solace-ds-text-muted: #a7a1b8;
+  --solace-ds-radius-card: 28px;
+  --solace-ds-radius-rail: 24px;
+  --solace-ds-shadow-cinematic: 0 40px 100px -48px rgba(0, 0, 0, 0.85), 0 0 60px -24px rgba(88, 28, 135, 0.35);
 }
 
 /* Custom dark scrollbar (WebKit + thin standard) */
@@ -35,4 +50,118 @@
 .solace-scroll::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, rgba(139, 92, 246, 0.45), rgba(34, 211, 238, 0.25));
   border-radius: 999px;
+}
+
+/* ─── Solace Login — typography + cinematic accents ───────────────────────── */
+.solace-login-page {
+  --solace-login-serif: "Cormorant Garamond", "Times New Roman", Georgia, serif;
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+}
+
+.solace-login-serif {
+  font-family: var(--solace-login-serif);
+}
+
+@keyframes solace-login-lantern-breathe {
+  0%,
+  100% {
+    opacity: 0.92;
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.035);
+    filter: brightness(1.14);
+  }
+}
+
+@keyframes solace-login-ember-rise {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.85);
+  }
+  25% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--sx, 0), -72px, 0) scale(1);
+  }
+}
+
+@keyframes solace-login-shimmer-soft {
+  0% {
+    opacity: 0.28;
+    transform: translateX(-8%);
+  }
+  50% {
+    opacity: 0.45;
+    transform: translateX(4%);
+  }
+  100% {
+    opacity: 0.28;
+    transform: translateX(8%);
+  }
+}
+
+.solace-login-lantern-breathe {
+  animation: solace-login-lantern-breathe 4.2s ease-in-out infinite;
+}
+
+.solace-login-particle {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 226, 200, 0.55);
+  box-shadow:
+    0 0 6px rgba(255, 176, 80, 0.45),
+    0 0 14px rgba(233, 30, 99, 0.2);
+  pointer-events: none;
+  animation: solace-login-ember-rise 10s linear infinite;
+  animation-delay: var(--delay, 0s);
+  bottom: clamp(96px, 18vh, 180px);
+  left: calc(42% + var(--ox, 0px));
+}
+
+.solace-login-water-shimmer {
+  animation: solace-login-shimmer-soft 14s ease-in-out infinite;
+}
+
+.solace-login-page .login-hero-stars {
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, rgba(255, 255, 255, 0.55), transparent),
+    radial-gradient(1px 1px at 28% 32%, rgba(255, 255, 255, 0.35), transparent),
+    radial-gradient(1px 1px at 44% 12%, rgba(255, 255, 255, 0.45), transparent),
+    radial-gradient(1px 1px at 62% 24%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(1px 1px at 78% 16%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1px 1px at 88% 36%, rgba(255, 255, 255, 0.3), transparent);
+}
+
+/* ─── Sonner — luxury wellness toast (auth + verify flows) ───────────────── */
+[data-sonner-toaster] [data-sonner-toast] {
+  border-radius: 22px !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: rgba(12, 14, 24, 0.92) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  color: rgba(255, 255, 255, 0.9) !important;
+  box-shadow:
+    0 0 0 1px rgba(168, 85, 247, 0.12),
+    0 24px 64px -24px rgba(0, 0, 0, 0.85),
+    0 0 48px -16px rgba(168, 85, 247, 0.28) !important;
+  padding: 16px 18px !important;
+  font-size: 14px !important;
+  line-height: 1.45 !important;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-type="success"] [data-icon] {
+  color: #4ade80 !important;
+}
+
+[data-sonner-toaster] [data-sonner-toast] [data-close-button] {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.65) !important;
 }

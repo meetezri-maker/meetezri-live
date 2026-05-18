@@ -1,253 +1,379 @@
-import { CrisisResourcesCallout } from "@/app/components/safety/CrisisResourcesCallout";
-import { Card } from "@/app/components/ui/card";
-import { Button } from "@/app/components/ui/button";
+import { useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { format } from "date-fns";
 import {
   ArrowLeft,
   Bell,
-  MessageSquare,
-  Mail,
+  ChevronRight,
   Phone,
-  AlertCircle,
-  CheckCircle,
-  XCircle,
-  Clock,
   Shield,
 } from "lucide-react";
-import { useMemo } from "react";
-import type { Notification } from "@/app/contexts/NotificationsContext";
+import { Skeleton } from "@/app/components/ui/skeleton";
+import { useAuth } from "@/app/contexts/AuthContext";
 import { useNotifications } from "@/app/contexts/NotificationsContext";
+import { cn } from "@/lib/utils";
+import {
+  NOTIFICATIONS_HERO_IMG,
+  emergencyBackLink,
+  emergencyBannerCta,
+  emergencyBannerGradient,
+  emergencyCategoryPill,
+  emergencyFilterPill,
+  emergencyFooterStrip,
+  emergencyHeroAccent,
+  emergencyHeroCard,
+  emergencyHeroImage,
+  emergencyHeroOverlayLeft,
+  emergencyHeroOverlayPurple,
+  emergencyHeroOverlayWarmth,
+  emergencyHeroTitle,
+  emergencyIconOrb,
+  emergencyNotificationCard,
+  emergencyPageAtmosphere,
+  emergencyPageFogMid,
+  emergencyPageGlowTop,
+  emergencyPageVignette,
+  emergencySortSelect,
+  emergencyStatusDot,
+} from "@/app/pages/app/emergency-notifications/emergencyNotificationsUi";
+import {
+  FEED_TABS,
+  belongsOnEmergencyNotificationsPage,
+  countByTab,
+  getCategoryIcon,
+  mapNotificationToFeedItem,
+  matchesFeedTab,
+  sortFeedItems,
+  type EmergencyFeedTab,
+  type EmergencySort,
+  type EmergencyVisualCategory,
+} from "@/app/pages/app/emergency-notifications/emergencyNotificationModel";
+import { EmergencyNotificationsRail } from "@/app/pages/app/emergency-notifications/EmergencyNotificationsRail";
 
-type HistoryRow = {
-  id: string;
+function formatFeedTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Recently";
+  return format(date, "MMM d, yyyy • h:mm a");
+}
+
+function formatQuietHours(
+  enabled: boolean | undefined,
+  start: string | undefined,
+  end: string | undefined
+): string {
+  if (!enabled) return "Off";
+  const s = start ?? "22:00";
+  const e = end ?? "07:00";
+  const fmt = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    const d = new Date();
+    d.setHours(h ?? 22, m ?? 0, 0, 0);
+    return format(d, "h:mm a");
+  };
+  return `${fmt(s)} – ${fmt(e)}`;
+}
+
+interface EmergencyNotificationCardProps {
+  title: string;
+  message: string;
   timestamp: string;
-  headline: string;
-  safetyBadge: string;
-  method: "app";
-  status: "sent" | "failed" | "pending";
-  body: string;
-};
+  category: EmergencyVisualCategory;
+  tagLabel: string;
+  index: number;
+}
 
-function isAdminEmergencyNotification(n: Notification): boolean {
-  const md = n.metadata as Record<string, unknown> | null | undefined;
-  if (!md || typeof md !== "object") return false;
-  if (md.manual_admin_broadcast !== true) return false;
-  return md.notification_category === "emergency";
+function EmergencyNotificationCard({
+  title,
+  message,
+  timestamp,
+  category,
+  tagLabel,
+  index,
+}: EmergencyNotificationCardProps) {
+  const Icon = getCategoryIcon(category);
+  const pillCategory =
+    category === "wellness" ? "safety" : category === "emergency" ? "emergency" : category;
+
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.04 + index * 0.04, duration: 0.4 }}
+      className={emergencyNotificationCard}
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
+        <div className={emergencyIconOrb(category === "wellness" ? "wellness" : pillCategory)}>
+          <Icon className="h-6 w-6 sm:h-7 sm:w-7" aria-hidden />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <h3 className="font-serif text-lg font-light text-white sm:text-xl">{title}</h3>
+          <p className="mt-2 text-sm leading-relaxed text-[rgba(255,255,255,0.58)]">{message}</p>
+          <p className="mt-3 text-xs text-[rgba(255,255,255,0.38)]">{formatFeedTimestamp(timestamp)}</p>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2 sm:flex-col sm:items-end sm:gap-2.5">
+          <span className={emergencyCategoryPill(pillCategory)}>{tagLabel}</span>
+          <span className={emergencyStatusDot(pillCategory)} aria-hidden />
+        </div>
+      </div>
+    </motion.article>
+  );
 }
 
 export function NotificationHistory() {
-  const navigate = useNavigate();
-  const { notifications: appNotifications } = useNotifications();
+  const { notifications: allNotifications, isLoading } = useNotifications();
+  const { profile } = useAuth();
+  const [activeTab, setActiveTab] = useState<EmergencyFeedTab>("all");
+  const [sort, setSort] = useState<EmergencySort>("recent");
 
-  const notifications: HistoryRow[] = useMemo(
-    () =>
-      appNotifications
-        .filter(isAdminEmergencyNotification)
-        .map((n) => ({
-          id: n.id,
-          timestamp: n.created_at,
-          headline: (n.title && n.title.trim()) || "Emergency notice",
-          safetyBadge: "From our team",
-          method: "app",
-          status: "sent",
-          body: (n.message && n.message.trim()) || "",
-        }))
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
-    [appNotifications]
+  const prefs = profile?.notification_preferences;
+  const inAppEnabled = true;
+  const emailEnabled = prefs?.emailEnabled ?? true;
+  const pushEnabled = prefs?.pushEnabled ?? true;
+  const quietHoursLabel = formatQuietHours(
+    prefs?.quietHoursEnabled,
+    prefs?.quietStart,
+    prefs?.quietEnd
   );
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "sent":
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case "failed":
-        return <XCircle className="w-5 h-5 text-red-500" />;
-      default:
-        return <Clock className="w-5 h-5 text-yellow-500" />;
-    }
-  };
+  const feedItems = useMemo(
+    () =>
+      allNotifications
+        .filter(belongsOnEmergencyNotificationsPage)
+        .map(mapNotificationToFeedItem),
+    [allNotifications]
+  );
 
-  const getMethodIcon = (method: string) => {
-    if (method === "sms") return <Phone className="w-4 h-4" />;
-    if (method === "email") return <Mail className="w-4 h-4" />;
-    return <Bell className="w-4 h-4" />;
-  };
+  const tabCounts = useMemo(() => countByTab(feedItems), [feedItems]);
 
-  const getSafetyStateColor = (label: string) => {
-    if (label === "From our team") {
-      return "bg-red-100 text-red-800 border-red-300 dark:bg-red-950/40 dark:text-red-200 dark:border-red-800";
-    }
-    return "bg-gray-100 text-gray-700 border-gray-300";
-  };
+  const visibleItems = useMemo(() => {
+    const filtered = feedItems.filter((item) => matchesFeedTab(item, activeTab));
+    return sortFeedItems(filtered, sort);
+  }, [feedItems, activeTab, sort]);
 
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+  const hasNotices = feedItems.length > 0;
 
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins} min ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
-    return date.toLocaleDateString();
-  };
+  if (isLoading) {
+    return (
+      <div className={emergencyPageAtmosphere}>
+        <motion.div className={emergencyPageGlowTop} aria-hidden />
+        <motion.div className={emergencyPageVignette} aria-hidden />
+        <div className="relative z-10 mx-auto w-full max-w-[1500px] px-4 py-7 sm:px-7 sm:py-9">
+          <Skeleton className="h-[min(300px,38vh)] w-full rounded-[2rem] bg-white/5" />
+          <div className="mt-6 space-y-4">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-[120px] w-full rounded-[1.375rem] bg-white/5" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <button
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2 text-muted-foreground hover:text-primary mb-4 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Settings
-          </button>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <Bell className="w-8 h-8 text-primary" />
-                <h1 className="text-3xl font-bold">Emergency Notifications</h1>
-              </div>
-              <p className="text-muted-foreground">
-                Notices flagged as emergency or safety notifications.
-              </p>
-            </div>
-          </div>
-        </motion.div>
+    <motion.div
+      className={emergencyPageAtmosphere}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35 }}
+    >
+      <div className={emergencyPageGlowTop} aria-hidden />
+      <motion.div className={emergencyPageFogMid} aria-hidden />
+      <motion.div className={emergencyPageVignette} aria-hidden />
 
-        {/* <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-6"
-        >
-          <Card className="notification-history-card p-4 bg-blue-50 border-blue-200 dark:bg-slate-900 dark:border-blue-900">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+      <div className="relative z-10 mx-auto w-full max-w-[1500px] px-4 py-7 sm:px-7 sm:py-9">
+        <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)] xl:items-start xl:gap-10">
+          <div className="min-w-0 space-y-8">
+            <Link to="/app/settings" className={emergencyBackLink}>
+              <ArrowLeft className="h-4 w-4" aria-hidden />
+              Back to Settings
+            </Link>
+
+            <motion.div
+              className="flex items-start gap-4"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-fuchsia-400/25 bg-fuchsia-500/10 shadow-[0_0_32px_-6px_rgba(236,72,153,0.5)]">
+                <Bell className="h-6 w-6 text-fuchsia-200" aria-hidden />
+              </div>
               <div>
-                <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">What you’ll see</h3>
-                <p className="text-sm text-blue-800 dark:text-blue-200">
-                  Only in-app messages your administrators send with <strong>Emergency / safety notice</strong> enabled
-                  are listed. Streak reminders, billing, and other updates are not shown on this page.
+                <h1 className={cn(emergencyHeroTitle, "text-[clamp(1.75rem,3.5vw,2.5rem)]")}>
+                  <span className={emergencyHeroAccent}>Emergency Notifications</span>
+                </h1>
+                <p className="mt-2 text-sm leading-relaxed text-[rgba(255,255,255,0.55)] sm:text-[15px]">
+                  Notices flagged as emergency or safety notifications.
                 </p>
               </div>
-            </div>
-          </Card>
-        </motion.div> */}
-
-        <div className="space-y-4">
-          {notifications.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center py-12"
-            >
-              <Bell className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="font-bold text-lg mb-2">No emergency notices yet</h3>
-              <p className="text-muted-foreground mb-4 max-w-md mx-auto">
-                When our team sends you a safety-related in-app notice, it will appear here. For all other alerts, open
-                Notifications.
-              </p>
-              {/* <Button asChild variant="outline">
-                <Link to="/app/notifications">
-                  <Bell className="w-4 h-4 mr-2" />
-                  Open Notifications
-                </Link>
-              </Button> */}
             </motion.div>
-          ) : (
-            notifications.map((notification, index) => (
-              <motion.div
-                key={notification.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05 + index * 0.04 }}
-              >
-                <Card className="notification-history-card p-6 shadow-lg hover:shadow-xl transition-all">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-start gap-3 flex-1">
-                      {getStatusIcon(notification.status)}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <h3 className="font-bold text-lg">{notification.headline}</h3>
-                          <div
-                            className={`px-2 py-0.5 rounded-full border text-xs font-medium ${getSafetyStateColor(notification.safetyBadge)}`}
-                          >
-                            {notification.safetyBadge}
-                          </div>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-3">
-                          {formatTimestamp(notification.timestamp)}
-                        </p>
-                      </div>
-                    </div>
+
+            <motion.section
+              className={emergencyHeroCard}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <img
+                src={NOTIFICATIONS_HERO_IMG}
+                alt=""
+                className={emergencyHeroImage}
+                width={1600}
+                height={900}
+              />
+              <div className={emergencyHeroOverlayLeft} aria-hidden />
+              <div className={emergencyHeroOverlayPurple} aria-hidden />
+              <div className={emergencyHeroOverlayWarmth} aria-hidden />
+
+              <div className="relative flex min-h-[min(280px,36vh)] flex-col justify-between p-6 sm:min-h-[300px] sm:p-8 lg:min-h-[280px] lg:flex-row lg:items-center lg:gap-10">
+                <div className="max-w-lg flex-1">
+                  <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-fuchsia-400/30 bg-fuchsia-500/15 shadow-[0_0_40px_-8px_rgba(236,72,153,0.55)]">
+                    <Bell className="h-7 w-7 text-fuchsia-200" aria-hidden />
                   </div>
-
-                  <div className="space-y-3 ml-8">
-                    <div className="flex items-center gap-2 text-sm">
-                      {getMethodIcon(notification.method)}
-                      <span className="text-gray-600 dark:text-gray-300">Delivered in the app</span>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm">
-                      <MessageSquare className="w-4 h-4 text-gray-400" />
-                      <span className="font-medium text-green-600 dark:text-green-400">Delivered successfully</span>
-                    </div>
-
-                    {notification.body ? (
-                      <details className="mt-3">
-                        <summary className="text-sm text-primary cursor-pointer hover:underline">
-                          View message content
-                        </summary>
-                        <div className="mt-3 p-4 bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">
-                          {notification.body.length > 2000
-                            ? `${notification.body.slice(0, 2000)}…`
-                            : notification.body}
-                        </div>
-                      </details>
-                    ) : null}
-                  </div>
-                </Card>
-              </motion.div>
-            ))
-          )}
-        </div>
-
-        {notifications.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="mt-8"
-          >
-            <Card className="notification-history-card p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200 dark:from-slate-900 dark:to-slate-900 dark:border-slate-700">
-              <h3 className="font-bold mb-4 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                Summary
-              </h3>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{notifications.length}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Emergency notices received</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-green-600 dark:text-green-400">{notifications.length}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Delivered in-app</p>
+                  {hasNotices ? (
+                    <>
+                      <h2 className="font-serif text-2xl font-light text-white sm:text-3xl">
+                        {feedItems.length} safety {feedItems.length === 1 ? "notice" : "notices"}
+                      </h2>
+                      <p className="mt-3 text-sm leading-relaxed text-[rgba(255,255,255,0.62)]">
+                        These messages were sent with your emotional safety in mind. Take your time reading them.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h2 className="font-serif text-2xl font-light text-white sm:text-3xl">
+                        No emergency notices yet
+                      </h2>
+                      <p className="mt-3 text-sm leading-relaxed text-[rgba(255,255,255,0.62)]">
+                        When our team sends you a safety-related in-app notice, it will appear here.
+                      </p>
+                      <p className="mt-2 text-xs leading-relaxed text-[rgba(255,255,255,0.45)]">
+                        For all other alerts, open Notifications.
+                      </p>
+                    </>
+                  )}
+                  {!hasNotices ? (
+                    <Link
+                      to="/app/settings/notifications"
+                      className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-fuchsia-300/90 transition-colors hover:text-fuchsia-200"
+                    >
+                      Open Notifications
+                      <ChevronRight className="h-4 w-4" aria-hidden />
+                    </Link>
+                  ) : null}
                 </div>
               </div>
-            </Card>
-          </motion.div>
-        )}
+            </motion.section>
 
-        <CrisisResourcesCallout />
+            <section className="space-y-5" aria-label="Emergency notification filters">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {FEED_TABS.map(({ id, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setActiveTab(id)}
+                      className={emergencyFilterPill(activeTab === id)}
+                    >
+                      {label} ({tabCounts[id]})
+                    </button>
+                  ))}
+                </div>
+                <label className="relative shrink-0">
+                  <span className="sr-only">Sort notifications</span>
+                  <select
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value as EmergencySort)}
+                    className={emergencySortSelect}
+                  >
+                    <option value="recent">Most Recent</option>
+                    <option value="oldest">Oldest First</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="space-y-4">
+                {visibleItems.length === 0 ? (
+                  <motion.div
+                    className={cn(emergencyNotificationCard, "text-center py-12")}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <Bell className="mx-auto h-10 w-10 text-violet-300/35" aria-hidden />
+                    <p className="mt-4 font-serif text-lg font-light text-white/80">
+                      No notices in this category
+                    </p>
+                    <p className="mt-2 text-sm text-[rgba(255,255,255,0.45)]">
+                      When something arrives here, you&apos;ll see it in this calm space.
+                    </p>
+                  </motion.div>
+                ) : (
+                  visibleItems.map((item, index) => (
+                    <EmergencyNotificationCard
+                      key={item.id}
+                      title={item.title}
+                      message={item.message}
+                      timestamp={item.timestamp}
+                      category={item.category}
+                      tagLabel={item.tagLabel}
+                      index={index}
+                    />
+                  ))
+                )}
+              </div>
+            </section>
+
+            <section className={emergencyBannerGradient} aria-labelledby="emergency-resources-banner">
+              <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25">
+                    <Phone className="h-6 w-6 text-white" aria-hidden />
+                  </div>
+                  <div>
+                    <h2
+                      id="emergency-resources-banner"
+                      className="font-serif text-xl font-light text-white sm:text-2xl"
+                    >
+                      Helpful Resources — Available 24/7
+                    </h2>
+                    <p className="mt-2 text-sm text-white/85">
+                      You are not alone. Support is always available.
+                    </p>
+                  </div>
+                </div>
+                <Link to="/app/emergency-resources" className={emergencyBannerCta}>
+                  Emergency Resources
+                  <ChevronRight className="h-5 w-5" aria-hidden />
+                </Link>
+              </div>
+            </section>
+
+            <div className={emergencyFooterStrip}>
+              <div className="flex items-start gap-2.5 text-xs leading-relaxed text-[rgba(255,255,255,0.48)]">
+                <Shield className="mt-0.5 h-4 w-4 shrink-0 text-violet-300/60" aria-hidden />
+                <p>
+                  If this is an emergency, please contact your local emergency services or a trusted
+                  contact immediately.
+                </p>
+              </div>
+              <Link
+                to="/app/settings/notifications"
+                className="shrink-0 text-xs font-medium text-fuchsia-300/80 transition-colors hover:text-fuchsia-200"
+              >
+                Manage Notification Preferences →
+              </Link>
+            </div>
+          </div>
+
+          <EmergencyNotificationsRail
+            inAppEnabled={inAppEnabled}
+            emailEnabled={emailEnabled}
+            pushEnabled={pushEnabled}
+            quietHoursLabel={quietHoursLabel}
+          />
+        </div>
       </div>
+    </motion.div>
   );
 }

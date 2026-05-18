@@ -1,29 +1,70 @@
-import { Card } from "../../components/ui/card";
-import { Button } from "../../components/ui/button";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { Button } from "@/app/components/ui/button";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Moon,
   Sun,
-  Clock,
-  TrendingUp,
   Calendar,
   Plus,
   Bed,
-  Coffee,
   Activity,
   Brain,
   Zap,
   X,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Sparkles,
+  Wind,
+  Leaf,
+  Headphones,
+  ChevronRight,
+  Heart,
+  Flower2,
+  Volume2,
+  Lightbulb,
+  Eye,
+  ArrowLeft,
+  Star,
+  BarChart3,
+  Cloud,
+  Thermometer,
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
-import { api } from "../../../lib/api";
-import { useAuth } from "../../contexts/AuthContext";
-import { format, differenceInMinutes, parseISO } from "date-fns";
-import { Skeleton } from "../../components/ui/skeleton";
+import type { LucideIcon } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
+import { api } from "@/lib/api";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { format, differenceInMinutes, parseISO, differenceInCalendarDays, addMinutes, addDays } from "date-fns";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { AdminPaginationBar } from "@/app/components/admin/AdminPaginationBar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/app/components/ui/select";
+import { cn } from "@/lib/utils";
+import {
+  SolaceAmbientBackground,
+  SolaceGlassCard,
+  SolaceHeroEnvironment,
+  SolaceGlowButton,
+  SolaceProgressRing,
+  SolaceRightRailCard,
+} from "@/app/solace";
+import { usePrefersReducedMotion } from "@/app/pages/app/brain-health/usePrefersReducedMotion";
 
 type SleepEntry = {
   id: string;
@@ -35,27 +76,340 @@ type SleepEntry = {
 
 const SLEEP_HISTORY_PAGE_OPTIONS = [10, 20, 50] as const;
 
+const JOURNEY_STAGES = [
+  {
+    id: "awareness",
+    label: "Awareness",
+    sub: "Track your sleep patterns",
+    Icon: Moon,
+  },
+  {
+    id: "understanding",
+    label: "Understanding",
+    sub: "Learn what affects your sleep",
+    Icon: BarChart3,
+  },
+  {
+    id: "consistency",
+    label: "Consistency",
+    sub: "Build a regular sleep routine",
+    Icon: Flower2,
+  },
+  {
+    id: "recovery",
+    label: "Recovery",
+    sub: "Improve your rest and energy",
+    Icon: Heart,
+  },
+  {
+    id: "transformation",
+    label: "Transformation",
+    sub: "Live your best, rested life",
+    Icon: Star,
+  },
+] as const;
+
+const SLEEP_HERO_IMAGE = "/sleep/hero-ref.png";
+
+function safeNumber(value: number, fallback = 0): number {
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function consecutiveSleepNightStreak(entries: SleepEntry[]): number {
+  if (!entries.length) return 0;
+  const keys = Array.from(
+    new Set(entries.map((e) => format(parseISO(e.bed_time), "yyyy-MM-dd")))
+  ).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+  if (!keys.length) return 0;
+  let streak = 1;
+  for (let i = 1; i < keys.length; i++) {
+    const prev = parseISO(`${keys[i - 1]}T12:00:00`);
+    const cur = parseISO(`${keys[i]}T12:00:00`);
+    if (differenceInCalendarDays(prev, cur) === 1) streak += 1;
+    else break;
+  }
+  return streak;
+}
+
+function durationHours(entry: SleepEntry): number {
+  return safeNumber(differenceInMinutes(parseISO(entry.wake_time), parseISO(entry.bed_time)) / 60);
+}
+
+function sleepMemoryLabel(hours: number, quality: number | null): { label: string; Icon: LucideIcon } {
+  const q = quality ?? 0;
+  if (hours < 5 || q < 45) return { label: "Interrupted Night", Icon: Zap };
+  if (hours < 6.5 || q < 62) return { label: "Light Sleep", Icon: Activity };
+  if (q >= 85 && hours >= 7) return { label: "Deep Recovery", Icon: Sparkles };
+  if (q >= 72) return { label: "Restful Sleep", Icon: Heart };
+  if (hours >= 7.5) return { label: "Calm Recovery", Icon: Moon };
+  return { label: "Quiet Rest", Icon: Moon };
+}
+
+function thumbnailClassForId(id: string): string {
+  const n = id.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % 4;
+  const palettes = [
+    "from-indigo-950 via-violet-900 to-slate-950",
+    "from-slate-950 via-cyan-950/80 to-indigo-950",
+    "from-violet-950 via-fuchsia-950/70 to-slate-950",
+    "from-sky-950/90 via-indigo-950 to-zinc-950",
+  ];
+  return palettes[n] ?? palettes[0];
+}
+
+function averageBedDate(entries: SleepEntry[]): Date | null {
+  if (!entries.length) return null;
+  const ref = new Date();
+  ref.setHours(0, 0, 0, 0);
+  let sum = 0;
+  for (const e of entries) {
+    const d = parseISO(e.bed_time);
+    sum += d.getHours() * 60 + d.getMinutes();
+  }
+  const avg = Math.round(sum / entries.length);
+  const h = Math.floor(avg / 60) % 24;
+  const m = avg % 60;
+  const t = new Date(ref);
+  t.setHours(h, m, 0, 0);
+  const now = new Date();
+  if (t.getTime() <= now.getTime()) {
+    t.setDate(t.getDate() + 1);
+  }
+  return t;
+}
+
+function windDownTarget(bedAvg: Date | null): Date | null {
+  if (!bedAvg) return null;
+  return addMinutes(bedAvg, -60);
+}
+
+function formatCountdown(ms: number): string {
+  if (ms <= 0) return "Anytime you are ready";
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  if (h <= 0) return `${m}m`;
+  return `${h}h ${m}m`;
+}
+
+function sleepConsistencyScore(entries: SleepEntry[]): number {
+  const slice = entries.slice(0, 10);
+  if (slice.length < 2) return slice.length === 1 ? 55 : 0;
+  const hours = slice.map(durationHours);
+  const mean = hours.reduce((a, b) => a + b, 0) / hours.length;
+  const variance =
+    hours.reduce((acc, h) => acc + (h - mean) * (h - mean), 0) / hours.length;
+  const std = Math.sqrt(variance);
+  return Math.max(0, Math.min(100, Math.round(100 - std * 22)));
+}
+
+function calmNightsCount(entries: SleepEntry[]): number {
+  return entries.filter((e) => {
+    const h = durationHours(e);
+    const q = e.quality_rating ?? 0;
+    return h >= 6.5 && q >= 72;
+  }).length;
+}
+
+function journeyStageIndex(entryCount: number): number {
+  if (entryCount <= 0) return 0;
+  if (entryCount <= 2) return 1;
+  if (entryCount <= 6) return 2;
+  if (entryCount <= 14) return 3;
+  return 4;
+}
+
+function computeWeekTrends(entries: SleepEntry[]): {
+  avgSleepHoursDelta: number | null;
+  avgQualityDelta: number | null;
+} {
+  const last7 = entries.slice(0, 7);
+  const prev7 = entries.slice(7, 14);
+  if (last7.length < 3 || prev7.length < 3) {
+    return { avgSleepHoursDelta: null, avgQualityDelta: null };
+  }
+  const avgH = (arr: SleepEntry[]) =>
+    arr.reduce((sum, e) => sum + durationHours(e), 0) / arr.length;
+  const avgQ = (arr: SleepEntry[]) => {
+    const qs = arr.map((e) => e.quality_rating).filter((q): q is number => q != null);
+    if (qs.length < 2) return null;
+    return qs.reduce((a, b) => a + b, 0) / qs.length;
+  };
+  const h1 = avgH(last7);
+  const h0 = avgH(prev7);
+  const q1 = avgQ(last7);
+  const q0 = avgQ(prev7);
+  return {
+    avgSleepHoursDelta: h1 - h0,
+    avgQualityDelta: q1 != null && q0 != null ? q1 - q0 : null,
+  };
+}
+
+function formatHoursTrend(delta: number | null): string {
+  if (delta == null) return "Compares when you have 7+ older nights";
+  const mins = Math.round(Math.abs(delta) * 60);
+  if (mins === 0) return "Stable vs prior week";
+  return `${delta > 0 ? "↑" : "↓"} ${mins}m vs prior week`;
+}
+
+function formatQualityTrend(delta: number | null): string {
+  if (delta == null) return "Compares when you have 7+ older nights";
+  const pct = Math.round(Math.abs(delta));
+  if (pct === 0) return "Stable vs prior week";
+  return `${delta > 0 ? "↑" : "↓"} ${pct}% vs prior week`;
+}
+
+function buildSleepInsightRows(params: {
+  entryCount: number;
+  avgQuality: number;
+  avgHours: number;
+  calmNights: number;
+  consistency: number;
+}): Array<{ headline: string; detail: string; Icon: LucideIcon }> {
+  const rows: Array<{ headline: string; detail: string; Icon: LucideIcon }> = [];
+  const { entryCount, avgQuality, avgHours, calmNights, consistency } = params;
+  if (entryCount === 0) {
+    rows.push({
+      headline: "Your sleep insights will gather here",
+      detail: "Log a night when it feels right—Solace will reflect patterns back to you gently.",
+      Icon: Moon,
+    });
+    return rows;
+  }
+  if (calmNights >= 3) {
+    rows.push({
+      headline: "Calm nights are adding up",
+      detail: "Longer, kinder nights are showing up in how steady your recovery feels.",
+      Icon: Sparkles,
+    });
+  }
+  if (consistency >= 70) {
+    rows.push({
+      headline: "Rhythm is doing quiet work",
+      detail: "Consistency gives your nervous system a predictable place to land.",
+      Icon: Activity,
+    });
+  }
+  if (avgHours < 6.5 && avgQuality < 70) {
+    rows.push({
+      headline: "Time and quality are both asking for softness",
+      detail: "Small wind-down shifts often help before chasing longer hours.",
+      Icon: Moon,
+    });
+  } else if (avgHours < 6.5) {
+    rows.push({
+      headline: "A little more time in bed can help",
+      detail: "Your body may need more runway to finish its deeper passes of rest.",
+      Icon: Bed,
+    });
+  }
+  if (avgQuality >= 78) {
+    rows.push({
+      headline: "Quality is holding steady",
+      detail: "Protect the rituals that make sleep feel safe—not perfect, just yours.",
+      Icon: Heart,
+    });
+  }
+  if (rows.length < 2 && entryCount >= 4) {
+    rows.push({
+      headline: "Patterns are forming",
+      detail: "You do not have to chase perfection to feel better mornings.",
+      Icon: BarChart3,
+    });
+  }
+  if (rows.length < 2) {
+    rows.push({
+      headline: "Rest is permission, not a score",
+      detail: "Move at the pace that feels honest tonight.",
+      Icon: Sparkles,
+    });
+  }
+  return rows.slice(0, 3);
+}
+
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: ReadonlyArray<{ name?: string; value?: number; dataKey?: string }>;
+  label?: string;
+}
+
+function SleepChartTooltip({ active, payload, label }: ChartTooltipProps) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0];
+  const v = row?.value;
+  const suffix = row?.dataKey === "hours" ? "h" : "%";
+  return (
+    <div className="rounded-xl border border-white/10 bg-[#0b1020]/95 px-3 py-2 text-xs text-zinc-100 shadow-[0_0_24px_rgba(88,28,135,0.35)] backdrop-blur-md">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-violet-300/90">{label}</p>
+      <p className="mt-0.5 tabular-nums text-sm text-white">
+        {v == null ? "—" : `${v}${suffix}`}
+      </p>
+    </div>
+  );
+}
+
+interface HeroParticlesProps {
+  reduced: boolean;
+}
+
+function HeroParticles({ reduced }: HeroParticlesProps) {
+  const spots = useMemo(
+    () =>
+      Array.from({ length: reduced ? 8 : 22 }, (_, i) => ({
+        id: i,
+        left: `${(i * 37) % 100}%`,
+        top: `${(i * 53) % 85}%`,
+        delay: (i % 7) * 0.35,
+        dur: 3.5 + (i % 5) * 0.4,
+      })),
+    [reduced]
+  );
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+      {spots.map((s) => (
+        <motion.span
+          key={s.id}
+          className="absolute h-1 w-1 rounded-full bg-white/30 shadow-[0_0_12px_rgba(168,85,247,0.45)]"
+          style={{ left: s.left, top: s.top }}
+          animate={
+            reduced
+              ? { opacity: 0.25 }
+              : { opacity: [0.15, 0.55, 0.2], y: [0, -10, 0] }
+          }
+          transition={{
+            duration: s.dur,
+            delay: s.delay,
+            repeat: reduced ? 0 : Infinity,
+            ease: "easeInOut",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function SleepTracker() {
+  const chartGradId = useId().replace(/:/g, "");
+  const barGradId = `${chartGradId}-bars`;
+  const prefersReducedMotion = usePrefersReducedMotion();
   const { session } = useAuth();
   const [showLogModal, setShowLogModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [modalFeedback, setModalFeedback] = useState<{ kind: "error"; message: string } | null>(null);
   const [sleepFormData, setSleepFormData] = useState({
-    date: format(new Date(), 'yyyy-MM-dd'),
+    date: format(new Date(), "yyyy-MM-dd"),
     bedTime: "",
     wakeTime: "",
     quality: "85",
-    notes: ""
+    notes: "",
   });
-  
+
   const [sleepEntries, setSleepEntries] = useState<SleepEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sleepHistoryPage, setSleepHistoryPage] = useState(1);
   const [sleepHistoryPageSize, setSleepHistoryPageSize] = useState(10);
 
   useEffect(() => {
-    fetchSleepEntries();
+    void fetchSleepEntries();
   }, [session]);
 
   const fetchSleepEntries = async (options?: { silent?: boolean }) => {
@@ -95,7 +449,7 @@ export function SleepTracker() {
       if (sleepFormData.wakeTime < sleepFormData.bedTime) {
         const nextDate = new Date(sleepFormData.date);
         nextDate.setDate(nextDate.getDate() + 1);
-        wakeDateTimeStr = `${format(nextDate, 'yyyy-MM-dd')}T${sleepFormData.wakeTime}:00`;
+        wakeDateTimeStr = `${format(nextDate, "yyyy-MM-dd")}T${sleepFormData.wakeTime}:00`;
       }
 
       await api.sleep.createEntry({
@@ -106,7 +460,7 @@ export function SleepTracker() {
       });
 
       setSleepFormData({
-        date: format(new Date(), 'yyyy-MM-dd'),
+        date: format(new Date(), "yyyy-MM-dd"),
         bedTime: "",
         wakeTime: "",
         quality: "85",
@@ -126,19 +480,25 @@ export function SleepTracker() {
     }
   };
 
-  const closeLogModal = () => {
+  const closeLogModal = useCallback(() => {
     if (isSaving) return;
     setShowLogModal(false);
     setModalFeedback(null);
-  };
+  }, [isSaving]);
 
-  const safeNumber = (value: number, fallback = 0) =>
-    Number.isFinite(value) ? value : fallback;
-
-  // Calculate stats from real data
-  const calculateStats = () => {
-    if (sleepEntries.length === 0)
-      return { avgDuration: "0.0", avgQuality: 0, avgDeepSleep: "0", streak: 0 };
+  const stats = useMemo(() => {
+    if (sleepEntries.length === 0) {
+      return {
+        avgDuration: "0.0",
+        avgQuality: 0,
+        deepSleepDisplay: "—" as const,
+        streak: 0,
+        recoveryLevel: 0,
+        calmNights: 0,
+        consistency: 0,
+        avgHoursNum: 0,
+      };
+    }
 
     let totalDurationMinutes = 0;
     let qualitySum = 0;
@@ -154,32 +514,39 @@ export function SleepTracker() {
     });
 
     const avgDuration = safeNumber(totalDurationMinutes / sleepEntries.length / 60).toFixed(1);
-    const avgQualityVal =
-      qualityCount > 0 ? safeNumber(Math.round(qualitySum / qualityCount)) : 0;
+    const avgQualityVal = qualityCount > 0 ? safeNumber(Math.round(qualitySum / qualityCount)) : 0;
+    const streak = consecutiveSleepNightStreak(sleepEntries);
+    const calmNights = calmNightsCount(sleepEntries);
+    const consistency = sleepConsistencyScore(sleepEntries);
 
     return {
       avgDuration,
       avgQuality: avgQualityVal,
-      avgDeepSleep: "0",
-      streak: sleepEntries.length,
+      deepSleepDisplay: "—" as const,
+      streak,
+      recoveryLevel: avgQualityVal,
+      calmNights,
+      consistency,
+      avgHoursNum: safeNumber(totalDurationMinutes / sleepEntries.length / 60),
     };
-  };
+  }, [sleepEntries]);
 
-  const stats = calculateStats();
-
-  // API returns entries newest-first; chart shows up to 7 most recent nights, oldest → newest on the X axis
-  const chartData = sleepEntries
-    .slice(0, 7)
-    .reverse()
-    .map((entry) => {
-      const duration =
-        differenceInMinutes(parseISO(entry.wake_time), parseISO(entry.bed_time)) / 60;
-      return {
-        day: format(parseISO(entry.bed_time), "EEE"),
-        hours: safeNumber(parseFloat(duration.toFixed(1))),
-        quality: safeNumber(entry.quality_rating ?? 0),
-      };
-    });
+  const chartData = useMemo(
+    () =>
+      sleepEntries
+        .slice(0, 7)
+        .reverse()
+        .map((entry) => {
+          const duration =
+            differenceInMinutes(parseISO(entry.wake_time), parseISO(entry.bed_time)) / 60;
+          return {
+            day: format(parseISO(entry.bed_time), "EEE"),
+            hours: safeNumber(parseFloat(duration.toFixed(1))),
+            quality: safeNumber(entry.quality_rating ?? 0),
+          };
+        }),
+    [sleepEntries]
+  );
 
   const sleepHistoryTotalPages = Math.max(1, Math.ceil(sleepEntries.length / sleepHistoryPageSize));
   const sleepHistorySafePage = Math.min(Math.max(1, sleepHistoryPage), sleepHistoryTotalPages);
@@ -192,290 +559,725 @@ export function SleepTracker() {
     setSleepHistoryPage((p) => (p > sleepHistoryTotalPages ? sleepHistoryTotalPages : p));
   }, [sleepHistoryTotalPages]);
 
+  const [nowTick, setNowTick] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTick((n) => n + 1), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const avgBed = useMemo(() => averageBedDate(sleepEntries), [sleepEntries]);
+  const windDownAt = useMemo(() => windDownTarget(avgBed), [avgBed]);
+  const windDownRemainingMs = useMemo(() => {
+    if (!windDownAt) return null;
+    void nowTick;
+    return windDownAt.getTime() - Date.now();
+  }, [windDownAt, nowTick]);
+
+  const weekTrends = useMemo(() => computeWeekTrends(sleepEntries), [sleepEntries]);
+
+  const insightRows = useMemo(
+    () =>
+      buildSleepInsightRows({
+        entryCount: sleepEntries.length,
+        avgQuality: stats.avgQuality,
+        avgHours: stats.avgHoursNum,
+        calmNights: stats.calmNights,
+        consistency: stats.consistency,
+      }),
+    [sleepEntries.length, stats.avgQuality, stats.avgHoursNum, stats.calmNights, stats.consistency]
+  );
+
+  const journeyIdx = journeyStageIndex(sleepEntries.length);
+
+  const bedtimeProgress = useMemo(() => {
+    if (!avgBed) return null;
+    void nowTick;
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const span = avgBed.getTime() - start.getTime();
+    if (span <= 0) return 0.5;
+    const p = (Date.now() - start.getTime()) / span;
+    return Math.min(1, Math.max(0, p));
+  }, [avgBed, nowTick]);
+
+  const nextBedtimeLabel = useMemo(() => {
+    if (!avgBed) return null;
+    const key = format(avgBed, "yyyy-MM-dd");
+    const today = format(new Date(), "yyyy-MM-dd");
+    const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
+    if (key === today) return "Tonight";
+    if (key === tomorrow) return "Tomorrow night";
+    return format(avgBed, "MMM d");
+  }, [avgBed]);
+
+  const [chartRange, setChartRange] = useState<"week">("week");
+
+  const scrollToHistory = useCallback(() => {
+    setSleepHistoryPageSize(50);
+    setSleepHistoryPage(1);
+    window.requestAnimationFrame(() => {
+      document.getElementById("sleep-history-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
+  const openLogModal = useCallback(() => {
+    setModalFeedback(null);
+    setShowLogModal(true);
+  }, []);
+
   if (isLoading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-          <div className="mb-8">
-            <Skeleton className="h-8 w-64 mb-2" />
-            <Skeleton className="h-4 w-80" />
+      <SolaceAmbientBackground className="min-h-[60vh] w-full min-w-0 rounded-[32px] p-4 sm:p-6">
+        <div className="grid w-full min-w-0 gap-8 xl:grid-cols-[minmax(0,2.55fr)_minmax(280px,1fr)]">
+          <div className="min-w-0 space-y-8">
+            <Skeleton className="h-[min(380px,42vh)] w-full rounded-[28px] bg-white/[0.06]" />
+            <Skeleton className="h-28 w-full rounded-[24px] bg-white/[0.06]" />
+            <div className="grid min-h-[320px] grid-cols-1 gap-6 lg:grid-cols-2">
+              <Skeleton className="h-full min-h-[300px] rounded-[28px] bg-white/[0.06]" />
+              <Skeleton className="h-full min-h-[300px] rounded-[28px] bg-white/[0.06]" />
+            </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-            {[0, 1, 2, 3].map((i) => (
-              <Card key={i} className="p-4">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="w-10 h-10 rounded-xl" />
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-20" />
-                    <Skeleton className="h-3 w-16" />
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {[0, 1].map((i) => (
-              <Card key={i} className="p-6">
-                <Skeleton className="h-5 w-40 mb-4" />
-                <Skeleton className="h-64 w-full" />
-              </Card>
-            ))}
+          <div className="hidden min-w-0 space-y-4 xl:block">
+            <Skeleton className="h-64 w-full rounded-[24px] bg-white/[0.06]" />
+            <Skeleton className="h-48 w-full rounded-[24px] bg-white/[0.06]" />
           </div>
         </div>
+      </SolaceAmbientBackground>
     );
   }
 
   return (
     <>
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <Moon className="w-8 h-8 text-indigo-500" />
-                <h1 className="text-3xl font-bold">Sleep Tracker</h1>
-              </div>
-              <p className="text-muted-foreground">
-                Monitor your sleep patterns and improve sleep quality
-              </p>
-            </div>
-            <Button
-              className="gap-2"
-              onClick={() => {
-                setModalFeedback(null);
-                setShowLogModal(true);
-              }}
-            >
-              <Plus className="w-4 h-4" />
-              Log Sleep
-            </Button>
-          </div>
+      <SolaceAmbientBackground className="relative overflow-hidden rounded-[32px]">
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(168,85,247,0.12),transparent_50%)]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_rgba(0,0,0,0.45)]"
+          aria-hidden
+        />
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <Card className="p-4 bg-gradient-to-br from-indigo-50 to-purple-50">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-indigo-500 rounded-xl">
-                  <Bed className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-indigo-600">{stats.avgDuration}h</p>
-                  <p className="text-xs text-muted-foreground">Avg Sleep</p>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-blue-500 rounded-xl">
-                  <Activity className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-blue-600">{stats.avgQuality}%</p>
-                  <p className="text-xs text-muted-foreground">Avg Quality</p>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-4 bg-gradient-to-br from-purple-50 to-pink-50">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-purple-500 rounded-xl">
-                  <Brain className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-purple-600">{stats.avgDeepSleep}</p>
-                  <p className="text-xs text-muted-foreground">Avg Deep Sleep</p>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-4 bg-gradient-to-br from-green-50 to-emerald-50">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-green-500 rounded-xl">
-                  <Zap className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-green-600">{stats.streak}</p>
-                  <p className="text-xs text-muted-foreground">Day Streak</p>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </motion.div>
-
-        {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Sleep Duration Chart */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <Card className="p-6">
-              <h3 className="font-bold mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-primary" />
-                Weekly Sleep Duration
-              </h3>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="day" />
-                    <YAxis />
-                    <Tooltip />
-                    <Area type="monotone" dataKey="hours" stroke="#8884d8" fillOpacity={1} fill="url(#colorHours)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
-          </motion.div>
-
-          {/* Sleep Quality Trend */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Card className="p-6">
-              <h3 className="font-bold mb-4 flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-primary" />
-                Sleep Quality Trend
-              </h3>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="day" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="quality" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
-          </motion.div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Recent History */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="lg:col-span-2"
-          >
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="font-bold flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-primary" />
-                  Recent History
-                </h3>
-              </div>
-              <div className="space-y-4">
-                {paginatedSleepEntries.map((log) => (
+        <div className="relative z-10 w-full min-w-0 px-3 py-6 sm:px-5 sm:py-8 lg:px-6 xl:px-8">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-10 xl:grid-cols-[minmax(0,2.55fr)_minmax(280px,1fr)] xl:items-start xl:gap-10">
+            <div className="min-w-0 space-y-10">
+              {/* 1. Hero — wide cinematic sanctuary */}
+              <motion.section
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55 }}
+                className="w-full"
+              >
+                <SolaceHeroEnvironment
+                  imageSrc={SLEEP_HERO_IMAGE}
+                  imageAlt="Moonlit lake at night with soft lantern glow on the water"
+                  className="min-h-[min(380px,42vh)] w-full max-h-[400px]"
+                  contentClassName="h-full min-h-[min(380px,42vh)] max-h-[400px] justify-between p-6 sm:p-8 lg:p-10"
+                >
                   <div
-                    key={log.id}
-                    className="p-4 rounded-xl border border-border hover:border-primary/50 transition-colors"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
-                      <div>
-                        <h4 className="font-semibold">{format(parseISO(log.bed_time), 'MMMM d, yyyy')}</h4>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                          <span className="flex items-center gap-1">
-                            <Moon className="w-3 h-3" />
-                            {format(parseISO(log.bed_time), 'h:mm a')} - {format(parseISO(log.wake_time), 'h:mm a')}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {(differenceInMinutes(parseISO(log.wake_time), parseISO(log.bed_time)) / 60).toFixed(1)}h
-                          </span>
+                    className="pointer-events-none absolute inset-0 bg-[linear-gradient(105deg,rgba(5,8,22,0.88)_0%,rgba(5,8,22,0.55)_42%,rgba(5,8,22,0.25)_72%,rgba(5,8,22,0.5)_100%)]"
+                    aria-hidden
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_70%_100%,rgba(251,191,36,0.12),transparent_55%)]"
+                    aria-hidden
+                  />
+                  <HeroParticles reduced={prefersReducedMotion} />
+
+                  <div className="relative flex min-h-0 w-full flex-1 flex-col gap-6 lg:flex-row lg:justify-between">
+                    <div className="max-w-2xl space-y-4 lg:pr-8">
+                      <Link
+                        to="/app/settings"
+                        className="inline-flex min-h-[44px] items-center gap-2 text-sm text-zinc-300/95 transition-colors hover:text-white"
+                      >
+                        <ArrowLeft className="size-4 shrink-0 text-violet-300/90" aria-hidden />
+                        Back to Settings
+                      </Link>
+                      <h1 className="font-serif text-[clamp(2.1rem,4.2vw,3.5rem)] font-light leading-[1.06] tracking-tight text-white [text-shadow:0_2px_48px_rgba(0,0,0,0.65)]">
+                        Sleep{" "}
+                        <span className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-pink-300 bg-clip-text text-transparent">
+                          Tracker
+                        </span>
+                      </h1>
+                      <p className="max-w-xl text-[15px] leading-relaxed text-zinc-200/95 sm:text-base">
+                        Understand your sleep, embrace your rest,
+                        <br className="hidden sm:block" /> and wake up to a better you.
+                      </p>
+                      <blockquote className="max-w-lg border-l-2 border-amber-400/35 pl-4 text-sm italic leading-relaxed text-zinc-300/95">
+                        &ldquo;Sleep is the golden chain that ties
+                        <br className="hidden sm:block" /> health and our bodies together.&rdquo;
+                        <span className="mt-2 block text-xs not-italic text-zinc-500">— Thomas Dekker</span>
+                      </blockquote>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-start gap-4 lg:items-end lg:pt-1">
+                      <SolaceGlowButton
+                        type="button"
+                        onClick={openLogModal}
+                        className="min-h-[44px] shadow-[0_0_32px_rgba(168,85,247,0.45)]"
+                      >
+                        <Plus className="size-4" aria-hidden />
+                        Log Sleep
+                      </SolaceGlowButton>
+                    </div>
+                  </div>
+                </SolaceHeroEnvironment>
+              </motion.section>
+
+              {/* 2. Sleep signal summary strip — one continuous glass bar */}
+              <motion.section
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05, duration: 0.5 }}
+                className="w-full"
+              >
+                <div className="flex w-full min-w-0 overflow-x-auto rounded-[24px] border border-white/[0.09] bg-[color-mix(in_oklab,var(--solace-ds-surface)_92%,transparent)] shadow-[0_0_48px_-24px_rgba(88,28,135,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {(
+                    [
+                      {
+                        label: "Avg Sleep",
+                        value: `${stats.avgDuration}h`,
+                        trend: formatHoursTrend(weekTrends.avgSleepHoursDelta),
+                        icon: Moon,
+                        iconClass: "text-violet-200 shadow-[0_0_20px_rgba(168,85,247,0.45)]",
+                        ring: "from-violet-500/30 to-violet-900/20",
+                      },
+                      {
+                        label: "Avg Quality",
+                        value: `${stats.avgQuality}%`,
+                        trend: formatQualityTrend(weekTrends.avgQualityDelta),
+                        icon: Activity,
+                        iconClass: "text-sky-200 shadow-[0_0_20px_rgba(34,211,238,0.35)]",
+                        ring: "from-cyan-500/25 to-violet-900/20",
+                      },
+                      {
+                        label: "Avg Deep Sleep",
+                        value: stats.deepSleepDisplay,
+                        trend: "Not tracked in your logs",
+                        icon: Brain,
+                        iconClass: "text-fuchsia-200/90 shadow-[0_0_18px_rgba(236,72,153,0.35)]",
+                        ring: "from-fuchsia-500/25 to-violet-900/20",
+                      },
+                      {
+                        label: "Day Streak",
+                        value: String(stats.streak),
+                        trend: sleepEntries.length >= 10 ? "From consecutive logged nights" : "Builds with back-to-back logs",
+                        icon: Zap,
+                        iconClass: "text-emerald-200/90 shadow-[0_0_18px_rgba(52,211,153,0.35)]",
+                        ring: "from-emerald-500/20 to-slate-900/30",
+                      },
+                      {
+                        label: "Recovery Level",
+                        value: `${stats.recoveryLevel}%`,
+                        trend:
+                          weekTrends.avgQualityDelta != null
+                            ? formatQualityTrend(weekTrends.avgQualityDelta)
+                            : "Grounded in your self-reported quality",
+                        icon: Heart,
+                        iconClass: "text-rose-200/90 shadow-[0_0_18px_rgba(244,63,94,0.28)]",
+                        ring: "from-rose-500/20 to-violet-900/20",
+                      },
+                    ] as const
+                  ).map((seg, i, arr) => {
+                    const SegIcon = seg.icon;
+                    return (
+                      <div
+                        key={seg.label}
+                        className={cn(
+                          "flex min-w-[148px] flex-1 flex-col items-center px-4 py-5 sm:min-w-[160px] sm:px-5",
+                          i < arr.length - 1 && "border-r border-white/[0.07]"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-gradient-to-br shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
+                            seg.ring
+                          )}
+                        >
+                          <SegIcon className={cn("size-6", seg.iconClass)} aria-hidden />
                         </div>
+                        <p className="mt-3 font-serif text-2xl font-light tabular-nums tracking-tight text-white">{seg.value}</p>
+                        <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{seg.label}</p>
+                        <p className="mt-2 text-center text-[11px] leading-snug text-zinc-500">{seg.trend}</p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-medium">
-                          {log.quality_rating != null ? `${log.quality_rating}% quality` : "Quality not set"}
+                    );
+                  })}
+                </div>
+              </motion.section>
+
+              {/* 3. Charts row */}
+              <motion.section
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1, duration: 0.5 }}
+                className="grid w-full min-w-0 grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-8"
+              >
+                <SolaceGlassCard className="flex min-h-[360px] flex-col p-5 sm:min-h-[380px] sm:p-7">
+                  <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-serif text-xl font-light text-white sm:text-2xl">Sleep Duration</h3>
+                      <p className="mt-1 text-sm text-zinc-500">Hours of sleep each night</p>
+                    </div>
+                    <Select value={chartRange} onValueChange={(v) => setChartRange(v as "week")}>
+                      <SelectTrigger
+                        aria-label="Chart range"
+                        className="h-10 w-[140px] shrink-0 border-white/10 bg-black/40 text-xs text-zinc-200"
+                      >
+                        <SelectValue placeholder="This week" />
+                      </SelectTrigger>
+                      <SelectContent className="border-white/10 bg-[#0b1020] text-zinc-100">
+                        <SelectItem value="week">This week</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="min-h-0 flex-1 pt-2">
+                    <div className="h-[min(320px,38vw)] w-full min-h-[260px] sm:h-[300px] lg:min-h-[280px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartData} margin={{ top: 12, right: 12, left: -12, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id={`${chartGradId}-area`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.55} />
+                            <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="4 8" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                        <XAxis dataKey="day" tick={{ fill: "#a1a1aa", fontSize: 11 }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} width={36} />
+                        <Tooltip content={<SleepChartTooltip />} cursor={{ stroke: "rgba(168,85,247,0.25)" }} />
+                        <Area
+                          type="monotone"
+                          dataKey="hours"
+                          stroke="#c084fc"
+                          strokeWidth={2.5}
+                          fill={`url(#${chartGradId}-area)`}
+                          style={{ filter: "drop-shadow(0 0 10px rgba(168,85,247,0.45))" }}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                    </div>
+                  </div>
+                </SolaceGlassCard>
+
+                <SolaceGlassCard className="flex min-h-[360px] flex-col p-5 sm:min-h-[380px] sm:p-7">
+                  <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-serif text-xl font-light text-white sm:text-2xl">Sleep Quality Trend</h3>
+                      <p className="mt-1 text-sm text-zinc-500">Quality score each night</p>
+                    </div>
+                    <Select value={chartRange} onValueChange={(v) => setChartRange(v as "week")}>
+                      <SelectTrigger
+                        aria-label="Chart range"
+                        className="h-10 w-[140px] shrink-0 border-white/10 bg-black/40 text-xs text-zinc-200"
+                      >
+                        <SelectValue placeholder="This week" />
+                      </SelectTrigger>
+                      <SelectContent className="border-white/10 bg-[#0b1020] text-zinc-100">
+                        <SelectItem value="week">This week</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="min-h-0 flex-1 pt-2">
+                    <div className="h-[min(320px,38vw)] w-full min-h-[260px] sm:h-[300px] lg:min-h-[280px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData} margin={{ top: 12, right: 12, left: -12, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id={barGradId} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.9} />
+                            <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.85} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="4 8" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                        <XAxis dataKey="day" tick={{ fill: "#a1a1aa", fontSize: 11 }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} width={40} domain={[0, 100]} />
+                        <Tooltip content={<SleepChartTooltip />} cursor={{ fill: "rgba(168,85,247,0.08)" }} />
+                        <Bar dataKey="quality" radius={[10, 10, 4, 4]} maxBarSize={48}>
+                          {chartData.map((_, i) => (
+                            <Cell key={`c-${i}`} fill={`url(#${barGradId})`} style={{ filter: "drop-shadow(0 0 8px rgba(34,211,238,0.25))" }} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    </div>
+                  </div>
+                </SolaceGlassCard>
+              </motion.section>
+
+              {/* 4. Sleep History */}
+              <motion.section
+                id="sleep-history-panel"
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.12, duration: 0.5 }}
+                className="w-full scroll-mt-8 space-y-4"
+              >
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h3 className="font-serif text-xl font-light text-zinc-50 sm:text-2xl">Sleep History</h3>
+                    <p className="mt-1 text-sm text-zinc-500">Your recent sleep logs</p>
+                  </div>
+                  {sleepEntries.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={scrollToHistory}
+                      className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-violet-300 transition-colors hover:text-violet-200"
+                    >
+                      View All Logs
+                      <ChevronRight className="size-4" aria-hidden />
+                    </button>
+                  ) : null}
+                </div>
+                <SolaceGlassCard className="overflow-hidden p-0 sm:p-0">
+                  <div className="divide-y divide-white/[0.06]">
+                    {paginatedSleepEntries.map((log) => {
+                      const hours = durationHours(log);
+                      const { label, Icon } = sleepMemoryLabel(hours, log.quality_rating);
+                      const thumbClass = thumbnailClassForId(log.id);
+                      const q = log.quality_rating ?? 0;
+                      return (
+                        <div
+                          key={log.id}
+                          className="flex min-h-[52px] items-center gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.03] sm:gap-4 sm:px-5"
+                        >
+                          <div
+                            className={cn(
+                              "relative h-11 w-11 shrink-0 overflow-hidden rounded-full border border-white/10 bg-gradient-to-br shadow-[0_0_16px_rgba(88,28,135,0.35)]",
+                              thumbClass
+                            )}
+                          >
+                            <Moon className="absolute inset-0 m-auto size-5 text-white/75" aria-hidden />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-zinc-100">
+                              {format(parseISO(log.bed_time), "MMM d, yyyy")}
+                            </p>
+                            <p className="truncate text-xs text-zinc-500">
+                              {format(parseISO(log.bed_time), "h:mm a")} – {format(parseISO(log.wake_time), "h:mm a")} ·{" "}
+                              {hours.toFixed(1)}h
+                            </p>
+                            <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-violet-200/85">
+                              <Icon className="size-3.5 shrink-0 opacity-90" aria-hidden />
+                              {label}
+                            </p>
+                            {log.notes ? (
+                              <p className="mt-1 truncate text-xs italic text-zinc-600" title={log.notes}>
+                                &ldquo;{log.notes}&rdquo;
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                            <SolaceProgressRing value={q} size={56} strokeWidth={6}>
+                              <span className="max-w-[40px] text-center text-[9px] font-light leading-tight tabular-nums text-white">
+                                {q > 0 ? `${q}%` : "—"}
+                              </span>
+                            </SolaceProgressRing>
+                            <Cloud className="size-5 text-zinc-600/80" aria-hidden />
+                          </div>
                         </div>
+                      );
+                    })}
+                  </div>
+                  {sleepEntries.length === 0 ? (
+                    <p className="px-5 py-12 text-center text-sm text-zinc-500">
+                      No logs yet. When you record a night, it will appear here—softly, without judgment.
+                    </p>
+                  ) : null}
+                  {sleepEntries.length > 0 ? (
+                    <div className="border-t border-white/[0.06] px-4 py-4 sm:px-5">
+                      <AdminPaginationBar
+                        total={sleepEntries.length}
+                        page={sleepHistoryPage}
+                        pageSize={sleepHistoryPageSize}
+                        onPageChange={setSleepHistoryPage}
+                        onPageSizeChange={setSleepHistoryPageSize}
+                        selectId="sleep-tracker-history-page-size"
+                        pageSizeOptions={[...SLEEP_HISTORY_PAGE_OPTIONS]}
+                      />
+                    </div>
+                  ) : null}
+                </SolaceGlassCard>
+              </motion.section>
+
+              {/* 5. Sleep Insights + Recommendations */}
+              <motion.section
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.14, duration: 0.5 }}
+                className="grid w-full min-w-0 grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-8"
+              >
+                <div className="min-w-0 space-y-3">
+                  <h3 className="font-serif text-xl font-light text-zinc-50 sm:text-2xl">Sleep Insights</h3>
+                  <div className="space-y-2.5">
+                    {insightRows.map((row, i) => {
+                      const RowIcon = row.Icon;
+                      return (
+                        <div
+                          key={`insight-${i}-${row.headline}`}
+                          className="flex gap-3 rounded-2xl border border-white/[0.07] bg-black/25 px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md"
+                        >
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-violet-400/20 bg-violet-500/10 text-violet-200 shadow-[0_0_18px_rgba(168,85,247,0.2)]">
+                            <RowIcon className="size-5" aria-hidden />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-zinc-100">{row.headline}</p>
+                            <p className="mt-1 text-xs leading-relaxed text-zinc-500">{row.detail}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="min-w-0 space-y-3">
+                  <h3 className="font-serif text-xl font-light text-zinc-50 sm:text-2xl">Recommendations</h3>
+                  <div className="space-y-2.5">
+                    {[
+                      { title: "Breathing wind-down", sub: "Four slow counts in, pause, out—let the exhale be longer.", icon: Wind },
+                      { title: "Ease caffeine earlier", sub: "Give your nervous system a longer runway into night.", icon: Leaf },
+                      { title: "Night journaling", sub: "Empty the day onto paper so your mind can land.", icon: Moon },
+                    ].map((rec) => {
+                      const RecIcon = rec.icon;
+                      return (
+                        <Link
+                          key={rec.title}
+                          to="/app/wellness-tools"
+                          className="group flex min-h-[44px] items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-black/25 px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md transition-colors hover:border-violet-400/25 hover:bg-white/[0.04]"
+                        >
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-cyan-400/15 bg-cyan-500/10 text-cyan-200">
+                              <RecIcon className="size-[18px]" aria-hidden />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-zinc-100">{rec.title}</p>
+                              <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">{rec.sub}</p>
+                            </div>
+                          </div>
+                          <ChevronRight className="size-5 shrink-0 text-zinc-600 transition-transform group-hover:translate-x-0.5 group-hover:text-violet-300" aria-hidden />
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              </motion.section>
+
+              {/* 6. Your Sleep Journey */}
+              <motion.section
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.16, duration: 0.5 }}
+                className="w-full space-y-4 pb-2"
+              >
+                <div>
+                  <h3 className="font-serif text-xl font-light text-zinc-50 sm:text-2xl">Your Sleep Journey</h3>
+                  <p className="mt-1 text-sm text-zinc-500">Small steps create better nights.</p>
+                </div>
+                <div className="relative overflow-hidden rounded-[28px] border border-white/[0.08] bg-[color-mix(in_oklab,var(--solace-ds-surface)_88%,transparent)] shadow-[0_0_56px_-28px_rgba(88,28,135,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl">
+                  <div
+                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_80%_at_50%_100%,rgba(30,58,138,0.35),transparent_55%),radial-gradient(ellipse_70%_50%_at_80%_0%,rgba(168,85,247,0.18),transparent_50%)]"
+                    aria-hidden
+                  />
+                  <div className="relative overflow-x-auto px-4 py-8 sm:px-8 sm:py-10 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="relative mx-auto min-w-[min(100%,720px)] max-w-5xl">
+                      <div
+                        className="absolute left-[8%] right-[8%] top-[40px] h-[2px] bg-gradient-to-r from-transparent via-violet-400/70 to-transparent shadow-[0_0_24px_rgba(168,85,247,0.65)] sm:top-[44px]"
+                        aria-hidden
+                      />
+                      <div className="relative flex justify-between gap-2 sm:gap-4">
+                        {JOURNEY_STAGES.map((stage, idx) => {
+                          const active = idx === journeyIdx;
+                          const StageIcon = stage.Icon;
+                          return (
+                            <div key={stage.id} className="flex w-[20%] max-w-[140px] flex-col items-center text-center">
+                              <motion.div
+                                className={cn(
+                                  "relative flex h-[52px] w-[52px] items-center justify-center rounded-full border bg-black/50 sm:h-14 sm:w-14",
+                                  active
+                                    ? "border-violet-400/70 text-violet-100 shadow-[0_0_40px_rgba(168,85,247,0.65),0_0_60px_-10px_rgba(236,72,153,0.35)]"
+                                    : "border-white/10 text-zinc-500"
+                                )}
+                                animate={active ? { scale: [1, 1.05, 1] } : {}}
+                                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                              >
+                                <StageIcon className={cn("size-6 sm:size-7", active ? "text-violet-100" : "text-zinc-500")} aria-hidden />
+                              </motion.div>
+                              <p
+                                className={cn(
+                                  "mt-4 text-[10px] font-semibold uppercase tracking-wider sm:text-xs",
+                                  active ? "text-violet-200" : "text-zinc-500"
+                                )}
+                              >
+                                {stage.label}
+                              </p>
+                              <p className="mt-2 text-[10px] leading-snug text-zinc-500 sm:text-[11px]">{stage.sub}</p>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                    {log.notes && (
-                      <p className="text-sm text-muted-foreground bg-muted/30 p-2 rounded-lg mt-2">
-                        "{log.notes}"
-                      </p>
-                    )}
                   </div>
-                ))}
-                {sleepEntries.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No sleep entries yet. Log your first sleep!
-                  </div>
-                )}
-              </div>
-              {sleepEntries.length > 0 && (
-                <AdminPaginationBar
-                  total={sleepEntries.length}
-                  page={sleepHistoryPage}
-                  pageSize={sleepHistoryPageSize}
-                  onPageChange={setSleepHistoryPage}
-                  onPageSizeChange={setSleepHistoryPageSize}
-                  selectId="sleep-tracker-history-page-size"
-                  pageSizeOptions={[...SLEEP_HISTORY_PAGE_OPTIONS]}
-                />
-              )}
-            </Card>
-          </motion.div>
-
-        {/* Sleep Tips */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="mt-8"
-        >
-          <Card className="p-6 bg-gradient-to-r from-indigo-500 to-purple-500 text-white">
-            <h3 className="font-bold text-xl mb-3 flex items-center gap-2">
-              <Coffee className="w-6 h-6" />
-              Sleep Hygiene Tips
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex items-start gap-2">
-                <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  ✓
                 </div>
-                <p className="text-sm text-white/90">Maintain a consistent sleep schedule, even on weekends</p>
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  ✓
-                </div>
-                <p className="text-sm text-white/90">Create a relaxing bedtime routine 30-60 minutes before sleep</p>
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  ✓
-                </div>
-                <p className="text-sm text-white/90">Keep your bedroom cool, dark, and quiet</p>
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  ✓
-                </div>
-                <p className="text-sm text-white/90">Avoid caffeine and screens 2-3 hours before bedtime</p>
-              </div>
+              </motion.section>
             </div>
-          </Card>
-        </motion.div>
-      </div>
-      </div>
+
+            {/* Right rail — nighttime companion */}
+            <aside className="flex w-full min-w-0 flex-col gap-6 xl:sticky xl:top-4 xl:max-w-[min(100%,380px)]">
+              <SolaceRightRailCard className="p-6">
+                <h2 className="font-serif text-lg font-light text-white">Sleep Recovery</h2>
+                <div className="mt-5 flex flex-col items-center">
+                  <motion.div
+                    animate={{ opacity: [0.85, 1, 0.85] }}
+                    transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    <SolaceProgressRing value={stats.recoveryLevel} size={140} strokeWidth={10}>
+                      <div className="flex flex-col items-center px-2">
+                        <span className="text-3xl font-light tabular-nums text-white">{stats.recoveryLevel}%</span>
+                        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">Recovered</span>
+                      </div>
+                    </SolaceProgressRing>
+                  </motion.div>
+                  <p className="mt-5 text-center text-sm leading-relaxed text-zinc-400">
+                    {stats.recoveryLevel >= 75
+                      ? "You are recovering with room to soften into rest."
+                      : stats.recoveryLevel >= 55
+                        ? "Recovery is steady—protect small rituals that feel kind."
+                        : "Be gentle; recovery deepens when pressure loosens."}
+                  </p>
+                </div>
+              </SolaceRightRailCard>
+
+              <SolaceRightRailCard className="p-6">
+                <h2 className="font-serif text-lg font-light text-white">Next Bedtime</h2>
+                {avgBed ? (
+                  <>
+                    <p className="mt-1 text-xs font-medium uppercase tracking-wider text-violet-300/90">
+                      {nextBedtimeLabel ?? "Suggested"}
+                    </p>
+                    <p className="mt-2 font-serif text-2xl font-light tabular-nums text-white">{format(avgBed, "h:mm a")}</p>
+                    <p className="mt-1 text-xs text-zinc-500">From your recent average bedtime</p>
+                    {bedtimeProgress != null ? (
+                      <div className="mt-5 space-y-2">
+                        <div className="flex justify-between text-[11px] text-zinc-500">
+                          <span>Day toward rest</span>
+                          <span>{Math.round(bedtimeProgress * 100)}%</span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800/90">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400 shadow-[0_0_16px_rgba(168,85,247,0.45)] transition-[width] duration-700"
+                            style={{ width: `${Math.round(bedtimeProgress * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="mt-5 rounded-2xl border border-white/[0.07] bg-black/35 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-300/90">Wind-down</p>
+                      <p className="mt-1 text-sm text-zinc-200">
+                        {windDownAt ? format(windDownAt, "h:mm a") : "—"} suggested start
+                      </p>
+                      <p className="mt-2 text-xs text-zinc-500">
+                        {windDownRemainingMs != null
+                          ? `${formatCountdown(windDownRemainingMs)} until that softer window`
+                          : "We will refine this as you log more nights."}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-4 text-sm leading-relaxed text-zinc-500">
+                    Log a few nights and a gentle bedtime rhythm will appear here—no pressure to be perfect.
+                  </p>
+                )}
+              </SolaceRightRailCard>
+
+              <SolaceRightRailCard className="p-6">
+                <h2 className="font-serif text-lg font-light text-white">Sleep Environment</h2>
+                <p className="mt-1 text-xs text-zinc-500">Not logged in the app yet—neutral placeholders.</p>
+                <ul className="mt-5 space-y-3.5 text-sm">
+                  <li className="flex items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
+                    <span className="flex items-center gap-2 text-zinc-400">
+                      <Thermometer className="size-4 text-amber-300/80" aria-hidden />
+                      Room temperature
+                    </span>
+                    <span className="text-emerald-300/90">—</span>
+                  </li>
+                  <li className="flex items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
+                    <span className="flex items-center gap-2 text-zinc-400">
+                      <Volume2 className="size-4 text-cyan-300/80" aria-hidden />
+                      Ambient noise
+                    </span>
+                    <span className="text-amber-200/90">—</span>
+                  </li>
+                  <li className="flex items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
+                    <span className="flex items-center gap-2 text-zinc-400">
+                      <Lightbulb className="size-4 text-violet-300/80" aria-hidden />
+                      Lighting
+                    </span>
+                    <span className="text-zinc-500">—</span>
+                  </li>
+                  <li className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-2 text-zinc-400">
+                      <Eye className="size-4 text-fuchsia-300/80" aria-hidden />
+                      Distractions
+                    </span>
+                    <span className="text-zinc-500">—</span>
+                  </li>
+                </ul>
+                <Button
+                  asChild
+                  className="mt-6 min-h-[44px] w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] hover:from-violet-500 hover:to-fuchsia-500"
+                >
+                  <Link to="/app/wellness-tools">Optimize Environment</Link>
+                </Button>
+              </SolaceRightRailCard>
+
+              <SolaceRightRailCard className="p-6">
+                <h2 className="font-serif text-lg font-light text-white">Wind Down Tip</h2>
+                <div className="mt-4 flex gap-4">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-violet-400/25 bg-violet-500/15 shadow-[0_0_28px_rgba(168,85,247,0.35)]">
+                    <Flower2 className="size-7 text-violet-200" aria-hidden />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm leading-relaxed text-zinc-300">
+                      Inhale for four, exhale for six—let the longer exhale tell your body the day can wait.
+                    </p>
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="mt-4 min-h-[44px] border-white/15 bg-white/[0.04] text-zinc-100 hover:bg-white/[0.08]"
+                    >
+                      <Link to="/app/wellness-tools">Explore Tools</Link>
+                    </Button>
+                  </div>
+                </div>
+              </SolaceRightRailCard>
+
+              <SolaceRightRailCard className="overflow-hidden p-0">
+                <div className="relative min-h-[200px] bg-gradient-to-br from-amber-950/50 via-violet-950/80 to-black p-6">
+                  <div
+                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(251,191,36,0.2),transparent_45%),radial-gradient(circle_at_20%_100%,rgba(168,85,247,0.35),transparent_55%)]"
+                    aria-hidden
+                  />
+                  <div className="relative flex gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-violet-100">
+                      <Headphones className="size-5" aria-hidden />
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="font-serif text-lg font-light text-white">Need Support?</h2>
+                      <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+                        We&apos;re here to help you improve your sleep.
+                      </p>
+                      <Button
+                        asChild
+                        variant="outline"
+                        className="mt-5 min-h-[44px] w-full border-white/15 bg-black/30 text-zinc-100 hover:bg-white/[0.08]"
+                      >
+                        <Link to="/app/settings/help-support">Contact Support</Link>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </SolaceRightRailCard>
+            </aside>
+          </div>
+        </div>
+      </SolaceAmbientBackground>
 
       {/* Sleep Saved Success Modal */}
       <AnimatePresence>
@@ -486,45 +1288,47 @@ export function SleepTracker() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowSuccessModal(false)}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              initial={{ opacity: 0, scale: 0.94, y: 24 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 30 }}
-              className="fixed inset-4 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-md z-50"
+              exit={{ opacity: 0, scale: 0.94, y: 24 }}
+              className="fixed inset-4 z-50 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2"
             >
-              <Card className="p-8 flex flex-col items-center text-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+              <SolaceGlassCard className="flex flex-col items-center gap-4 p-8 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/10 shadow-[0_0_32px_rgba(16,185,129,0.25)]">
+                  <CheckCircle2 className="size-8 text-emerald-300" aria-hidden />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold mb-1">Sleep Logged!</h3>
-                  <p className="text-muted-foreground text-sm">
-                    Your sleep entry was saved. You can log another night or close this window.
+                  <h3 className="font-serif text-xl font-light text-white">Sleep logged</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                    Your night is saved. Rest knowing the story is held for you.
                   </p>
                 </div>
-                <div className="flex gap-3 w-full pt-2">
+                <div className="flex w-full gap-3 pt-2">
                   <Button
                     variant="outline"
-                    className="flex-1"
+                    type="button"
+                    className="flex-1 border-white/12 bg-transparent text-zinc-200 hover:bg-white/[0.06]"
                     onClick={() => setShowSuccessModal(false)}
                   >
                     Close
                   </Button>
-                  <Button
-                    className="flex-1 bg-indigo-500 hover:bg-indigo-600"
+                  <SolaceGlowButton
+                    type="button"
+                    className="flex-1"
                     onClick={() => {
                       setShowSuccessModal(false);
                       setModalFeedback(null);
                       setShowLogModal(true);
                     }}
                   >
-                    <Plus className="w-4 h-4 mr-1" />
-                    Log Another
-                  </Button>
+                    <Plus className="size-4" aria-hidden />
+                    Log another
+                  </SolaceGlowButton>
                 </div>
-              </Card>
+              </SolaceGlassCard>
             </motion.div>
           </>
         )}
@@ -539,44 +1343,42 @@ export function SleepTracker() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={closeLogModal}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 50 }}
+              initial={{ opacity: 0, scale: 0.94, y: 40 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 50 }}
-              className="fixed inset-4 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-2xl z-50"
+              exit={{ opacity: 0, scale: 0.94, y: 40 }}
+              className="fixed inset-4 z-50 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:max-h-[90vh] sm:w-full sm:max-w-2xl sm:-translate-x-1/2 sm:-translate-y-1/2"
             >
-              <Card className="p-6 max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-2xl font-bold flex items-center gap-2">
-                    <Moon className="w-6 h-6 text-indigo-500" />
-                    Log Sleep
-                  </h3>
+              <SolaceGlassCard className="max-h-[90vh] overflow-y-auto p-6">
+                <div className="flex items-center justify-between border-b border-white/[0.08] pb-4">
+                  <h3 className="font-serif text-2xl font-light text-white">Log sleep</h3>
                   <button
                     type="button"
                     onClick={closeLogModal}
                     disabled={isSaving}
-                    className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                    className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-200 disabled:opacity-50"
+                    aria-label="Close log sleep dialog"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="size-5" aria-hidden />
                   </button>
                 </div>
 
                 {modalFeedback && (
                   <div
                     role="alert"
-                    className="mb-4 flex gap-2 rounded-lg border px-3 py-2.5 text-sm border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100"
+                    className="mt-4 flex gap-2 rounded-xl border border-rose-500/30 bg-rose-950/40 px-3 py-2.5 text-sm text-rose-100"
                   >
-                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden />
+                    <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
                     <span>{modalFeedback.message}</span>
                   </div>
                 )}
 
-                <div className="space-y-4">
+                <div className="mt-5 space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      <Calendar className="w-4 h-4 inline mr-1" />
+                    <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-zinc-300">
+                      <Calendar className="size-4 text-violet-300" aria-hidden />
                       Date
                     </label>
                     <input
@@ -584,14 +1386,14 @@ export function SleepTracker() {
                       value={sleepFormData.date}
                       disabled={isSaving}
                       onChange={(e) => setSleepFormData({ ...sleepFormData, date: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+                      className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-zinc-100 outline-none ring-violet-500/40 focus:ring-2 disabled:opacity-60"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        <Moon className="w-4 h-4 inline mr-1" />
+                      <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-zinc-300">
+                        <Moon className="size-4 text-violet-300" aria-hidden />
                         Bedtime
                       </label>
                       <input
@@ -599,82 +1401,80 @@ export function SleepTracker() {
                         value={sleepFormData.bedTime}
                         disabled={isSaving}
                         onChange={(e) => setSleepFormData({ ...sleepFormData, bedTime: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+                        className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-zinc-100 outline-none ring-violet-500/40 focus:ring-2 disabled:opacity-60"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        <Sun className="w-4 h-4 inline mr-1" />
-                        Wake Time
+                      <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-zinc-300">
+                        <Sun className="size-4 text-amber-200" aria-hidden />
+                        Wake time
                       </label>
                       <input
                         type="time"
                         value={sleepFormData.wakeTime}
                         disabled={isSaving}
                         onChange={(e) => setSleepFormData({ ...sleepFormData, wakeTime: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+                        className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-zinc-100 outline-none ring-violet-500/40 focus:ring-2 disabled:opacity-60"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      <Activity className="w-4 h-4 inline mr-1" />
-                      Sleep Quality ({sleepFormData.quality}%)
+                    <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-zinc-300">
+                      <Activity className="size-4 text-cyan-300" aria-hidden />
+                      Sleep quality ({sleepFormData.quality}%)
                     </label>
                     <input
                       type="range"
-                      min="0"
-                      max="100"
+                      min={0}
+                      max={100}
                       value={sleepFormData.quality}
                       disabled={isSaving}
                       onChange={(e) => setSleepFormData({ ...sleepFormData, quality: e.target.value })}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-60"
+                      className="h-2 w-full cursor-pointer appearance-none rounded-full bg-zinc-800 accent-violet-500 disabled:opacity-60"
                     />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>Poor</span>
-                      <span>Good</span>
-                      <span>Excellent</span>
+                    <div className="mt-1 flex justify-between text-xs text-zinc-500">
+                      <span>Heavy</span>
+                      <span>Balanced</span>
+                      <span>Light</span>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Notes (Optional)
-                    </label>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-300">Notes (optional)</label>
                     <textarea
                       value={sleepFormData.notes}
                       disabled={isSaving}
                       onChange={(e) => setSleepFormData({ ...sleepFormData, notes: e.target.value })}
                       placeholder="How did you feel? Any factors affecting your sleep?"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+                      className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-zinc-100 outline-none ring-violet-500/40 placeholder:text-zinc-600 focus:ring-2 disabled:opacity-60"
                       rows={3}
                     />
                   </div>
 
-                  <div className="flex gap-3 pt-4">
+                  <div className="flex gap-3 pt-2">
                     <Button
                       variant="outline"
                       type="button"
                       onClick={closeLogModal}
                       disabled={isSaving}
-                      className="flex-1"
+                      className="flex-1 border-white/12 bg-transparent text-zinc-200 hover:bg-white/[0.06]"
                     >
                       Cancel
                     </Button>
                     <Button
                       type="button"
-                      onClick={handleLogSleep}
+                      onClick={() => void handleLogSleep()}
+                      disabled={isSaving}
                       isLoading={isSaving}
-                      className="flex-1 bg-indigo-500 hover:bg-indigo-600"
+                      className="flex-1 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-[0_0_24px_rgba(168,85,247,0.35)] hover:from-violet-500 hover:to-fuchsia-500"
                     >
-                      {!isSaving && <Plus className="w-4 h-4" />}
-                      Log Sleep
+                      Log sleep
                     </Button>
                   </div>
                 </div>
-              </Card>
+              </SolaceGlassCard>
             </motion.div>
           </>
         )}

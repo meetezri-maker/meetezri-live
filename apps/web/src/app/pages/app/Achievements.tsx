@@ -1,8 +1,31 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Trophy, Award, Star, Lock, Calendar, TrendingUp, Target, Zap, Heart, Brain, Moon, CheckCircle, ArrowLeft, Users } from 'lucide-react';
-import { AnimatedCard } from '@/app/components/AnimatedCard';
+import {
+  Trophy,
+  Award,
+  Star,
+  Lock,
+  Calendar,
+  Target,
+  Zap,
+  Heart,
+  Moon,
+  CheckCircle,
+  ArrowLeft,
+  Users,
+  Crown,
+  Flame,
+  Sparkles,
+  Compass,
+  User,
+  Diamond,
+  BookOpen,
+  Headphones,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -172,10 +195,81 @@ function parseMoodForApi(selected: string, fallback?: Achievement['moodTag']): s
   return mapMoodTagToGoalEmotionTag(fallback);
 }
 
+const RARITY_RANK: Record<Achievement['rarity'], number> = {
+  common: 0,
+  rare: 1,
+  epic: 2,
+  legendary: 3,
+};
+
+/** Maps a selected achievement to a journey node index for local preview (no backend). */
+function journeyIndexFromSelectedAchievement(a: Achievement): number {
+  const total = Math.max(1, a.total);
+  const ratio = a.progress / total;
+  if (a.unlocked) {
+    if (a.rarity === 'legendary') return 4;
+    if (a.rarity === 'epic' || a.rarity === 'rare') return 3;
+    return 2;
+  }
+  if (ratio <= 0.2) return 0;
+  if (ratio <= 0.45) return 1;
+  if (ratio <= 0.75) return 2;
+  return 3;
+}
+
+function formatUnlockDate(achievement: Achievement): string | null {
+  if (!achievement.unlocked) return null;
+  const hist = achievement.checkInHistory;
+  if (hist && hist.length > 0) {
+    const latest = hist.reduce((a, b) => (a > b ? a : b));
+    try {
+      return format(new Date(`${latest}T12:00:00`), 'MMM d, yyyy');
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+interface VaultParticlesProps {
+  className?: string;
+}
+
+function VaultParticles({ className }: VaultParticlesProps) {
+  return (
+    <div className={cn('pointer-events-none absolute inset-0 overflow-hidden', className)} aria-hidden>
+      {Array.from({ length: 7 }).map((_, i) => (
+        <motion.span
+          key={i}
+          className="absolute h-0.5 w-0.5 rounded-full bg-amber-200/50 shadow-[0_0_8px_rgba(251,191,36,0.35)]"
+          style={{ left: `${10 + ((i * 23) % 80)}%`, top: `${12 + ((i * 17) % 70)}%` }}
+          animate={{ opacity: [0.15, 0.55, 0.15], scale: [0.9, 1.15, 0.9] }}
+          transition={{
+            duration: 2.8 + (i % 3) * 0.35,
+            repeat: Infinity,
+            delay: i * 0.18,
+            ease: 'easeInOut',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function Achievements() {
   const { profile } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedRarity, setSelectedRarity] = useState<'all' | Achievement['rarity']>('all');
+  const [showAllAchievements, setShowAllAchievements] = useState(false);
+  const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const [wellnessExercises, setWellnessExercises] = useState(0);
+  const journeyRingId = useId().replace(/:/g, '');
+
+  useEffect(() => {
+    setShowAllAchievements(false);
+    setSelectedAchievement(null);
+  }, [selectedCategory, selectedRarity]);
+
   const [communityPosts, setCommunityPosts] = useState(0);
   const [customAchievements, setCustomAchievements] = useState<Achievement[]>([]);
   const [newTitle, setNewTitle] = useState('');
@@ -460,49 +554,133 @@ export function Achievements() {
 
   const categories = [
     { id: 'all', label: 'All', icon: Trophy },
-    { id: 'sessions', label: 'Talk it out', icon: Target },
+    { id: 'sessions', label: 'Talk It Out', icon: Target },
     { id: 'mood', label: 'Mood', icon: Heart },
-    { id: 'journal', label: 'Journal', icon: Brain },
+    { id: 'journal', label: 'Journal', icon: BookOpen },
     { id: 'wellness', label: 'Wellness', icon: Zap },
-    { id: 'streak', label: 'Streaks', icon: TrendingUp },
+    { id: 'streak', label: 'Streaks', icon: Flame },
     { id: 'community', label: 'Community', icon: Users },
-    { id: 'personal', label: 'Personal Achievements', icon: Star },
-    { id: 'self_improvement', label: 'Self Improvement', icon: Star },
-    { id: 'professional', label: 'Professional', icon: Star }
+    { id: 'personal', label: 'Personal', icon: Star },
   ];
 
-  const filteredAchievements = selectedCategory === 'all' 
-    ? achievements 
-    : achievements.filter(a => a.category === selectedCategory);
+  const rarityFilters: { id: 'all' | Achievement['rarity']; label: string }[] = [
+    { id: 'all', label: 'All Rarities' },
+    { id: 'common', label: 'Common' },
+    { id: 'rare', label: 'Rare' },
+    { id: 'epic', label: 'Epic' },
+    { id: 'legendary', label: 'Legendary' },
+  ];
 
-  const rarityColors = {
-    common: 'from-gray-500 to-gray-600',
-    rare: 'from-blue-500 to-blue-600',
-    epic: 'from-purple-500 to-purple-600',
-    legendary: 'from-yellow-500 to-orange-500'
-  };
+  const filteredAchievements = useMemo(() => {
+    let list =
+      selectedCategory === 'all'
+        ? achievements
+        : selectedCategory === 'personal'
+          ? achievements.filter((a) =>
+              ['personal', 'self_improvement', 'professional'].includes(a.category)
+            )
+          : achievements.filter((a) => a.category === selectedCategory);
+    if (selectedRarity !== 'all') {
+      list = list.filter((a) => a.rarity === selectedRarity);
+    }
+    return list;
+  }, [achievements, selectedCategory, selectedRarity]);
 
-  const rarityBorders = {
-    common: 'border-gray-500/30',
-    rare: 'border-blue-500/30',
-    epic: 'border-purple-500/30',
-    legendary: 'border-yellow-500/30'
-  };
-
-  const getIcon = (iconName: string) => {
-    const icons: any = {
-      footprints: Target,
-      target: Target,
-      heart: Heart,
-      book: Brain,
-      zap: Zap,
-      moon: Moon,
-      trophy: Trophy,
-      sunrise: Calendar,
-      users: Users
+  const recentUnlocked = useMemo(() => {
+    const unlocked = achievements.filter((a) => a.unlocked);
+    if (unlocked.length === 0) return null;
+    const score = (a: Achievement) => {
+      let t = 0;
+      const h = a.checkInHistory;
+      if (h && h.length > 0) {
+        const maxD = h.reduce((best, d) => (d > best ? d : best), h[0]);
+        t = new Date(`${maxD}T12:00:00`).getTime();
+      }
+      return t * 10 + RARITY_RANK[a.rarity] * 1000 + a.points;
     };
-    return icons[iconName] || Trophy;
+    return unlocked.reduce((best, a) => (score(a) >= score(best) ? a : best), unlocked[0]);
+  }, [achievements]);
+
+  const rarestUnlock = useMemo(() => {
+    const unlocked = achievements.filter((a) => a.unlocked);
+    if (unlocked.length === 0) return null;
+    return unlocked.reduce((best, a) =>
+      RARITY_RANK[a.rarity] > RARITY_RANK[best.rarity]
+        ? a
+        : RARITY_RANK[a.rarity] === RARITY_RANK[best.rarity] && a.points > best.points
+          ? a
+          : best
+    );
+  }, [achievements]);
+
+  const overallCompletionPct =
+    stats.totalCount > 0 ? Math.round((stats.unlockedCount / stats.totalCount) * 100) : 0;
+
+  const journeyActiveIndex = useMemo(() => {
+    const p = stats.totalCount > 0 ? stats.unlockedCount / stats.totalCount : 0;
+    if (p >= 0.85) return 4;
+    if (p >= 0.6) return 3;
+    if (p >= 0.35) return 2;
+    if (p >= 0.12) return 1;
+    return 0;
+  }, [stats.totalCount, stats.unlockedCount]);
+
+  const nextClosestAchievement = useMemo(() => {
+    const list = achievements.filter((x) => !x.unlocked && x.progress < x.total);
+    if (list.length === 0) return null;
+    return list.reduce((best, x) => {
+      const br = best.progress / Math.max(1, best.total);
+      const xr = x.progress / Math.max(1, x.total);
+      return xr >= br ? x : best;
+    });
+  }, [achievements]);
+
+  const journeyHighlightIndex = useMemo(
+    () =>
+      selectedAchievement
+        ? journeyIndexFromSelectedAchievement(selectedAchievement)
+        : journeyActiveIndex,
+    [journeyActiveIndex, selectedAchievement]
+  );
+
+  const nextPointsMilestone = useMemo(() => {
+    const step = 250;
+    return Math.max(step, Math.ceil(stats.totalPoints / step) * step);
+  }, [stats.totalPoints]);
+
+  const pointsToNext = Math.max(0, nextPointsMilestone - stats.totalPoints);
+
+  const rarityVaultGlow = {
+    common: 'border-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
+    rare: 'border-cyan-400/20 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]',
+    epic: 'border-fuchsia-400/22 shadow-[0_0_0_1px_rgba(192,132,252,0.14)]',
+    legendary: 'border-amber-400/25 shadow-[0_0_0_1px_rgba(251,191,36,0.16)]',
   };
+
+  const rarityPillStyle: Record<Achievement['rarity'], string> = {
+    common: 'text-zinc-200/90 bg-white/[0.05] ring-1 ring-white/10',
+    rare: 'text-cyan-100/95 bg-cyan-500/10 ring-1 ring-cyan-400/22',
+    epic: 'text-fuchsia-100/95 bg-fuchsia-500/10 ring-1 ring-fuchsia-400/25',
+    legendary: 'text-amber-50/95 bg-amber-500/12 ring-1 ring-amber-400/28',
+  };
+
+  const iconMap: Record<string, LucideIcon> = {
+    footprints: Target,
+    target: Target,
+    heart: Heart,
+    book: BookOpen,
+    zap: Zap,
+    moon: Moon,
+    trophy: Trophy,
+    sunrise: Calendar,
+    users: Users,
+  };
+
+  const getIcon = (iconName: string): LucideIcon => iconMap[iconName] ?? Trophy;
+
+  const visibleAchievementList = showAllAchievements
+    ? filteredAchievements
+    : filteredAchievements.slice(0, 8);
 
   const saveCustomAchievements = (items: Achievement[]) => {
     setCustomAchievements(items);
@@ -961,147 +1139,545 @@ export function Achievements() {
     }
   };
 
+  const scrollToAchievement = (id: string) => {
+    document.getElementById(`ach-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const handleViewAllRarities = () => {
+    setSelectedRarity('all');
+    document.getElementById('achievement-rarity-filters')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+    });
+  };
+
+  const journeyNodes: {
+    key: string;
+    label: string;
+    sub: string;
+    icon: LucideIcon;
+  }[] = [
+    { key: 'start', label: 'Start', sub: 'Your story begins', icon: User },
+    { key: 'explore', label: 'Explore', sub: 'Discover what supports you', icon: Compass },
+    { key: 'grow', label: 'Grow', sub: 'Small wins compound', icon: Trophy },
+    { key: 'inspire', label: 'Inspire', sub: 'Lift others as you rise', icon: Sparkles },
+    { key: 'transform', label: 'Transform', sub: 'Become who you are meant to be', icon: Crown },
+  ];
+
+  const unlockPct =
+    stats.totalCount > 0 ? Math.min(100, (stats.unlockedCount / stats.totalCount) * 100) : 0;
+
+  const FeaturedIcon = recentUnlocked ? getIcon(recentUnlocked.icon) : Trophy;
+  const RarestIcon = rarestUnlock ? getIcon(rarestUnlock.icon) : Trophy;
+
   return (
     <>
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header */}
-          <div className="mb-8">
-            <Link 
-              to="/app/settings" 
-              className="inline-flex items-center gap-2 text-gray-700 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-200 mb-6 transition-colors font-medium"
+      <div
+        className={cn(
+          'min-h-full pb-12',
+          'bg-[radial-gradient(ellipse_110%_70%_at_50%_-18%,rgba(124,58,237,0.12),transparent_52%),radial-gradient(ellipse_50%_38%_at_100%_0%,rgba(236,72,153,0.06),transparent_40%),linear-gradient(180deg,#080b14_0%,#060912_55%,#05070f_100%)]',
+          'text-zinc-100'
+        )}
+      >
+        <div className="relative mx-auto max-w-[1580px] px-4 pb-10 pt-6 sm:px-6 lg:px-8 lg:pt-8">
+          <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
+            <Link
+              to="/app/settings"
+              className="inline-flex min-h-[44px] min-w-0 items-center gap-2 text-sm font-medium text-zinc-400 transition-colors hover:text-zinc-100"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
               Back to Settings
             </Link>
-            
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center">
-                  <Trophy className="w-6 h-6 text-white" />
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex min-h-[44px] w-fit items-center justify-center rounded-full border border-white/12 bg-white/[0.06] px-5 text-sm font-semibold text-zinc-100 transition hover:border-fuchsia-400/25 hover:bg-white/[0.09]"
+            >
+              Add personal milestone
+            </button>
+          </div>
+
+          <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_280px] xl:gap-10">
+            <div className="min-w-0 space-y-8 sm:space-y-10">
+              {/* Hero — cinematic vault */}
+              <section className="relative overflow-hidden rounded-3xl border border-white/[0.07] bg-[#0a0f1a]/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_24px_80px_-48px_rgba(0,0,0,0.85)] backdrop-blur-xl">
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_20%_0%,rgba(168,85,247,0.08),transparent_55%)]" />
+                <div className="relative grid gap-0 lg:min-h-[280px] lg:grid-cols-[minmax(0,1.02fr)_minmax(0,1.08fr)] lg:items-stretch">
+                  <div className="relative z-10 flex flex-col justify-center space-y-4 p-6 sm:p-8 lg:pr-6">
+                    <h1 className="font-serif text-4xl font-semibold tracking-tight text-white sm:text-[2.75rem] sm:leading-tight">
+                      Achievements
+                    </h1>
+                    <p className="max-w-md text-[15px] leading-relaxed text-zinc-400">
+                      Celebrate your growth and the milestones that shape your best self.
+                    </p>
+                  </div>
+                  <div className="relative min-h-[200px] border-t border-white/[0.06] lg:min-h-0 lg:border-l lg:border-t-0">
+                    <img
+                      src="/solace-achievements-hero.png"
+                      alt="Calm lake at dusk with a warm lantern on a pier—symbol of reflection and earned progress."
+                      className="h-full min-h-[200px] w-full object-cover object-center lg:min-h-full"
+                      width={960}
+                      height={540}
+                      loading="eager"
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#05070f]/95 via-[#05070f]/35 to-transparent lg:bg-gradient-to-l" />
+                  </div>
                 </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Achievements</h1>
-                  <p className="text-gray-600 dark:text-slate-400">Your journey and milestones</p>
+              </section>
+
+              {/* Progress summary strip */}
+              <section className="rounded-2xl border border-white/[0.07] bg-[#0b101c]/80 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md sm:p-0">
+                <div className="grid grid-cols-2 divide-y divide-white/[0.06] sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+                  <div className="flex min-h-[72px] items-center gap-3 px-3 py-3 sm:min-h-[76px] sm:px-4 sm:py-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/10 ring-1 ring-amber-400/20">
+                      <Award className="h-4 w-4 text-amber-200/90" aria-hidden />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Unlocked</p>
+                      <p className="truncate font-serif text-lg text-white sm:text-xl">
+                        {stats.unlockedCount}
+                        <span className="text-zinc-500">/{stats.totalCount}</span>
+                      </p>
+                      <div className="mt-1 h-0.5 overflow-hidden rounded-full bg-white/[0.08]">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-amber-400/90 to-orange-500/90"
+                          style={{ width: `${unlockPct}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex min-h-[72px] items-center gap-3 px-3 py-3 sm:min-h-[76px] sm:px-4 sm:py-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fuchsia-500/10 ring-1 ring-fuchsia-400/18">
+                      <Star className="h-4 w-4 text-fuchsia-200/90" aria-hidden />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Total points</p>
+                      <p className="font-serif text-lg text-white sm:text-xl">{stats.totalPoints.toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <div className="flex min-h-[72px] items-center gap-3 px-3 py-3 sm:min-h-[76px] sm:px-4 sm:py-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 ring-1 ring-emerald-400/18">
+                      <Flame className="h-4 w-4 text-emerald-200/90" aria-hidden />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                        Current streak
+                      </p>
+                      <p className="font-serif text-lg text-white sm:text-xl">
+                        {stats.currentStreak}
+                        <span className="text-sm font-sans font-normal text-zinc-500"> days</span>
+                      </p>
+                      <p className="text-[11px] text-zinc-500">Keep going!</p>
+                    </div>
+                  </div>
+                  <div className="flex min-h-[72px] items-center gap-3 px-3 py-3 sm:min-h-[76px] sm:px-4 sm:py-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-500/10 ring-1 ring-sky-400/18">
+                      <Crown className="h-4 w-4 text-sky-200/90" aria-hidden />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                        Longest streak
+                      </p>
+                      <p className="font-serif text-lg text-white sm:text-xl">
+                        {stats.longestStreak}
+                        <span className="text-sm font-sans font-normal text-zinc-500"> days</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Category + rarity filters */}
+              <div className="space-y-3">
+                <div className="-mx-1 flex gap-2 overflow-x-auto pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible">
+                  {categories.map((category) => {
+                    const Icon = category.icon;
+                    const isActive = selectedCategory === category.id;
+                    return (
+                      <motion.button
+                        key={category.id}
+                        type="button"
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setSelectedCategory(category.id)}
+                        className={cn(
+                          'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-medium transition-colors sm:px-3 sm:py-1.5',
+                          isActive
+                            ? 'border-fuchsia-400/30 bg-fuchsia-950/40 text-white shadow-[0_0_20px_-8px_rgba(168,85,247,0.35)]'
+                            : 'border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:border-white/15 hover:bg-white/[0.05] hover:text-zinc-200'
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+                        {category.label}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+                <div
+                  id="achievement-rarity-filters"
+                  className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible"
+                >
+                  <span className="hidden shrink-0 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 sm:inline">
+                    Rarity
+                  </span>
+                  {rarityFilters.map((r) => {
+                    const isActive = selectedRarity === r.id;
+                    return (
+                      <motion.button
+                        key={r.id}
+                        type="button"
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setSelectedRarity(r.id)}
+                        className={cn(
+                          'inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-wide transition sm:min-h-0 sm:px-3 sm:py-1.5',
+                          isActive
+                            ? 'border-fuchsia-400/28 bg-white/[0.1] text-white'
+                            : 'border-white/[0.08] bg-white/[0.03] text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300'
+                        )}
+                      >
+                        {r.label}
+                      </motion.button>
+                    );
+                  })}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(true)}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold hover:opacity-95 w-fit"
-              >
-                Add Achievement
-              </button>
+
+              {/* Recently unlocked */}
+              <section className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[linear-gradient(120deg,rgba(251,191,36,0.06),rgba(88,28,135,0.08),#0a0f1a)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md sm:p-7">
+                {recentUnlocked ? (
+                  <>
+                    <VaultParticles className="opacity-35" />
+                    <div className="relative z-10 grid gap-8 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
+                      <div className="flex justify-center lg:justify-start">
+                        <div className="relative flex h-32 w-32 items-center justify-center sm:h-36 sm:w-36">
+                          <div className="absolute inset-0 rotate-45 rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-400/15 via-fuchsia-900/20 to-violet-950/50" />
+                          <div className="absolute inset-2.5 rotate-45 rounded-xl border border-white/10 bg-black/35" />
+                          <FeaturedIcon
+                            className="relative z-10 h-12 w-12 text-amber-100/95"
+                            aria-hidden
+                          />
+                        </div>
+                      </div>
+                      <div className="min-w-0 space-y-2 text-center lg:text-left">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200/85">
+                          Recently Unlocked
+                        </p>
+                        <h2 className="font-serif text-2xl font-semibold text-white sm:text-3xl">{recentUnlocked.title}</h2>
+                        <p className="text-sm leading-relaxed text-zinc-400">{recentUnlocked.description}</p>
+                      </div>
+                      <div className="flex flex-col items-center gap-4 lg:items-end">
+                        <p className="text-center text-xs text-zinc-500 lg:text-right">
+                          {formatUnlockDate(recentUnlocked) ? (
+                            <>
+                              <span className="block text-zinc-500">Unlocked</span>
+                              <span className="text-zinc-300">{formatUnlockDate(recentUnlocked)}</span>
+                            </>
+                          ) : (
+                            <span className="text-zinc-500">Earned on your journey</span>
+                          )}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => scrollToAchievement(recentUnlocked.id)}
+                          className="inline-flex min-h-[44px] min-w-[160px] items-center justify-center rounded-full border border-fuchsia-400/28 bg-fuchsia-950/50 px-5 text-sm font-semibold text-fuchsia-50 transition hover:border-fuchsia-300/40 hover:bg-fuchsia-900/55"
+                        >
+                          View Achievement
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="relative z-10 py-6 text-center">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                      Recently Unlocked
+                    </p>
+                    <p className="mx-auto mt-3 max-w-md text-sm text-zinc-400">
+                      When you unlock your next milestone, it will take center stage here—quietly celebrating what you
+                      have earned.
+                    </p>
+                  </div>
+                )}
+              </section>
+
+              <section className="space-y-5">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="font-serif text-2xl font-semibold text-white sm:text-3xl">Your achievements</h2>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      {filteredAchievements.length} visible · {stats.unlockedCount} of {stats.totalCount} unlocked
+                      overall
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {visibleAchievementList.map((achievement, index) => {
+                    const Icon = getIcon(achievement.icon);
+                    const isUnlocked = achievement.unlocked;
+                    const total = Math.max(1, achievement.total);
+                    const pct = Math.min(100, (achievement.progress / total) * 100);
+                    const glow = rarityVaultGlow[achievement.rarity];
+                    const pill = rarityPillStyle[achievement.rarity];
+                    const isSelected = selectedAchievement?.id === achievement.id;
+                    const showProgressBar = !isUnlocked && achievement.progress < total;
+
+                    return (
+                      <motion.article
+                        key={achievement.id}
+                        id={`ach-${achievement.id}`}
+                        layout={false}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: Math.min(index * 0.04, 0.24) }}
+                        className={cn(
+                          'group relative flex min-h-[280px] flex-col overflow-hidden rounded-2xl border bg-[#0c1018]/95 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md transition',
+                          isUnlocked
+                            ? 'border-emerald-400/12 hover:border-emerald-400/22'
+                            : 'border-white/[0.06] hover:border-white/12',
+                          isSelected && 'ring-2 ring-fuchsia-400/30 ring-offset-2 ring-offset-[#05070d]'
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedAchievement((prev) =>
+                              prev?.id === achievement.id ? null : achievement
+                            )
+                          }
+                          className="flex flex-1 flex-col items-center gap-3 p-5 text-center outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/45"
+                          aria-pressed={isSelected}
+                          aria-label={`${achievement.title}. ${isUnlocked ? 'Unlocked' : 'Locked'}. Tap to preview your journey.`}
+                        >
+                          <div
+                            className={cn(
+                              'relative flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-2xl border transition',
+                              isUnlocked
+                                ? cn('border-white/10 bg-gradient-to-br from-white/[0.07] to-black/45', glow)
+                                : 'border-white/[0.06] bg-black/50 opacity-75 saturate-[0.7]'
+                            )}
+                          >
+                            <Icon
+                              className={cn(
+                                'h-9 w-9',
+                                isUnlocked
+                                  ? 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]'
+                                  : 'text-zinc-500'
+                              )}
+                              aria-hidden
+                            />
+                            {!isUnlocked ? (
+                              <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/40">
+                                <Lock className="h-5 w-5 text-zinc-500" aria-hidden />
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="min-w-0 space-y-1.5 px-0.5">
+                            <h3 className="line-clamp-2 text-center text-[15px] font-semibold leading-snug text-white">
+                              {achievement.title}
+                            </h3>
+                            <p className="line-clamp-2 text-center text-xs leading-relaxed text-zinc-500">
+                              {achievement.description}
+                            </p>
+                          </div>
+
+                          <span
+                            className={cn(
+                              'inline-flex items-center justify-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+                              pill
+                            )}
+                          >
+                            {achievement.rarity}
+                          </span>
+
+                          {showProgressBar ? (
+                            <div className="w-full space-y-1 px-1">
+                              <div className="flex justify-between text-[10px] text-zinc-500">
+                                <span>Progress</span>
+                                <span className="tabular-nums text-zinc-400">
+                                  {achievement.progress}/{total}
+                                </span>
+                              </div>
+                              <div className="h-1 overflow-hidden rounded-full bg-white/[0.06]">
+                                <motion.div
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${pct}%` }}
+                                  transition={{ delay: index * 0.05, duration: 0.5, ease: 'easeOut' }}
+                                  className="h-full rounded-full bg-gradient-to-r from-fuchsia-500/90 to-cyan-400/90"
+                                />
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <div className="mt-auto flex w-full flex-col items-center gap-1 border-t border-white/[0.06] pt-3 text-[11px] text-zinc-500">
+                            {isUnlocked ? (
+                              <>
+                                <span className="inline-flex items-center gap-1 text-emerald-300/90">
+                                  <CheckCircle className="h-3.5 w-3.5" aria-hidden />
+                                  Unlocked
+                                </span>
+                                {formatUnlockDate(achievement) ? (
+                                  <span className="text-zinc-500">{formatUnlockDate(achievement)}</span>
+                                ) : null}
+                                {achievement.points > 0 ? (
+                                  <span className="text-zinc-600">+{achievement.points} pts</span>
+                                ) : null}
+                              </>
+                            ) : (
+                              <>
+                                <span className="inline-flex items-center gap-1 text-zinc-500">
+                                  <Lock className="h-3.5 w-3.5" aria-hidden />
+                                  Locked
+                                </span>
+                                {achievement.points > 0 ? (
+                                  <span className="text-zinc-600">+{achievement.points} pts on unlock</span>
+                                ) : null}
+                              </>
+                            )}
+                          </div>
+                        </button>
+                      </motion.article>
+                    );
+                  })}
+                </div>
+
+                {filteredAchievements.length > 8 ? (
+                  <div className="flex justify-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAllAchievements((v) => !v)}
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/12 bg-white/[0.04] px-6 text-sm font-medium text-zinc-200 transition hover:border-fuchsia-400/25 hover:bg-white/[0.07]"
+                    >
+                      {showAllAchievements ? 'Show fewer achievements' : 'Show More Achievements'}
+                    </button>
+                  </div>
+                ) : null}
+              </section>
+
+          {filteredAchievements.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-white/[0.12] bg-[#0b101c]/50 py-16 text-center backdrop-blur-xl">
+              <Trophy className="mx-auto mb-4 h-14 w-14 text-fuchsia-400/35" aria-hidden />
+              <h3 className="font-serif text-xl font-semibold text-white">No trophies in this view</h3>
+              <p className="mx-auto mt-2 max-w-md text-sm text-zinc-400">
+                Adjust your filters—or keep showing up in Talk It Out, Mood, and Journal. Your next unlock is already
+                forming.
+              </p>
             </div>
-            <p className="text-sm text-gray-600 dark:text-slate-400">
-              Achievements are activity-based milestones. They unlock as you complete sessions, check-ins, journals, and community goals.
+          ) : null}
+
+          {/* Achievement Journey */}
+          <section className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[linear-gradient(125deg,rgba(10,14,24,0.96),rgba(24,12,40,0.45))] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_20px_60px_-40px_rgba(0,0,0,0.75)] backdrop-blur-xl sm:p-8">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(251,191,36,0.06),transparent_42%)]" />
+            <h2 className="relative font-serif text-xl font-semibold text-white sm:text-2xl">Achievement Journey</h2>
+            <p className="relative mt-1 max-w-2xl text-sm leading-relaxed text-zinc-400">
+              A gentle arc from your first brave step to the future you are building — one unlock at a time.
             </p>
-          </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <AnimatedCard delay={0.1}>
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6 shadow-sm h-full flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Award className="w-8 h-8 text-yellow-600 dark:text-yellow-500" />
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white">{stats.unlockedCount}/{stats.totalCount}</span>
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400">Unlocked</p>
-                </div>
-                <div className="mt-3 h-2 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full"
-                    style={{ width: `${(stats.unlockedCount / stats.totalCount) * 100}%` }}
-                  />
-                </div>
+            {selectedAchievement ? (
+              <div className="relative mt-5 rounded-2xl border border-white/[0.08] bg-black/35 px-4 py-3 backdrop-blur-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Journey focus</p>
+                <p className="mt-1 text-sm font-semibold text-white">{selectedAchievement.title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                  {selectedAchievement.unlocked ? (
+                    <>
+                      Earned and held — the path ahead stays lit through{' '}
+                      <span className="text-zinc-300">{journeyNodes[journeyHighlightIndex]?.label ?? 'today'}</span>
+                      {selectedAchievement.rarity === 'legendary' ? (
+                        <span className="text-amber-200/90"> — a rare crown moment in your vault.</span>
+                      ) : (
+                        '.'
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      Still unfolding: you are oriented toward{' '}
+                      <span className="text-zinc-300">{journeyNodes[journeyHighlightIndex]?.label ?? 'the next step'}</span>
+                      {' '}
+                      <span className="tabular-nums text-zinc-500">
+                        ({selectedAchievement.progress}/{Math.max(1, selectedAchievement.total)} toward unlock).
+                      </span>
+                    </>
+                  )}
+                </p>
               </div>
-            </AnimatedCard>
+            ) : null}
 
-            <AnimatedCard delay={0.2}>
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6 shadow-sm h-full flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Star className="w-8 h-8 text-purple-600 dark:text-purple-500" />
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalPoints}</span>
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400">Total Points</p>
-                </div>
+            <div className="relative mt-8 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:overflow-visible">
+              <div className="relative mx-auto flex min-w-[520px] justify-between gap-3 px-1 sm:min-w-0 sm:gap-2 sm:px-0">
+                <div
+                  className="pointer-events-none absolute left-[10%] right-[10%] top-[22px] hidden h-px sm:block"
+                  style={{
+                    background:
+                      'repeating-linear-gradient(90deg, rgba(168,85,247,0.45) 0, rgba(168,85,247,0.45) 5px, transparent 5px, transparent 11px), linear-gradient(90deg, rgba(34,211,238,0.12), rgba(251,191,36,0.12))',
+                  }}
+                  aria-hidden
+                />
+                {journeyNodes.map((node, idx) => {
+                  const JIcon = node.icon;
+                  const highlightIdx = journeyHighlightIndex;
+                  const active = idx === highlightIdx;
+                  const passed = idx < highlightIdx;
+                  const isFinal = idx === journeyNodes.length - 1;
+                  return (
+                    <div key={node.key} className="relative z-10 flex min-w-[88px] flex-1 flex-col items-center text-center sm:min-w-0">
+                      <div className="relative mb-2 flex h-12 w-12 items-center justify-center">
+                        {active ? (
+                          <span
+                            className="absolute inset-0 rounded-full bg-fuchsia-500/15 blur-md"
+                            aria-hidden
+                          />
+                        ) : null}
+                        {isFinal && active ? (
+                          <span
+                            className="absolute -inset-1 rounded-full bg-amber-400/10 blur-md"
+                            aria-hidden
+                          />
+                        ) : null}
+                        <div
+                          className={cn(
+                            'relative flex h-12 w-12 items-center justify-center rounded-full border backdrop-blur-md transition',
+                            active &&
+                              'border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-100 shadow-[0_0_22px_-6px_rgba(168,85,247,0.45)]',
+                            passed &&
+                              !active &&
+                              'border-cyan-400/28 bg-cyan-500/8 text-cyan-100/90 shadow-[0_0_14px_-8px_rgba(34,211,238,0.25)]',
+                            !passed && !active && 'border-white/[0.09] bg-white/[0.03] text-zinc-500'
+                          )}
+                        >
+                          <JIcon className="h-5 w-5" aria-hidden />
+                        </div>
+                      </div>
+                      <p
+                        className={cn(
+                          'text-[11px] font-semibold uppercase tracking-wide',
+                          active ? 'text-fuchsia-200/95' : 'text-zinc-500'
+                        )}
+                      >
+                        {node.label}
+                      </p>
+                      <p className="mt-1 text-[10px] leading-snug text-zinc-600">{node.sub}</p>
+                    </div>
+                  );
+                })}
               </div>
-            </AnimatedCard>
-
-            <AnimatedCard delay={0.3}>
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6 shadow-sm h-full flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <TrendingUp className="w-8 h-8 text-green-600 dark:text-green-500" />
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white">{stats.currentStreak}</span>
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400">Current Streak</p>
-                </div>
-              </div>
-            </AnimatedCard>
-
-            <AnimatedCard delay={0.4}>
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6 shadow-sm h-full flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Trophy className="w-8 h-8 text-blue-600 dark:text-blue-500" />
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white">{stats.longestStreak}</span>
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400">Longest Streak</p>
-                </div>
-              </div>
-            </AnimatedCard>
-          </div>
-
-          {/* Category Filters */}
-          <div className="mb-8">
-            <div className="flex flex-wrap gap-2">
-              {categories.map((category) => {
-                const Icon = category.icon;
-                const isActive = selectedCategory === category.id;
-                const categoryButton = (
-                  <motion.button
-                    key={category.id}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setSelectedCategory(category.id)}
-                    className={`px-4 py-2 rounded-xl flex items-center gap-2 transition-all ${
-                      isActive
-                        ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-md'
-                        : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:border-purple-300 hover:bg-gray-50 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {category.label}
-                  </motion.button>
-                );
-                return (
-                  <React.Fragment key={category.id}>
-                    {categoryButton}
-                  </React.Fragment>
-                );
-              })}
             </div>
-          </div>
+          </section>
 
           {/* Daily check-ins: goals sync to the goals API; personal achievements stay on this page only */}
-          <div className="mb-8 bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-5 space-y-6">
+          <div className="space-y-6 rounded-3xl border border-white/[0.08] bg-[#0b101c]/55 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] backdrop-blur-xl sm:p-6">
             {personalTrackItems.length === 0 ? (
               <>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Daily tracking</h2>
-                <p className="text-sm text-gray-600 dark:text-slate-400">
-                  Add a personal goal or personal achievement first, then check in here daily.
+                <h2 className="text-lg font-semibold text-white">Daily rhythm</h2>
+                <p className="text-sm text-zinc-400">
+                  Add a personal goal or personal achievement first—then return here to check in once a day.
                 </p>
               </>
             ) : null}
 
             {personalGoalsSynced.length > 0 ? (
               <div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Daily Goal Check-in</h2>
-                <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
-                  These items sync with your personal goals planner and goal check-in history (one check-in per item each day).
+                <h2 className="text-lg font-semibold text-white">Daily goal check-in</h2>
+                <p className="mb-4 text-sm text-zinc-400">
+                  These items sync with your personal goals planner (one check-in per item each day).
                 </p>
                 <div className="space-y-4">
                   {personalGoalsSynced.map((goal) => {
@@ -1116,45 +1692,47 @@ export function Achievements() {
                     return (
                       <div
                         key={goal.id}
-                        className="flex flex-col gap-4 p-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40"
+                        className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-black/25 p-4"
                       >
                         <div>
-                          <p className="font-semibold text-gray-900 dark:text-white">{goal.title}</p>
-                          <p className="text-xs text-gray-600 dark:text-slate-400 mt-0.5">
-                            {goal.goalType ? goalTypeLabels[goal.goalType] : 'Personal Goal'} • Progress {goal.progress}/
-                            {goal.total}
-                            {goal.goalCategory ? ` • ${goal.goalCategory}` : ''}
+                          <p className="font-semibold text-white">{goal.title}</p>
+                          <p className="mt-0.5 text-xs text-zinc-400">
+                            {goal.goalType ? goalTypeLabels[goal.goalType] : 'Personal Goal'} · Progress{' '}
+                            {goal.progress}/{goal.total}
+                            {goal.goalCategory ? ` · ${goal.goalCategory}` : ''}
                           </p>
                         </div>
 
                         {(goal.whyItMatters || goal.targetOutcome || goal.actionSteps) && (
-                          <div className="p-3 rounded-lg bg-white/80 dark:bg-slate-900/50 border border-gray-200 dark:border-slate-600 text-sm space-y-1.5">
-                            <p className="text-xs font-medium text-gray-500 dark:text-slate-400">From your goal</p>
+                          <div className="space-y-1.5 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-300">
+                            <p className="text-xs font-medium text-zinc-500">From your goal</p>
                             {goal.whyItMatters ? (
-                              <p className="text-gray-800 dark:text-slate-200">
-                                <span className="font-medium text-gray-900 dark:text-white">Why it matters: </span>
+                              <p>
+                                <span className="font-medium text-white">Why it matters: </span>
                                 {goal.whyItMatters}
                               </p>
                             ) : null}
                             {goal.targetOutcome ? (
-                              <p className="text-gray-800 dark:text-slate-200">
-                                <span className="font-medium text-gray-900 dark:text-white">Target outcome: </span>
+                              <p>
+                                <span className="font-medium text-white">Target outcome: </span>
                                 {goal.targetOutcome}
                               </p>
                             ) : null}
                             {goal.actionSteps ? (
-                              <p className="text-gray-800 dark:text-slate-200">
-                                <span className="font-medium text-gray-900 dark:text-white">Action steps: </span>
+                              <p>
+                                <span className="font-medium text-white">Action steps: </span>
                                 {goal.actionSteps}
                               </p>
                             ) : null}
                           </div>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                           {goal.goalType === 'money_management' && (
                             <div className="space-y-1.5">
-                              <Label htmlFor={`amt-${goal.id}`}>Amount added today ($)</Label>
+                              <Label htmlFor={`amt-${goal.id}`} className="text-zinc-300">
+                                Amount added today ($)
+                              </Label>
                               <input
                                 id={`amt-${goal.id}`}
                                 type="number"
@@ -1163,18 +1741,20 @@ export function Achievements() {
                                 onChange={(e) => patchFields({ amount: e.target.value })}
                                 placeholder="0"
                                 disabled={checkedToday}
-                                className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-white disabled:opacity-60"
+                                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white disabled:opacity-60"
                               />
                             </div>
                           )}
                           <div className="space-y-1.5 md:col-span-2">
-                            <Label htmlFor={`mood-${goal.id}`}>Emotion tag</Label>
+                            <Label htmlFor={`mood-${goal.id}`} className="text-zinc-300">
+                              Emotion tag
+                            </Label>
                             <select
                               id={`mood-${goal.id}`}
                               value={inputState.mood}
                               onChange={(e) => patchFields({ mood: e.target.value })}
                               disabled={checkedToday}
-                              className="h-9 w-full rounded-md border border-input bg-input-background px-3 text-sm disabled:opacity-60"
+                              className="h-9 w-full rounded-md border border-white/15 bg-black/40 px-3 text-sm text-white disabled:opacity-60"
                             >
                               <option value="">How are you feeling? (optional)</option>
                               {GOAL_EMOTION_TAG_OPTIONS.map((item) => (
@@ -1184,13 +1764,15 @@ export function Achievements() {
                               ))}
                             </select>
                             {goal.moodTag ? (
-                              <p className="text-xs text-gray-500 dark:text-slate-500">
-                                Default on your goal: {goal.moodTag} (applied when you leave this blank)
+                              <p className="text-xs text-zinc-500">
+                                Default on your goal: {goal.moodTag} (when left blank)
                               </p>
                             ) : null}
                           </div>
                           <div className="md:col-span-2 space-y-1.5">
-                            <Label htmlFor={`refl-${goal.id}`}>Reflection</Label>
+                            <Label htmlFor={`refl-${goal.id}`} className="text-zinc-300">
+                              Reflection
+                            </Label>
                             <Textarea
                               id={`refl-${goal.id}`}
                               value={inputState.reflection}
@@ -1198,11 +1780,13 @@ export function Achievements() {
                               placeholder="What stood out today?"
                               disabled={checkedToday}
                               rows={3}
-                              className="min-h-[80px]"
+                              className="min-h-[80px] border-white/15 bg-black/40 text-white"
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor={`chal-${goal.id}`}>Challenges faced</Label>
+                            <Label htmlFor={`chal-${goal.id}`} className="text-zinc-300">
+                              Challenges faced
+                            </Label>
                             <Textarea
                               id={`chal-${goal.id}`}
                               value={inputState.challenges}
@@ -1210,10 +1794,13 @@ export function Achievements() {
                               placeholder="Optional"
                               disabled={checkedToday}
                               rows={3}
+                              className="border-white/15 bg-black/40 text-white"
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor={`wins-${goal.id}`}>Wins</Label>
+                            <Label htmlFor={`wins-${goal.id}`} className="text-zinc-300">
+                              Wins
+                            </Label>
                             <Textarea
                               id={`wins-${goal.id}`}
                               value={inputState.wins}
@@ -1221,10 +1808,13 @@ export function Achievements() {
                               placeholder="Optional"
                               disabled={checkedToday}
                               rows={3}
+                              className="border-white/15 bg-black/40 text-white"
                             />
                           </div>
                           <div className="md:col-span-2 space-y-1.5">
-                            <Label htmlFor={`notes-${goal.id}`}>Notes for this check-in</Label>
+                            <Label htmlFor={`notes-${goal.id}`} className="text-zinc-300">
+                              Notes for this check-in
+                            </Label>
                             <Textarea
                               id={`notes-${goal.id}`}
                               value={inputState.notes}
@@ -1232,6 +1822,7 @@ export function Achievements() {
                               placeholder="Optional"
                               disabled={checkedToday}
                               rows={2}
+                              className="border-white/15 bg-black/40 text-white"
                             />
                           </div>
                         </div>
@@ -1243,9 +1834,9 @@ export function Achievements() {
                             checkedToday ||
                             (goal.goalType === 'money_management' && !(Number(inputState.amount) > 0))
                           }
-                          className="self-start px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-emerald-500 to-teal-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="self-start rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {checkedToday ? 'Checked Today' : 'Daily Check-in'}
+                          {checkedToday ? 'Checked today' : 'Daily check-in'}
                         </button>
                       </div>
                     );
@@ -1256,9 +1847,9 @@ export function Achievements() {
 
             {personalAchievementsOnly.length > 0 ? (
               <div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Daily Achievements</h2>
-                <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
-                  Streaks for achievements you added under Personal Achievements. These stay here and do not use the goals API.
+                <h2 className="text-lg font-semibold text-white">Daily achievements</h2>
+                <p className="mb-4 text-sm text-zinc-400">
+                  Streak items you keep only on this page (no goals API sync).
                 </p>
                 <div className="space-y-3">
                   {personalAchievementsOnly.map((goal) => {
@@ -1267,14 +1858,14 @@ export function Achievements() {
                     return (
                       <div
                         key={goal.id}
-                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40"
+                        className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/25 p-3 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div className="w-full">
-                          <p className="font-semibold text-gray-900 dark:text-white">{goal.title}</p>
-                          <p className="text-xs text-gray-600 dark:text-slate-400">
-                            Personal achievement • {goal.progress}/{goal.total}
+                          <p className="font-semibold text-white">{goal.title}</p>
+                          <p className="text-xs text-zinc-400">
+                            Personal achievement · {goal.progress}/{goal.total}
                           </p>
-                          <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
                             {goal.goalType === 'money_management' && (
                               <input
                                 type="number"
@@ -1292,7 +1883,7 @@ export function Achievements() {
                                 }
                                 placeholder="Amount added today ($)"
                                 disabled={checkedToday}
-                                className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-white disabled:opacity-60"
+                                className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white disabled:opacity-60"
                               />
                             )}
                             <input
@@ -1310,17 +1901,20 @@ export function Achievements() {
                               }
                               placeholder="Note (optional)"
                               disabled={checkedToday}
-                              className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-white disabled:opacity-60"
+                              className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white disabled:opacity-60"
                             />
                           </div>
                         </div>
                         <button
                           type="button"
                           onClick={() => void handleDailyGoalCheckIn(goal.id)}
-                          disabled={checkedToday || (goal.goalType === 'money_management' && !(Number(inputState.amount) > 0))}
-                          className="px-3 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-emerald-500 to-teal-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={
+                            checkedToday ||
+                            (goal.goalType === 'money_management' && !(Number(inputState.amount) > 0))
+                          }
+                          className="rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {checkedToday ? 'Checked Today' : 'Daily Achievements'}
+                          {checkedToday ? 'Checked today' : 'Daily achievements'}
                         </button>
                       </div>
                     );
@@ -1330,28 +1924,25 @@ export function Achievements() {
             ) : null}
           </div>
 
-          {/* 30 Day Report */}
-          <div className="mb-8 bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-5">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div className="space-y-4 rounded-3xl border border-white/[0.08] bg-[#0b101c]/55 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] backdrop-blur-xl sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">30-Day Report</h2>
-                <p className="text-sm text-gray-600 dark:text-slate-400">
-                  Generate your last 30 days personal goals report.
-                </p>
+                <h2 className="font-serif text-lg font-semibold text-white">30-day reflection export</h2>
+                <p className="text-sm text-zinc-400">A quiet text snapshot of your personal goal check-ins.</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={generateThirtyDayReport}
-                  className="px-3 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-indigo-500 to-purple-500 text-white"
+                  className="rounded-full bg-gradient-to-r from-indigo-600 to-fuchsia-700 px-4 py-2 text-sm font-semibold text-white shadow-[0_0_20px_rgba(99,102,241,0.35)]"
                 >
-                  Generate Report
+                  Generate
                 </button>
                 <button
                   type="button"
                   onClick={copyReport}
                   disabled={!reportText}
-                  className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="rounded-full border border-white/15 bg-white/[0.05] px-4 py-2 text-sm font-medium text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Copy
                 </button>
@@ -1360,105 +1951,162 @@ export function Achievements() {
             <textarea
               value={reportText}
               readOnly
-              placeholder="Generate report to view your 30-day summary."
-              className="w-full min-h-40 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-4 py-3 text-sm text-gray-800 dark:text-slate-200"
+              placeholder="Generate to view your last 30 days summary."
+              className="min-h-40 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-zinc-200"
             />
           </div>
-
-          {/* Achievements Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredAchievements.map((achievement, index) => {
-              const Icon = getIcon(achievement.icon);
-              const isUnlocked = achievement.unlocked;
-              
-              return (
-                <AnimatedCard key={achievement.id} delay={index * 0.05}>
-                  <div
-                    className={`relative bg-white dark:bg-slate-900 rounded-2xl border-2 h-full flex flex-col ${
-                      isUnlocked ? rarityBorders[achievement.rarity] : 'border-gray-200 dark:border-slate-800'
-                    } p-6 overflow-hidden hover:shadow-lg transition-all ${!isUnlocked && 'opacity-60'}`}
-                  >
-                    {/* Rarity Gradient Overlay */}
-                    {isUnlocked && (
-                      <div className={`absolute inset-0 bg-gradient-to-br ${rarityColors[achievement.rarity]} opacity-5`} />
-                    )}
-
-                    {/* Content */}
-                    <div className="relative flex-1 flex flex-col">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
-                          isUnlocked 
-                            ? `bg-gradient-to-br ${rarityColors[achievement.rarity]}` 
-                            : 'bg-gray-100 dark:bg-slate-800'
-                        }`}>
-                          {isUnlocked ? (
-                            <Icon className="w-8 h-8 text-white" />
-                          ) : (
-                            <Icon className="w-8 h-8 text-gray-400 dark:text-slate-600" />
-                          )}
-                        </div>
-                        {isUnlocked && (
-                          <div className="flex items-center gap-1 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-1 rounded-lg">
-                            <Star className="w-4 h-4 text-yellow-600 dark:text-yellow-500" />
-                            <span className="text-sm font-bold text-yellow-700 dark:text-yellow-500">{achievement.points}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{achievement.title}</h3>
-                      <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">{achievement.description}</p>
-                      {achievement.goalType && (
-                        <p className="text-xs text-gray-600 dark:text-slate-400 mb-3">
-                          Goal: {goalTypeLabels[achievement.goalType]}
-                        </p>
-                      )}
-
-                      {/* Progress Bar */}
-                      <div className="mb-3">
-                        <div className="flex items-center justify-between text-xs text-gray-600 dark:text-slate-400 mb-1">
-                          <span>Progress</span>
-                          <span>{achievement.progress}/{achievement.total}</span>
-                        </div>
-                        <div className="h-2 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${Math.min(100, (achievement.progress / achievement.total) * 100)}%` }}
-                            transition={{ delay: index * 0.1, duration: 0.5 }}
-                            className={`h-full ${
-                              isUnlocked 
-                                ? `bg-gradient-to-r ${rarityColors[achievement.rarity]}` 
-                                : 'bg-gradient-to-r from-gray-300 to-gray-400 dark:from-slate-600 dark:to-slate-500'
-                            } rounded-full`}
-                          />
-                        </div>
-                      </div>
-
-                      {isUnlocked ? (
-                        <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
-                          <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-500" />
-                          <span>Unlocked</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
-                          <Lock className="w-4 h-4 text-gray-500 dark:text-slate-500" />
-                          <span>In progress</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </AnimatedCard>
-              );
-            })}
-          </div>
-
-          {/* Empty State */}
-          {filteredAchievements.length === 0 && (
-            <div className="text-center py-16">
-              <Trophy className="w-16 h-16 text-gray-400 dark:text-slate-600 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No achievements in this category yet</h3>
-              <p className="text-gray-600 dark:text-slate-400">Keep going! Your achievements are waiting to be unlocked.</p>
             </div>
-          )}
+
+            <aside className="min-w-0 space-y-5 xl:sticky xl:top-4 xl:self-start">
+              <div className="rounded-3xl border border-white/[0.08] bg-[#0b101c]/90 p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Your Progress</p>
+                <div className="relative mx-auto mt-4 h-[136px] w-[136px] sm:h-40 sm:w-40">
+                  <svg className="-rotate-90" viewBox="0 0 100 100" width="144" height="144" aria-hidden>
+                    <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="none"
+                      stroke={`url(#${journeyRingId})`}
+                      strokeWidth="8"
+                      strokeLinecap="round"
+                      strokeDasharray={`${(overallCompletionPct / 100) * 251.2} 251.2`}
+                    />
+                    <defs>
+                      <linearGradient id={journeyRingId} x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#d8b4fe" />
+                        <stop offset="100%" stopColor="#22d3ee" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+                    <p className="font-serif text-2xl font-semibold text-white sm:text-3xl">{overallCompletionPct}%</p>
+                    <p className="text-[10px] uppercase tracking-wider text-zinc-500">Overall completion</p>
+                  </div>
+                </div>
+                <p className="mt-4 text-xs text-zinc-400">
+                  {stats.unlockedCount} of {stats.totalCount} achievements unlocked
+                </p>
+              </div>
+
+              <div className="rounded-3xl border border-white/[0.08] bg-[#0b101c]/90 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-fuchsia-500/12 ring-1 ring-fuchsia-400/22">
+                    <Diamond className="h-5 w-5 text-fuchsia-200/95" aria-hidden />
+                  </div>
+                  <div className="min-w-0 text-left">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Achievement Points</p>
+                    <p className="font-serif text-xl text-white sm:text-2xl">{stats.totalPoints.toLocaleString()}</p>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs text-zinc-500">
+                  {pointsToNext > 0
+                    ? `${pointsToNext.toLocaleString()} pts to the next reward`
+                    : 'You are at this reward threshold'}
+                </p>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-fuchsia-500/90 to-cyan-400/90"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        stats.totalPoints > 0 ? (stats.totalPoints / nextPointsMilestone) * 100 : 0
+                      )}%`,
+                    }}
+                  />
+                </div>
+                <p className="mt-1.5 text-[10px] text-zinc-600">
+                  Next reward · {nextPointsMilestone.toLocaleString()} pts
+                </p>
+              </div>
+
+              <div className="rounded-3xl border border-amber-400/18 bg-[linear-gradient(145deg,rgba(251,191,36,0.07),rgba(12,18,28,0.92))] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-200/85">Rarest Unlocked</p>
+                {rarestUnlock ? (
+                  <>
+                    <div className="mt-3 flex items-center gap-3">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-500/25 to-orange-950/40 shadow-[0_0_18px_-8px_rgba(251,191,36,0.35)]">
+                        <RarestIcon className="h-6 w-6 text-amber-50" aria-hidden />
+                      </div>
+                      <div className="min-w-0 text-left">
+                        <p className="truncate font-serif text-base font-semibold text-white">{rarestUnlock.title}</p>
+                        <p className="text-[11px] capitalize text-amber-200/75">{rarestUnlock.rarity}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleViewAllRarities}
+                      className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-full border border-white/[0.1] bg-black/30 px-4 text-xs font-semibold text-zinc-200 transition hover:border-fuchsia-400/25 hover:bg-white/[0.05]"
+                    >
+                      View All Rarities
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+                      Your rarest unlock will appear here.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleViewAllRarities}
+                      className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-full border border-white/[0.1] bg-black/30 px-4 text-xs font-semibold text-zinc-400 transition hover:border-fuchsia-400/25 hover:text-zinc-200"
+                    >
+                      View All Rarities
+                    </button>
+                  </>
+                )}
+              </div>
+
+              <div className="rounded-3xl border border-orange-400/15 bg-[#0b101c]/90 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
+                <div className="flex items-start gap-3">
+                  <Flame
+                    className="mt-0.5 h-6 w-6 shrink-0 text-amber-300/90"
+                    aria-hidden
+                  />
+                  <div className="min-w-0 text-left">
+                    <p className="font-serif text-base font-semibold text-white">Keep Going!</p>
+                    <p className="mt-2 text-sm font-medium leading-relaxed text-zinc-300">
+                      Consistency is the key to transformation.
+                    </p>
+                    <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+                      {nextClosestAchievement ? (
+                        <>
+                          Next milestone in reach:{' '}
+                          <span className="text-zinc-400">{nextClosestAchievement.title}</span>
+                          <span className="tabular-nums text-zinc-600">
+                            {' '}
+                            ({nextClosestAchievement.progress}/{Math.max(1, nextClosestAchievement.total)}).
+                          </span>
+                        </>
+                      ) : (
+                        'Your next milestone is forming as you return to what supports you.'
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0a0f18] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_85%_0%,rgba(251,191,36,0.08),transparent_48%)]" />
+                <div className="relative flex items-start gap-3">
+                  <Headphones className="mt-0.5 h-6 w-6 shrink-0 text-cyan-200/80" aria-hidden />
+                  <div className="min-w-0 flex-1 text-left">
+                    <p className="font-serif text-base font-semibold text-white">Need Help?</p>
+                    <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+                      We&apos;re here to support your journey, always.
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to="/app/settings/help-support"
+                  className="relative mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-full border border-cyan-400/22 bg-white/[0.05] py-2.5 text-sm font-semibold text-cyan-100/95 transition hover:border-cyan-300/35 hover:bg-white/[0.08]"
+                >
+                  Contact Support
+                </Link>
+              </div>
+            </aside>
+          </div>
         </div>
       </div>
       {showCreateModal && (
@@ -1471,7 +2119,7 @@ export function Achievements() {
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
             className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6"
           >
             <div className="flex items-center justify-between mb-4">

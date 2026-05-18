@@ -448,7 +448,7 @@ export default function App() {
             <Route path="/how-it-works" element={<HowItWorks />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
-            <Route path="/accessibility" element={<Accessibility />} />
+            {/* <Route path="/accessibility" element={<Accessibility />} /> */}
             <Route path="/pricing" element={<Pricing />} />
 
             {/* Error pages share the public boundary */}

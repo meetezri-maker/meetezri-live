@@ -8,20 +8,32 @@ import {
   Pause,
   RotateCcw,
   X,
-  Clock,
-  Star,
   Sparkles,
   Lock,
-  LayoutGrid,
   CheckCircle2,
+  ChevronDown,
+  Brain,
+  Moon,
+  Crosshair,
+  Flame,
+  Shield,
+  Smile,
+  Meh,
+  CloudLightning,
+  Frown,
+  Droplets,
+  Quote,
   type LucideIcon,
 } from "lucide-react";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Skeleton } from "../../components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import { TalkItOutBottomDock } from "@/app/pages/app/talk-it-out/TalkItOutBottomDock";
+import { TALK_ENV_LAKE, TALK_ENV_FOREST, TALK_ENV_CANDLE } from "@/lib/solace/referenceImagery";
 import {
   WELLNESS_TOOL_CATEGORIES,
   WELLNESS_CATEGORY_GRADIENT,
@@ -36,10 +48,7 @@ import {
   wellnessProgressTotalSeconds,
   type WellnessProgressRow,
 } from "../../../lib/wellnessLocalProgress";
-import {
-  getWellnessCategoryIcon,
-  WELLNESS_CATEGORY_ICONS,
-} from "../../../lib/wellnessCategoryIcons";
+import { getWellnessCategoryIcon } from "../../../lib/wellnessCategoryIcons";
 import {
   ambientKindForExercise,
   startWellnessAmbient,
@@ -238,6 +247,178 @@ function mergeBuiltinAndApi(
   return [...builtinsKept, ...apiItems];
 }
 
+type ExploreGroup = "mind" | "body" | "emotions" | "relax" | "sleep";
+
+const EXPLORE_GROUP_CATEGORIES: Record<ExploreGroup, WellnessToolCategory[]> = {
+  mind: ["Meditation", "Mindfulness"],
+  body: ["Exercise"],
+  emotions: ["Anxiousness", "Self-Care", "Low morale support"],
+  relax: ["Relaxation", "Stress Management"],
+  sleep: ["Sleep Health"],
+};
+
+type ExploreCardMeta = {
+  title: string;
+  subtitle: string;
+  image: string;
+  icon: LucideIcon;
+  iconTint: string;
+  /** Bottom-anchored cinematic color wash — keeps layout identical, varies emotional identity. */
+  ambientOverlay: string;
+};
+
+const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
+  mind: {
+    title: "Mind",
+    subtitle: "Clear thoughts & focus",
+    image:
+      "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?auto=format&fit=crop&w=1400&q=86",
+    icon: Brain,
+    iconTint: "text-violet-200 shadow-[0_0_28px_rgba(167,139,250,0.55)]",
+    ambientOverlay:
+      "bg-gradient-to-t from-indigo-950/90 via-violet-950/35 to-transparent mix-blend-multiply",
+  },
+  body: {
+    title: "Body",
+    subtitle: "Move, breathe & energize",
+    image:
+      "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1400&q=86",
+    icon: Heart,
+    iconTint: "text-emerald-200 shadow-[0_0_28px_rgba(52,211,153,0.45)]",
+    ambientOverlay:
+      "bg-gradient-to-t from-amber-950/88 via-orange-900/25 to-transparent mix-blend-soft-light",
+  },
+  emotions: {
+    title: "Emotions",
+    subtitle: "Understand & manage feelings",
+    image:
+      "https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?auto=format&fit=crop&w=1400&q=86",
+    icon: Sparkles,
+    iconTint: "text-fuchsia-200 shadow-[0_0_28px_rgba(244,114,182,0.45)]",
+    ambientOverlay:
+      "bg-gradient-to-t from-rose-950/90 via-fuchsia-900/30 to-transparent mix-blend-multiply",
+  },
+  relax: {
+    title: "Relax",
+    subtitle: "Rest, breathe & unwind",
+    image:
+      "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1400&q=86",
+    icon: Droplets,
+    iconTint: "text-sky-200 shadow-[0_0_28px_rgba(56,189,248,0.45)]",
+    ambientOverlay:
+      "bg-gradient-to-t from-slate-950/92 via-sky-950/35 to-cyan-200/10 mix-blend-multiply",
+  },
+  sleep: {
+    title: "Sleep",
+    subtitle: "Better sleep, better you",
+    image:
+      "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1400&q=86",
+    icon: Moon,
+    iconTint: "text-indigo-200 shadow-[0_0_28px_rgba(129,140,248,0.5)]",
+    ambientOverlay:
+      "bg-gradient-to-t from-violet-950/92 via-purple-950/40 to-fuchsia-200/12 mix-blend-multiply",
+  },
+};
+
+const SUPPORT_PILLS: {
+  label: string;
+  category: WellnessToolCategory;
+  icon: LucideIcon;
+  glow: string;
+}[] = [
+  { label: "Calm Anxiety", category: "Anxiousness", icon: Brain, glow: "shadow-[0_0_32px_rgba(167,139,250,0.35)]" },
+  { label: "Sleep Better", category: "Sleep Health", icon: Moon, glow: "shadow-[0_0_28px_rgba(56,189,248,0.32)]" },
+  { label: "Boost Focus", category: "Mindfulness", icon: Crosshair, glow: "shadow-[0_0_28px_rgba(34,211,238,0.32)]" },
+  { label: "Manage Stress", category: "Stress Management", icon: Flame, glow: "shadow-[0_0_28px_rgba(251,146,60,0.32)]" },
+  { label: "Lift Your Mood", category: "Self-Care", icon: Heart, glow: "shadow-[0_0_28px_rgba(244,114,182,0.35)]" },
+  { label: "Build Confidence", category: "Low morale support", icon: Shield, glow: "shadow-[0_0_28px_rgba(192,132,252,0.32)]" },
+];
+
+/** Wide misty mountain lake — fog, reflections, peaks (cinematic depth; layered with warmth + candle glow). */
+const WELLNESS_HERO_BASE =
+  "https://images.unsplash.com/photo-1470770903676-69b18201ac71?auto=format&fit=crop&w=2400&q=88";
+/** Rose-gold dawn mist — warms the scene (lantern / candle emotional balance). */
+const WELLNESS_HERO_WARM_LAYER =
+  "https://images.unsplash.com/photo-1504893524553-b855bcef70d3?auto=format&fit=crop&w=2400&q=82";
+const WELLNESS_HERO_BASE_NARROW = WELLNESS_HERO_BASE.replace("w=2400", "w=1200").replace("q=88", "q=84");
+const WELLNESS_HERO_CANDLE_WIDE = TALK_ENV_CANDLE.replace("w=600", "w=1800").replace("q=80", "q=86");
+
+function widenImageUrl(url: string): string {
+  return url.replace(/w=\d+/g, "w=1200").replace(/q=\d+/g, "q=82");
+}
+
+const WELLNESS_TOOL_CARD_FALLBACKS: string[] = [
+  WELLNESS_HERO_BASE_NARROW,
+  "https://images.unsplash.com/photo-1502134249126-9f3755a50d0b?auto=format&fit=crop&w=1200&q=82",
+  "https://images.unsplash.com/photo-1433863448220-78aaa154ff80?auto=format&fit=crop&w=1200&q=82",
+  "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1200&q=82",
+  "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1200&q=82",
+  "https://images.unsplash.com/photo-1511497584787-876760111969?auto=format&fit=crop&w=1200&q=82",
+  widenImageUrl(TALK_ENV_CANDLE),
+  widenImageUrl(TALK_ENV_FOREST),
+];
+
+function exerciseCardBackdropSrc(exercise: WellnessExerciseItem): string {
+  const byId: Record<string, string> = {
+    "grounding-54321": WELLNESS_HERO_BASE_NARROW,
+    "stress-release-waves":
+      "https://images.unsplash.com/photo-1504384308090-c54be3855836?auto=format&fit=crop&w=1200&q=82",
+    "body-scan":
+      "https://images.unsplash.com/photo-1511497584787-876760111969?auto=format&fit=crop&w=1200&q=82",
+    "sleep-meditation":
+      "https://images.unsplash.com/photo-1502134249126-9f3755a50d0b?auto=format&fit=crop&w=1200&q=82",
+    "gentle-movement":
+      "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1200&q=82",
+    gratitude:
+      "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1200&q=82",
+    "box-breathing": WELLNESS_HERO_BASE_NARROW,
+    "compassion-pause": widenImageUrl(TALK_ENV_CANDLE),
+    "mindful-anchor": widenImageUrl(TALK_ENV_FOREST),
+    "rain-sounds":
+      "https://images.unsplash.com/photo-1433863448220-78aaa154ff80?auto=format&fit=crop&w=1200&q=82",
+  };
+  if (byId[exercise.id]) return byId[exercise.id]!;
+  const byCat: Partial<Record<WellnessToolCategory, string>> = {
+    Anxiousness: byId["grounding-54321"]!,
+    "Stress Management": byId["stress-release-waves"]!,
+    Meditation: byId["body-scan"]!,
+    "Sleep Health": byId["sleep-meditation"]!,
+    Exercise: byId["gentle-movement"]!,
+    "Self-Care": byId["gratitude"]!,
+    Relaxation: byId["rain-sounds"]!,
+    "Low morale support": widenImageUrl(TALK_ENV_CANDLE),
+    Mindfulness: widenImageUrl(TALK_ENV_FOREST),
+  };
+  const fromCat = byCat[exercise.category as WellnessToolCategory];
+  if (fromCat) return fromCat;
+  const idx = Math.abs(
+    [...exercise.id].reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % WELLNESS_TOOL_CARD_FALLBACKS.length
+  );
+  return WELLNESS_TOOL_CARD_FALLBACKS[idx]!;
+}
+
+function practiceButtonClass(exercise: WellnessExerciseItem): string {
+  const glow =
+    "backdrop-blur-sm ring-1 ring-white/15 transition-[filter,box-shadow] hover:brightness-[1.04] hover:shadow-[0_0_32px_rgba(167,139,250,0.22)]";
+  const cat = exercise.category as WellnessToolCategory;
+  if (cat === "Sleep Health" || cat === "Relaxation" || cat === "Low morale support") {
+    return `border border-sky-300/22 bg-gradient-to-r from-sky-500/82 to-indigo-600/88 text-white shadow-[0_0_22px_rgba(56,189,248,0.28),0_10px_28px_-14px_rgba(15,23,42,0.55)] hover:from-sky-400/90 hover:to-indigo-500/90 ${glow}`;
+  }
+  if (cat === "Stress Management") {
+    return `border border-orange-300/22 bg-gradient-to-r from-orange-500/86 to-amber-600/88 text-white shadow-[0_0_22px_rgba(251,146,60,0.28),0_10px_28px_-14px_rgba(15,23,42,0.55)] hover:from-orange-400/90 hover:to-amber-500/90 ${glow}`;
+  }
+  if (cat === "Exercise") {
+    return `border border-emerald-300/20 bg-gradient-to-r from-emerald-500/84 to-teal-600/88 text-white shadow-[0_0_22px_rgba(52,211,153,0.26),0_10px_28px_-14px_rgba(15,23,42,0.55)] hover:from-emerald-400/90 hover:to-teal-500/90 ${glow}`;
+  }
+  if (cat === "Self-Care" || cat === "Anxiousness") {
+    return `border border-fuchsia-300/22 bg-gradient-to-r from-fuchsia-500/84 to-pink-600/86 text-white shadow-[0_0_24px_rgba(236,72,153,0.3),0_10px_28px_-14px_rgba(76,29,149,0.35)] hover:from-fuchsia-400/90 hover:to-pink-500/90 ${glow}`;
+  }
+  if (cat === "Mindfulness") {
+    return `border border-cyan-300/20 bg-gradient-to-r from-cyan-500/82 to-teal-600/86 text-white shadow-[0_0_22px_rgba(34,211,238,0.24),0_10px_28px_-14px_rgba(15,23,42,0.55)] hover:from-cyan-400/90 hover:to-teal-500/90 ${glow}`;
+  }
+  return `border border-violet-300/22 bg-gradient-to-r from-violet-500/86 to-fuchsia-600/86 text-white shadow-[0_0_26px_rgba(139,92,246,0.32),0_10px_28px_-14px_rgba(236,72,153,0.14)] hover:from-violet-400/90 hover:to-fuchsia-500/90 ${glow}`;
+}
+
 export function WellnessTools() {
   const { profile, user } = useAuth();
   const navigate = useNavigate();
@@ -278,6 +459,8 @@ export function WellnessTools() {
   const [guidedExercise, setGuidedExercise] = useState<string | null>(null);
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
   const [selectedCategoryTab, setSelectedCategoryTab] = useState<WellnessToolCategory | "all">("all");
+  const [exploreGroup, setExploreGroup] = useState<ExploreGroup | null>(null);
+  const [sortOption, setSortOption] = useState<"recommended" | "shortest" | "longest" | "az">("recommended");
   const [exercises, setExercises] = useState<WellnessExerciseItem[]>([]);
   const [progress, setProgress] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -354,6 +537,16 @@ export function WellnessTools() {
     0
   );
 
+  const completedSessionsTotal = useMemo(
+    () => progress.reduce((acc, curr) => acc + (curr.sessionsCompleted ?? 0), 0),
+    [progress]
+  );
+
+  const streakDotsActive = useMemo(() => {
+    if (completedSessionsTotal <= 0) return 0;
+    return Math.min(7, Math.max(1, Math.ceil(completedSessionsTotal / 2)));
+  }, [completedSessionsTotal]);
+
   /** Single list: canonical category order, then title (no duplicate “spotlight” section). */
   const exercisesSorted = useMemo(() => {
     const rank = new Map(WELLNESS_TOOL_CATEGORIES.map((c, i) => [c, i]));
@@ -367,32 +560,34 @@ export function WellnessTools() {
 
   const displayExercises = useMemo(() => {
     let base = exercisesSorted;
+    if (exploreGroup) {
+      const allow = new Set(EXPLORE_GROUP_CATEGORIES[exploreGroup]);
+      base = base.filter((e) => allow.has(e.category as WellnessToolCategory));
+    }
     if (selectedCategoryTab !== "all") {
       base = base.filter((e) => e.category === selectedCategoryTab);
     }
     if (showOnlyFavorites) {
       base = base.filter((e) => e.favorite);
     }
-    return base;
-  }, [exercisesSorted, showOnlyFavorites, selectedCategoryTab]);
-
-  const stats = [
-    { 
-      label: "Completed Talk it out", 
-      value: progress.reduce((acc, curr) => acc + curr.sessionsCompleted, 0).toString(), 
-      icon: Star 
-    },
-    { 
-      label: "Total time", 
-      value: formatWellnessDuration(totalTimeSeconds), 
-      icon: Clock 
-    },
-    { 
-      label: "Exercises Tried", 
-      value: progress.length.toString(), 
-      icon: Heart 
+    const list = [...base];
+    if (sortOption === "az") {
+      list.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sortOption === "shortest") {
+      list.sort(
+        (a, b) =>
+          parseWellnessDurationLabelToSeconds(a.duration) -
+          parseWellnessDurationLabelToSeconds(b.duration)
+      );
+    } else if (sortOption === "longest") {
+      list.sort(
+        (a, b) =>
+          parseWellnessDurationLabelToSeconds(b.duration) -
+          parseWellnessDurationLabelToSeconds(a.duration)
+      );
     }
-  ];
+    return list;
+  }, [exercisesSorted, exploreGroup, showOnlyFavorites, selectedCategoryTab, sortOption]);
 
   const handleStartExercise = async (exerciseId: string) => {
     setSessionTimeComplete(false);
@@ -651,291 +846,706 @@ export function WellnessTools() {
     return remaining > 0 && remaining <= 60;
   }, [activeExerciseData, isPlaying, sessionTimeComplete, timer]);
 
+  const journeyRingPct = Math.min(
+    100,
+    completedSessionsTotal === 0 ? 6 : Math.min(100, 10 + completedSessionsTotal * 12)
+  );
+  const journeyNarrative =
+    completedSessionsTotal === 0
+      ? "Your journey begins with a single gentle step."
+      : completedSessionsTotal === 1
+        ? "Great start! You've taken 1 step towards a calmer, stronger you."
+        : `Great momentum — you've completed ${completedSessionsTotal} sessions towards a calmer, stronger you.`;
+
+  const scrollToFeatured = useCallback(() => {
+    document.getElementById("wellness-featured-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const resetFiltersAndScroll = useCallback(() => {
+    setExploreGroup(null);
+    setSelectedCategoryTab("all");
+    setShowOnlyFavorites(false);
+    requestAnimationFrame(() =>
+      document.getElementById("wellness-featured-grid")?.scrollIntoView({ behavior: "smooth", block: "start" })
+    );
+  }, []);
+
+  const ringRadius = 52;
+  const ringCirc = 2 * Math.PI * ringRadius;
+  const ringOffset = ringCirc * (1 - journeyRingPct / 100);
+
   if (isLoading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-          <div className="mb-8">
-            <Skeleton className="h-8 w-64 mb-2" />
-            <Skeleton className="h-4 w-80" />
+      <div className="relative overflow-x-hidden bg-[#080512] px-8 pt-6 pb-28 text-zinc-100 lg:pb-16">
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_100%_55%_at_50%_-8%,rgba(192,132,252,0.2),transparent_52%),radial-gradient(ellipse_55%_48%_at_100%_15%,rgba(244,114,182,0.11),transparent_52%),radial-gradient(ellipse_50%_42%_at_0%_50%,rgba(139,92,246,0.1),transparent_48%),radial-gradient(ellipse_70%_45%_at_50%_100%,rgba(251,146,60,0.06),transparent_55%)]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.035] mix-blend-soft-light"
+          aria-hidden
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+          }}
+        />
+        <div className="mx-auto w-full max-w-[1450px] space-y-6">
+          <div className="space-y-3">
+            <Skeleton className="h-10 w-72 rounded-xl bg-white/[0.06]" />
+            <Skeleton className="h-4 w-full max-w-md rounded-lg bg-white/[0.05]" />
           </div>
-          <div className="grid grid-cols-3 gap-4 mb-8">
-            {[0, 1, 2].map((i) => (
-              <Card key={i} className="p-4 text-center">
-                <Skeleton className="w-6 h-6 rounded-full mx-auto mb-2" />
-                <Skeleton className="h-5 w-16 mx-auto mb-1" />
-                <Skeleton className="h-3 w-24 mx-auto" />
-              </Card>
+          <Skeleton className="h-[260px] w-full rounded-3xl bg-white/[0.05]" />
+          <div className="flex gap-3 overflow-hidden">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-[72px] w-[120px] shrink-0 rounded-2xl bg-white/[0.05]" />
             ))}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            {[0, 1, 2, 3].map((i) => (
-              <Card key={i} className="p-4">
-                <div className="flex gap-3">
-                  <Skeleton className="w-12 h-12 rounded-xl" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-40" />
-                    <Skeleton className="h-3 w-32" />
-                    <Skeleton className="h-3 w-24" />
-                  </div>
-                </div>
-              </Card>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-[180px] rounded-2xl bg-white/[0.05]" />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-[250px] rounded-2xl bg-white/[0.05]" />
             ))}
           </div>
         </div>
+      </div>
     );
   }
 
   return (
     <>
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <div className="flex items-center gap-3 mb-2">
-            <Heart className="w-8 h-8 text-primary" />
-            <h1 className="text-3xl font-bold">Wellness Tools</h1>
-          </div>
-          <p className="text-muted-foreground">
-            Guided exercises to support your mental wellbeing
-          </p>
-        </motion.div>
-
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          {stats.map((stat, index) => {
-            const Icon = stat.icon;
-            return (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
+      <div className="relative overflow-x-hidden bg-[#080512] pb-28 text-zinc-100 lg:pb-16">
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_100%_55%_at_50%_-8%,rgba(192,132,252,0.2),transparent_52%),radial-gradient(ellipse_55%_48%_at_100%_15%,rgba(244,114,182,0.11),transparent_52%),radial-gradient(ellipse_50%_42%_at_0%_50%,rgba(139,92,246,0.1),transparent_48%),radial-gradient(ellipse_70%_45%_at_50%_100%,rgba(251,146,60,0.06),transparent_55%)]"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.035] mix-blend-soft-light"
+          aria-hidden
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+          }}
+        />
+        <div className="relative mx-auto w-full max-w-[1450px] px-8 pt-6">
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="min-w-0 space-y-6">
+              <motion.header
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 + index * 0.05 }}
+                className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"
               >
-                <Card className="p-4 text-center shadow-lg">
-                  <Icon className="w-6 h-6 text-primary mx-auto mb-2" />
-                  <div className="text-2xl font-bold mb-1">{stat.value}</div>
-                  <div className="text-sm text-muted-foreground">{stat.label}</div>
-                </Card>
-              </motion.div>
-            );
-          })}
-        </div>
+                <div>
+                  <div className="flex items-center gap-3">
+                    <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/20 to-violet-600/25 shadow-[0_0_24px_rgba(236,72,153,0.3)]">
+                      <Heart className="h-4 w-4 text-fuchsia-100" aria-hidden />
+                    </span>
+                    <h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                      Wellness Tools
+                    </h1>
+                  </div>
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">
+                    Care for your mind, body and soul with guided experiences.
+                  </p>
+                </div>
+              </motion.header>
 
-        {/* Progress Breakdown */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="mb-8"
-        >
-          <div className="flex items-center justify-between mb-4">
-             <h2 className="text-xl font-bold">Detailed Progress</h2>
-          </div>
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4">
-             {isLoading ? (
-               <p className="text-gray-500 text-center py-4">Loading progress...</p>
-             ) : progress.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">No exercises completed yet. Start one today!</p>
-             ) : (
-                <div className="space-y-4">
-                  {progress.map((p) => (
-                    <div key={p.toolId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-                           <Star className="w-4 h-4" />
+              <motion.section
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.04 }}
+                className="relative h-[260px] overflow-hidden rounded-3xl border border-white/[0.12] shadow-[0_32px_90px_-28px_rgba(139,92,246,0.28),0_24px_64px_-32px_rgba(0,0,0,0.9)] ring-1 ring-fuchsia-500/10"
+              >
+                <div
+                  className="pointer-events-none absolute inset-0 z-0 scale-[1.03] bg-cover bg-[center_40%]"
+                  style={{ backgroundImage: `url(${WELLNESS_HERO_BASE})` }}
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.38] mix-blend-soft-light"
+                  style={{ backgroundImage: `url(${WELLNESS_HERO_WARM_LAYER})` }}
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute inset-0 z-[2] bg-[radial-gradient(ellipse_90%_70%_at_70%_25%,rgba(251,191,36,0.14),transparent_55%),radial-gradient(ellipse_85%_60%_at_15%_80%,rgba(236,72,153,0.11),transparent_52%)]"
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute inset-0 z-[3] bg-gradient-to-r from-[#0a0618]/96 via-violet-950/42 to-fuchsia-950/12"
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute inset-0 z-[4] bg-gradient-to-t from-[#06040f]/92 via-transparent to-violet-300/12"
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,transparent_28%,transparent_55%,rgba(8,5,18,0.25)_100%)]"
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute inset-y-0 right-0 z-[6] hidden w-[55%] bg-cover bg-[center_65%] opacity-[0.48] mix-blend-soft-light lg:block"
+                  style={{ backgroundImage: `url(${WELLNESS_HERO_CANDLE_WIDE})` }}
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute inset-y-0 right-0 z-[7] hidden w-[40%] bg-gradient-to-l from-amber-100/12 via-orange-200/5 to-transparent opacity-80 mix-blend-overlay lg:block"
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute inset-0 z-[8] rounded-3xl shadow-[inset_0_0_120px_rgba(0,0,0,0.5)]"
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute inset-0 z-[9] bg-[radial-gradient(ellipse_at_center,transparent_0%,transparent_42%,rgba(0,0,0,0.35)_100%)] opacity-90"
+                  aria-hidden
+                />
+                <div className="relative z-10 grid h-full grid-cols-1 lg:grid-cols-[1.1fr_1fr]">
+                  <div className="flex flex-col justify-center gap-5 px-6 py-5 sm:px-8">
+                    <h2 className="font-serif text-[clamp(1.25rem,2.8vw,1.75rem)] font-normal leading-tight tracking-tight text-white">
+                      Tools to help you{" "}
+                      <span className="bg-gradient-to-r from-fuchsia-300 via-violet-200 to-indigo-200 bg-clip-text italic text-transparent">
+                        feel better,
+                      </span>{" "}
+                      anytime.
+                    </h2>
+                    <p className="text-sm leading-relaxed text-zinc-200/95">
+                      Whether you need a moment of calm, focus, energy, or emotional support, you&apos;ll find the
+                      right space here.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={scrollToFeatured}
+                      className="w-fit rounded-full bg-gradient-to-r from-fuchsia-500 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_0_40px_rgba(236,72,153,0.55),0_16px_48px_-12px_rgba(139,92,246,0.35)] ring-1 ring-white/25 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-300/50"
+                    >
+                      Find Your Tool &gt;
+                    </button>
+                  </div>
+                  <div className="hidden lg:block" aria-hidden />
+                </div>
+              </motion.section>
+
+              <section className="space-y-3" aria-labelledby="wellness-support-heading">
+                <div>
+                  <h2
+                    id="wellness-support-heading"
+                    className="text-lg font-semibold tracking-tight text-white sm:text-xl"
+                  >
+                    How can we support you today?
+                  </h2>
+                  <p className="mt-1 text-sm text-zinc-400">Start with what you need most right now.</p>
+                </div>
+                <div className="solace-scroll flex flex-nowrap gap-3 overflow-x-auto pb-1 pt-0.5">
+                  {SUPPORT_PILLS.map((pill) => {
+                    const Icon = pill.icon;
+                    const active =
+                      !showOnlyFavorites &&
+                      exploreGroup === null &&
+                      selectedCategoryTab === pill.category;
+                    return (
+                      <button
+                        key={pill.label}
+                        type="button"
+                        onClick={() => {
+                          setExploreGroup(null);
+                          setSelectedCategoryTab(pill.category);
+                          setShowOnlyFavorites(false);
+                        }}
+                        className={cn(
+                          "flex h-[72px] w-[120px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-2xl border text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition",
+                          active
+                            ? "border-violet-400/45 bg-gradient-to-b from-violet-950/50 to-zinc-950/90 shadow-[0_0_36px_rgba(139,92,246,0.35),0_12px_32px_-18px_rgba(236,72,153,0.12)] ring-1 ring-fuchsia-400/20"
+                            : "border-white/[0.1] bg-black/35 shadow-[0_14px_36px_-22px_rgba(0,0,0,0.65)] hover:border-violet-400/30 hover:shadow-[0_0_28px_rgba(139,92,246,0.18)]"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
+                            pill.glow
+                          )}
+                        >
+                          <Icon className="h-4 w-4 text-zinc-100" aria-hidden />
+                        </span>
+                        <span className="px-1 text-[11px] font-medium leading-tight text-zinc-100">{pill.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section className="space-y-3" aria-labelledby="wellness-explore-heading">
+                <div className="flex flex-wrap items-end justify-between gap-2">
+                  <div>
+                    <h2
+                      id="wellness-explore-heading"
+                      className="text-lg font-semibold tracking-tight text-white sm:text-xl"
+                    >
+                      Explore by Categories
+                    </h2>
+                    <p className="mt-1 text-sm text-zinc-400">Browse tools by what you want to improve.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={resetFiltersAndScroll}
+                    className="text-sm font-medium text-fuchsia-300/90 underline-offset-4 hover:text-fuchsia-200 hover:underline"
+                  >
+                    View All
+                  </button>
+                </div>
+                <div className="solace-scroll flex gap-4 overflow-x-auto pb-1 lg:grid lg:grid-cols-5 lg:gap-4 lg:overflow-visible">
+                  {(Object.keys(EXPLORE_CARD_META) as ExploreGroup[]).map((group) => {
+                    const meta = EXPLORE_CARD_META[group];
+                    const Icon = meta.icon;
+                    const active = exploreGroup === group;
+                    return (
+                      <button
+                        key={group}
+                        type="button"
+                        onClick={() => {
+                          setShowOnlyFavorites(false);
+                          setSelectedCategoryTab("all");
+                          setExploreGroup(group);
+                          scrollToFeatured();
+                        }}
+                        className={cn(
+                          "group relative flex h-[180px] w-[min(200px,78vw)] shrink-0 flex-col justify-end overflow-hidden rounded-2xl border p-5 text-left shadow-[0_18px_48px_-28px_rgba(0,0,0,0.75)] ring-1 ring-white/[0.04] transition lg:min-w-0 lg:w-full",
+                          active
+                            ? "border-violet-400/50 shadow-[0_0_44px_rgba(139,92,246,0.38),0_20px_56px_-28px_rgba(236,72,153,0.15)] ring-fuchsia-400/25"
+                            : "border-white/[0.1] hover:border-violet-400/35 hover:shadow-[0_0_32px_rgba(139,92,246,0.2)]"
+                        )}
+                      >
+                        <div
+                          className="absolute inset-0 bg-cover bg-center transition duration-500 group-hover:scale-[1.03]"
+                          style={{ backgroundImage: `url(${meta.image})` }}
+                          aria-hidden
+                        />
+                        <div
+                          className="absolute inset-0 bg-gradient-to-br from-violet-950/50 via-fuchsia-950/10 to-transparent opacity-[0.78] mix-blend-multiply"
+                          aria-hidden
+                        />
+                        <div
+                          className="absolute inset-0 bg-gradient-to-t from-[#07030f]/95 via-black/45 to-amber-200/10"
+                          aria-hidden
+                        />
+                        <div
+                          className="absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_20%_15%,rgba(167,139,250,0.18),transparent_55%)] opacity-[0.65]"
+                          aria-hidden
+                        />
+                        <div
+                          className={cn("pointer-events-none absolute inset-0", meta.ambientOverlay)}
+                          aria-hidden
+                        />
+                        <div className="relative flex flex-col gap-2.5 drop-shadow-[0_2px_16px_rgba(0,0,0,0.85)]">
+                          <span
+                            className={cn(
+                              "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/20 bg-black/35 shadow-[0_0_24px_rgba(0,0,0,0.45)] backdrop-blur-[2px]",
+                              meta.iconTint
+                            )}
+                          >
+                            <Icon className="h-4 w-4" aria-hidden />
+                          </span>
+                          <p className="text-base font-semibold tracking-tight text-white">{meta.title}</p>
+                          <p className="line-clamp-2 text-[11px] leading-snug text-zinc-200/95">{meta.subtitle}</p>
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-slate-100">{p.toolTitle}</p>
-                          <p className="text-sm text-gray-500">{p.sessionsCompleted} sessions completed</p>
-                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <motion.section
+                id="wellness-featured-grid"
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.06 }}
+                className="scroll-mt-24 space-y-3"
+                aria-labelledby="wellness-featured-heading"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2
+                      id="wellness-featured-heading"
+                      className="text-lg font-semibold tracking-tight text-white sm:text-xl"
+                    >
+                      Featured Wellness Tools
+                    </h2>
+                    <p className="mt-1 text-sm text-zinc-400">Handpicked experiences to support your wellbeing.</p>
+                  </div>
+                  <label className="relative flex w-full shrink-0 items-center sm:w-auto">
+                    <span className="sr-only">Sort tools</span>
+                    <select
+                      value={sortOption}
+                      onChange={(e) =>
+                        setSortOption(e.target.value as "recommended" | "shortest" | "longest" | "az")
+                      }
+                      className="solace-scroll w-full cursor-pointer appearance-none rounded-xl border border-white/[0.1] bg-black/40 py-2 pl-3 pr-9 text-[13px] font-medium text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35 sm:w-auto"
+                    >
+                      <option value="recommended">Recommended</option>
+                      <option value="shortest">Shortest first</option>
+                      <option value="longest">Longest first</option>
+                      <option value="az">A–Z</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500 sm:right-3" aria-hidden />
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+                  {displayExercises.length === 0 ? (
+                    <p className="col-span-full rounded-2xl border border-white/[0.08] bg-black/30 p-5 text-center text-sm text-zinc-500">
+                      {showOnlyFavorites
+                        ? "No favorites yet. Tap the heart on an exercise to save it here."
+                        : exploreGroup
+                          ? "No exercises in this space yet. Try another category or clear filters."
+                          : selectedCategoryTab !== "all"
+                            ? "No exercises in this category yet."
+                            : "No exercises available."}
+                    </p>
+                  ) : (
+                    displayExercises.map((exercise, index) => {
+                      const Icon = getWellnessCategoryIcon(exercise.category);
+                      const bg = exerciseCardBackdropSrc(exercise);
+                      return (
+                        <motion.div
+                          id={`wellness-exercise-card-${exercise.id}`}
+                          key={exercise.id}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.03 + index * 0.02 }}
+                          whileHover={{ y: -2 }}
+                          className="group relative h-[250px] overflow-hidden rounded-2xl border border-white/[0.12] shadow-[0_28px_72px_-30px_rgba(0,0,0,0.88),0_0_60px_-18px_rgba(139,92,246,0.32),0_0_40px_-24px_rgba(236,72,153,0.1)] ring-1 ring-fuchsia-500/10"
+                        >
+                          <div
+                            className="absolute inset-0 bg-cover bg-center transition duration-500 group-hover:scale-[1.03]"
+                            style={{ backgroundImage: `url(${bg})` }}
+                            aria-hidden
+                          />
+                          <div
+                            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_100%_65%_at_50%_0%,rgba(192,132,252,0.32),transparent_60%)]"
+                            aria-hidden
+                          />
+                          <div
+                            className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-[#050816]/12 via-[22%] to-[#07030f]/92"
+                            aria-hidden
+                          />
+                          <div
+                            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_130%_90%_at_100%_100%,rgba(251,146,60,0.16),transparent_58%)]"
+                            aria-hidden
+                          />
+                          <div
+                            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-transparent via-transparent to-violet-300/12"
+                            aria-hidden
+                          />
+                          <div
+                            className="pointer-events-none absolute inset-0 rounded-2xl shadow-[inset_0_0_80px_rgba(0,0,0,0.45)]"
+                            aria-hidden
+                          />
+                          <div
+                            className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(ellipse_at_center,transparent_0%,transparent_38%,rgba(0,0,0,0.28)_100%)] opacity-95"
+                            aria-hidden
+                          />
+                          <div className="relative z-10 flex h-full flex-col p-5">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/25 bg-black/35 text-white shadow-[0_0_22px_rgba(167,139,250,0.45)] ring-1 ring-fuchsia-300/25 backdrop-blur-sm">
+                                <Icon className="h-[18px] w-[18px]" aria-hidden />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="rounded-full border border-white/20 bg-black/45 px-2.5 py-1 text-[10px] font-medium tabular-nums text-zinc-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-sm">
+                                  {exercise.duration}
+                                </span>
+                                <motion.button
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  type="button"
+                                  onClick={(e) => handleToggleFavorite(exercise.id, e)}
+                                  className="rounded-full border border-white/20 bg-black/45 p-2 text-zinc-100 shadow-[0_0_18px_rgba(236,72,153,0.15)] backdrop-blur-sm hover:bg-black/55"
+                                  aria-label={exercise.favorite ? "Remove from favorites" : "Add to favorites"}
+                                >
+                                  <Heart
+                                    className={cn(
+                                      "h-3.5 w-3.5",
+                                      exercise.favorite ? "fill-fuchsia-400 text-fuchsia-400" : "text-zinc-200"
+                                    )}
+                                  />
+                                </motion.button>
+                              </div>
+                            </div>
+                            <div className="mt-auto flex min-h-0 flex-col gap-3.5">
+                              <div className="space-y-1.5">
+                                <h3 className="line-clamp-2 text-sm font-semibold leading-snug tracking-tight text-white drop-shadow-[0_2px_18px_rgba(0,0,0,0.85)]">
+                                  {exercise.title}
+                                </h3>
+                                <p className="line-clamp-2 text-[11px] leading-relaxed text-zinc-100 drop-shadow-[0_2px_14px_rgba(0,0,0,0.75)]">
+                                  {exercise.description}
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  onClick={() => handleStartExercise(exercise.id)}
+                                  size="sm"
+                                  className={cn(
+                                    "h-9 min-h-0 flex-1 rounded-full px-3 text-xs font-semibold",
+                                    practiceButtonClass(exercise)
+                                  )}
+                                >
+                                  <Play className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                  Start Practice
+                                </Button>
+                                <Button
+                                  type="button"
+                                  onClick={() => setGuidedExercise(exercise.id)}
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-9 min-h-0 shrink-0 rounded-full border-white/20 bg-gradient-to-br from-white/[0.1] to-violet-950/40 px-2.5 text-[11px] text-violet-50/95 shadow-[0_0_20px_rgba(139,92,246,0.22)] ring-1 ring-white/15 backdrop-blur-sm hover:from-white/[0.14] hover:to-violet-900/50"
+                                >
+                                  <Sparkles className="h-3 w-3" aria-hidden />
+                                  Ezri
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="flex justify-center pt-2">
+                  <button
+                    type="button"
+                    onClick={resetFiltersAndScroll}
+                    className="mx-auto flex w-full max-w-[220px] items-center justify-center gap-2 rounded-full border border-white/[0.1] bg-black/40 py-2.5 text-sm font-medium text-zinc-100 shadow-[0_0_24px_rgba(139,92,246,0.12)] transition hover:border-violet-400/28 hover:bg-violet-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
+                  >
+                    View All Tools
+                    <ChevronDown className="h-4 w-4 -rotate-90" aria-hidden />
+                  </button>
+                </div>
+              </motion.section>
+            </div>
+
+            <div
+              role="region"
+              aria-label="Wellness insights"
+              className="flex w-full shrink-0 flex-col gap-5 lg:sticky lg:top-6 lg:w-[320px] lg:self-start lg:shrink-0"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setShowOnlyFavorites(!showOnlyFavorites);
+                  if (!showOnlyFavorites) {
+                    setExploreGroup(null);
+                    setSelectedCategoryTab("all");
+                  }
+                }}
+                className="group flex w-full items-center justify-center gap-2 rounded-2xl border border-white/[0.12] bg-[color-mix(in_oklab,var(--solace-panel)_86%,transparent)] p-5 text-sm font-medium text-zinc-50 shadow-[0_16px_48px_-24px_rgba(0,0,0,0.65),0_0_40px_-14px_rgba(139,92,246,0.3),inset_0_1px_0_rgba(255,255,255,0.08)] ring-1 ring-fuchsia-500/10 backdrop-blur-xl transition hover:border-violet-400/35 hover:shadow-[0_0_36px_rgba(236,72,153,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
+                aria-pressed={showOnlyFavorites}
+              >
+                <Heart
+                  className={cn(
+                    "h-4 w-4",
+                    showOnlyFavorites ? "fill-fuchsia-400 text-fuchsia-400" : "text-fuchsia-300/90"
+                  )}
+                  aria-hidden
+                />
+                My Favorites ({favoriteCount})
+                <ChevronDown className="h-4 w-4 text-zinc-500 group-hover:text-zinc-300" aria-hidden />
+              </button>
+              <div className="rounded-2xl border border-white/[0.12] bg-[color-mix(in_oklab,var(--solace-panel)_86%,transparent)] p-5 shadow-[0_18px_48px_-22px_rgba(0,0,0,0.62),0_0_44px_-12px_rgba(139,92,246,0.32),inset_0_1px_0_rgba(255,255,255,0.09)] ring-1 ring-fuchsia-500/10 backdrop-blur-xl">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="text-base font-semibold tracking-tight text-white">Your Wellness Journey</h3>
+                  <label className="sr-only" htmlFor="wellness-journey-period">
+                    Time period
+                  </label>
+                  <select
+                    id="wellness-journey-period"
+                    defaultValue="week"
+                    className="solace-scroll max-w-[7.5rem] cursor-pointer appearance-none rounded-lg border border-white/[0.08] bg-black/35 py-1 pl-2 pr-6 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/30"
+                  >
+                    <option value="week">This Week</option>
+                  </select>
+                </div>
+                <div className="mt-4 flex flex-col items-center gap-3 text-center">
+                  <div className="relative flex h-[120px] w-[120px] shrink-0 items-center justify-center">
+                    <svg className="absolute inset-0 -rotate-90" viewBox="0 0 120 120" aria-hidden>
+                      <circle
+                        cx="60"
+                        cy="60"
+                        r={ringRadius}
+                        fill="none"
+                        stroke="rgba(255,255,255,0.06)"
+                        strokeWidth="8"
+                      />
+                      <circle
+                        cx="60"
+                        cy="60"
+                        r={ringRadius}
+                        fill="none"
+                        stroke="url(#wellnessRingGrad)"
+                        strokeWidth="8"
+                        strokeLinecap="round"
+                        strokeDasharray={ringCirc}
+                        strokeDashoffset={ringOffset}
+                        className="transition-[stroke-dashoffset] duration-700"
+                      />
+                      <defs>
+                        <linearGradient id="wellnessRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#e879f9" />
+                          <stop offset="100%" stopColor="#8b5cf6" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <Heart className="relative h-7 w-7 text-fuchsia-200/95 drop-shadow-[0_0_18px_rgba(236,72,153,0.45)]" aria-hidden />
+                  </div>
+                  <p className="text-[12px] leading-relaxed text-zinc-300">
+                    {journeyNarrative}
+                  </p>
+                </div>
+                <div className="mt-4 grid grid-cols-3 gap-3 border-t border-white/[0.06] pt-4 text-center">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Completed</p>
+                    <p className="mt-1 text-sm font-semibold tabular-nums text-white">
+                      {completedSessionsTotal}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Total Time</p>
+                    <p className="mt-1 text-sm font-semibold tabular-nums text-white">
+                      {formatWellnessDuration(totalTimeSeconds)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Exercises</p>
+                    <p className="mt-1 text-sm font-semibold tabular-nums text-white">{progress.length}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/[0.12] bg-[color-mix(in_oklab,var(--solace-panel)_86%,transparent)] p-5 shadow-[0_18px_48px_-22px_rgba(0,0,0,0.62),0_0_44px_-12px_rgba(236,72,153,0.14),inset_0_1px_0_rgba(255,255,255,0.09)] ring-1 ring-fuchsia-500/10 backdrop-blur-xl">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="text-base font-semibold tracking-tight text-white">Mood After Exercises</h3>
+                  <select
+                    aria-label="Mood period"
+                    defaultValue="week"
+                    className="solace-scroll max-w-[7.5rem] cursor-pointer appearance-none rounded-lg border border-white/[0.08] bg-black/35 py-1 pl-2 pr-6 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/30"
+                  >
+                    <option value="week">This Week</option>
+                  </select>
+                </div>
+                <p className="sr-only">Illustrative reflection snapshot for your week.</p>
+                <div className="mt-4 grid grid-cols-4 gap-2">
+                  {[
+                    { label: "Positive", pct: "60%", icon: Smile, tone: "text-emerald-300 shadow-[0_0_22px_rgba(52,211,153,0.35)]" },
+                    { label: "Neutral", pct: "30%", icon: Meh, tone: "text-sky-300 shadow-[0_0_22px_rgba(56,189,248,0.3)]" },
+                    { label: "Anxious", pct: "7%", icon: CloudLightning, tone: "text-violet-300 shadow-[0_0_22px_rgba(167,139,250,0.35)]" },
+                    { label: "Sad", pct: "3%", icon: Frown, tone: "text-rose-300 shadow-[0_0_22px_rgba(251,113,133,0.3)]" },
+                  ].map((m) => {
+                    const MIcon = m.icon;
+                    return (
+                      <div key={m.label} className="flex flex-col items-center text-center">
+                        <span
+                          className={cn(
+                            "flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.12] bg-black/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]",
+                            m.tone
+                          )}
+                        >
+                          <MIcon className="h-4 w-4" aria-hidden />
+                        </span>
+                        <p className="mt-2 text-[11px] text-zinc-500">{m.label}</p>
+                        <p className="text-sm font-semibold tabular-nums text-white">{m.pct}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-900 dark:text-slate-100">
-                          {formatWellnessDuration(wellnessProgressTotalSeconds(p))}
-                        </p>
-                        <p className="text-xs text-gray-500">Total time</p>
-                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/[0.12] bg-[color-mix(in_oklab,var(--solace-panel)_86%,transparent)] p-5 shadow-[0_18px_48px_-22px_rgba(0,0,0,0.62),0_0_44px_-12px_rgba(251,146,60,0.12),inset_0_1px_0_rgba(255,255,255,0.09)] ring-1 ring-fuchsia-500/10 backdrop-blur-xl">
+                <h3 className="text-base font-semibold tracking-tight text-white">Your Streak</h3>
+                {completedSessionsTotal === 0 ? (
+                  <>
+                    <p className="mt-2 font-serif text-2xl font-light text-white">Today</p>
+                    <p className="mt-1 text-[13px] text-zinc-400">Begin your gentle streak.</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Flame className="h-5 w-5 shrink-0 text-orange-400/90 drop-shadow-[0_0_12px_rgba(251,146,60,0.45)]" aria-hidden />
+                      <p className="text-3xl font-light tabular-nums text-white">{streakDotsActive} days</p>
+                    </div>
+                    <p className="mt-1 text-[13px] text-zinc-400">Keep your streak alive!</p>
+                  </>
+                )}
+                <div className="mt-5 flex justify-between gap-1 border-t border-white/[0.06] pt-4">
+                  {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
+                    <div key={`${d}-${i}`} className="flex flex-1 flex-col items-center gap-2">
+                      <span
+                        className={cn(
+                          "h-2.5 w-2.5 rounded-full border border-white/[0.06] transition",
+                          i < streakDotsActive
+                            ? "border-fuchsia-400/40 bg-gradient-to-br from-fuchsia-400 to-violet-500 shadow-[0_0_14px_rgba(236,72,153,0.55)]"
+                            : "bg-white/[0.06]"
+                        )}
+                      />
+                      <span className="text-[10px] font-medium text-zinc-500">{d}</span>
                     </div>
                   ))}
                 </div>
-             )}
-          </div>
-        </motion.div>
+              </div>
 
-        {/* Category tabs: filter exercises below (each category has a unique icon in wellnessCategoryIcons) */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.18 }}
-          className="mb-8"
-        >
-          <h2 className="text-xl font-bold mb-4">Categories</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <motion.button
-              type="button"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.18 }}
-              whileHover={{ scale: 1.03, y: -3 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                setSelectedCategoryTab("all");
-                setShowOnlyFavorites(false);
-              }}
-              className={`flex min-h-[112px] flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-slate-500 to-slate-700 p-4 text-center text-white shadow-lg sm:min-h-[120px] sm:p-5 ${
-                selectedCategoryTab === "all" ? "ring-4 ring-white/90 ring-offset-2 ring-offset-slate-100" : ""
-              }`}
-            >
-              <LayoutGrid className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" aria-hidden />
-              <span className="text-xs font-bold leading-tight sm:text-sm">All</span>
-            </motion.button>
-            {WELLNESS_TOOL_CATEGORIES.map((cat, index) => {
-              const Icon = WELLNESS_CATEGORY_ICONS[cat];
-              const active = selectedCategoryTab === cat;
-              return (
-                <motion.button
-                  key={cat}
-                  type="button"
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 + index * 0.03 }}
-                  whileHover={{ scale: 1.03, y: -3 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => {
-                    setSelectedCategoryTab(cat);
-                    setShowOnlyFavorites(false);
-                  }}
-                  className={`flex min-h-[112px] flex-col items-center justify-center gap-2 rounded-xl bg-gradient-to-br ${WELLNESS_CATEGORY_GRADIENT[cat]} p-4 text-center text-white shadow-lg sm:min-h-[120px] sm:p-5 ${
-                    active ? "ring-4 ring-white/90 ring-offset-2 ring-offset-slate-100" : ""
-                  }`}
-                >
-                  <Icon className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" aria-hidden />
-                  <span className="text-xs font-bold leading-tight sm:text-sm">{cat}</span>
-                </motion.button>
-              );
-            })}
+              <div className="relative h-[360px] overflow-hidden rounded-2xl border border-white/[0.12] shadow-[0_28px_100px_-40px_rgba(139,92,246,0.38),0_24px_64px_-36px_rgba(0,0,0,0.82)] ring-1 ring-fuchsia-500/10">
+                <div
+                  className="absolute inset-0 scale-[1.04] bg-cover bg-[center_45%]"
+                  style={{ backgroundImage: `url(${WELLNESS_HERO_BASE})` }}
+                  aria-hidden
+                />
+                <div
+                  className="absolute inset-0 bg-cover bg-center opacity-[0.35] mix-blend-soft-light"
+                  style={{ backgroundImage: `url(${WELLNESS_HERO_WARM_LAYER})` }}
+                  aria-hidden
+                />
+                <div
+                  className="absolute inset-0 bg-[radial-gradient(ellipse_100%_85%_at_50%_50%,rgba(8,5,18,0.2)_0%,rgba(8,5,18,0.55)_55%,rgba(8,5,18,0.82)_100%)]"
+                  aria-hidden
+                />
+                <div
+                  className="absolute inset-0 bg-[radial-gradient(ellipse_90%_80%_at_50%_88%,rgba(236,72,153,0.2),transparent_55%),radial-gradient(ellipse_70%_55%_at_50%_5%,rgba(139,92,246,0.18),transparent_52%)] mix-blend-multiply opacity-90"
+                  aria-hidden
+                />
+                <div
+                  className="absolute inset-0 bg-gradient-to-b from-violet-950/25 via-transparent to-[#080512]/90"
+                  aria-hidden
+                />
+                <div
+                  className="absolute inset-0 rounded-2xl shadow-[inset_0_0_100px_rgba(0,0,0,0.55)]"
+                  aria-hidden
+                />
+                <div className="relative z-10 flex h-full flex-col items-center justify-center gap-5 px-7 py-10 text-center sm:px-10">
+                  <Quote className="h-10 w-10 text-violet-200/50 drop-shadow-[0_0_24px_rgba(167,139,250,0.45)]" aria-hidden />
+                  <p className="max-w-[20rem] font-serif text-[1.4rem] font-normal leading-snug tracking-tight text-white/95 sm:text-[1.65rem] sm:leading-snug [text-shadow:0_2px_24px_rgba(0,0,0,0.55),0_0_40px_rgba(139,92,246,0.2)]">
+                    &ldquo;Wellness is not a destination, it&apos;s the gentle steps you take for yourself every single
+                    day.&rdquo;
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-        </motion.div>
 
-        {/* Single exercises grid (same card layout for every tool) */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold">
-              {showOnlyFavorites
-                ? `Favorite exercises (${favoriteCount})`
-                : selectedCategoryTab === "all"
-                  ? "Wellness Tools"
-                  : selectedCategoryTab}
-            </h2>
-            <button 
-              onClick={() => setShowOnlyFavorites(!showOnlyFavorites)}
-              className="text-sm text-primary font-medium hover:underline flex items-center gap-1"
-            >
-              {showOnlyFavorites ? (
-                <>
-                  <X className="w-4 h-4" />
-                  Show All
-                </>
-              ) : (
-                <>
-                  <Heart className="w-4 h-4" />
-                  View Favorites ({favoriteCount})
-                </>
-              )}
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
-            {displayExercises.length === 0 ? (
-              <p className="text-muted-foreground col-span-full text-center py-8">
-                {showOnlyFavorites
-                  ? "No favorites yet. Tap the heart on an exercise to save it here."
-                  : selectedCategoryTab !== "all"
-                    ? `No exercises in this category yet.`
-                    : "No exercises available."}
-              </p>
-            ) : (
-            displayExercises.map((exercise, index) => {
-              const Icon = getWellnessCategoryIcon(exercise.category);
-              return (
-                <motion.div
-                  id={`wellness-exercise-card-${exercise.id}`}
-                  key={exercise.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.15 + index * 0.04 }}
-                  whileHover={{ y: -5 }}
-                  className="scroll-mt-28 h-full"
+          <div className="relative mt-6 w-full">
+            <div
+              className="pointer-events-none absolute inset-x-0 -top-8 h-12 bg-[linear-gradient(180deg,transparent_0%,rgba(6,10,18,0.4)_100%)]"
+              aria-hidden
+            />
+            <TalkItOutBottomDock
+              density="compact"
+              getSupportSlot={
+                <Button
+                  asChild
+                  className="min-h-[44px] rounded-full bg-gradient-to-r from-violet-600/90 to-indigo-600/90 px-6 text-[13px] text-white shadow-[0_0_28px_rgba(76,29,149,0.35)] hover:from-violet-500 hover:to-indigo-500"
                 >
-                  <Card className="p-4 shadow-lg hover:shadow-xl transition-all group cursor-pointer border border-slate-100 h-full min-h-[240px] flex flex-col">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <motion.div
-                          whileHover={{ rotate: 10, scale: 1.1 }}
-                          className={`p-3 rounded-xl bg-gradient-to-br ${exercise.color} text-white shrink-0`}
-                        >
-                          <Icon className="w-6 h-6" />
-                        </motion.div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                            {exercise.category}
-                          </p>
-                          <h3 className="font-bold text-lg leading-snug group-hover:text-primary transition-colors">
-                            {exercise.title}
-                          </h3>
-                        </div>
-                      </div>
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={(e) => handleToggleFavorite(exercise.id, e)}
-                        className="p-2 hover:bg-gray-100 rounded-full transition-colors z-10 shrink-0"
-                      >
-                        <Heart className={`w-5 h-5 ${exercise.favorite ? "text-red-500 fill-red-500" : "text-gray-300"}`} />
-                      </motion.button>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2 min-h-[2.75rem] flex-1">
-                      {exercise.description}
-                    </p>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-4 mt-auto">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {exercise.duration}
-                      </div>
-                      <div className="px-2 py-1 bg-gray-100 rounded-full">
-                        {exercise.difficulty}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => setGuidedExercise(exercise.id)}
-                        variant="outline"
-                        className="flex-1 group/ezri border-2 border-purple-200 hover:border-purple-400 hover:bg-purple-50"
-                        size="sm"
-                      >
-                        <Sparkles className="w-4 h-4 mr-2 text-purple-600 group-hover/ezri:scale-110 transition-transform" />
-                        <span className="text-purple-700 font-medium">Ezri</span>
-                      </Button>
-                      <Button
-                        onClick={() => handleStartExercise(exercise.id)}
-                        className="flex-1 group/btn"
-                        size="sm"
-                      >
-                        <Play className="w-4 h-4 mr-2 group-hover/btn:scale-110 transition-transform" />
-                        Start
-                      </Button>
-                    </div>
-                  </Card>
-                </motion.div>
-              );
-            })
-            )}
+                  <Link to="/app/emergency-resources">Get Support</Link>
+                </Button>
+              }
+            />
           </div>
-        </motion.div>
 
         {/* Exercise Player Modal */}
         <AnimatePresence>
@@ -1165,6 +1775,7 @@ export function WellnessTools() {
             </>
           )}
         </AnimatePresence>
+        </div>
       </div>
 
       {/* Ezri Guided Mode */}

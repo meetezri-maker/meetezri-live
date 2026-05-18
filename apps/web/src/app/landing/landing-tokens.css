@@ -1,0 +1,199 @@
+/**
+ * Solace landing — locked cinematic wellness DNA (scoped to .solace-landing)
+ */
+.solace-landing {
+  --solace-ds-bg-deep: #050816;
+  --solace-ds-bg: #070a14;
+  --solace-ds-bg-raised: #0b1020;
+  --solace-ds-surface: rgba(12, 14, 28, 0.72);
+  --solace-ds-border-glow: rgba(168, 85, 247, 0.22);
+  --solace-ds-glow-purple: rgba(168, 85, 247, 0.35);
+  --solace-ds-glow-pink: rgba(236, 72, 153, 0.28);
+  --solace-ds-glow-cyan: rgba(34, 211, 238, 0.18);
+  --solace-ds-text: #f7f3ff;
+  --solace-ds-text-muted: #a7a1b8;
+  --solace-ds-radius-card: 24px;
+  --landing-max-w: 72rem;
+  --solace-ds-shadow-cinematic: 0 40px 100px -48px rgba(0, 0, 0, 0.85),
+    0 0 60px -24px rgba(88, 28, 135, 0.35);
+  color: var(--solace-ds-text);
+}
+
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -8px, 0);
+  }
+}
+
+@keyframes landing-cta-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 28px rgba(233, 30, 99, 0.45),
+      0 0 48px -12px rgba(168, 85, 247, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 40px rgba(233, 30, 99, 0.55),
+      0 0 64px -8px rgba(168, 85, 247, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  }
+}
+
+.landing-float {
+  animation: landing-float 7s ease-in-out infinite;
+}
+
+.landing-float-delay-1 {
+  animation-delay: 1.2s;
+}
+
+.landing-float-delay-2 {
+  animation-delay: 2.4s;
+}
+
+.landing-float-delay-3 {
+  animation-delay: 3.6s;
+}
+
+.landing-cta-glow {
+  animation: landing-cta-pulse 4.5s ease-in-out infinite;
+}
+
+.landing-glass {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--solace-ds-radius-card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--solace-ds-surface);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 0 0 1px rgba(168, 85, 247, 0.1),
+    0 0 40px -16px var(--landing-card-glow, var(--solace-ds-glow-purple)),
+    0 32px 80px -40px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition:
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.45s ease;
+}
+
+.landing-glass::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse 80% 50% at 50% -20%,
+    var(--landing-card-glow, rgba(168, 85, 247, 0.12)),
+    transparent 55%
+  );
+  opacity: 1;
+  transition: opacity 0.45s ease;
+}
+
+.landing-glass:hover {
+  transform: translateY(-2px) scale(1.01);
+  border-color: var(--landing-card-border-hover, rgba(168, 85, 247, 0.35));
+  box-shadow:
+    0 0 0 1px var(--landing-card-border-hover, rgba(168, 85, 247, 0.28)),
+    0 0 56px -8px var(--landing-card-glow, var(--solace-ds-glow-purple)),
+    0 0 80px -20px var(--landing-card-glow-outer, rgba(168, 85, 247, 0.25)),
+    0 40px 100px -36px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.landing-glass:hover::before {
+  opacity: 1.15;
+}
+
+.landing-glow-pink {
+  --landing-card-glow: rgba(236, 72, 153, 0.32);
+  --landing-card-glow-outer: rgba(236, 72, 153, 0.22);
+  --landing-card-border-hover: rgba(236, 72, 153, 0.42);
+}
+
+.landing-glow-cyan {
+  --landing-card-glow: rgba(34, 211, 238, 0.28);
+  --landing-card-glow-outer: rgba(34, 211, 238, 0.18);
+  --landing-card-border-hover: rgba(34, 211, 238, 0.38);
+}
+
+.landing-glow-purple {
+  --landing-card-glow: rgba(168, 85, 247, 0.32);
+  --landing-card-glow-outer: rgba(168, 85, 247, 0.22);
+  --landing-card-border-hover: rgba(168, 85, 247, 0.42);
+}
+
+.landing-glow-amber {
+  --landing-card-glow: rgba(251, 191, 36, 0.28);
+  --landing-card-glow-outer: rgba(251, 191, 36, 0.18);
+  --landing-card-border-hover: rgba(251, 191, 36, 0.38);
+}
+
+.landing-glow-green {
+  --landing-card-glow: rgba(52, 211, 153, 0.28);
+  --landing-card-glow-outer: rgba(52, 211, 153, 0.18);
+  --landing-card-border-hover: rgba(52, 211, 153, 0.38);
+}
+
+.landing-glow-blue {
+  --landing-card-glow: rgba(96, 165, 250, 0.28);
+  --landing-card-glow-outer: rgba(96, 165, 250, 0.18);
+  --landing-card-border-hover: rgba(96, 165, 250, 0.38);
+}
+
+.landing-glow-popular {
+  --landing-card-glow: rgba(236, 72, 153, 0.38);
+  --landing-card-glow-outer: rgba(168, 85, 247, 0.32);
+  --landing-card-border-hover: rgba(236, 72, 153, 0.55);
+  border-color: rgba(236, 72, 153, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(236, 72, 153, 0.25),
+    0 0 64px -12px rgba(236, 72, 153, 0.35),
+    0 0 48px -16px rgba(168, 85, 247, 0.3),
+    0 40px 100px -40px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.landing-check-glow {
+  filter: drop-shadow(0 0 6px rgba(74, 222, 128, 0.65));
+}
+
+.landing-star-glow {
+  filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.55));
+}
+
+.landing-section {
+  width: 100%;
+  max-width: var(--landing-max-w);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+  .landing-section {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+.landing-serif {
+  font-family: "Cormorant Garamond", "Times New Roman", Georgia, serif;
+}
+
+.landing-step-visual {
+  width: 100%;
+  max-width: 320px;
+  height: 180px;
+  flex-shrink: 0;
+}
