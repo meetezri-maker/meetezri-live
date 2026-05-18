@@ -24,8 +24,12 @@ const Toaster = ({ toastOptions, ...props }: ToasterProps) => {
         ...toastOptions,
         classNames: {
           ...toastOptions?.classNames,
-          // Default toast body is 13px; bump success copy slightly (needs ! vs Sonner’s inline styles).
-          success: cn("!text-[15px]", toastOptions?.classNames?.success),
+          toast: cn(
+            "!rounded-[22px] !border-white/[0.08] !bg-[#0c0e18]/92 !text-white/90 !shadow-[0_0_0_1px_rgba(168,85,247,0.12),0_24px_64px_-24px_rgba(0,0,0,0.85),0_0_48px_-16px_rgba(168,85,247,0.28)] !backdrop-blur-xl",
+            toastOptions?.classNames?.toast,
+          ),
+          success: cn("!text-[14px] !leading-snug", toastOptions?.classNames?.success),
+          description: cn("!text-white/65", toastOptions?.classNames?.description),
         },
       }}
       {...props}

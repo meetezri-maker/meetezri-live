@@ -1,24 +1,63 @@
 import { motion } from "motion/react";
-import { 
+import {
   Shield,
   Lock,
   Eye,
   Download,
   Trash2,
-  FileText,
-  UserX,
   ArrowLeft,
-  CheckCircle,
-  AlertCircle,
   Bell,
-  Heart
+  Heart,
+  Brain,
+  BarChart3,
+  Link2,
+  ChevronRight,
+  Laptop,
+  Smartphone,
+  ShieldCheck,
+  MessageCircle,
+  AlertCircle,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, type ReactNode } from "react";
 import { useSafetyConsent } from "@/app/contexts/SafetyContext";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import {
+  PRIVACY_BANNER_IMG,
+  PRIVACY_ENCRYPTION_IMG,
+  PRIVACY_HERO_IMG,
+  privacyBackLink,
+  privacyBtnGhost,
+  privacyBtnPrimary,
+  privacyBtnRose,
+  privacyCommitmentBanner,
+  privacyCompactCard,
+  privacyDataCard,
+  privacyGlassCard,
+  privacyHeroAccent,
+  privacyHeroCard,
+  privacyHeroImage,
+  privacyHeroOverlayLeft,
+  privacyHeroOverlayPurple,
+  privacyHeroOverlayWarmth,
+  privacyHeroTitle,
+  privacyIconChip,
+  privacyLinkMuted,
+  privacyPageAtmosphere,
+  privacyPageFogMid,
+  privacyPageGlowTop,
+  privacyPageVignette,
+  privacyRailCard,
+  privacyRow,
+  privacySectionSubtitle,
+  privacySectionTitle,
+  privacySelect,
+  privacySessionRow,
+} from "@/app/pages/app/privacy-settings/privacySettingsUi";
 
 function csvEscape(value: unknown) {
   const normalized = value === null || value === undefined ? "" : String(value);
@@ -61,10 +100,74 @@ function jsonToExcelFriendlyCsv(jsonValue: unknown) {
   return `\uFEFFField,Value\r\n${contentRows.join("\r\n")}`;
 }
 
+function getTotpFactorsFromMfaList(data: { totp?: unknown; all?: unknown } | null | undefined) {
+  const fromTotp = Array.isArray(data?.totp) ? data.totp : [];
+  const fromAll = Array.isArray(data?.all)
+    ? (data.all as { factor_type?: string; id?: string }[]).filter((f) => f?.factor_type === "totp")
+    : [];
+  const byId = new Map<string, (typeof fromTotp)[number]>();
+  for (const f of [...fromTotp, ...fromAll] as { id?: string }[]) {
+    if (f?.id) byId.set(f.id, f as (typeof fromTotp)[number]);
+  }
+  return Array.from(byId.values());
+}
+
+interface PrivacyToggleProps {
+  enabled: boolean;
+  onToggle: () => void;
+  ariaLabel: string;
+}
+
+function PrivacyToggle({ enabled, onToggle, ariaLabel }: PrivacyToggleProps) {
+  return (
+    <motion.button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      aria-label={ariaLabel}
+      whileTap={{ scale: 0.95 }}
+      onClick={onToggle}
+      className={cn(
+        "relative h-8 w-14 shrink-0 rounded-full transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50",
+        enabled ? "bg-violet-500/55 shadow-[0_0_20px_-4px_rgba(139,92,246,0.55)]" : "bg-white/10"
+      )}
+    >
+      <motion.span
+        animate={{ x: enabled ? 26 : 4 }}
+        transition={{ type: "spring", stiffness: 500, damping: 32 }}
+        className="absolute top-1 left-0 h-6 w-6 rounded-full bg-white shadow-md"
+      />
+    </motion.button>
+  );
+}
+
+interface PrivacyRowProps {
+  icon: ReactNode;
+  tone: "violet" | "pink" | "cyan" | "amber" | "rose" | "emerald" | "blue";
+  title: string;
+  description: string;
+  control: ReactNode;
+}
+
+function PrivacyControlRow({ icon, tone, title, description, control }: PrivacyRowProps) {
+  return (
+    <motion.div className={privacyRow} initial={false}>
+      <motion.div className="flex min-w-0 flex-1 items-start gap-3.5">
+        <div className={privacyIconChip(tone)}>{icon}</div>
+        <div className="min-w-0">
+          <p className="font-medium text-[rgba(255,255,255,0.92)]">{title}</p>
+          <p className="mt-1 text-sm leading-relaxed text-[rgba(255,255,255,0.45)]">{description}</p>
+        </div>
+      </motion.div>
+      <div className="shrink-0 sm:pl-4">{control}</div>
+    </motion.div>
+  );
+}
+
 export function PrivacySettings() {
   const { consent, updateConsent } = useSafetyConsent();
   const { profile } = useAuth();
-  
+
   const [settings, setSettings] = useState({
     profileVisibility: "public",
     allowAnalytics: true,
@@ -77,36 +180,97 @@ export function PrivacySettings() {
     showAvatarInCommunity: true,
   });
 
-  // Load settings from profile when component mounts or profile changes
+  const [thirdPartyExpanded, setThirdPartyExpanded] = useState(false);
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [knowledge2faEnabled, setKnowledge2faEnabled] = useState(false);
+
+  const loginAlertsEnabled = profile?.notification_preferences?.pushEnabled ?? true;
+
   useEffect(() => {
     if (profile?.privacy_settings) {
       const normalizedVisibility =
         profile.privacy_settings.profileVisibility === "friends"
           ? "private"
           : profile.privacy_settings.profileVisibility ?? "public";
-      setSettings(prev => ({
+      setSettings((prev) => ({
         ...prev,
         ...profile.privacy_settings,
-        ...(normalizedVisibility ? { profileVisibility: normalizedVisibility } : {})
+        ...(normalizedVisibility ? { profileVisibility: normalizedVisibility } : {}),
       }));
     }
   }, [profile]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase.auth.mfa.listFactors();
+        if (error || cancelled) return;
+        const totp = getTotpFactorsFromMfaList(data);
+        setMfaEnabled(totp.length > 0);
+        const knowledge = await api.getKnowledgeTwoFactorStatus().catch(() => null);
+        if (!cancelled && knowledge) {
+          setKnowledge2faEnabled(Boolean(knowledge.enabled));
+        }
+      } catch {
+        /* display-only */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const currentDevice = useMemo(() => {
+    if (typeof navigator === "undefined") {
+      return { label: "This device", meta: "Current session", isMobile: false };
+    }
+    const ua = navigator.userAgent;
+    const isMobile = /iPhone|iPad|Android/i.test(ua);
+    const isMac = /Mac OS X/i.test(ua);
+    const isWin = /Windows/i.test(ua);
+    const browser = /Chrome/i.test(ua) && !/Edg/i.test(ua)
+      ? "Chrome"
+      : /Safari/i.test(ua) && !/Chrome/i.test(ua)
+        ? "Safari"
+        : /Firefox/i.test(ua)
+          ? "Firefox"
+          : "Browser";
+    const os = isMobile
+      ? /iPhone|iPad/i.test(ua)
+        ? "iOS"
+        : "Android"
+      : isMac
+        ? "macOS"
+        : isWin
+          ? "Windows"
+          : "Desktop";
+    const label = isMobile ? (/iPhone/i.test(ua) ? "iPhone" : "Mobile device") : isMac ? "MacBook Pro 16\"" : "This device";
+    return {
+      label,
+      meta: `${os} · ${browser} · Active now`,
+      isMobile,
+    };
+  }, []);
+
+  const twoFactorEnabled = mfaEnabled || knowledge2faEnabled;
+  const accountScore = twoFactorEnabled && settings.profileVisibility === "private" ? 92 : twoFactorEnabled ? 86 : 78;
+  const accountScoreLabel = accountScore >= 90 ? "Excellent" : accountScore >= 80 ? "Good" : "Fair";
+
   const updateSettings = async (newSettings: typeof settings) => {
-    setSettings(newSettings); // Optimistic update
-    
+    setSettings(newSettings);
+
     try {
       await api.updateProfile({
-        privacy_settings: newSettings
+        privacy_settings: newSettings,
       });
     } catch (error) {
       console.error("Failed to update privacy settings:", error);
       toast.error("Failed to save settings");
-      // Revert state on error
       if (profile?.privacy_settings) {
-        setSettings(prev => ({
+        setSettings((prev) => ({
           ...prev,
-          ...profile.privacy_settings
+          ...profile.privacy_settings,
         }));
       }
     }
@@ -115,9 +279,21 @@ export function PrivacySettings() {
   const toggleSetting = (key: keyof typeof settings) => {
     const newSettings = {
       ...settings,
-      [key]: !settings[key]
+      [key]: !settings[key],
     };
     updateSettings(newSettings);
+  };
+
+  const toggleLoginAlerts = async () => {
+    const currentPrefs = profile?.notification_preferences || {};
+    const newPrefs = { ...currentPrefs, pushEnabled: !loginAlertsEnabled };
+    try {
+      await api.updateProfile({ notification_preferences: newPrefs });
+      toast.success("Settings saved");
+    } catch (error) {
+      console.error("Failed to update login alerts:", error);
+      toast.error("Failed to save settings");
+    }
   };
 
   const handleDownloadData = async () => {
@@ -131,7 +307,6 @@ export function PrivacySettings() {
       let blobToDownload = blob;
       let resolvedFilename = filename?.trim() || `ezri-data-export-${new Date().toISOString().split("T")[0]}.json`;
 
-      // Convert JSON exports to CSV so they open directly in Excel.
       if (isJsonPayload) {
         try {
           const jsonText = await blob.text();
@@ -155,7 +330,7 @@ export function PrivacySettings() {
       }
 
       const url = window.URL.createObjectURL(blobToDownload);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = resolvedFilename;
       document.body.appendChild(a);
@@ -171,27 +346,25 @@ export function PrivacySettings() {
 
   const handleDeleteAllData = async () => {
     const confirmation = window.confirm(
-      '⚠️ Warning: This will permanently delete ALL your data including:\n\n' +
-      '• Profile information\n' +
-      '• Mood tracking history\n' +
-      '• Journal entries\n' +
-      '• Session data\n' +
-      '• Habits and goals\n' +
-      '• All wellness data\n\n' +
-      'This action CANNOT be undone. Are you sure you want to continue?'
+      "⚠️ Warning: This will permanently delete ALL your data including:\n\n" +
+        "• Profile information\n" +
+        "• Mood tracking history\n" +
+        "• Journal entries\n" +
+        "• Session data\n" +
+        "• Habits and goals\n" +
+        "• All wellness data\n\n" +
+        "This action CANNOT be undone. Are you sure you want to continue?"
     );
-    
+
     if (confirmation) {
       const finalConfirmation = window.confirm(
         'Final confirmation: Type "DELETE" in your mind and click OK to permanently delete all your data.'
       );
-      
+
       if (finalConfirmation) {
         try {
           await api.deleteAccount();
-          toast.success('Your data has been permanently deleted.');
-          // Optionally redirect to home or logout
-          // window.location.href = '/';
+          toast.success("Your data has been permanently deleted.");
         } catch (error) {
           console.error("Failed to delete user data:", error);
           toast.error("Failed to delete your data. Please try again.");
@@ -201,348 +374,545 @@ export function PrivacySettings() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8"
-          >
-            <Link 
-              to="/app/settings" 
-              className="inline-flex items-center gap-2 text-gray-700 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-6 transition-colors font-medium"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Back to Settings
-            </Link>
+    <motion.div
+      className={privacyPageAtmosphere}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35 }}
+    >
+      <div className={privacyPageGlowTop} aria-hidden />
+      <motion.div className={privacyPageFogMid} aria-hidden />
+      <div className={privacyPageVignette} aria-hidden />
 
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 shadow-lg shadow-purple-500/20">
-                <Shield className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Privacy & Security</h1>
-                <p className="text-gray-600 dark:text-gray-400">Control your data and privacy settings</p>
-              </div>
-            </div>
-          </motion.div>
+      <div className="relative z-10 mx-auto w-full max-w-[1500px] px-4 py-7 sm:px-7 sm:py-9">
+        <motion.div
+          className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          {/* Main column */}
+          <div className="min-w-0 space-y-6">
+            {/* Hero */}
+            <section className={privacyHeroCard}>
+              <img src={PRIVACY_HERO_IMG} alt="" className={privacyHeroImage} />
+              <motion.div className={privacyHeroOverlayLeft} aria-hidden />
+              <motion.div className={privacyHeroOverlayPurple} aria-hidden />
+              <motion.div className={privacyHeroOverlayWarmth} aria-hidden />
 
-          {/* Privacy Controls */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-800 mb-6 transition-colors duration-300"
-          >
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Privacy Controls</h2>
+              <div className="relative flex h-full min-h-[280px] flex-col justify-between p-6 sm:min-h-[300px] sm:p-8 lg:min-h-[320px] lg:flex-row lg:items-center lg:gap-8">
+                <div className="max-w-xl flex-1">
+                  <Link to="/app/settings" className={privacyBackLink}>
+                    <ArrowLeft className="h-4 w-4" aria-hidden />
+                    Back to Settings
+                  </Link>
 
-            <div className="space-y-4">
-              {/* Profile Visibility */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-xl transition-colors duration-300">
-                <div className="flex items-center gap-3">
-                  <Eye className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">Profile Visibility</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Who can see your profile</p>
-                  </div>
+                  <h1 className={cn(privacyHeroTitle, "mt-5")}>
+                    Privacy & <span className={privacyHeroAccent}>Security</span>
+                  </h1>
+                  <p className="mt-3 max-w-lg text-sm leading-relaxed text-[rgba(255,255,255,0.62)] sm:text-[15px]">
+                    You&apos;re in control of your data, your privacy, and your safety.
+                  </p>
+                  <p className="mt-4 inline-flex items-center gap-2 text-xs text-[rgba(255,255,255,0.5)]">
+                    <Shield className="h-3.5 w-3.5 text-violet-300/70" aria-hidden />
+                    We protect your privacy so you can focus on your wellbeing.
+                  </p>
                 </div>
-                <select
-                  value={settings.profileVisibility}
-                  onChange={(e) => updateSettings({...settings, profileVisibility: e.target.value})}
-                  className="px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition-colors"
-                >
-                  <option value="public">Public</option>
-                  <option value="private">Private</option>
-                </select>
-              </div>
 
-              {/* Share Progress */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-xl transition-colors duration-300">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">Share Progress</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Allow sharing wellness milestones</p>
-                  </div>
-                </div>
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => toggleSetting("shareProgress")}
-                  className={`w-14 h-8 rounded-full transition-colors ${
-                    settings.shareProgress ? "bg-blue-500" : "bg-gray-300 dark:bg-slate-600"
-                  }`}
-                >
-                  <motion.div
-                    animate={{ x: settings.shareProgress ? 24 : 2 }}
-                    className="w-6 h-6 bg-white rounded-full shadow-md"
-                  />
-                </motion.button>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Safety & Support */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-800 mb-6 transition-colors duration-300"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Safety & Support</h2>
-              <Link
-                to="/app/settings/emergency-notifications"
-                className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium underline"
-              >
-                Emergency notice history
-              </Link>
-            </div>
-
-            <div className="space-y-4">
-              {/* Trusted Contact Notifications */}
-              <div className="flex items-center justify-between p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border-2 border-purple-200 dark:border-purple-800 transition-colors duration-300">
-                <div className="flex items-center gap-3 flex-1">
-                  <Bell className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">Trusted Contact Notifications</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                      Allow your trusted contacts to receive supportive check-in messages when our safety system detects you may need extra support
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Heart className="w-4 h-4 text-purple-500 dark:text-purple-400" />
-                      <span className="text-xs text-purple-700 dark:text-purple-300 font-medium">
-                        Privacy-safe • No medical details shared
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => updateConsent({ trustedContactEnabled: !consent.trustedContactEnabled })}
-                  className={`w-14 h-8 rounded-full transition-colors flex-shrink-0 ml-4 ${ 
-                    consent.trustedContactEnabled ? "bg-purple-500" : "bg-gray-300 dark:bg-slate-600"
-                  }`}
-                >
-                  <motion.div
-                    animate={{ x: consent.trustedContactEnabled ? 24 : 2 }}
-                    className="w-6 h-6 bg-white rounded-full shadow-md"
-                  />
-                </motion.button>
-              </div>
-
-              {/* Info about trusted contacts */}
-              {consent.trustedContactEnabled && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 transition-colors duration-300"
-                >
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm text-blue-900 dark:text-blue-100 font-medium mb-1">
-                        Trusted Contact Notifications Enabled
+                <motion.div className="flex shrink-0 justify-center lg:justify-end">
+                  <div className="relative flex h-[190px] w-[190px] items-center justify-center sm:h-[210px] sm:w-[210px]">
+                    <div
+                      className="absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(139,92,246,0.35)_0%,rgba(139,92,246,0.08)_45%,transparent_70%)] blur-md"
+                      aria-hidden
+                    />
+                    <div className="relative flex h-full w-full flex-col items-center justify-center rounded-full border border-violet-300/25 bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(15,16,36,0.75)_100%)] text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_0_48px_-8px_rgba(139,92,246,0.5)] backdrop-blur-md">
+                      <Shield className="h-8 w-8 text-violet-200/90" aria-hidden />
+                      <p className="mt-2 text-lg font-semibold text-white">Protected</p>
+                      <p className="mt-1 max-w-[140px] text-[11px] leading-snug text-[rgba(255,255,255,0.55)]">
+                        Your data is encrypted and secure
                       </p>
-                      <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                        Your trusted contacts will receive supportive messages if HIGH_RISK or SAFETY_MODE is detected. Messages are privacy-safe and contain no details about your conversations or sessions.
-                      </p>
-                      <Link
-                        to="/app/settings/emergency-contacts"
-                        className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium underline"
-                      >
-                        Manage Trusted Contacts →
-                      </Link>
                     </div>
                   </div>
                 </motion.div>
-              )}
-            </div>
-          </motion.div>
-
-          {/* Data & Analytics */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-800 mb-6 transition-colors duration-300"
-          >
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Data & Analytics</h2>
-
-            <div className="space-y-4">
-              {/* Allow Analytics */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-xl transition-colors duration-300">
-                <div className="flex items-center gap-3">
-                  <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">Usage Analytics</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Help improve Ezri with usage data</p>
-                  </div>
-                </div>
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => toggleSetting("allowAnalytics")}
-                  className={`w-14 h-8 rounded-full transition-colors ${
-                    settings.allowAnalytics ? "bg-indigo-500" : "bg-gray-300 dark:bg-slate-600"
-                  }`}
-                >
-                  <motion.div
-                    animate={{ x: settings.allowAnalytics ? 24 : 2 }}
-                    className="w-6 h-6 bg-white rounded-full shadow-md"
-                  />
-                </motion.button>
               </div>
+            </section>
 
-              {/* Cookies */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-xl transition-colors duration-300">
-                <div className="flex items-center gap-3">
-                  <Lock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">Essential Cookies</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Required for app functionality</p>
-                  </div>
-                </div>
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => toggleSetting("allowCookies")}
-                  className={`w-14 h-8 rounded-full transition-colors ${
-                    settings.allowCookies ? "bg-yellow-500" : "bg-gray-300 dark:bg-slate-600"
-                  }`}
-                >
-                  <motion.div
-                    animate={{ x: settings.allowCookies ? 24 : 2 }}
-                    className="w-6 h-6 bg-white rounded-full shadow-md"
-                  />
-                </motion.button>
-              </div>
-
-              {/* Marketing Emails */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-xl transition-colors duration-300">
-                <div className="flex items-center gap-3">
-                  <UserX className="w-5 h-5 text-red-600 dark:text-red-400" />
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">Marketing Communications</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Receive promotional emails</p>
-                  </div>
-                </div>
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => toggleSetting("marketingEmails")}
-                  className={`w-14 h-8 rounded-full transition-colors ${
-                    settings.marketingEmails ? "bg-red-500" : "bg-gray-300 dark:bg-slate-600"
-                  }`}
-                >
-                  <motion.div
-                    animate={{ x: settings.marketingEmails ? 24 : 2 }}
-                    className="w-6 h-6 bg-white rounded-full shadow-md"
-                  />
-                </motion.button>
-              </div>
-
-              {/* Third Party */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-xl transition-colors duration-300">
-                <div className="flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">Third-Party Data Sharing</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Share with partner services</p>
-                  </div>
-                </div>
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => toggleSetting("thirdPartySharing")}
-                  className={`w-14 h-8 rounded-full transition-colors ${
-                    settings.thirdPartySharing ? "bg-orange-500" : "bg-gray-300 dark:bg-slate-600"
-                  }`}
-                >
-                  <motion.div
-                    animate={{ x: settings.thirdPartySharing ? 24 : 2 }}
-                    className="w-6 h-6 bg-white rounded-full shadow-md"
-                  />
-                </motion.button>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Data Management */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-800 mb-6 transition-colors duration-300"
-          >
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Data Management</h2>
-
-            <div className="space-y-3">
-              <motion.button
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                className="w-full bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-xl p-4 flex items-center justify-between transition-colors"
-                onClick={handleDownloadData}
-              >
-                <div className="flex items-center gap-3">
-                  <Download className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  <div className="text-left">
-                    <p className="font-medium text-gray-900 dark:text-white">Download My Data</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Get a copy of all your information</p>
-                  </div>
-                </div>
-                <div className="text-blue-600 dark:text-blue-400 font-medium">Export</div>
-              </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                className="w-full bg-red-50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-xl p-4 flex items-center justify-between transition-colors"
-                onClick={handleDeleteAllData}
-              >
-                <div className="flex items-center gap-3">
-                  <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
-                  <div className="text-left">
-                    <p className="font-medium text-gray-900 dark:text-white">Delete All Data</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Permanently remove all your information</p>
-                  </div>
-                </div>
-                <div className="text-red-600 dark:text-red-400 font-medium">Delete</div>
-              </motion.button>
-            </div>
-          </motion.div>
-
-          {/* HIPAA Notice */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-2 border-purple-200 dark:border-purple-800 rounded-2xl p-6 transition-colors duration-300"
-          >
-            <div className="flex items-start gap-4">
-              <Shield className="w-8 h-8 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+            {/* Account protection */}
+            <section className={cn(privacyGlassCard, "p-6 sm:p-8")}>
               <div>
-                <h3 className="font-bold text-purple-900 dark:text-purple-100 mb-2">HIPAA Compliant</h3>
-                <p className="text-sm text-purple-700 dark:text-purple-300 mb-3">
-                  Your mental health data is protected under HIPAA regulations. We encrypt all 
-                  sensitive information and never share your health records without explicit consent.
+                <h2 className={privacySectionTitle}>Account protection</h2>
+                <p className={privacySectionSubtitle}>Keep your account safe and secure</p>
+              </div>
+
+              <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <div className={privacyCompactCard}>
+                  <div className={privacyIconChip("violet")}>
+                    <Lock className="h-4 w-4" aria-hidden />
+                  </div>
+                  <motion.div>
+                    <p className="text-sm font-semibold text-white">Password</p>
+                    <p className="mt-1 text-[11px] text-[rgba(255,255,255,0.45)]">Manage in account settings</p>
+                  </motion.div>
+                  <Link to="/app/settings/account" className={privacyBtnGhost}>
+                    Change
+                  </Link>
+                </div>
+
+                <div className={privacyCompactCard}>
+                  <motion.div className={privacyIconChip("blue")}>
+                    <Shield className="h-4 w-4" aria-hidden />
+                  </motion.div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Two-factor auth</p>
+                    <p className="mt-1 text-[11px] text-[rgba(255,255,255,0.45)]">Added protection for your account</p>
+                  </div>
+                  {twoFactorEnabled ? (
+                    <span className="inline-flex w-fit rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200/90">
+                      Enabled
+                    </span>
+                  ) : (
+                    <Link to="/app/settings/account" className={privacyBtnGhost}>
+                      Enable
+                    </Link>
+                  )}
+                </div>
+
+                <div className={privacyCompactCard}>
+                  <div className={privacyIconChip("emerald")}>
+                    <ShieldCheck className="h-4 w-4" aria-hidden />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Recovery methods</p>
+                    <p className="mt-1 text-[11px] text-[rgba(255,255,255,0.45)]">Email & backup methods</p>
+                  </div>
+                  <Link to="/app/settings/account" className={privacyBtnGhost}>
+                    Manage
+                  </Link>
+                </div>
+
+                <div className={privacyCompactCard}>
+                  <div className={privacyIconChip("amber")}>
+                    <Bell className="h-4 w-4" aria-hidden />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Login alerts</p>
+                    <p className="mt-1 text-[11px] leading-snug text-[rgba(255,255,255,0.45)]">
+                      Get notified about suspicious activity
+                    </p>
+                  </div>
+                  <PrivacyToggle
+                    enabled={loginAlertsEnabled}
+                    onToggle={toggleLoginAlerts}
+                    ariaLabel="Login alerts"
+                  />
+                </div>
+
+                <div className={privacyCompactCard}>
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border-2 border-violet-400/35 bg-violet-500/10 text-lg font-semibold text-violet-100 shadow-[0_0_28px_-8px_rgba(139,92,246,0.45)]">
+                    {accountScore}
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-white">{accountScoreLabel}</p>
+                    <Link to="/app/settings/account" className={cn(privacyLinkMuted, "mt-1 justify-center")}>
+                      View details
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Active sessions */}
+            <section className={cn(privacyGlassCard, "overflow-hidden")}>
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.05] px-6 py-5">
+                <div>
+                  <h2 className={privacySectionTitle}>Active sessions</h2>
+                  <p className={privacySectionSubtitle}>Manage where you&apos;re signed in</p>
+                </div>
+                <Link to="/app/settings/account" className={privacyLinkMuted}>
+                  View all sessions
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+
+              <Link to="/app/settings/account" className={cn(privacySessionRow, "group")}>
+                <div className={privacyIconChip("cyan")}>
+                  {currentDevice.isMobile ? (
+                    <Smartphone className="h-4 w-4" aria-hidden />
+                  ) : (
+                    <Laptop className="h-4 w-4" aria-hidden />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-[rgba(255,255,255,0.92)]">{currentDevice.label}</p>
+                    <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-200/90">
+                      Current session
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-[rgba(255,255,255,0.45)]">{currentDevice.meta}</p>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-emerald-300/80">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]" />
+                  Active now
+                </div>
+                <ChevronRight className="h-5 w-5 text-[rgba(255,255,255,0.28)] group-hover:text-violet-300" />
+              </Link>
+
+              <div className={cn(privacySessionRow, "opacity-80")}>
+                <div className={privacyIconChip("blue")}>
+                  <Smartphone className="h-4 w-4" aria-hidden />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-[rgba(255,255,255,0.88)]">Other devices</p>
+                  <p className="mt-0.5 text-xs text-[rgba(255,255,255,0.42)]">Review sign-ins in account settings</p>
+                </div>
+                <span className="text-xs text-[rgba(255,255,255,0.38)]">—</span>
+                <ChevronRight className="h-5 w-5 text-[rgba(255,255,255,0.2)]" aria-hidden />
+              </div>
+            </section>
+
+            {/* Privacy controls */}
+            <section className={cn(privacyGlassCard, "overflow-hidden")}>
+              <div className="border-b border-white/[0.05] px-6 py-5">
+                <h2 className={privacySectionTitle}>Privacy controls</h2>
+                <p className={privacySectionSubtitle}>Control what you share and how your data is used</p>
+              </div>
+
+              <PrivacyControlRow
+                icon={<Eye className="h-4 w-4" />}
+                tone="violet"
+                title="Profile visibility"
+                description="Choose who can see your profile and activity"
+                control={
+                  <select
+                    value={settings.profileVisibility}
+                    onChange={(e) => updateSettings({ ...settings, profileVisibility: e.target.value })}
+                    className={privacySelect}
+                    aria-label="Profile visibility"
+                  >
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                  </select>
+                }
+              />
+
+              <PrivacyControlRow
+                icon={<Brain className="h-4 w-4" />}
+                tone="pink"
+                title="Companion memory"
+                description="Allow Solace to remember your preferences and patterns"
+                control={
+                  <PrivacyToggle
+                    enabled={settings.communityEnabled}
+                    onToggle={() => toggleSetting("communityEnabled")}
+                    ariaLabel="Companion memory"
+                  />
+                }
+              />
+
+              <PrivacyControlRow
+                icon={<BarChart3 className="h-4 w-4" />}
+                tone="cyan"
+                title="Data insights"
+                description="Allow insights to improve your experience"
+                control={
+                  <PrivacyToggle
+                    enabled={settings.shareProgress}
+                    onToggle={() => toggleSetting("shareProgress")}
+                    ariaLabel="Data insights"
+                  />
+                }
+              />
+
+              <PrivacyControlRow
+                icon={<Shield className="h-4 w-4" />}
+                tone="emerald"
+                title="Anonymous analytics"
+                description="Help improve Solace with anonymous usage data"
+                control={
+                  <PrivacyToggle
+                    enabled={settings.allowAnalytics}
+                    onToggle={() => toggleSetting("allowAnalytics")}
+                    ariaLabel="Anonymous analytics"
+                  />
+                }
+              />
+
+              <div>
+                <button
+                  type="button"
+                  className={cn(privacyRow, "w-full text-left")}
+                  onClick={() => setThirdPartyExpanded((v) => !v)}
+                  aria-expanded={thirdPartyExpanded}
+                >
+                  <div className="flex min-w-0 flex-1 items-start gap-3.5">
+                    <div className={privacyIconChip("amber")}>
+                      <Link2 className="h-4 w-4" aria-hidden />
+                    </div>
+                    <div>
+                      <p className="font-medium text-[rgba(255,255,255,0.92)]">Third-party services</p>
+                      <p className="mt-1 text-sm text-[rgba(255,255,255,0.45)]">
+                        Manage data shared with third-party services
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight
+                    className={cn(
+                      "h-5 w-5 shrink-0 text-[rgba(255,255,255,0.35)] transition-transform",
+                      thirdPartyExpanded && "rotate-90"
+                    )}
+                  />
+                </button>
+
+                {thirdPartyExpanded ? (
+                  <div className="border-t border-white/[0.05] bg-black/20 px-4 pb-4 sm:px-6">
+                    <PrivacyControlRow
+                      icon={<Link2 className="h-4 w-4" />}
+                      tone="amber"
+                      title="Third-party data sharing"
+                      description="Share with partner services"
+                      control={
+                        <PrivacyToggle
+                          enabled={settings.thirdPartySharing}
+                          onToggle={() => toggleSetting("thirdPartySharing")}
+                          ariaLabel="Third-party data sharing"
+                        />
+                      }
+                    />
+                    <PrivacyControlRow
+                      icon={<Bell className="h-4 w-4" />}
+                      tone="rose"
+                      title="Marketing communications"
+                      description="Receive promotional emails"
+                      control={
+                        <PrivacyToggle
+                          enabled={settings.marketingEmails}
+                          onToggle={() => toggleSetting("marketingEmails")}
+                          ariaLabel="Marketing communications"
+                        />
+                      }
+                    />
+                    <PrivacyControlRow
+                      icon={<Lock className="h-4 w-4" />}
+                      tone="violet"
+                      title="Essential cookies"
+                      description="Required for app functionality"
+                      control={
+                        <PrivacyToggle
+                          enabled={settings.allowCookies}
+                          onToggle={() => toggleSetting("allowCookies")}
+                          ariaLabel="Essential cookies"
+                        />
+                      }
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Trusted contact notifications — preserved from prior page */}
+              <div className="border-t border-white/[0.05] bg-violet-500/[0.04]">
+                <PrivacyControlRow
+                  icon={<Heart className="h-4 w-4" />}
+                  tone="pink"
+                  title="Trusted contact notifications"
+                  description="Allow trusted contacts to receive supportive check-in messages when our safety system detects you may need extra support"
+                  control={
+                    <PrivacyToggle
+                      enabled={consent.trustedContactEnabled}
+                      onToggle={() => updateConsent({ trustedContactEnabled: !consent.trustedContactEnabled })}
+                      ariaLabel="Trusted contact notifications"
+                    />
+                  }
+                />
+                {consent.trustedContactEnabled ? (
+                  <div className="mx-4 mb-4 rounded-2xl border border-blue-400/15 bg-blue-500/[0.08] p-4 sm:mx-6">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-blue-300/80" aria-hidden />
+                      <div>
+                        <p className="text-sm font-medium text-blue-100/95">Trusted contact notifications enabled</p>
+                        <p className="mt-1 text-xs leading-relaxed text-[rgba(255,255,255,0.5)]">
+                          Messages are privacy-safe and contain no details about your conversations or sessions.
+                        </p>
+                        <Link
+                          to="/app/settings/emergency-contacts"
+                          className={cn(privacyLinkMuted, "mt-2")}
+                        >
+                          Manage trusted contacts
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </Link>
+                        <Link
+                          to="/app/settings/emergency-notifications"
+                          className={cn(privacyLinkMuted, "mt-2 ml-4")}
+                        >
+                          Emergency notice history
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+
+            {/* Data management */}
+            <section className={cn(privacyGlassCard, "p-6 sm:p-8")}>
+              <div>
+                <h2 className={privacySectionTitle}>Data management</h2>
+                <p className={privacySectionSubtitle}>Your data belongs to you</p>
+              </div>
+
+              <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className={privacyDataCard}>
+                  <div className={privacyIconChip("cyan")}>
+                    <Download className="h-4 w-4" aria-hidden />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white">Export your data</p>
+                    <p className="mt-2 text-sm leading-relaxed text-[rgba(255,255,255,0.48)]">
+                      Download a copy of all your data including journals, insights, and account information.
+                    </p>
+                  </div>
+                  <button type="button" onClick={handleDownloadData} className={privacyBtnPrimary}>
+                    Export data
+                  </button>
+                </div>
+
+                <div
+                  className={cn(
+                    privacyDataCard,
+                    "border-rose-500/12 bg-[linear-gradient(165deg,rgba(76,5,25,0.18)_0%,rgba(12,10,20,0.65)_100%)]"
+                  )}
+                >
+                  <div className={privacyIconChip("rose")}>
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white">Delete your data</p>
+                    <p className="mt-2 text-sm leading-relaxed text-[rgba(255,255,255,0.48)]">
+                      Permanently delete your account and all associated data. This action cannot be undone.
+                    </p>
+                  </div>
+                  <button type="button" onClick={handleDeleteAllData} className={privacyBtnRose}>
+                    Delete account
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            {/* Commitment banner */}
+            <section className={privacyCommitmentBanner}>
+              <img src={PRIVACY_BANNER_IMG} alt="" className="absolute inset-0 h-full w-full object-cover brightness-[0.4] saturate-[1.08]" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#0a0b18]/95 via-[#0a0b18]/75 to-[#0a0b18]/55" aria-hidden />
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_80%_at_0%_50%,rgba(139,92,246,0.15)_0%,transparent_55%)]" aria-hidden />
+
+              <div className="relative flex flex-col gap-6 sm:flex-row sm:items-start">
+                <motion.div className={cn(privacyIconChip("violet"), "h-14 w-14 shrink-0 [&_svg]:h-7 [&_svg]:w-7")}>
+                  <Shield className="h-7 w-7" aria-hidden />
+                </motion.div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-serif text-2xl font-light text-white sm:text-[1.65rem]">
+                    Your wellbeing. Our responsibility.
+                  </h2>
+                  <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[rgba(255,255,255,0.55)] sm:text-[15px]">
+                    We follow industry-leading security practices and HIPAA-aligned standards to keep your data
+                    private, secure, and respected.
+                  </p>
+                  <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-xs">
+                    <Link to="/privacy" className={privacyLinkMuted}>
+                      Privacy Policy
+                    </Link>
+                    <Link to="/terms" className={privacyLinkMuted}>
+                      Terms of Service
+                    </Link>
+                    <Link to="/privacy" className={privacyLinkMuted}>
+                      HIPAA Compliance
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          {/* Right security rail */}
+          <aside className="w-full space-y-4 xl:sticky xl:top-6 xl:self-start">
+            <div className={privacyRailCard}>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]" />
+                <p className="text-xs font-medium text-emerald-200/90">All systems secure</p>
+              </div>
+              <h2 className="mt-3 text-sm font-semibold text-[rgba(255,255,255,0.92)]">Security status</h2>
+              <div className="mt-5 flex flex-col items-center py-2 text-center">
+                <div className="relative flex h-28 w-28 items-center justify-center rounded-full border-2 border-emerald-400/25 bg-emerald-500/[0.06] shadow-[0_0_36px_-10px_rgba(52,211,153,0.35)]">
+                  <Shield className="h-8 w-8 text-emerald-200/90" aria-hidden />
+                </div>
+                <p className="mt-4 text-lg font-semibold text-white">{accountScoreLabel}</p>
+                <p className="mt-1 text-xs text-[rgba(255,255,255,0.48)]">
+                  Your account is protected and up to date.
                 </p>
-                <div className="flex gap-2">
-                  <Link
-                    to="/privacy"
-                    className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium underline"
-                  >
-                    Privacy Policy
-                  </Link>
-                  <span className="text-purple-400 dark:text-purple-600">•</span>
-                  <Link
-                    to="/terms"
-                    className="text-sm text-purple-600 hover:text-purple-700 font-medium underline"
-                  >
-                    Terms of Service
-                  </Link>
+              </div>
+            </div>
+
+            <div className={privacyRailCard}>
+              <div className={privacyIconChip("violet")}>
+                <Shield className="h-4 w-4" aria-hidden />
+              </div>
+              <h2 className="mt-3 text-sm font-semibold text-[rgba(255,255,255,0.92)]">Privacy promise</h2>
+              <p className="mt-2 text-xs leading-relaxed text-[rgba(255,255,255,0.5)]">
+                We never sell your data. Your emotional privacy is our highest priority.
+              </p>
+              <Link to="/privacy" className={cn(privacyLinkMuted, "mt-3")}>
+                Learn more
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+
+            <div className={privacyRailCard}>
+              <div className={privacyIconChip("rose")}>
+                <Heart className="h-4 w-4" aria-hidden />
+              </div>
+              <h2 className="mt-3 text-sm font-semibold text-[rgba(255,255,255,0.92)]">Emergency access</h2>
+              <p className="mt-2 text-xs leading-relaxed text-[rgba(255,255,255,0.5)]">
+                In a crisis, trusted contacts you&apos;ve chosen can receive limited information to help keep you safe.
+              </p>
+              <Link to="/app/settings/emergency-contacts" className={cn(privacyLinkMuted, "mt-3")}>
+                Manage contacts
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+
+            <motion.div className={privacyRailCard}>
+              <div className={privacyIconChip("pink")}>
+                <MessageCircle className="h-4 w-4" aria-hidden />
+              </div>
+              <h2 className="mt-3 text-sm font-semibold text-[rgba(255,255,255,0.92)]">Need reassurance?</h2>
+              <p className="mt-2 text-xs leading-relaxed text-[rgba(255,255,255,0.5)]">
+                Our support team is here to help with any privacy or security concerns.
+              </p>
+              <Link to="/app/settings/help-support" className={cn(privacyBtnPrimary, "mt-4 w-full")}>
+                Contact support
+              </Link>
+            </motion.div>
+
+            <div className={cn(privacyRailCard, "overflow-hidden p-0")}>
+              <div className="p-5 sm:p-6">
+                <h2 className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">End-to-end encryption</h2>
+                <p className="mt-2 text-xs leading-relaxed text-[rgba(255,255,255,0.5)]">
+                  All journal entries, messages, and personal data are encrypted in transit and at rest.
+                </p>
+              </div>
+              <div className="relative h-36 overflow-hidden">
+                <img src={PRIVACY_ENCRYPTION_IMG} alt="" className="h-full w-full object-cover brightness-[0.45] saturate-[1.05]" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0b18] via-[#0a0b18]/40 to-transparent" />
+                <div className="absolute inset-0 flex items-end justify-center pb-5">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-300/30 bg-amber-500/15 shadow-[0_0_32px_-6px_rgba(251,191,36,0.45)]">
+                    <Lock className="h-5 w-5 text-amber-200/90" aria-hidden />
+                  </div>
                 </div>
               </div>
             </div>
-          </motion.div>
-        </div>
+          </aside>
+        </motion.div>
       </div>
+    </motion.div>
   );
 }

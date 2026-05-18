@@ -10,7 +10,11 @@ const notificationsUnreadCountCache = new Map<string, { data: number; timestamp:
 const NOTIFICATIONS_CACHE_TTL = 5 * 1000; // 5 seconds
 
 function clearNotificationCachesForUser(userId: string) {
-  notificationsListCache.delete(userId);
+  for (const key of notificationsListCache.keys()) {
+    if (key === userId || key.startsWith(`${userId}:`)) {
+      notificationsListCache.delete(key);
+    }
+  }
   notificationsUnreadCountCache.delete(userId);
 }
 
@@ -370,18 +374,42 @@ export const notificationsService = {
     return result;
   },
 
-  async findAll(userId: string) {
-    const cached = notificationsListCache.get(userId);
+  async findPaginated(userId: string, page = 1, limit = 20) {
+    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const safePage = Math.max(Number(page) || 1, 1);
+    const skip = (safePage - 1) * safeLimit;
+    const cacheKey = `${userId}:${safePage}:${safeLimit}`;
+
+    const cached = notificationsListCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < NOTIFICATIONS_CACHE_TTL) {
       return cached.data;
     }
-    const data = await prisma.notifications.findMany({
-      where: { user_id: userId },
-      orderBy: { created_at: 'desc' },
-      take: 50,
-    });
-    notificationsListCache.set(userId, { data, timestamp: Date.now() });
+
+    const [notifications, total] = await Promise.all([
+      prisma.notifications.findMany({
+        where: { user_id: userId },
+        orderBy: { created_at: 'desc' },
+        take: safeLimit,
+        skip,
+      }),
+      prisma.notifications.count({
+        where: { user_id: userId },
+      }),
+    ]);
+
+    const data = {
+      notifications,
+      total,
+      page: safePage,
+      pageSize: safeLimit,
+    };
+    notificationsListCache.set(cacheKey, { data, timestamp: Date.now() });
     return data;
+  },
+
+  /** @deprecated Use findPaginated — kept for internal callers defaulting to page 1. */
+  async findAll(userId: string) {
+    return this.findPaginated(userId, 1, 50);
   },
 
   async markAsRead(id: string, userId: string) {

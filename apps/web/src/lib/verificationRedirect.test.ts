@@ -20,7 +20,6 @@ describe("verificationRedirect (trial) local vs prod base URL", () => {
     // simulate local dev origin
     // @ts-expect-error override
     delete window.location;
-    // @ts-expect-error override
     window.location = new URL("http://localhost:5173/signup") as any;
 
     const mod = await import("./verificationRedirect");

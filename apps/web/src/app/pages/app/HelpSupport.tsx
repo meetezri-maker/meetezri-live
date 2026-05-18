@@ -1,22 +1,15 @@
 import { motion } from "motion/react";
-import { 
+import {
   HelpCircle,
-  Search,
-  BadgeCheck,
   BookOpen,
   MessageCircle,
   Mail,
-  Phone,
   Send,
-  ArrowLeft,
   FileText,
   Video,
   Users,
   ExternalLink,
-  Clock,
   CheckCircle,
-  AlertCircle,
-  ShieldAlert,
   X,
   ChevronDown,
 } from "lucide-react";
@@ -25,7 +18,18 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDistanceToNow, parseISO } from "date-fns";
-import { cn } from "@/app/components/ui/utils";
+import { cn } from "@/lib/utils";
+import {
+  SanctuaryPageShell,
+  SupportHero,
+  SupportActionCards,
+  SupportConversations,
+  GuidedComfortTopics,
+  SupportBottomBanner,
+  SupportRightRail,
+  BackToSettingsLink,
+  glassPanel,
+} from "./help-support/HelpSupportSanctuary";
 
 export function HelpSupport() {
   const [showContactForm, setShowContactForm] = useState(false);
@@ -182,29 +186,35 @@ export function HelpSupport() {
 
   const faqs = [
     {
-      question: "How do I start a Talk?",
-      answer: "Navigate to the Talk It Out tab from your dashboard and click 'Start Talk'. Choose your preferred Avatar and begin your talk."
+      question: "Is my data private and secure?",
+      answer:
+        "Yes. Your conversations are protected with strong encryption, and we never share your personal health information without your explicit consent. You control your data in Privacy & Security settings.",
     },
     {
-      question: "Is my data private and secure?",
-      answer: "Yes! All your conversations are encrypted end-to-end and comply with HIPAA regulations. We never share your personal health information without explicit consent."
+      question: "What if I'm feeling emotionally distressed?",
+      answer:
+        "You're not alone. Use Crisis Support or Emergency Resources for immediate help. You can also start a Talk It Out session or reach our support team — we're here with compassion, not judgment.",
     },
     {
       question: "How does mood tracking work?",
-      answer: "Visit the Mood Tracker from your dashboard to log your current mood, intensity, and add notes. Track patterns over time with our analytics dashboard."
+      answer:
+        "Visit Mood from your dashboard to log how you feel, add intensity and notes, and notice patterns over time. Small check-ins can help you understand yourself with more kindness.",
     },
     {
       question: "Can I export my journal entries?",
-      answer: "Yes! Go to Privacy & Security settings and select 'Download My Data' to export all your information including journal entries."
+      answer:
+        "Yes. Go to Settings → Privacy & Security and choose Download My Data to export your information, including journal entries, whenever you need them.",
     },
     {
-      question: "What are emergency resources?",
-      answer: "Helpful resources provide immediate help emergencies. Access them 24/7 from the Wellness Tools section or the emergency button on your dashboard."
+      question: "How do I manage notifications?",
+      answer:
+        "Open Settings → Notifications to customize alerts, reminders, and updates so they feel supportive — not overwhelming.",
     },
     {
-      question: "How do I change my notification settings?",
-      answer: "Go to Settings > Notifications to Customize Alerts, Reminders, and Updates according to your preferences."
-    }
+      question: "What safety tools are available?",
+      answer:
+        "Your Safety Plan, emergency contacts, and Emergency Resources are always available from Settings and Wellness Tools. If you're in immediate danger, please contact local emergency services or 988 (U.S.).",
+    },
   ];
 
   const filteredSolaceFaqs = useMemo(() => {
@@ -338,187 +348,102 @@ export function HelpSupport() {
     void loadTickets();
   }, []);
 
+  const inputClass =
+    "w-full rounded-xl border border-white/10 bg-black/35 px-4 py-2.5 text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/40";
+
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <Link 
-            to="/app/settings" 
-            className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white mb-6 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Settings
-          </Link>
-
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
-              <HelpCircle className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Support Center</h1>
-              <p className="text-gray-600 dark:text-gray-400">Solace support, resources, and answers.</p>
-            </div>
+    <>
+      <SanctuaryPageShell>
+        <div className="flex flex-col gap-8 xl:flex-row xl:items-start">
+          <div className="min-w-0 flex-1 space-y-8">
+            <SupportHero backLink={<BackToSettingsLink />} />
+            <SupportActionCards
+              onTalkToSupport={() => setShowContactForm(true)}
+              onResourceGuide={() => handleResourceClick("User Guide")}
+              onCommunityHelp={() => handleResourceClick("Community Forum")}
+            />
+            <SupportConversations
+              tickets={tickets}
+              ticketsLoading={ticketsLoading}
+              onRefresh={() => void loadTickets()}
+              onOpenTicket={(id) => void openTicket(id)}
+            />
+            <GuidedComfortTopics
+              faqs={faqs}
+              openIndex={openGeneralFaq}
+              onToggle={(idx) => setOpenGeneralFaq(openGeneralFaq === idx ? null : idx)}
+            />
+            <SupportBottomBanner />
           </div>
-        </motion.div>
+          <SupportRightRail />
+        </div>
+      </SanctuaryPageShell>
 
-        {/* My tickets */}
+      {showContactForm && (
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.12 }}
-          className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 mb-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md"
+          onClick={() => setShowContactForm(false)}
         >
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">My support tickets</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                View your recent requests and replies from the support team.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void loadTickets()}
-              className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-sm font-semibold"
-              disabled={ticketsLoading}
-            >
-              {ticketsLoading ? "Refreshing..." : "Refresh"}
-            </button>
-          </div>
-
-          {ticketsLoading && tickets.length === 0 ? (
-            <div className="py-8 text-center text-sm text-gray-600 dark:text-gray-400">Loading tickets…</div>
-          ) : tickets.length === 0 ? (
-            <div className="py-8 text-center text-sm text-gray-600 dark:text-gray-400">
-              No tickets yet. Use “Contact Support” to create your first one.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {tickets.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => void openTicket(t.id)}
-                  className="w-full text-left rounded-2xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-950 hover:bg-gray-100 dark:hover:bg-slate-900 transition-colors p-4"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="font-bold text-gray-900 dark:text-gray-100 truncate">{t.subject}</div>
-                      <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        Updated{" "}
-                        {(() => {
-                          try {
-                            return formatDistanceToNow(parseISO(t.updated_at), { addSuffix: true });
-                          } catch {
-                            return "recently";
-                          }
-                        })()}
-                        {" • "}
-                        Status: <span className="font-semibold">{t.status || "open"}</span>
-                        {" • "}
-                        Priority: <span className="font-semibold">{t.priority || "medium"}</span>
-                      </div>
-                    </div>
-                    <div className="shrink-0">
-                      <span className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 dark:text-blue-400">
-                        View
-                        <ExternalLink className="w-4 h-4" />
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </motion.div>
-
-  
-
-        {/* Quick Help Cards */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8"
-        >
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setShowContactForm(!showContactForm)}
-            className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl p-6 shadow-lg text-left"
-          >
-            <MessageCircle className="w-8 h-8 mb-3" />
-            <h3 className="font-bold text-lg mb-1">Contact Support</h3>
-            <p className="text-sm text-blue-100">Send us a message and we'll respond within 24 hours</p>
-          </motion.button>
-
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => handleResourceClick("User Guide")}
-            className="bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white rounded-2xl p-6 shadow-lg text-left"
-          >
-            <BookOpen className="w-8 h-8 mb-3" />
-            <h3 className="font-bold text-lg mb-1">User Guide</h3>
-            <p className="text-sm text-violet-100">Step-by-step guide for sessions, tools, and settings</p>
-          </motion.button>
-        </motion.div>
-
-        {/* Contact Form */}
-        {showContactForm && (
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 mb-6"
+            initial={{ scale: 0.96, y: 16 }}
+            animate={{ scale: 1, y: 0 }}
+            onClick={(e) => e.stopPropagation()}
+            className={cn(glassPanel, "w-full max-w-lg p-6 sm:p-7")}
           >
-            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Send us a message</h2>
-            
-            {submitted ? (
-              <motion.div
-                initial={{ scale: 0.9 }}
-                animate={{ scale: 1 }}
-                className="text-center py-8"
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-serif text-xl font-light text-zinc-50">Send us a message</h2>
+                <p className="mt-1 text-sm text-zinc-500">We&apos;ll respond with care within 24 hours.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowContactForm(false)}
+                className="rounded-xl border border-white/10 p-2 text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200"
+                aria-label="Close"
               >
-                <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Message Sent!</h3>
-                <p className="text-gray-600 dark:text-gray-400">We'll get back to you within 24 hours.</p>
-              </motion.div>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {submitted ? (
+              <div className="py-8 text-center">
+                <CheckCircle className="mx-auto mb-4 h-14 w-14 text-emerald-400" />
+                <h3 className="font-serif text-lg font-light text-zinc-50">Message sent</h3>
+                <p className="mt-2 text-sm text-zinc-500">We&apos;ll get back to you within 24 hours.</p>
+              </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-300">Name</label>
                   <input
                     type="text"
                     required
                     value={contactForm.name}
                     onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={inputClass}
                     placeholder="Your name"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-300">Email</label>
                   <input
                     type="email"
                     required
                     value={contactForm.email}
                     onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={inputClass}
                     placeholder="your@email.com"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-300">Subject</label>
                   <select
                     required
                     value={contactForm.subject}
                     onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={inputClass}
                   >
                     <option value="">Select a topic</option>
                     <option value="technical">Technical Issue</option>
@@ -528,163 +453,53 @@ export function HelpSupport() {
                     <option value="other">Other</option>
                   </select>
                 </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Message</label>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-300">Message</label>
                   <textarea
                     required
                     value={contactForm.message}
                     onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
                     rows={4}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className={cn(inputClass, "resize-none")}
                     placeholder="Tell us how we can help..."
                   />
                 </div>
-
-                <div className="flex gap-3">
+                <div className="flex gap-3 pt-1">
                   <button
                     type="button"
                     onClick={() => setShowContactForm(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-gray-900 dark:text-gray-100"
+                    className="flex-1 rounded-xl border border-white/10 px-4 py-2.5 text-sm text-zinc-200 hover:bg-white/[0.05]"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_0_24px_rgba(139,92,246,0.3)]"
                   >
-                    <Send className="w-4 h-4" />
-                    Send Message
+                    <Send className="h-4 w-4" />
+                    Send message
                   </button>
                 </div>
               </form>
             )}
           </motion.div>
-        )}
-
-        {/* Resources */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="mb-8"
-        >
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Help Resources</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {resources.map((resource, index) => {
-              const Icon = resource.icon;
-              return (
-                <motion.button
-                  key={index}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => handleResourceClick(resource.title)}
-                  className="bg-white dark:bg-slate-900 rounded-xl p-5 shadow-md border border-gray-100 dark:border-slate-700 hover:shadow-lg transition-all text-left"
-                >
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${resource.color} flex items-center justify-center mb-3`}>
-                    <Icon className="w-6 h-6 text-white" />
-                  </div>
-                  <h3 className="font-bold text-gray-900 dark:text-gray-100 mb-1">{resource.title}</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{resource.description}</p>
-                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-sm font-medium">
-                    {resource.action}
-                    <ExternalLink className="w-3 h-3" />
-                  </div>
-                </motion.button>
-              );
-            })}
-          </div>
         </motion.div>
+      )}
 
-        {/* FAQs */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-slate-700 mb-6"
-        >
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">General FAQs</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">Common questions about Ezri features.</p>
-
-          <div className="space-y-3">
-            {faqs.map((faq, idx) => {
-              const open = openGeneralFaq === idx;
-              return (
-                <div
-                  key={`${faq.question}-${idx}`}
-                  className="rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setOpenGeneralFaq(open ? null : idx)}
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left bg-gray-50 dark:bg-slate-800/60 hover:bg-gray-100/80 dark:hover:bg-slate-800 transition-colors"
-                    aria-expanded={open}
-                  >
-                    <div className="flex min-w-0 flex-1 items-start gap-2 font-semibold text-gray-900 dark:text-gray-100">
-                      <HelpCircle className="w-5 h-5 shrink-0 text-blue-600 dark:text-blue-400 mt-0.5" />
-                      <span>{faq.question}</span>
-                    </div>
-                    <ChevronDown
-                      className={cn(
-                        "h-5 w-5 shrink-0 text-gray-500 transition-transform duration-200 dark:text-gray-400",
-                        open && "rotate-180",
-                      )}
-                      aria-hidden
-                    />
-                  </button>
-
-                  {open && (
-                    <div className="px-4 py-4 bg-white dark:bg-slate-900">
-                      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{faq.answer}</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </motion.div>
-
-        {/* Contact Info */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-slate-900 dark:to-slate-900 border-2 border-indigo-200 dark:border-slate-700 rounded-2xl p-6"
-        >
-          <div className="flex items-start gap-4">
-            <Clock className="w-6 h-6 text-indigo-600 dark:text-indigo-300 flex-shrink-0 mt-1" />
-            <div>
-              <h3 className="font-bold text-indigo-900 dark:text-gray-100 mb-2">Support Hours</h3>
-              <p className="text-sm text-indigo-700 dark:text-gray-300 mb-3">
-                Our support team is available Monday - Friday, 9am - 6pm EST. For urgent matters outside these hours, please use our emergency support line or 988.
-              </p>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-indigo-800 dark:text-gray-200">
-                  <Mail className="w-4 h-4" />
-                  <span>support@ezri.health</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-indigo-800 dark:text-gray-200">
-                  <Phone className="w-4 h-4" />
-                  <span>1-800-EZRI-HELP (1-800-397-4435)</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </motion.div>
 
         {/* Resource Modal */}
         {showResourceModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md"
             onClick={() => setShowResourceModal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl shadow-2xl border border-gray-100 dark:border-slate-700 overflow-hidden"
+              className={cn(glassPanel, "w-full max-w-4xl overflow-hidden")}
             >
               <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-gray-100 dark:border-slate-700">
                 <div className="flex items-center gap-3 min-w-0">
@@ -982,7 +797,7 @@ export function HelpSupport() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md"
             onClick={() => {
               setTicketModalOpen(false);
               setActiveTicketId(null);
@@ -994,7 +809,7 @@ export function HelpSupport() {
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-3xl shadow-2xl border border-gray-100 dark:border-slate-700 overflow-hidden"
+              className={cn(glassPanel, "w-full max-w-3xl overflow-hidden")}
             >
               <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-gray-100 dark:border-slate-700">
                 <div className="min-w-0">
@@ -1124,6 +939,6 @@ export function HelpSupport() {
             </motion.div>
           </motion.div>
         )}
-      </div>
+    </>
   );
 }

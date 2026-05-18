@@ -21,6 +21,10 @@ export const queryKeys = {
     all: () => ["notifications"] as const,
     byUser: (userId: string | undefined) =>
       ["notifications", userId] as const,
+    list: (
+      userId: string | undefined,
+      params?: { page?: number; pageSize?: number }
+    ) => ["notifications", "list", userId, params] as const,
   },
   profile: {
     all: () => ["profile"] as const,

@@ -4,13 +4,93 @@ import { useAuth } from "../contexts/AuthContext";
 import { PublicNav } from "../components/PublicNav";
 import { BrandLogo } from "../components/BrandLogo";
 import { Button } from "../components/ui/button";
-import { Card } from "../components/ui/card";
-import { AnimatedCard } from "../components/AnimatedCard";
-import { FloatingElement } from "../components/FloatingElement";
 import { motion } from "motion/react";
-import { Heart, Video, Shield, Clock, Sparkles, CheckCircle2, ArrowRight, Star, Zap, Check, Crown, Loader2 } from "lucide-react";
+import {
+  Heart,
+  Video,
+  Shield,
+  Clock,
+  Sparkles,
+  CheckCircle2,
+  ArrowRight,
+  Star,
+  Zap,
+  Check,
+  Crown,
+  Loader2,
+  Twitter,
+  Instagram,
+  Facebook,
+  Youtube,
+} from "lucide-react";
 import { SUBSCRIPTION_PLANS } from "../utils/subscriptionPlans";
 import type { PlanTier } from "../utils/subscriptionPlans";
+import { LandingBackground } from "../landing/LandingBackground";
+import { LandingHeroScene } from "../landing/LandingHeroScene";
+import { LandingGlowCard } from "../landing/LandingGlowCard";
+import { cn } from "@/lib/utils";
+
+const WHY_FEATURES = [
+  {
+    icon: Video,
+    title: "FaceTime Talk it out",
+    description:
+      "Connect through natural video conversations whenever you need support",
+    glow: "purple" as const,
+    iconClass: "from-violet-500/90 to-fuchsia-600/90 shadow-[0_0_20px_rgba(168,85,247,0.5)]",
+  },
+  {
+    icon: Heart,
+    title: "Mood Tracking",
+    description: "Track your emotional journey with insights and trends over time",
+    glow: "green" as const,
+    iconClass: "from-emerald-400/90 to-green-600/90 shadow-[0_0_20px_rgba(52,211,153,0.45)]",
+  },
+  {
+    icon: Shield,
+    title: "Private & Secure",
+    description: "Your conversations are encrypted and your data is always protected",
+    glow: "blue" as const,
+    iconClass: "from-blue-400/90 to-indigo-600/90 shadow-[0_0_20px_rgba(96,165,250,0.45)]",
+  },
+  {
+    icon: Clock,
+    title: "24/7 Available",
+    description: "Get support whenever you need it, day or night",
+    glow: "amber" as const,
+    iconClass: "from-amber-400/90 to-orange-500/90 shadow-[0_0_20px_rgba(251,191,36,0.45)]",
+  },
+] as const;
+
+const STEPS = [
+  {
+    step: 1,
+    title: "Sign Up & Onboard",
+    description:
+      "Create your account and complete a quick wellness baseline to help Solace understand you better",
+    icon: CheckCircle2,
+    glow: "green" as const,
+    iconGlow: "text-emerald-300 drop-shadow-[0_0_28px_rgba(52,211,153,0.65)]",
+  },
+  {
+    step: 2,
+    title: "Connect With Solace",
+    description:
+      "Start a FaceTime-style session whenever you need to talk, decompress, or get guided support",
+    icon: Video,
+    glow: "pink" as const,
+    iconGlow: "text-pink-300 drop-shadow-[0_0_28px_rgba(236,72,153,0.65)]",
+  },
+  {
+    step: 3,
+    title: "Track & Improve",
+    description:
+      "Monitor your mood, journal your thoughts, and access wellness tools designed for your needs",
+    icon: Heart,
+    glow: "pink" as const,
+    iconGlow: "text-pink-300 drop-shadow-[0_0_28px_rgba(236,72,153,0.65)]",
+  },
+] as const;
 
 export function Landing() {
   const { user, isLoading } = useAuth();
@@ -19,25 +99,20 @@ export function Landing() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
   useEffect(() => {
-    // Scroll to hash if present
-    if (location.hash === '#pricing') {
+    if (location.hash === "#pricing") {
       setTimeout(() => {
-        const el = document.getElementById('pricing');
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth' });
-        }
+        const el = document.getElementById("pricing");
+        if (el) el.scrollIntoView({ behavior: "smooth" });
       }, 100);
     }
 
-    // 1. Immediate redirect if auth params are present (Implicit or PKCE)
     const hash = location.hash;
     const search = location.search;
 
-    // Invite magic links sometimes land on Site URL `/` with type=invite in the hash — send them to the password page.
     if (
       hash &&
-      hash.includes('type=invite') &&
-      (hash.includes('access_token') || hash.includes('error='))
+      hash.includes("type=invite") &&
+      (hash.includes("access_token") || hash.includes("error="))
     ) {
       navigate(`/invite/create-password${search}${hash}`);
       return;
@@ -45,663 +120,617 @@ export function Landing() {
 
     if (
       (hash &&
-        (hash.includes('access_token') ||
-          hash.includes('type=recovery') ||
-          hash.includes('error='))) ||
-      (search && (search.includes('code=') || search.includes('error=')))
+        (hash.includes("access_token") ||
+          hash.includes("type=recovery") ||
+          hash.includes("error="))) ||
+      (search && (search.includes("code=") || search.includes("error=")))
     ) {
       navigate(`/auth/callback${search}${hash}`);
-      return;
     }
-
-    // 2. Do NOT auto-redirect logged-in users away from home.
-    //    They should stay on `/` unless they explicitly start onboarding
-    //    or navigate via another flow (login, auth callback, etc.).
   }, [user, isLoading, navigate, location]);
 
-  // Show loader if we are about to redirect (auth params present)
   const isAuthRedirect =
     (location.hash &&
-      (location.hash.includes('access_token') ||
-        location.hash.includes('type=recovery') ||
-        location.hash.includes('type=invite'))) ||
-    (location.search && location.search.includes('code='));
+      (location.hash.includes("access_token") ||
+        location.hash.includes("type=recovery") ||
+        location.hash.includes("type=invite"))) ||
+    (location.search && location.search.includes("code="));
 
   if (isAuthRedirect) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+      <div className="flex min-h-screen items-center justify-center bg-[#050816]">
+        <Loader2 className="h-10 w-10 animate-spin text-violet-400" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white via-purple-50/30 to-white overflow-hidden">
-      <PublicNav />
-      
-      {/* Hero Section with Floating Elements */}
-      <section className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 md:pt-20 pb-16">
-        {/* Floating background elements */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <FloatingElement delay={0} duration={4} yOffset={30}>
-            <div className="absolute top-20 left-10 w-20 h-20 bg-primary/10 rounded-full blur-2xl" />
-          </FloatingElement>
-          <FloatingElement delay={1} duration={5} yOffset={25}>
-            <div className="absolute top-40 right-20 w-32 h-32 bg-accent/10 rounded-full blur-2xl" />
-          </FloatingElement>
-          <FloatingElement delay={2} duration={6} yOffset={35}>
-            <div className="absolute bottom-20 left-1/4 w-24 h-24 bg-secondary/10 rounded-full blur-2xl" />
-          </FloatingElement>
-        </div>
-        
-        <div className="relative z-10 text-center max-w-3xl mx-auto">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full mb-6"
-          >
+    <div className="solace-landing relative min-h-screen overflow-x-hidden">
+      <LandingBackground />
+
+      <div className="relative z-10">
+        <PublicNav variant="cinematic" />
+
+        {/* Hero — centered, lake/lantern scene contained here only */}
+        <LandingHeroScene>
+          <div className="landing-section flex flex-col items-center justify-center px-4 py-16 text-center sm:py-20">
             <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45 }}
+              className="mb-5 inline-flex items-center gap-2 rounded-full border border-pink-500/30 bg-[#1a0f24]/80 px-4 py-1.5 text-sm font-medium text-pink-100/95 shadow-[0_0_20px_-4px_rgba(236,72,153,0.4)] backdrop-blur-sm"
             >
-              <Sparkles className="w-4 h-4 text-primary" />
+              <Sparkles className="h-3.5 w-3.5 text-pink-300" />
+              Your AI-Powered Wellness Companion
             </motion.div>
-            <span className="text-sm text-primary font-medium">Your AI-Powered Wellness Companion</span>
-          </motion.div>
-          
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent leading-tight"
-          >
-            Talk to Solace.
-            <br />
-            Feel Better.
-          </motion.h1>
-          
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="text-lg md:text-xl text-muted-foreground mb-8 px-4"
-          >
-            Connect with your Solace avatar through FaceTime-style sessions. 
-            Available 24/7 for support, mood tracking, and guided wellness tools.
-          </motion.p>
-          
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center px-4"
-          >
-            <div onClick={() => localStorage.setItem('selectedPlan', 'trial')}>
-              <Link to="/signup" className="w-full sm:w-auto">
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="w-full"
-                >
-                  <Button size="lg" className="w-full sm:w-auto group relative overflow-hidden">
-                    <span className="relative z-10 flex items-center gap-2">
-                      Start Your Trial
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                    </span>
-                    <motion.div
-                      className="absolute inset-0 bg-gradient-to-r from-accent to-secondary"
-                      initial={{ x: "-100%" }}
-                      whileHover={{ x: 0 }}
-                      transition={{ duration: 0.3 }}
-                    />
-                  </Button>
-                </motion.div>
-              </Link>
-            </div>
-            <Link to="/how-it-works" className="w-full sm:w-auto">
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="w-full"
-              >
-                <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                  Learn More
-                </Button>
-              </motion.div>
-            </Link>
-          </motion.div>
-          
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.8 }}
-            className="text-sm text-muted-foreground mt-6 flex items-center justify-center gap-2 flex-wrap px-4"
-          >
-            <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-4 h-4 text-secondary" />
-              No credit card required
-            </span>
-            <span>•</span>
-            <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-4 h-4 text-secondary" />
-              7-day trial
-            </span>
-            <span>•</span>
-            <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-4 h-4 text-secondary" />
-              Cancel anytime
-            </span>
-          </motion.p>
-        </div>
-      </section>
-      
-      {/* Features Grid with 3D Cards */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <motion.h2
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-3xl md:text-4xl font-bold text-center mb-12"
-        >
-          Why Choose Solace?
-        </motion.h2>
-        
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <AnimatedCard delay={0}>
-            <Card className="p-6 h-full hover:shadow-2xl transition-shadow bg-gradient-to-br from-white to-primary/5 border-primary/20">
-              <motion.div
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                className="w-12 h-12 bg-gradient-to-br from-primary to-primary/80 rounded-xl flex items-center justify-center mb-4 shadow-lg"
-              >
-                <Video className="w-6 h-6 text-white" />
-              </motion.div>
-              <h3 className="text-lg font-semibold mb-2">FaceTime Talk it out</h3>
-              <p className="text-muted-foreground text-sm">
-                Connect through natural video conversations whenever you need support
-              </p>
-            </Card>
-          </AnimatedCard>
-          
-          <AnimatedCard delay={0.1}>
-            <Card className="p-6 h-full hover:shadow-2xl transition-shadow bg-gradient-to-br from-white to-secondary/5 border-secondary/20">
-              <motion.div
-                whileHover={{ scale: 1.1, rotate: -5 }}
-                className="w-12 h-12 bg-gradient-to-br from-secondary to-secondary/80 rounded-xl flex items-center justify-center mb-4 shadow-lg"
-              >
-                <Heart className="w-6 h-6 text-white" />
-              </motion.div>
-              <h3 className="text-lg font-semibold mb-2">Mood Tracking</h3>
-              <p className="text-muted-foreground text-sm">
-                Track your emotional journey with insights and trends over time
-              </p>
-            </Card>
-          </AnimatedCard>
-          
-          <AnimatedCard delay={0.2}>
-            <Card className="p-6 h-full hover:shadow-2xl transition-shadow bg-gradient-to-br from-white to-accent/5 border-accent/20">
-              <motion.div
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                className="w-12 h-12 bg-gradient-to-br from-accent to-accent/80 rounded-xl flex items-center justify-center mb-4 shadow-lg"
-              >
-                <Shield className="w-6 h-6 text-white" />
-              </motion.div>
-              <h3 className="text-lg font-semibold mb-2">Private & Secure</h3>
-              <p className="text-muted-foreground text-sm">
-                Your conversations are encrypted and your data is always protected
-              </p>
-            </Card>
-          </AnimatedCard>
-          
-          <AnimatedCard delay={0.3}>
-            <Card className="p-6 h-full hover:shadow-2xl transition-shadow bg-gradient-to-br from-white to-orange-500/5 border-orange-500/20">
-              <motion.div
-                whileHover={{ scale: 1.1, rotate: -5 }}
-                className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center mb-4 shadow-lg"
-              >
-                <Clock className="w-6 h-6 text-white" />
-              </motion.div>
-              <h3 className="text-lg font-semibold mb-2">24/7 Available</h3>
-              <p className="text-muted-foreground text-sm">
-                Get support whenever you need it, day or night
-              </p>
-            </Card>
-          </AnimatedCard>
-        </div>
-      </section>
-      
-      {/* How It Works - Interactive */}
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <motion.h2
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-3xl md:text-4xl font-bold text-center mb-12"
-        >
-          Simple. Effective. Personal.
-        </motion.h2>
-        
-        <div className="space-y-16">
-          {[
-            {
-              step: 1,
-              title: "Sign Up & Onboard",
-              description: "Create your account and complete a quick wellness baseline to help Solace understand you better",
-              icon: CheckCircle2,
-              color: "primary",
-              gradient: "from-primary/20 to-accent/20"
-            },
-            {
-              step: 2,
-              title: "Connect With Solace",
-              description: "Start a FaceTime-style session whenever you need to talk, decompress, or get guided support",
-              icon: Video,
-              color: "secondary",
-              gradient: "from-secondary/20 to-primary/20"
-            },
-            {
-              step: 3,
-              title: "Track & Improve",
-              description: "Monitor your mood, journal your thoughts, and access wellness tools designed for your needs",
-              icon: Heart,
-              color: "accent",
-              gradient: "from-accent/20 to-secondary/20"
-            }
-          ].map((item, index) => (
-            <motion.div
-              key={item.step}
-              initial={{ opacity: 0, x: index % 2 === 0 ? -50 : 50 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: index * 0.2 }}
-              className={`flex flex-col ${index % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'} items-center gap-8`}
+
+            <motion.h1
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1, duration: 0.5 }}
+              className="landing-serif mb-5 max-w-3xl text-4xl font-semibold leading-[1.12] tracking-tight text-white sm:text-5xl md:text-6xl"
             >
-              <div className="flex-1 text-center md:text-left">
-                <motion.div
-                  whileHover={{ scale: 1.1, rotate: 5 }}
-                  className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-primary to-accent rounded-full text-white font-bold mb-4 shadow-lg"
-                >
-                  {item.step}
-                </motion.div>
-                <h3 className="text-2xl font-semibold mb-3">{item.title}</h3>
-                <p className="text-muted-foreground">
-                  {item.description}
-                </p>
+              Talk to Solace.
+              <br />
+              <span className="bg-gradient-to-r from-pink-200 via-fuchsia-200 to-violet-100 bg-clip-text text-transparent">
+                Feel Better.
+              </span>
+            </motion.h1>
+
+            <motion.p
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+              className="mb-8 max-w-xl text-base leading-relaxed text-white/75 sm:text-lg"
+            >
+              Connect with your Solace avatar through FaceTime-style sessions. Available 24/7 for
+              support, mood tracking, and guided wellness tools.
+            </motion.p>
+
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="flex w-full max-w-md flex-col gap-3 sm:max-w-none sm:flex-row sm:justify-center"
+            >
+              <div onClick={() => localStorage.setItem("selectedPlan", "trial")} className="w-full sm:w-auto">
+                <Link to="/signup" className="block w-full">
+                  <motion.span
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="landing-cta-glow inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#E91E63] to-[#9C27B0] px-8 py-3.5 text-base font-semibold text-white sm:w-auto"
+                  >
+                    Start Your Trial
+                    <ArrowRight className="h-4 w-4" />
+                  </motion.span>
+                </Link>
               </div>
-              <motion.div
-                whileHover={{ scale: 1.05, rotate: 2 }}
-                className={`flex-1 bg-gradient-to-br ${item.gradient} rounded-3xl h-64 flex items-center justify-center shadow-xl`}
-              >
-                <motion.div
-                  animate={{
-                    scale: [1, 1.1, 1],
-                    rotate: [0, 5, 0]
-                  }}
-                  transition={{
-                    duration: 3,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  }}
+              <Link to="/how-it-works" className="w-full sm:w-auto">
+                <motion.span
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex w-full items-center justify-center rounded-xl border border-white/20 bg-black/25 px-8 py-3.5 text-base font-semibold text-white/90 backdrop-blur-sm transition-[box-shadow,border-color] hover:border-white/30 hover:shadow-[0_0_28px_-8px_rgba(168,85,247,0.4)] sm:w-auto"
                 >
-                  <item.icon className={`w-20 h-20 text-${item.color}`} />
-                </motion.div>
-              </motion.div>
+                  Learn More
+                </motion.span>
+              </Link>
             </motion.div>
-          ))}
-        </div>
-      </section>
-      
-      {/* Social Proof */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-12"
-        >
-          <div className="flex justify-center gap-1 mb-4">
-            {[...Array(5)].map((_, i) => (
+
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.45 }}
+              className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-white/60"
+            >
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="landing-check-glow h-4 w-4 text-emerald-400" />
+                No credit card required
+              </span>
+              <span className="hidden text-white/25 sm:inline" aria-hidden>
+                •
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="landing-check-glow h-4 w-4 text-emerald-400" />
+                7-day trial
+              </span>
+              <span className="hidden text-white/25 sm:inline" aria-hidden>
+                •
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="landing-check-glow h-4 w-4 text-emerald-400" />
+                Cancel anytime
+              </span>
+            </motion.p>
+          </div>
+        </LandingHeroScene>
+
+        {/* Why Choose Solace */}
+        <section className="landing-section py-12 md:py-16">
+          <motion.h2
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mb-8 text-center text-3xl font-bold text-white md:text-4xl"
+          >
+            Why Choose Solace?
+          </motion.h2>
+
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {WHY_FEATURES.map((feature, index) => (
               <motion.div
-                key={i}
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.1 }}
+                key={feature.title}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.06 }}
+                className="flex"
               >
-                <Star className="w-8 h-8 fill-yellow-400 text-yellow-400" />
+                <LandingGlowCard glow={feature.glow} className="flex h-full w-full flex-col p-5">
+                  <div
+                    className={cn(
+                      "mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br",
+                      feature.iconClass,
+                    )}
+                  >
+                    <feature.icon className="h-5 w-5 text-white" />
+                  </div>
+                  <h3 className="mb-2 text-base font-semibold text-white">{feature.title}</h3>
+                  <p className="text-sm leading-relaxed text-[var(--solace-ds-text-muted)]">
+                    {feature.description}
+                  </p>
+                </LandingGlowCard>
               </motion.div>
             ))}
           </div>
-          <p className="text-2xl font-semibold mb-2">Trusted by 10,000+ Users</p>
-          <p className="text-muted-foreground">Join our growing community on their wellness journey</p>
-        </motion.div>
-      </section>
-      
-      {/* CTA Section */}
-      <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <AnimatedCard>
-          <Card className="p-8 md:p-12 bg-gradient-to-br from-primary/10 via-accent/10 to-secondary/10 border-primary/20 relative overflow-hidden">
-            <div className="absolute inset-0 bg-grid-white/10 [mask-image:radial-gradient(white,transparent_80%)]" />
-            <div className="relative z-10 text-center">
-              <motion.div
-                initial={{ scale: 0 }}
-                whileInView={{ scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ type: "spring", stiffness: 200 }}
-                className="inline-flex items-center gap-2 mb-6"
-              >
-                <Zap className="w-6 h-6 text-primary" />
-                <h2 className="text-3xl md:text-4xl font-bold">Ready to Start Your Wellness Journey?</h2>
-              </motion.div>
-              <p className="text-muted-foreground mb-8 text-lg max-w-2xl mx-auto">
-                Join thousands who trust Solace for their mental health and wellbeing
-              </p>
-              <div onClick={() => localStorage.setItem('selectedPlan', 'trial')}>
-                <Link to="/signup">
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <Button size="lg" className="mb-4">
-                      Start Trial
-                    </Button>
-                  </motion.div>
-                </Link>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                7-day trial • No credit card required
-              </p>
-            </div>
-          </Card>
-        </AnimatedCard>
-      </section>
+        </section>
 
-      {/* Pricing Section */}
-      <section id="pricing" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
-        <div className="text-center mb-12">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
+        {/* Simple. Effective. Personal. */}
+        <section className="landing-section py-12 md:py-16">
+          <motion.h2
+            initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
+            className="mb-10 text-center text-3xl font-bold text-white md:text-4xl"
           >
-            <span className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-100 to-pink-100 rounded-full mb-4">
-              <Crown className="w-4 h-4 text-purple-600" />
-              <span className="text-sm text-purple-700 font-semibold">Simple, Transparent Pricing</span>
-            </span>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
-              Choose Your <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Wellness Journey</span>
-            </h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Start with a 7-day trial. Upgrade anytime for more AI companion time and better pay-as-you-go rates.
-            </p>
-          </motion.div>
-        </div>
+            Simple. Effective. Personal.
+          </motion.h2>
 
-        <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
-          {(Object.keys(SUBSCRIPTION_PLANS) as PlanTier[]).map((planId, index) => {
-            const plan = SUBSCRIPTION_PLANS[planId];
-            const isPopular = plan.popular;
-            
-            return (
+          <div className="space-y-12 md:space-y-14">
+            {STEPS.map((item, index) => (
               <motion.div
-                key={planId}
-                initial={{ opacity: 0, y: 30 }}
+                key={item.step}
+                initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="relative"
-              >
-                {isPopular && (
-                  <div className="absolute -top-4 left-0 right-0 flex justify-center z-10">
-                    <span className="px-4 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold rounded-full shadow-lg">
-                      MOST POPULAR
-                    </span>
-                  </div>
+                transition={{ delay: index * 0.08 }}
+                className={cn(
+                  "flex flex-col items-center gap-8 md:gap-10",
+                  index % 2 === 0 ? "md:flex-row" : "md:flex-row-reverse",
                 )}
-                
-                <Card className={`p-6 h-full flex flex-col relative overflow-hidden transition-all duration-300 hover:shadow-2xl ${
-                  isPopular 
-                    ? 'border-2 border-purple-500 shadow-lg shadow-purple-500/20 scale-105' 
-                    : 'border border-border hover:border-purple-300'
-                }`}>
-                  {/* Background Gradient */}
-                  <div className={`absolute inset-0 bg-gradient-to-br ${plan.gradient} opacity-0 group-hover:opacity-5 transition-opacity`} />
-                  
-                  <div className="relative z-10">
-                    {/* Plan Header */}
-                    <div className="mb-6">
-                      <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br ${plan.gradient} mb-4`}>
-                        {planId === 'trial' && <Sparkles className="w-6 h-6 text-white" />}
-                  {planId === 'core' && <Zap className="w-6 h-6 text-white" />}
-                  {planId === 'pro' && <Crown className="w-6 h-6 text-white" />}
-                      </div>
-                      <h3 className="text-xl font-bold mb-2">{plan.displayName}</h3>
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-4xl font-bold">
-                          ${plan.price}
-                        </span>
-                        {plan.price > 0 && (
-                          <span className="text-muted-foreground">/month</span>
-                        )}
-                      </div>
-                      {planId === 'trial' && (
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {plan.trialDays}-day trial
-                        </p>
-                      )}
+              >
+                <div className="flex-1 text-center md:text-left">
+                  <span className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-fuchsia-600 text-sm font-bold text-white shadow-[0_0_20px_rgba(236,72,153,0.45)]">
+                    {item.step}
+                  </span>
+                  <h3 className="mb-2 text-xl font-semibold text-white md:text-2xl">{item.title}</h3>
+                  <p className="mx-auto max-w-md text-sm leading-relaxed text-[var(--solace-ds-text-muted)] md:mx-0 md:text-base">
+                    {item.description}
+                  </p>
+                </div>
+                <LandingGlowCard
+                  glow={item.glow}
+                  className="landing-step-visual flex items-center justify-center"
+                >
+                  <item.icon className={cn("h-14 w-14", item.iconGlow)} />
+                </LandingGlowCard>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* Trust */}
+        <section className="landing-section py-10 md:py-12">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center"
+          >
+            <div className="mb-3 flex justify-center gap-1">
+              {[...Array(5)].map((_, i) => (
+                <Star
+                  key={i}
+                  className="landing-star-glow h-7 w-7 fill-amber-400 text-amber-400"
+                />
+              ))}
+            </div>
+            <p className="text-xl font-semibold text-white md:text-2xl">Trusted by 10,000+ Users</p>
+            <p className="mt-1.5 text-sm text-[var(--solace-ds-text-muted)] md:text-base">
+              Join our growing community on their wellness journey
+            </p>
+          </motion.div>
+        </section>
+
+        {/* CTA */}
+        <section className="landing-section py-10 md:py-12">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <LandingGlowCard
+              glow="pink"
+              className="relative mx-auto max-w-[720px] overflow-hidden px-6 py-10 text-center sm:px-10 sm:py-12"
+            >
+              <div
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_100%,rgba(88,28,135,0.18)_0%,transparent_55%),radial-gradient(ellipse_at_50%_0%,rgba(236,72,153,0.08)_0%,transparent_50%)]"
+                aria-hidden
+              />
+              <div className="relative z-[1]">
+                <Zap className="mx-auto mb-3 h-6 w-6 text-pink-300" />
+                <h2 className="text-2xl font-bold text-white md:text-3xl">
+                  Ready to Start Your Wellness Journey?
+                </h2>
+                <p className="mx-auto mt-3 max-w-lg text-sm text-[var(--solace-ds-text-muted)] md:text-base">
+                  Join thousands who trust Solace for their mental health and wellbeing
+                </p>
+                <div className="mt-6" onClick={() => localStorage.setItem("selectedPlan", "trial")}>
+                  <Link to="/signup">
+                    <motion.span
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="landing-cta-glow inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-[#E91E63] to-[#9C27B0] px-10 py-3.5 text-base font-semibold text-white"
+                    >
+                      Start Trial
+                    </motion.span>
+                  </Link>
+                </div>
+                <p className="mt-3 text-sm text-[var(--solace-ds-text-muted)]">
+                  7-day trial • No credit card required
+                </p>
+              </div>
+            </LandingGlowCard>
+          </motion.div>
+        </section>
+
+        {/* Pricing */}
+        <section id="pricing" className="landing-section py-12 md:py-16">
+          <div className="mb-8 text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+            >
+              <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-violet-400/25 bg-violet-500/10 px-4 py-1.5 text-sm font-semibold text-violet-100/90">
+                <Crown className="h-4 w-4 text-violet-300" />
+                Simple, Transparent Pricing
+              </span>
+              <h2 className="mb-3 text-3xl font-bold text-white md:text-4xl">
+                Choose Your{" "}
+                <span className="bg-gradient-to-r from-pink-300 to-fuchsia-400 bg-clip-text text-transparent">
+                  Wellness Journey
+                </span>
+              </h2>
+              <p className="mx-auto max-w-2xl text-base text-[var(--solace-ds-text-muted)]">
+                Start with a 7-day trial. Upgrade anytime for more AI companion time and better
+                pay-as-you-go rates.
+              </p>
+            </motion.div>
+          </div>
+
+          <div className="grid items-stretch gap-6 md:grid-cols-3 lg:gap-8">
+            {(Object.keys(SUBSCRIPTION_PLANS) as PlanTier[]).map((planId, index) => {
+              const plan = SUBSCRIPTION_PLANS[planId];
+              const isPopular = plan.popular;
+
+              return (
+                <motion.div
+                  key={planId}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.08 }}
+                  className="relative flex"
+                >
+                  {isPopular ? (
+                    <div className="absolute -top-3.5 left-0 right-0 z-10 flex justify-center">
+                      <span className="rounded-full border border-pink-400/40 bg-gradient-to-r from-violet-600 to-pink-500 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-[0_0_20px_rgba(236,72,153,0.4)]">
+                        Most Popular
+                      </span>
                     </div>
+                  ) : null}
 
-                    {/* Credits */}
-                    <div className="mb-6 p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border border-purple-100">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-purple-900">AI Companion Time</span>
-                        <Video className="w-4 h-4 text-purple-600" />
-                      </div>
-                      <p className="text-2xl font-bold text-purple-700">
-                        {plan.credits} minutes
-                      </p>
-                      <p className="text-xs text-purple-600 mt-1">
-                        {planId === 'trial' 
-                          ? 'One-time trial credits' 
-                          : 'Refreshes monthly'}
-                      </p>
-                    </div>
-
-                    {/* Pay-as-you-go Rate */}
-                    {plan.payAsYouGoRate !== null ? (
-                      <div className="mb-6 p-3 bg-green-50 rounded-lg border border-green-200">
-                        <div className="flex items-center gap-2 mb-1">
-                          <CheckCircle2 className="w-4 h-4 text-green-600" />
-                          <span className="text-sm font-semibold text-green-900">
-                            Pay-As-You-Go Available
-                          </span>
-                        </div>
-                        <p className="text-lg font-bold text-green-700">
-                          ${plan.payAsYouGoRate}/min
-                        </p>
-                        {planId === 'pro' && (
-                          <p className="text-xs text-green-600 mt-1">40% savings vs Core</p>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="mb-6 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm text-gray-600">
-                            No pay-as-you-go option
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Features */}
-                    <ul className="space-y-3 mb-8 flex-grow">
-                      {plan.features.map((feature, idx) => (
-                        <li key={idx} className="flex items-start gap-2">
-                          <Check className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
-                            isPopular ? 'text-purple-600' : 'text-green-600'
-                          }`} />
-                          <span className="text-sm text-muted-foreground">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {/* CTA Button */}
-                    <div>
-                      {planId === 'trial' ? (
+                  <LandingGlowCard
+                    glow={isPopular ? "popular" : "purple"}
+                    className="flex w-full flex-col p-6 sm:p-7"
+                  >
+                    <div className="relative z-[1] flex flex-1 flex-col">
+                      <div className="mb-5">
                         <div
-                          onClick={() => {
-                            setLoadingPlan(planId);
-                            localStorage.setItem('selectedPlan', planId);
-                            setTimeout(() => {
-                              navigate('/signup');
-                            }, 500);
-                          }}
+                          className={cn(
+                            "mb-3 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br",
+                            plan.gradient,
+                          )}
                         >
-                          <Button 
-                            className={`w-full ${
-                              isPopular 
-                                ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/30' 
-                                : 'bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white'
-                            }`}
+                          {planId === "trial" && <Sparkles className="h-5 w-5 text-white" />}
+                          {planId === "core" && <Zap className="h-5 w-5 text-white" />}
+                          {planId === "pro" && <Crown className="h-5 w-5 text-white" />}
+                        </div>
+                        <h3 className="mb-1 text-lg font-bold text-white">{plan.displayName}</h3>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-bold text-white">${plan.price}</span>
+                          {plan.price > 0 ? (
+                            <span className="text-sm text-[var(--solace-ds-text-muted)]">/month</span>
+                          ) : null}
+                        </div>
+                        {planId === "trial" ? (
+                          <p className="mt-0.5 text-sm text-[var(--solace-ds-text-muted)]">
+                            {plan.trialDays}-day trial
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="mb-5 rounded-xl border border-white/[0.08] bg-white/[0.04] p-3.5">
+                        <div className="mb-0.5 flex items-center justify-between">
+                          <span className="text-xs font-medium text-violet-100/85">
+                            AI Companion Time
+                          </span>
+                          <Video className="h-3.5 w-3.5 text-violet-300" />
+                        </div>
+                        <p className="text-xl font-bold text-white">{plan.credits} minutes</p>
+                        <p className="mt-0.5 text-[11px] text-violet-200/60">
+                          {planId === "trial" ? "One-time trial credits" : "Refreshes monthly"}
+                        </p>
+                      </div>
+
+                      {plan.payAsYouGoRate !== null ? (
+                        <div className="mb-5 rounded-lg border border-emerald-400/15 bg-emerald-500/[0.06] p-2.5">
+                          <div className="mb-0.5 flex items-center gap-1.5">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                            <span className="text-xs font-semibold text-emerald-100/90">
+                              Pay-As-You-Go Available
+                            </span>
+                          </div>
+                          <p className="text-base font-bold text-emerald-200">
+                            ${plan.payAsYouGoRate}/min
+                          </p>
+                          {planId === "pro" ? (
+                            <p className="mt-0.5 text-[10px] text-emerald-300/65">
+                              40% savings vs Core
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="mb-5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="h-3.5 w-3.5 text-[var(--solace-ds-text-muted)]" />
+                            <span className="text-xs text-[var(--solace-ds-text-muted)]">
+                              No pay-as-you-go option
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      <ul className="mb-6 flex-grow space-y-2.5">
+                        {plan.features.map((feature, idx) => (
+                          <li key={idx} className="flex items-start gap-2">
+                            <Check
+                              className={cn(
+                                "landing-check-glow mt-0.5 h-4 w-4 shrink-0",
+                                isPopular ? "text-pink-400" : "text-emerald-400",
+                              )}
+                            />
+                            <span className="text-xs leading-relaxed text-[var(--solace-ds-text-muted)] sm:text-sm">
+                              {feature}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+
+                      <div className="mt-auto">
+                        {planId === "trial" ? (
+                          <div
+                            onClick={() => {
+                              setLoadingPlan(planId);
+                              localStorage.setItem("selectedPlan", planId);
+                              setTimeout(() => navigate("/signup"), 500);
+                            }}
+                          >
+                            <Button
+                              className={cn(
+                                "w-full rounded-xl border-0 py-5 text-sm font-semibold",
+                                isPopular
+                                  ? "landing-cta-glow bg-gradient-to-r from-violet-600 to-pink-500 text-white"
+                                  : "bg-white/10 text-white hover:bg-white/15",
+                              )}
+                              size="lg"
+                              isLoading={loadingPlan === planId}
+                            >
+                              Start Your Trial
+                              <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            onClick={async () => {
+                              try {
+                                setLoadingPlan(planId);
+                                localStorage.setItem("selectedPlan", planId);
+                                const origin = window.location.origin;
+                                const successUrl = `${origin}/signup?postCheckout=1&plan=${planId}&session_id={CHECKOUT_SESSION_ID}`;
+                                const cancelUrl = `${origin}/#pricing`;
+                                const { api } = await import("@/lib/api");
+                                const result = await api.billing.createGuestSubscription({
+                                  plan_type: planId,
+                                  billing_cycle: "monthly",
+                                  successUrl,
+                                  cancelUrl,
+                                });
+                                if (result.checkoutUrl) {
+                                  window.location.href = result.checkoutUrl;
+                                }
+                              } catch (e) {
+                                console.error("Failed to start checkout:", e);
+                                setLoadingPlan(null);
+                              }
+                            }}
+                            className={cn(
+                              "w-full rounded-xl border-0 py-5 text-sm font-semibold",
+                              isPopular
+                                ? "landing-cta-glow bg-gradient-to-r from-violet-600 to-pink-500 text-white"
+                                : "bg-white/10 text-white hover:bg-white/15",
+                            )}
                             size="lg"
                             isLoading={loadingPlan === planId}
                           >
-                            Start Your Trial
-                            <ArrowRight className="w-4 h-4 ml-2" />
+                            Get Started
+                            <ArrowRight className="ml-2 h-4 w-4" />
                           </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          onClick={async () => {
-                            try {
-                              setLoadingPlan(planId);
-                              localStorage.setItem('selectedPlan', planId);
-                              const origin = window.location.origin;
-                              const successUrl = `${origin}/signup?postCheckout=1&plan=${planId}&session_id={CHECKOUT_SESSION_ID}`;
-                              const cancelUrl = `${origin}/#pricing`;
-                              
-                              const { api } = await import("@/lib/api");
-                              const result = await api.billing.createGuestSubscription({
-                                plan_type: planId,
-                                billing_cycle: "monthly",
-                                successUrl,
-                                cancelUrl
-                              });
-                              
-                              if (result.checkoutUrl) {
-                                window.location.href = result.checkoutUrl;
-                              }
-                            } catch (e) {
-                              console.error("Failed to start checkout:", e);
-                              setLoadingPlan(null);
-                            }
-                          }}
-                          className={`w-full ${
-                            isPopular 
-                              ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/30' 
-                              : 'bg-black text-white hover:bg-gray-800'
-                          }`}
-                          size="lg"
-                          isLoading={loadingPlan === planId}
-                        >
-                          Get Started
-                          <ArrowRight className="w-4 h-4 ml-2" />
-                        </Button>
-                      )}
+                        )}
+                      </div>
+
+                      {planId === "trial" ? (
+                        <p className="mt-2 text-center text-[11px] text-[var(--solace-ds-text-muted)]">
+                          No credit card required
+                        </p>
+                      ) : null}
                     </div>
+                  </LandingGlowCard>
+                </motion.div>
+              );
+            })}
+          </div>
 
-                    {planId === 'trial' && (
-                      <p className="text-xs text-center text-muted-foreground mt-3">
-                        No credit card required
-                      </p>
-                    )}
-                  </div>
-                </Card>
-              </motion.div>
-            );
-          })}
-        </div>
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="mt-8"
+          >
+            <LandingGlowCard glow="blue" className="mx-auto max-w-3xl p-5 sm:p-6">
+              <div className="flex items-start gap-4">
+                <Shield className="mt-0.5 h-7 w-7 shrink-0 text-blue-300 drop-shadow-[0_0_14px_rgba(96,165,250,0.45)]" />
+                <div>
+                  <h4 className="mb-1.5 font-semibold text-white">
+                    Flexible Plans, No Long-Term Commitments
+                  </h4>
+                  <p className="text-sm leading-relaxed text-[var(--solace-ds-text-muted)]">
+                    Start with a trial, upgrade or downgrade anytime. Cancel whenever you want.
+                    Higher-tier plans get better pay-as-you-go rates when you need extra minutes.
+                    All plans include access to our AI companions, mood tracking, and wellness
+                    tools.
+                  </p>
+                </div>
+              </div>
+            </LandingGlowCard>
+          </motion.div>
+        </section>
 
-        {/* Additional Info */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-          className="mt-12 text-center"
-        >
-          <Card className="p-6 max-w-3xl mx-auto bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-            <div className="flex items-start gap-4">
-              <Shield className="w-8 h-8 text-blue-600 flex-shrink-0 mt-1" />
-              <div className="text-left">
-                <h4 className="font-semibold text-blue-900 mb-2">
-                  Flexible Plans, No Long-Term Commitments
-                </h4>
-                <p className="text-sm text-blue-700">
-                  Start with a trial, upgrade or downgrade anytime. Cancel whenever you want. 
-                  Higher-tier plans get better pay-as-you-go rates when you need extra minutes. 
-                  All plans include access to our AI companions, mood tracking, and wellness tools.
+        {/* Footer */}
+        <footer className="border-t border-white/[0.08] bg-[#04060f]/90">
+          <div className="pointer-events-none mx-auto h-px max-w-7xl bg-gradient-to-r from-transparent via-violet-500/35 to-transparent" />
+          <div className="landing-section py-10 md:py-12">
+            <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+              <div className="col-span-2 md:col-span-1">
+                <BrandLogo heightClass="h-14" />
+                <p className="mt-3 text-sm text-[var(--solace-ds-text-muted)]">
+                  Your AI-powered wellness companion, available 24/7
                 </p>
+                <div className="mt-4 flex gap-2.5">
+                  {[
+                    { Icon: Twitter, label: "Twitter" },
+                    { Icon: Instagram, label: "Instagram" },
+                    { Icon: Facebook, label: "Facebook" },
+                    { Icon: Youtube, label: "YouTube" },
+                  ].map(({ Icon, label }) => (
+                    <span
+                      key={label}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] text-white/55"
+                      aria-label={label}
+                      role="img"
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="mb-3 text-sm font-semibold text-white">Product</h4>
+                <ul className="space-y-1.5 text-sm text-[var(--solace-ds-text-muted)]">
+                  <li>
+                    <Link to="/how-it-works" className="hover:text-white">
+                      How It Works
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/pricing" className="hover:text-white">
+                      Pricing
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/privacy" className="hover:text-white">
+                      Privacy & Safety
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="mb-3 text-sm font-semibold text-white">Legal</h4>
+                <ul className="space-y-1.5 text-sm text-[var(--solace-ds-text-muted)]">
+                  <li>
+                    <Link to="/terms" className="hover:text-white">
+                      Terms & Conditions
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/privacy" className="hover:text-white">
+                      Privacy Policy
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="mb-3 text-sm font-semibold text-white">Get Started</h4>
+                <ul className="space-y-1.5 text-sm text-[var(--solace-ds-text-muted)]">
+                  <li>
+                    <Link to="/signup" className="hover:text-white">
+                      Sign Up
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/login" className="hover:text-white">
+                      Log In
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/admin/credentials"
+                      className="font-semibold text-violet-300 hover:text-violet-200"
+                    >
+                      Admin Credentials
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/admin/login" className="text-violet-300/90 hover:text-violet-200">
+                      Admin Portal
+                    </Link>
+                  </li>
+                </ul>
               </div>
             </div>
-          </Card>
-        </motion.div>
-      </section>
-      
-      {/* Footer */}
-      <footer className="border-t border-border mt-16 bg-white/50 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="col-span-2 md:col-span-1">
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                className="flex items-center gap-2 mb-4"
-              >
-                <BrandLogo heightClass="h-16" />
-                {/* <span className="text-xl font-semibold">Solace</span> */}
-              </motion.div>
-              <p className="text-sm text-muted-foreground">
-                Your AI-powered wellness companion, available 24/7
+
+            <div className="mt-8 border-t border-white/[0.06] pt-6 text-center text-xs text-[var(--solace-ds-text-muted)] sm:text-sm">
+              <p>&copy; 2024 Solace. All rights reserved.</p>
+              <p className="mt-1.5">
+                This is not a replacement for professional medical or mental health services.
               </p>
             </div>
-            
-            <div>
-              <h4 className="font-semibold mb-4">Product</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link to="/how-it-works" className="hover:text-foreground transition-colors">How It Works</Link></li>
-                <li><Link to="/privacy" className="hover:text-foreground transition-colors">Privacy & Safety</Link></li>
-                <li><Link to="/accessibility" className="hover:text-foreground transition-colors">Accessibility</Link></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-4">Legal</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link to="/terms" className="hover:text-foreground transition-colors">Terms & Conditions</Link></li>
-                <li><Link to="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-4">Get Started</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link to="/signup" className="hover:text-foreground transition-colors">Sign Up</Link></li>
-                <li><Link to="/login" className="hover:text-foreground transition-colors">Log In</Link></li>
-                <li><Link to="/admin/credentials" className="hover:text-foreground transition-colors text-primary font-semibold">Admin Credentials</Link></li>
-                <li><Link to="/admin/login" className="hover:text-foreground transition-colors text-primary">Admin Portal</Link></li>
-              </ul>
-            </div>
           </div>
-          
-          <div className="border-t border-border mt-8 pt-8 text-center text-sm text-muted-foreground">
-            <p>&copy; 2024 Solace. All rights reserved.</p>
-            <p className="mt-2">
-              This is not a replacement for professional medical or mental health services.
-            </p>
-          </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </div>
   );
 }

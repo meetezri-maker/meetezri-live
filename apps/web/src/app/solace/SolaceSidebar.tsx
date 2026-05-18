@@ -14,6 +14,7 @@ import {
   Users,
   CreditCard,
   Trophy,
+  User,
   Settings,
   LifeBuoy,
 } from "lucide-react";
@@ -44,8 +45,9 @@ const mainNav: NavItem[] = [
   { path: "/app/community", label: "Community", icon: Users },
   { path: "/app/billing", label: "Billing & Credits", icon: CreditCard },
   { path: "/app/settings/achievements", label: "Achievements", icon: Trophy },
+  { path: "/app/user-profile", label: "Profile", icon: User },
   { path: "/app/settings", label: "Settings", icon: Settings },
-  { path: "/app/settings/resources", label: "Support", icon: LifeBuoy },
+  { path: "/app/settings/help-support", label: "Help and Support", icon: LifeBuoy },
 ];
 
 export function SolaceSidebar() {
@@ -72,12 +74,20 @@ export function SolaceSidebar() {
     window.dispatchEvent(new CustomEvent("solace-focus-mode", { detail: { enabled: next } }));
   }, []);
 
-  const isActive = useMemo(
-    () => (path: string) =>
+  const isActive = useMemo(() => {
+    const matches = (path: string) =>
       location.pathname === path ||
-      (path !== "/app/dashboard" && location.pathname.startsWith(`${path}/`)),
-    [location.pathname]
-  );
+      (path !== "/app/dashboard" && location.pathname.startsWith(`${path}/`));
+
+    const activeItem = mainNav
+      .filter((item) => matches(item.path))
+      .reduce<NavItem | null>(
+        (best, item) => (!best || item.path.length > best.path.length ? item : best),
+        null
+      );
+
+    return (path: string) => activeItem?.path === path;
+  }, [location.pathname]);
 
   const firstName = profile?.full_name?.split(" ")[0] || "Friend";
   const premiumish =
@@ -106,8 +116,8 @@ export function SolaceSidebar() {
               className={cn(
                 "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-all duration-300",
                 active
-                  ? "bg-gradient-to-r from-violet-500/18 to-cyan-500/10 text-zinc-50 shadow-[0_0_28px_rgba(139,92,246,0.18),inset_0_0_0_1px_rgba(139,92,246,0.28)]"
-                  : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
+                  ? "bg-gradient-to-r from-violet-500/20 to-fuchsia-500/10 text-[rgba(255,255,255,0.96)] shadow-[0_0_32px_rgba(139,92,246,0.22),inset_0_0_0_1px_rgba(167,139,250,0.32)]"
+                  : "text-[rgba(255,255,255,0.55)] hover:bg-white/[0.04] hover:text-[rgba(255,255,255,0.82)]"
               )}
             >
               <Icon
@@ -123,7 +133,7 @@ export function SolaceSidebar() {
       })}
 
       <div className="mt-auto space-y-3 border-t border-white/[0.06] pt-3">
-        <div className="rounded-xl border border-white/[0.07] bg-black/25 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+        <div className="rounded-xl border border-white/[0.06] bg-[linear-gradient(180deg,rgba(18,18,40,0.55)_0%,rgba(10,10,24,0.75)_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_28px_-10px_rgba(139,92,246,0.15)]">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-violet-500/30 to-cyan-500/15 text-sm font-medium text-zinc-100">
               {(firstName[0] || "?").toUpperCase()}
@@ -164,6 +174,83 @@ export function SolaceSidebar() {
             />
           </button>
         </div>
+
+        {location.pathname === "/app/wellness-tools" && (
+          <motion.div
+            className="rounded-xl border border-white/[0.07] bg-black/28 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_0_24px_rgba(139,92,246,0.08)]"
+            aria-label="Gentle reminder"
+          >
+            <p className="text-xs font-medium tracking-tight text-zinc-100">Take a breath</p>
+            <p className="mt-0.5 text-[10px] leading-snug text-zinc-500">You&apos;ve got this.</p>
+            <div
+              className="mt-2.5 h-[3px] w-full overflow-hidden rounded-full bg-white/[0.06]"
+              aria-hidden
+            >
+              <div className="h-full w-[42%] rounded-full bg-gradient-to-r from-fuchsia-500/90 via-violet-500 to-cyan-400/80 shadow-[0_0_14px_rgba(236,72,153,0.45)]" />
+            </div>
+          </motion.div>
+        )}
+
+        {(location.pathname === "/app/user-profile" || location.pathname.startsWith("/app/user-profile?")) && (
+          <div
+            className="relative overflow-hidden rounded-xl border border-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_32px_-8px_rgba(139,92,246,0.2)]"
+            aria-label="Supportive reminder"
+          >
+            <img
+              src="/community/scene-forest.jpg"
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover brightness-[0.55] saturate-[1.05]"
+              width={320}
+              height={180}
+            />
+            <div
+              className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,10,35,0.25)_0%,rgba(8,8,20,0.88)_72%)]"
+              aria-hidden
+            />
+            <motion.div
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_30%_85%,rgba(251,191,36,0.16),transparent_55%)]"
+              aria-hidden
+            />
+            <div className="relative px-3.5 py-3.5">
+              <p className="text-[11px] font-medium tracking-wide text-[rgba(255,255,255,0.92)]">You matter here.</p>
+              <p className="mt-1.5 text-[10px] leading-relaxed text-[rgba(255,255,255,0.62)]">
+                Your wellness journey is important. We&apos;re here with you, every step.
+              </p>
+            </div>
+          </div>
+        )}
+        {location.pathname.startsWith("/app/settings") && (
+          <motion.div
+            className="relative overflow-hidden rounded-xl border border-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_32px_-8px_rgba(139,92,246,0.2)]"
+            aria-label="Privacy sanctuary reminder"
+          >
+            <img
+              src="/community/scene-forest.jpg"
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover brightness-[0.5] saturate-[1.08]"
+              width={320}
+              height={180}
+            />
+            <div
+              className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,10,35,0.2)_0%,rgba(8,8,20,0.9)_72%)]"
+              aria-hidden
+            />
+            <motion.div
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_30%_85%,rgba(251,191,36,0.18),transparent_55%)]"
+              aria-hidden
+            />
+            <div className="relative px-3.5 py-3.5">
+              <p className="text-[11px] font-medium tracking-wide text-[rgba(255,255,255,0.92)]">
+                Your sanctuary. Your story. Your safe space.
+              </p>
+              <p className="mt-1.5 text-[10px] leading-relaxed text-[rgba(255,255,255,0.58)]">
+                Take a breath. Your privacy and emotional safety matter here.
+              </p>
+            </div>
+          </motion.div>
+        )}
+
+
       </div>
     </div>
   );
