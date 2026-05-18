@@ -200,6 +200,21 @@ export const JORDAN_EYE_INTELLIGENCE_TUNING = {
   asymmetryAmount: 0.006,
 } as const;
 
+export const JORDAN_EYE_FOCUS_TUNING = {
+  idleHoldMs: [2500, 5500],
+  listeningHoldMs: [3500, 7500],
+  thinkingHoldMs: [3000, 6500],
+  speakingHoldMs: [2200, 5000],
+  idleEyeMax: 0.045,
+  listeningEyeMax: 0.035,
+  thinkingDownMax: 0.055,
+  speakingEyeMax: 0.03,
+  blendSpeed: 2.2,
+  asymmetryAmount: [0.03, 0.08],
+  thinkingDownBias: 0.025,
+  horizontalHeadYawMax: 0.006,
+} as const;
+
 export const JORDAN_LISTENING_SMILE_TUNING = {
   blendInSpeed: 0.85,
   blendOutSpeed: 0.75,
@@ -214,6 +229,83 @@ export const JORDAN_LISTENING_SMILE_TUNING = {
   cheekRightMax: 0.38,
   browMin: 0.06,
   browMax: 0.12,
+} as const;
+
+export const JORDAN_LISTENING_FACE_TUNING = {
+  browBase: [0.03, 0.07],
+  browPeak: [0.08, 0.12],
+  smileLeft: [0.04, 0.09],
+  smileRight: [0.04, 0.1],
+  concernFrown: [0.04, 0.1],
+  cheek: [0.02, 0.07],
+  headTiltRadians: [0.006, 0.018],
+  targetHoldMs: [2500, 5000],
+  blendSpeed: 1.8,
+  asymmetryAmount: [0.04, 0.1],
+} as const;
+
+export const JORDAN_IDLE_BROW_TUNING = {
+  baseMin: 0.01,
+  baseMax: 0.03,
+  peakMin: 0.035,
+  peakMax: 0.045,
+  peakProbability: 0.18,
+  maxValue: 0.05,
+  targetHoldMs: [4000, 9000],
+  blendSpeed: 1,
+} as const;
+
+export const JORDAN_EXPRESSION_PRESETS = {
+  calmIdle: {
+    visemeRest: [0.14, 0.2],
+    mouthSmileLeft: [0.025, 0.055],
+    mouthSmileRight: [0.03, 0.065],
+    cheekSquintLeft: [0.015, 0.035],
+    cheekSquintRight: [0.018, 0.04],
+    eyebrows: [0.018, 0.045],
+    sad: [0, 0],
+    mouthFrownLeft: [0, 0],
+    mouthFrownRight: [0, 0],
+    eyeLookDownLeft: [0.005, 0.02],
+    eyeLookDownRight: [0.005, 0.02],
+    eyeLookUpLeft: [0, 0.012],
+    eyeLookUpRight: [0, 0.012],
+  },
+  attentiveListening: {
+    visemeRest: [0.16, 0.22],
+    mouthSmileLeft: [0.06, 0.12],
+    mouthSmileRight: [0.07, 0.13],
+    cheekSquintLeft: [0.035, 0.08],
+    cheekSquintRight: [0.04, 0.09],
+    eyebrows: [0.04, 0.095],
+    sad: [0, 0],
+    mouthFrownLeft: [0, 0],
+    mouthFrownRight: [0, 0],
+    eyeLookDownLeft: [0.005, 0.018],
+    eyeLookDownRight: [0.005, 0.018],
+    eyeLookUpLeft: [0.005, 0.018],
+    eyeLookUpRight: [0.005, 0.018],
+  },
+  warmSpeaking: {
+    cheekSquintLeft: [0.025, 0.07],
+    cheekSquintRight: [0.03, 0.08],
+    eyebrows: [0.025, 0.075],
+    mouthSmileLeft: [0.02, 0.07],
+    mouthSmileRight: [0.025, 0.08],
+    mouthFrownLeft: [0.02, 0.07],
+    mouthFrownRight: [0.02, 0.07],
+    sad: [0.06, 0.16],
+  },
+} as const;
+
+export const JORDAN_EXPRESSION_PRESET_TUNING = {
+  blendSpeed: 1.4,
+  speakingBlendSpeed: 2.2,
+  asymmetryAmount: [0.04, 0.1],
+  sentimentSmileMultiplier: 1,
+  sadSmileReduction: 0.3,
+  speechEnergyCheekMultiplier: 1,
+  maxPresetContribution: 1,
 } as const;
 
 export const JORDAN_HEAD_PRESENCE_TUNING = {
