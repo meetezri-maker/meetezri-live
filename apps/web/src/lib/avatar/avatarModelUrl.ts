@@ -6,7 +6,7 @@ export function getVitePublicBaseUrl(): string {
 }
 
 /** Default 3D model when no companion-specific GLB is registered. */
-export const DEFAULT_AVATAR_MODEL_URL = `${getVitePublicBaseUrl()}jordan Taylor.glb`;
+export const DEFAULT_AVATAR_MODEL_URL = `${getVitePublicBaseUrl()}jordanTaylor.glb`;
 
 /** @deprecated Use {@link DEFAULT_AVATAR_MODEL_URL} or {@link resolveCompanionModelUrl}. */
 export const AVATAR_MODEL_URL = DEFAULT_AVATAR_MODEL_URL;
