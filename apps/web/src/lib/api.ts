@@ -7,7 +7,7 @@ const API_URL =
     ? '/api'
     : 'https://meetezri-live-api.vercel.app/api');
 
-async function getHeaders(accessToken?: string) {
+async function getHeaders(accessToken?: string): Promise<Record<string, string>> {
   const token =
     accessToken ||
     (await supabase.auth.getSession()).data.session?.access_token;
@@ -15,16 +15,16 @@ async function getHeaders(accessToken?: string) {
   // Tells the API which SPA origin to use in email `redirect_to` (signup, resend, etc.).
   // The server honors this over `Origin` when set (see `getWebBaseUrlFromRequest` in the API).
   // Fixes local dev when links would otherwise pick up `WEB_BASE_URL` or a wrong host.
-  const webBase =
-    typeof window !== 'undefined' && window.location?.origin
-      ? { 'X-Web-Base-Url': window.location.origin }
-      : {};
-
-  return {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...webBase,
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    headers['X-Web-Base-Url'] = window.location.origin;
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
 }
 
 /** Turn Fastify/Zod validation payloads into a short user-facing string. */
@@ -164,7 +164,7 @@ let getJournalListInFlight: Promise<any> | null = null;
 /** Merge overlapping GET /users/activity calls (dashboard widgets). */
 let getRecentActivityInFlight: Promise<any> | null = null;
 /** Merge overlapping GET /notifications calls (header + page). */
-let getNotificationsInFlight: Promise<any> | null = null;
+const getNotificationsInFlight = new Map<string, Promise<any>>();
 /** Merge overlapping GET /notifications/unread-count calls (header + page). */
 let getUnreadCountInFlight: Promise<any> | null = null;
 /** Merge overlapping GET /wellness/challenges?scope=dashboard calls (dashboard). */
@@ -2669,25 +2669,35 @@ export const api = {
 
   // Notifications API
   notifications: {
-    async getAll() {
-      const cacheKey = 'GET:/notifications';
-      if (!getNotificationsInFlight) {
-        const cached = getCached<any>(cacheKey, 5_000);
-        if (cached !== null) return cached;
-        getNotificationsInFlight = (async () => {
-          const headers = await getHeaders();
-          return await getJsonCached<any>(
-            cacheKey,
-            `${API_URL}/notifications`,
-            headers,
-            'Failed to fetch notifications',
-            5_000
-          );
-        })().finally(() => {
-          getNotificationsInFlight = null;
-        });
-      }
-      return getNotificationsInFlight;
+    async getAll(params?: { page?: number; limit?: number }) {
+      const qs = new URLSearchParams();
+      if (params?.page != null) qs.set('page', String(params.page));
+      if (params?.limit != null) qs.set('limit', String(params.limit));
+      const query = qs.toString();
+      const url = `${API_URL}/notifications${query ? `?${query}` : ''}`;
+      const cacheKey = `GET:/notifications${query ? `?${query}` : ''}`;
+
+      const cached = getCached<any>(cacheKey, 5_000);
+      if (cached !== null) return cached;
+
+      const existing = getNotificationsInFlight.get(cacheKey);
+      if (existing) return existing;
+
+      const request = (async () => {
+        const headers = await getHeaders();
+        return await getJsonCached<any>(
+          cacheKey,
+          url,
+          headers,
+          'Failed to fetch notifications',
+          5_000
+        );
+      })().finally(() => {
+        getNotificationsInFlight.delete(cacheKey);
+      });
+
+      getNotificationsInFlight.set(cacheKey, request);
+      return request;
     },
 
     async getUnreadCount() {

@@ -63,7 +63,7 @@ describe('OnboardingEmergencyContact', () => {
       screen.getByPlaceholderText(/Mom, Best Friend, Partner/i),
       'Jane Doe'
     );
-    await user.type(screen.getByPlaceholderText(/^Phone number$/i), '5551234567');
+    await user.type(screen.getByPlaceholderText(/^Phone number$/i), '55512345678');
     await user.selectOptions(screen.getByLabelText(/^Relationship$/i), 'partner');
 
     await user.click(screen.getByRole('button', { name: /continue/i }));

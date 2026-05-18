@@ -58,6 +58,7 @@
     "embla-carousel-react": "8.6.0",
     "emoji-regex": "10.6.0",
     "fluentui-emoji-js": "1.2.1",
+    "framer-motion": "^12.38.0",
     "input-otp": "1.4.2",
     "jspdf": "^4.2.1",
     "lucide-react": "0.487.0",

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
-  FileText,
   Search,
   Star,
   Clock,
@@ -12,16 +11,41 @@ import {
   Loader2,
   ExternalLink,
 } from "lucide-react";
-import { AnimatedCard } from "@/app/components/AnimatedCard";
 import { Link, useNavigate } from "react-router-dom";
 import { WELLNESS_TOOL_CATEGORIES } from "@/lib/wellnessToolCategories";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import {
   categoryVisualsForReading,
   fetchReadingLibraryArticles,
   type ReadingLibraryArticle,
 } from "@/lib/readingLibraryArticles";
+import {
+  RESOURCES_HERO_IMG,
+  formatCategoryLabel,
+  getDifficultyPillClass,
+  getResourceCardAtmosphere,
+  resourcesBackLink,
+  resourcesCardShell,
+  resourcesExternalBtn,
+  resourcesFavoriteBtn,
+  resourcesHeroCard,
+  resourcesHeroGlowPurple,
+  resourcesHeroGlowWarmth,
+  resourcesHeroImage,
+  resourcesHeroOverlay,
+  resourcesHeroSubtitle,
+  resourcesHeroTitle,
+  resourcesPageAtmosphere,
+  resourcesPageFogMid,
+  resourcesPageGlowTop,
+  resourcesPageVignette,
+  resourcesReadBtn,
+  resourcesSearchInput,
+  resourcesSelect,
+  secondarySourceLabel,
+} from "@/app/pages/app/resources-library/resourcesLibraryUi";
 
 type Article = ReadingLibraryArticle;
 
@@ -63,15 +87,6 @@ export function Resources() {
     [articles, searchQuery, selectedCategory]
   );
 
-  const getDifficultyColor = (difficulty: string) => {
-    const colors = {
-      beginner: "text-emerald-800 bg-emerald-100 dark:text-emerald-200 dark:bg-emerald-950/60",
-      intermediate: "text-amber-800 bg-amber-100 dark:text-amber-200 dark:bg-amber-950/60",
-      advanced: "text-rose-800 bg-rose-100 dark:text-rose-200 dark:bg-rose-950/60",
-    };
-    return colors[difficulty as keyof typeof colors] || colors.beginner;
-  };
-
   const handleToggleFavorite = async (article: Article) => {
     if (article.source !== "api") {
       toast.info("Favorite articles from your care team in Wellness Tools.");
@@ -92,59 +107,133 @@ export function Resources() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-violet-50/40 dark:from-slate-950 dark:via-slate-950 dark:to-violet-950/20 transition-colors duration-300">
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {loading ? (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 dark:bg-slate-950/60 backdrop-blur-sm">
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-5 py-4 shadow-xl">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="h-5 w-5 animate-spin text-violet-600 dark:text-violet-400" />
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">Loading articles</p>
-                    <p className="text-xs text-slate-600 dark:text-slate-400">Preparing your reading library…</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
+    <motion.div
+      className={resourcesPageAtmosphere}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <motion.div
+        className={resourcesPageGlowTop}
+        aria-hidden
+        animate={{ opacity: [0.55, 0.85, 0.55] }}
+        transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <div className={resourcesPageFogMid} aria-hidden />
+      <motion.div
+        className={resourcesPageVignette}
+        aria-hidden
+        animate={{ opacity: [0.85, 1, 0.85] }}
+        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+      />
 
-          <Link
-            to="/app/settings"
-            className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 mb-6 transition-colors font-medium text-sm"
+      <div className="relative z-10 mx-auto w-full max-w-[min(100%,1400px)] px-4 pb-10 pt-5 sm:px-6 sm:pb-12 lg:px-8 lg:pt-6">
+        {loading ? (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0b18]/75 backdrop-blur-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            aria-busy="true"
+            aria-label="Loading reading library"
           >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Settings
-          </Link>
-
-          <header className="mb-10">
-            <div className="inline-flex items-center gap-2 rounded-full bg-violet-100/90 dark:bg-violet-950/80 px-3 py-1 text-xs font-semibold text-violet-800 dark:text-violet-200 mb-4">
-              <FileText className="h-3.5 w-3.5" />
-              Articles
+            <div className="rounded-2xl border border-white/[0.08] bg-[linear-gradient(180deg,rgba(18,18,40,0.98)_0%,rgba(10,10,24,0.99)_100%)] px-5 py-4 shadow-[0_0_48px_-12px_rgba(139,92,246,0.35)]">
+              <motion.div
+                className="flex items-center gap-3"
+                animate={{ opacity: [0.85, 1, 0.85] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+              >
+                <Loader2 className="h-5 w-5 animate-spin text-violet-300" aria-hidden />
+                <motion.div
+                  animate={{ opacity: [0.7, 1, 0.7] }}
+                  transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <p className="text-sm font-semibold text-white">Loading resources</p>
+                  <p className="text-xs text-[rgba(255,255,255,0.48)]">Preparing your reading library…</p>
+                </motion.div>
+              </motion.div>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-white mb-2">
-              Reading library
+          </motion.div>
+        ) : null}
+
+        {/* 1. Cinematic hero */}
+        <section className={resourcesHeroCard} aria-labelledby="reading-library-title">
+          <img
+            src={RESOURCES_HERO_IMG}
+            alt=""
+            className={resourcesHeroImage}
+            width={1600}
+            height={640}
+          />
+          <motion.div
+            className={resourcesHeroOverlay}
+            aria-hidden
+            animate={{ opacity: [0.92, 1, 0.92] }}
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            className={resourcesHeroGlowPurple}
+            aria-hidden
+            animate={{ opacity: [0.7, 1, 0.7] }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            className={resourcesHeroGlowWarmth}
+            aria-hidden
+            animate={{ opacity: [0.65, 0.95, 0.65] }}
+            transition={{ duration: 11, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+          />
+          <div
+            className="pointer-events-none absolute inset-0 shadow-[inset_0_0_100px_rgba(0,0,0,0.45)]"
+            aria-hidden
+          />
+
+          <div className="relative z-10 flex min-h-[220px] flex-col justify-end p-6 sm:min-h-[260px] sm:p-8 lg:min-h-[300px] lg:p-10">
+            <Link to="/app/settings" className={resourcesBackLink}>
+              <ArrowLeft className="h-4 w-4" aria-hidden />
+              Back to Resources
+            </Link>
+            <h1 id="reading-library-title" className={cn(resourcesHeroTitle, "mt-4")}>
+              Reading Library
             </h1>
-            <p className="text-slate-600 dark:text-slate-300 text-base max-w-2xl leading-relaxed">
-              Short reads and guided reflections from Solace and  only, organized by topic.
+            <p className={resourcesHeroSubtitle}>
+              Browse and explore all resources for self-growth, healing, and transformation.
             </p>
-          </header>
+          </div>
+        </section>
 
-          <div className="mb-6 flex flex-col sm:flex-row gap-3">
-            <div className="flex-1 relative">
-              <Search className="w-5 h-5 text-slate-400 dark:text-slate-500 absolute left-4 top-1/2 -translate-y-1/2" />
-              <input
-                type="search"
-                placeholder="Search articles…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-12 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-200 dark:focus:ring-violet-900 transition-all"
-              />
-            </div>
+        {/* 2. Search + filter row */}
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <motion.div
+            className="relative flex-1"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05, duration: 0.35 }}
+          >
+            <Search
+              className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[rgba(255,255,255,0.38)]"
+              aria-hidden
+            />
+            <input
+              type="search"
+              placeholder="Search resources..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={resourcesSearchInput}
+              aria-label="Search resources"
+            />
+          </motion.div>
 
+          <motion.div
+            className="flex shrink-0 gap-2 sm:w-auto"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08, duration: 0.35 }}
+          >
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="sm:w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-200 dark:focus:ring-violet-900 transition-all"
+              className={resourcesSelect}
+              aria-label="Filter by category"
             >
               <option value="all">All categories</option>
               {WELLNESS_TOOL_CATEGORIES.map((category) => (
@@ -154,150 +243,208 @@ export function Resources() {
               ))}
               <option value="General">General</option>
             </select>
-          </div>
-
-          {!loading && filteredArticles.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/50 dark:bg-slate-900/40 px-6 py-16 text-center">
-              <BookOpen className="h-10 w-10 text-violet-500 mx-auto mb-4" />
-              <p className="text-lg font-semibold text-slate-900 dark:text-white">No articles match</p>
-              <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 max-w-md mx-auto">
-                Try another category or clear your search.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery("");
-                  setSelectedCategory("all");
-                }}
-                className="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-900 dark:bg-white px-4 py-2 text-sm font-semibold text-white dark:text-slate-900"
-              >
-                Reset filters
-              </button>
-            </div>
-          ) : !loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
-              {filteredArticles.map((article, index) => {
-                const { gradient, Icon: CategoryIcon } = categoryVisualsForReading(article.category);
-                const showRating = article.rating > 0;
-                const showViews = article.source === "api" && article.views > 0;
-
-                return (
-                  <AnimatedCard key={article.id} delay={index * 0.04}>
-                    <motion.div
-                      whileHover={{ y: -2 }}
-                      className="h-full flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 overflow-hidden hover:border-violet-300/80 dark:hover:border-violet-800 hover:shadow-lg hover:shadow-violet-500/5 transition-all"
-                    >
-                      <div
-                        className={`relative h-40 bg-gradient-to-br ${gradient} flex items-center justify-center overflow-hidden`}
-                      >
-                        <CategoryIcon
-                          className="h-16 w-16 text-white/90 drop-shadow-lg"
-                          strokeWidth={1.25}
-                          aria-hidden
-                        />
-                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.35),transparent_55%)] opacity-80 dark:opacity-30" />
-                        <div className="absolute top-3 right-3">
-                          <motion.button
-                            type="button"
-                            whileHover={{ scale: 1.06 }}
-                            whileTap={{ scale: 0.94 }}
-                            className={`p-2 rounded-xl transition-all backdrop-blur-md ${
-                              article.isFavorite
-                                ? "bg-white text-rose-600 shadow"
-                                : "bg-black/20 text-white hover:bg-black/30"
-                            }`}
-                            onClick={() => void handleToggleFavorite(article)}
-                            aria-label={article.isFavorite ? "Remove favorite" : "Add favorite"}
-                          >
-                            <Heart className="w-5 h-5" fill={article.isFavorite ? "currentColor" : "none"} />
-                          </motion.button>
-                        </div>
-                        <div className="absolute top-3 left-3 flex flex-col gap-2">
-                          <div className="bg-white/95 dark:bg-slate-950/90 backdrop-blur-md px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-sm">
-                            <FileText className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
-                            <span className="text-xs font-semibold text-slate-800 dark:text-slate-100">Article</span>
-                          </div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-black/25 text-white w-fit">
-                            {article.source === "builtin" ? "Ezri" : "Your team"}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="p-5 flex flex-col flex-1">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <h2 className="text-base font-bold text-slate-900 dark:text-white leading-snug line-clamp-2">
-                            {article.title}
-                          </h2>
-                          {showRating ? (
-                            <div className="flex items-center gap-0.5 text-amber-500 shrink-0">
-                              <Star className="w-4 h-4" fill="currentColor" />
-                              <span className="text-xs font-bold tabular-nums">{article.rating.toFixed(1)}</span>
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-3 flex-1">
-                          {article.description}
-                        </p>
-
-                        <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-4 text-xs text-slate-500 dark:text-slate-500">
-                          <span className="inline-flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" />
-                            {article.duration}
-                          </span>
-                          {showViews ? (
-                            <span className="inline-flex items-center gap-1">
-                              <TrendingUp className="w-3.5 h-3.5" />
-                              {article.views.toLocaleString()} opens
-                            </span>
-                          ) : null}
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          <span className="text-[11px] px-2 py-0.5 rounded-md bg-violet-100 dark:bg-violet-950/60 text-violet-800 dark:text-violet-200 font-medium">
-                            {article.category}
-                          </span>
-                          <span
-                            className={`text-[11px] px-2 py-0.5 rounded-md font-medium capitalize ${getDifficultyColor(article.difficulty)}`}
-                          >
-                            {article.difficulty}
-                          </span>
-                        </div>
-
-                        <div className="flex gap-2 mt-5">
-                          <motion.button
-                            type="button"
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            className="flex-1 min-h-[44px] px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-md shadow-violet-500/20"
-                            onClick={() => handleOpenArticle(article)}
-                          >
-                            <BookOpen className="w-4 h-4" />
-                            Read
-                          </motion.button>
-                          {article.contentUrl ? (
-                            <motion.button
-                              type="button"
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                              className="px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                              onClick={() =>
-                                window.open(article.contentUrl!, "_blank", "noopener,noreferrer")
-                              }
-                              aria-label="Open in new tab"
-                            >
-                              <ExternalLink className="w-5 h-5" />
-                            </motion.button>
-                          ) : null}
-                        </div>
-                      </div>
-                    </motion.div>
-                  </AnimatedCard>
-                );
-              })}
-            </div>
-          ) : null}
+          </motion.div>
         </div>
+
+        {/* 3. Resource grid */}
+        {!loading && filteredArticles.length === 0 ? (
+          <motion.div
+            className="mt-8 rounded-[1.4rem] border border-dashed border-white/[0.12] bg-[linear-gradient(180deg,rgba(16,16,36,0.6)_0%,rgba(9,9,22,0.75)_100%)] px-6 py-16 text-center"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <BookOpen className="mx-auto mb-4 h-10 w-10 text-violet-300/80" aria-hidden />
+            <p className="text-lg font-semibold text-white">No resources match</p>
+            <p className="mx-auto mt-2 max-w-md text-sm text-[rgba(255,255,255,0.48)]">
+              Try another category or clear your search.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setSelectedCategory("all");
+              }}
+              className="mt-6 inline-flex min-h-[44px] items-center gap-2 rounded-full border border-violet-400/25 bg-violet-500/15 px-5 py-2 text-sm font-semibold text-violet-100 transition-colors hover:bg-violet-500/25"
+            >
+              Reset filters
+            </button>
+          </motion.div>
+        ) : !loading ? (
+          <div className="mt-6 grid grid-cols-1 gap-5 pb-8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+            {filteredArticles.map((article, index) => {
+              const { Icon: CategoryIcon } = categoryVisualsForReading(article.category);
+              const atmosphere = getResourceCardAtmosphere(article.category);
+              const showRating = article.rating > 0;
+              const showViews = article.source === "api" && article.views > 0;
+              const extraTags = article.tags.filter(
+                (tag) => tag.toLowerCase() !== article.category.toLowerCase()
+              );
+
+              return (
+                <motion.article
+                  key={article.id}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.03, duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+                  className={resourcesCardShell}
+                >
+                  {/* Top visual atmosphere */}
+                  <motion.div
+                    className={cn("relative h-[148px] overflow-hidden", atmosphere.visualBg)}
+                    whileHover={{ scale: 1.01 }}
+                    transition={{ duration: 0.35 }}
+                  >
+                    <div className={cn("absolute inset-0", atmosphere.radialGlow)} aria-hidden />
+                    <motion.div
+                      className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_18%,rgba(255,255,255,0.08),transparent_55%)]"
+                      aria-hidden
+                      animate={{ opacity: [0.5, 0.85, 0.5] }}
+                      transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                    />
+
+                    <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                      <span
+                        className={cn(
+                          "w-fit rounded-lg border px-2.5 py-1 text-[10px] font-bold tracking-[0.14em]",
+                          atmosphere.pillClass
+                        )}
+                      >
+                        {formatCategoryLabel(article.category)}
+                      </span>
+                      {extraTags.length > 0 ? (
+                        extraTags.slice(0, 1).map((tag) => (
+                          <span
+                            key={tag}
+                            className="w-fit rounded-lg border border-white/10 bg-black/30 px-2 py-0.5 text-[9px] font-semibold tracking-[0.12em] text-white/70 uppercase"
+                          >
+                            {tag}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="w-fit rounded-lg border border-white/10 bg-black/30 px-2 py-0.5 text-[9px] font-semibold tracking-[0.12em] text-white/65 uppercase">
+                          {secondarySourceLabel(article.source)}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="absolute top-3 right-3">
+                      <motion.button
+                        type="button"
+                        whileHover={{ scale: 1.06 }}
+                        whileTap={{ scale: 0.94 }}
+                        className={resourcesFavoriteBtn(article.isFavorite)}
+                        onClick={() => void handleToggleFavorite(article)}
+                        aria-label={article.isFavorite ? "Remove favorite" : "Add favorite"}
+                      >
+                        <Heart
+                          className="h-4 w-4"
+                          fill={article.isFavorite ? "currentColor" : "none"}
+                          strokeWidth={1.75}
+                        />
+                      </motion.button>
+                    </div>
+
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <CategoryIcon
+                        className={cn("h-[4.25rem] w-[4.25rem]", atmosphere.iconClass)}
+                        strokeWidth={1.15}
+                        aria-hidden
+                      />
+                    </div>
+                  </motion.div>
+
+                  {/* Card body */}
+                  <div className="flex flex-1 flex-col p-4 sm:p-[1.125rem]">
+                    <motion.div
+                      className="mb-2 flex items-start justify-between gap-2"
+                      initial={false}
+                      whileHover={{ x: 1 }}
+                      transition={{ duration: 0.25 }}
+                    >
+                      <h2 className="line-clamp-2 text-[0.95rem] font-bold leading-snug text-white">
+                        {article.title}
+                      </h2>
+                      {showRating ? (
+                        <div className="flex shrink-0 items-center gap-0.5 text-amber-300/90">
+                          <Star className="h-3.5 w-3.5" fill="currentColor" aria-hidden />
+                          <span className="text-xs font-bold tabular-nums">{article.rating.toFixed(1)}</span>
+                        </div>
+                      ) : null}
+                    </motion.div>
+
+                    <p className="line-clamp-3 flex-1 text-sm leading-relaxed text-[rgba(255,255,255,0.48)]">
+                      {article.description}
+                    </p>
+
+                    <div className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-[rgba(255,255,255,0.42)]">
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5" aria-hidden />
+                        {article.duration}
+                      </span>
+                      {showViews ? (
+                        <span className="inline-flex items-center gap-1">
+                          <TrendingUp className="h-3.5 w-3.5" aria-hidden />
+                          {article.views.toLocaleString()} opens
+                        </span>
+                      ) : null}
+                      <span
+                        className={cn(
+                          "rounded-md border px-2 py-0.5 text-[10px] font-semibold capitalize",
+                          getDifficultyPillClass(article.difficulty)
+                        )}
+                      >
+                        {article.difficulty}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 flex gap-2">
+                      <motion.button
+                        type="button"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className={resourcesReadBtn}
+                        onClick={() => handleOpenArticle(article)}
+                      >
+                        <BookOpen className="h-4 w-4" aria-hidden />
+                        Read
+                      </motion.button>
+                      {article.contentUrl ? (
+                        <motion.button
+                          type="button"
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className={resourcesExternalBtn}
+                          onClick={() =>
+                            window.open(article.contentUrl!, "_blank", "noopener,noreferrer")
+                          }
+                          aria-label="Open in new tab"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </motion.button>
+                      ) : null}
+                    </div>
+                  </div>
+                </motion.article>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {/* 4. Footer */}
+        <footer className="pt-2 text-center">
+          <p className="text-sm text-[rgba(255,255,255,0.42)]">Made with care for your wellbeing</p>
+          <p className="mt-1 text-xs text-[rgba(255,255,255,0.32)]">
+            Solace v1.0.0 • © 2024 •{" "}
+            <Link to="/privacy" className="underline-offset-2 hover:text-violet-300/80 hover:underline">
+              Privacy
+            </Link>{" "}
+            •{" "}
+            <Link to="/terms" className="underline-offset-2 hover:text-violet-300/80 hover:underline">
+              Terms
+            </Link>
+          </p>
+        </footer>
       </div>
+    </motion.div>
   );
 }

@@ -419,8 +419,8 @@ export function Accessibility() {
               <h4 className="font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><Link to="/how-it-works" className="hover:text-foreground transition-colors">How It Works</Link></li>
+                <li><Link to="/pricing" className="hover:text-foreground transition-colors">Pricing</Link></li>
                 <li><Link to="/privacy" className="hover:text-foreground transition-colors">Privacy & Safety</Link></li>
-                <li><Link to="/accessibility" className="hover:text-foreground transition-colors">Accessibility</Link></li>
               </ul>
             </div>
 

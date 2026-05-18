@@ -2,3 +2,4 @@
 @import './tailwind.css';
 @import './theme.css';
 @import '../app/solace/solace-tokens.css';
+@import '../app/landing/landing-tokens.css';

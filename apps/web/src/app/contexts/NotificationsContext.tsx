@@ -34,7 +34,7 @@ function computeUnreadCount(items: Notification[]) {
   }, 0);
 }
 
-function normalizeNotifications(payload: unknown): Notification[] {
+export function normalizeNotifications(payload: unknown): Notification[] {
   if (Array.isArray(payload)) return payload as Notification[];
 
   if (payload && typeof payload === 'object') {
@@ -49,17 +49,29 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Replace fetchNotifications useState+useEffect with useQuery.
-  // staleTime: 30_000 per .cursorrules (Notifications list).
-  const { data: notificationsRaw, isLoading } = useQuery({
+  // Recent notifications for header / emergency history (first page only).
+  const { data: notificationsRaw, isPending, isFetching } = useQuery({
     queryKey: queryKeys.notifications.byUser(user?.id),
-    queryFn: () => api.notifications.getAll(),
+    queryFn: () => api.notifications.getAll({ page: 1, limit: 100 }),
     enabled: !!user,
     staleTime: 30_000,
+    retry: 1,
+  });
+
+  const isLoading = isPending && isFetching;
+
+  const { data: unreadCountRaw } = useQuery({
+    queryKey: [...queryKeys.notifications.byUser(user?.id), 'unread-count'] as const,
+    queryFn: () => api.notifications.getUnreadCount(),
+    enabled: !!user,
+    staleTime: 10_000,
   });
 
   const notifications = notificationsRaw ? normalizeNotifications(notificationsRaw) : [];
-  const unreadCount = computeUnreadCount(notifications);
+  const unreadCount =
+    typeof unreadCountRaw?.count === 'number'
+      ? unreadCountRaw.count
+      : computeUnreadCount(notifications);
 
   // Realtime subscription — NOT migrated to useQuery per .cursorrules.
   // Channel name, cleanup, and CHANNEL_ERROR handling are per .cursorrules spec.
@@ -87,11 +99,25 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
               const existing = normalizeNotifications(old);
               // Dedupe by id — realtime can replay inserts on reconnect.
               if (existing.some((item) => item.id === newNotification.id)) {
-                return existing;
+                return old;
               }
-              return [newNotification, ...existing];
+              const next = [newNotification, ...existing];
+              if (old && typeof old === 'object' && !Array.isArray(old)) {
+                const meta = old as { total?: number; page?: number; pageSize?: number };
+                return {
+                  ...meta,
+                  notifications: next,
+                  total: typeof meta.total === 'number' ? meta.total + 1 : next.length,
+                };
+              }
+              return next;
             }
           );
+
+          queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all() });
+          queryClient.invalidateQueries({
+            queryKey: [...queryKeys.notifications.byUser(user.id), 'unread-count'],
+          });
 
           toast(newNotification.title || 'New Notification', {
             description: newNotification.message,
@@ -109,15 +135,30 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     };
   }, [user?.id, queryClient]);
 
+  const updateNotificationsReadState = (
+    old: unknown,
+    updater: (items: Notification[]) => Notification[]
+  ) => {
+    const items = normalizeNotifications(old);
+    const next = updater(items);
+    if (old && typeof old === 'object' && !Array.isArray(old)) {
+      return { ...(old as object), notifications: next };
+    }
+    return next;
+  };
+
   const markAsRead = async (id: string) => {
     try {
       await api.notifications.markAsRead(id);
-      queryClient.setQueryData(
-        queryKeys.notifications.byUser(user?.id),
-        (old: unknown) => normalizeNotifications(old).map((n) =>
-          n.id === id ? { ...n, is_read: true } : n
+      queryClient.setQueryData(queryKeys.notifications.byUser(user?.id), (old: unknown) =>
+        updateNotificationsReadState(old, (items) =>
+          items.map((n) => (n.id === id ? { ...n, is_read: true } : n))
         )
       );
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all() });
+      queryClient.invalidateQueries({
+        queryKey: [...queryKeys.notifications.byUser(user?.id), 'unread-count'],
+      });
     } catch (error) {
       console.error('Failed to mark as read:', error);
       toast.error('Failed to mark as read');
@@ -127,10 +168,13 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const markAllAsRead = async () => {
     try {
       await api.notifications.markAllAsRead();
-      queryClient.setQueryData(
-        queryKeys.notifications.byUser(user?.id),
-        (old: unknown) => normalizeNotifications(old).map((n) => ({ ...n, is_read: true }))
+      queryClient.setQueryData(queryKeys.notifications.byUser(user?.id), (old: unknown) =>
+        updateNotificationsReadState(old, (items) => items.map((n) => ({ ...n, is_read: true })))
       );
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all() });
+      queryClient.invalidateQueries({
+        queryKey: [...queryKeys.notifications.byUser(user?.id), 'unread-count'],
+      });
     } catch (error) {
       console.error('Failed to mark all as read:', error);
       toast.error('Failed to mark all as read');

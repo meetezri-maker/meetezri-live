@@ -1,34 +1,51 @@
 /**
- * EZRI — RESOURCE ANALYTICS DASHBOARD
- * View effectiveness and usage of safety resources (data from your account, stored in the database).
+ * EZRI — RESOURCE ANALYTICS
+ * Cinematic wellness analytics sanctuary (real interaction data only).
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { CrisisResourcesCallout } from '@/app/components/safety/CrisisResourcesCallout';
-import { Card } from '@/app/components/ui/card';
-import { Button } from '@/app/components/ui/button';
 import {
   ArrowLeft,
-  TrendingUp,
   Eye,
   Phone,
-  MessageSquare,
   BarChart3,
-  Award,
+  BookOpen,
   Calendar,
   Download,
   RefreshCw,
   Loader2,
-  Info,
+  ChevronRight,
+  Sun,
+  Star,
+  Activity,
+  HeartPulse,
 } from 'lucide-react';
+import { SolaceGlassCard } from '@/app/solace/SolaceGlassCard';
+import { cn } from '@/lib/utils';
+import {
+  wellnessPlanPageAtmosphere,
+  wellnessPlanPageGlowTop,
+  wellnessPlanPageFogMid,
+  wellnessPlanPageVignette,
+  wellnessPlanBackLink,
+  wellnessPlanHeroTitle,
+  wellnessPlanHeroCard,
+  wellnessPlanHeroImage,
+  wellnessPlanHeroOverlayLeft,
+  wellnessPlanHeroOverlayPurple,
+  wellnessPlanHeroOverlayWarmth,
+  wellnessPlanIconChip,
+  wellnessPlanGlassCard,
+  wellnessPlanBtnGhost,
+  WELLNESS_PLAN_HERO_IMG,
+} from '@/app/pages/app/wellness-plan-settings/wellnessPlanSettingsUi';
 import {
   getAllResourceAnalytics,
   getMostUsedResources,
   getResourceEffectivenessScore,
-  getInteractionsBySafetyState,
   getInteractionsByResourceType,
   getInteractionsByTimePeriod,
   exportResourceAnalytics,
@@ -39,12 +56,101 @@ import { getSafetyResources } from '@/app/utils/safetyResources';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/queries';
+import { ResourceAnalyticsRail } from './resource-analytics/ResourceAnalyticsRail';
+import {
+  MiniSparkline,
+  SupportActivityTimeline,
+} from './resource-analytics/ResourceAnalyticsVisuals';
+import {
+  aggregateBucketsWeekly,
+  buildDailyBuckets,
+  comparePeriods,
+  effectivenessToStars,
+  formatComparisonLine,
+  getEmotionalEngagementLabel,
+  getEngagementLevel,
+  getMostActivePeriod,
+  getResourceTypeColor,
+  getResourceTypeForId,
+  getResourceTypeLabel,
+  getSupportConsistencyDays,
+  getTopReachOutDays,
+  sparklineFromBuckets,
+  type ChartInterval,
+} from './resource-analytics/resourceAnalyticsUtils';
+
+const TIME_FILTER_LABELS: Record<'7d' | '30d' | '90d' | 'all', string> = {
+  '7d': 'last 7 days',
+  '30d': 'last 30 days',
+  '90d': 'last 90 days',
+  all: 'all time',
+};
+
+interface MetricCardProps {
+  label: string;
+  value: string | number;
+  comparison: string | null;
+  icon: ReactNode;
+  iconGlow: string;
+  sparkData: number[];
+  sparkColor: string;
+}
+
+function MetricCard({
+  label,
+  value,
+  comparison,
+  icon,
+  iconGlow,
+  sparkData,
+  sparkColor,
+}: MetricCardProps) {
+  return (
+    <div
+      className={cn(
+        wellnessPlanGlassCard,
+        'flex min-h-[132px] flex-col justify-between rounded-3xl p-5',
+        'border-white/[0.06] bg-[linear-gradient(160deg,rgba(255,255,255,0.05)_0%,rgba(255,255,255,0.01)_55%,rgba(0,0,0,0.15)_100%)]'
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div
+          className={cn(
+            'flex h-11 w-11 shrink-0 items-center justify-center rounded-full',
+            iconGlow
+          )}
+        >
+          {icon}
+        </div>
+        <MiniSparkline data={sparkData} stroke={sparkColor} />
+      </div>
+      <div className="mt-4">
+        <p className="text-3xl font-light tabular-nums text-white">{value}</p>
+        <p className="mt-1 text-xs font-medium text-[rgba(255,255,255,0.5)]">{label}</p>
+        {comparison ? (
+          <p
+            className={cn(
+              'mt-1.5 text-[11px] font-medium',
+              comparison.startsWith('↑')
+                ? 'text-emerald-400/85'
+                : comparison.startsWith('↓')
+                  ? 'text-amber-300/80'
+                  : 'text-[rgba(255,255,255,0.4)]'
+            )}
+          >
+            {comparison}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 export function ResourceAnalyticsPage() {
-  const navigate = useNavigate();
   const { user, profile, isLoading: authLoading } = useAuth();
   const userId = user?.id ?? profile?.id ?? null;
   const [timeFilter, setTimeFilter] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
+  const [chartInterval, setChartInterval] = useState<ChartInterval>('daily');
 
   const range = useMemo(() => {
     const now = new Date();
@@ -140,6 +246,21 @@ export function ResourceAnalyticsPage() {
     return localInteractionsFiltered;
   }, [serverInteractions, localInteractionsFiltered, isSuccess, isError]);
 
+  const { recentHalfInteractions, priorHalfInteractions } = useMemo(() => {
+    const midMs =
+      periodBounds.start.getTime() +
+      (periodBounds.end.getTime() - periodBounds.start.getTime()) / 2;
+    const mid = new Date(midMs);
+    const prior: typeof interactions = [];
+    const recent: typeof interactions = [];
+    interactions.forEach((ix) => {
+      const t = new Date(ix.timestamp);
+      if (t < mid) prior.push(ix);
+      else recent.push(ix);
+    });
+    return { recentHalfInteractions: recent, priorHalfInteractions: prior };
+  }, [interactions, periodBounds.start, periodBounds.end]);
+
   const dataSourceNote: 'synced' | 'local_fallback' | 'offline' =
     serverInteractions.length > 0
       ? 'synced'
@@ -154,20 +275,31 @@ export function ResourceAnalyticsPage() {
     [interactions]
   );
 
-  const mostUsed = useMemo(
-    () => getMostUsedResources(10, interactions),
-    [interactions]
+  const recentHalfAnalytics = useMemo(
+    () => getAllResourceAnalytics(recentHalfInteractions),
+    [recentHalfInteractions]
   );
 
-  const bySafetyState = useMemo(
-    () => getInteractionsBySafetyState(interactions),
-    [interactions]
+  const priorHalfAnalytics = useMemo(
+    () => getAllResourceAnalytics(priorHalfInteractions),
+    [priorHalfInteractions]
   );
 
-  const byType = useMemo(
-    () => getInteractionsByResourceType(interactions),
-    [interactions]
+  const mostUsed = useMemo(() => getMostUsedResources(4, interactions), [interactions]);
+
+  const byType = useMemo(() => getInteractionsByResourceType(interactions), [interactions]);
+
+  const dailyBuckets = useMemo(
+    () => buildDailyBuckets(interactions, periodBounds.start, periodBounds.end),
+    [interactions, periodBounds.start, periodBounds.end]
   );
+
+  const chartBuckets = useMemo(() => {
+    if (chartInterval === 'weekly' || timeFilter === '90d' || timeFilter === 'all') {
+      return aggregateBucketsWeekly(dailyBuckets);
+    }
+    return dailyBuckets;
+  }, [chartInterval, dailyBuckets, timeFilter]);
 
   const handleExport = () => {
     const data = exportResourceAnalytics(interactions);
@@ -182,21 +314,129 @@ export function ResourceAnalyticsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const getTotalInteractions = () =>
-    Object.values(analytics).reduce((sum, a) => sum + a.totalViews + a.totalClicks, 0);
+  const totalInteractions = useMemo(
+    () => Object.values(analytics).reduce((sum, a) => sum + a.totalViews + a.totalClicks, 0),
+    [analytics]
+  );
 
-  const getTotalClicks = () =>
-    Object.values(analytics).reduce((sum, a) => sum + a.totalClicks, 0);
+  const totalClicks = useMemo(
+    () => Object.values(analytics).reduce((sum, a) => sum + a.totalClicks, 0),
+    [analytics]
+  );
 
-  const getAverageCTR = () => {
+  const recentTotalInteractions = useMemo(
+    () =>
+      Object.values(recentHalfAnalytics).reduce((sum, a) => sum + a.totalViews + a.totalClicks, 0),
+    [recentHalfAnalytics]
+  );
+
+  const priorTotalInteractions = useMemo(
+    () =>
+      Object.values(priorHalfAnalytics).reduce((sum, a) => sum + a.totalViews + a.totalClicks, 0),
+    [priorHalfAnalytics]
+  );
+
+  const recentTotalClicks = useMemo(
+    () => Object.values(recentHalfAnalytics).reduce((sum, a) => sum + a.totalClicks, 0),
+    [recentHalfAnalytics]
+  );
+
+  const priorTotalClicks = useMemo(
+    () => Object.values(priorHalfAnalytics).reduce((sum, a) => sum + a.totalClicks, 0),
+    [priorHalfAnalytics]
+  );
+
+  const avgCtr = useMemo(() => {
     const resources = Object.values(analytics).filter((a) => a.totalViews > 0);
-    if (resources.length === 0) return 0;
-    const totalCTR = resources.reduce((sum, a) => {
-      const ctr = (a.totalClicks / a.totalViews) * 100;
-      return sum + ctr;
-    }, 0);
+    if (resources.length === 0) return '0';
+    const totalCTR = resources.reduce((sum, a) => sum + (a.totalClicks / a.totalViews) * 100, 0);
     return (totalCTR / resources.length).toFixed(1);
-  };
+  }, [analytics]);
+
+  const recentAvgCtr = useMemo(() => {
+    const resources = Object.values(recentHalfAnalytics).filter((a) => a.totalViews > 0);
+    if (resources.length === 0) return 0;
+    const totalCTR = resources.reduce((sum, a) => sum + (a.totalClicks / a.totalViews) * 100, 0);
+    return totalCTR / resources.length;
+  }, [recentHalfAnalytics]);
+
+  const priorAvgCtr = useMemo(() => {
+    const resources = Object.values(priorHalfAnalytics).filter((a) => a.totalViews > 0);
+    if (resources.length === 0) return 0;
+    const totalCTR = resources.reduce((sum, a) => sum + (a.totalClicks / a.totalViews) * 100, 0);
+    return totalCTR / resources.length;
+  }, [priorHalfAnalytics]);
+
+  const resourcesExplored = Object.keys(analytics).length;
+  const recentResourcesExplored = Object.keys(recentHalfAnalytics).length;
+  const priorResourcesExplored = Object.keys(priorHalfAnalytics).length;
+
+  const comparisonLabel = `first half of ${TIME_FILTER_LABELS[timeFilter]}`;
+
+  const comparisons = useMemo(
+    () => ({
+      interactions: formatComparisonLine(
+        comparePeriods(recentTotalInteractions, priorTotalInteractions),
+        comparisonLabel
+      ),
+      engagements: formatComparisonLine(
+        comparePeriods(recentTotalClicks, priorTotalClicks),
+        comparisonLabel
+      ),
+      ctr: formatComparisonLine(
+        comparePeriods(recentAvgCtr, priorAvgCtr),
+        comparisonLabel
+      ),
+      resources: formatComparisonLine(
+        comparePeriods(recentResourcesExplored, priorResourcesExplored),
+        comparisonLabel
+      ),
+    }),
+    [
+      recentTotalInteractions,
+      priorTotalInteractions,
+      recentTotalClicks,
+      priorTotalClicks,
+      recentAvgCtr,
+      priorAvgCtr,
+      recentResourcesExplored,
+      priorResourcesExplored,
+      comparisonLabel,
+    ]
+  );
+
+  const engagement = useMemo(() => getEngagementLevel(totalInteractions), [totalInteractions]);
+
+  const avgEffectiveness = useMemo(() => {
+    if (mostUsed.length === 0) return 0;
+    const sum = mostUsed.reduce(
+      (acc, r) => acc + getResourceEffectivenessScore(r.resourceId, interactions),
+      0
+    );
+    return Math.round(sum / mostUsed.length);
+  }, [mostUsed, interactions]);
+
+  const topCategory = useMemo(() => {
+    const entries = Object.entries(byType).sort(([, a], [, b]) => b - a);
+    if (entries.length === 0) return 'Not enough data yet';
+    return getResourceTypeLabel(entries[0][0]);
+  }, [byType]);
+
+  const categoryRows = useMemo(() => {
+    const total = Object.values(byType).reduce((s, c) => s + c, 0);
+    if (total === 0) return [];
+    return Object.entries(byType)
+      .sort(([, a], [, b]) => b - a)
+      .map(([type, count]) => ({
+        type,
+        label: getResourceTypeLabel(type),
+        pct: Math.round((count / total) * 100),
+        color: getResourceTypeColor(type),
+      }));
+  }, [byType]);
+
+  const mostActivePeriod = useMemo(() => getMostActivePeriod(interactions), [interactions]);
+  const topDays = useMemo(() => getTopReachOutDays(interactions), [interactions]);
 
   const getResourceName = useCallback(
     (resourceId: string): string => {
@@ -211,391 +451,513 @@ export function ResourceAnalyticsPage() {
 
   if (authLoading) {
     return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 flex flex-col items-center gap-4 text-muted-foreground">
-          <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden />
-          <p>Loading your settings…</p>
+      <div className={wellnessPlanPageAtmosphere}>
+        <div className="relative z-10 flex min-h-[50vh] flex-col items-center justify-center gap-4 text-[rgba(255,255,255,0.5)]">
+          <Loader2 className="h-10 w-10 animate-spin text-fuchsia-300/60" aria-hidden />
+          <p>Loading your analytics sanctuary…</p>
         </div>
+      </div>
     );
   }
 
   if (!userId) {
     return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-          <Card className="p-6 text-center">
-            <p className="text-muted-foreground">Sign in to view resource analytics.</p>
-          </Card>
+      <div className={wellnessPlanPageAtmosphere}>
+        <div className="relative z-10 mx-auto max-w-lg px-6 py-16 text-center">
+          <SolaceGlassCard className="p-8">
+            <p className="text-[rgba(255,255,255,0.55)]">Sign in to view resource analytics.</p>
+          </SolaceGlassCard>
         </div>
+      </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2 text-muted-foreground hover:text-primary mb-4 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Settings
-          </button>
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <BarChart3 className="w-8 h-8 text-primary" />
-                <h1 className="text-3xl font-bold">Resource Analytics</h1>
+    <motion.div
+      className={wellnessPlanPageAtmosphere}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35 }}
+    >
+      <motion.div className={wellnessPlanPageGlowTop} aria-hidden />
+      <motion.div className={wellnessPlanPageFogMid} aria-hidden />
+      <motion.div className={wellnessPlanPageVignette} aria-hidden />
+
+      <div className="relative z-10 mx-auto w-full max-w-[1500px] px-4 py-7 sm:px-7 sm:py-9">
+        <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] xl:gap-7">
+          {/* Main column ~72% */}
+          <div className="min-w-0 space-y-7">
+            {/* 1. Cinematic hero */}
+            <motion.section
+              className={wellnessPlanHeroCard}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <img
+                src={WELLNESS_PLAN_HERO_IMG}
+                alt=""
+                className={wellnessPlanHeroImage}
+                width={1600}
+                height={900}
+              />
+              <div className={wellnessPlanHeroOverlayLeft} aria-hidden />
+              <div className={wellnessPlanHeroOverlayPurple} aria-hidden />
+              <motion.div className={wellnessPlanHeroOverlayWarmth} aria-hidden />
+
+              <div className="relative flex min-h-[240px] flex-col p-5 sm:min-h-[260px] sm:p-7 lg:min-h-[280px]">
+                <Link to="/app/settings" className={wellnessPlanBackLink}>
+                  <ArrowLeft className="h-4 w-4" aria-hidden />
+                  Back to Settings
+                </Link>
+
+                <div className="mt-5 flex flex-1 flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="flex flex-wrap items-start gap-4">
+                    <div className={wellnessPlanIconChip('pink')}>
+                      <BarChart3 className="h-7 w-7 text-fuchsia-200" aria-hidden />
+                    </div>
+                    <div>
+                      <h1 className={wellnessPlanHeroTitle}>Resource Analytics</h1>
+                      <p className="mt-2 max-w-xl text-sm leading-relaxed text-[rgba(255,255,255,0.58)] sm:text-[15px]">
+                        Understanding what support resources helped you most.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <label className="sr-only" htmlFor="ra-time-filter">
+                      Date range
+                    </label>
+                    <div className="flex min-h-[44px] items-center gap-2 rounded-full border border-white/[0.1] bg-black/35 px-3 backdrop-blur-md">
+                      <Calendar className="h-4 w-4 shrink-0 text-[rgba(255,255,255,0.45)]" aria-hidden />
+                      <select
+                        id="ra-time-filter"
+                        value={timeFilter}
+                        onChange={(e) => setTimeFilter(e.target.value as typeof timeFilter)}
+                        className="min-h-[44px] cursor-pointer bg-transparent text-sm text-[rgba(255,255,255,0.88)] outline-none"
+                        disabled={isLoading}
+                      >
+                        <option value="7d" className="bg-[#0a0b18]">
+                          Last 7 days
+                        </option>
+                        <option value="30d" className="bg-[#0a0b18]">
+                          Last 30 days
+                        </option>
+                        <option value="90d" className="bg-[#0a0b18]">
+                          Last 90 days
+                        </option>
+                        <option value="all" className="bg-[#0a0b18]">
+                          All time
+                        </option>
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => refetch()}
+                      disabled={isFetching}
+                      className={cn(
+                        wellnessPlanBtnGhost,
+                        'min-h-[44px] min-w-[44px] px-4'
+                      )}
+                      aria-label="Refresh analytics"
+                    >
+                      <RefreshCw
+                        className={cn('h-4 w-4', isFetching && 'animate-spin')}
+                        aria-hidden
+                      />
+                      <span className="hidden sm:inline">Refresh</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExport}
+                      disabled={interactions.length === 0}
+                      className={cn(
+                        'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white',
+                        'bg-[linear-gradient(135deg,#7c3aed_0%,#db2777_55%,#ec4899_100%)]',
+                        'border border-white/10 shadow-[0_0_32px_-8px_rgba(168,85,247,0.55)]',
+                        'transition-all hover:brightness-110 disabled:opacity-45'
+                      )}
+                    >
+                      <Download className="h-4 w-4" aria-hidden />
+                      Export insights
+                    </button>
+                  </div>
+                </div>
               </div>
-              <p className="text-muted-foreground">
-                See when you opened hotlines, links, or call buttons—we log each action for your insights only.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-muted-foreground" />
-                <select
-                  value={timeFilter}
-                  onChange={(e) => setTimeFilter(e.target.value as typeof timeFilter)}
-                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                  aria-label="Time range"
-                  disabled={isLoading}
-                >
-                  <option value="7d">Last 7 days</option>
-                  <option value="30d">Last 30 days</option>
-                  <option value="90d">Last 90 days</option>
-                  <option value="all">All time</option>
-                </select>
+            </motion.section>
+
+            {/* Sync / offline notices */}
+            {dataSourceNote === 'offline' && interactions.length > 0 ? (
+              <div className="rounded-2xl border border-amber-400/20 bg-amber-500/[0.08] px-4 py-3 text-sm text-amber-100/90">
+                Could not reach the server. Showing activity saved in this browser.{' '}
+                <button type="button" className="font-semibold underline" onClick={() => refetch()}>
+                  Retry sync
+                </button>
               </div>
-              <Button type="button" variant="outline" onClick={() => refetch()} disabled={isFetching}>
-                <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
-              <Button type="button" onClick={handleExport} variant="outline" disabled={interactions.length === 0}>
-                <Download className="w-4 h-4 mr-2" />
-                Export Data
-              </Button>
-            </div>
-          </div>
-        </motion.div>
+            ) : null}
 
-        <Card className="p-6 mb-6 bg-muted/30 border-muted">
-          <div className="flex gap-3">
-            <Info className="w-5 h-5 shrink-0 text-primary mt-0.5" aria-hidden />
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p className="font-semibold text-foreground">How this works</p>
-              <ol className="list-decimal pl-5 space-y-2">
-                <li>
-                  Open{' '}
-                  <Link className="text-primary underline underline-offset-2 font-medium" to="/app/emergency-resources">
-                    Emergency resources
-                  </Link>{' '}
-                  from Settings (or tap hotlines inside a live session’s safety-resources panel).
-                </li>
-                <li>
-                  When you <strong className="text-foreground font-medium">tap call, visit site, copy, or similar</strong>
-                  , MeetEzri records that action (counts as a view when a card mounts in the modal only).
-                </li>
-                <li>
-                  Data is stored on your account when the API syncs;{' '}
-                  <strong className="text-foreground font-medium">Refresh</strong> updates this dashboard. If sync fails,
-                  actions from this browser in the selected date range still appear below.
-                </li>
-              </ol>
-              <p className="text-xs pt-2">
-                No server yet? Ensure the API is running locally and Postgres has the migration for{' '}
-                <code className="text-xs bg-muted px-1 rounded">safety_resource_interactions</code> (run{' '}
-                <code className="text-xs bg-muted px-1 rounded">pnpm prisma migrate deploy</code> in{' '}
-                <code className="text-xs bg-muted px-1 rounded">apps/api</code>).
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        {dataSourceNote === 'offline' && interactions.length > 0 && (
-          <Card className="p-4 mb-6 border-amber-200 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-800">
-            <p className="text-sm text-amber-900 dark:text-amber-100">
-              Could not reach the server. Showing activity saved in this browser for the selected period.{' '}
-              <button
-                type="button"
-                className="font-semibold underline"
-                onClick={() => refetch()}
-              >
-                Retry sync
-              </button>
-              .
-            </p>
-          </Card>
-        )}
-
-        {dataSourceNote === 'local_fallback' &&
-          interactions.length > 0 &&
-          !isError &&
-          serverInteractions.length === 0 &&
-          isSuccess && (
-            <Card className="p-4 mb-6 border-blue-200 bg-blue-50/80 dark:bg-blue-950/30 dark:border-blue-900">
-              <p className="text-sm text-blue-900 dark:text-blue-100">
-                No synced history for this window yet—we’re showing what this browser logged. Tap a few resources on{' '}
+            {dataSourceNote === 'local_fallback' &&
+            interactions.length > 0 &&
+            !isError &&
+            serverInteractions.length === 0 &&
+            isSuccess ? (
+              <div className="rounded-2xl border border-violet-400/18 bg-violet-500/[0.08] px-4 py-3 text-sm text-violet-100/88">
+                Showing browser-logged activity for this period.{' '}
                 <Link className="font-semibold underline" to="/app/emergency-resources">
                   Emergency resources
                 </Link>{' '}
-                then tap <strong>Refresh</strong> here (after migrations, events save to your account too).
-              </p>
-            </Card>
-          )}
+                sync to your account when the API is available.
+              </div>
+            ) : null}
 
-        {isError && interactions.length === 0 && (
-          <Card className="p-6 mb-6 border-destructive/50 bg-destructive/5">
-            <p className="text-destructive text-sm mb-3">
-              Could not load analytics from the server. Use Emergency resources once, ensure the API/database migration
-              is applied, then retry.
-            </p>
-            <Button type="button" variant="outline" size="sm" onClick={() => refetch()}>
-              Retry
-            </Button>
-          </Card>
-        )}
+            {isError && interactions.length === 0 ? (
+              <SolaceGlassCard className="border-rose-400/20 p-5">
+                <p className="text-sm text-rose-200/85">
+                  Could not load analytics from the server. Use Emergency resources once, then retry.
+                </p>
+                <button
+                  type="button"
+                  className={cn(wellnessPlanBtnGhost, 'mt-4')}
+                  onClick={() => refetch()}
+                >
+                  Retry
+                </button>
+              </SolaceGlassCard>
+            ) : null}
 
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            {[1, 2, 3, 4].map((i) => (
-              <Card key={i} className="p-6 animate-pulse h-28 bg-muted/40" />
-            ))}
-          </div>
-        ) : (
-          <>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8"
-            >
-              <Card className="p-6 bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200">
-                <div className="flex items-center justify-between mb-2">
-                  <Eye className="w-8 h-8 text-blue-600" />
-                  <TrendingUp className="w-5 h-5 text-blue-500" />
-                </div>
-                <p className="text-3xl font-bold text-blue-900">{getTotalInteractions()}</p>
-                <p className="text-sm text-blue-700">Total Interactions</p>
-              </Card>
+            {isLoading ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <div
+                    key={i}
+                    className={cn(wellnessPlanGlassCard, 'h-32 animate-pulse rounded-3xl')}
+                  />
+                ))}
+              </div>
+            ) : (
+              <>
+                {/* 2. Overview metrics */}
+                <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <MetricCard
+                    label="Total Interactions"
+                    value={totalInteractions}
+                    comparison={comparisons.interactions}
+                    icon={<Eye className="h-5 w-5 text-cyan-200" aria-hidden />}
+                    iconGlow="bg-[radial-gradient(circle,rgba(34,211,238,0.35)_0%,rgba(139,92,246,0.12)_70%)] shadow-[0_0_24px_-6px_rgba(34,211,238,0.45)]"
+                    sparkData={sparklineFromBuckets(dailyBuckets, 'interactions')}
+                    sparkColor="#22d3ee"
+                  />
+                  <MetricCard
+                    label="Total Engagements"
+                    value={totalClicks}
+                    comparison={comparisons.engagements}
+                    icon={<Phone className="h-5 w-5 text-pink-200" aria-hidden />}
+                    iconGlow="bg-[radial-gradient(circle,rgba(236,72,153,0.35)_0%,rgba(168,85,247,0.1)_70%)] shadow-[0_0_24px_-6px_rgba(236,72,153,0.45)]"
+                    sparkData={sparklineFromBuckets(dailyBuckets, 'engagements')}
+                    sparkColor="#f472b6"
+                  />
+                  <MetricCard
+                    label="Avg Support Response Rate"
+                    value={`${avgCtr}%`}
+                    comparison={comparisons.ctr}
+                    icon={<HeartPulse className="h-5 w-5 text-emerald-200" aria-hidden />}
+                    iconGlow="bg-[radial-gradient(circle,rgba(52,211,153,0.32)_0%,rgba(34,211,238,0.1)_70%)] shadow-[0_0_24px_-6px_rgba(52,211,153,0.4)]"
+                    sparkData={sparklineFromBuckets(dailyBuckets, 'engagements')}
+                    sparkColor="#34d399"
+                  />
+                  <MetricCard
+                    label="Resources Explored"
+                    value={resourcesExplored}
+                    comparison={comparisons.resources}
+                    icon={<BookOpen className="h-5 w-5 text-amber-200" aria-hidden />}
+                    iconGlow="bg-[radial-gradient(circle,rgba(251,191,36,0.32)_0%,rgba(249,115,22,0.08)_70%)] shadow-[0_0_24px_-6px_rgba(251,191,36,0.4)]"
+                    sparkData={sparklineFromBuckets(dailyBuckets, 'views')}
+                    sparkColor="#fbbf24"
+                  />
+                </section>
 
-              <Card className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200">
-                <div className="flex items-center justify-between mb-2">
-                  <Phone className="w-8 h-8 text-purple-600" />
-                  <TrendingUp className="w-5 h-5 text-purple-500" />
-                </div>
-                <p className="text-3xl font-bold text-purple-900">{getTotalClicks()}</p>
-                <p className="text-sm text-purple-700">Total Engagements</p>
-              </Card>
+                {/* 3. Support Activity Timeline */}
+                <SolaceGlassCard className="p-5 sm:p-6">
+                  <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="font-serif text-xl font-light text-white">
+                        Support Activity Timeline
+                      </h2>
+                      <p className="mt-1 text-sm text-[rgba(255,255,255,0.48)]">
+                        Your engagement with support resources over time.
+                      </p>
+                    </div>
+                    <label className="sr-only" htmlFor="ra-chart-interval">
+                      Chart interval
+                    </label>
+                    <select
+                      id="ra-chart-interval"
+                      value={chartInterval}
+                      onChange={(e) => setChartInterval(e.target.value as ChartInterval)}
+                      className="min-h-[44px] rounded-full border border-white/[0.1] bg-white/[0.04] px-4 text-sm text-[rgba(255,255,255,0.82)] outline-none"
+                    >
+                      <option value="daily" className="bg-[#0a0b18]">
+                        Daily
+                      </option>
+                      <option value="weekly" className="bg-[#0a0b18]">
+                        Weekly
+                      </option>
+                    </select>
+                  </div>
 
-              <Card className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-                <div className="flex items-center justify-between mb-2">
-                  <Award className="w-8 h-8 text-green-600" />
-                  <TrendingUp className="w-5 h-5 text-green-500" />
-                </div>
-                <p className="text-3xl font-bold text-green-900">{getAverageCTR()}%</p>
-                <p className="text-sm text-green-700">Avg Click Rate</p>
-              </Card>
+                  <SupportActivityTimeline
+                    data={chartBuckets}
+                    isEmpty={interactions.length === 0}
+                  />
 
-              <Card className="p-6 bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200">
-                <div className="flex items-center justify-between mb-2">
-                  <BarChart3 className="w-8 h-8 text-orange-600" />
-                  <Calendar className="w-5 h-5 text-orange-500" />
-                </div>
-                <p className="text-3xl font-bold text-orange-900">{Object.keys(analytics).length}</p>
-                <p className="text-sm text-orange-700">Resources Tracked</p>
-              </Card>
-            </motion.div>
+                  <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-3">
+                      <div className="flex items-center gap-2 text-xs font-medium text-amber-200/85">
+                        <Sun className="h-4 w-4 shrink-0" aria-hidden />
+                        Most active periods
+                      </div>
+                      <p className="mt-1.5 text-sm text-[rgba(255,255,255,0.65)]">
+                        {mostActivePeriod ?? 'Not enough data yet'}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-3">
+                      <div className="flex items-center gap-2 text-xs font-medium text-violet-200/85">
+                        <Calendar className="h-4 w-4 shrink-0" aria-hidden />
+                        Days you reached out most
+                      </div>
+                      <p className="mt-1.5 text-sm text-[rgba(255,255,255,0.65)]">
+                        {topDays.length > 0 ? topDays.join(' • ') : 'Not enough data yet'}
+                      </p>
+                    </div>
+                  </div>
+                </SolaceGlassCard>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="mb-8"
-            >
-              <h2 className="text-xl font-bold mb-4">Most Used Resources</h2>
-              <div className="space-y-3">
-                {mostUsed.length === 0 ? (
-                  <Card className="p-6 text-center space-y-3">
-                    <p className="text-muted-foreground">
-                      Nothing recorded in this period yet—open Emergency resources or use the safety-resources panel during
-                      a session, tap a phone number or link, then tap <strong>Refresh</strong> above.
-                    </p>
-                    <Button type="button" variant="outline" asChild>
-                      <Link to="/app/emergency-resources">Go to Emergency resources</Link>
-                    </Button>
-                  </Card>
-                ) : (
-                  mostUsed.map((resource) => {
-                    const effectivenessScore = getResourceEffectivenessScore(
-                      resource.resourceId,
-                      interactions
-                    );
-                    const ctr =
-                      resource.totalViews > 0
-                        ? ((resource.totalClicks / resource.totalViews) * 100).toFixed(1)
-                        : '0';
+                {/* 4. Most Helpful Resources */}
+                <section>
+                  <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <h2 className="font-serif text-xl font-light text-white">
+                        Most Helpful Resources
+                      </h2>
+                      <p className="mt-1 text-sm text-[rgba(255,255,255,0.48)]">
+                        Resources you&apos;ve used and engaged with the most.
+                      </p>
+                    </div>
+                    <Link
+                      to="/app/emergency-resources"
+                      className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-fuchsia-300/80 transition-colors hover:text-fuchsia-200"
+                    >
+                      View all resources
+                      <ChevronRight className="h-4 w-4" aria-hidden />
+                    </Link>
+                  </div>
 
-                    return (
-                      <motion.div
-                        key={resource.resourceId}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.3 + resource.rank * 0.05 }}
+                  {mostUsed.length === 0 ? (
+                    <SolaceGlassCard className="p-8 text-center">
+                      <p className="text-sm text-[rgba(255,255,255,0.5)]">
+                        Nothing recorded in this period yet—open Emergency resources, tap a hotline
+                        or link, then refresh.
+                      </p>
+                      <Link
+                        to="/app/emergency-resources"
+                        className={cn(wellnessPlanBtnGhost, 'mt-5 inline-flex')}
                       >
-                        <Card className="p-5 hover:shadow-lg transition-all">
-                          <div className="flex items-start gap-4">
-                            <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-lg font-bold text-lg flex-shrink-0">
-                              #{resource.rank}
-                            </div>
-                            <div className="flex-1">
-                              <h3 className="font-bold text-lg mb-1">
-                                {getResourceName(resource.resourceId)}
-                              </h3>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
-                                <div>
-                                  <p className="text-xs text-gray-600">Views</p>
-                                  <p className="text-lg font-bold text-blue-600">{resource.totalViews}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-600">Engagements</p>
-                                  <p className="text-lg font-bold text-purple-600">{resource.totalClicks}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-600">Click Rate</p>
-                                  <p className="text-lg font-bold text-green-600">{ctr}%</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-600">Effectiveness</p>
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                      <div
-                                        className="h-full bg-gradient-to-r from-green-500 to-emerald-500"
-                                        style={{ width: `${effectivenessScore}%` }}
-                                      />
-                                    </div>
-                                    <span className="text-sm font-bold text-gray-700">{effectivenessScore}</span>
-                                  </div>
-                                </div>
+                        Go to Emergency resources
+                      </Link>
+                    </SolaceGlassCard>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      {mostUsed.map((resource) => {
+                        const effectivenessScore = getResourceEffectivenessScore(
+                          resource.resourceId,
+                          interactions
+                        );
+                        const stars = effectivenessToStars(effectivenessScore);
+                        const resourceType =
+                          getResourceTypeForId(interactions, resource.resourceId) ?? 'crisis_line';
+                        const lastUsed = resource.lastInteraction
+                          ? new Date(resource.lastInteraction).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })
+                          : '—';
+
+                        return (
+                          <article
+                            key={resource.resourceId}
+                            className={cn(
+                              wellnessPlanGlassCard,
+                              'rounded-3xl p-5 transition-colors hover:border-fuchsia-400/18'
+                            )}
+                          >
+                            <div className="flex items-start gap-3">
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 text-xs font-bold text-white shadow-[0_0_20px_-6px_rgba(168,85,247,0.6)]">
+                                #{resource.rank}
+                              </span>
+                              <div
+                                className={cn(
+                                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br',
+                                  getResourceTypeColor(resourceType)
+                                )}
+                              >
+                                <Activity className="h-5 w-5 text-white/90" aria-hidden />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <h3 className="truncate font-medium text-white">
+                                  {getResourceName(resource.resourceId)}
+                                </h3>
+                                <span
+                                  className={cn(
+                                    'mt-1 inline-block rounded-full px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+                                    'border border-white/10 bg-white/[0.04] text-violet-200/85'
+                                  )}
+                                >
+                                  {getResourceTypeLabel(resourceType)}
+                                </span>
                               </div>
                             </div>
-                          </div>
-                        </Card>
-                      </motion.div>
-                    );
-                  })
-                )}
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="grid md:grid-cols-2 gap-6 mb-8"
-            >
-              <Card className="p-6">
-                <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-primary" />
-                  By Safety State
-                </h3>
-                {Object.keys(bySafetyState).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No safety-state context recorded yet</p>
-                ) : (
-                  <div className="space-y-3">
-                    {Object.entries(bySafetyState)
-                      .sort(([, a], [, b]) => b - a)
-                      .map(([state, count]) => {
-                        const total = Object.values(bySafetyState).reduce((sum, c) => sum + c, 0);
-                        const percentage = ((count / total) * 100).toFixed(0);
-
-                        const colorMap: Record<string, string> = {
-                          NORMAL: 'bg-green-500',
-                          ELEVATED_CONCERN: 'bg-yellow-500',
-                          HIGH_RISK: 'bg-orange-500',
-                          SAFETY_MODE: 'bg-red-500',
-                          COOLDOWN: 'bg-slate-500',
-                        };
-
-                        return (
-                          <div key={state}>
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm font-medium">{state.replace(/_/g, ' ')}</span>
-                              <span className="text-sm font-bold">
-                                {count} ({percentage}%)
-                              </span>
-                            </div>
-                            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full ${colorMap[state] || 'bg-gray-500'}`}
-                                style={{ width: `${percentage}%` }}
-                              />
-                            </div>
-                          </div>
+                            <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <dt className="text-[rgba(255,255,255,0.42)]">Views</dt>
+                                <dd className="mt-0.5 font-semibold text-cyan-200/90">
+                                  {resource.totalViews}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-[rgba(255,255,255,0.42)]">Engagements</dt>
+                                <dd className="mt-0.5 font-semibold text-pink-200/90">
+                                  {resource.totalClicks}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-[rgba(255,255,255,0.42)]">Helpfulness</dt>
+                                <dd className="mt-0.5 flex items-center gap-0.5">
+                                  {stars > 0 ? (
+                                    Array.from({ length: 5 }).map((_, i) => (
+                                      <Star
+                                        key={i}
+                                        className={cn(
+                                          'h-3.5 w-3.5',
+                                          i < stars
+                                            ? 'fill-amber-300/90 text-amber-300/90'
+                                            : 'text-white/15'
+                                        )}
+                                        aria-hidden
+                                      />
+                                    ))
+                                  ) : (
+                                    <span className="text-[rgba(255,255,255,0.45)]">—</span>
+                                  )}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-[rgba(255,255,255,0.42)]">Last used</dt>
+                                <dd className="mt-0.5 font-medium text-[rgba(255,255,255,0.72)]">
+                                  {lastUsed}
+                                </dd>
+                              </div>
+                            </dl>
+                          </article>
                         );
                       })}
-                  </div>
-                )}
-              </Card>
+                    </div>
+                  )}
+                </section>
 
-              <Card className="p-6">
-                <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-primary" />
-                  By Resource Type
-                </h3>
-                {Object.keys(byType).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No data yet</p>
-                ) : (
-                  <div className="space-y-3">
-                    {Object.entries(byType)
-                      .sort(([, a], [, b]) => b - a)
-                      .map(([type, count]) => {
-                        const total = Object.values(byType).reduce((sum, c) => sum + c, 0);
-                        const percentage = ((count / total) * 100).toFixed(0);
-
-                        const colorMap: Record<string, string> = {
-                          crisis_line: 'bg-blue-500',
-                          text_line: 'bg-purple-500',
-                          emergency: 'bg-red-500',
-                          support_group: 'bg-green-500',
-                          trusted_contact: 'bg-orange-500',
-                        };
-
-                        const nameMap: Record<string, string> = {
-                          crisis_line: 'Emergency & mental-health hotlines',
-                          text_line: 'Text Lines',
-                          emergency: 'Emergency',
-                          support_group: 'Support Groups',
-                          trusted_contact: 'Trusted contact',
-                        };
-
-                        return (
-                          <div key={type}>
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm font-medium">{nameMap[type] || type}</span>
-                              <span className="text-sm font-bold">
-                                {count} ({percentage}%)
+                {/* 5. Resource Categories */}
+                <section>
+                  <h2 className="font-serif text-xl font-light text-white">Resource Categories</h2>
+                  <p className="mt-1 text-sm text-[rgba(255,255,255,0.48)]">
+                    Where you focus most to support your wellbeing.
+                  </p>
+                  {categoryRows.length === 0 ? (
+                    <SolaceGlassCard className="mt-4 p-6">
+                      <p className="text-sm text-[rgba(255,255,255,0.45)]">No category data yet</p>
+                    </SolaceGlassCard>
+                  ) : (
+                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                      {categoryRows.map((row) => (
+                        <div
+                          key={row.type}
+                          className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3.5"
+                        >
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className={cn(
+                                  'flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br',
+                                  row.color
+                                )}
+                              >
+                                <BookOpen className="h-4 w-4 text-white/90" aria-hidden />
+                              </div>
+                              <span className="text-sm font-medium text-[rgba(255,255,255,0.82)]">
+                                {row.label}
                               </span>
                             </div>
-                            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full ${colorMap[type] || 'bg-gray-500'}`}
-                                style={{ width: `${percentage}%` }}
-                              />
-                            </div>
+                            <span className="text-sm font-semibold tabular-nums text-white">
+                              {row.pct}%
+                            </span>
                           </div>
-                        );
-                      })}
-                  </div>
-                )}
-              </Card>
-            </motion.div>
-          </>
-        )}
+                          <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
+                            <div
+                              className={cn('h-full rounded-full bg-gradient-to-r', row.color)}
+                              style={{ width: `${row.pct}%` }}
+                              role="progressbar"
+                              aria-valuenow={row.pct}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </>
+            )}
 
-        <CrisisResourcesCallout />
+            {/* How it works — preserved, discreet */}
+            <details className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm text-[rgba(255,255,255,0.48)]">
+              <summary className="cursor-pointer font-medium text-[rgba(255,255,255,0.65)]">
+                How resource tracking works
+              </summary>
+              <ol className="mt-3 list-decimal space-y-2 pl-5">
+                <li>
+                  Open{' '}
+                  <Link className="text-fuchsia-300/85 underline" to="/app/emergency-resources">
+                    Emergency resources
+                  </Link>{' '}
+                  from Settings or during a live session.
+                </li>
+                <li>
+                  Taps on call, visit, copy, or similar are recorded for your insights only.
+                </li>
+                <li>
+                  Use <strong className="text-white/80">Refresh</strong> to sync; browser activity
+                  appears if the API is unavailable.
+                </li>
+              </ol>
+            </details>
+
+            {/* Footer */}
+            <footer className="border-t border-white/[0.06] pt-6 text-center">
+              <p className="text-sm text-[rgba(255,255,255,0.42)]">
+                <span aria-hidden>♡</span> Made with care for your wellbeing
+              </p>
+            </footer>
+          </div>
+
+          {/* Right rail ~28% */}
+          <ResourceAnalyticsRail
+            engagementLabel={engagement.label}
+            engagementPercent={engagement.percent}
+            mostUsedCategory={topCategory}
+            supportConsistencyDays={getSupportConsistencyDays(interactions)}
+            emotionalEngagement={getEmotionalEngagementLabel(avgEffectiveness)}
+          />
+        </div>
       </div>
+    </motion.div>
   );
 }

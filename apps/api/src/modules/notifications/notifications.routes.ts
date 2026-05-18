@@ -1,6 +1,10 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { notificationsService } from './notifications.service';
-import { createNotificationSchema } from './notifications.schema';
+import {
+  createNotificationSchema,
+  listNotificationsQuerySchema,
+  paginatedNotificationsSchema,
+} from './notifications.schema';
 import { z } from 'zod';
 
 export async function notificationRoutes(app: FastifyInstance) {
@@ -10,22 +14,16 @@ export async function notificationRoutes(app: FastifyInstance) {
     schema: {
       // @ts-ignore
       tags: ['Notifications'],
+      querystring: listNotificationsQuerySchema,
       response: {
-        200: z.array(z.object({
-          id: z.string(),
-          type: z.string(),
-          title: z.string().nullable(),
-          message: z.string().nullable(),
-          is_read: z.boolean().nullable(),
-          created_at: z.date(),
-          metadata: z.any().nullable(),
-        }))
-      }
-    }
+        200: paginatedNotificationsSchema,
+      },
+    },
   }, async (req) => {
     // @ts-ignore - user is populated by auth plugin
     const userId = req.user.sub;
-    return notificationsService.findAll(userId);
+    const { page, limit } = listNotificationsQuerySchema.parse(req.query ?? {});
+    return notificationsService.findPaginated(userId, page, limit);
   });
 
   app.get('/unread-count', {

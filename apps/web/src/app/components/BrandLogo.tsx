@@ -1,12 +1,13 @@
 /**
- * Theme-aware brand mark.
+ * Brand mark used across the app.
  * - If the admin has uploaded a custom logo via /admin/branding-customization,
  *   that logo (stored in localStorage "ezri_branding") is shown for all themes.
- * - Otherwise falls back to the static light/dark logo files.
+ * - Otherwise falls back to the static white logo in public/logos.
  */
 import { useState, useEffect } from "react";
 
 const LS_KEY = "ezri_branding";
+const DEFAULT_LOGO_SRC = "/logos/logo black.png";
 
 function readCustomLogoUrl(): string {
   try {
@@ -67,14 +68,9 @@ export function BrandLogo({
       className={`inline-flex shrink-0 items-center justify-center overflow-visible ${heightClass} ${className}`}
     >
       <img
-        src="/logos/logo white.png"
+        src={DEFAULT_LOGO_SRC}
         alt=""
-        className="h-[130%] w-auto max-h-none object-contain object-center dark:hidden"
-      />
-      <img
-        src="/logos/logo black.png"
-        alt=""
-        className="hidden h-[130%] w-auto max-h-none object-contain object-center dark:block"
+        className="h-[130%] w-auto max-h-none object-contain object-center"
       />
     </span>
   );
