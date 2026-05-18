@@ -16,6 +16,9 @@ export const ONBOARDING_COMPANION_SELECTION_BG =
 
 /** Calm mountain / alpine lake — Welcome onboarding backdrop (environment plate only) */
 export const ONBOARDING_WELCOME_BG = "/solace/login-environment.jpg";
+
+/** Alpine sunrise above cloud sea — signup cinematic panel (environment only, no UI) */
+export const SIGNUP_HERO_BG = "/solace/companion-selection-calm-mountain.jpg";
 export const TALK_ENV_FOREST =
   "https://images.unsplash.com/photo-1473448912268-202bb2b7a626?auto=format&fit=crop&w=600&q=80";
 export const TALK_ENV_STUDIO =

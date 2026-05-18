@@ -57,7 +57,8 @@ const signupSchema = z.object({
 
 type SignupFormValues = z.infer<typeof signupSchema>;
 
-const SIGNUP_HERO_BG = "/solace/login-cinematic-lock.png";
+/** Scene-only alpine sunrise — no baked UI (signup page only). */
+const SIGNUP_HERO_BG = "/solace/companion-selection-calm-mountain.jpg";
 const SIGNUP_NAV_H = "4.75rem";
 
 const glassInput =
@@ -328,7 +329,7 @@ function SignupCinematicLeft({ className, variant }: SignupCinematicLeftProps) {
         src={SIGNUP_HERO_BG}
         alt=""
         aria-hidden
-        className="absolute inset-0 h-full w-full scale-[1.02] object-cover"
+        className="absolute inset-0 h-full w-full object-cover object-center brightness-[0.52] contrast-[1.05] saturate-[1.08] scale-[1.02]"
       />
       <div
         className="absolute inset-0 bg-gradient-to-br from-[#0a0a12]/88 via-[#15051f]/55 to-transparent"
