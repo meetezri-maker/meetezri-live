@@ -2,6 +2,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { PublicNav } from "../components/PublicNav";
+import { BrandLogo } from "../components/BrandLogo";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { AnimatedCard } from "../components/AnimatedCard";
@@ -31,12 +32,24 @@ export function Landing() {
     // 1. Immediate redirect if auth params are present (Implicit or PKCE)
     const hash = location.hash;
     const search = location.search;
-    
+
+    // Invite magic links sometimes land on Site URL `/` with type=invite in the hash — send them to the password page.
     if (
-      (hash && (hash.includes('access_token') || hash.includes('type=recovery') || hash.includes('error='))) ||
+      hash &&
+      hash.includes('type=invite') &&
+      (hash.includes('access_token') || hash.includes('error='))
+    ) {
+      navigate(`/invite/create-password${search}${hash}`);
+      return;
+    }
+
+    if (
+      (hash &&
+        (hash.includes('access_token') ||
+          hash.includes('type=recovery') ||
+          hash.includes('error='))) ||
       (search && (search.includes('code=') || search.includes('error=')))
     ) {
-      // Forward to auth callback handler immediately
       navigate(`/auth/callback${search}${hash}`);
       return;
     }
@@ -47,8 +60,11 @@ export function Landing() {
   }, [user, isLoading, navigate, location]);
 
   // Show loader if we are about to redirect (auth params present)
-  const isAuthRedirect = 
-    (location.hash && (location.hash.includes('access_token') || location.hash.includes('type=recovery'))) ||
+  const isAuthRedirect =
+    (location.hash &&
+      (location.hash.includes('access_token') ||
+        location.hash.includes('type=recovery') ||
+        location.hash.includes('type=invite'))) ||
     (location.search && location.search.includes('code='));
 
   if (isAuthRedirect) {
@@ -100,7 +116,7 @@ export function Landing() {
             transition={{ delay: 0.2 }}
             className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent leading-tight"
           >
-            Talk to Ezri.
+            Talk to Solace.
             <br />
             Feel Better.
           </motion.h1>
@@ -111,7 +127,7 @@ export function Landing() {
             transition={{ delay: 0.4 }}
             className="text-lg md:text-xl text-muted-foreground mb-8 px-4"
           >
-            Connect with your AI wellness companion through FaceTime-style sessions. 
+            Connect with your Solace avatar through FaceTime-style sessions. 
             Available 24/7 for support, mood tracking, and guided wellness tools.
           </motion.p>
           
@@ -188,7 +204,7 @@ export function Landing() {
           viewport={{ once: true }}
           className="text-3xl md:text-4xl font-bold text-center mb-12"
         >
-          Why Choose Ezri?
+          Why Choose Solace?
         </motion.h2>
         
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -200,7 +216,7 @@ export function Landing() {
               >
                 <Video className="w-6 h-6 text-white" />
               </motion.div>
-              <h3 className="text-lg font-semibold mb-2">FaceTime Sessions</h3>
+              <h3 className="text-lg font-semibold mb-2">FaceTime Talk it out</h3>
               <p className="text-muted-foreground text-sm">
                 Connect through natural video conversations whenever you need support
               </p>
@@ -270,14 +286,14 @@ export function Landing() {
             {
               step: 1,
               title: "Sign Up & Onboard",
-              description: "Create your account and complete a quick wellness baseline to help Ezri understand you better",
+              description: "Create your account and complete a quick wellness baseline to help Solace understand you better",
               icon: CheckCircle2,
               color: "primary",
               gradient: "from-primary/20 to-accent/20"
             },
             {
               step: 2,
-              title: "Connect With Ezri",
+              title: "Connect With Solace",
               description: "Start a FaceTime-style session whenever you need to talk, decompress, or get guided support",
               icon: Video,
               color: "secondary",
@@ -377,7 +393,7 @@ export function Landing() {
                 <h2 className="text-3xl md:text-4xl font-bold">Ready to Start Your Wellness Journey?</h2>
               </motion.div>
               <p className="text-muted-foreground mb-8 text-lg max-w-2xl mx-auto">
-                Join thousands who trust Ezri for their mental health and wellbeing
+                Join thousands who trust Solace for their mental health and wellbeing
               </p>
               <div onClick={() => localStorage.setItem('selectedPlan', 'trial')}>
                 <Link to="/signup">
@@ -642,10 +658,8 @@ export function Landing() {
                 whileHover={{ scale: 1.05 }}
                 className="flex items-center gap-2 mb-4"
               >
-                <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
-                  <Heart className="w-5 h-5 text-white" fill="white" />
-                </div>
-                <span className="text-xl font-semibold">Ezri</span>
+                <BrandLogo heightClass="h-16" />
+                {/* <span className="text-xl font-semibold">Solace</span> */}
               </motion.div>
               <p className="text-sm text-muted-foreground">
                 Your AI-powered wellness companion, available 24/7
@@ -681,7 +695,7 @@ export function Landing() {
           </div>
           
           <div className="border-t border-border mt-8 pt-8 text-center text-sm text-muted-foreground">
-            <p>&copy; 2024 Ezri. All rights reserved.</p>
+            <p>&copy; 2024 Solace. All rights reserved.</p>
             <p className="mt-2">
               This is not a replacement for professional medical or mental health services.
             </p>

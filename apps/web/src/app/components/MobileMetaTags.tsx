@@ -41,7 +41,8 @@ export function MobileMetaTags() {
       document.head.appendChild(manifestLink);
     }
 
-    // Add touch icons for iOS
+    // Add touch icons for iOS (same asset as site favicon)
+    const touchIconHref = "/favicon/Black.png";
     const touchIconSizes = [180, 167, 152, 120];
     touchIconSizes.forEach((size) => {
       let link = document.querySelector(`link[rel="apple-touch-icon"][sizes="${size}x${size}"]`);
@@ -49,9 +50,9 @@ export function MobileMetaTags() {
         link = document.createElement("link");
         link.setAttribute("rel", "apple-touch-icon");
         link.setAttribute("sizes", `${size}x${size}`);
-        link.setAttribute("href", `/icon-${size}.png`);
         document.head.appendChild(link);
       }
+      link.setAttribute("href", touchIconHref);
     });
 
     // Prevent pull-to-refresh on iOS Safari

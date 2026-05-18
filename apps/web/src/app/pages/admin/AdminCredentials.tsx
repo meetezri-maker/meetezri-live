@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
-import { Crown, Building2, Users, Shield, Copy, CheckCircle2, ArrowRight, Heart } from "lucide-react";
+import { Crown, Building2, Users, Shield, Copy, CheckCircle2, ArrowRight } from "lucide-react";
+import { BrandLogo } from "../../components/BrandLogo";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { FloatingElement } from "../../components/FloatingElement";
@@ -152,9 +153,9 @@ export function AdminCredentials() {
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl"
+            className="flex items-center justify-center mx-auto mb-4"
           >
-            <Heart className="w-8 h-8 text-white" fill="white" />
+            <BrandLogo heightClass="h-16" />
           </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 10 }}

@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { createSleepEntry, deleteSleepEntry, getSleepEntries, getSleepEntryById, updateSleepEntry } from './sleep.service';
+import { createSleepEntry, deleteSleepEntry, getAllSleepEntriesAdmin, getSleepEntries, getSleepEntryById, updateSleepEntry } from './sleep.service';
 import { CreateSleepEntryInput, UpdateSleepEntryInput } from './sleep.schema';
 
 interface UserPayload {
@@ -57,6 +57,17 @@ export async function getUserSleepEntriesHandler(
 ) {
   const { userId } = request.params;
   const entries = await getSleepEntries(userId);
+  return reply.send(entries);
+}
+
+export async function getAllSleepEntriesAdminHandler(
+  request: FastifyRequest<{ Querystring: { startDate?: string; endDate?: string } }>,
+  reply: FastifyReply
+) {
+  const { startDate, endDate } = request.query;
+  const start = startDate ? new Date(startDate) : undefined;
+  const end = endDate ? new Date(endDate) : undefined;
+  const entries = await getAllSleepEntriesAdmin(start, end);
   return reply.send(entries);
 }
 

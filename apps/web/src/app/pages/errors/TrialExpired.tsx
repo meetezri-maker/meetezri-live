@@ -32,7 +32,7 @@ export function TrialExpired() {
         "Advanced mood analytics",
         "Full wellness tool library",
         "Priority support",
-        "Crisis resources 24/7"
+        "Emergency resources 24/7"
       ],
       gradient: "from-purple-500 to-pink-500",
       popular: true
@@ -90,7 +90,7 @@ export function TrialExpired() {
           <div className="grid md:grid-cols-3 gap-4">
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 text-center">
               <div className="text-3xl font-bold text-blue-600 mb-1">12</div>
-              <p className="text-sm text-gray-600">Sessions Completed</p>
+              <p className="text-sm text-gray-600">Talk it out Completed</p>
             </div>
             
             <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 text-center">

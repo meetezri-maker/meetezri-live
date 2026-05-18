@@ -10,14 +10,36 @@ export type EzriRealtimeConnectArgs = {
   brainProvider: string;
   ttsProvider: string;
   sttProvider: string;
+  /** TTS voice id for the server (e.g. `af_heart`, `am_echo`, `af_sky`). */
+  voice: string;
+};
+
+export type EzriTimestampedPhoneme = {
+  phoneme: string;
+  start: number;
+  end: number;
+};
+
+export type EzriAvatarData = {
+  sentence: string;
+  phonemes: string[] | EzriTimestampedPhoneme[];
+  sentiment: unknown;
+  chunk_index?: number;
 };
 
 export type EzriRealtimeClientHandlers = {
   onStatus?: (status: EzriWsStatus) => void;
   onAssistantText?: (text: string, kind: "partial" | "final") => void;
+  /** HF / reference backend: `{ type: "transcription", user, ai }` — user line for the UI. */
+  onUserTranscript?: (text: string) => void;
   onAudio?: (audio: EzriAudioSource) => void;
   onTtsDone?: () => void;
   onInterrupt?: () => void;
+  /** Fired when the backend commits to speaking (step: speaking) — BEFORE first audio byte.
+   *  Use to pause browser STT as early as possible to prevent mis-detection of echo. */
+  onSpeakingStart?: () => void;
+  /** Backend-computed phonemes + sentiment for each TTS sentence. Useful for lip sync / expressions. */
+  onAvatarData?: (data: EzriAvatarData) => void;
   onError?: (error: unknown, context?: any) => void;
   onUnknownMessage?: (raw: unknown) => void;
 };
@@ -39,11 +61,8 @@ function extractText(msg: AnyObj): { text: string; kind: "partial" | "final" } |
   // - status: {text}
   // - debug/warning: telemetry
   if (type === "step" || type === "status" || type === "debug" || type === "warning") return null;
-  // HF Space / reference backend sends: { type:"transcription", user:"...", ai:"..." }
-  if (type === "transcription") {
-    if (typeof msg.ai === "string" && msg.ai.trim()) return { text: msg.ai, kind: "final" };
-    // user transcription is handled elsewhere in the app; ignore here
-  }
+  // `transcription` is handled in onmessage (user + ai); do not route through here.
+  if (type === "transcription") return null;
   const text =
     (typeof msg.text === "string" && msg.text) ||
     (typeof msg.message === "string" && msg.message) ||
@@ -133,7 +152,8 @@ export class EzriRealtimeClient {
       `&tts_provider=${encodeURIComponent(args.ttsProvider)}` +
       `&stt_provider=${encodeURIComponent(args.sttProvider)}` +
       `&userid=${encodeURIComponent(args.userid)}` +
-      `&session_id=${encodeURIComponent(args.sessionId)}`;
+      `&session_id=${encodeURIComponent(args.sessionId)}` +
+      `&voice=${encodeURIComponent(args.voice)}`;
 
     try {
       this.ws = new WebSocket(url);
@@ -194,6 +214,66 @@ export class EzriRealtimeClient {
         return;
       }
 
+      if (errType === "pong") {
+        // Heartbeat response — nothing to do, connection is alive
+        return;
+      }
+
+      // step: speaking → backend committed to speaking, pause STT before first byte arrives.
+      if (errType === "step" && typeof msg.status === "string" && msg.status === "speaking") {
+        this.handlers.onSpeakingStart?.();
+        return;
+      }
+
+      // avatar_data → per-sentence phonemes + sentiment for lip sync / expressions.
+      if (errType === "avatar_data") {
+        this.handlers.onAvatarData?.({
+          sentence: typeof msg.sentence === "string" ? msg.sentence : "",
+          phonemes: msg.phonemes,
+          sentiment: msg.sentiment,
+          chunk_index: typeof msg.chunk_index === "number" ? msg.chunk_index : undefined,
+        });
+        return;
+      }
+
+      // Reference `app.js`: append both user and assistant from one message.
+      if (errType === "transcription") {
+        const audioTn = extractAudio(msg);
+        if (audioTn) this.handlers.onAudio?.(audioTn);
+
+        const nested =
+          msg.data !== null &&
+          typeof msg.data === "object" &&
+          !Array.isArray(msg.data)
+            ? (msg.data as AnyObj)
+            : null;
+
+        const userRaw =
+          (typeof msg.user === "string" && msg.user) ||
+          (typeof msg.user_text === "string" && msg.user_text) ||
+          (typeof msg.userText === "string" && msg.userText) ||
+          (nested && typeof nested.user === "string" && nested.user) ||
+          (nested && typeof nested.user_text === "string" && nested.user_text) ||
+          "";
+        const userT = userRaw.trim();
+
+        const aiRaw =
+          (typeof msg.ai === "string" && msg.ai) ||
+          (typeof msg.assistant === "string" && msg.assistant) ||
+          (nested && typeof nested.ai === "string" && nested.ai) ||
+          (nested && typeof nested.assistant === "string" && nested.assistant) ||
+          "";
+        const aiT = aiRaw.trim();
+
+        if (userT) this.handlers.onUserTranscript?.(userT);
+        if (aiT) this.handlers.onAssistantText?.(aiT, "final");
+
+        if (!audioTn && !userT && !aiT) {
+          this.handlers.onUnknownMessage?.(msg);
+        }
+        return;
+      }
+
       const audio = extractAudio(msg);
       if (audio) this.handlers.onAudio?.(audio);
 
@@ -243,12 +323,45 @@ export class EzriRealtimeClient {
     ws.send(JSON.stringify({ type: "chat", text }));
   }
 
-  sendPlaybackDone() {
+  /** Best-effort (matches ping/pcm) — barge-in must not throw if the socket is mid-flush. */
+  sendPlaybackDone(): boolean {
     const ws = this.ws;
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      throw new Error("Ezri WebSocket is not connected.");
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    try {
+      ws.send(JSON.stringify({ type: "playback_done" }));
+      return true;
+    } catch {
+      return false;
     }
-    ws.send(JSON.stringify({ type: "playback_done" }));
+  }
+
+  /**
+   * Tell the server to cancel the current TTS/brain turn. Reference UI only handles
+   * incoming `{type:"interrupt"}`; we also send `source` for logging when supported.
+   */
+  sendInterrupt(source = "client_barge_in"): boolean {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    try {
+      ws.send(JSON.stringify({ type: "interrupt", source }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Send a heartbeat ping to prevent HF Space nginx idle-timeout (60 s). */
+  sendPing() {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "ping" }));
+  }
+
+  /** Send a raw Int16 PCM buffer to the server for backend VAD + STT processing. */
+  sendPcm(buffer: ArrayBuffer) {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(buffer);
   }
 
   disconnect() {

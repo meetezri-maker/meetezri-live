@@ -1,8 +1,21 @@
 import prisma from '../../lib/prisma';
 import { CreateSleepEntryInput, UpdateSleepEntryInput } from './sleep.schema';
 
+const sleepListCache = new Map<string, { data: any[]; timestamp: number }>();
+const sleepByIdCache = new Map<string, { data: any; timestamp: number }>();
+const SLEEP_CACHE_TTL = 5 * 1000; // 5 seconds
+
+function clearSleepCacheForUser(userId: string) {
+  sleepListCache.delete(userId);
+  const prefix = `${userId}|`;
+  for (const key of sleepByIdCache.keys()) {
+    if (key.startsWith(prefix)) sleepByIdCache.delete(key);
+  }
+  allSleepCache = null;
+}
+
 export async function createSleepEntry(userId: string, data: CreateSleepEntryInput) {
-  return prisma.sleep_entries.create({
+  const created = await prisma.sleep_entries.create({
     data: {
       bed_time: data.bed_time,
       wake_time: data.wake_time,
@@ -14,19 +27,73 @@ export async function createSleepEntry(userId: string, data: CreateSleepEntryInp
       },
     },
   });
+  clearSleepCacheForUser(userId);
+  return created;
 }
 
 export async function getSleepEntries(userId: string) {
-  return prisma.sleep_entries.findMany({
+  const cached = sleepListCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < SLEEP_CACHE_TTL) {
+    return cached.data;
+  }
+  const data = await prisma.sleep_entries.findMany({
     where: { user_id: userId },
     orderBy: { bed_time: 'desc' },
   });
+  sleepListCache.set(userId, { data, timestamp: Date.now() });
+  return data;
+}
+
+const ALL_SLEEP_CACHE_TTL = 120 * 1000; // 120 seconds
+let allSleepCache: { data: any[]; timestamp: number } | null = null;
+
+export async function getAllSleepEntriesAdmin(startDate?: Date, endDate?: Date) {
+  const isFiltered = startDate != null || endDate != null;
+
+  if (!isFiltered) {
+    const now = Date.now();
+    if (allSleepCache && now - allSleepCache.timestamp < ALL_SLEEP_CACHE_TTL) {
+      return allSleepCache.data;
+    }
+  }
+
+  const where: any = {};
+  if (startDate || endDate) {
+    where.bed_time = {};
+    if (startDate) where.bed_time.gte = startDate;
+    if (endDate) where.bed_time.lt = endDate;
+  }
+
+  const result = await prisma.sleep_entries.findMany({
+    where,
+    orderBy: { bed_time: 'desc' },
+    include: {
+      profiles: {
+        select: {
+          email: true,
+          full_name: true,
+        },
+      },
+    },
+  });
+
+  if (!isFiltered) {
+    allSleepCache = { data: result, timestamp: Date.now() };
+  }
+  return result;
 }
 
 export async function getSleepEntryById(userId: string, id: string) {
-  return prisma.sleep_entries.findFirst({
+  const key = `${userId}|${id}`;
+  const cached = sleepByIdCache.get(key);
+  if (cached && Date.now() - cached.timestamp < SLEEP_CACHE_TTL) {
+    return cached.data;
+  }
+  const data = await prisma.sleep_entries.findFirst({
     where: { id, user_id: userId },
   });
+  sleepByIdCache.set(key, { data, timestamp: Date.now() });
+  return data;
 }
 
 export async function updateSleepEntry(userId: string, id: string, data: UpdateSleepEntryInput) {
@@ -35,10 +102,12 @@ export async function updateSleepEntry(userId: string, id: string, data: UpdateS
     throw new Error('Sleep entry not found or unauthorized');
   }
 
-  return prisma.sleep_entries.update({
+  const updated = await prisma.sleep_entries.update({
     where: { id },
     data,
   });
+  clearSleepCacheForUser(userId);
+  return updated;
 }
 
 export async function deleteSleepEntry(userId: string, id: string) {
@@ -47,7 +116,9 @@ export async function deleteSleepEntry(userId: string, id: string) {
     throw new Error('Sleep entry not found or unauthorized');
   }
 
-  return prisma.sleep_entries.delete({
+  const deleted = await prisma.sleep_entries.delete({
     where: { id },
   });
+  clearSleepCacheForUser(userId);
+  return deleted;
 }

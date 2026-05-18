@@ -1,10 +1,20 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, type ChangeEventHandler } from "react";
+import { toast } from "sonner";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { motion, AnimatePresence } from "motion/react";
 import { api } from "../../../lib/api";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
+import { AdminPaginationBar } from "../../components/admin/AdminPaginationBar";
+import { mergeApiBuiltinsForAdmin } from "../../../lib/mergeAdminWellnessTools";
+import {
+  WELLNESS_BUILTIN_TOOLS_ADMIN,
+  isBuiltinWellnessListId,
+} from "../../../lib/wellnessBuiltinToolsMetadata";
+import { WELLNESS_TOOL_CATEGORIES } from "../../../lib/wellnessToolCategories";
 import {
   Plus,
   Edit,
@@ -14,7 +24,24 @@ import {
   Heart,
   Lightbulb,
   X,
+  Download,
+  Upload,
 } from "lucide-react";
+
+const LS_PROMPTS = "ezri-admin-content-prompts";
+const LS_RESOURCES = "ezri-admin-content-resources";
+
+const DEFAULT_JOURNAL_PROMPTS: Prompt[] = [
+  { id: "jp-1", text: "What is one thing that went better than you expected today?", category: "Gratitude", uses: 0 },
+  { id: "jp-2", text: "Name three sensations you notice in your body right now.", category: "Mindfulness", uses: 0 },
+  { id: "jp-3", text: "What would you tell a friend who felt the way you feel today?", category: "Self-Compassion", uses: 0 },
+  { id: "jp-4", text: "What boundary do you want to honor this week?", category: "Stress", uses: 0 },
+];
+
+const DEFAULT_RESOURCES: Resource[] = [
+  { id: "res-1", title: "Crisis resources (US)", type: "Article", views: 0, rating: 5 },
+  { id: "res-2", title: "Sleep hygiene basics", type: "Guide", views: 0, rating: 4 },
+];
 
 interface Exercise {
   id: string;
@@ -23,6 +50,8 @@ interface Exercise {
   duration: string;
   uses: number;
   status: string;
+  /** Matches in-app built-ins — not editable via this API row */
+  isBuiltin?: boolean;
 }
 
 interface Prompt {
@@ -40,17 +69,52 @@ interface Resource {
   rating: number;
 }
 
+const CONTENT_EXPORT_VERSION = 1 as const;
+
+type ContentExportPayload = {
+  version: typeof CONTENT_EXPORT_VERSION;
+  exportedAt: string;
+  prompts: Prompt[];
+  resources: Resource[];
+  exercises: Exercise[];
+};
+
+function isPromptRow(x: unknown): x is Prompt {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  return (
+    typeof o.id === "string" &&
+    typeof o.text === "string" &&
+    typeof o.category === "string" &&
+    typeof o.uses === "number"
+  );
+}
+
+function isResourceRow(x: unknown): x is Resource {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  return (
+    typeof o.id === "string" &&
+    typeof o.title === "string" &&
+    typeof o.type === "string" &&
+    typeof o.views === "number" &&
+    typeof o.rating === "number"
+  );
+}
+
 export function ContentManagement() {
   const [activeTab, setActiveTab] = useState<"exercises" | "prompts" | "resources">(
     "exercises"
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [tablePage, setTablePage] = useState(1);
+  const [tablePageSize, setTablePageSize] = useState(10);
 
   // State for content items
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [prompts, setPrompts] = useState<Prompt[]>([]);
-  const [resources, setResources] = useState<Resource[]>([]);
+  const [prompts, setPrompts] = useState<Prompt[]>(DEFAULT_JOURNAL_PROMPTS);
+  const [resources, setResources] = useState<Resource[]>(DEFAULT_RESOURCES);
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -77,27 +141,59 @@ export function ContentManagement() {
     type: "Article",
   });
 
+  const importInputRef = useRef<HTMLInputElement>(null);
+
   const fetchExercises = async () => {
     try {
       setIsLoading(true);
-      const [toolsRes, progressRes] = await Promise.all([
+      const [toolsRes, usageRes] = await Promise.all([
         api.wellness.getAll(),
-        api.wellness.getProgress(),
+        api.admin.getWellnessToolUsage().catch((e) => {
+          console.warn("Wellness tool usage unavailable:", e);
+          return null;
+        }),
       ]);
-      const progressMap = new Map(
-        (progressRes || []).map((p: any) => [p.toolId, p.sessionsCompleted])
+      const usageMap = new Map<string, number>(
+        Array.isArray(usageRes)
+          ? usageRes.map((r: { toolId: string; sessionsCompleted: number }) => [
+              r.toolId,
+              r.sessionsCompleted,
+            ])
+          : []
       );
-      const mappedExercises: Exercise[] = toolsRes.map((t: any) => ({
+      const apiList = Array.isArray(toolsRes) ? toolsRes : [];
+      const builtinRows: Exercise[] = WELLNESS_BUILTIN_TOOLS_ADMIN.map((b) => ({
+        id: `builtin:${b.id}`,
+        name: b.title,
+        category: b.category,
+        duration: b.duration,
+        uses: 0,
+        status: "published",
+        isBuiltin: true,
+      }));
+      const mappedApi: Exercise[] = apiList.map((t: any) => ({
         id: t.id,
         name: t.title,
         category: t.category,
         duration: t.duration_minutes ? `${t.duration_minutes} min` : "∞",
-        uses: progressMap.get(t.id) ?? 0,
+        uses: usageMap.get(t.id) ?? 0,
         status: (t.status as string) || "draft",
+        isBuiltin: false,
       }));
-      setExercises(mappedExercises);
+      setExercises(mergeApiBuiltinsForAdmin(builtinRows, mappedApi));
     } catch (error) {
       console.error("Failed to fetch exercises:", error);
+      setExercises(
+        WELLNESS_BUILTIN_TOOLS_ADMIN.map((b) => ({
+          id: `builtin:${b.id}`,
+          name: b.title,
+          category: b.category,
+          duration: b.duration,
+          uses: 0,
+          status: "published",
+          isBuiltin: true,
+        }))
+      );
     } finally {
       setIsLoading(false);
     }
@@ -105,6 +201,20 @@ export function ContentManagement() {
 
   useEffect(() => {
     fetchExercises();
+    try {
+      const rawP = localStorage.getItem(LS_PROMPTS);
+      if (rawP) {
+        const parsed = JSON.parse(rawP) as Prompt[];
+        if (Array.isArray(parsed) && parsed.length > 0) setPrompts(parsed);
+      }
+      const rawR = localStorage.getItem(LS_RESOURCES);
+      if (rawR) {
+        const parsed = JSON.parse(rawR) as Resource[];
+        if (Array.isArray(parsed) && parsed.length > 0) setResources(parsed);
+      }
+    } catch {
+      /* keep initial defaults */
+    }
   }, []);
 
   const searchQueryLower = searchQuery.toLowerCase();
@@ -129,6 +239,34 @@ export function ContentManagement() {
       resource.type.toLowerCase().includes(searchQueryLower)
     );
   });
+
+  const listForPagination =
+    activeTab === "exercises"
+      ? filteredExercises
+      : activeTab === "prompts"
+        ? filteredPrompts
+        : filteredResources;
+  const listTotal = listForPagination.length;
+
+  useEffect(() => {
+    setTablePage(1);
+  }, [activeTab, searchQuery]);
+
+  useEffect(() => {
+    const tp = Math.max(1, Math.ceil(listTotal / tablePageSize) || 1);
+    setTablePage((p) => (p > tp ? tp : p));
+  }, [listTotal, tablePageSize]);
+
+  const tableTotalPages = Math.max(1, Math.ceil(listTotal / tablePageSize) || 1);
+  const tableSafePage = Math.min(Math.max(1, tablePage), tableTotalPages);
+  const sliceStart = (tableSafePage - 1) * tablePageSize;
+  const sliceEnd = tableSafePage * tablePageSize;
+  const paginatedExercises =
+    activeTab === "exercises" ? filteredExercises.slice(sliceStart, sliceEnd) : filteredExercises;
+  const paginatedPrompts =
+    activeTab === "prompts" ? filteredPrompts.slice(sliceStart, sliceEnd) : filteredPrompts;
+  const paginatedResources =
+    activeTab === "resources" ? filteredResources.slice(sliceStart, sliceEnd) : filteredResources;
 
   // Handle Add New
   const handleAddNew = () => {
@@ -170,6 +308,86 @@ export function ContentManagement() {
     setShowDeleteModal(true);
   };
 
+  const persistPrompts = (next: Prompt[]) => {
+    setPrompts(next);
+    try {
+      localStorage.setItem(LS_PROMPTS, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const persistResources = (next: Resource[]) => {
+    setResources(next);
+    try {
+      localStorage.setItem(LS_RESOURCES, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleExportContent = () => {
+    const payload: ContentExportPayload = {
+      version: CONTENT_EXPORT_VERSION,
+      exportedAt: new Date().toISOString(),
+      prompts,
+      resources,
+      exercises,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `content-management-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Export downloaded.");
+  };
+
+  const handleImportFile: ChangeEventHandler<HTMLInputElement> = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result as string) as unknown;
+        if (!parsed || typeof parsed !== "object") {
+          toast.error("Invalid file.");
+          return;
+        }
+        const rec = parsed as Record<string, unknown>;
+        if (rec.version !== CONTENT_EXPORT_VERSION) {
+          toast.error("Unsupported export version. Re-export from this page and try again.");
+          return;
+        }
+        const nextPrompts = rec.prompts;
+        const nextResources = rec.resources;
+        if (!Array.isArray(nextPrompts) || !Array.isArray(nextResources)) {
+          toast.error("File must include prompts and resources arrays.");
+          return;
+        }
+        const validPrompts = nextPrompts.filter(isPromptRow);
+        const validResources = nextResources.filter(isResourceRow);
+        if (validPrompts.length === 0 && validResources.length === 0) {
+          toast.error("No valid prompt or resource rows found.");
+          return;
+        }
+        if (validPrompts.length > 0) persistPrompts(validPrompts);
+        if (validResources.length > 0) persistResources(validResources);
+        toast.success(
+          "Imported saved prompts and/or resources. Wellness exercises are managed in the database."
+        );
+        void fetchExercises();
+      } catch {
+        toast.error("Could not read that file.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
   // Confirm Add
   const confirmAdd = async () => {
     if (activeTab === "exercises") {
@@ -201,21 +419,21 @@ export function ContentManagement() {
       }
     } else if (activeTab === "prompts") {
       const newPrompt: Prompt = {
-        id: String(prompts.length + 1),
+        id: `jp-${Date.now()}`,
         text: promptForm.text,
         category: promptForm.category,
         uses: 0,
       };
-      setPrompts([...prompts, newPrompt]);
+      persistPrompts([...prompts, newPrompt]);
     } else if (activeTab === "resources") {
       const newResource: Resource = {
-        id: String(resources.length + 1),
+        id: `res-${Date.now()}`,
         title: resourceForm.title,
         type: resourceForm.type,
         views: 0,
         rating: 0,
       };
-      setResources([...resources, newResource]);
+      persistResources([...resources, newResource]);
     }
     setShowAddModal(false);
   };
@@ -223,6 +441,13 @@ export function ContentManagement() {
   // Confirm Edit
   const confirmEdit = async () => {
     if (activeTab === "exercises") {
+      if (selectedItem?.isBuiltin || isBuiltinWellnessListId(selectedItem?.id)) {
+        alert(
+          "Built-in exercises ship with the app. Edit them in code, or create a new CMS tool in Wellness Tools CMS."
+        );
+        setShowEditModal(false);
+        return;
+      }
       try {
         const durationMatch = exerciseForm.duration.match(/\d+/);
         const durationMinutes = durationMatch ? parseInt(durationMatch[0], 10) : undefined;
@@ -250,7 +475,7 @@ export function ContentManagement() {
         console.error("Failed to update exercise:", error);
       }
     } else if (activeTab === "prompts") {
-      setPrompts(
+      persistPrompts(
         prompts.map((pr) =>
           pr.id === selectedItem.id
             ? { ...pr, ...promptForm }
@@ -258,7 +483,7 @@ export function ContentManagement() {
         )
       );
     } else if (activeTab === "resources") {
-      setResources(
+      persistResources(
         resources.map((res) =>
           res.id === selectedItem.id
             ? { ...res, ...resourceForm }
@@ -272,6 +497,11 @@ export function ContentManagement() {
   // Confirm Delete
   const confirmDelete = async () => {
     if (activeTab === "exercises") {
+      if (selectedItem?.isBuiltin || isBuiltinWellnessListId(selectedItem?.id)) {
+        alert("Built-in exercises cannot be deleted from here.");
+        setShowDeleteModal(false);
+        return;
+      }
       try {
         await api.wellness.delete(selectedItem.id);
         setExercises(exercises.filter((ex) => ex.id !== selectedItem.id));
@@ -279,9 +509,9 @@ export function ContentManagement() {
         console.error("Failed to delete exercise:", error);
       }
     } else if (activeTab === "prompts") {
-      setPrompts(prompts.filter((pr) => pr.id !== selectedItem.id));
+      persistPrompts(prompts.filter((pr) => pr.id !== selectedItem.id));
     } else if (activeTab === "resources") {
-      setResources(resources.filter((res) => res.id !== selectedItem.id));
+      persistResources(resources.filter((res) => res.id !== selectedItem.id));
     }
     setShowDeleteModal(false);
   };
@@ -352,8 +582,8 @@ export function ContentManagement() {
           transition={{ delay: 0.2 }}
         >
           <Card className="p-4">
-            <div className="flex gap-4">
-              <div className="flex-1 relative">
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex-1 min-w-[200px] relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="Search content..."
@@ -362,10 +592,38 @@ export function ContentManagement() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <Button className="gap-2" onClick={handleAddNew}>
-                <Plus className="w-4 h-4" />
-                Add New
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={handleExportContent}
+                >
+                  <Download className="w-4 h-4" />
+                  Export
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => importInputRef.current?.click()}
+                >
+                  <Upload className="w-4 h-4" />
+                  Import
+                </Button>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  aria-hidden
+                  onChange={handleImportFile}
+                />
+                <Button className="gap-2" onClick={handleAddNew}>
+                  <Plus className="w-4 h-4" />
+                  Add New
+                </Button>
+              </div>
             </div>
           </Card>
         </motion.div>
@@ -402,16 +660,9 @@ export function ContentManagement() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-200 bg-white">
                     {isLoading ? (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          className="px-6 py-8 text-center text-sm text-muted-foreground"
-                        >
-                          Loading exercises...
-                        </td>
-                      </tr>
+                      <AdminTableSkeletonRows columns={6} rows={8} padding="comfortable" />
                     ) : filteredExercises.length === 0 ? (
                       <tr>
                         <td
@@ -422,9 +673,16 @@ export function ContentManagement() {
                         </td>
                       </tr>
                     ) : (
-                      filteredExercises.map((exercise) => (
+                      paginatedExercises.map((exercise) => (
                         <tr key={exercise.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 font-medium">{exercise.name}</td>
+                          <td className="px-6 py-4 font-medium">
+                            {exercise.name}
+                            {exercise.isBuiltin ? (
+                              <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                                Built-in
+                              </span>
+                            ) : null}
+                          </td>
                           <td className="px-6 py-4 text-sm text-gray-600">
                             {exercise.category}
                           </td>
@@ -439,10 +697,22 @@ export function ContentManagement() {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex gap-2">
-                              <Button variant="ghost" size="sm" onClick={() => handleEdit(exercise)}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={exercise.isBuiltin}
+                                onClick={() => handleEdit(exercise)}
+                                title={exercise.isBuiltin ? "Built-in tools are not edited here" : "Edit"}
+                              >
                                 <Edit className="w-4 h-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleDelete(exercise)}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={exercise.isBuiltin}
+                                onClick={() => handleDelete(exercise)}
+                                title={exercise.isBuiltin ? "Cannot delete built-in" : "Delete"}
+                              >
                                 <Trash2 className="w-4 h-4 text-red-600" />
                               </Button>
                             </div>
@@ -460,7 +730,7 @@ export function ContentManagement() {
                 {filteredPrompts.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No prompts found.</p>
                 ) : (
-                  filteredPrompts.map((prompt) => (
+                  paginatedPrompts.map((prompt) => (
                     <div
                       key={prompt.id}
                       className="p-4 border border-gray-200 rounded-lg hover:border-primary transition-colors"
@@ -521,7 +791,7 @@ export function ContentManagement() {
                         </td>
                       </tr>
                     ) : (
-                      filteredResources.map((resource) => (
+                      paginatedResources.map((resource) => (
                         <tr key={resource.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 font-medium">{resource.title}</td>
                           <td className="px-6 py-4 text-sm">
@@ -533,7 +803,9 @@ export function ContentManagement() {
                             {resource.views.toLocaleString()}
                           </td>
                           <td className="px-6 py-4 text-sm font-medium">
-                            ⭐ {resource.rating}
+                            <span className="inline-flex items-center gap-1">
+                              <FluentEmoji emoji="⭐" size={18} /> {resource.rating}
+                            </span>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex gap-2">
@@ -551,6 +823,17 @@ export function ContentManagement() {
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {listTotal > 0 && (
+              <AdminPaginationBar
+                total={listTotal}
+                page={tablePage}
+                pageSize={tablePageSize}
+                onPageChange={setTablePage}
+                onPageSizeChange={setTablePageSize}
+                selectId="content-management-page-size"
+              />
             )}
           </Card>
         </motion.div>
@@ -587,11 +870,18 @@ export function ContentManagement() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Category</label>
-                        <Input
+                        <select
                           value={exerciseForm.category}
                           onChange={(e) => setExerciseForm({ ...exerciseForm, category: e.target.value })}
-                          placeholder="e.g., Anxiety Relief"
-                        />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                          <option value="">Select category</option>
+                          {WELLNESS_TOOL_CATEGORIES.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Duration</label>
@@ -698,11 +988,18 @@ export function ContentManagement() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Category</label>
-                        <Input
+                        <select
                           value={exerciseForm.category}
                           onChange={(e) => setExerciseForm({ ...exerciseForm, category: e.target.value })}
-                          placeholder="e.g., Anxiety Relief"
-                        />
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                          <option value="">Select category</option>
+                          {WELLNESS_TOOL_CATEGORIES.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Duration</label>

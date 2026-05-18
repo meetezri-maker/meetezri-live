@@ -1,10 +1,19 @@
 import { motion, AnimatePresence } from "motion/react";
 import { X, Volume2, VolumeX, Sparkles, Heart, CheckCircle2, Star, MessageCircle, Mic } from "lucide-react";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
+import {
+  ambientKindForExercise,
+  startWellnessAmbient,
+  stopWellnessAmbient,
+} from "../../../lib/wellnessAmbientAudio";
+import { parseWellnessDurationLabelToSeconds } from "../../../lib/wellnessCategoryDurations";
 
 interface EzriGuidedModeProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Built-in id or API id; ambient lookup also falls back to title/category. */
+  exerciseId?: string;
   exerciseTitle: string;
   exerciseDescription: string;
   exerciseColor: string;
@@ -15,6 +24,7 @@ interface EzriGuidedModeProps {
 export function EzriGuidedMode({
   isOpen,
   onClose,
+  exerciseId,
   exerciseTitle,
   exerciseDescription,
   exerciseColor,
@@ -41,42 +51,71 @@ export function EzriGuidedMode({
     "Excellent work! When you're ready, slowly open your eyes."
   ];
 
-  const durationMinutes = parseInt(duration.replace(" min", "")) || 5;
-  const totalSeconds = durationMinutes * 60;
+  const totalSecondsRaw = parseWellnessDurationLabelToSeconds(duration.trim());
+  const totalSeconds =
+    totalSecondsRaw === Number.POSITIVE_INFINITY
+      ? Number.POSITIVE_INFINITY
+      : Math.max(1, totalSecondsRaw);
+
+  const showNearEndNudge =
+    stage === "active" &&
+    Number.isFinite(totalSeconds) &&
+    totalSeconds - timer > 0 &&
+    totalSeconds - timer <= 60;
 
   useEffect(() => {
-    if (stage === "active") {
+    if (!isOpen || stage !== "active" || isMuted) {
+      stopWellnessAmbient();
+      return;
+    }
+    const kind = ambientKindForExercise({
+      id: exerciseId,
+      title: exerciseTitle,
+    });
+    if (!kind) return;
+    void startWellnessAmbient(kind).catch(() => {
+      /* autoplay / context may fail silently */
+    });
+    return () => {
+      stopWellnessAmbient();
+    };
+  }, [isOpen, stage, exerciseId, isMuted]);
+
+  useEffect(() => {
+    if (stage === "active" && Number.isFinite(totalSeconds)) {
       const interval = setInterval(() => {
-        setTimer(prev => {
+        setTimer((prev) => {
           const newTime = prev + 1;
           setProgress((newTime / totalSeconds) * 100);
-          
-          // Trigger guidance messages at intervals
+
           const messageInterval = totalSeconds / guidanceMessages.length;
           const messageIndex = Math.floor(newTime / messageInterval);
-          
+
           if (newTime % messageInterval === 0 && messageIndex < guidanceMessages.length) {
             setIsEzriSpeaking(true);
             setCurrentGuidance(guidanceMessages[messageIndex]);
-            
+
             setTimeout(() => {
               setIsEzriSpeaking(false);
             }, 4000);
           }
-          
-          // Complete exercise
+
           if (newTime >= totalSeconds) {
+            stopWellnessAmbient();
+            toast.success("Time's up", {
+              description: "You've completed your guided session.",
+            });
             setStage("complete");
             return newTime;
           }
-          
+
           return newTime;
         });
       }, 1000);
-      
+
       return () => clearInterval(interval);
     }
-  }, [stage, totalSeconds]);
+  }, [stage, totalSeconds, guidanceMessages.length]);
 
   const handleStart = () => {
     setStage("active");
@@ -86,6 +125,16 @@ export function EzriGuidedMode({
   };
 
   const handleComplete = () => {
+    stopWellnessAmbient();
+    setStage("intro");
+    setTimer(0);
+    setProgress(0);
+    setCurrentGuidance("");
+    onClose();
+  };
+
+  const handleCloseModal = () => {
+    stopWellnessAmbient();
     setStage("intro");
     setTimer(0);
     setProgress(0);
@@ -108,6 +157,7 @@ export function EzriGuidedMode({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            onClick={handleCloseModal}
             className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
           />
 
@@ -119,31 +169,33 @@ export function EzriGuidedMode({
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               className={`bg-gradient-to-br ${exerciseColor} rounded-3xl shadow-2xl max-w-2xl w-full pointer-events-auto overflow-hidden relative`}
             >
-              {/* Animated Background Blobs */}
+              {/* Decorative glows — behind all text */}
               <motion.div
+                aria-hidden
                 animate={{
                   scale: [1, 1.2, 1],
                   opacity: [0.3, 0.5, 0.3]
                 }}
                 transition={{ duration: 5, repeat: Infinity }}
-                className="absolute -top-40 -right-40 w-96 h-96 bg-white/20 rounded-full blur-3xl"
+                className="pointer-events-none absolute -top-40 -right-40 z-0 h-96 w-96 rounded-full bg-white/20 blur-3xl"
               />
               <motion.div
+                aria-hidden
                 animate={{
                   scale: [1, 1.3, 1],
                   opacity: [0.2, 0.4, 0.2]
                 }}
                 transition={{ duration: 6, repeat: Infinity }}
-                className="absolute -bottom-40 -left-40 w-96 h-96 bg-white/20 rounded-full blur-3xl"
+                className="pointer-events-none absolute -bottom-40 -left-40 z-0 h-96 w-96 rounded-full bg-white/20 blur-3xl"
               />
 
               {/* Content */}
-              <div className="relative z-10 p-8 text-white">
+              <div className="relative isolate z-10 p-8 text-white">
                 {/* Close Button */}
                 <motion.button
                   whileHover={{ scale: 1.1, rotate: 90 }}
                   whileTap={{ scale: 0.9 }}
-                  onClick={onClose}
+                  onClick={handleCloseModal}
                   className="absolute top-6 right-6 p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
                 >
                   <X className="w-5 h-5" />
@@ -281,6 +333,22 @@ export function EzriGuidedMode({
                         </motion.div>
                       )}
                     </AnimatePresence>
+
+                    {showNearEndNudge && (
+                      <motion.div
+                        role="status"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-6 max-w-xl mx-auto rounded-2xl border border-white/25 bg-white/15 px-4 py-3 text-center shadow-lg backdrop-blur-md"
+                      >
+                        <p className="text-sm font-medium text-white">
+                          We hope you&apos;re enjoying this moment.
+                        </p>
+                        <p className="mt-1 text-sm text-white/90">
+                          How are you feeling right now?
+                        </p>
+                      </motion.div>
+                    )}
 
                     {/* Timer */}
                     <div className="mb-8">

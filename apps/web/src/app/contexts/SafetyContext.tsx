@@ -39,6 +39,10 @@ export function SafetyProvider({ children }: SafetyProviderProps) {
     };
   });
 
+  const updateConsent = useCallback((partial: Partial<SafetyConsent>) => {
+    setConsent((prev) => ({ ...prev, ...partial }));
+  }, []);
+
   // Save consent to localStorage whenever it changes
   useEffect(() => {
     try {
@@ -139,6 +143,7 @@ export function SafetyProvider({ children }: SafetyProviderProps) {
     stateChangedAt,
     sessionId,
     consent,
+    updateConsent,
     updateState,
     resetToNormal,
     getStateDescription,
@@ -169,19 +174,8 @@ export function useSafetyConsent() {
     throw new Error('useSafetyConsent must be used within a SafetyProvider');
   }
 
-  const updateConsent = useCallback((newConsent: Partial<SafetyConsent>) => {
-    try {
-      const updated = { ...context.consent, ...newConsent };
-      localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(updated));
-      // Note: The SafetyProvider will re-read from localStorage on next mount
-      // No need to reload the page - navigation will handle it
-    } catch (error) {
-      console.error('Failed to update safety consent:', error);
-    }
-  }, [context.consent]);
-
   return {
     consent: context.consent,
-    updateConsent,
+    updateConsent: context.updateConsent,
   };
 }

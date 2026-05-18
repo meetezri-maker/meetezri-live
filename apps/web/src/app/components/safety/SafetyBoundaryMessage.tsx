@@ -40,7 +40,7 @@ export function SafetyBoundaryMessage({ state, customMessage }: SafetyBoundaryMe
     SAFETY_MODE: {
       icon: <ShieldAlert className="size-5" />,
       title: 'Please Reach Out for Immediate Support',
-      message: 'I\'m really concerned about your safety. I can\'t provide emergency support, but there are people who can help you right now. Please reach out to emergency services or one of the crisis resources below.',
+      message: 'I\'m really concerned about your safety. I can\'t provide emergency support, but there are people who can help you right now. Please reach out to emergency services or one of the support resources below.',
       variant: 'destructive',
     },
     COOLDOWN: {
@@ -83,7 +83,7 @@ export function SafetyRefusalMessage() {
         <AlertDescription>
           I care about your safety, but I'm not able to provide guidance on that topic. 
           I'd like to connect you with someone who can offer real support. 
-          Would you be willing to reach out to a crisis counselor?
+          Would you be willing to reach out to a counselor or crisis line?
         </AlertDescription>
       </div>
     </Alert>

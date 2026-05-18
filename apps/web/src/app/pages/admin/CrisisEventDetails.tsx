@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
-import { motion } from "motion/react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
-import { AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
   AlertTriangle,
@@ -13,23 +11,19 @@ import {
   Shield,
   Clock,
   User,
-  MapPin,
-  Calendar,
   CheckCircle,
-  XCircle,
   PhoneCall,
   Send,
   FileText,
   Activity,
-  AlertCircle,
   Heart,
-  TrendingUp,
   Download,
-  Ban,
   X,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { api } from "../../../lib/api";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 interface CrisisEvent {
   id: string;
@@ -47,6 +41,8 @@ interface CrisisEvent {
   sessionId?: string;
   location?: string;
   timezone?: string;
+  notes?: string | null;
+  resolvedAt?: string | null;
   emergencyContact?: {
     name: string;
     relationship?: string;
@@ -57,6 +53,182 @@ interface CrisisEvent {
     specialty?: string;
     phone?: string;
   } | null;
+}
+
+type UserHistoryRow = {
+  date: string;
+  event: string;
+  mood?: number;
+  notes: string;
+  riskLevel: "high" | "medium" | "low";
+};
+
+type ActionLogItem = {
+  iso: string;
+  time: string;
+  date: string;
+  action: string;
+  performer: string;
+  details: string;
+  severity: "critical" | "high" | "medium" | "low";
+};
+
+function dash(v?: string | null) {
+  const t = v?.trim();
+  return t ? t : "—";
+}
+
+function riskToUserHistoryLevel(
+  rk: string
+): UserHistoryRow["riskLevel"] {
+  if (rk === "critical" || rk === "high") return "high";
+  if (rk === "medium") return "medium";
+  return "low";
+}
+
+function buildUserHistory(data: Record<string, unknown>): UserHistoryRow[] {
+  const rows: { at: number; row: UserHistoryRow }[] = [];
+  const moods = (data.recent_mood_entries as Array<Record<string, unknown>> | undefined) || [];
+  for (const m of moods) {
+    const created = m.created_at as string | undefined;
+    if (!created) continue;
+    const at = new Date(created).getTime();
+    const intensity = typeof m.intensity === "number" ? m.intensity : 5;
+    const risk: UserHistoryRow["riskLevel"] =
+      intensity >= 8 ? "high" : intensity >= 5 ? "medium" : "low";
+    rows.push({
+      at,
+      row: {
+        date: formatDateTime(created),
+        event: `Mood check-in (${String(m.mood || "—")})`,
+        mood: intensity,
+        notes: typeof m.notes === "string" && m.notes.trim() ? m.notes.trim() : "—",
+        riskLevel: risk,
+      },
+    });
+  }
+  const prior = (data.prior_crisis_events as Array<Record<string, unknown>> | undefined) || [];
+  for (const p of prior) {
+    const created = p.created_at as string | undefined;
+    if (!created) continue;
+    const at = new Date(created).getTime();
+    const rk = String(p.risk_level || "medium");
+    rows.push({
+      at,
+      row: {
+        date: formatDateTime(created),
+        event: `Prior crisis: ${String(p.event_type || "Crisis event")}`,
+        notes:
+          Array.isArray(p.keywords) && p.keywords.length
+            ? `Keywords: ${(p.keywords as string[]).join(", ")}`
+            : "—",
+        riskLevel: riskToUserHistoryLevel(rk),
+      },
+    });
+  }
+  rows.sort((a, b) => b.at - a.at);
+  return rows.slice(0, 12).map((x) => x.row);
+}
+
+function severityFromRisk(rk: string): ActionLogItem["severity"] {
+  if (rk === "critical") return "critical";
+  if (rk === "high") return "high";
+  if (rk === "medium") return "medium";
+  return "low";
+}
+
+function buildActionTimeline(data: Record<string, unknown>): ActionLogItem[] {
+  const items: ActionLogItem[] = [];
+  const createdRaw = data.created_at as string | undefined;
+  if (createdRaw) {
+    const d = new Date(createdRaw);
+    const iso = d.toISOString();
+    const rk = String(data.risk_level || "medium");
+    const kws = Array.isArray(data.keywords) ? (data.keywords as string[]).filter(Boolean) : [];
+    items.push({
+      iso,
+      time: d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      date: d.toLocaleDateString(),
+      action: "Crisis event recorded",
+      performer: "System",
+      details: `Risk: ${rk}. Keywords: ${kws.length ? kws.join(", ") : "none logged"}.`,
+      severity: severityFromRisk(rk),
+    });
+  }
+  const notes = typeof data.notes === "string" ? data.notes.trim() : "";
+  if (notes) {
+    const ref = (data.resolved_at as string | undefined) || createdRaw;
+    const d = ref ? new Date(ref) : new Date();
+    items.push({
+      iso: d.toISOString(),
+      time: d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      date: d.toLocaleDateString(),
+      action: "Case notes on file",
+      performer: "Staff",
+      details: notes,
+      severity: "medium",
+    });
+  }
+  const resolvedRaw = data.resolved_at as string | undefined;
+  if (resolvedRaw) {
+    const d = new Date(resolvedRaw);
+    items.push({
+      iso: d.toISOString(),
+      time: d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      date: d.toLocaleDateString(),
+      action: "Case resolved",
+      performer: "System",
+      details: "Status marked resolved.",
+      severity: "low",
+    });
+  }
+  items.sort((a, b) => new Date(b.iso).getTime() - new Date(a.iso).getTime());
+  return items;
+}
+
+function riskBannerClass(level: CrisisEvent["riskLevel"]) {
+  switch (level) {
+    case "critical":
+      return {
+        card: "bg-red-50 border-2 border-red-500",
+        iconBg: "bg-red-600",
+        title: "Critical crisis alert",
+        badge: "bg-red-600 text-white",
+        text: "text-red-900",
+        sub: "text-red-800",
+        chip: "bg-red-600 text-white",
+      };
+    case "high":
+      return {
+        card: "bg-orange-50 border-2 border-orange-500",
+        iconBg: "bg-orange-600",
+        title: "High risk crisis alert",
+        badge: "bg-orange-600 text-white",
+        text: "text-orange-950",
+        sub: "text-orange-900",
+        chip: "bg-orange-600 text-white",
+      };
+    case "medium":
+      return {
+        card: "bg-amber-50 border-2 border-amber-400",
+        iconBg: "bg-amber-500",
+        title: "Medium risk alert",
+        badge: "bg-amber-600 text-white",
+        text: "text-amber-950",
+        sub: "text-amber-900",
+        chip: "bg-amber-600 text-white",
+      };
+    default:
+      return {
+        card: "bg-slate-50 border-2 border-slate-300",
+        iconBg: "bg-slate-600",
+        title: "Crisis event",
+        badge: "bg-slate-600 text-white",
+        text: "text-slate-900",
+        sub: "text-slate-800",
+        chip: "bg-slate-600 text-white",
+      };
+  }
 }
 
 function formatDateTime(value?: string | null) {
@@ -81,45 +253,79 @@ function formatRelativeTime(value?: string | null) {
   return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
 }
 
-function mapApiEvent(event: any): CrisisEvent {
-  const profile = event.profiles;
-  const assignedProfile = event.assigned_profile;
+function mapApiEvent(event: Record<string, unknown>): CrisisEvent {
+  const profile = event.profiles as Record<string, unknown> | undefined;
+  const assignedProfile = event.assigned_profile as Record<string, unknown> | undefined;
+  const contacts = (event.emergency_contacts_list as Array<Record<string, unknown>> | undefined) || [];
+  const firstContact = contacts[0];
   const userName =
-    profile?.full_name ||
-    profile?.email ||
+    (profile?.full_name as string | undefined) ||
+    (profile?.email as string | undefined) ||
     "Unknown user";
-  const userEmail = profile?.email;
+  const userEmail = profile?.email as string | undefined;
   const riskLevel = (event.risk_level || "medium") as CrisisEvent["riskLevel"];
   const status = (event.status || "pending") as CrisisEvent["status"];
 
+  const ecFromTable =
+    firstContact &&
+    (firstContact.name || firstContact.phone || firstContact.email)
+      ? {
+          name: String(firstContact.name || "Emergency contact"),
+          relationship:
+            typeof firstContact.relationship === "string"
+              ? firstContact.relationship
+              : undefined,
+          phone: [firstContact.phone, firstContact.email].filter(Boolean).join(" · ") || undefined,
+        }
+      : null;
+
+  const ecFromProfile =
+    !ecFromTable &&
+    (profile?.emergency_contact_name || profile?.emergency_contact_phone)
+      ? {
+          name: String(profile.emergency_contact_name || "Emergency contact"),
+          relationship: profile.emergency_contact_relationship as string | undefined,
+          phone: (profile.emergency_contact_phone as string | undefined) || undefined,
+        }
+      : null;
+
   return {
-    id: event.id,
-    userId: event.user_id,
+    id: String(event.id),
+    userId: String(event.user_id),
     userName,
     userEmail,
-    userPhone: undefined,
+    userPhone: (profile?.phone as string | undefined) || undefined,
     riskLevel,
-    type: event.event_type || "Crisis event",
-    keywords: Array.isArray(event.keywords) ? event.keywords : [],
+    type: (event.event_type as string) || "Crisis event",
+    keywords: Array.isArray(event.keywords) ? (event.keywords as string[]) : [],
     timestamp: formatRelativeTime(event.created_at as string | undefined),
     detectedAt: formatDateTime(event.created_at as string | undefined),
     status,
     aiConfidence: typeof event.ai_confidence === "number" ? event.ai_confidence : 0,
-    sessionId: event.session_id || undefined,
+    sessionId: undefined,
     location: undefined,
-    timezone: undefined,
-    emergencyContact: null,
+    timezone: (profile?.timezone as string | undefined) || undefined,
+    notes: (event.notes as string | null | undefined) ?? null,
+    resolvedAt: (event.resolved_at as string | null | undefined) ?? null,
+    emergencyContact: ecFromTable || ecFromProfile,
     companion: assignedProfile
       ? {
-          name: assignedProfile.full_name || assignedProfile.email || "Assigned specialist",
+          name:
+            (assignedProfile.full_name as string | undefined) ||
+            (assignedProfile.email as string | undefined) ||
+            "Assigned specialist",
           specialty: undefined,
-          phone: undefined,
+          phone: (assignedProfile.phone as string | undefined) || undefined,
         }
       : null,
   };
 }
 
 export function CrisisEventDetails() {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const eventId = searchParams.get("id");
+
   const [selectedAction, setSelectedAction] = useState<string | null>(null);
   const [showNotes, setShowNotes] = useState(false);
   const [showCallModal, setShowCallModal] = useState(false);
@@ -130,204 +336,82 @@ export function CrisisEventDetails() {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showCompleteLogModal, setShowCompleteLogModal] = useState(false);
   const [notes, setNotes] = useState("");
+  const [caseNotes, setCaseNotes] = useState("");
+  const [statusNotes, setStatusNotes] = useState("");
   const [emailContent, setEmailContent] = useState("");
   const [callNotes, setCallNotes] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
   const [event, setEvent] = useState<CrisisEvent | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [detailPayload, setDetailPayload] = useState<Record<string, unknown> | null>(null);
+  const [isLoading, setIsLoading] = useState(() => Boolean(eventId));
+  const [listLoading, setListLoading] = useState(() => !eventId);
+  const [listRows, setListRows] = useState<Record<string, unknown>[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  const location = useLocation();
-  const searchParams = new URLSearchParams(location.search);
-  const eventId = searchParams.get("id");
-
-  useEffect(() => {
-    const load = async () => {
-      if (!eventId) {
-        setError("Missing crisis event id");
-        setIsLoading(false);
-        return;
-      }
-      try {
-        setError(null);
-        const data = await api.admin.getCrisisEvent(eventId);
-        setEvent(mapApiEvent(data));
-      } catch (err) {
-        console.error("Failed to fetch crisis event", err);
-        setError("Failed to load crisis event");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    load();
+  const reloadDetail = useCallback(async () => {
+    if (!eventId) return;
+    try {
+      const data = await api.admin.getCrisisEvent(eventId);
+      setDetailPayload(data as Record<string, unknown>);
+      setEvent(mapApiEvent(data as Record<string, unknown>));
+    } catch (err) {
+      console.error("Failed to refresh crisis event", err);
+    }
   }, [eventId]);
 
-  const conversationContext = [
-    {
-      speaker: "user",
-      message: "I've been feeling really overwhelmed lately. Everything seems pointless.",
-      time: "14:28",
-    },
-    {
-      speaker: "avatar",
-      message: "I hear that you're feeling overwhelmed. Can you tell me more about what's been happening?",
-      time: "14:29",
-    },
-    {
-      speaker: "user",
-      message: "Work is crushing me, my relationship is falling apart, and I just... I can't take this pain anymore. I keep thinking about ways to end it.",
-      time: "14:30",
-      flagged: true,
-    },
-    {
-      speaker: "avatar",
-      message: "Thank you for sharing that with me. I want you to know that you're not alone. What you're feeling is valid, but I'm concerned about your safety. Have you thought about hurting yourself?",
-      time: "14:31",
-    },
-    {
-      speaker: "user",
-      message: "Sometimes. Tonight especially. I have a plan. I just want the pain to stop.",
-      time: "14:32",
-      flagged: true,
-      criticalKeywords: ["tonight", "plan", "pain"],
-    },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!eventId) {
+        setIsLoading(false);
+        setListLoading(true);
+        setError(null);
+        setEvent(null);
+        setDetailPayload(null);
+        try {
+          const data = await api.admin.getCrisisEvents({ limit: 80 });
+          const rows = Array.isArray(data) ? data : [];
+          if (!cancelled) setListRows(rows as Record<string, unknown>[]);
+        } catch (err) {
+          console.error("Failed to fetch crisis events list", err);
+          if (!cancelled) setError("Failed to load crisis events");
+        } finally {
+          if (!cancelled) setListLoading(false);
+        }
+        return;
+      }
 
-  const userHistory = [
-    {
-      date: "Dec 28, 2024",
-      event: "Session completed",
-      mood: 4,
-      notes: "Expressed feelings of hopelessness",
-      riskLevel: "medium",
-    },
-    {
-      date: "Dec 25, 2024",
-      event: "Mood check-in",
-      mood: 3,
-      notes: "Holiday stress, family conflict",
-      riskLevel: "medium",
-    },
-    {
-      date: "Dec 22, 2024",
-      event: "Crisis alert",
-      mood: 2,
-      notes: "Mentioned self-harm thoughts, contacted",
-      riskLevel: "high",
-    },
-    {
-      date: "Dec 20, 2024",
-      event: "Session completed",
-      mood: 5,
-      notes: "Discussed coping strategies",
-      riskLevel: "low",
-    },
-  ];
+      setIsLoading(true);
+      setError(null);
+      try {
+        const data = await api.admin.getCrisisEvent(eventId);
+        if (cancelled) return;
+        setDetailPayload(data as Record<string, unknown>);
+        setEvent(mapApiEvent(data as Record<string, unknown>));
+      } catch (err) {
+        console.error("Failed to fetch crisis event", err);
+        if (!cancelled) setError("Failed to load crisis event");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
 
-  const actionHistory = [
-    {
-      time: "14:35",
-      action: "Crisis protocol initiated",
-      performer: "AI System",
-      details: "High-risk keywords detected, immediate notification sent",
-    },
-    {
-      time: "14:34",
-      action: "Emergency contact notified",
-      performer: "System",
-      details: "Sister (Jennifer Mitchell) alerted via SMS",
-    },
-    {
-      time: "14:33",
-      action: "Crisis team assigned",
-      performer: "System",
-      details: "Crisis Team Alpha notified",
-    },
-  ];
-
-  // Complete action log with more historical entries
-  const completeActionLog = [
-    {
-      time: "14:35",
-      date: "Dec 29, 2024",
-      action: "Crisis protocol initiated",
-      performer: "AI System",
-      details: "High-risk keywords detected, immediate notification sent",
-      severity: "critical"
-    },
-    {
-      time: "14:34",
-      date: "Dec 29, 2024",
-      action: "Emergency contact notified",
-      performer: "System",
-      details: "Sister (Jennifer Mitchell) alerted via SMS",
-      severity: "high"
-    },
-    {
-      time: "14:33",
-      date: "Dec 29, 2024",
-      action: "Crisis team assigned",
-      performer: "System",
-      details: "Crisis Team Alpha notified",
-      severity: "high"
-    },
-    {
-      time: "14:32",
-      date: "Dec 29, 2024",
-      action: "Critical keywords detected",
-      performer: "AI System",
-      details: "Keywords flagged: 'tonight', 'plan', 'pain' - AI Confidence: 94%",
-      severity: "critical"
-    },
-    {
-      time: "14:30",
-      date: "Dec 29, 2024",
-      action: "Session monitoring active",
-      performer: "AI System",
-      details: "Real-time conversation analysis in progress",
-      severity: "medium"
-    },
-    {
-      time: "14:28",
-      date: "Dec 29, 2024",
-      action: "Session started",
-      performer: "User",
-      details: "User initiated conversation with AI companion",
-      severity: "low"
-    },
-    {
-      time: "09:15",
-      date: "Dec 28, 2024",
-      action: "Follow-up check completed",
-      performer: "Crisis Team",
-      details: "User reported stable mood, continuing regular sessions",
-      severity: "low"
-    },
-    {
-      time: "16:42",
-      date: "Dec 27, 2024",
-      action: "Status update",
-      performer: "Admin User",
-      details: "Case marked as 'monitoring' - scheduled follow-up for Dec 28",
-      severity: "medium"
-    },
-    {
-      time: "11:23",
-      date: "Dec 22, 2024",
-      action: "Crisis intervention completed",
-      performer: "Dr. Emily Chen",
-      details: "User contacted, safety plan reviewed, emergency contacts verified",
-      severity: "high"
-    },
-    {
-      time: "10:55",
-      date: "Dec 22, 2024",
-      action: "Previous crisis alert",
-      performer: "AI System",
-      details: "Self-harm keywords detected, immediate intervention initiated",
-      severity: "critical"
-    },
-  ];
+  const userHistoryRows = useMemo(
+    () => (detailPayload ? buildUserHistory(detailPayload) : []),
+    [detailPayload]
+  );
+  const actionLogFull = useMemo(
+    () => (detailPayload ? buildActionTimeline(detailPayload) : []),
+    [detailPayload]
+  );
+  const actionHistoryPreview = useMemo(() => actionLogFull.slice(0, 3), [actionLogFull]);
+  const riskB = useMemo(() => (event ? riskBannerClass(event.riskLevel) : null), [event]);
 
   const quickActions = [
     {
@@ -377,6 +461,7 @@ export function CrisisEventDetails() {
   const handleAction = (actionId: string) => {
     setSelectedAction(actionId);
     if (actionId === "notes") {
+      setCaseNotes(event?.notes || "");
       setShowNotes(true);
     } else if (actionId === "call") {
       setShowCallModal(true);
@@ -396,7 +481,151 @@ export function CrisisEventDetails() {
     }
   };
 
-  if (isLoading) {
+  if (!eventId) {
+    if (listLoading) {
+      return (
+        <AdminLayoutNew>
+          <div className="space-y-6" key="crisis-events-loading">
+            <div>
+              <Button variant="ghost" className="gap-2 mb-4" asChild>
+                <Link to="/admin/crisis-dashboard">
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to Crisis Dashboard
+                </Link>
+              </Button>
+              <h1 className="text-2xl font-bold">Crisis events</h1>
+              <p className="text-muted-foreground mt-1">Loading events…</p>
+            </div>
+            <Card className="p-0 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                        When
+                      </th>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                        User
+                      </th>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                        Risk
+                      </th>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                        Status
+                      </th>
+                      <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                        Type
+                      </th>
+                      <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 bg-white">
+                    <AdminTableSkeletonRows columns={6} rows={8} padding="comfortable" />
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        </AdminLayoutNew>
+      );
+    }
+    if (error) {
+      return (
+        <AdminLayoutNew>
+          <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+            <p className="text-red-600 font-medium">{error}</p>
+            <Button variant="outline" asChild>
+              <Link to="/admin/crisis-dashboard">Back to Crisis Dashboard</Link>
+            </Button>
+          </div>
+        </AdminLayoutNew>
+      );
+    }
+    return (
+      <AdminLayoutNew>
+        <div className="space-y-6" key="crisis-events-index">
+          <div>
+            <Button variant="ghost" className="gap-2 mb-4" asChild>
+              <Link to="/admin/crisis-dashboard">
+                <ArrowLeft className="w-4 h-4" />
+                Back to Crisis Dashboard
+              </Link>
+            </Button>
+            <h1 className="text-2xl font-bold">Crisis events</h1>
+            <p className="text-muted-foreground mt-1">Select an event to open full details.</p>
+          </div>
+          <Card className="p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      When
+                    </th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      User
+                    </th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Risk
+                    </th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Status
+                    </th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Type
+                    </th>
+                    <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {listRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                        No crisis events recorded yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    listRows.map((row) => {
+                      const id = String(row.id);
+                      const prof = row.profiles as Record<string, unknown> | undefined;
+                      const name =
+                        (prof?.full_name as string) || (prof?.email as string) || "Unknown user";
+                      const created = row.created_at as string | undefined;
+                      const rel = created ? formatRelativeTime(created) : "—";
+                      const rk = String(row.risk_level || "medium");
+                      const st = String(row.status || "pending");
+                      return (
+                        <tr key={id} className="border-t border-border hover:bg-muted/30">
+                          <td className="p-3 whitespace-nowrap">{rel}</td>
+                          <td className="p-3">{name}</td>
+                          <td className="p-3 uppercase text-xs font-semibold">{rk}</td>
+                          <td className="p-3">{st.replace(/-/g, " ")}</td>
+                          <td className="p-3 max-w-[200px] truncate">
+                            {(row.event_type as string) || "Crisis event"}
+                          </td>
+                          <td className="p-3 text-right">
+                            <Button size="sm" variant="outline" asChild>
+                              <Link to={`/admin/crisis-event-details?id=${encodeURIComponent(id)}`}>View</Link>
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      </AdminLayoutNew>
+    );
+  }
+
+  if (eventId && isLoading) {
     return (
       <AdminLayoutNew>
         <div className="flex items-center justify-center h-[60vh]">
@@ -406,74 +635,84 @@ export function CrisisEventDetails() {
     );
   }
 
-  if (error || !event) {
+  if (eventId && (error || !event)) {
     return (
       <AdminLayoutNew>
         <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
           <p className="text-red-600 font-medium">{error || "Crisis event not found"}</p>
-          <Link to="/admin/crisis-dashboard">
-            <Button variant="outline">Back to Crisis Dashboard</Button>
-          </Link>
+          <Button variant="outline" asChild>
+            <Link to="/admin/crisis-dashboard">Back to Crisis Dashboard</Link>
+          </Button>
         </div>
       </AdminLayoutNew>
     );
   }
 
+  if (!event) {
+    return null;
+  }
+
   return (
     <AdminLayoutNew>
-      <div className="space-y-6">
+      <div className="space-y-6" key={eventId}>
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
+        <div
         >
-          <Link to="/admin/crisis-dashboard">
-            <Button variant="ghost" className="gap-2 mb-4">
+          <Button variant="ghost" className="gap-2 mb-4" asChild>
+            <Link to="/admin/crisis-dashboard">
               <ArrowLeft className="w-4 h-4" />
               Back to Crisis Dashboard
-            </Button>
-          </Link>
+            </Link>
+          </Button>
 
-          {/* Critical Alert Banner */}
-          <Card className="p-6 bg-red-50 border-2 border-red-500 mb-6">
-            <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center flex-shrink-0 animate-pulse">
-                <AlertTriangle className="w-8 h-8 text-white" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h2 className="text-2xl font-bold text-red-900">CRITICAL CRISIS ALERT</h2>
-                  <span className="px-3 py-1 bg-red-600 text-white rounded-full text-xs font-bold">
-                    IMMEDIATE ACTION REQUIRED
-                  </span>
+          {/* Risk banner (data from crisis_events) */}
+          {riskB && (
+            <Card className={`p-6 mb-6 ${riskB.card}`}>
+              <div className="flex items-start gap-4">
+                <div
+                  className={`w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    event.riskLevel === "critical" ? "animate-pulse " : ""
+                  }${riskB.iconBg}`}
+                >
+                  <AlertTriangle className="w-8 h-8 text-white" />
                 </div>
-                <p className="text-red-800 font-medium mb-2">
-                  {event.type} detected for {event.userName} ({event.userId})
-                </p>
-                <p className="text-sm text-red-700 mb-3">
-                  AI Confidence: {event.aiConfidence}% • Detected {event.timestamp} • Time-sensitive intervention needed
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {event.keywords.map((keyword, i) => (
-                    <span
-                      key={i}
-                      className="px-3 py-1 bg-red-600 text-white rounded-full text-sm font-medium"
-                    >
-                      {keyword}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <h2 className={`text-2xl font-bold ${riskB.text}`}>{riskB.title.toUpperCase()}</h2>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${riskB.badge}`}>
+                      REVIEW REQUIRED
                     </span>
-                  ))}
+                  </div>
+                  <p className={`font-medium mb-2 ${riskB.sub}`}>
+                    {event.type} — {event.userName} ({event.userId})
+                  </p>
+                  <p className={`text-sm mb-3 ${riskB.sub}`}>
+                    AI confidence: {event.aiConfidence}% • Detected {event.timestamp}
+                    {event.detectedAt ? ` • ${event.detectedAt}` : ""}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {event.keywords.length === 0 ? (
+                      <span className="text-sm opacity-80">No keywords stored for this event.</span>
+                    ) : (
+                      event.keywords.map((keyword, i) => (
+                        <span
+                          key={i}
+                          className={`px-3 py-1 rounded-full text-sm font-medium ${riskB.chip}`}
+                        >
+                          {keyword}
+                        </span>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </Card>
-        </motion.div>
+            </Card>
+          )}
+        </div>
 
         {/* User Information */}
         <div className="grid lg:grid-cols-3 gap-6">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1 }}
+          <div
           >
             <Card className="p-6">
               <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
@@ -496,39 +735,29 @@ export function CrisisEventDetails() {
                     <Mail className="w-4 h-4 text-muted-foreground" />
                     <div className="flex-1">
                       <p className="text-xs text-muted-foreground">Email</p>
-                      <p className="font-medium text-sm">{event.userEmail}</p>
+                      <p className="font-medium text-sm">{dash(event.userEmail)}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Phone className="w-4 h-4 text-muted-foreground" />
                     <div className="flex-1">
                       <p className="text-xs text-muted-foreground">Phone</p>
-                      <p className="font-medium text-sm">{event.userPhone}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-muted-foreground" />
-                    <div className="flex-1">
-                      <p className="text-xs text-muted-foreground">Location</p>
-                      <p className="font-medium text-sm">{event.location}</p>
+                      <p className="font-medium text-sm">{dash(event.userPhone)}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-muted-foreground" />
                     <div className="flex-1">
                       <p className="text-xs text-muted-foreground">Timezone</p>
-                      <p className="font-medium text-sm">{event.timezone}</p>
+                      <p className="font-medium text-sm">{dash(event.timezone)}</p>
                     </div>
                   </div>
                 </div>
               </div>
             </Card>
-          </motion.div>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
+          <div
           >
             <Card className="p-6">
               <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
@@ -536,18 +765,26 @@ export function CrisisEventDetails() {
                 Emergency Contact
               </h3>
               <div className="space-y-4">
-                <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                  <p className="font-bold mb-1">{event.emergencyContact.name}</p>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    {event.emergencyContact.relationship}
-                  </p>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone className="w-4 h-4" />
-                    <span className="font-medium">{event.emergencyContact.phone}</span>
+                {event.emergencyContact ? (
+                  <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                    <p className="font-bold mb-1">{event.emergencyContact.name}</p>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      {dash(event.emergencyContact.relationship)}
+                    </p>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Phone className="w-4 h-4" />
+                      <span className="font-medium">{dash(event.emergencyContact.phone)}</span>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No emergency contact on file (profile or saved contacts).
+                  </p>
+                )}
 
-                <Button className="w-full gap-2 bg-orange-600 hover:bg-orange-700"
+                <Button
+                  className="w-full gap-2 bg-orange-600 hover:bg-orange-700"
+                  disabled={!event.emergencyContact}
                   onClick={() => setShowEmergencyContactModal(true)}
                 >
                   <PhoneCall className="w-4 h-4" />
@@ -560,20 +797,25 @@ export function CrisisEventDetails() {
                   <User className="w-5 h-5 text-primary" />
                   Crisis Specialist
                 </h3>
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="font-bold mb-1">{event.companion.name}</p>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    {event.companion.specialty}
-                  </p>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone className="w-4 h-4" />
-                    <span className="font-medium">{event.companion.phone}</span>
+                {event.companion ? (
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="font-bold mb-1">{event.companion.name}</p>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      {dash(event.companion.specialty)}
+                    </p>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Phone className="w-4 h-4" />
+                      <span className="font-medium">{dash(event.companion.phone)}</span>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No specialist assigned yet.</p>
+                )}
 
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="w-full gap-2 mt-3"
+                  disabled={!event.companion}
                   onClick={() => setShowTherapistModal(true)}
                 >
                   <Send className="w-4 h-4" />
@@ -581,12 +823,9 @@ export function CrisisEventDetails() {
                 </Button>
               </div>
             </Card>
-          </motion.div>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
+          <div
           >
             <Card className="p-6">
               <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
@@ -596,7 +835,17 @@ export function CrisisEventDetails() {
               <div className="space-y-3">
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Risk Level</p>
-                  <span className="px-3 py-1 bg-red-500 text-white rounded-full text-sm font-bold">
+                  <span
+                    className={`px-3 py-1 rounded-full text-sm font-bold text-white ${
+                      event.riskLevel === "critical"
+                        ? "bg-red-600"
+                        : event.riskLevel === "high"
+                          ? "bg-orange-500"
+                          : event.riskLevel === "medium"
+                            ? "bg-amber-500"
+                            : "bg-slate-500"
+                    }`}
+                  >
                     {event.riskLevel.toUpperCase()}
                   </span>
                 </div>
@@ -621,118 +870,86 @@ export function CrisisEventDetails() {
                   <p className="font-medium">{event.detectedAt}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Session ID</p>
-                  <p className="font-medium">{event.sessionId}</p>
+                  <p className="text-xs text-muted-foreground mb-1">Session</p>
+                  <p className="font-medium text-muted-foreground">
+                    {event.sessionId || "Not linked to an app session in this record"}
+                  </p>
                 </div>
+                {event.resolvedAt && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Resolved</p>
+                    <p className="font-medium">{formatDateTime(event.resolvedAt)}</p>
+                  </div>
+                )}
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Status</p>
                   <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium border border-red-300">
-                    {event.status.toUpperCase()}
+                    {event.status.replace("-", " ").toUpperCase()}
                   </span>
                 </div>
               </div>
             </Card>
-          </motion.div>
+          </div>
         </div>
 
         {/* Quick Action Buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+        <div
         >
           <Card className="p-6">
             <h3 className="font-bold text-lg mb-4">Quick Actions</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
               {quickActions.map((action, index) => (
-                <motion.button
+                <button
                   key={action.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 + index * 0.05 }}
                   onClick={() => handleAction(action.id)}
                   className={`p-4 rounded-lg text-white text-center hover:shadow-lg transition-all ${action.color}`}
                 >
                   <action.icon className="w-6 h-6 mx-auto mb-2" />
                   <p className="font-medium text-sm">{action.label}</p>
-                </motion.button>
+                </button>
               ))}
             </div>
           </Card>
-        </motion.div>
+        </div>
 
-        {/* Conversation Context */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
+        {/* Detection summary (chat transcripts are not stored server-side) */}
+        <div
         >
           <Card className="p-6">
             <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-primary" />
-              Conversation Context
+              Detection summary
             </h3>
-            <div className="space-y-4">
-              {conversationContext.map((msg, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, x: msg.speaker === "user" ? 20 : -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.7 + index * 0.1 }}
-                  className={`flex ${msg.speaker === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-[80%] p-4 rounded-lg ${
-                      msg.flagged
-                        ? "bg-red-50 border-2 border-red-500"
-                        : msg.speaker === "user"
-                        ? "bg-primary text-white"
-                        : "bg-gray-100"
-                    }`}
+            <p className="text-sm text-muted-foreground mb-4">
+              Full conversation transcripts are not stored. The information below is what was persisted when this
+              crisis event was created.
+            </p>
+            {event.notes?.trim() ? (
+              <div className="mb-4 p-4 rounded-lg bg-muted/50 border border-border">
+                <p className="text-xs font-semibold text-muted-foreground mb-1">Case notes</p>
+                <p className="text-sm whitespace-pre-wrap">{event.notes.trim()}</p>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              {event.keywords.length === 0 ? (
+                <span className="text-sm text-muted-foreground">No keywords on record.</span>
+              ) : (
+                event.keywords.map((keyword, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium border border-red-200"
                   >
-                    {msg.flagged && (
-                      <div className="flex items-center gap-2 mb-2 text-red-600">
-                        <AlertTriangle className="w-4 h-4" />
-                        <span className="text-xs font-bold">CRISIS KEYWORDS DETECTED</span>
-                      </div>
-                    )}
-                    <p className="text-sm mb-1">{msg.message}</p>
-                    <p
-                      className={`text-xs ${
-                        msg.flagged
-                          ? "text-red-600"
-                          : msg.speaker === "user"
-                          ? "text-white/70"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      {msg.time}
-                    </p>
-                    {msg.criticalKeywords && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {msg.criticalKeywords.map((keyword, i) => (
-                          <span
-                            key={i}
-                            className="px-2 py-0.5 bg-red-600 text-white rounded text-xs font-bold"
-                          >
-                            {keyword}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
+                    {keyword}
+                  </span>
+                ))
+              )}
             </div>
           </Card>
-        </motion.div>
+        </div>
 
         <div className="grid lg:grid-cols-2 gap-6">
           {/* User History */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 }}
+          <div
           >
             <Card className="p-6">
               <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
@@ -740,44 +957,49 @@ export function CrisisEventDetails() {
                 Recent User History
               </h3>
               <div className="space-y-3">
-                {userHistory.map((item, index) => (
-                  <div
-                    key={index}
-                    className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <p className="font-medium">{item.event}</p>
-                        <p className="text-sm text-muted-foreground">{item.date}</p>
+                {userHistoryRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No recent mood check-ins or prior crisis events for this user in the database.
+                  </p>
+                ) : (
+                  userHistoryRows.map((item, index) => (
+                    <div
+                      key={index}
+                      className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <p className="font-medium">{item.event}</p>
+                          <p className="text-sm text-muted-foreground">{item.date}</p>
+                        </div>
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium ${
+                            item.riskLevel === "high"
+                              ? "bg-red-100 text-red-700"
+                              : item.riskLevel === "medium"
+                                ? "bg-yellow-100 text-yellow-700"
+                                : "bg-green-100 text-green-700"
+                          }`}
+                        >
+                          {item.riskLevel}
+                        </span>
                       </div>
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${
-                          item.riskLevel === "high"
-                            ? "bg-red-100 text-red-700"
-                            : item.riskLevel === "medium"
-                            ? "bg-yellow-100 text-yellow-700"
-                            : "bg-green-100 text-green-700"
-                        }`}
-                      >
-                        {item.riskLevel}
-                      </span>
+                      {item.mood !== undefined && (
+                        <div className="flex items-center gap-2 mb-2">
+                          <Heart className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm">Intensity: {item.mood}/10</span>
+                        </div>
+                      )}
+                      <p className="text-sm text-muted-foreground">{item.notes}</p>
                     </div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Heart className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">Mood: {item.mood}/10</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{item.notes}</p>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </Card>
-          </motion.div>
+          </div>
 
           {/* Action History */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.9 }}
+          <div
           >
             <Card className="p-6">
               <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
@@ -785,21 +1007,23 @@ export function CrisisEventDetails() {
                 Action History
               </h3>
               <div className="space-y-3">
-                {actionHistory.map((action, index) => (
-                  <div
-                    key={index}
-                    className="p-4 bg-blue-50 border border-blue-200 rounded-lg"
-                  >
-                    <div className="flex items-start justify-between mb-1">
-                      <p className="font-medium">{action.action}</p>
-                      <span className="text-xs text-muted-foreground">{action.time}</span>
+                {actionHistoryPreview.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No timeline entries for this event yet.</p>
+                ) : (
+                  actionHistoryPreview.map((action, index) => (
+                    <div
+                      key={`${action.iso}-${index}`}
+                      className="p-4 bg-blue-50 border border-blue-200 rounded-lg"
+                    >
+                      <div className="flex items-start justify-between mb-1">
+                        <p className="font-medium">{action.action}</p>
+                        <span className="text-xs text-muted-foreground">{action.time}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-1">By: {action.performer}</p>
+                      <p className="text-sm">{action.details}</p>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      By: {action.performer}
-                    </p>
-                    <p className="text-sm">{action.details}</p>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
 
               <Button variant="outline" className="w-full mt-4 gap-2" onClick={() => setShowCompleteLogModal(true)}>
@@ -807,14 +1031,11 @@ export function CrisisEventDetails() {
                 View Complete Log
               </Button>
             </Card>
-          </motion.div>
+          </div>
         </div>
 
         {/* Status Update */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1 }}
+        <div
         >
           <Card className="p-6">
             <h3 className="font-bold text-lg mb-4">Update Case Status</h3>
@@ -824,6 +1045,7 @@ export function CrisisEventDetails() {
                 className="gap-2"
                 onClick={() => {
                   setSelectedStatus("contacted");
+                  setStatusNotes("");
                   setShowStatusModal(true);
                 }}
               >
@@ -835,6 +1057,7 @@ export function CrisisEventDetails() {
                 className="gap-2"
                 onClick={() => {
                   setSelectedStatus("in-progress");
+                  setStatusNotes("");
                   setShowStatusModal(true);
                 }}
               >
@@ -846,6 +1069,7 @@ export function CrisisEventDetails() {
                 className="gap-2 text-green-600 border-green-300"
                 onClick={() => {
                   setSelectedStatus("resolved");
+                  setStatusNotes("");
                   setShowStatusModal(true);
                 }}
               >
@@ -857,6 +1081,7 @@ export function CrisisEventDetails() {
                 className="gap-2 text-red-600 border-red-300"
                 onClick={() => {
                   setSelectedStatus("escalated");
+                  setStatusNotes("");
                   setShowStatusModal(true);
                 }}
               >
@@ -865,23 +1090,17 @@ export function CrisisEventDetails() {
               </Button>
             </div>
           </Card>
-        </motion.div>
+        </div>
       </div>
 
       {/* Add Notes Modal */}
-      <AnimatePresence>
-        {showNotes && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+              {showNotes && (
+          <div
+            key="crisis-notes-overlay"
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setShowNotes(false)}
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+            <div
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl"
             >
@@ -901,8 +1120,8 @@ export function CrisisEventDetails() {
               <div className="mb-6">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Notes</label>
                 <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  value={caseNotes}
+                  onChange={(e) => setCaseNotes(e.target.value)}
                   rows={8}
                   placeholder="Document intervention details, actions taken, user's response, follow-up plans..."
                   className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
@@ -912,10 +1131,20 @@ export function CrisisEventDetails() {
               <div className="flex gap-3">
                 <Button
                   className="flex-1 gap-2"
-                  onClick={() => {
-                    console.log('Saving notes:', notes);
-                    setShowNotes(false);
-                    setNotes("");
+                  disabled={isUpdating}
+                  onClick={async () => {
+                    try {
+                      setIsUpdating(true);
+                      await api.admin.updateCrisisEventStatus(event.id, {
+                        notes: caseNotes.trim() || undefined,
+                      });
+                      await reloadDetail();
+                      setShowNotes(false);
+                    } catch (e) {
+                      console.error("Failed to save crisis notes", e);
+                    } finally {
+                      setIsUpdating(false);
+                    }
                   }}
                 >
                   <FileText className="w-4 h-4" />
@@ -926,38 +1155,31 @@ export function CrisisEventDetails() {
                   className="px-6"
                   onClick={() => {
                     setShowNotes(false);
-                    setNotes("");
+                    setCaseNotes("");
                   }}
                 >
                   Cancel
                 </Button>
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
-      </AnimatePresence>
 
       {/* Call User Modal - Similar to Crisis Monitoring */}
-      <AnimatePresence>
-        {showCallModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+              {showCallModal && (
+          <div
+            key="crisis-call-overlay"
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setShowCallModal(false)}
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+            <div
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl"
             >
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">Initiate Crisis Call</h3>
-                  <p className="text-gray-600">{event.userName} ({event.userPhone})</p>
+                  <p className="text-gray-600">{event.userName} ({dash(event.userPhone)})</p>
                 </div>
                 <button
                   onClick={() => setShowCallModal(false)}
@@ -1031,25 +1253,18 @@ export function CrisisEventDetails() {
                   Cancel
                 </Button>
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
-      </AnimatePresence>
 
       {/* Send Email Modal */}
-      <AnimatePresence>
-        {showEmailModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+              {showEmailModal && (
+          <div
+            key="crisis-email-overlay"
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setShowEmailModal(false)}
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+            <div
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
             >
@@ -1120,25 +1335,18 @@ export function CrisisEventDetails() {
                   Cancel
                 </Button>
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
-      </AnimatePresence>
 
       {/* Emergency Services Modal */}
-      <AnimatePresence>
-        {showEmergencyModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+              {showEmergencyModal && (
+          <div
+            key="crisis-emergency-services-overlay"
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setShowEmergencyModal(false)}
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+            <div
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl"
             >
@@ -1161,8 +1369,8 @@ export function CrisisEventDetails() {
                 <div className="text-center mb-4">
                   <p className="text-red-800 font-medium mb-2">Emergency Information:</p>
                   <p className="text-sm text-red-700">User: {event.userName}</p>
-                  <p className="text-sm text-red-700">Phone: {event.userPhone}</p>
-                  <p className="text-sm text-red-700">Location: {event.location}</p>
+                  <p className="text-sm text-red-700">Phone: {dash(event.userPhone)}</p>
+                  <p className="text-sm text-red-700">Timezone: {dash(event.timezone)}</p>
                 </div>
               </div>
 
@@ -1197,25 +1405,18 @@ export function CrisisEventDetails() {
                   Cancel
                 </Button>
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
-      </AnimatePresence>
 
       {/* Emergency Contact Modal */}
-      <AnimatePresence>
-        {showEmergencyContactModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+              {showEmergencyContactModal && (
+          <div
+            key="crisis-emergency-contact-overlay"
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setShowEmergencyContactModal(false)}
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+            <div
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl"
             >
@@ -1234,20 +1435,24 @@ export function CrisisEventDetails() {
 
               <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-4 mb-6">
                 <h4 className="font-bold text-orange-900 mb-3">Emergency Contact Information</h4>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-orange-700" />
-                    <span className="font-semibold">{event.emergencyContact.name}</span>
+                {event.emergencyContact ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-orange-700" />
+                      <span className="font-semibold">{event.emergencyContact.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Heart className="w-4 h-4 text-orange-700" />
+                      <span className="text-sm">{dash(event.emergencyContact.relationship)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-orange-700" />
+                      <span className="font-medium">{dash(event.emergencyContact.phone)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Heart className="w-4 h-4 text-orange-700" />
-                    <span className="text-sm">{event.emergencyContact.relationship}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-orange-700" />
-                    <span className="font-medium">{event.emergencyContact.phone}</span>
-                  </div>
-                </div>
+                ) : (
+                  <p className="text-sm text-orange-900">No emergency contact on file.</p>
+                )}
               </div>
 
               <div className="mb-6">
@@ -1284,25 +1489,18 @@ export function CrisisEventDetails() {
                   Cancel
                 </Button>
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
-      </AnimatePresence>
 
       {/* Alert Therapist Modal */}
-      <AnimatePresence>
-        {showTherapistModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+              {showTherapistModal && (
+          <div
+            key="crisis-therapist-overlay"
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setShowTherapistModal(false)}
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+            <div
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl"
             >
@@ -1321,20 +1519,24 @@ export function CrisisEventDetails() {
 
               <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4 mb-6">
                 <h4 className="font-bold text-green-900 mb-3">Crisis Specialist Information</h4>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-green-700" />
-                    <span className="font-semibold">{event.companion.name}</span>
+                {event.companion ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-green-700" />
+                      <span className="font-semibold">{event.companion.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-green-700" />
+                      <span className="text-sm">{dash(event.companion.specialty)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 text-green-700" />
+                      <span className="font-medium">{dash(event.companion.phone)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-4 h-4 text-green-700" />
-                    <span className="text-sm">{event.companion.specialty}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-green-700" />
-                    <span className="font-medium">{event.companion.phone}</span>
-                  </div>
-                </div>
+                ) : (
+                  <p className="text-sm text-green-900">No specialist assigned.</p>
+                )}
               </div>
 
               <div className="mb-6">
@@ -1371,25 +1573,18 @@ export function CrisisEventDetails() {
                   Cancel
                 </Button>
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
-      </AnimatePresence>
 
       {/* Update Status Modal */}
-      <AnimatePresence>
-        {showStatusModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+              {showStatusModal && (
+          <div
+            key="crisis-status-overlay"
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setShowStatusModal(false)}
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+            <div
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl"
             >
@@ -1414,11 +1609,27 @@ export function CrisisEventDetails() {
                   selectedStatus === "resolved" ? "bg-green-50 border-green-300" :
                   "bg-red-50 border-red-300"
                 }`}>
-                  <p className="font-bold text-lg">
-                    {selectedStatus === "contacted" && "📞 Mark as Contacted"}
-                    {selectedStatus === "in-progress" && "⚙️ In Progress"}
-                    {selectedStatus === "resolved" && "✅ Resolve Case"}
-                    {selectedStatus === "escalated" && "⚠️ Escalate"}
+                  <p className="font-bold text-lg inline-flex flex-wrap items-center gap-2">
+                    {selectedStatus === "contacted" && (
+                      <>
+                        <FluentEmoji emoji="📞" size={22} /> Mark as Contacted
+                      </>
+                    )}
+                    {selectedStatus === "in-progress" && (
+                      <>
+                        <FluentEmoji emoji="⚙️" size={22} /> In Progress
+                      </>
+                    )}
+                    {selectedStatus === "resolved" && (
+                      <>
+                        <FluentEmoji emoji="✅" size={22} /> Resolve Case
+                      </>
+                    )}
+                    {selectedStatus === "escalated" && (
+                      <>
+                        <FluentEmoji emoji="⚠️" size={22} /> Escalate
+                      </>
+                    )}
                   </p>
                   <p className="text-sm text-gray-600 mt-1">
                     {selectedStatus === "contacted" && "User has been contacted and initial assessment completed"}
@@ -1432,8 +1643,8 @@ export function CrisisEventDetails() {
               <div className="mb-6">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Status Update Notes</label>
                 <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  value={statusNotes}
+                  onChange={(e) => setStatusNotes(e.target.value)}
                   rows={5}
                   placeholder="Document the reason for status change, actions taken, current situation, next steps..."
                   className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
@@ -1443,10 +1654,32 @@ export function CrisisEventDetails() {
               <div className="flex gap-3">
                 <Button
                   className="flex-1 gap-2"
-                  onClick={() => {
-                    console.log('Status updated:', selectedStatus, notes);
-                    setShowStatusModal(false);
-                    setNotes("");
+                  disabled={isUpdating}
+                  onClick={async () => {
+                    const apiStatus =
+                      selectedStatus === "escalated" ? "in-progress" : selectedStatus;
+                    let merged = event.notes || "";
+                    if (statusNotes.trim()) {
+                      const tag =
+                        selectedStatus === "escalated" ? "Escalation" : "Status update";
+                      merged = merged
+                        ? `${merged}\n\n[${tag}] ${statusNotes.trim()}`
+                        : `[${tag}] ${statusNotes.trim()}`;
+                    }
+                    try {
+                      setIsUpdating(true);
+                      await api.admin.updateCrisisEventStatus(event.id, {
+                        status: apiStatus as "contacted" | "in-progress" | "resolved",
+                        notes: merged || undefined,
+                      });
+                      await reloadDetail();
+                      setShowStatusModal(false);
+                      setStatusNotes("");
+                    } catch (e) {
+                      console.error("Failed to update crisis status", e);
+                    } finally {
+                      setIsUpdating(false);
+                    }
                   }}
                 >
                   <CheckCircle className="w-4 h-4" />
@@ -1457,31 +1690,24 @@ export function CrisisEventDetails() {
                   className="px-6"
                   onClick={() => {
                     setShowStatusModal(false);
-                    setNotes("");
+                    setStatusNotes("");
                   }}
                 >
                   Cancel
                 </Button>
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
-      </AnimatePresence>
 
       {/* Complete Log Modal */}
-      <AnimatePresence>
-        {showCompleteLogModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+              {showCompleteLogModal && (
+          <div
+            key="crisis-complete-log-overlay"
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setShowCompleteLogModal(false)}
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+            <div
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
             >
@@ -1499,7 +1725,7 @@ export function CrisisEventDetails() {
               </div>
 
               <div className="mb-4 flex items-center justify-between">
-                <p className="text-sm text-gray-600">Showing all {completeActionLog.length} actions</p>
+                <p className="text-sm text-gray-600">Showing all {actionLogFull.length} actions</p>
                 <Button variant="outline" className="gap-2 px-3 py-2 text-sm">
                   <Download className="w-4 h-4" />
                   Export Log
@@ -1507,9 +1733,9 @@ export function CrisisEventDetails() {
               </div>
 
               <div className="space-y-3">
-                {completeActionLog.map((action, index) => (
+                {actionLogFull.map((action, index) => (
                   <div
-                    key={index}
+                    key={`${action.iso}-${index}`}
                     className={`p-4 rounded-lg border-l-4 ${
                       action.severity === "critical" ? "bg-red-50 border-red-500 border" :
                       action.severity === "high" ? "bg-orange-50 border-orange-500 border" :
@@ -1551,10 +1777,9 @@ export function CrisisEventDetails() {
                   Close
                 </Button>
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
-      </AnimatePresence>
     </AdminLayoutNew>
   );
 }

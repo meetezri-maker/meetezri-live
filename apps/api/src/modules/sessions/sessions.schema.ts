@@ -25,6 +25,20 @@ export const heartbeatSessionSchema = z.object({
   elapsed_seconds: z.number().int().nonnegative(),
 });
 
+export const updateScheduledSessionSchema = z.object({
+  duration_minutes: z.number().int().positive().optional(),
+  scheduled_at: z.string().datetime().optional(),
+  config: z.object({
+    voice: z.string().optional(),
+    avatar: z.string().optional(),
+  }).optional(),
+});
+
+/** Body for POST /sessions/:id/start — begin a scheduled session as the same row (active). */
+export const beginScheduledSessionSchema = z.object({
+  duration_minutes: z.number().int().positive().max(480).optional(),
+});
+
 export const createMessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'system']),
   content: z.string(),
@@ -49,4 +63,6 @@ export const sessionResponseSchema = z.object({
 export type CreateSessionInput = z.infer<typeof createSessionSchema>;
 export type EndSessionInput = z.infer<typeof endSessionSchema>;
 export type HeartbeatSessionInput = z.infer<typeof heartbeatSessionSchema>;
+export type UpdateScheduledSessionInput = z.infer<typeof updateScheduledSessionSchema>;
+export type BeginScheduledSessionInput = z.infer<typeof beginScheduledSessionSchema>;
 export type CreateMessageInput = z.infer<typeof createMessageSchema>;

@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { CreateHabitInput, UpdateHabitInput, LogHabitInput } from "./habits.schema";
-import { createHabit, getHabits, updateHabit, deleteHabit, logHabitCompletion, removeHabitCompletion } from "./habits.service";
+import { createHabit, getAllHabitsAdmin, getHabits, updateHabit, deleteHabit, logHabitCompletion, removeHabitCompletion } from "./habits.service";
 
 interface UserPayload {
   sub: string;
@@ -102,6 +102,22 @@ export async function getUserHabitsHandler(
   } catch (e) {
     console.error(e);
     return reply.code(500).send({ message: "Error fetching user habits" });
+  }
+}
+
+export async function getAllHabitsAdminHandler(
+  request: FastifyRequest<{ Querystring: { startDate?: string; endDate?: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const { startDate, endDate } = request.query;
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    const habits = await getAllHabitsAdmin(start, end);
+    return reply.code(200).send(habits);
+  } catch (e) {
+    console.error(e);
+    return reply.code(500).send({ message: "Error fetching all habits" });
   }
 }
 

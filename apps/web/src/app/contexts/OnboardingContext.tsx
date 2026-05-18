@@ -24,6 +24,8 @@ interface OnboardingData {
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   emergencyContactRelationship?: string;
+  /** User's own phone (optional); saved at profile setup with country code. */
+  phone?: string;
   permissions?: Record<string, any>;
   notificationPreferences?: Record<string, any>;
   [key: string]: any;
@@ -149,6 +151,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         full_name: `${finalData.firstName} ${finalData.lastName}`.trim(),
         role: finalData.role,
         pronouns: finalData.pronouns,
+        ...(finalData.phone?.trim() ? { phone: finalData.phone.trim() } : {}),
         age: finalData.age,
         timezone: finalData.timezone,
         current_mood: finalData.currentMood,

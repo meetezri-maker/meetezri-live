@@ -1,19 +1,32 @@
 import { FastifyInstance } from 'fastify';
-import { createJournalSchema, journalResponseSchema, updateJournalSchema } from './journal.schema';
-import { createJournalHandler, deleteJournalHandler, getJournalByIdHandler, getJournalsHandler, updateJournalHandler, getUserJournalsHandler, toggleJournalFavoriteHandler } from './journal.controller';
+import { createJournalSchema, journalAdminResponseSchema, journalResponseSchema, updateJournalSchema } from './journal.schema';
+import { createJournalHandler, deleteJournalHandler, getAllJournalsAdminHandler, getJournalByIdHandler, getJournalsHandler, updateJournalHandler, getUserJournalsHandler, toggleJournalFavoriteHandler } from './journal.controller';
 import { z } from 'zod';
 
 export async function journalRoutes(app: FastifyInstance) {
+  app.get(
+    '/admin',
+    {
+      schema: {
+        response: {
+          200: z.array(journalAdminResponseSchema),
+        },
+      },
+      preHandler: [app.authenticate, app.authorize(['super_admin', 'org_admin', 'team_admin'])],
+    },
+    getAllJournalsAdminHandler
+  );
+
   app.get(
     '/admin/users/:userId/journals',
     {
       schema: {
         params: z.object({ userId: z.string() }),
         response: {
-          200: z.array(journalResponseSchema),
+          200: z.array(journalAdminResponseSchema),
         },
       },
-      preHandler: [app.authenticate, app.authorize(['super_admin', 'org_admin'])],
+      preHandler: [app.authenticate, app.authorize(['super_admin', 'org_admin', 'team_admin'])],
     },
     getUserJournalsHandler
   );

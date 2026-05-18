@@ -43,9 +43,9 @@ export function Privacy() {
                 Your safety is paramount. Ezri includes several features to ensure you get the help you need:
               </p>
               <ul className="space-y-2 ml-6 list-disc">
-                <li>Crisis detection and immediate resource provision</li>
+                <li>Emergency detection and immediate resource provision</li>
                 <li>Emergency contact integration</li>
-                <li>24/7 access to crisis hotlines</li>
+                <li>24/7 access to emergency and mental-health hotlines</li>
                 <li>Content moderation and safety protocols</li>
                 <li>Option to pause or end sessions anytime</li>
               </ul>

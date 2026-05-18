@@ -3,8 +3,10 @@ import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Label } from "../../components/ui/label";
 import { Link, useNavigate } from "react-router-dom";
+import { useMemo } from "react";
 import { motion } from "motion/react";
-import { ArrowRight, ArrowLeft, Sparkles, Volume2, Palette, Heart, Brain, Users, Star, CheckCircle } from "lucide-react";
+import { DEFAULT_AI_COMPANIONS } from "@meetezri/shared";
+import { ArrowRight, ArrowLeft, Sparkles, Volume2, Palette, Heart, Brain, Users, Star, CheckCircle, User } from "lucide-react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,6 +19,21 @@ import {
   FormLabel,
   FormMessage,
 } from "../../components/ui/form";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
+import { companionCardImageUrl } from "@/lib/avatar/companionModelUrl";
+
+/** Older onboarding stored short ids (e.g. `maya`); profile uses canonical display names. */
+function normalizeOnboardingAvatarName(raw: string | undefined): string {
+  const t = (raw ?? "").trim();
+  if (!t) return "";
+  const legacy: Record<string, string> = {
+    maya: "Maya Chen",
+    alex: "Alex",
+    jordan: "Jordan Taylor",
+    sarah: "Sara Mitchell",
+  };
+  return legacy[t.toLowerCase()] ?? t;
+}
 
 interface AIAvatar {
   id: string;
@@ -26,7 +43,8 @@ interface AIAvatar {
   personality: string;
   specialty: string[];
   description: string;
-  image: string;
+  /** Portrait from `public/avatars/` */
+  imageUrl?: string;
   voiceType: string;
   accentType: string;
   rating: number;
@@ -47,69 +65,29 @@ export function OnboardingAvatarPreferences() {
   const form = useForm<AvatarPreferencesValues>({
     resolver: zodResolver(avatarPreferencesSchema),
     defaultValues: {
-      selectedAvatar: data.selectedAvatar || "",
+      selectedAvatar: normalizeOnboardingAvatarName(data.selectedAvatar),
       selectedEnvironment: data.selectedEnvironment || "",
     },
   });
 
-  const aiAvatars: AIAvatar[] = [
-    {
-      id: "maya",
-      name: "Maya Chen",
-      gender: "Female",
-      ageRange: "35-40",
-      personality: "Warm, Empathetic, Supportive",
-      specialty: ["Anxiety", "Depression", "Stress Management"],
-      description: "A compassionate AI companion with a warm presence. Maya specializes in helping with anxiety, stress, and building emotional resilience through mindfulness.",
-      image: "👩‍💼",
-      voiceType: "Warm & Soothing",
-      accentType: "Neutral American",
-      rating: 4.9,
-      totalUsers: 2456
-    },
-    {
-      id: "alex",
-      name: "Alex Rivera",
-      gender: "Male",
-      ageRange: "30-35",
-      personality: "Calm, Patient, Understanding",
-      specialty: ["PTSD", "Trauma", "Life Transitions"],
-      description: "A gentle and patient listener who creates a safe space for healing. Alex focuses on trauma recovery and navigating life's big changes.",
-      image: "👨‍💼",
-      voiceType: "Deep & Calming",
-      accentType: "Neutral American",
-      rating: 4.8,
-      totalUsers: 1893
-    },
-    {
-      id: "jordan",
-      name: "Jordan Taylor",
-      gender: "Non-binary",
-      ageRange: "28-32",
-      personality: "Energetic, Positive, Supportive",
-      specialty: ["Self-Esteem", "Relationships", "Personal Growth"],
-      description: "An uplifting companion who helps you discover your strengths. Jordan specializes in building confidence and personal development.",
-      image: "🧑‍💼",
-      voiceType: "Bright & Encouraging",
-      accentType: "Neutral American",
-      rating: 4.7,
-      totalUsers: 1654
-    },
-    {
-      id: "sarah",
-      name: "Sarah Mitchell",
-      gender: "Female",
-      ageRange: "45-50",
-      personality: "Wise, Grounded, Nurturing",
-      specialty: ["Grief", "Family Issues", "Chronic Illness"],
-      description: "A wise and nurturing presence with deep empathy. Sarah brings years of life experience in supporting people through challenging times.",
-      image: "👩‍🦳",
-      voiceType: "Gentle & Maternal",
-      accentType: "British",
-      rating: 4.9,
-      totalUsers: 2103
-    }
-  ];
+  const aiAvatars: AIAvatar[] = useMemo(
+    () =>
+      DEFAULT_AI_COMPANIONS.map((c) => ({
+        id: c.id,
+        name: c.name,
+        gender: c.gender,
+        ageRange: c.age_range,
+        personality: c.personality,
+        specialty: [...c.specialties],
+        description: c.description,
+        imageUrl: companionCardImageUrl(c.portraitPng),
+        voiceType: c.voice_type,
+        accentType: c.accent_type,
+        rating: c.rating,
+        totalUsers: 0,
+      })),
+    []
+  );
 
   const environments = [
     { value: "beach", label: "Beach Sunset", emoji: "🏖️", gradient: "from-orange-300 to-blue-400" },
@@ -128,8 +106,8 @@ export function OnboardingAvatarPreferences() {
     <OnboardingLayout
       currentStep={5}
       totalSteps={8}
-      title="Choose Your AI Companion"
-      subtitle="Select the AI companion who will support your wellness journey"
+      title="Choose Your Solace Companion"
+      subtitle="Select the Solace companion who will support your wellness journey"
     >
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -144,7 +122,7 @@ export function OnboardingAvatarPreferences() {
                 <Sparkles className="w-5 h-5 text-purple-600 mt-0.5" />
                 <div>
                   <p className="text-sm font-medium text-purple-900 mb-1">
-                    AI-Powered Video Therapy Sessions
+                    AI-Powered Video Therapy Talk it out
                   </p>
                   <p className="text-xs text-purple-700">
                     Your chosen AI companion will appear as a realistic 3D avatar during video sessions. All conversations are voice-based for a natural, human-like experience.
@@ -163,10 +141,10 @@ export function OnboardingAvatarPreferences() {
             <div className="mb-4">
               <Label className="text-base font-semibold flex items-center gap-2">
                 <Brain className="w-5 h-5 text-primary" />
-                Select Your AI Companion
+                Your Solace Avatar
               </Label>
               <p className="text-sm text-muted-foreground mt-1">
-                Choose the AI companion that feels right for you. You can change this later in settings.
+                Choose the avatar that feels right for you. You can change this later in settings.
               </p>
             </div>
 
@@ -179,22 +157,22 @@ export function OnboardingAvatarPreferences() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {aiAvatars.map((avatar, index) => (
                         <motion.button
-                          key={avatar.id}
+                          key={avatar.name}
                           type="button"
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: 0.3 + index * 0.1 }}
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={() => field.onChange(avatar.id)}
+                          onClick={() => field.onChange(avatar.name)}
                           className={`relative rounded-2xl border-2 transition-all overflow-hidden ${
-                            field.value === avatar.id
+                            field.value === avatar.name
                               ? "border-primary bg-primary/5 shadow-xl"
                               : "border-border hover:border-primary/50 bg-white"
                           }`}
                         >
                           {/* Selected Indicator */}
-                          {field.value === avatar.id && (
+                          {field.value === avatar.name && (
                             <motion.div
                               initial={{ scale: 0 }}
                               animate={{ scale: 1 }}
@@ -207,7 +185,17 @@ export function OnboardingAvatarPreferences() {
                           <div className="p-6 text-left">
                             {/* Avatar Image & Basic Info */}
                             <div className="flex items-start gap-4 mb-4">
-                              <div className="text-6xl">{avatar.image}</div>
+                              {avatar.imageUrl ? (
+                                <img
+                                  src={avatar.imageUrl}
+                                  alt=""
+                                  className="h-24 w-24 shrink-0 rounded-xl object-cover border border-gray-200"
+                                />
+                              ) : (
+                                <div className="h-24 w-24 shrink-0 rounded-xl border border-gray-200 bg-muted flex items-center justify-center">
+                                  <User className="h-12 w-12 text-muted-foreground" aria-hidden />
+                                </div>
+                              )}
                               <div className="flex-1">
                                 <h3 className="text-lg font-bold text-gray-900 mb-1">{avatar.name}</h3>
                                 <p className="text-sm text-muted-foreground mb-2">
@@ -317,7 +305,9 @@ export function OnboardingAvatarPreferences() {
                             }`}
                           >
                             <div className={`h-24 bg-gradient-to-br ${env.gradient} flex items-center justify-center`}>
-                              <span className="text-4xl">{env.emoji}</span>
+                              <span className="text-4xl leading-none flex items-center justify-center">
+                                <FluentEmoji emoji={env.emoji} size={48} />
+                              </span>
                             </div>
                             <div className="p-2 bg-white">
                               <p className="text-sm font-medium">{env.label}</p>
@@ -340,8 +330,8 @@ export function OnboardingAvatarPreferences() {
             transition={{ delay: 0.9 }}
           >
             <Card className="p-4 bg-blue-50 border-blue-200">
-              <p className="text-sm text-blue-900">
-                💡 <span className="font-medium">Tip:</span> You can change your AI companion and session preferences anytime in your settings
+              <p className="text-sm text-blue-900"> 
+                💡 <span className="font-medium">Tip:</span> You can change your Solace avatar and session preferences anytime in your settings
               </p>
             </Card>
           </motion.div>

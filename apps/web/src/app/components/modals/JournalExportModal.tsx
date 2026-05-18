@@ -1,53 +1,84 @@
 import { motion, AnimatePresence } from "motion/react";
 import { X, Download, FileText, FileJson, Calendar, CheckCircle2, Loader } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  filterJournalEntriesByDateRange,
+  buildJournalJsonExport,
+  buildJournalPdf,
+  type JournalExportEntry,
+} from "../../../lib/journalExport";
 
 interface JournalExportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  entriesCount: number;
+  entries: JournalExportEntry[];
 }
 
-export function JournalExportModal({ isOpen, onClose, entriesCount }: JournalExportModalProps) {
+export function JournalExportModal({ isOpen, onClose, entries }: JournalExportModalProps) {
   const [exportFormat, setExportFormat] = useState<"pdf" | "json">("pdf");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [exportComplete, setExportComplete] = useState(false);
 
-  const handleExport = async () => {
-    setIsExporting(true);
-    
-    // Simulate export process
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Create mock download
-    const filename = `ezri-journal-${new Date().toISOString().split('T')[0]}.${exportFormat}`;
-    const mockData = exportFormat === "json" 
-      ? JSON.stringify({ entries: entriesCount, exportDate: new Date(), format: "Ezri Journal Export" }, null, 2)
-      : "PDF Content would be generated here...";
-    
-    const blob = new Blob([mockData], { type: exportFormat === "json" ? "application/json" : "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
-    
+  useEffect(() => {
+    if (!isOpen) return;
+    setDateFrom("");
+    setDateTo("");
+    setExportComplete(false);
     setIsExporting(false);
-    setExportComplete(true);
-    
-    setTimeout(() => {
-      setExportComplete(false);
-      onClose();
-    }, 2000);
-  };
+  }, [isOpen]);
 
-  const getFilteredCount = () => {
-    if (!dateFrom && !dateTo) return entriesCount;
-    // Mock filtered count
-    return Math.floor(entriesCount * 0.6);
+  const filteredEntries = useMemo(
+    () => filterJournalEntriesByDateRange(entries ?? [], dateFrom, dateTo),
+    [entries, dateFrom, dateTo]
+  );
+
+  const handleExport = async () => {
+    if (filteredEntries.length === 0) {
+      toast.error("No journal entries to export for this date range.");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const stamp = new Date();
+      const day = stamp.toISOString().split("T")[0];
+      const filename = `ezri-journal-${day}.${exportFormat}`;
+
+      let blob: Blob;
+      if (exportFormat === "json") {
+        blob = new Blob([buildJournalJsonExport(filteredEntries, stamp)], {
+          type: "application/json;charset=utf-8",
+        });
+      } else {
+        const doc = await buildJournalPdf(filteredEntries);
+        blob = doc.output("blob");
+      }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.rel = "noopener";
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+
+      setExportComplete(true);
+      setTimeout(() => {
+        setExportComplete(false);
+        onClose();
+      }, 2000);
+    } catch (e) {
+      console.error("Journal export failed", e);
+      toast.error("Export failed. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -190,6 +221,9 @@ export function JournalExportModal({ isOpen, onClose, entriesCount }: JournalExp
                           </div>
                         </div>
                       </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Counts use each entry&apos;s date in your time zone. Leave both empty to export all loaded entries.
+                      </p>
                     </div>
 
                     {/* Export Summary */}
@@ -198,7 +232,10 @@ export function JournalExportModal({ isOpen, onClose, entriesCount }: JournalExp
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
                           <p className="text-gray-500">Entries</p>
-                          <p className="font-bold text-gray-900">{getFilteredCount()} {getFilteredCount() === 1 ? 'entry' : 'entries'}</p>
+                          <p className="font-bold text-gray-900">
+                            {filteredEntries.length}{" "}
+                            {filteredEntries.length === 1 ? "entry" : "entries"}
+                          </p>
                         </div>
                         <div>
                           <p className="text-gray-500">Format</p>

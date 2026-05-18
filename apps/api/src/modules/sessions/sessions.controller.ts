@@ -1,6 +1,25 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { createSession, getSessions, getSessionById, endSession, createMessage, getSessionTranscript, toggleSessionFavorite, heartbeatSession } from './sessions.service';
-import { CreateSessionInput, EndSessionInput, CreateMessageInput, HeartbeatSessionInput } from './sessions.schema';
+import {
+  createSession,
+  getSessions,
+  getSessionById,
+  endSession,
+  createMessage,
+  getSessionTranscript,
+  toggleSessionFavorite,
+  heartbeatSession,
+  cancelScheduledSession,
+  updateScheduledSession,
+  beginScheduledSession,
+} from './sessions.service';
+import {
+  CreateSessionInput,
+  EndSessionInput,
+  CreateMessageInput,
+  HeartbeatSessionInput,
+  UpdateScheduledSessionInput,
+  BeginScheduledSessionInput,
+} from './sessions.schema';
 
 interface UserPayload {
   sub: string;
@@ -93,11 +112,23 @@ export async function getSessionTranscriptHandler(
 }
 
 export async function getSessionsHandler(
-  request: FastifyRequest<{ Querystring: { status?: string } }>,
+  request: FastifyRequest<{ Querystring: { status?: string; limit?: number | string } }>,
   reply: FastifyReply
 ) {
   const user = request.user as UserPayload;
-  const sessions = await getSessions(user.sub, request.query.status);
+  const rawLimit = request.query.limit;
+  const parsedLimit =
+    typeof rawLimit === 'string'
+      ? Number.parseInt(rawLimit, 10)
+      : typeof rawLimit === 'number'
+        ? rawLimit
+        : undefined;
+  const limit =
+    typeof parsedLimit === 'number' && Number.isFinite(parsedLimit)
+      ? Math.min(200, Math.max(1, parsedLimit))
+      : undefined;
+
+  const sessions = await getSessions(user.sub, request.query.status, limit);
   return reply.send(sessions);
 }
 
@@ -119,6 +150,29 @@ export async function getSessionHandler(
     return reply.code(404).send({ message: 'Session not found' });
   }
   return reply.send(session);
+}
+
+export async function beginScheduledSessionHandler(
+  request: FastifyRequest<{ Params: { id: string }; Body: BeginScheduledSessionInput }>,
+  reply: FastifyReply
+) {
+  try {
+    const user = request.user as UserPayload;
+    const session = await beginScheduledSession(user.sub, request.params.id, request.body);
+    return reply.send(session);
+  } catch (error: any) {
+    if (error.message === 'Session not found') {
+      return reply.code(404).send({ message: error.message });
+    }
+    if (error.message === 'Only scheduled sessions can be started') {
+      return reply.code(400).send({ message: error.message });
+    }
+    const code = error.statusCode;
+    if (typeof code === 'number' && code >= 400 && code < 500) {
+      return reply.code(code).send({ message: error.message });
+    }
+    throw error;
+  }
 }
 
 export async function endSessionHandler(
@@ -154,6 +208,44 @@ export async function heartbeatSessionHandler(
   } catch (error: any) {
     if (error.message === 'Session not found') {
       return reply.code(404).send({ message: 'Session not found' });
+    }
+    throw error;
+  }
+}
+
+export async function cancelScheduledSessionHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const user = request.user as UserPayload;
+    const session = await cancelScheduledSession(user.sub, request.params.id);
+    return reply.send(session);
+  } catch (error: any) {
+    if (error.message === 'Session not found') {
+      return reply.code(404).send({ message: 'Session not found' });
+    }
+    if (error.message === 'Only scheduled sessions can be canceled') {
+      return reply.code(400).send({ message: error.message });
+    }
+    throw error;
+  }
+}
+
+export async function updateScheduledSessionHandler(
+  request: FastifyRequest<{ Params: { id: string }; Body: UpdateScheduledSessionInput }>,
+  reply: FastifyReply
+) {
+  try {
+    const user = request.user as UserPayload;
+    const session = await updateScheduledSession(user.sub, request.params.id, request.body);
+    return reply.send(session);
+  } catch (error: any) {
+    if (error.message === 'Session not found') {
+      return reply.code(404).send({ message: 'Session not found' });
+    }
+    if (error.message === 'Only scheduled sessions can be edited') {
+      return reply.code(400).send({ message: error.message });
     }
     throw error;
   }

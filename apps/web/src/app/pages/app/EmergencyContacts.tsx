@@ -1,4 +1,3 @@
-import { AppLayout } from "../../components/AppLayout";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { motion } from "motion/react";
@@ -13,16 +12,24 @@ import {
   Trash2,
   ArrowLeft,
   AlertCircle,
-  Bell,
-  BellOff,
-  Shield,
-  MessageSquare,
   Loader2
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
+import { queryKeys } from "@/lib/queries";
+import { cn } from "@/app/components/ui/utils";
 import { toast } from "sonner";
+import { CrisisResourcesCallout } from "@/app/components/safety/CrisisResourcesCallout";
+import { EmergencyContactConsentModal } from "../../components/consent/EmergencyContactConsentModal";
 import { Skeleton } from "../../components/ui/skeleton";
+import { PhoneInput } from "../../components/ui/phone-input";
+import { Checkbox } from "../../components/ui/checkbox";
+import { Label } from "../../components/ui/label";
+import {
+  normalizeStoredPhoneForInput,
+  isValidOptionalAppPhone,
+} from "@/lib/normalizeStoredPhone";
 
 interface EmergencyContact {
   id: string;
@@ -37,20 +44,46 @@ interface EmergencyContact {
 
 export function EmergencyContacts() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const {
+    data: profile,
+    isLoading: profileLoading,
+    isError: profileError,
+    refetch: refetchProfile,
+  } = useQuery({
+    queryKey: queryKeys.profile.me(),
+    queryFn: () => api.getMe(),
+    staleTime: 5 * 60_000,
+  });
+
+  const consentMutation = useMutation({
+    mutationFn: () => api.updateProfile({ emergency_consent: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile.me() });
+      toast.success("Your consent has been saved.");
+    },
+    onError: () => {
+      toast.error("Could not save consent. Please try again.");
+    },
+  });
+
+  const hasPageConsent = profile?.emergency_consent === true;
+  const showConsentModal =
+    !profileLoading && !profileError && profile != null && !hasPageConsent;
+
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingContact, setEditingContact] = useState<EmergencyContact | null>(null);
+  const [emergencyConsentChecked, setEmergencyConsentChecked] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     relationship: "",
     phone: "",
     email: "",
-    is_trusted: false,
   });
 
   useEffect(() => {
@@ -71,20 +104,28 @@ export function EmergencyContacts() {
   };
 
   const resetForm = () => {
-    setFormData({ 
-      name: "", 
-      relationship: "", 
-      phone: "", 
+    setFormData({
+      name: "",
+      relationship: "",
+      phone: "",
       email: "",
-      is_trusted: false,
     });
     setEditingContact(null);
+    setEmergencyConsentChecked(false);
     setShowAddModal(false);
   };
 
   const handleAddContact = async () => {
+    if (!emergencyConsentChecked) {
+      toast.error("Please confirm emergency contact consent before saving");
+      return;
+    }
     if (!formData.name) {
       toast.error("Name is required");
+      return;
+    }
+    if (!isValidOptionalAppPhone(formData.phone)) {
+      toast.error("Enter a valid phone with country code and exactly 12 digits total, or leave blank");
       return;
     }
 
@@ -93,9 +134,9 @@ export function EmergencyContacts() {
       const newContact = await api.emergencyContacts.create({
         name: formData.name,
         relationship: formData.relationship || undefined,
-        phone: formData.phone || undefined,
+        phone: formData.phone.trim() || undefined,
         email: formData.email || undefined,
-        is_trusted: formData.is_trusted
+        is_trusted: true
       });
       
       setContacts([newContact, ...contacts]);
@@ -114,17 +155,25 @@ export function EmergencyContacts() {
     setFormData({
       name: contact.name,
       relationship: contact.relationship || "",
-      phone: contact.phone || "",
+      phone: normalizeStoredPhoneForInput(contact.phone || ""),
       email: contact.email || "",
-      is_trusted: contact.is_trusted,
     });
+    setEmergencyConsentChecked(false);
     setShowAddModal(true);
   };
 
   const handleUpdateContact = async () => {
     if (!editingContact) return;
+    if (!emergencyConsentChecked) {
+      toast.error("Please confirm emergency contact consent before saving");
+      return;
+    }
     if (!formData.name) {
       toast.error("Name is required");
+      return;
+    }
+    if (!isValidOptionalAppPhone(formData.phone)) {
+      toast.error("Enter a valid phone with country code and exactly 12 digits total, or leave blank");
       return;
     }
 
@@ -133,9 +182,9 @@ export function EmergencyContacts() {
       const updatedContact = await api.emergencyContacts.update(editingContact.id, {
         name: formData.name,
         relationship: formData.relationship || undefined,
-        phone: formData.phone || undefined,
+        phone: formData.phone.trim() || undefined,
         email: formData.email || undefined,
-        is_trusted: formData.is_trusted
+        is_trusted: true
       });
 
       setContacts(contacts.map(c => c.id === editingContact.id ? updatedContact : c));
@@ -165,28 +214,9 @@ export function EmergencyContacts() {
     }
   };
 
-  const toggleTrustedContact = async (contact: EmergencyContact) => {
-    try {
-      setTogglingId(contact.id);
-      const updatedContact = await api.emergencyContacts.update(contact.id, {
-        is_trusted: !contact.is_trusted
-      });
-      setContacts(contacts.map(c => c.id === contact.id ? updatedContact : c));
-      toast.success(updatedContact.is_trusted ? "Added to trusted contacts" : "Removed from trusted contacts");
-    } catch (error) {
-      console.error('Failed to update trusted status:', error);
-      toast.error("Failed to update status");
-    } finally {
-      setTogglingId(null);
-    }
-  };
-
-  const trustedContactsCount = contacts.filter(c => c.is_trusted).length;
-
-  if (isLoading) {
+  if (profileLoading || isLoading) {
     return (
-      <AppLayout>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
           <div className="mb-8">
             <Skeleton className="h-4 w-24 mb-4" />
             <div className="flex items-center justify-between">
@@ -234,24 +264,52 @@ export function EmergencyContacts() {
             ))}
           </div>
         </div>
-      </AppLayout>
+    );
+  }
+
+  if (profileError) {
+    return (
+      <div className="max-w-4xl mx-auto flex flex-col items-center justify-center gap-4 px-4 py-16 text-center">
+          <AlertCircle className="text-destructive h-10 w-10" aria-hidden />
+          <div>
+            <h2 className="text-lg font-semibold">Couldn&apos;t load your profile</h2>
+            <p className="text-muted-foreground mt-1 text-sm">
+              We need your profile to check emergency contact consent. Please try again.
+            </p>
+          </div>
+          <Button type="button" onClick={() => void refetchProfile()}>
+            Retry
+          </Button>
+        </div>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+    <>
+    <EmergencyContactConsentModal
+        open={showConsentModal}
+        onConsent={() => consentMutation.mutate()}
+        onCancel={() => navigate("/app/settings")}
+        isSubmitting={consentMutation.isPending}
+      />
+      <div
+        className={cn(
+          "max-w-4xl mx-auto px-4 sm:px-6 py-6",
+          showConsentModal && "pointer-events-none select-none opacity-40",
+        )}
+        aria-hidden={showConsentModal}
+      >
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate("/app/settings")}
             className="flex items-center gap-2 text-muted-foreground hover:text-primary mb-4 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back
+            Back to Settings
           </button>
           <div className="flex items-center justify-between">
             <div>
@@ -260,12 +318,13 @@ export function EmergencyContacts() {
                 <h1 className="text-3xl font-bold">Emergency Contacts</h1>
               </div>
               <p className="text-muted-foreground">
-                Manage your trusted contacts for crisis situations
+                Manage contacts we can notify if you need support
               </p>
             </div>
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              type="button"
               onClick={() => {
                 resetForm();
                 setShowAddModal(true);
@@ -290,29 +349,12 @@ export function EmergencyContacts() {
               <div>
                 <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">About Emergency Contacts</h3>
                 <p className="text-sm text-blue-800 dark:text-blue-200">
-                  These contacts may be notified if you're in crisis or need immediate support. Make sure to inform them that they're listed as emergency contacts.
+                  These contacts may be notified if you're in distress or need immediate support. Make sure to inform them that they're listed as emergency contacts.
                 </p>
               </div>
             </div>
           </Card>
 
-          <Card className="p-4 bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800">
-            <div className="flex items-start gap-3">
-              <Shield className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-1">
-                  Trusted Contacts ({trustedContactsCount})
-                </h3>
-                <p className="text-sm text-purple-800 dark:text-purple-200 mb-2">
-                  Trusted contacts can receive automatic check-in notifications when our safety system detects you may need support.
-                </p>
-                <div className="flex items-center gap-2 text-xs text-purple-700 dark:text-purple-200 bg-purple-100 dark:bg-purple-900/40 rounded-lg px-3 py-2">
-                  <Bell className="w-4 h-4" />
-                  <span>Privacy-safe messages • No medical details shared • You stay in control</span>
-                </div>
-              </div>
-            </div>
-          </Card>
         </motion.div>
 
         {/* Contacts List */}
@@ -324,9 +366,7 @@ export function EmergencyContacts() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 + index * 0.05 }}
             >
-              <Card className={`p-6 shadow-lg hover:shadow-xl transition-all group dark:bg-gray-800 ${
-                contact.is_trusted ? 'border-2 border-purple-200 dark:border-purple-800 bg-purple-50/30 dark:bg-purple-900/10' : ''
-              }`}>
+              <Card className="p-6 shadow-lg hover:shadow-xl transition-all group dark:bg-gray-800">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-3">
@@ -336,12 +376,6 @@ export function EmergencyContacts() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-bold text-lg">{contact.name}</h3>
-                          {contact.is_trusted && (
-                            <div className="flex items-center gap-1 px-2 py-1 bg-purple-100 border border-purple-300 rounded-full">
-                              <Shield className="w-3 h-3 text-purple-700" />
-                              <span className="text-xs font-medium text-purple-700">Trusted</span>
-                            </div>
-                          )}
                         </div>
                         <p className="text-sm text-muted-foreground">{contact.relationship}</p>
                       </div>
@@ -366,35 +400,15 @@ export function EmergencyContacts() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    {/* Trusted Contact Toggle */}
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => toggleTrustedContact(contact)}
-                      disabled={togglingId === contact.id}
-                      className={`p-2 rounded-lg transition-colors ${
-                        contact.is_trusted 
-                          ? 'bg-purple-100 hover:bg-purple-200' 
-                          : 'bg-gray-100 hover:bg-gray-200'
-                      } ${togglingId === contact.id ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      title={contact.is_trusted ? 'Remove from trusted contacts' : 'Add to trusted contacts'}
-                    >
-                      {togglingId === contact.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
-                      ) : contact.is_trusted ? (
-                        <Bell className="w-4 h-4 text-purple-600" />
-                      ) : (
-                        <BellOff className="w-4 h-4 text-gray-600" />
-                      )}
-                    </motion.button>
-                    
                     {/* Edit/Delete Actions */}
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
+                        type="button"
                         onClick={() => handleEditContact(contact)}
                         disabled={deletingId === contact.id}
+                        aria-label="Edit contact"
                         className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                       >
                         <Edit className="w-4 h-4 text-gray-600" />
@@ -428,8 +442,14 @@ export function EmergencyContacts() {
           >
             <Heart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="font-bold text-lg mb-2">No Emergency Contacts Yet</h3>
-            <p className="text-muted-foreground mb-4">Add trusted contacts who can support you in crisis situations</p>
-            <Button onClick={() => setShowAddModal(true)}>
+            <p className="text-muted-foreground mb-4">Add emergency contacts who can support you in urgent situations</p>
+            <Button
+              type="button"
+              onClick={() => {
+                resetForm();
+                setShowAddModal(true);
+              }}
+            >
               <Plus className="w-4 h-4 mr-2" />
               Add Your First Contact
             </Button>
@@ -487,17 +507,18 @@ export function EmergencyContacts() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">Phone Number</label>
-                    <div className="flex items-center gap-2 p-3 border border-gray-300 rounded-lg">
-                      <Phone className="w-4 h-4 text-gray-400" />
-                      <input
-                        type="tel"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        placeholder="(555) 123-4567"
-                        className="flex-1 outline-none bg-transparent"
-                      />
-                    </div>
+                    <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
+                      Phone number
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Choose country code, then number (exactly 12 digits including code).
+                    </p>
+                    <PhoneInput
+                      value={formData.phone}
+                      onChange={(v) => setFormData({ ...formData, phone: v })}
+                      placeholder="Phone number"
+                      className="w-full"
+                    />
                   </div>
 
                   <div>
@@ -514,16 +535,26 @@ export function EmergencyContacts() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <label className="block text-sm font-medium mb-2">Trusted Contact</label>
-                    <div className="flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-gray-400" />
-                      <input
-                        type="checkbox"
-                        checked={formData.is_trusted}
-                        onChange={(e) => setFormData({ ...formData, is_trusted: e.target.checked })}
-                        className="h-4 w-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                  <div className="rounded-xl border border-rose-100 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 px-3 py-2.5">
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id="emergency-contact-consent-modal"
+                        checked={emergencyConsentChecked}
+                        onCheckedChange={(value) => setEmergencyConsentChecked(value === true)}
+                        className="mt-0.5"
+                        aria-describedby="emergency-contact-consent-modal-desc"
                       />
+                      <div className="space-y-1 min-w-0">
+                        <Label
+                          htmlFor="emergency-contact-consent-modal"
+                          className="text-xs font-normal cursor-pointer leading-snug text-gray-700 dark:text-gray-300"
+                        >
+                          I confirm this person knows they may be contacted only during urgent wellbeing or safety situations.
+                        </Label>
+                        <p id="emergency-contact-consent-modal-desc" className="text-xs text-muted-foreground">
+                          Required to save changes in this form.
+                        </p>
+                      </div>
                     </div>
                   </div>
 
@@ -537,9 +568,10 @@ export function EmergencyContacts() {
                       Cancel
                     </Button>
                     <Button
+                      type="button"
                       onClick={editingContact ? handleUpdateContact : handleAddContact}
                       className="flex-1"
-                      disabled={!formData.name || isSubmitting}
+                      disabled={!formData.name || isSubmitting || !emergencyConsentChecked}
                     >
                       {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                       {editingContact ? "Update Contact" : "Add Contact"}
@@ -550,7 +582,10 @@ export function EmergencyContacts() {
             </motion.div>
           </>
         )}
+
+        <CrisisResourcesCallout />
       </div>
-    </AppLayout>
+    </>
   );
 }
+

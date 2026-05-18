@@ -27,13 +27,26 @@ import {
   MessageSquare,
   Package,
   Layout,
+  Moon,
+  Target,
 } from "lucide-react";
 import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "./ui/button";
+import { BrandLogo } from "./BrandLogo";
 import { useAuth } from "../contexts/AuthContext";
 import { Navigate } from "react-router-dom";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -71,6 +84,10 @@ const NAVIGATION: NavSection[] = [
     roles: ["super_admin", "org_admin", "team_admin"],
     pages: [
       { name: "All Users", href: "/admin/user-management", icon: Users, roles: ["super_admin", "org_admin", "team_admin"] },
+      { name: "Mood Analytics", href: "/admin/user-analytics/moods", icon: Heart, roles: ["super_admin", "org_admin", "team_admin"] },
+      { name: "Journal Analytics", href: "/admin/user-analytics/journals", icon: FileText, roles: ["super_admin", "org_admin", "team_admin"] },
+      { name: "Sleep Logs", href: "/admin/user-analytics/sleep", icon: Moon, roles: ["super_admin", "org_admin", "team_admin"] },
+      { name: "Habit Tracker", href: "/admin/user-analytics/habits", icon: Target, roles: ["super_admin", "org_admin", "team_admin"] },
       { name: "User Segmentation", href: "/admin/user-segmentation", icon: Users, roles: ["super_admin", "org_admin"] },
       { name: "Team Management", href: "/admin/team-role-management", icon: Shield, roles: ["super_admin", "org_admin"] },
       { name: "Companion Management", href: "/admin/companion-management", icon: Users, roles: ["super_admin", "org_admin"] },
@@ -82,6 +99,7 @@ const NAVIGATION: NavSection[] = [
     roles: ["super_admin", "org_admin"],
     pages: [
       { name: "AI Avatar Manager", href: "/admin/ai-avatar-manager", icon: Brain, roles: ["super_admin", "org_admin"] },
+      { name: "Avatar Selection Analytics", href: "/admin/avatar-selection-analytics", icon: BarChart3, roles: ["super_admin", "org_admin"] },
       { name: "Conversation Transcripts", href: "/admin/conversation-transcripts", icon: MessageSquare, roles: ["super_admin", "org_admin", "team_admin"] },
     ],
   },
@@ -125,7 +143,6 @@ const NAVIGATION: NavSection[] = [
       { name: "Tool Editor", href: "/admin/wellness-tool-editor", icon: FileText, roles: ["super_admin", "org_admin"] },
       { name: "Exercise Library", href: "/admin/exercise-library", icon: FileText, roles: ["super_admin", "org_admin"] },
       { name: "Content Performance", href: "/admin/content-performance", icon: BarChart3, roles: ["super_admin", "org_admin"] },
-      { name: "Content Moderation", href: "/admin/content-moderation", icon: Shield, roles: ["super_admin", "org_admin"] },
     ],
   },
   {
@@ -133,12 +150,8 @@ const NAVIGATION: NavSection[] = [
     icon: Zap,
     roles: ["super_admin", "org_admin"],
     pages: [
-      { name: "Nudge Management", href: "/admin/nudge-management", icon: Bell, roles: ["super_admin", "org_admin"] },
-      { name: "Nudge Templates", href: "/admin/nudge-templates", icon: FileText, roles: ["super_admin", "org_admin"] },
-      { name: "Nudge Scheduler", href: "/admin/nudge-scheduler", icon: LayoutDashboard, roles: ["super_admin", "org_admin"] },
-      { name: "Nudge Performance", href: "/admin/nudge-performance", icon: BarChart3, roles: ["super_admin", "org_admin"] },
-      { name: "Wellness Challenges", href: "/admin/wellness-challenges", icon: FileText, roles: ["super_admin", "org_admin"] },
-      { name: "Badge Manager", href: "/admin/badge-manager", icon: FileText, roles: ["super_admin", "org_admin"] },
+      { name: "Nudge Center", href: "/admin/nudge-center", icon: Bell, roles: ["super_admin", "org_admin"] },
+      { name: "Gamification", href: "/admin/gamification", icon: BarChart3, roles: ["super_admin", "org_admin"] },
     ],
   },
   {
@@ -146,12 +159,8 @@ const NAVIGATION: NavSection[] = [
     icon: Bell,
     roles: ["super_admin", "org_admin", "team_admin"],
     pages: [
-      { name: "Notifications Center", href: "/admin/notifications-center", icon: Bell, roles: ["super_admin", "org_admin", "team_admin"] },
-      { name: "Manual Notifications", href: "/admin/manual-notifications", icon: Bell, roles: ["super_admin", "org_admin"] },
-      { name: "Email Templates", href: "/admin/email-templates", icon: FileText, roles: ["super_admin", "org_admin"] },
-      { name: "Push Notifications", href: "/admin/push-notifications", icon: Bell, roles: ["super_admin", "org_admin"] },
+      { name: "Communications Hub", href: "/admin/communications", icon: Bell, roles: ["super_admin", "org_admin", "team_admin"] },
       { name: "Support Tickets", href: "/admin/support-tickets", icon: FileText, roles: ["super_admin", "org_admin", "team_admin"] },
-      { name: "Community Management", href: "/admin/community-management", icon: Users, roles: ["super_admin", "org_admin"] },
     ],
   },
   {
@@ -159,11 +168,9 @@ const NAVIGATION: NavSection[] = [
     icon: Eye,
     roles: ["super_admin", "org_admin", "team_admin"],
     pages: [
-      { name: "Live Sessions", href: "/admin/live-sessions-monitor", icon: Eye, roles: ["super_admin", "org_admin", "team_admin"] },
+      { name: "Live Talk It Out", href: "/admin/live-sessions-monitor", icon: Eye, roles: ["super_admin", "org_admin", "team_admin"] },
       { name: "Session Recordings", href: "/admin/session-recordings", icon: Eye, roles: ["super_admin", "org_admin"] },
-      { name: "Activity Monitor", href: "/admin/activity-monitor", icon: Eye, roles: ["super_admin", "org_admin"] },
       { name: "System Health", href: "/admin/system-health-enhanced", icon: Server, roles: ["super_admin"] },
-      { name: "System Health Dashboard", href: "/admin/system-health-dashboard", icon: Server, roles: ["super_admin"] },
       { name: "Error Tracking", href: "/admin/error-tracking", icon: AlertTriangle, roles: ["super_admin"] },
     ],
   },
@@ -239,11 +246,11 @@ const roleInfo: Record<AdminRole, { name: string; gradient: string; icon: any }>
 export function AdminLayoutNew({ children }: AdminLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, signOut, hasRole } = useAuth();
+  const { user, profile, signOut, hasRole, isLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isAdmin = hasRole(["super_admin", "org_admin", "team_admin"]);
   
-  if (profile && !isAdmin) {
+  if (!isLoading && profile && !isAdmin) {
     return <Navigate to="/error/permission-denied" replace />;
   }
 
@@ -269,6 +276,7 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
     // Otherwise, expand the section containing current page
     return findCurrentSection();
   });
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // Update expanded section when navigating to a new page
   useEffect(() => {
@@ -279,8 +287,13 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
   }, [location.pathname]);
 
   const handleLogout = async () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = async () => {
     await signOut();
     localStorage.removeItem("adminExpandedSection");
+    setShowLogoutModal(false);
     navigate("/admin/login");
   };
 
@@ -317,6 +330,7 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
       <AnimatePresence>
         {sidebarOpen && (
           <motion.div
+            key="admin-mobile-sidebar-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -332,11 +346,9 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
           {/* Header - Compact */}
           <div className="px-5 py-4 border-b border-gray-200/60">
             <Link to={`/admin/super-admin-dashboard`} className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
-                <Heart className="w-4 h-4 text-white" fill="white" />
-              </div>
+              <BrandLogo heightClass="h-8" />
               <div>
-                <h1 className="font-semibold text-sm">Ezri Admin</h1>
+                <h1 className="font-semibold text-sm">Solace Admin</h1>
                 <p className="text-xs text-gray-500">{currentRoleInfo.name}</p>
               </div>
             </Link>
@@ -345,7 +357,11 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
           {/* Navigation - Clean List */}
           <nav className="flex-1 overflow-y-auto px-3 py-3">
             <div className="space-y-0.5">
-              {filteredNav.map((section) => {
+              {isLoading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="h-9 rounded-lg bg-gray-200/70 animate-pulse mx-0.5" />
+                ))
+              ) : filteredNav.map((section) => {
                 const isExpanded = expandedSection === section.name;
                 const SectionIcon = section.icon;
                 const hasActiveChild = section.pages.some(
@@ -413,13 +429,13 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
             </div>
             
             {/* Exit to User App */}
-            <Link 
+            {/* <Link 
               to="/" 
               className="w-full flex items-center justify-start gap-2 px-3 py-2 text-xs h-8 text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg mb-2 transition-all font-medium"
             >
               <Globe className="w-3.5 h-3.5" />
               Exit to User App
-            </Link>
+            </Link> */}
             
             <Button 
               onClick={handleLogout} 
@@ -440,15 +456,35 @@ export function AdminLayoutNew({ children }: AdminLayoutProps) {
         <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-lg border-b border-gray-200 shadow-sm">
           <div className="flex items-center justify-between px-8 py-4">
             <h2 className="text-lg font-bold text-gray-800">Admin Portal</h2>
-            <Link to="/app/dashboard" className="text-sm text-primary hover:underline font-medium">
+            {/* <Link to="/app/dashboard" className="text-sm text-primary hover:underline font-medium">
               View User App →
-            </Link>
+            </Link> */}
           </div>
         </header>
 
         {/* Page Content */}
         <main className="p-8">{children}</main>
       </div>
+
+      <AlertDialog open={showLogoutModal} onOpenChange={setShowLogoutModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Log out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out of the admin portal?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmLogout}
+              className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
+            >
+              Log Out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

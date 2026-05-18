@@ -1,7 +1,9 @@
 import { Server } from 'socket.io';
 import { createServer } from 'http';
 import dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
+
+import { supabaseAdmin } from './config/supabase';
+import { parseRealtimeCorsOrigins } from './parse-cors-origins';
 
 dotenv.config();
 
@@ -22,9 +24,6 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"]
   }
 });
-
-import { supabaseAdmin } from './config/supabase';
-import { parseRealtimeCorsOrigins } from './parse-cors-origins';
 
 type TranscriptMessage = {
   id: string;

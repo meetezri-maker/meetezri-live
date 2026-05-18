@@ -50,6 +50,17 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { Button } from "./ui/button";
+import { BrandLogo } from "./BrandLogo";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -191,11 +202,10 @@ const navigationItems: NavItem[] = [
     icon: Eye,
     roles: ["super", "org", "team"],
     children: [
-      { name: "Live Sessions", href: "/admin/live-sessions-monitor", icon: Activity, roles: ["super", "org", "team"] },
+      { name: "Live Talk it out", href: "/admin/live-sessions-monitor", icon: Activity, roles: ["super", "org", "team"] },
       { name: "Session Recordings", href: "/admin/session-recordings", icon: Eye, roles: ["super", "org"] },
       { name: "Activity Monitor", href: "/admin/activity-monitor", icon: TrendingUp, roles: ["super", "org"] },
       { name: "System Health", href: "/admin/system-health-enhanced", icon: Server, roles: ["super"] },
-      { name: "System Health Dashboard", href: "/admin/system-health-dashboard", icon: Activity, roles: ["super"] },
       { name: "Error Tracking", href: "/admin/error-tracking", icon: AlertTriangle, roles: ["super"] },
     ],
   },
@@ -286,6 +296,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     "Crisis Management",
     "Analytics"
   ]);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     // Get admin role from localStorage
@@ -296,8 +307,13 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   }, []);
 
   const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = () => {
     localStorage.removeItem("adminRole");
     localStorage.removeItem("adminEmail");
+    setShowLogoutModal(false);
     navigate("/admin/login");
   };
 
@@ -349,12 +365,12 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               <motion.div
                 whileHover={{ rotate: 360, scale: 1.1 }}
                 transition={{ duration: 0.5 }}
-                className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center shadow-lg"
+                className="flex items-center justify-center"
               >
-                <Heart className="w-6 h-6 text-white" fill="white" />
+                <BrandLogo heightClass="h-10" />
               </motion.div>
               <div>
-                <h1 className="font-bold text-lg">Ezri Admin</h1>
+                <h1 className="font-bold text-lg">Solace Admin</h1>
                 <p className="text-xs text-muted-foreground">{currentRoleInfo.name}</p>
               </div>
             </Link>
@@ -523,6 +539,26 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         {/* Page content */}
         <main className="p-4 lg:p-8">{children}</main>
       </div>
+
+      <AlertDialog open={showLogoutModal} onOpenChange={setShowLogoutModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Log out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out of the admin portal?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmLogout}
+              className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
+            >
+              Log Out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

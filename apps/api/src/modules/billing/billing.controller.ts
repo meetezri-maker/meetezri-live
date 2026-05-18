@@ -14,6 +14,8 @@ import {
   getInvoicesForUser,
   getAllInvoices,
   getAllPaygTransactions,
+  getAdminPaygSummary,
+  getAdminBillingOverview,
   syncPaygCredits,
   createGuestCheckoutSession,
 } from './index';
@@ -165,6 +167,22 @@ export async function getAllPaygTransactionsHandler(
 ) {
   const transactions = await getAllPaygTransactions();
   return reply.send(transactions);
+}
+
+export async function getAdminPaygSummaryHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const summary = await getAdminPaygSummary();
+  return reply.send(summary);
+}
+
+export async function getAdminBillingOverviewHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const data = await getAdminBillingOverview();
+  return reply.send(data);
 }
 
 export async function adminUpdateSubscriptionHandler(

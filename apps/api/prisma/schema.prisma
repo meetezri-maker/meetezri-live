@@ -599,6 +599,26 @@ model audit_logs {
   @@schema("public")
 }
 
+/// Admin UI audit trail for backup/export/restore requests. Physical DB backups are host-managed (e.g. Supabase).
+model admin_backup_records {
+  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  kind          String
+  status        String
+  size_bytes    BigInt?
+  duration_ms   Int?
+  storage_path  String?   @db.Text
+  metadata      Json?
+  error_message String?   @db.Text
+  created_by    String?   @db.Uuid
+  created_at    DateTime  @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  completed_at  DateTime? @db.Timestamptz(6)
+  profiles      profiles? @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([created_at(sort: Desc)])
+  @@index([kind])
+  @@schema("public")
+}
+
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model community_comments {
   id              String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
@@ -635,6 +655,7 @@ model community_groups {
   description             String?
   category                String?
   privacy                 String?                   @default("public")
+  archived_at             DateTime?                 @db.Timestamptz(6)
   created_at              DateTime                  @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
   community_group_members community_group_members[]
   community_posts         community_posts[]
@@ -650,6 +671,9 @@ model community_posts {
   content            String
   likes_count        Int?                 @default(0)
   tags               String[]
+  locked_at          DateTime?            @db.Timestamptz(6)
+  flag_count         Int                  @default(0)
+  deleted_at         DateTime?            @db.Timestamptz(6)
   created_at         DateTime             @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
   community_comments community_comments[]
   community_groups   community_groups?    @relation(fields: [group_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -692,6 +716,9 @@ model crisis_events {
   profiles_crisis_events_assigned_toToprofiles profiles?      @relation("crisis_events_assigned_toToprofiles", fields: [assigned_to], references: [id], onDelete: NoAction, onUpdate: NoAction)
   profiles_crisis_events_user_idToprofiles     profiles       @relation("crisis_events_user_idToprofiles", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@index([status])
+  @@index([created_at(sort: Desc)])
+  @@index([user_id])
   @@schema("public")
 }
 
@@ -838,6 +865,104 @@ model mood_entries {
   @@schema("public")
 }
 
+/// Personal goals created by users for growth tracking.
+model personal_goals {
+  id                      String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id                 String         @db.Uuid
+  goal_title              String
+  goal_category           String
+  goal_description        String
+  why_this_goal_matters   String
+  target_outcome          String
+  priority_level          String
+  status                  String         @default("not_started")
+  start_date              String
+  target_date             String?
+  progress_percentage     Int            @default(0)
+  check_in_frequency      String         @default("daily")
+  reminder_enabled        Boolean        @default(false)
+  reminder_time           String?
+  small_action_steps      String[]
+  emotion_tag             String?
+  support_type_needed     String?
+  notes                   String?
+  last_check_in_date      String?
+  streak_count            Int            @default(0)
+  ai_suggestions          String[]
+  partner_visibility      Boolean        @default(false)
+  partner_comment_enabled Boolean        @default(false)
+  completion_note         String?
+  created_at              DateTime       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at              DateTime       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  profiles                profiles       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  goal_check_ins          goal_check_ins[]
+
+  @@index([user_id])
+  @@index([user_id, created_at(sort: Desc)])
+  @@index([user_id, status])
+  @@schema("public")
+}
+
+model custom_achievements {
+  id                 String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id            String   @db.Uuid
+  title              String
+  description        String
+  icon               String
+  category           String
+  progress           Int      @default(0)
+  total              Int      @default(1)
+  unlocked           Boolean  @default(false)
+  points             Int      @default(0)
+  rarity             String   @default("common")
+  goal_type          String?
+  last_check_in_date String?
+  check_in_history   String[]
+  check_in_entries   Json?
+  goal_category      String?
+  why_it_matters     String?
+  target_outcome     String?
+  start_date         String?
+  target_date        String?
+  priority           String?
+  progress_status    String?
+  check_in_frequency String?
+  reminder_enabled   Boolean?
+  action_steps       String?
+  mood_tag           String?
+  support_type       String?
+  notes              String?
+  linked_goal_id     String?  @db.Uuid
+  /// When true, daily check-ins also write to `personal_goals` / `goal_check_ins`. When false, only this row is updated (personal achievement streaks).
+  sync_with_goals    Boolean  @default(true)
+  created_at         DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  updated_at         DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  profiles           profiles @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, created_at(sort: Desc)])
+  @@schema("public")
+}
+
+/// Daily/weekly check-ins attached to a personal goal.
+model goal_check_ins {
+  id               String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  goal_id          String         @db.Uuid
+  user_id          String         @db.Uuid
+  progress_percentage Int
+  mood             String?
+  reflection       String?
+  challenges_faced String?
+  wins             String?
+  notes            String?
+  created_at       DateTime       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  personal_goals   personal_goals @relation(fields: [goal_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  profiles         profiles       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([goal_id, created_at(sort: Desc)])
+  @@index([user_id, created_at(sort: Desc)])
+  @@schema("public")
+}
+
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model notifications {
   id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
@@ -930,14 +1055,19 @@ model profiles {
   // - trial user flow (trial onboarding after verification)
   // - plan buyer flow (pricing->signup->verification->onboarding, no billing in onboarding)
   signup_type                                          String?                        // 'trial' | 'plan' | null
+  /// How the account was created: `app` = self-serve signup; `admin_*` = invited/provisioned by admin.
+  signup_source                                        String?                        // 'app' | 'admin_user' | 'admin_companion' | 'admin_org'
   age                                                   String?
   current_mood                                          String?
+  bio                                                   String? // About-me (Account Settings); separate from current_mood
   pronouns                                              String?
   selected_goals                                        String[]
   timezone                                              String?
   emergency_contact_name                                String?
   emergency_contact_phone                               String?
   emergency_contact_relationship                        String?
+  /// User acknowledged in-app consent for notifying emergency contacts only in serious safety situations.
+  emergency_consent                                     Boolean                        @default(false)
   in_therapy                                            String?
   notification_preferences                              Json?
   on_medication                                         String?
@@ -953,6 +1083,7 @@ model profiles {
   purchased_credits                                     Int?                           @default(0)
   purchased_credits_seconds                             Int?                           @default(0)
   privacy_settings                                      Json?
+  brain_health_settings                                 Json?
   account_status                                        String?                        @default("active")
   // Single source of truth for onboarding completion.
   // Nullable for backwards-compatibility: older rows may not have this column yet.
@@ -963,6 +1094,7 @@ model profiles {
   appointments_appointments_companion_idToprofiles      appointments[]                 @relation("appointments_companion_idToprofiles")
   appointments_appointments_user_idToprofiles           appointments[]                 @relation("appointments_user_idToprofiles")
   audit_logs                                            audit_logs[]
+  admin_backup_records                                  admin_backup_records[]
   community_comments                                    community_comments[]
   community_group_members                               community_group_members[]
   community_posts                                       community_posts[]
@@ -976,15 +1108,20 @@ model profiles {
   moderation_queue                                      moderation_queue[]
   mood_entries                                          mood_entries[]
   notifications                                         notifications[]
+  custom_achievements                                   custom_achievements[]
+  personal_goals                                        personal_goals[]
+  goal_check_ins                                        goal_check_ins[]
   nudges                                                nudges[]
   org_members                                           org_members[]
   users                                                 users                          @relation(fields: [id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   reports_daily                                         reports_daily[]
   safety_plans                                          safety_plans[]
+  safety_resource_interactions                          safety_resource_interactions[]
   sleep_entries                                         sleep_entries[]
   subscriptions                                         subscriptions[]
   support_tickets_support_tickets_assigned_toToprofiles support_tickets[]              @relation("support_tickets_assigned_toToprofiles")
   support_tickets_support_tickets_user_idToprofiles     support_tickets[]              @relation("support_tickets_user_idToprofiles")
+  support_ticket_messages_support_ticket_messages_author support_ticket_messages[]     @relation("support_ticket_messages_author")
   system_settings                                       system_settings[]
   time_entries                                          time_entries[]
   user_achievements                                     user_achievements[]
@@ -1038,6 +1175,9 @@ model payment_transactions {
   metadata          Json?
   created_at        DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
 
+  @@index([created_at(sort: Desc)])
+  @@index([status, created_at(sort: Desc)])
+  @@index([user_id])
   @@schema("public")
 }
 
@@ -1079,6 +1219,23 @@ model safety_plans {
   last_updated         DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
   profiles             profiles @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@schema("public")
+}
+
+/// User interactions with in-app crisis / safety resources (hotlines, text lines, links, etc.) for analytics.
+model safety_resource_interactions {
+  id                 String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id            String   @db.Uuid
+  resource_id        String
+  resource_name      String
+  resource_type      String
+  interaction_type   String
+  context_session_id String?
+  safety_state       String?
+  created_at         DateTime @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  profiles           profiles @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, created_at(sort: Desc)])
   @@schema("public")
 }
 
@@ -1146,9 +1303,26 @@ model support_tickets {
   assigned_to                                    String?          @db.Uuid
   created_at                                     DateTime         @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
   updated_at                                     DateTime         @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  support_ticket_messages                        support_ticket_messages[]
   profiles_support_tickets_assigned_toToprofiles profiles?        @relation("support_tickets_assigned_toToprofiles", fields: [assigned_to], references: [id], onDelete: NoAction, onUpdate: NoAction)
   profiles_support_tickets_user_idToprofiles     profiles         @relation("support_tickets_user_idToprofiles", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@schema("public")
+}
+
+/// Support ticket thread messages (user + support replies).
+model support_ticket_messages {
+  id             String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  ticket_id      String         @db.Uuid
+  author_user_id String         @db.Uuid
+  author_role    String         @default("user") // 'user' | 'support' | 'admin'
+  body           String
+  created_at     DateTime       @default(dbgenerated("timezone('utc'::text, now())")) @db.Timestamptz(6)
+  ticket         support_tickets @relation(fields: [ticket_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  profiles       profiles        @relation("support_ticket_messages_author", fields: [author_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([ticket_id, created_at(sort: Asc)])
+  @@index([author_user_id])
   @@schema("public")
 }
 
@@ -1272,6 +1446,8 @@ model wellness_tools {
   description            String?
   content_url            String?
   duration_minutes       Int?
+  /// Exact session length for timers (optional; falls back to duration_minutes × 60).
+  duration_seconds       Int?
   difficulty             String?
   is_premium             Boolean?                 @default(false)
   status                 String?                  @default("draft")

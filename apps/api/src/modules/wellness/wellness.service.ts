@@ -1,5 +1,12 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../lib/prisma';
-import { CreateWellnessToolInput, UpdateWellnessToolInput } from './wellness.schema';
+import { sharedDel, sharedGetJson, sharedSetJson } from '../../lib/sharedCache';
+import {
+  CreateWellnessChallengeInput,
+  CreateWellnessToolInput,
+  UpdateWellnessChallengeInput,
+  UpdateWellnessToolInput,
+} from './wellness.schema';
 
 const PROGRESS_CACHE_TTL = 30 * 1000; // 30 seconds
 const progressCache = new Map<string, { data: any[]; timestamp: number }>();
@@ -10,29 +17,69 @@ const wellnessToolsCache = new Map<string, { data: any[]; timestamp: number }>()
 const WELLNESS_STATS_CACHE_TTL = 60 * 1000; // 60 seconds
 const wellnessStatsCache = new Map<string, { data: any; timestamp: number }>();
 
+const wellnessToolByIdCache = new Map<string, { data: any; timestamp: number }>();
+const WELLNESS_TOOL_BY_ID_CACHE_TTL = 10 * 1000; // 10 seconds
+
+const wellnessChallengesDashboardCache = new Map<string, { data: any; timestamp: number }>();
+const WELLNESS_CHALLENGES_DASHBOARD_CACHE_TTL = 30 * 1000; // 30s: expensive dashboard endpoint; safe to be slightly stale.
+const wellnessChallengesDashboardInFlight = new Map<string, Promise<any>>();
+
+const wellnessChallengesWithStatsCache: { data: any; timestamp: number } | null = null as any;
+let wellnessChallengesWithStatsCacheValue: { data: any; timestamp: number } | null = null;
+const WELLNESS_CHALLENGES_WITH_STATS_TTL = 10 * 1000; // 10 seconds
+
 function clearWellnessToolCaches() {
   wellnessToolsCache.clear();
+  wellnessToolByIdCache.clear();
 }
 
 function clearUserWellnessCaches(userId: string) {
   progressCache.delete(userId);
   wellnessStatsCache.delete(userId);
+  // Dashboard depends on these signals (sessions/moods/journals/wellness). Safe short TTL but clear on writes.
+  wellnessChallengesDashboardCache.delete(userId);
+  void sharedDel(`wellness:challenges:dashboard:${userId}`);
+}
+
+function resolveDurationFields(input: {
+  duration_minutes?: number | null;
+  duration_seconds?: number | null;
+}): { duration_minutes: number | null; duration_seconds: number | null } {
+  const dmIn = input.duration_minutes ?? null;
+  const dsIn = input.duration_seconds ?? null;
+  if (dsIn != null && dsIn >= 0) {
+    return {
+      duration_seconds: dsIn,
+      duration_minutes: Math.max(1, Math.round(dsIn / 60)),
+    };
+  }
+  if (dmIn != null && dmIn > 0) {
+    return {
+      duration_minutes: dmIn,
+      duration_seconds: dmIn * 60,
+    };
+  }
+  return { duration_minutes: dmIn, duration_seconds: dsIn };
 }
 
 export async function createWellnessTool(data: CreateWellnessToolInput & { created_by?: string }) {
-  const { created_by, image_url, content, ...rest } = data;
+  const { created_by, image_url, content } = data;
+  /** Guided JSON lives in `content_url` (text column) when no separate asset URL. */
+  const storedContent = image_url ?? content ?? null;
+  const { duration_minutes, duration_seconds } = resolveDurationFields(data);
 
   const created = await prisma.wellness_tools.create({
     data: {
       title: data.title,
       category: data.category,
       description: data.description,
-      duration_minutes: data.duration_minutes,
+      duration_minutes,
+      duration_seconds,
       difficulty: data.difficulty,
       is_premium: data.is_premium,
       status: data.status,
       icon: data.icon,
-      content_url: image_url,
+      content_url: storedContent,
       ...(created_by ? {
         profiles: {
           connect: { id: created_by },
@@ -44,8 +91,60 @@ export async function createWellnessTool(data: CreateWellnessToolInput & { creat
   return created;
 }
 
+export async function createWellnessChallenge(data: CreateWellnessChallengeInput) {
+  const start = new Date(data.start_date);
+  const end = new Date(data.end_date);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    throw new Error('Invalid start or end date');
+  }
+  const created = await prisma.wellness_challenges.create({
+    data: {
+      title: data.title,
+      description: data.description ?? null,
+      category: data.category ?? null,
+      start_date: start,
+      end_date: end,
+      reward_points: data.reward_points ?? 0,
+      goal_criteria:
+        data.goal_criteria === undefined || data.goal_criteria === null
+          ? undefined
+          : (data.goal_criteria as object),
+    },
+  });
+  wellnessChallengesWithStatsCacheValue = null;
+  return {
+    ...created,
+    participants: 0,
+    completionRate: 0,
+  };
+}
+
+function buildEnrollmentTrendFromJoinedAt(
+  rows: { joined_at: Date }[]
+): { month: string; participants: number }[] {
+  const map = new Map<string, { month: string; participants: number; sortKey: string }>();
+  for (const row of rows) {
+    const d = row.joined_at;
+    const sortKey = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
+    const label = d.toLocaleString('default', { month: 'short' });
+    const existing = map.get(sortKey) || { month: label, participants: 0, sortKey };
+    existing.participants += 1;
+    existing.month = label;
+    map.set(sortKey, existing);
+  }
+  return Array.from(map.values())
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+    .map(({ month, participants }) => ({ month, participants }));
+}
+
 export async function getWellnessChallengesWithStats() {
-  const [challenges, participation, completions] = await Promise.all([
+  if (
+    wellnessChallengesWithStatsCacheValue &&
+    Date.now() - wellnessChallengesWithStatsCacheValue.timestamp < WELLNESS_CHALLENGES_WITH_STATS_TTL
+  ) {
+    return wellnessChallengesWithStatsCacheValue.data;
+  }
+  const [challenges, participation, completions, joinedRows] = await Promise.all([
     prisma.wellness_challenges.findMany({
       orderBy: { start_date: 'asc' },
     }),
@@ -57,6 +156,9 @@ export async function getWellnessChallengesWithStats() {
       by: ['challenge_id'],
       where: { is_completed: true },
       _count: { user_id: true },
+    }),
+    prisma.user_challenge_participation.findMany({
+      select: { joined_at: true },
     }),
   ]);
 
@@ -70,7 +172,7 @@ export async function getWellnessChallengesWithStats() {
     completionsMap.set(row.challenge_id, row._count.user_id);
   });
 
-  return challenges.map((challenge) => {
+  const mapped = challenges.map((challenge) => {
     const participants = participantsMap.get(challenge.id) || 0;
     const completed = completionsMap.get(challenge.id) || 0;
     const completionRate = participants
@@ -83,6 +185,418 @@ export async function getWellnessChallengesWithStats() {
       completionRate,
     };
   });
+
+  const data = {
+    challenges: mapped,
+    enrollmentTrend: buildEnrollmentTrendFromJoinedAt(joinedRows),
+  };
+  wellnessChallengesWithStatsCacheValue = { data, timestamp: Date.now() };
+  return data;
+}
+
+async function getChallengeStatsById(challengeId: string): Promise<{
+  participants: number;
+  completionRate: number;
+}> {
+  const [participants, completed] = await Promise.all([
+    prisma.user_challenge_participation.count({ where: { challenge_id: challengeId } }),
+    prisma.user_challenge_participation.count({
+      where: { challenge_id: challengeId, is_completed: true },
+    }),
+  ]);
+  const completionRate = participants
+    ? Math.round((completed / participants) * 100)
+    : 0;
+  return { participants, completionRate };
+}
+
+export async function joinWellnessChallenge(userId: string, challengeId: string) {
+  const challenge = await prisma.wellness_challenges.findUnique({ where: { id: challengeId } });
+  if (!challenge) throw new Error('Challenge not found');
+
+  const result = await prisma.user_challenge_participation.upsert({
+    where: { user_id_challenge_id: { user_id: userId, challenge_id: challengeId } },
+    create: { user_id: userId, challenge_id: challengeId, progress: 0, is_completed: false },
+    update: {},
+  });
+  clearUserWellnessCaches(userId);
+  wellnessChallengesWithStatsCacheValue = null;
+  return result;
+}
+
+export async function unjoinWellnessChallenge(userId: string, challengeId: string) {
+  try {
+    await prisma.user_challenge_participation.delete({
+      where: { user_id_challenge_id: { user_id: userId, challenge_id: challengeId } },
+    });
+  } catch {
+    // Already not joined
+  }
+  clearUserWellnessCaches(userId);
+  wellnessChallengesWithStatsCacheValue = null;
+}
+
+export async function updateWellnessChallenge(
+  id: string,
+  data: UpdateWellnessChallengeInput
+) {
+  const existing = await prisma.wellness_challenges.findUnique({ where: { id } });
+  if (!existing) {
+    throw new Error('Wellness challenge not found');
+  }
+
+  const start =
+    data.start_date !== undefined ? new Date(data.start_date) : existing.start_date;
+  const end = data.end_date !== undefined ? new Date(data.end_date) : existing.end_date;
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    throw new Error('Invalid start or end date');
+  }
+  if (end < start) {
+    throw new Error('End date must be on or after start date');
+  }
+
+  let nextGoal: object | undefined;
+  if (data.goal_criteria !== undefined) {
+    const base =
+      existing.goal_criteria && typeof existing.goal_criteria === 'object'
+        ? (existing.goal_criteria as object)
+        : {};
+    const patch =
+      data.goal_criteria === null
+        ? {}
+        : typeof data.goal_criteria === 'object' && data.goal_criteria !== null
+          ? (data.goal_criteria as object)
+          : {};
+    nextGoal = { ...base, ...patch };
+  }
+
+  const updated = await prisma.wellness_challenges.update({
+    where: { id },
+    data: {
+      ...(data.title !== undefined && { title: data.title }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.category !== undefined && { category: data.category }),
+      ...(data.start_date !== undefined && { start_date: start }),
+      ...(data.end_date !== undefined && { end_date: end }),
+      ...(data.reward_points !== undefined && { reward_points: data.reward_points }),
+      ...(nextGoal !== undefined && { goal_criteria: nextGoal }),
+    },
+  });
+
+  const stats = await getChallengeStatsById(id);
+  wellnessChallengesWithStatsCacheValue = null;
+  return {
+    ...updated,
+    participants: stats.participants,
+    completionRate: stats.completionRate,
+  };
+}
+
+/** Mirrors user.service streak logic for dashboard challenge progress. */
+function calculateMoodStreakDays(
+  moodEntries: { created_at: Date }[]
+): number {
+  if (!moodEntries || moodEntries.length === 0) return 0;
+  const sorted = [...moodEntries].sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const lastEntryDate = new Date(sorted[0].created_at);
+  lastEntryDate.setHours(0, 0, 0, 0);
+  const diffTime = Math.abs(today.getTime() - lastEntryDate.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  if (diffDays > 1) return 0;
+
+  let streak = 1;
+  let currentDate = lastEntryDate;
+  for (let i = 1; i < sorted.length; i++) {
+    const entryDate = new Date(sorted[i].created_at);
+    entryDate.setHours(0, 0, 0, 0);
+    const diff = Math.abs(currentDate.getTime() - entryDate.getTime());
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    if (days === 0) continue;
+    if (days === 1) {
+      streak++;
+      currentDate = entryDate;
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+function getChallengeTargetFromCriteria(goalCriteria: unknown): number {
+  const gc =
+    goalCriteria && typeof goalCriteria === 'object'
+      ? (goalCriteria as Record<string, unknown>)
+      : {};
+  const t = gc.target ?? gc.targetCount;
+  if (typeof t === 'number' && t > 0) return Math.min(9999, Math.floor(t));
+  const tasks = gc.dailyTasks;
+  if (Array.isArray(tasks) && tasks.length > 0) return tasks.length;
+  return 7;
+}
+
+function mapDifficultyLabel(goalCriteria: unknown): 'Easy' | 'Medium' | 'Hard' {
+  const gc =
+    goalCriteria && typeof goalCriteria === 'object'
+      ? (goalCriteria as Record<string, unknown>)
+      : {};
+  const d = String(gc.difficulty || 'easy').toLowerCase();
+  if (d === 'medium') return 'Medium';
+  if (d === 'hard') return 'Hard';
+  return 'Easy';
+}
+
+async function computeChallengeProgressForUser(
+  userId: string,
+  challenge: {
+    id: string;
+    title: string;
+    category: string | null;
+    start_date: Date;
+    end_date: Date;
+    goal_criteria: unknown;
+  },
+  participation: { progress: number | null; is_completed: boolean | null } | null,
+  profileStreakDays: number
+): Promise<number> {
+  const target = getChallengeTargetFromCriteria(challenge.goal_criteria);
+  if (participation?.is_completed) {
+    return target;
+  }
+  if (
+    typeof participation?.progress === 'number' &&
+    participation.progress > 0
+  ) {
+    return Math.min(participation.progress, target);
+  }
+
+  const gc = (challenge.goal_criteria || {}) as Record<string, unknown>;
+  const metric = typeof gc.metric === 'string' ? gc.metric : '';
+  const title = (challenge.title || '').toLowerCase();
+  const cat = (challenge.category || '').toLowerCase();
+  const start = challenge.start_date;
+  const end = challenge.end_date;
+
+  let raw = 0;
+
+  if (
+    metric === 'mood_streak' ||
+    title.includes('check-in') ||
+    title.includes('check in') ||
+    title.includes('daily check')
+  ) {
+    raw = Math.min(profileStreakDays, target);
+  } else if (metric === 'meditation_sessions' || title.includes('meditation')) {
+    raw = await prisma.user_wellness_progress.count({
+      where: {
+        user_id: userId,
+        completed_at: { gte: start, lte: end, not: null },
+        wellness_tools: { category: 'Meditation' },
+      },
+    });
+  } else if (
+    metric === 'journal_entries' ||
+    cat === 'journaling' ||
+    title.includes('journal')
+  ) {
+    raw = await prisma.journal_entries.count({
+      where: { user_id: userId, created_at: { gte: start, lte: end } },
+    });
+  } else if (metric === 'breathing' || title.includes('breath')) {
+    raw = await prisma.user_wellness_progress.count({
+      where: {
+        user_id: userId,
+        completed_at: { gte: start, lte: end, not: null },
+        wellness_tools: { category: 'Relaxation' },
+      },
+    });
+  } else if (
+    metric === 'wellness_sessions' ||
+    title.includes('wellness warrior') ||
+    cat === 'exercise' ||
+    title.includes('exercise') ||
+    title.includes('workout') ||
+    title.includes('fitness') ||
+    title.includes('gym')
+  ) {
+    raw = await prisma.user_wellness_progress.count({
+      where: {
+        user_id: userId,
+        completed_at: { gte: start, lte: end, not: null },
+      },
+    });
+  } else if (metric === 'sleep_nights' || title.includes('sleep')) {
+    raw = await prisma.sleep_entries.count({
+      where: { user_id: userId, created_at: { gte: start, lte: end } },
+    });
+  } else if (metric === 'mood_entries' || title.includes('mood')) {
+    raw = await prisma.mood_entries.count({
+      where: { user_id: userId, created_at: { gte: start, lte: end } },
+    });
+  } else {
+    raw = typeof participation?.progress === 'number' ? participation.progress : 0;
+  }
+
+  return Math.min(Math.max(0, raw), target);
+}
+
+/**
+ * Active challenges with per-user progress for dashboard / app UI.
+ */
+export async function getWellnessChallengesForUserDashboard(userId: string) {
+  const cached = wellnessChallengesDashboardCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < WELLNESS_CHALLENGES_DASHBOARD_CACHE_TTL) {
+    return cached.data;
+  }
+
+  const shared = await sharedGetJson<any>(`wellness:challenges:dashboard:${userId}`);
+  if (shared) {
+    wellnessChallengesDashboardCache.set(userId, { data: shared, timestamp: Date.now() });
+    return shared;
+  }
+
+  const inFlight = wellnessChallengesDashboardInFlight.get(userId);
+  if (inFlight) return await inFlight;
+
+  const run = (async () => {
+  const now = new Date();
+
+  const [challengeRows, recentMoods] = await Promise.all([
+    prisma.wellness_challenges.findMany({
+      where: {
+        start_date: { lte: now },
+        end_date: { gte: now },
+      },
+      orderBy: { end_date: 'asc' },
+      take: 24,
+    }),
+    prisma.mood_entries.findMany({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+      take: 60,
+      select: { created_at: true },
+    }),
+  ]);
+
+  const streakDays = calculateMoodStreakDays(recentMoods);
+
+  const challenges = challengeRows.filter((c) => {
+    const gc =
+      c.goal_criteria && typeof c.goal_criteria === 'object'
+        ? (c.goal_criteria as Record<string, unknown>)
+        : {};
+    if (gc.status === 'draft') return false;
+    return true;
+  }).slice(0, 12);
+
+  if (challenges.length === 0) {
+    return {
+      totalPoints: 0,
+      currentLevel: 1,
+      pointsToNextLevel: 250,
+      levelProgressPercent: 0,
+      challenges: [] as Array<Record<string, unknown>>,
+    };
+  }
+
+  const participationRows = await prisma.user_challenge_participation.findMany({
+    where: {
+      user_id: userId,
+      challenge_id: { in: challenges.map((c) => c.id) },
+    },
+  });
+  const partMap = new Map(participationRows.map((p) => [p.challenge_id, p]));
+
+  // Sum reward points in SQL (avoids loading all completed rows into Node).
+  const totalPointsRows = await prisma.$queryRaw<[{ total: bigint | null }]>(
+    Prisma.sql`
+      SELECT COALESCE(SUM(COALESCE(c.reward_points, 0)), 0)::bigint AS total
+      FROM public.user_challenge_participation p
+      JOIN public.wellness_challenges c ON c.id = p.challenge_id
+      WHERE p.user_id = ${userId}::uuid
+        AND p.is_completed = true
+    `
+  );
+  const totalPoints = Number(totalPointsRows[0]?.total ?? 0) || 0;
+
+  const withinThousand = totalPoints % 1000;
+  const pointsToNextLevel =
+    totalPoints === 0 ? 250 : withinThousand === 0 ? 1000 : 1000 - withinThousand;
+  const levelProgressPercent =
+    totalPoints === 0 ? 0 : Math.min(100, (withinThousand / 1000) * 100);
+  const currentLevel = Math.max(
+    1,
+    Math.min(99, Math.floor(totalPoints / 200) + 1)
+  );
+
+  const mapped = await Promise.all(
+    challenges.map(async (c) => {
+      const part = partMap.get(c.id) ?? null;
+      const target = Math.max(1, getChallengeTargetFromCriteria(c.goal_criteria));
+      const progress = await computeChallengeProgressForUser(
+        userId,
+        c,
+        part,
+        streakDays
+      );
+      const isCompleted = part?.is_completed === true || progress >= target;
+      const gc = (c.goal_criteria || {}) as Record<string, unknown>;
+      const isLocked = gc.locked === true;
+
+      return {
+        id: c.id,
+        title: c.title,
+        description: c.description ?? '',
+        progress,
+        target,
+        reward: c.reward_points ?? 0,
+        difficulty: mapDifficultyLabel(c.goal_criteria),
+        isCompleted,
+        isJoined: part !== null,
+        isLocked,
+        category: c.category,
+        endDate: c.end_date.toISOString(),
+      };
+    })
+  );
+
+  // Fire-and-forget: persist completed challenges so totalPoints is accurate on subsequent loads
+  const toComplete = mapped.filter(c => c.isCompleted);
+  if (toComplete.length > 0) {
+    void Promise.all(
+      toComplete.map(c =>
+        prisma.user_challenge_participation.upsert({
+          where: { user_id_challenge_id: { user_id: userId, challenge_id: c.id } },
+          create: { user_id: userId, challenge_id: c.id, progress: c.progress, is_completed: true },
+          update: { progress: c.progress, is_completed: true },
+        })
+      )
+    ).catch(() => undefined);
+  }
+
+  const data = {
+    totalPoints,
+    currentLevel,
+    pointsToNextLevel:
+      totalPoints === 0 ? 250 : Math.min(1000, Math.max(0, pointsToNextLevel)),
+    levelProgressPercent: Number.isFinite(levelProgressPercent)
+      ? levelProgressPercent
+      : 0,
+    challenges: mapped,
+  };
+  wellnessChallengesDashboardCache.set(userId, { data, timestamp: Date.now() });
+  void sharedSetJson(`wellness:challenges:dashboard:${userId}`, data, WELLNESS_CHALLENGES_DASHBOARD_CACHE_TTL);
+  return data;
+  })().finally(() => {
+    wellnessChallengesDashboardInFlight.delete(userId);
+  });
+
+  wellnessChallengesDashboardInFlight.set(userId, run);
+  return await run;
 }
 
 export async function getWellnessTools(userId: string, category?: string) {
@@ -162,6 +676,11 @@ export async function toggleWellnessToolFavorite(userId: string, toolId: string)
 }
 
 export async function getWellnessToolById(userId: string, id: string) {
+  const key = `${userId}|${id}`;
+  const cached = wellnessToolByIdCache.get(key);
+  if (cached && Date.now() - cached.timestamp < WELLNESS_TOOL_BY_ID_CACHE_TTL) {
+    return cached.data;
+  }
   const tool = await prisma.wellness_tools.findUnique({
     where: { id },
     include: {
@@ -173,20 +692,57 @@ export async function getWellnessToolById(userId: string, id: string) {
 
   if (!tool) return null;
 
-  return {
+  const result = {
     ...tool,
     is_favorite: tool.favorite_wellness_tools.length > 0,
     favorite_wellness_tools: undefined
   };
+  wellnessToolByIdCache.set(key, { data: result, timestamp: Date.now() });
+  return result;
 }
 
 export async function updateWellnessTool(id: string, data: UpdateWellnessToolInput) {
+  const patch: {
+    title?: string;
+    description?: string | null;
+    category?: string;
+    duration_minutes?: number | null;
+    duration_seconds?: number | null;
+    difficulty?: string | null;
+    is_premium?: boolean | null;
+    status?: string | null;
+    icon?: string | null;
+    content_url?: string | null;
+    updated_at: Date;
+  } = { updated_at: new Date() };
+
+  if (data.title !== undefined) patch.title = data.title;
+  if (data.description !== undefined) patch.description = data.description;
+  if (data.category !== undefined) patch.category = data.category;
+  if (data.duration_minutes !== undefined || data.duration_seconds !== undefined) {
+    const existing = await prisma.wellness_tools.findUnique({
+      where: { id },
+      select: { duration_minutes: true, duration_seconds: true },
+    });
+    const merged = resolveDurationFields({
+      duration_minutes:
+        data.duration_minutes !== undefined ? data.duration_minutes : existing?.duration_minutes,
+      duration_seconds:
+        data.duration_seconds !== undefined ? data.duration_seconds : existing?.duration_seconds,
+    });
+    patch.duration_minutes = merged.duration_minutes;
+    patch.duration_seconds = merged.duration_seconds;
+  }
+  if (data.difficulty !== undefined) patch.difficulty = data.difficulty;
+  if (data.is_premium !== undefined) patch.is_premium = data.is_premium;
+  if (data.status !== undefined) patch.status = data.status;
+  if (data.icon !== undefined) patch.icon = data.icon;
+  if (data.content !== undefined) patch.content_url = data.content;
+  else if (data.image_url !== undefined) patch.content_url = data.image_url;
+
   const updated = await prisma.wellness_tools.update({
     where: { id },
-    data: {
-      ...data,
-      updated_at: new Date(),
-    },
+    data: patch,
   });
   clearWellnessToolCaches();
   return updated;
@@ -297,12 +853,16 @@ export async function getUserWellnessProgress(userId: string) {
     GROUP BY wp.tool_id, wt.title
   `;
 
-  const result = progress.map(p => ({
-    toolId: p.tool_id,
-    toolTitle: p.toolTitle,
-    sessionsCompleted: p.sessionsCompleted,
-    totalMinutes: Math.round((p.totalSeconds || 0) / 60),
-  }));
+  const result = progress.map(p => {
+    const totalSeconds = Number(p.totalSeconds) || 0;
+    return {
+      toolId: p.tool_id,
+      toolTitle: p.toolTitle,
+      sessionsCompleted: p.sessionsCompleted,
+      totalSeconds,
+      totalMinutes: Math.round(totalSeconds / 60),
+    };
+  });
 
   progressCache.set(userId, { data: result, timestamp: Date.now() });
   return result;
@@ -326,12 +886,14 @@ export async function getWellnessStats(userId: string) {
   sixMonthsAgo.setMonth(today.getMonth() - 5); 
   sixMonthsAgo.setDate(1); 
 
-  // Helper to group by week
+  const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+
+  // Helper to group by week (4 buckets covering the last 28 days; clamp so day 28 lands in week 4 → bucket 3)
   const getWeekNumber = (date: Date) => {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
     const diff = d.getTime() - fourWeeksAgo.getTime();
-    return Math.floor(diff / (7 * 24 * 60 * 60 * 1000));
+    return Math.min(3, Math.floor(diff / oneWeekMs));
   };
 
   // Run independent queries in parallel
@@ -343,7 +905,8 @@ export async function getWellnessStats(userId: string) {
     avgMoodResult,
     sleepEntries,
     postsCount,
-    commentsCount
+    commentsCount,
+    wellnessDurationLast4Weeks,
   ] = await Promise.all([
     // Sessions (Last 6 Months)
     prisma.app_sessions.findMany({
@@ -398,7 +961,17 @@ export async function getWellnessStats(userId: string) {
 
     // Social Counts (Total)
     prisma.community_posts.count({ where: { user_id: userId } }),
-    prisma.community_comments.count({ where: { user_id: userId } })
+    prisma.community_comments.count({ where: { user_id: userId } }),
+
+    // Physical score: wellness exercise time in the last 4 weeks (seconds)
+    prisma.user_wellness_progress.aggregate({
+      where: {
+        user_id: userId,
+        completed_at: { gte: fourWeeksAgo },
+        duration_spent: { gt: 0 },
+      },
+      _sum: { duration_spent: true },
+    }),
   ]);
 
   // --- Process Results ---
@@ -499,8 +1072,13 @@ export async function getWellnessStats(userId: string) {
   const mentalCount = recentJournals + recentSessions + recentWellness;
   const mentalScore = Math.min((mentalCount / 5) * 100, 100);
 
-  // Physical: Placeholder
-  const physicalScore = 65; 
+  // Physical: time spent on wellness exercises in the last 4 weeks (~90 min total = 100%)
+  const physicalSeconds = Number(wellnessDurationLast4Weeks._sum.duration_spent ?? 0) || 0;
+  const physicalTargetSeconds = 90 * 60;
+  const physicalScore = Math.min(
+    100,
+    Math.round((physicalSeconds / physicalTargetSeconds) * 100)
+  );
 
   const wellnessScore = [
     { subject: 'Emotional', A: Math.round(emotionalScore), fullMark: 100 },

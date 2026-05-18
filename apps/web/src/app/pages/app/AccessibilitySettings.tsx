@@ -14,8 +14,7 @@ import {
   CheckCircle
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { AppLayout } from "@/app/components/AppLayout";
+import { useEffect, useRef, useState } from "react";
 
 export function AccessibilitySettings() {
   const getDefaultSettings = () => ({
@@ -52,6 +51,7 @@ export function AccessibilitySettings() {
   });
 
   const [showSavedMessage, setShowSavedMessage] = useState(false);
+  const hasInitializedSettings = useRef(false);
 
   const toggleSetting = (key: keyof typeof settings) => {
     setSettings(prev => ({
@@ -62,6 +62,10 @@ export function AccessibilitySettings() {
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.localStorage === "undefined") return;
+    if (!hasInitializedSettings.current) {
+      hasInitializedSettings.current = true;
+      return;
+    }
     window.localStorage.setItem("ezri_accessibility_settings", JSON.stringify(settings));
     setShowSavedMessage(true);
     const timer = setTimeout(() => {
@@ -83,6 +87,20 @@ export function AccessibilitySettings() {
         : "16px";
     root.style.setProperty("--font-size", fontSizePx);
   }, [settings.fontSize]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    const textSpacingMap: Record<string, { lineHeight: string; letterSpacing: string }> = {
+      compact: { lineHeight: "1.35", letterSpacing: "-0.005em" },
+      normal: { lineHeight: "1.5", letterSpacing: "0em" },
+      relaxed: { lineHeight: "1.7", letterSpacing: "0.01em" },
+      loose: { lineHeight: "1.9", letterSpacing: "0.015em" },
+    };
+    const spacing = textSpacingMap[settings.textSpacing] || textSpacingMap.normal;
+    root.style.setProperty("--text-line-height", spacing.lineHeight);
+    root.style.setProperty("--text-letter-spacing", spacing.letterSpacing);
+  }, [settings.textSpacing]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -140,18 +158,8 @@ export function AccessibilitySettings() {
       ? "text-xl"
       : "text-base";
 
-  const containerTextSpacing =
-    settings.textSpacing === "compact"
-      ? "leading-tight"
-      : settings.textSpacing === "relaxed"
-      ? "leading-relaxed"
-      : settings.textSpacing === "loose"
-      ? "leading-loose"
-      : "";
-
   return (
-    <AppLayout>
-      <div className={`min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300 ${containerFontSize} ${containerTextSpacing}`}>
+    <div className={`min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300 ${containerFontSize}`}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <motion.div
@@ -452,10 +460,10 @@ export function AccessibilitySettings() {
               <div>
                 <h3 className="font-bold text-green-900 dark:text-green-100 mb-2">WCAG 2.1 AA Compliant</h3>
                 <p className="text-sm text-green-700 dark:text-green-300 mb-3">
-                  Ezri is designed to meet Web Content Accessibility Guidelines (WCAG) 2.1 Level AA standards. 
+                  Solace is designed to meet Web Content Accessibility Guidelines (WCAG) 2.1 Level AA standards. 
                   We're committed to making mental health support accessible to everyone.
                 </p>
-                <button className="text-sm text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium underline">
+                <button onClick={() => window.open("https://www.w3.org/TR/WCAG21/", "_blank")} className="text-sm  cursor-pointer text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium underline">
                   Learn more about our accessibility commitment
                 </button>
               </div>
@@ -474,6 +482,5 @@ export function AccessibilitySettings() {
           )}
         </div>
       </div>
-    </AppLayout>
   );
 }

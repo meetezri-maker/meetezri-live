@@ -4,6 +4,7 @@ import { Card } from "../components/ui/card";
 import { Label } from "../components/ui/label";
 import { useLocation, useNavigate } from "react-router-dom";
 import { KeyRound, CheckCircle } from "lucide-react";
+import { PasswordStrengthMeter } from "../components/ui/PasswordStrengthMeter";
 import { PublicNav } from "../components/PublicNav";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
@@ -160,6 +161,7 @@ export function ResetPassword() {
                   required
                   disabled={isLoading || isProcessing}
                 />
+                <PasswordStrengthMeter password={password} />
               </div>
               
               <div className="space-y-2">

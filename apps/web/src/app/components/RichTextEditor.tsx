@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useState, useRef, useEffect } from "react";
+import { memo, useCallback, useMemo, useState, useRef, useEffect } from "react";
 import {
   Bold,
   Italic,
@@ -15,9 +15,12 @@ import {
   Type,
   AlignLeft,
   AlignCenter,
-  AlignRight
+  AlignRight,
 } from "lucide-react";
 import { cn } from "./ui/utils";
+import { htmlToPlainText } from "../../lib/htmlPlainText";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 interface RichTextEditorProps {
   value: string;
@@ -27,32 +30,57 @@ interface RichTextEditorProps {
   hideMoodSelector?: boolean;
 }
 
-export function RichTextEditor({ value, onChange, placeholder = "Start writing...", className, hideMoodSelector = false }: RichTextEditorProps) {
+const MOODS = [
+  { emoji: "😊", label: "Happy", color: "text-green-500" },
+  { emoji: "😌", label: "Calm", color: "text-blue-500" },
+  { emoji: "😰", label: "Anxious", color: "text-orange-500" },
+  { emoji: "😢", label: "Sad", color: "text-gray-500" },
+  { emoji: "🤩", label: "Excited", color: "text-purple-500" },
+  { emoji: "😡", label: "Angry", color: "text-red-500" },
+];
+
+/** Common emojis for the in-editor keyboard picker (toolbar). */
+const EMOJI_KEYBOARD_GRID = [
+  "😀", "😃", "😄", "😁", "😅", "😂", "🤣", "😊",
+  "😇", "🥰", "😍", "🤩", "😘", "😋", "🤪", "😛",
+  "🙂", "😐", "😒", "🙄", "😔", "😢", "😭", "😤",
+  "😠", "😡", "🤬", "😰", "😱", "🥺", "😴", "🤔",
+  "🤗", "🙏", "👍", "👎", "👏", "✌️", "🤞", "💪",
+  "❤️", "💙", "💜", "🔥", "✨", "💯", "⭐", "🎉",
+] as const;
+
+const TOOLBAR_BUTTONS: Array<{
+  icon: any;
+  label: string;
+  action?: string;
+  value?: string;
+}> = [
+  { icon: Bold, label: "Bold", action: "bold" },
+  { icon: Italic, label: "Italic", action: "italic" },
+  { icon: Underline, label: "Underline", action: "underline" },
+  { icon: null, label: "divider" },
+  { icon: List, label: "Bullet List", action: "insertUnorderedList" },
+  { icon: ListOrdered, label: "Numbered List", action: "insertOrderedList" },
+  { icon: Quote, label: "Quote", action: "formatBlock", value: "<blockquote>" },
+  { icon: null, label: "divider" },
+  { icon: AlignLeft, label: "Align Left", action: "justifyLeft" },
+  { icon: AlignCenter, label: "Align Center", action: "justifyCenter" },
+  { icon: AlignRight, label: "Align Right", action: "justifyRight" },
+];
+
+export const RichTextEditor = memo(function RichTextEditor({
+  value,
+  onChange,
+  placeholder = "Start writing...",
+  className,
+  hideMoodSelector = false,
+}: RichTextEditorProps) {
   const [selectedMood, setSelectedMood] = useState<string>("");
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
-
-  const moods = [
-    { emoji: "😊", label: "Happy", color: "text-green-500" },
-    { emoji: "😌", label: "Calm", color: "text-blue-500" },
-    { emoji: "😰", label: "Anxious", color: "text-orange-500" },
-    { emoji: "😢", label: "Sad", color: "text-gray-500" },
-    { emoji: "🤩", label: "Excited", color: "text-purple-500" },
-    { emoji: "😡", label: "Angry", color: "text-red-500" }
-  ];
-
-  const toolbarButtons = [
-    { icon: Bold, label: "Bold", action: "bold" },
-    { icon: Italic, label: "Italic", action: "italic" },
-    { icon: Underline, label: "Underline", action: "underline" },
-    { icon: null, label: "divider" },
-    { icon: List, label: "Bullet List", action: "insertUnorderedList" },
-    { icon: ListOrdered, label: "Numbered List", action: "insertOrderedList" },
-    { icon: Quote, label: "Quote", action: "formatBlock" },
-    { icon: null, label: "divider" },
-    { icon: AlignLeft, label: "Align Left", action: "justifyLeft" },
-    { icon: AlignCenter, label: "Align Center", action: "justifyCenter" },
-    { icon: AlignRight, label: "Align Right", action: "justifyRight" },
-  ];
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const selectionRef = useRef<Range | null>(null);
 
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== value) {
@@ -60,21 +88,100 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
     }
   }, [value]);
 
-  const handleFormat = (action: string) => {
-    document.execCommand(action, false);
+  const saveSelection = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    selectionRef.current = sel.getRangeAt(0).cloneRange();
+  };
+
+  const restoreSelection = () => {
+    const sel = window.getSelection();
+    if (!sel) return;
+    sel.removeAllRanges();
+    if (selectionRef.current) {
+      sel.addRange(selectionRef.current);
+    }
+  };
+
+  const focusEditor = () => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    restoreSelection();
+  };
+
+  const handleFormat = useCallback((action: string, value?: string) => {
+    focusEditor();
+    const ok = document.execCommand(action, false, value);
+    if (!ok) {
+      // Fallback for browsers where some execCommand actions are flaky.
+      const selectedText = (window.getSelection()?.toString() || "").trim();
+      if (action === "insertUnorderedList") {
+        const item = selectedText || "List item";
+        document.execCommand("insertHTML", false, `<ul><li>${item}</li></ul>`);
+      } else if (action === "insertOrderedList") {
+        const item = selectedText || "List item";
+        document.execCommand("insertHTML", false, `<ol><li>${item}</li></ol>`);
+      } else if (action === "formatBlock" && (value === "blockquote" || value === "<blockquote>")) {
+        const content = selectedText || "Quote";
+        document.execCommand("insertHTML", false, `<blockquote>${content}</blockquote>`);
+      }
+    }
     if (editorRef.current) {
       onChange(editorRef.current.innerHTML);
     }
-  };
+  }, [onChange]);
+
+  const handleImageInsert = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const src = typeof reader.result === "string" ? reader.result : "";
+      if (!src) return;
+      focusEditor();
+      document.execCommand("insertImage", false, src);
+      if (editorRef.current) onChange(editorRef.current.innerHTML);
+    };
+    reader.readAsDataURL(file);
+  }, [onChange]);
+
+  const handleFileAttach = useCallback((file: File) => {
+    const url = URL.createObjectURL(file);
+    focusEditor();
+    document.execCommand("insertHTML", false, `<a href="${url}" target="_blank" rel="noopener noreferrer">${file.name}</a>`);
+    if (editorRef.current) onChange(editorRef.current.innerHTML);
+  }, [onChange]);
+
+  const insertEmoji = useCallback(
+    (emoji: string) => {
+      if (!editorRef.current) return;
+      editorRef.current.focus();
+      restoreSelection();
+      document.execCommand("insertText", false, emoji);
+      if (editorRef.current) onChange(editorRef.current.innerHTML);
+      setEmojiPickerOpen(false);
+    },
+    [onChange],
+  );
+
+  const stats = useMemo(() => {
+    if (!value) return { wordCount: 0, charCount: 0 };
+    const plain = htmlToPlainText(value);
+    const words = plain.split(/\s+/).filter(Boolean).length;
+    return { wordCount: words, charCount: plain.length };
+  }, [value]);
+
+  const selectedMoodEmoji = useMemo(
+    () => MOODS.find((m) => m.label === selectedMood)?.emoji,
+    [selectedMood],
+  );
 
   return (
     <div className={cn("border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800", className)}>
       {/* Toolbar */}
       <div className="bg-gray-50 dark:bg-gray-900 border-b border-gray-300 dark:border-gray-700 p-2">
-        <div className="flex flex-wrap items-center gap-1">
-          {toolbarButtons.map((button, index) => {
+        <div className="flex flex-wrap items-center gap-1 w-full">
+          {TOOLBAR_BUTTONS.map((button, index) => {
             if (button.label === "divider") {
-              return <div key={index} className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-1" />;
+              return <div key={index} className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-1 flex-shrink-0" />;
             }
 
             const Icon = button.icon!;
@@ -84,8 +191,8 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => handleFormat(button.action!)}
-                className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => handleFormat(button.action!, button.value)}
+                className="p-1.5 sm:p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
                 title={button.label}
               >
                 <Icon className="w-4 h-4 text-gray-700 dark:text-gray-300" />
@@ -93,15 +200,15 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
             );
           })}
 
-          <div className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-1" />
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-1 flex-shrink-0" />
 
           {/* Undo/Redo */}
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => document.execCommand("undo")}
-            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            onClick={() => handleFormat("undo")}
+            className="p-1.5 sm:p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
             title="Undo"
           >
             <Undo className="w-4 h-4 text-gray-700 dark:text-gray-300" />
@@ -110,30 +217,85 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => document.execCommand("redo")}
-            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            onClick={() => handleFormat("redo")}
+            className="p-1.5 sm:p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
             title="Redo"
           >
             <Redo className="w-4 h-4 text-gray-700 dark:text-gray-300" />
           </motion.button>
 
-          <div className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-1" />
+          <div className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-1 flex-shrink-0" />
 
           {/* Media Buttons */}
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onMouseDown={(e) => e.preventDefault()}
-            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            onClick={() => imageInputRef.current?.click()}
+            className="p-1.5 sm:p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
             title="Insert Image"
           >
             <Image className="w-4 h-4 text-gray-700 dark:text-gray-300" />
           </motion.button>
+          <Popover
+            open={emojiPickerOpen}
+            onOpenChange={(open) => {
+              setEmojiPickerOpen(open);
+              if (open) saveSelection();
+            }}
+          >
+            <PopoverTrigger asChild>
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  saveSelection();
+                }}
+                className="p-1.5 sm:p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+                title="Emoji keyboard"
+                aria-label="Open emoji keyboard"
+              >
+                <span aria-hidden className="flex shrink-0 items-center justify-center">
+                  <FluentEmoji emoji="😀" size={20} label="" className="shrink-0" />
+                </span>
+              </motion.button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              side="bottom"
+              sideOffset={6}
+              className="w-auto max-w-[min(100vw-2rem,20rem)] p-2"
+              onOpenAutoFocus={(e) => e.preventDefault()}
+            >
+              <div
+                className="grid grid-cols-8 gap-1 max-h-52 overflow-y-auto pr-1"
+                role="listbox"
+                aria-label="Choose an emoji"
+              >
+                {EMOJI_KEYBOARD_GRID.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    role="option"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => insertEmoji(emoji)}
+                    className="flex size-9 items-center justify-center rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    aria-label={`Insert ${emoji}`}
+                  >
+                    <FluentEmoji emoji={emoji} size={24} label={emoji} />
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onMouseDown={(e) => e.preventDefault()}
-            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            onClick={() => fileInputRef.current?.click()}
+            className="p-1.5 sm:p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
             title="Attach File"
           >
             <Paperclip className="w-4 h-4 text-gray-700 dark:text-gray-300" />
@@ -148,7 +310,7 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
             <Smile className="w-4 h-4 text-gray-600 dark:text-gray-400" />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">How are you feeling?</span>
             <div className="flex gap-2 ml-2">
-              {moods.map((mood) => (
+              {MOODS.map((mood) => (
                 <motion.button
                   key={mood.label}
                   whileHover={{ scale: 1.2 }}
@@ -161,7 +323,7 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
                   }`}
                   title={mood.label}
                 >
-                  {mood.emoji}
+                  <FluentEmoji emoji={mood.emoji} size={28} />
                 </motion.button>
               ))}
             </div>
@@ -174,25 +336,55 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
         ref={editorRef}
         contentEditable
         suppressContentEditableWarning
-        onInput={(e) => onChange(e.currentTarget.innerHTML)}
-        className="min-h-[300px] p-4 focus:outline-none text-gray-900 dark:text-gray-100 empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 dark:empty:before:text-gray-500"
+        onInput={(e) => {
+          saveSelection();
+          onChange(e.currentTarget.innerHTML);
+        }}
+        onKeyUp={saveSelection}
+        onMouseUp={saveSelection}
+        onFocus={saveSelection}
+        className="min-h-[300px] p-4 focus:outline-none text-gray-900 dark:text-gray-100 empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 dark:empty:before:text-gray-500 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6 [&_li]:my-1 [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 dark:[&_blockquote]:border-gray-600 [&_blockquote]:pl-3 [&_blockquote]:italic"
         data-placeholder={placeholder}
+      />
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleImageInsert(file);
+          e.currentTarget.value = "";
+        }}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFileAttach(file);
+          e.currentTarget.value = "";
+        }}
       />
 
       {/* Footer Stats */}
       <div className="bg-gray-50 dark:bg-gray-900 border-t border-gray-300 dark:border-gray-700 px-4 py-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
         <div className="flex items-center gap-4">
-          <span>{value ? value.replace(/<[^>]*>/g, '').split(/\s+/).filter(Boolean).length : 0} words</span>
-          <span>{value ? value.replace(/<[^>]*>/g, '').length : 0} characters</span>
+          <span>
+            {stats.wordCount} words
+          </span>
+          <span>{stats.charCount} characters</span>
         </div>
         {!hideMoodSelector && selectedMood && (
           <div className="flex items-center gap-2">
             <span>Mood:</span>
             <span className="font-medium">{selectedMood}</span>
-            <span>{moods.find(m => m.label === selectedMood)?.emoji}</span>
+            {selectedMoodEmoji ? <FluentEmoji emoji={selectedMoodEmoji} size={18} /> : null}
           </div>
         )}
       </div>
     </div>
   );
-}
+});

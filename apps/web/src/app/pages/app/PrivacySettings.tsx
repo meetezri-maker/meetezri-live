@@ -3,12 +3,10 @@ import {
   Shield,
   Lock,
   Eye,
-  EyeOff,
   Download,
   Trash2,
   FileText,
   UserX,
-  Globe,
   ArrowLeft,
   CheckCircle,
   AlertCircle,
@@ -19,30 +17,77 @@ import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useSafetyConsent } from "@/app/contexts/SafetyContext";
 import { useAuth } from "@/app/contexts/AuthContext";
-import { AppLayout } from "@/app/components/AppLayout";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+
+function csvEscape(value: unknown) {
+  const normalized = value === null || value === undefined ? "" : String(value);
+  return `"${normalized.replace(/"/g, '""')}"`;
+}
+
+function flattenForCsv(value: unknown, basePath = "", rows: Array<[string, string]> = []) {
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      rows.push([basePath || "root", ""]);
+      return rows;
+    }
+    value.forEach((item, index) => {
+      const nextPath = basePath ? `${basePath}[${index}]` : `[${index}]`;
+      flattenForCsv(item, nextPath, rows);
+    });
+    return rows;
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) {
+      rows.push([basePath || "root", ""]);
+      return rows;
+    }
+    entries.forEach(([key, nestedValue]) => {
+      const nextPath = basePath ? `${basePath}.${key}` : key;
+      flattenForCsv(nestedValue, nextPath, rows);
+    });
+    return rows;
+  }
+
+  rows.push([basePath || "root", value === null || value === undefined ? "" : String(value)]);
+  return rows;
+}
+
+function jsonToExcelFriendlyCsv(jsonValue: unknown) {
+  const rows = flattenForCsv(jsonValue);
+  const contentRows = rows.map(([field, value]) => `${csvEscape(field)},${csvEscape(value)}`);
+  return `\uFEFFField,Value\r\n${contentRows.join("\r\n")}`;
+}
 
 export function PrivacySettings() {
   const { consent, updateConsent } = useSafetyConsent();
   const { profile } = useAuth();
   
   const [settings, setSettings] = useState({
-    profileVisibility: "private",
-    showOnlineStatus: false,
+    profileVisibility: "public",
     allowAnalytics: true,
     shareProgress: false,
     allowCookies: true,
     marketingEmails: false,
-    thirdPartySharing: false
+    thirdPartySharing: false,
+    communityEnabled: true,
+    showDisplayNameInCommunity: true,
+    showAvatarInCommunity: true,
   });
 
   // Load settings from profile when component mounts or profile changes
   useEffect(() => {
     if (profile?.privacy_settings) {
+      const normalizedVisibility =
+        profile.privacy_settings.profileVisibility === "friends"
+          ? "private"
+          : profile.privacy_settings.profileVisibility ?? "public";
       setSettings(prev => ({
         ...prev,
-        ...profile.privacy_settings
+        ...profile.privacy_settings,
+        ...(normalizedVisibility ? { profileVisibility: normalizedVisibility } : {})
       }));
     }
   }, [profile]);
@@ -78,11 +123,41 @@ export function PrivacySettings() {
   const handleDownloadData = async () => {
     toast.info("Preparing your data for download...");
     try {
-      const blob = await api.exportUserData();
-      const url = window.URL.createObjectURL(blob);
+      const { blob, filename, contentType } = await api.exportUserData();
+      const isJsonPayload =
+        contentType.toLowerCase().includes("json") ||
+        (filename?.toLowerCase().endsWith(".json") ?? false);
+
+      let blobToDownload = blob;
+      let resolvedFilename = filename?.trim() || `ezri-data-export-${new Date().toISOString().split("T")[0]}.json`;
+
+      // Convert JSON exports to CSV so they open directly in Excel.
+      if (isJsonPayload) {
+        try {
+          const jsonText = await blob.text();
+          const parsedJson = JSON.parse(jsonText);
+          const csvContent = jsonToExcelFriendlyCsv(parsedJson);
+          blobToDownload = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+          resolvedFilename = resolvedFilename.replace(/\.json$/i, ".csv");
+          if (!resolvedFilename.toLowerCase().endsWith(".csv")) {
+            resolvedFilename = `ezri-data-export-${new Date().toISOString().split("T")[0]}.csv`;
+          }
+        } catch (conversionError) {
+          console.warn("Export returned JSON-like file that could not be converted to CSV:", conversionError);
+        }
+      } else if (!filename?.trim()) {
+        const fallbackExtension = contentType.includes("csv")
+          ? "csv"
+          : contentType.includes("zip")
+            ? "zip"
+            : "json";
+        resolvedFilename = `ezri-data-export-${new Date().toISOString().split("T")[0]}.${fallbackExtension}`;
+      }
+
+      const url = window.URL.createObjectURL(blobToDownload);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `ezri-data-export-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = resolvedFilename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -113,7 +188,7 @@ export function PrivacySettings() {
       
       if (finalConfirmation) {
         try {
-          await api.deleteUser();
+          await api.deleteAccount();
           toast.success('Your data has been permanently deleted.');
           // Optionally redirect to home or logout
           // window.location.href = '/';
@@ -126,8 +201,7 @@ export function PrivacySettings() {
   };
 
   return (
-    <AppLayout>
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <motion.div
@@ -179,32 +253,8 @@ export function PrivacySettings() {
                   className="px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition-colors"
                 >
                   <option value="public">Public</option>
-                  <option value="friends">Friends Only</option>
                   <option value="private">Private</option>
                 </select>
-              </div>
-
-              {/* Online Status */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800 rounded-xl transition-colors duration-300">
-                <div className="flex items-center gap-3">
-                  <Globe className="w-5 h-5 text-green-600 dark:text-green-400" />
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">Show Online Status</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Let others see when you're active</p>
-                  </div>
-                </div>
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => toggleSetting("showOnlineStatus")}
-                  className={`w-14 h-8 rounded-full transition-colors ${
-                    settings.showOnlineStatus ? "bg-green-500" : "bg-gray-300 dark:bg-slate-600"
-                  }`}
-                >
-                  <motion.div
-                    animate={{ x: settings.showOnlineStatus ? 24 : 2 }}
-                    className="w-6 h-6 bg-white rounded-full shadow-md"
-                  />
-                </motion.button>
               </div>
 
               {/* Share Progress */}
@@ -242,10 +292,10 @@ export function PrivacySettings() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">Safety & Support</h2>
               <Link
-                to="/app/settings/notification-history"
+                to="/app/settings/emergency-notifications"
                 className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium underline"
               >
-                View History
+                Emergency notice history
               </Link>
             </div>
 
@@ -494,6 +544,5 @@ export function PrivacySettings() {
           </motion.div>
         </div>
       </div>
-    </AppLayout>
   );
 }

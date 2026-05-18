@@ -28,12 +28,19 @@ export function PackageManager() {
   const [editingPlan, setEditingPlan] = useState<PlanTier | null>(null);
   const [editForm, setEditForm] = useState<Partial<SubscriptionPlan>>({});
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [paygRevenueTotal, setPaygRevenueTotal] = useState<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await api.billing.getAllSubscriptions();
-        setSubscriptions(data || []);
+        const [subs, paygSummary] = await Promise.all([
+          api.billing.getAllSubscriptions(),
+          api.billing.getAdminPaygSummary(),
+        ]);
+        setSubscriptions(subs || []);
+        setPaygRevenueTotal(
+          typeof paygSummary?.totalRevenue === "number" ? paygSummary.totalRevenue : 0
+        );
       } catch (error) {
         console.error("Failed to load subscription stats:", error);
       }
@@ -53,10 +60,10 @@ export function PackageManager() {
 
     const activeSubs = subscriptions.filter((s) => s.status === "active");
     const totalSubscribers = activeSubs.length;
-    const monthlyRevenue = activeSubs.reduce(
-      (sum, s) => sum + (s.amount || 0),
-      0
-    );
+    const monthlyRevenue = activeSubs.reduce((sum, s) => {
+      const n = s.amount != null ? Number(s.amount) : 0;
+      return sum + (Number.isFinite(n) ? n : 0);
+    }, 0);
     const averagePerUser =
       totalSubscribers > 0 ? monthlyRevenue / totalSubscribers : 0;
 
@@ -76,10 +83,12 @@ export function PackageManager() {
     };
 
     subscriptions.forEach((s) => {
+      if (s.status !== "active") return;
       const planType = s.plan_type as PlanTier | undefined;
       if (!planType || !base[planType]) return;
       base[planType].users += 1;
-      base[planType].revenue += s.amount || 0;
+      const n = s.amount != null ? Number(s.amount) : 0;
+      base[planType].revenue += Number.isFinite(n) ? n : 0;
     });
 
     return base;
@@ -163,9 +172,13 @@ export function PackageManager() {
                 <Zap className="w-8 h-8 text-amber-600" />
                 <ArrowRight className="w-5 h-5 text-amber-600 group-hover:translate-x-1 transition-transform" />
               </div>
-              <p className="text-sm text-muted-foreground mb-1">PAYG Revenue</p>
+              <p className="text-sm text-muted-foreground mb-1">PAYG Revenue (Stripe snapshot)</p>
               <p className="text-3xl font-bold text-amber-700">
-                $12.4K
+                {paygRevenueTotal === null
+                  ? "…"
+                  : paygRevenueTotal >= 1000
+                    ? `$${(paygRevenueTotal / 1000).toFixed(1)}K`
+                    : `$${paygRevenueTotal.toFixed(0)}`}
               </p>
               <p className="text-xs text-amber-600 mt-1 font-medium">
                 View detailed transactions →

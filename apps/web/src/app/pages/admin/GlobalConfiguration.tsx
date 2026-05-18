@@ -323,7 +323,16 @@ export function GlobalConfiguration() {
           ...section,
           settings: section.settings.map(setting => {
             const found = data.find((s: any) => s.key === setting.id);
-            return found ? { ...setting, value: found.value } : setting;
+            if (!found) return setting;
+            let v = found.value;
+            if (setting.type === "toggle" && typeof v !== "boolean") {
+              v = v === true || v === "true" || v === 1;
+            }
+            if (setting.type === "number" && typeof v !== "number") {
+              const n = Number(v);
+              v = Number.isFinite(n) ? n : setting.defaultValue;
+            }
+            return { ...setting, value: v };
           })
         })));
       } catch (err) {
@@ -445,7 +454,7 @@ export function GlobalConfiguration() {
             <Button
               onClick={handleReset}
               variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
+              className="border-gray-300 text-gray-700 hover:bg-gray-500"
               disabled={isLoading}
             >
               <RotateCcw className="w-4 h-4 mr-2" />

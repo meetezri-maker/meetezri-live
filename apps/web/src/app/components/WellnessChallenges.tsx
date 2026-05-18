@@ -1,284 +1,492 @@
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
+import { Skeleton } from "./ui/skeleton";
 import { motion } from "motion/react";
 import {
   Trophy,
-  Target,
-  Flame,
   Star,
-  Zap,
-  Heart,
   CheckCircle2,
-  Lock
+  Lock,
+  UserPlus,
+  UserMinus,
+  Loader2,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
+import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { SolacePanel } from "@/app/solace/SolacePanel";
 
-interface Challenge {
-  id: string;
-  title: string;
-  description: string;
-  progress: number;
-  target: number;
-  reward: number;
-  difficulty: "Easy" | "Medium" | "Hard";
-  icon: typeof Trophy;
-  color: string;
-  isCompleted: boolean;
-  isLocked: boolean;
+import {
+  mapWellnessChallengeDashboardToRows,
+  type WellnessChallengeDashboardPayload as DashboardPayload,
+  type WellnessChallengeRow as ChallengeRow,
+} from "@/app/features/wellness/challengesMapper";
+
+interface WellnessChallengesProps {
+  /** Dark cinematic shell for Solace dashboard rail */
+  variant?: "default" | "solace";
 }
 
-export function WellnessChallenges() {
-  const [challenges, setChallenges] = useState<Challenge[]>([
-    {
-      id: "daily-checkin",
-      title: "Daily Check-In Streak",
-      description: "Check in for 7 days in a row",
-      progress: 5,
-      target: 7,
-      reward: 100,
-      difficulty: "Easy",
-      icon: Flame,
-      color: "from-orange-400 to-red-500",
-      isCompleted: false,
-      isLocked: false
-    },
-    {
-      id: "meditation-master",
-      title: "Meditation Master",
-      description: "Complete 10 meditation sessions",
-      progress: 6,
-      target: 10,
-      reward: 200,
-      difficulty: "Medium",
-      icon: Star,
-      color: "from-purple-400 to-pink-500",
-      isCompleted: false,
-      isLocked: false
-    },
-    {
-      id: "breath-work",
-      title: "Breath Work Pro",
-      description: "Complete 5 breathing exercises",
-      progress: 5,
-      target: 5,
-      reward: 150,
-      difficulty: "Easy",
-      icon: Zap,
-      color: "from-blue-400 to-cyan-500",
-      isCompleted: true,
-      isLocked: false
-    },
-    {
-      id: "journal-writer",
-      title: "Journal Writer",
-      description: "Write 15 journal entries",
-      progress: 12,
-      target: 15,
-      reward: 250,
-      difficulty: "Medium",
-      icon: Heart,
-      color: "from-pink-400 to-rose-500",
-      isCompleted: false,
-      isLocked: false
-    },
-    {
-      id: "wellness-warrior",
-      title: "Wellness Warrior",
-      description: "Complete 30 wellness activities",
-      progress: 8,
-      target: 30,
-      reward: 500,
-      difficulty: "Hard",
-      icon: Trophy,
-      color: "from-amber-400 to-yellow-500",
-      isCompleted: false,
-      isLocked: false
-    },
-    {
-      id: "perfect-week",
-      title: "Perfect Week",
-      description: "Complete all daily goals for 7 days",
-      progress: 0,
-      target: 7,
-      reward: 1000,
-      difficulty: "Hard",
-      icon: Target,
-      color: "from-green-400 to-emerald-500",
-      isCompleted: false,
-      isLocked: true
-    }
-  ]);
-
-  const totalPoints = 750;
-  const currentLevel = 5;
-  const pointsToNextLevel = 250;
-
+export function WellnessChallenges({ variant = "default" }: WellnessChallengesProps) {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState({
+    totalPoints: 0,
+    currentLevel: 1,
+    pointsToNextLevel: 250,
+    levelProgressPercent: 0,
+  });
+  const [challenges, setChallenges] = useState<ChallengeRow[]>([]);
+  const [joiningId, setJoiningId] = useState<string | null>(null);
+  const solace = variant === "solace";
 
-  return (
-    <Card className="p-6 shadow-xl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Trophy className="w-6 h-6 text-primary" />
-            <h2 className="text-xl font-bold">Wellness Challenges</h2>
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const raw = (await api.wellness.getChallengesForMe()) as DashboardPayload;
+        if (cancelled) return;
+        setSummary({
+          totalPoints: raw.totalPoints ?? 0,
+          currentLevel: raw.currentLevel ?? 1,
+          pointsToNextLevel: raw.pointsToNextLevel ?? 250,
+          levelProgressPercent:
+            typeof raw.levelProgressPercent === "number"
+              ? raw.levelProgressPercent
+              : 0,
+        });
+        setChallenges(mapWellnessChallengeDashboardToRows(raw));
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Could not load challenges");
+          setChallenges([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleJoinToggle = useCallback(
+    async (challenge: ChallengeRow) => {
+      if (joiningId || challenge.isCompleted || challenge.isLocked) return;
+      setJoiningId(challenge.id);
+      try {
+        if (challenge.isJoined) {
+          await api.wellness.unjoinChallenge(challenge.id);
+          setChallenges((prev) =>
+            prev.map((c) => (c.id === challenge.id ? { ...c, isJoined: false } : c))
+          );
+        } else {
+          await api.wellness.joinChallenge(challenge.id);
+          setChallenges((prev) =>
+            prev.map((c) => (c.id === challenge.id ? { ...c, isJoined: true } : c))
+          );
+        }
+      } catch {
+        // Silently fail
+      } finally {
+        setJoiningId(null);
+      }
+    },
+    [joiningId]
+  );
+
+  const displayChallenges = useMemo(() => challenges.slice(0, 6), [challenges]);
+
+  const { totalPoints, currentLevel, pointsToNextLevel, levelProgressPercent } = summary;
+
+  if (loading) {
+    if (solace) {
+      return (
+        <SolacePanel glow="amber" soft className="p-5">
+          <div className="mb-4 flex justify-between gap-4">
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-40 bg-white/10" />
+              <Skeleton className="h-3 w-56 bg-white/5" />
+            </div>
+            <Skeleton className="h-12 w-16 rounded-xl bg-white/10" />
           </div>
-          <p className="text-sm text-muted-foreground">
+          <Skeleton className="mb-5 h-2 w-full rounded-full bg-white/10" />
+          <div className="space-y-3">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-24 w-full rounded-xl bg-white/5" />
+            ))}
+          </div>
+        </SolacePanel>
+      );
+    }
+    return (
+      <Card className="p-6 shadow-xl">
+        <div className="mb-6 flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-48" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <Skeleton className="h-14 w-24" />
+        </div>
+        <Skeleton className="mb-6 h-3 w-full rounded-full" />
+        <div className="space-y-4">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-28 w-full rounded-xl" />
+          ))}
+        </div>
+      </Card>
+    );
+  }
+
+  const content = (
+    <>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <div className="mb-2 flex items-center gap-2">
+            <Trophy
+              className={cn("h-6 w-6", solace ? "text-violet-300/90" : "text-primary")}
+            />
+            <h2
+              className={cn(
+                "text-xl font-semibold tracking-tight",
+                solace ? "font-serif text-lg text-[var(--solace-text)]" : "font-bold"
+              )}
+            >
+              Wellness Challenges
+            </h2>
+          </div>
+          <p
+            className={cn(
+              "text-sm",
+              solace ? "text-[var(--solace-muted)]" : "text-muted-foreground"
+            )}
+          >
             Complete challenges to earn points and level up
           </p>
+          {error && (
+            <p
+              className={cn(
+                "mt-2 text-sm",
+                solace ? "text-amber-300/90" : "text-amber-600 dark:text-amber-400"
+              )}
+            >
+              {error}
+            </p>
+          )}
         </div>
         <div className="text-center">
-          <div className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+          <div
+            className={cn(
+              "text-3xl font-bold",
+              solace
+                ? "bg-gradient-to-r from-violet-300 to-cyan-300 bg-clip-text text-transparent"
+                : "bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent"
+            )}
+          >
             Level {currentLevel}
           </div>
-          <div className="text-xs text-muted-foreground">{totalPoints} points</div>
+          <div
+            className={cn("text-xs", solace ? "text-[var(--solace-muted)]" : "text-muted-foreground")}
+          >
+            {totalPoints} points
+          </div>
         </div>
       </div>
 
-      {/* Level Progress */}
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium">Next Level</span>
-          <span className="text-sm text-muted-foreground">
+        <div className="mb-2 flex items-center justify-between">
+          <span
+            className={cn(
+              "text-sm font-medium",
+              solace ? "text-zinc-300" : ""
+            )}
+          >
+            Next Level
+          </span>
+          <span
+            className={cn(
+              "text-sm",
+              solace ? "text-[var(--solace-muted)]" : "text-muted-foreground"
+            )}
+          >
             {pointsToNextLevel} points needed
           </span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+        <div
+          className={cn(
+            "h-3 w-full overflow-hidden rounded-full",
+            solace ? "bg-white/[0.07]" : "bg-gray-200 dark:bg-slate-700"
+          )}
+        >
           <motion.div
             initial={{ width: 0 }}
-            animate={{ width: `${((totalPoints % 1000) / 1000) * 100}%` }}
+            animate={{
+              width: `${Math.min(100, Math.max(0, levelProgressPercent))}%`,
+            }}
             transition={{ duration: 1, ease: "easeOut" }}
-            className="h-full bg-gradient-to-r from-primary to-secondary rounded-full"
+            className={cn(
+              "h-full rounded-full",
+              solace
+                ? "bg-gradient-to-r from-violet-500/80 to-cyan-500/70"
+                : "bg-gradient-to-r from-primary to-secondary"
+            )}
           />
         </div>
       </div>
 
-      {/* Challenges Grid */}
-      <div className="space-y-4">
-        {challenges.map((challenge, index) => {
-          const Icon = challenge.icon;
-          const progressPercentage = (challenge.progress / challenge.target) * 100;
+      {displayChallenges.length === 0 ? (
+        <p
+          className={cn(
+            "py-6 text-center text-sm",
+            solace ? "text-[var(--solace-muted)]" : "text-muted-foreground"
+          )}
+        >
+          No active wellness challenges right now. Check back when your team publishes new
+          challenges, or open the full list below.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {displayChallenges.map((challenge, index) => {
+            const Icon = challenge.icon;
+            const progressPercentage = Math.min(
+              100,
+              (challenge.progress / challenge.target) * 100
+            );
 
-          return (
-            <motion.div
-              key={challenge.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.1 }}
-            >
-              <Card
-                className={`p-4 transition-all ${
-                  challenge.isLocked
-                    ? "opacity-50 cursor-not-allowed"
-                    : challenge.isCompleted
-                    ? "bg-gradient-to-r from-green-50 to-emerald-50 border-green-200"
-                    : "hover:shadow-lg cursor-pointer"
-                }`}
+            const isJoiningThis = joiningId === challenge.id;
+
+            return (
+              <motion.div
+                key={challenge.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.1 }}
               >
-                <div className="flex items-start gap-4">
-                  {/* Icon */}
-                  <motion.div
-                    whileHover={challenge.isCompleted ? { scale: 1.1, rotate: 5 } : {}}
-                    className={`p-3 rounded-xl bg-gradient-to-br ${challenge.color} text-white flex-shrink-0 relative`}
-                  >
-                    <Icon className="w-6 h-6" />
-                    {challenge.isCompleted && (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="absolute -top-1 -right-1 bg-green-500 rounded-full p-0.5"
-                      >
-                        <CheckCircle2 className="w-4 h-4 text-white" />
-                      </motion.div>
-                    )}
-                    {challenge.isLocked && (
-                      <div className="absolute -top-1 -right-1 bg-gray-500 rounded-full p-0.5">
-                        <Lock className="w-4 h-4 text-white" />
-                      </div>
-                    )}
-                  </motion.div>
+                <div
+                  className={cn(
+                    "rounded-xl p-4 transition-all",
+                    solace && "border border-white/[0.08] bg-black/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+                    !solace && "rounded-xl border bg-card",
+                    challenge.isLocked && "opacity-50",
+                    !solace &&
+                      !challenge.isLocked &&
+                      challenge.isCompleted &&
+                      "border-emerald-200 bg-gradient-to-r from-green-50 to-emerald-50 dark:border-green-800 dark:from-green-950/30 dark:to-emerald-950/30",
+                    solace &&
+                      !challenge.isLocked &&
+                      challenge.isCompleted &&
+                      "border-emerald-500/25 bg-emerald-950/25"
+                  )}
+                >
+                  <div className="flex items-start gap-4">
+                    <motion.div
+                      whileHover={challenge.isCompleted ? { scale: 1.1, rotate: 5 } : {}}
+                      className={cn(
+                        "relative flex-shrink-0 rounded-xl bg-gradient-to-br p-3 text-white",
+                        challenge.color
+                      )}
+                    >
+                      <Icon className="h-6 w-6" />
+                      {challenge.isCompleted && (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="absolute -right-1 -top-1 rounded-full bg-emerald-500 p-0.5"
+                        >
+                          <CheckCircle2 className="h-4 w-4 text-white" />
+                        </motion.div>
+                      )}
+                      {challenge.isLocked && (
+                        <div className="absolute -right-1 -top-1 rounded-full bg-gray-500 p-0.5">
+                          <Lock className="h-4 w-4 text-white" />
+                        </div>
+                      )}
+                    </motion.div>
 
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div>
-                        <h3 className="font-bold">{challenge.title}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {challenge.description}
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <div className="px-2 py-1 bg-gray-100 rounded-full text-xs font-medium">
-                          {challenge.difficulty}
-                        </div>
-                        <div className="flex items-center gap-1 text-amber-500">
-                          <Star className="w-3 h-3 fill-amber-500" />
-                          <span className="text-xs font-bold">+{challenge.reward}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    {!challenge.isLocked && (
-                      <>
-                        <div className="w-full bg-gray-200 rounded-full h-2 mb-2 overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${progressPercentage}%` }}
-                            transition={{ duration: 0.8, ease: "easeOut" }}
-                            className={`h-full rounded-full ${
-                              challenge.isCompleted
-                                ? "bg-green-500"
-                                : `bg-gradient-to-r ${challenge.color}`
-                            }`}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">
-                            {challenge.progress} / {challenge.target} completed
-                          </span>
-                          {challenge.isCompleted ? (
-                            <motion.span
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              className="text-xs font-bold text-green-600"
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-2 flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
+                            <h3
+                              className={cn(
+                                "font-bold",
+                                solace ? "text-sm text-zinc-100" : ""
+                              )}
                             >
-                              ✓ Completed
-                            </motion.span>
-                          ) : (
-                            <span className="text-xs font-medium text-primary">
-                              {Math.round(progressPercentage)}%
-                            </span>
-                          )}
+                              {challenge.title}
+                            </h3>
+                            {challenge.isJoined && !challenge.isCompleted && (
+                              <span
+                                className={cn(
+                                  "rounded-full px-1.5 py-0.5 text-xs font-medium",
+                                  solace
+                                    ? "border border-violet-400/25 bg-violet-500/15 text-violet-200"
+                                    : "bg-primary/10 text-primary"
+                                )}
+                              >
+                                Enrolled
+                              </span>
+                            )}
+                          </div>
+                          <p
+                            className={cn(
+                              "text-sm",
+                              solace ? "text-[var(--solace-muted)]" : "text-muted-foreground"
+                            )}
+                          >
+                            {challenge.description}
+                          </p>
                         </div>
-                      </>
-                    )}
-
-                    {challenge.isLocked && (
-                      <div className="text-xs text-muted-foreground italic">
-                        🔒 Complete previous challenges to unlock
+                        <div className="flex flex-shrink-0 flex-col items-end gap-1">
+                          <div
+                            className={cn(
+                              "rounded-full px-2 py-1 text-xs font-medium",
+                              solace
+                                ? "border border-white/10 bg-white/[0.04] text-zinc-300"
+                                : "bg-gray-100 dark:bg-slate-800"
+                            )}
+                          >
+                            {challenge.difficulty}
+                          </div>
+                          <div className="flex items-center gap-1 text-amber-400/90">
+                            <Star className="h-3 w-3 fill-amber-400/90" />
+                            <span className="text-xs font-bold">+{challenge.reward}</span>
+                          </div>
+                        </div>
                       </div>
-                    )}
+
+                      {!challenge.isLocked && (
+                        <>
+                          <div
+                            className={cn(
+                              "mb-2 h-2 w-full overflow-hidden rounded-full",
+                              solace ? "bg-white/[0.06]" : "bg-gray-200 dark:bg-slate-700"
+                            )}
+                          >
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${progressPercentage}%` }}
+                              transition={{ duration: 0.8, ease: "easeOut" }}
+                              className={cn(
+                                "h-full rounded-full",
+                                challenge.isCompleted
+                                  ? solace
+                                    ? "bg-emerald-500/80"
+                                    : "bg-green-500"
+                                  : `bg-gradient-to-r ${challenge.color}`
+                              )}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span
+                              className={cn(
+                                "text-xs",
+                                solace ? "text-[var(--solace-muted)]" : "text-muted-foreground"
+                              )}
+                            >
+                              {challenge.progress} / {challenge.target} completed
+                            </span>
+                            {challenge.isCompleted ? (
+                              <motion.span
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                className={cn(
+                                  "text-xs font-bold",
+                                  solace ? "text-emerald-300" : "text-green-600 dark:text-green-400"
+                                )}
+                              >
+                                ✓ Completed
+                              </motion.span>
+                            ) : (
+                              <span
+                                className={cn(
+                                  "text-xs font-medium",
+                                  solace ? "text-violet-300/90" : "text-primary"
+                                )}
+                              >
+                                {Math.round(progressPercentage)}%
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      )}
+
+                      {challenge.isLocked && (
+                        <div
+                          className={cn(
+                            "text-xs italic",
+                            solace ? "text-zinc-500" : "text-muted-foreground"
+                          )}
+                        >
+                          Complete previous challenges to unlock
+                        </div>
+                      )}
+
+                      {!challenge.isLocked && !challenge.isCompleted && (
+                        <div className="mt-2">
+                          <Button
+                            size="sm"
+                            variant={challenge.isJoined ? "outline" : "default"}
+                            className={cn(
+                              "h-7 gap-1 text-xs",
+                              solace &&
+                                "border-white/15 bg-white/[0.06] text-zinc-100 hover:bg-white/10"
+                            )}
+                            disabled={isJoiningThis}
+                            onClick={() => handleJoinToggle(challenge)}
+                          >
+                            {isJoiningThis ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : challenge.isJoined ? (
+                              <UserMinus className="h-3 w-3" />
+                            ) : (
+                              <UserPlus className="h-3 w-3" />
+                            )}
+                            {isJoiningThis ? "…" : challenge.isJoined ? "Leave" : "Join"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </Card>
-            </motion.div>
-          );
-        })}
-      </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
 
-      {/* Action Button */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6 }}
         className="mt-6"
       >
-        <Button className="w-full" variant="outline" onClick={() => navigate("/app/challenges")}>
+        <Button
+          className={cn(
+            "w-full",
+            solace &&
+              "border border-white/12 bg-transparent text-zinc-200 hover:bg-white/[0.06]"
+          )}
+          variant="outline"
+          onClick={() => navigate("/app/challenges")}
+        >
           View All Challenges
         </Button>
       </motion.div>
-    </Card>
+    </>
   );
+
+  if (solace) {
+    return (
+      <SolacePanel glow="amber" soft className="p-5">
+        {content}
+      </SolacePanel>
+    );
+  }
+
+  return <Card className="p-6 shadow-xl">{content}</Card>;
 }

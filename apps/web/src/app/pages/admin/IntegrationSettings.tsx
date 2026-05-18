@@ -21,7 +21,9 @@ import {
   Copy,
   Activity,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback, type ComponentType } from "react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 
@@ -30,7 +32,7 @@ interface Integration {
   name: string;
   category: string;
   description: string;
-  icon: any;
+  icon: ComponentType<{ className?: string }>;
   color: string;
   enabled: boolean;
   configured: boolean;
@@ -38,6 +40,53 @@ interface Integration {
   lastSync?: string;
   apiKey?: string;
   webhooks?: number;
+}
+
+function integrationIconForId(id: string): Integration["icon"] {
+  const map: Record<string, Integration["icon"]> = {
+    stripe: CreditCard,
+    sendgrid: Mail,
+    twilio: MessageSquare,
+    "google-analytics": BarChart,
+    "aws-s3": Cloud,
+    slack: Zap,
+    zapier: Plug,
+  };
+  return map[id] || Plug;
+}
+
+function serializeIntegration(i: Integration) {
+  return {
+    id: i.id,
+    name: i.name,
+    category: i.category,
+    description: i.description,
+    color: i.color,
+    enabled: i.enabled,
+    configured: i.configured,
+    status: i.status,
+    lastSync: i.lastSync,
+    apiKey: i.apiKey,
+    webhooks: i.webhooks,
+  };
+}
+
+function deserializeIntegration(raw: Record<string, unknown>): Integration {
+  const id = String(raw.id);
+  return {
+    id,
+    name: String(raw.name),
+    category: String(raw.category),
+    description: String(raw.description ?? ""),
+    icon: integrationIconForId(id),
+    color: String(raw.color ?? "from-gray-500 to-slate-600"),
+    enabled: Boolean(raw.enabled),
+    configured: raw.configured !== false,
+    status: (String(raw.status || "inactive") as Integration["status"]) || "inactive",
+    lastSync: raw.lastSync != null ? String(raw.lastSync) : undefined,
+    apiKey: raw.apiKey != null ? String(raw.apiKey) : undefined,
+    webhooks: typeof raw.webhooks === "number" ? raw.webhooks : undefined,
+  };
 }
 
 interface Webhook {
@@ -48,6 +97,99 @@ interface Webhook {
   lastTriggered: string;
   totalCalls: number;
 }
+
+const DEFAULT_INTEGRATIONS: Integration[] = [
+  {
+    id: "stripe",
+    name: "Stripe",
+    category: "Payment",
+    description: "Payment processing and subscriptions",
+    icon: CreditCard,
+    color: "from-blue-500 to-indigo-600",
+    enabled: true,
+    configured: true,
+    status: "active",
+    lastSync: "2 minutes ago",
+    apiKey: "sk_live_51H***********************************",
+    webhooks: 3,
+  },
+  {
+    id: "sendgrid",
+    name: "SendGrid",
+    category: "Email",
+    description: "Transactional email delivery",
+    icon: Mail,
+    color: "from-cyan-500 to-blue-600",
+    enabled: true,
+    configured: true,
+    status: "active",
+    lastSync: "5 minutes ago",
+    apiKey: "SG.***********************************",
+    webhooks: 2,
+  },
+  {
+    id: "twilio",
+    name: "Twilio",
+    category: "SMS",
+    description: "SMS notifications and 2FA",
+    icon: MessageSquare,
+    color: "from-red-500 to-pink-600",
+    enabled: true,
+    configured: true,
+    status: "active",
+    lastSync: "10 minutes ago",
+    apiKey: "AC***********************************",
+    webhooks: 1,
+  },
+  {
+    id: "google-analytics",
+    name: "Google Analytics",
+    category: "Analytics",
+    description: "Web analytics and tracking",
+    icon: BarChart,
+    color: "from-orange-500 to-amber-600",
+    enabled: true,
+    configured: true,
+    status: "active",
+    lastSync: "1 hour ago",
+    apiKey: "G-***********",
+  },
+  {
+    id: "aws-s3",
+    name: "AWS S3",
+    category: "Storage",
+    description: "File storage and CDN",
+    icon: Cloud,
+    color: "from-yellow-500 to-orange-600",
+    enabled: true,
+    configured: true,
+    status: "active",
+    lastSync: "30 minutes ago",
+    apiKey: "AKIA***********************************",
+  },
+  {
+    id: "slack",
+    name: "Slack",
+    category: "Communication",
+    description: "Team notifications and alerts",
+    icon: Zap,
+    color: "from-purple-500 to-pink-600",
+    enabled: false,
+    configured: false,
+    status: "inactive",
+  },
+  {
+    id: "zapier",
+    name: "Zapier",
+    category: "Automation",
+    description: "Workflow automation",
+    icon: Plug,
+    color: "from-orange-500 to-red-600",
+    enabled: false,
+    configured: false,
+    status: "inactive",
+  },
+];
 
 export function IntegrationSettings() {
   const [showApiKeys, setShowApiKeys] = useState<{ [key: string]: boolean }>({});
@@ -60,98 +202,49 @@ export function IntegrationSettings() {
   const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null);
   const [selectedWebhook, setSelectedWebhook] = useState<Webhook | null>(null);
 
-  const [integrations, setIntegrations] = useState<Integration[]>([
-    {
-      id: "stripe",
-      name: "Stripe",
-      category: "Payment",
-      description: "Payment processing and subscriptions",
-      icon: CreditCard,
-      color: "from-blue-500 to-indigo-600",
-      enabled: true,
-      configured: true,
-      status: "active",
-      lastSync: "2 minutes ago",
-      apiKey: "sk_live_51H***********************************",
-      webhooks: 3,
-    },
-    {
-      id: "sendgrid",
-      name: "SendGrid",
-      category: "Email",
-      description: "Transactional email delivery",
-      icon: Mail,
-      color: "from-cyan-500 to-blue-600",
-      enabled: true,
-      configured: true,
-      status: "active",
-      lastSync: "5 minutes ago",
-      apiKey: "SG.***********************************",
-      webhooks: 2,
-    },
-    {
-      id: "twilio",
-      name: "Twilio",
-      category: "SMS",
-      description: "SMS notifications and 2FA",
-      icon: MessageSquare,
-      color: "from-red-500 to-pink-600",
-      enabled: true,
-      configured: true,
-      status: "active",
-      lastSync: "10 minutes ago",
-      apiKey: "AC***********************************",
-      webhooks: 1,
-    },
-    {
-      id: "google-analytics",
-      name: "Google Analytics",
-      category: "Analytics",
-      description: "Web analytics and tracking",
-      icon: BarChart,
-      color: "from-orange-500 to-amber-600",
-      enabled: true,
-      configured: true,
-      status: "active",
-      lastSync: "1 hour ago",
-      apiKey: "G-***********",
-    },
-    {
-      id: "aws-s3",
-      name: "AWS S3",
-      category: "Storage",
-      description: "File storage and CDN",
-      icon: Cloud,
-      color: "from-yellow-500 to-orange-600",
-      enabled: true,
-      configured: true,
-      status: "active",
-      lastSync: "30 minutes ago",
-      apiKey: "AKIA***********************************",
-    },
-    {
-      id: "slack",
-      name: "Slack",
-      category: "Communication",
-      description: "Team notifications and alerts",
-      icon: Zap,
-      color: "from-purple-500 to-pink-600",
-      enabled: false,
-      configured: false,
-      status: "inactive",
-    },
-    {
-      id: "zapier",
-      name: "Zapier",
-      category: "Automation",
-      description: "Workflow automation",
-      icon: Plug,
-      color: "from-orange-500 to-red-600",
-      enabled: false,
-      configured: false,
-      status: "inactive",
-    },
-  ]);
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [integrationsLoading, setIntegrationsLoading] = useState(true);
+  const [newIntName, setNewIntName] = useState("");
+  const [newIntCategory, setNewIntCategory] = useState("Payment");
+  const [newIntApiKey, setNewIntApiKey] = useState("");
+  const [persisting, setPersisting] = useState(false);
+
+  const persistIntegrationList = useCallback(async (next: Integration[]) => {
+    setPersisting(true);
+    try {
+      await api.saveIntegrationsConfig(next.map(serializeIntegration));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save integrations");
+      throw e;
+    } finally {
+      setPersisting(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setIntegrationsLoading(true);
+      try {
+        const data = await api.getIntegrationsConfig();
+        if (cancelled) return;
+        if (Array.isArray(data) && data.length > 0) {
+          setIntegrations(data.map((x) => deserializeIntegration(x as Record<string, unknown>)));
+        } else {
+          setIntegrations(DEFAULT_INTEGRATIONS);
+        }
+      } catch (e) {
+        console.error(e);
+        toast.error("Failed to load integrations");
+        setIntegrations(DEFAULT_INTEGRATIONS);
+      } finally {
+        if (!cancelled) setIntegrationsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [webhooks, setWebhooks] = useState<Webhook[]>([
     {
@@ -249,11 +342,58 @@ export function IntegrationSettings() {
   ];
 
   const toggleIntegration = (id: string) => {
-    setIntegrations(
-      integrations.map((int) =>
+    setIntegrations((prev) => {
+      const prevSnapshot = prev;
+      const next = prev.map((int) =>
         int.id === id ? { ...int, enabled: !int.enabled } : int
-      )
-    );
+      );
+      void persistIntegrationList(next).catch(() => {
+        setIntegrations(prevSnapshot);
+      });
+      return next;
+    });
+  };
+
+  const submitAddIntegration = async () => {
+    const name = newIntName.trim();
+    const key = newIntApiKey.trim();
+    if (!name || !key) {
+      toast.error("Name and API key are required");
+      return;
+    }
+    const slug = name
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")
+      .slice(0, 48);
+    const id = `custom_${slug}_${Date.now().toString(36)}`;
+    const row: Integration = {
+      id,
+      name,
+      category: newIntCategory,
+      description: "Custom integration",
+      icon: integrationIconForId(id),
+      color: "from-slate-500 to-gray-600",
+      enabled: true,
+      configured: true,
+      status: "active",
+      lastSync: "just now",
+      apiKey: key,
+      webhooks: 0,
+    };
+    const prevSnapshot = integrations;
+    const next = [...integrations, row];
+    setIntegrations(next);
+    try {
+      await persistIntegrationList(next);
+      setShowAddIntegrationModal(false);
+      setNewIntName("");
+      setNewIntCategory("Payment");
+      setNewIntApiKey("");
+      toast.success("Integration added");
+    } catch {
+      setIntegrations(prevSnapshot);
+    }
   };
 
   const toggleApiKeyVisibility = (id: string) => {
@@ -337,8 +477,12 @@ export function IntegrationSettings() {
             </div>
           </div>
 
+          {integrationsLoading && (
+            <p className="text-gray-600 py-4">Loading integrations…</p>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {integrations.map((integration, index) => (
+            {!integrationsLoading && integrations.map((integration, index) => (
               <motion.div
                 key={integration.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -364,7 +508,9 @@ export function IntegrationSettings() {
                     </div>
 
                     <button
+                      type="button"
                       onClick={() => toggleIntegration(integration.id)}
+                      disabled={persisting}
                       className={`relative w-14 h-8 rounded-full transition-all ${
                         integration.enabled
                           ? "bg-gradient-to-r from-green-500 to-emerald-600"
@@ -695,6 +841,8 @@ export function IntegrationSettings() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Integration Name</label>
                   <input
                     type="text"
+                    value={newIntName}
+                    onChange={(e) => setNewIntName(e.target.value)}
                     placeholder="e.g., Stripe, SendGrid"
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500 outline-none"
                   />
@@ -702,7 +850,11 @@ export function IntegrationSettings() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                  <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500 outline-none">
+                  <select
+                    value={newIntCategory}
+                    onChange={(e) => setNewIntCategory(e.target.value)}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500 outline-none"
+                  >
                     <option>Payment</option>
                     <option>Email</option>
                     <option>SMS</option>
@@ -717,6 +869,8 @@ export function IntegrationSettings() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">API Key</label>
                   <input
                     type="password"
+                    value={newIntApiKey}
+                    onChange={(e) => setNewIntApiKey(e.target.value)}
                     placeholder="Enter API key"
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-500 outline-none"
                   />
@@ -728,6 +882,7 @@ export function IntegrationSettings() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setShowAddIntegrationModal(false)}
+                  disabled={persisting}
                   className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
                 >
                   Cancel
@@ -736,10 +891,11 @@ export function IntegrationSettings() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowAddIntegrationModal(false)}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-600 text-white font-medium"
+                  onClick={() => void submitAddIntegration()}
+                  disabled={persisting}
+                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-600 text-white font-medium disabled:opacity-50"
                 >
-                  Add Integration
+                  {persisting ? "Saving…" : "Add Integration"}
                 </motion.button>
               </div>
             </motion.div>

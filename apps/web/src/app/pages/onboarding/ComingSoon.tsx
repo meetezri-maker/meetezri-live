@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, useAnimation, useMotionTemplate, useMotionValue } from 'framer-motion';
+import { motion, useMotionValue } from 'motion/react';
 import { Input } from '@/app/components/ui/input';
 import { Button } from '@/app/components/ui/button';
 import { Send, Sparkles, Heart, Shield, Zap, CheckCircle2, ArrowRight } from 'lucide-react';
@@ -26,8 +26,8 @@ export const ComingSoon = () => {
   };
 
   return (
-    <div 
-      className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4 relative overflow-hidden"
+    <div
+      className="coming-soon-page min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4 relative overflow-hidden"
       onMouseMove={handleMouseMove}
     >
       {/* Dynamic Background */}
@@ -58,8 +58,8 @@ export const ComingSoon = () => {
           className="text-center mb-6 relative"
         >
           <div className="absolute -inset-x-20 -inset-y-10 bg-gradient-to-r from-teal-500/20 via-blue-500/20 to-purple-500/20 blur-3xl opacity-30 pointer-events-none rounded-full" />
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white via-white to-slate-400 drop-shadow-sm">
-            Meet Ezri
+          <h1 className="coming-soon-title text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white via-white to-slate-400 drop-shadow-sm">
+            Meet Solace
           </h1>
           <p className="mt-4 text-xl md:text-2xl text-slate-400 max-w-2xl mx-auto leading-relaxed font-light">
             Your personal AI companion for <span className="text-teal-400 font-medium">mental wellness</span>, <span className="text-blue-400 font-medium">growth</span>, and <span className="text-purple-400 font-medium">safety</span>.

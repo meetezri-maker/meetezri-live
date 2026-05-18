@@ -20,6 +20,7 @@ import {
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../../lib/api";
 import { format } from "date-fns";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 
 export function UserDetails() {
   const { userId } = useParams<{ userId: string }>();
@@ -61,8 +62,49 @@ export function UserDetails() {
   if (isLoading) {
     return (
       <AdminLayoutNew>
-        <div className="flex items-center justify-center h-full">
-          <p>Loading user details...</p>
+        <div className="space-y-6 max-w-7xl mx-auto">
+          <div className="h-9 w-40 bg-gray-200 rounded animate-pulse" />
+          <div className="flex items-start gap-4">
+            <div className="w-20 h-20 rounded-full bg-gray-200 animate-pulse shrink-0" />
+            <div className="space-y-2 flex-1">
+              <div className="h-8 w-56 max-w-full bg-gray-200 rounded animate-pulse" />
+              <div className="h-4 w-72 max-w-full bg-gray-100 rounded animate-pulse" />
+            </div>
+          </div>
+          <div className="grid md:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i} className="p-4 h-24 animate-pulse bg-gray-50 border-gray-200">
+                <div className="h-3 w-24 bg-gray-200 rounded mb-2" />
+                <div className="h-6 w-16 bg-gray-200 rounded" />
+              </Card>
+            ))}
+          </div>
+          <Card className="p-6 overflow-hidden">
+            <div className="h-6 w-40 bg-gray-200 rounded animate-pulse mb-4" />
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Date
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Type
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Duration
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  <AdminTableSkeletonRows columns={4} rows={6} padding="compact" />
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
       </AdminLayoutNew>
     );
@@ -124,7 +166,7 @@ export function UserDetails() {
 
         <div className="grid md:grid-cols-4 gap-4">
           <Card className="p-4">
-            <p className="text-sm text-muted-foreground mb-1">Total Sessions</p>
+            <p className="text-sm text-muted-foreground mb-1">Total Talk it out</p>
             <p className="text-2xl font-bold">{sessions.length}</p>
           </Card>
           <Card className="p-4">

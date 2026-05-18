@@ -5,16 +5,11 @@ import {
   TrendingUp,
   TrendingDown,
   Target,
-  Clock,
-  Award,
   DollarSign,
   RefreshCw,
-  Download,
   Calendar,
-  Percent,
   Heart,
   AlertCircle,
-  CheckCircle2,
 } from "lucide-react";
 import {
   LineChart,
@@ -30,122 +25,223 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  Cell,
 } from "recharts";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Card } from "@/app/components/ui/card";
-import { Button } from "@/app/components/ui/button";
+import { buttonVariants } from "@/app/components/ui/button";
+import { cn } from "@/app/components/ui/utils";
+import { api } from "../../../lib/api";
+import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
+import { datesForPreset, downloadCsv } from "@/lib/adminAnalytics";
+
+function formatStatsRangeUtc(stats: { rangeStart?: string; rangeEnd?: string } | null) {
+  if (!stats?.rangeStart || !stats?.rangeEnd) return "";
+  try {
+    const a = new Date(stats.rangeStart).toISOString().slice(0, 10);
+    const b = new Date(stats.rangeEnd).toISOString().slice(0, 10);
+    return `${a} → ${b} UTC`;
+  } catch {
+    return "";
+  }
+}
+
+function formatAnalyticsRangeLabel(from: string, to: string): string {
+  try {
+    const a = new Date(`${from}T12:00:00Z`);
+    const b = new Date(`${to}T12:00:00Z`);
+    const o: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+    return `${a.toLocaleDateString(undefined, o)} – ${b.toLocaleDateString(undefined, o)}`;
+  } catch {
+    return `${from} – ${to}`;
+  }
+}
+
+/** API userGrowth buckets are cumulative profile counts at each period end (not cohort retention). */
+function buildPeriodGrowthRows(
+  userGrowth: { month: string; users: number }[]
+): {
+  period: string;
+  cumulative: number;
+  netNewVsPrior: number | null;
+  pctOfRangeEndTotal: number;
+}[] {
+  if (!userGrowth.length) return [];
+  const cum = userGrowth.map((r) => Math.max(0, Number(r.users) || 0));
+  const end = cum[cum.length - 1] || 0;
+  return userGrowth.map((r, i) => ({
+    period: r.month,
+    cumulative: cum[i],
+    netNewVsPrior: i === 0 ? null : Math.max(0, cum[i] - cum[i - 1]),
+    pctOfRangeEndTotal: end > 0 ? Math.round((cum[i] / end) * 1000) / 10 : 0,
+  }));
+}
 
 export function RetentionMetrics() {
-  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
+  const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
+  const [stats, setStats] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Cohort Retention Analysis
-  const cohortRetentionData = [
-    { cohort: "Jan 2024", week1: 92, week2: 85, week3: 78, week4: 72, month2: 65, month3: 58 },
-    { cohort: "Feb 2024", week1: 94, week2: 87, week3: 80, week4: 74, month2: 67, month3: 60 },
-    { cohort: "Mar 2024", week1: 95, week2: 89, week3: 82, week4: 76, month2: 69, month3: 62 },
-    { cohort: "Apr 2024", week1: 93, week2: 86, week3: 79, week4: 73, month2: 66, month3: 59 },
-    { cohort: "May 2024", week1: 96, week2: 90, week3: 84, week4: 78, month2: 71, month3: 64 },
-    { cohort: "Jun 2024", week1: 97, week2: 91, week3: 85, week4: 79, month2: 72, month3: 65 },
-    { cohort: "Jul 2024", week1: 98, week2: 92, week3: 86, week4: 80, month2: 73, month3: null },
-  ];
+  const loadStats = useCallback(async (forceRefresh?: boolean) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.admin.getStats({
+        chartPeriod: "month",
+        dateFrom,
+        dateTo,
+        ...(forceRefresh ? { refresh: true } : {}),
+      });
+      setStats(data);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load retention metrics");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dateFrom, dateTo]);
 
-  // Monthly Retention Curve
-  const retentionCurveData = [
-    { month: "Month 0", retention: 100 },
-    { month: "Month 1", retention: 78 },
-    { month: "Month 2", retention: 68 },
-    { month: "Month 3", retention: 62 },
-    { month: "Month 6", retention: 54 },
-    { month: "Month 9", retention: 49 },
-    { month: "Month 12", retention: 45 },
-  ];
+  useEffect(() => {
+    void loadStats();
+  }, [loadStats]);
 
-  // Churn Rate Over Time
-  const churnRateData = [
-    { month: "Jan", churnRate: 7.2, newUsers: 890, churned: 64 },
-    { month: "Feb", churnRate: 6.8, newUsers: 1234, churned: 84 },
-    { month: "Mar", churnRate: 6.5, newUsers: 1456, churned: 95 },
-    { month: "Apr", churnRate: 5.9, newUsers: 1678, churned: 99 },
-    { month: "May", churnRate: 5.4, newUsers: 1890, churned: 102 },
-    { month: "Jun", churnRate: 5.1, newUsers: 2100, churned: 107 },
-    { month: "Jul", churnRate: 4.8, newUsers: 2340, churned: 112 },
-  ];
+  const userGrowth = (stats?.userGrowth || []) as { month: string; users: number }[];
+  const periodGrowthRows = buildPeriodGrowthRows(userGrowth);
 
-  // Trial to Paid Conversion
-  const conversionData = [
-    { week: "Week 1", trials: 500, converted: 45, rate: 9 },
-    { week: "Week 2", trials: 650, converted: 78, rate: 12 },
-    { week: "Week 3", trials: 800, converted: 112, rate: 14 },
-    { week: "Week 4", trials: 920, converted: 156, rate: 17 },
-    { week: "Week 5", trials: 1100, converted: 198, rate: 18 },
-    { week: "Week 6", trials: 1250, converted: 238, rate: 19 },
-    { week: "Week 7", trials: 1400, converted: 280, rate: 20 },
-    { week: "Week 8", trials: 1520, converted: 319, rate: 21 },
-  ];
+  const cumulativeCurveData =
+    userGrowth.length > 0
+      ? userGrowth.map((row) => ({
+          month: row.month,
+          cumulative: Math.max(0, Number(row.users) || 0),
+        }))
+      : [{ month: "—", cumulative: 0 }];
 
-  // Lifetime Value Estimates
-  const lifetimeValueData = [
-    { segment: "Power Users", ltv: 2400, retention: 89, avgSpend: 49 },
-    { segment: "Active Users", ltv: 1680, retention: 76, avgSpend: 39 },
-    { segment: "Regular Users", ltv: 960, retention: 58, avgSpend: 29 },
-    { segment: "Casual Users", ltv: 480, retention: 42, avgSpend: 19 },
-  ];
+  /** Per-bucket new signups (delta of cumulative series); x-axis starts at 2nd bucket. MoM compares consecutive deltas. */
+  const signupMomentumChart =
+    userGrowth.length > 1
+      ? userGrowth.slice(1).map((row, j) => {
+          const idx = j + 1;
+          const netNew = Math.max(
+            0,
+            Number(userGrowth[idx].users) - Number(userGrowth[idx - 1].users)
+          );
+          let momNewSignupGrowthPct: number | null = null;
+          if (idx >= 2) {
+            const prevNew = Math.max(
+              0,
+              Number(userGrowth[idx - 1].users) - Number(userGrowth[idx - 2].users)
+            );
+            if (prevNew > 0) {
+              momNewSignupGrowthPct =
+                Math.round(((netNew - prevNew) / prevNew) * 10000) / 100;
+            } else if (netNew > 0) {
+              momNewSignupGrowthPct = 100;
+            } else {
+              momNewSignupGrowthPct = 0;
+            }
+          }
+          return { month: row.month, netNew, momNewSignupGrowthPct };
+        })
+      : [];
 
-  // Win-back Opportunities
+  const onboardingDaily = (stats?.onboardingStats?.daily || []) as {
+    date: string;
+    signups: number;
+    completions: number;
+  }[];
+  const onboardingTrendData = onboardingDaily.map((d) => ({
+    day: d.date?.slice(5) ?? d.date,
+    signups: d.signups ?? 0,
+    completions: d.completions ?? 0,
+  }));
+
+  const revenueByPeriod = (stats?.revenueData || []) as { month: string; revenue: number }[];
+  const revenueChartData = revenueByPeriod.map((r) => ({
+    period: r.month,
+    revenue: Math.max(0, Number(r.revenue) || 0),
+  }));
+
+  const featureUsageChart = ((stats?.featureUsage || []) as { feature: string; usage: number }[]).map((f) => ({
+    feature: f.feature,
+    usage: Math.max(0, Math.min(100, Number(f.usage) || 0)),
+  }));
+
+  const w = stats?.winbackStats;
   const winbackData = [
-    { status: "At Risk (30 days inactive)", count: 456, potential: "$22,464" },
-    { status: "Dormant (60 days inactive)", count: 234, potential: "$11,232" },
-    { status: "Lost (90+ days inactive)", count: 123, potential: "$5,904" },
-  ];
-
-  // Retention by User Type
-  const retentionByTypeData = [
-    { type: "Trial", day7: 68, day30: 45, day90: 32 },
-    { type: "Core", day7: 82, day30: 64, day90: 48 },
-    { type: "Pro", day7: 94, day30: 85, day90: 76 },
-  ];
-
-  const stats = [
     {
-      label: "30-Day Retention",
-      value: "68%",
-      change: "+3.2%",
+      status: "Inactive 30–60 days (profile)",
+      count: w?.atRisk30 ?? 0,
+      hint: "Win-back: send a nudge or push campaign to re-engage users who went quiet.",
+    },
+    {
+      status: "Inactive 60–90 days",
+      count: w?.dormant60 ?? 0,
+      hint: "Stronger win-back or support outreach.",
+    },
+    {
+      status: "Inactive 90+ days",
+      count: w?.lost90 ?? 0,
+      hint: "Long-lapsed users; use segments + nudges or manual outreach.",
+    },
+  ];
+
+  const oc = stats?.onboardingStats;
+  const statsCards = [
+    {
+      label: "Onboarding completion (range)",
+      value: `${oc?.completionRatePercent ?? 0}%`,
+      change: "—",
       trend: "up" as const,
       icon: Users,
       color: "from-blue-500 to-cyan-600",
-      description: "vs last period",
+      description: "profiles completed / signups in range",
     },
     {
-      label: "Churn Rate",
-      value: "4.8%",
-      change: "-0.6%",
+      label: "Inactive 30–60d (profiles)",
+      value: String(w?.atRisk30 ?? 0),
+      change: "—",
       trend: "up" as const,
       icon: AlertCircle,
       color: "from-red-500 to-orange-600",
-      description: "improvement",
+      description: "by profile updated_at",
     },
     {
-      label: "Trial Conversion",
-      value: "21%",
-      change: "+2.1%",
+      label: "Total users",
+      value: (stats?.totalUsers ?? 0).toLocaleString(),
+      change: "—",
       trend: "up" as const,
       icon: Target,
       color: "from-green-500 to-emerald-600",
-      description: "to paid",
+      description: "registered profiles",
     },
     {
-      label: "Avg Lifetime Value",
-      value: "$1,380",
-      change: "+$180",
+      label: "Revenue (cash, range)",
+      value: `$${(stats?.revenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      change: "—",
       trend: "up" as const,
       icon: DollarSign,
       color: "from-purple-500 to-pink-600",
-      description: "per user",
+      description: "completed payments in range",
     },
   ];
 
-  const COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b"];
+  const userGrowthMocked =
+    Array.isArray(stats?.mockedSections) && stats.mockedSections.includes("userGrowth");
+  const revenueMocked =
+    Array.isArray(stats?.mockedSections) && stats.mockedSections.includes("revenueData");
+
+  if (error && !stats) {
+    return (
+      <AdminLayoutNew>
+        <div className="max-w-2xl mx-auto py-16">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Retention Metrics</h1>
+          <p className="text-red-600 text-sm">{error}</p>
+        </div>
+      </AdminLayoutNew>
+    );
+  }
 
   return (
     <AdminLayoutNew>
@@ -154,52 +250,79 @@ export function RetentionMetrics() {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between"
+          className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between"
         >
           <div>
             <h1 className="text-4xl font-bold text-gray-900 mb-2">
               Retention Metrics
             </h1>
             <p className="text-gray-600">
-              Cohort analysis, churn tracking, and lifetime value estimates
+              Signup momentum, cumulative user base, and onboarding — scoped to your selected dates
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              {formatAnalyticsRangeLabel(dateFrom, dateTo)} · Monthly buckets · KPIs use the API data window below.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Time Range Selector */}
-            <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1 border border-gray-200">
-              {(["7d", "30d", "90d"] as const).map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    timeRange === range
-                      ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-                      : "text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  {range === "7d" ? "7 Days" : range === "30d" ? "30 Days" : "90 Days"}
-                </button>
-              ))}
-            </div>
-
-            <Button className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-
-            <Button
-              variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-          </div>
+          <AdminAnalyticsToolbar
+            showChartPeriod={false}
+            showRangePreset={false}
+            chartPeriod="month"
+            onChartPeriodChange={() => {}}
+            rangePreset="30d"
+            onRangePresetChange={() => {}}
+            useCustomRange
+            onUseCustomRangeChange={() => {}}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            onRefresh={() => void loadStats(true)}
+            isLoading={isLoading}
+            onExport={() => {
+              if (!stats) return;
+              downloadCsv(`retention-metrics-${new Date().toISOString().slice(0, 10)}.csv`, [
+                { metric: "totalUsers", value: stats.totalUsers },
+                { metric: "onboardingCompletionPct", value: stats.onboardingStats?.completionRatePercent },
+                ...periodGrowthRows.map((r, i) => ({
+                  row: i,
+                  period: r.period,
+                  cumulativeUsers: r.cumulative,
+                  netNewVsPrior: r.netNewVsPrior,
+                  pctOfRangeEndTotal: r.pctOfRangeEndTotal,
+                })),
+              ]);
+            }}
+          />
         </motion.div>
+
+        {stats && formatStatsRangeUtc(stats) && (
+          <p className="text-sm text-gray-500">
+            Data window: {formatStatsRangeUtc(stats)} · Buckets: monthly (aligned to range)
+          </p>
+        )}
+
+        {userGrowthMocked && (
+          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            User growth series fell back to a placeholder — check API/database connectivity for live cumulative profile
+            counts.
+          </p>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, index) => (
+          {isLoading && !stats
+            ? Array.from({ length: 4 }).map((_, index) => (
+                <Card
+                  key={index}
+                  className="bg-white border-gray-200 p-6 h-36 animate-pulse"
+                >
+                  <div className="h-4 w-28 bg-gray-200 rounded mb-4" />
+                  <div className="h-8 w-20 bg-gray-200 rounded mb-2" />
+                  <div className="h-3 w-40 bg-gray-100 rounded" />
+                </Card>
+              ))
+            : statsCards.map((stat, index) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, scale: 0.9 }}
@@ -211,7 +334,7 @@ export function RetentionMetrics() {
                   <div
                     className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-lg`}
                   >
-                    <stat.icon className="w-6 h-6 text-white" />
+                    <stat.icon className="w-6 h-6 text-black" />
                   </div>
                   <div
                     className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
@@ -236,7 +359,7 @@ export function RetentionMetrics() {
           ))}
         </div>
 
-        {/* Cohort Retention Analysis */}
+        {/* Profile growth (cumulative series — not same-user cohort retention) */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -246,110 +369,53 @@ export function RetentionMetrics() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h3 className="text-xl font-bold !text-gray-900 mb-1">
-                  Cohort Retention Analysis
+                  Profile growth by period
                 </h3>
-                <p className="text-sm !text-gray-600">
-                  Retention rates by signup cohort over time
+                <p className="text-sm !text-gray-600 max-w-3xl">
+                  Cumulative profile totals at each month boundary in your range. &quot;New vs prior&quot; is the change
+                  between consecutive buckets (not classic cohort week-1/week-2 retention).
                 </p>
               </div>
-              <Calendar className="w-5 h-5 text-purple-600" />
+              <Calendar className="w-5 h-5 text-purple-600 shrink-0" aria-hidden />
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left !text-gray-700 font-medium pb-3">Cohort</th>
-                    <th className="text-center !text-gray-700 font-medium pb-3">Week 1</th>
-                    <th className="text-center !text-gray-700 font-medium pb-3">Week 2</th>
-                    <th className="text-center !text-gray-700 font-medium pb-3">Week 3</th>
-                    <th className="text-center !text-gray-700 font-medium pb-3">Week 4</th>
-                    <th className="text-center !text-gray-700 font-medium pb-3">Month 2</th>
-                    <th className="text-center !text-gray-700 font-medium pb-3">Month 3</th>
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Period
+                    </th>
+                    <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      Cumulative profiles
+                    </th>
+                    <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      New vs prior period
+                    </th>
+                    <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+                      % of range-end base
+                    </th>
                   </tr>
                 </thead>
-                <tbody>
-                  {cohortRetentionData.map((cohort, index) => (
-                    <motion.tr
-                      key={cohort.cohort}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="border-b border-gray-100"
-                    >
-                      <td className="py-3 !text-gray-900 font-medium">{cohort.cohort}</td>
-                      <td className="text-center">
-                        <span
-                          className="inline-block px-3 py-1 rounded-full text-xs font-medium"
-                          style={{
-                            backgroundColor: `rgba(34, 197, 94, ${cohort.week1 / 100})`,
-                            color: cohort.week1 > 80 ? "#fff" : "#000",
-                          }}
-                        >
-                          {cohort.week1}%
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <span
-                          className="inline-block px-3 py-1 rounded-full text-xs font-medium"
-                          style={{
-                            backgroundColor: `rgba(34, 197, 94, ${cohort.week2 / 100})`,
-                            color: cohort.week2 > 80 ? "#fff" : "#000",
-                          }}
-                        >
-                          {cohort.week2}%
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <span
-                          className="inline-block px-3 py-1 rounded-full text-xs font-medium"
-                          style={{
-                            backgroundColor: `rgba(34, 197, 94, ${cohort.week3 / 100})`,
-                            color: cohort.week3 > 70 ? "#fff" : "#000",
-                          }}
-                        >
-                          {cohort.week3}%
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <span
-                          className="inline-block px-3 py-1 rounded-full text-xs font-medium"
-                          style={{
-                            backgroundColor: `rgba(34, 197, 94, ${cohort.week4 / 100})`,
-                            color: cohort.week4 > 70 ? "#fff" : "#000",
-                          }}
-                        >
-                          {cohort.week4}%
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <span
-                          className="inline-block px-3 py-1 rounded-full text-xs font-medium"
-                          style={{
-                            backgroundColor: `rgba(34, 197, 94, ${cohort.month2 / 100})`,
-                            color: cohort.month2 > 60 ? "#fff" : "#000",
-                          }}
-                        >
-                          {cohort.month2}%
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        {cohort.month3 ? (
-                          <span
-                            className="inline-block px-3 py-1 rounded-full text-xs font-medium"
-                            style={{
-                              backgroundColor: `rgba(34, 197, 94, ${cohort.month3 / 100})`,
-                              color: cohort.month3 > 60 ? "#fff" : "#000",
-                            }}
-                          >
-                            {cohort.month3}%
-                          </span>
-                        ) : (
-                          <span className="text-gray-500 text-xs">-</span>
-                        )}
-                      </td>
-                    </motion.tr>
-                  ))}
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {isLoading && !stats ? (
+                    <AdminTableSkeletonRows columns={4} rows={6} padding="comfortable" />
+                  ) : (
+                    periodGrowthRows.map((row, rowIdx) => (
+                      <tr key={`growth-${rowIdx}-${String(row.period)}`} className="border-b border-gray-100">
+                        <td className="py-3 px-6 !text-gray-900 font-medium">{row.period}</td>
+                        <td className="text-right px-6 tabular-nums">{row.cumulative.toLocaleString()}</td>
+                        <td className="text-right px-6 tabular-nums text-gray-700">
+                          {row.netNewVsPrior === null ? (
+                            <span className="text-gray-400">—</span>
+                          ) : (
+                            row.netNewVsPrior.toLocaleString()
+                          )}
+                        </td>
+                        <td className="text-right px-6 tabular-nums text-gray-700">{row.pctOfRangeEndTotal}%</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -367,25 +433,45 @@ export function RetentionMetrics() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
-                    Monthly Retention Curve
+                  <h3 className="text-xl font-bold text-black mb-1">
+                    Cumulative user base
                   </h3>
-                  <p className="text-sm text-gray-400">User retention over 12 months</p>
+                  <p className="text-sm text-gray-400">
+                    Total profiles with <span className="italic">created_at</span> before each month end (from stats
+                    series)
+                  </p>
                 </div>
                 <Heart className="w-5 h-5 text-pink-400" />
               </div>
 
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={retentionCurveData}>
+              <ResponsiveContainer width="100%" height={300} debounce={50}>
+                <AreaChart
+                  data={cumulativeCurveData}
+                  margin={{ top: 8, right: 12, left: 8, bottom: 8 }}
+                >
                   <defs>
-                    <linearGradient id="colorRetention" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="colorRetentionRm" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#ec4899" stopOpacity={0.8} />
                       <stop offset="95%" stopColor="#ec4899" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                  <XAxis dataKey="month" stroke="#9ca3af" />
-                  <YAxis stroke="#9ca3af" domain={[0, 100]} />
+                  <XAxis
+                    dataKey="month"
+                    stroke="#9ca3af"
+                    tick={{ fontSize: 11 }}
+                    angle={-35}
+                    textAnchor="end"
+                    height={64}
+                    interval="preserveStartEnd"
+                    minTickGap={24}
+                  />
+                  <YAxis
+                    stroke="#9ca3af"
+                    tick={{ fontSize: 11 }}
+                    width={48}
+                    domain={[0, "auto"]}
+                  />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "#1f2937",
@@ -393,13 +479,16 @@ export function RetentionMetrics() {
                       borderRadius: "8px",
                       color: "#fff",
                     }}
+                    formatter={(v: number) => [v.toLocaleString(), "Profiles"]}
                   />
                   <Area
+                    isAnimationActive={false}
                     type="monotone"
-                    dataKey="retention"
+                    dataKey="cumulative"
                     stroke="#ec4899"
                     fillOpacity={1}
-                    fill="url(#colorRetention)"
+                    fill="url(#colorRetentionRm)"
+                    name="Cumulative profiles"
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -415,53 +504,89 @@ export function RetentionMetrics() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
-                    Churn Rate Trend
+                  <h3 className="text-xl font-bold text-black mb-1">
+                    Signup momentum
                   </h3>
-                  <p className="text-sm text-gray-400">Monthly churn percentage</p>
+                  <p className="text-sm text-gray-400">
+                    New profiles per bucket (delta of cumulative counts). Line = period-over-period % change in those
+                    signups.
+                  </p>
                 </div>
                 <AlertCircle className="w-5 h-5 text-red-400" />
               </div>
 
-              <ResponsiveContainer width="100%" height={300}>
-                <ComposedChart data={churnRateData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                  <XAxis dataKey="month" stroke="#9ca3af" />
-                  <YAxis yAxisId="left" stroke="#9ca3af" />
-                  <YAxis yAxisId="right" orientation="right" stroke="#9ca3af" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#1f2937",
-                      border: "1px solid #374151",
-                      borderRadius: "8px",
-                      color: "#fff",
-                    }}
-                  />
-                  <Legend />
-                  <Bar
-                    yAxisId="right"
-                    dataKey="newUsers"
-                    fill="#3b82f6"
-                    radius={[8, 8, 0, 0]}
-                    name="New Users"
-                  />
-                  <Line
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="churnRate"
-                    stroke="#ef4444"
-                    strokeWidth={3}
-                    name="Churn Rate %"
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
+              {signupMomentumChart.length === 0 ? (
+                <p className="text-sm text-gray-500 py-12 text-center">
+                  Need at least two monthly buckets in the range to chart signup deltas.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height={300} debounce={50}>
+                  <ComposedChart
+                    data={signupMomentumChart}
+                    margin={{ top: 8, right: 12, left: 8, bottom: 8 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                    <XAxis
+                      dataKey="month"
+                      stroke="#9ca3af"
+                      tick={{ fontSize: 11 }}
+                      angle={-35}
+                      textAnchor="end"
+                      height={64}
+                      interval="preserveStartEnd"
+                      minTickGap={24}
+                    />
+                    <YAxis
+                      yAxisId="left"
+                      stroke="#9ca3af"
+                      tick={{ fontSize: 11 }}
+                      width={44}
+                      domain={[0, "auto"]}
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      stroke="#9ca3af"
+                      tick={{ fontSize: 11 }}
+                      width={48}
+                      domain={["auto", "auto"]}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#1f2937",
+                        border: "1px solid #374151",
+                        borderRadius: "8px",
+                        color: "#fff",
+                      }}
+                    />
+                    <Legend />
+                    <Bar
+                      isAnimationActive={false}
+                      yAxisId="left"
+                      dataKey="netNew"
+                      fill="#3b82f6"
+                      radius={[8, 8, 0, 0]}
+                      name="New signups"
+                    />
+                    <Line
+                      isAnimationActive={false}
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="momNewSignupGrowthPct"
+                      stroke="#ef4444"
+                      strokeWidth={3}
+                      connectNulls
+                      name="Δ signups vs prior %"
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
             </Card>
           </motion.div>
         </div>
 
-        {/* Trial Conversion & LTV */}
+        {/* Onboarding (range) & Revenue by period */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Trial to Paid Conversion */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -470,52 +595,63 @@ export function RetentionMetrics() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
-                    Trial to Paid Conversion
+                  <h3 className="text-xl font-bold text-black mb-1">
+                    Onboarding (daily in range)
                   </h3>
-                  <p className="text-sm text-gray-400">Conversion rate over time</p>
+                  <p className="text-sm text-gray-400">
+                    Signups vs profile completions per day from admin stats (same window as KPIs)
+                  </p>
                 </div>
                 <Target className="w-5 h-5 text-green-400" />
               </div>
 
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={conversionData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                  <XAxis dataKey="week" stroke="#9ca3af" />
-                  <YAxis yAxisId="left" stroke="#9ca3af" />
-                  <YAxis yAxisId="right" orientation="right" stroke="#9ca3af" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#1f2937",
-                      border: "1px solid #374151",
-                      borderRadius: "8px",
-                      color: "#fff",
-                    }}
-                  />
-                  <Legend />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="rate"
-                    stroke="#10b981"
-                    strokeWidth={3}
-                    dot={{ fill: "#10b981", r: 5 }}
-                    name="Conversion Rate %"
-                  />
-                  <Line
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="converted"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    name="Converted Users"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              {onboardingTrendData.length === 0 ? (
+                <p className="text-sm text-gray-500 py-12 text-center">No onboarding daily rows for this range.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={300} debounce={50}>
+                  <LineChart data={onboardingTrendData} margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                    <XAxis
+                      dataKey="day"
+                      stroke="#9ca3af"
+                      tick={{ fontSize: 10 }}
+                      interval="preserveStartEnd"
+                      minTickGap={8}
+                    />
+                    <YAxis stroke="#9ca3af" tick={{ fontSize: 11 }} width={36} domain={[0, "auto"]} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#1f2937",
+                        border: "1px solid #374151",
+                        borderRadius: "8px",
+                        color: "#fff",
+                      }}
+                    />
+                    <Legend />
+                    <Line
+                      isAnimationActive={false}
+                      type="monotone"
+                      dataKey="signups"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      dot={false}
+                      name="Signups"
+                    />
+                    <Line
+                      isAnimationActive={false}
+                      type="monotone"
+                      dataKey="completions"
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      dot={false}
+                      name="Completions"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </Card>
           </motion.div>
 
-          {/* Lifetime Value */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -524,39 +660,61 @@ export function RetentionMetrics() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
-                    Lifetime Value by Segment
+                  <h3 className="text-xl font-bold text-black mb-1">
+                    Revenue by period
                   </h3>
-                  <p className="text-sm text-gray-400">LTV estimates per user type</p>
+                  <p className="text-sm text-gray-400">
+                    Completed payment volume per bucket (from admin revenue series; matches chart period)
+                  </p>
                 </div>
                 <DollarSign className="w-5 h-5 text-yellow-400" />
               </div>
 
-              <div className="space-y-4">
-                {lifetimeValueData.map((segment, index) => (
-                  <div key={segment.segment} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-white font-medium">{segment.segment}</span>
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm text-gray-400">
-                          {segment.retention}% retention
-                        </span>
-                        <span className="text-lg font-bold text-white">
-                          ${segment.ltv.toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="h-3 bg-white/10 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(segment.ltv / 2400) * 100}%` }}
-                        transition={{ duration: 1, delay: index * 0.1 }}
-                        className="h-full bg-gradient-to-r from-yellow-500 to-orange-600 rounded-full"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {revenueMocked && (
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-3">
+                  Revenue series used a fallback aggregate — detailed per-period rows were unavailable.
+                </p>
+              )}
+              {revenueChartData.length === 0 ? (
+                <p className="text-sm text-gray-500 py-12 text-center">No revenue rows for this chart period.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={300} debounce={50}>
+                  <BarChart data={revenueChartData} margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                    <XAxis
+                      dataKey="period"
+                      stroke="#9ca3af"
+                      tick={{ fontSize: 11 }}
+                      angle={-30}
+                      textAnchor="end"
+                      height={56}
+                    />
+                    <YAxis
+                      stroke="#9ca3af"
+                      tick={{ fontSize: 11 }}
+                      width={44}
+                      domain={[0, "auto"]}
+                      tickFormatter={(v: number) => `$${v}`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#1f2937",
+                        border: "1px solid #374151",
+                        borderRadius: "8px",
+                        color: "#fff",
+                      }}
+                      formatter={(v: number) => [`$${v.toLocaleString()}`, "Revenue"]}
+                    />
+                    <Bar
+                      isAnimationActive={false}
+                      dataKey="revenue"
+                      fill="#eab308"
+                      radius={[8, 8, 0, 0]}
+                      name="Revenue (USD)"
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </Card>
           </motion.div>
         </div>
@@ -572,29 +730,32 @@ export function RetentionMetrics() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
+                  <h3 className="text-xl font-bold text-black mb-1">
                     Win-back Opportunities
                   </h3>
                   <p className="text-sm text-gray-400">
-                    Inactive users and revenue potential
+                    Current snapshot from profile activity (not tied to the date range above)
                   </p>
                 </div>
                 <RefreshCw className="w-5 h-5 text-cyan-400" />
               </div>
 
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                A <span className="font-medium text-gray-700">win-back campaign</span> is outreach to bring back
+                inactive users (email, push, or in-app nudges). This screen only shows counts; it does not send
+                messages. Use Nudge Management to create templates and target segments.
+              </p>
+
               <div className="space-y-4">
                 {winbackData.map((item, index) => (
-                  <motion.div
+                  <div
                     key={item.status}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.5 + index * 0.1 }}
                     className="bg-white/5 rounded-xl p-4 border border-white/10 hover:bg-white/10 transition-all"
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div
-                          className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
                             index === 0
                               ? "bg-yellow-500/20"
                               : index === 1
@@ -612,32 +773,34 @@ export function RetentionMetrics() {
                             }`}
                           />
                         </div>
-                        <div>
-                          <h4 className="font-semibold text-white text-sm">
+                        <div className="min-w-0">
+                          <h4 className="font-semibold text-black text-sm">
                             {item.status}
                           </h4>
                           <p className="text-xs text-gray-400">{item.count} users</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-white">{item.potential}</p>
-                        <p className="text-xs text-gray-400">potential revenue</p>
-                      </div>
+                      <p className="text-xs text-gray-400 leading-snug text-right max-w-[min(100%,20rem)]">
+                        {item.hint}
+                      </p>
                     </div>
-                    <Button
-                      size="sm"
-                      className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white"
-                    >
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Launch Win-back Campaign
-                    </Button>
-                  </motion.div>
+                  </div>
                 ))}
               </div>
+
+              <Link
+                to="/admin/nudge-management"
+                className={cn(
+                  buttonVariants({ size: "default" }),
+                  "mt-4 w-full justify-center bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-black"
+                )}
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Open Nudge Management (win-back)
+              </Link>
             </Card>
           </motion.div>
 
-          {/* Retention by User Type */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -646,35 +809,53 @@ export function RetentionMetrics() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
-                    Retention by User Type
+                  <h3 className="text-xl font-bold text-black mb-1">
+                    Platform activity mix
                   </h3>
                   <p className="text-sm text-gray-400">
-                    Retention rates at key milestones
+                    Relative feature usage (normalized index from totals in admin stats — not retention by plan tier)
                   </p>
                 </div>
                 <Users className="w-5 h-5 text-blue-400" />
               </div>
 
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={retentionByTypeData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                  <XAxis dataKey="type" stroke="#9ca3af" />
-                  <YAxis stroke="#9ca3af" domain={[0, 100]} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#1f2937",
-                      border: "1px solid #374151",
-                      borderRadius: "8px",
-                      color: "#fff",
-                    }}
-                  />
-                  <Legend />
-                  <Bar dataKey="day7" fill="#8b5cf6" name="7-Day" radius={[8, 8, 0, 0]} />
-                  <Bar dataKey="day30" fill="#3b82f6" name="30-Day" radius={[8, 8, 0, 0]} />
-                  <Bar dataKey="day90" fill="#10b981" name="90-Day" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {featureUsageChart.length === 0 ? (
+                <p className="text-sm text-gray-500 py-12 text-center">No feature usage data.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={300} debounce={50}>
+                  <BarChart
+                    data={featureUsageChart}
+                    layout="vertical"
+                    margin={{ top: 8, right: 24, left: 8, bottom: 8 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                    <XAxis type="number" stroke="#9ca3af" domain={[0, 100]} tick={{ fontSize: 11 }} />
+                    <YAxis
+                      type="category"
+                      dataKey="feature"
+                      stroke="#9ca3af"
+                      width={120}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#1f2937",
+                        border: "1px solid #374151",
+                        borderRadius: "8px",
+                        color: "#fff",
+                      }}
+                      formatter={(v: number) => [`${v}%`, "Relative usage"]}
+                    />
+                    <Bar
+                      isAnimationActive={false}
+                      dataKey="usage"
+                      fill="#6366f1"
+                      name="Usage index"
+                      radius={[0, 8, 8, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </Card>
           </motion.div>
         </div>

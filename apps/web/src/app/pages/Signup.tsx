@@ -5,7 +5,8 @@ import { PhoneInput } from "../components/ui/phone-input";
 import { Card } from "../components/ui/card";
 import { Label } from "../components/ui/label";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Heart, CheckCircle2, ArrowRight, Sparkles, Loader2 } from "lucide-react";
+import { CheckCircle2, ArrowRight, Sparkles, Loader2 } from "lucide-react";
+import { BrandLogo } from "../components/BrandLogo";
 import { motion } from "motion/react";
 import { FloatingElement } from "../components/FloatingElement";
 import { PublicNav } from "../components/PublicNav";
@@ -19,6 +20,7 @@ import * as z from "zod";
 import {
   resolveVerificationRedirectForFlow,
 } from "@/lib/verificationRedirect";
+import { PasswordStrengthMeter } from "../components/ui/PasswordStrengthMeter";
 import {
   Form,
   FormControl,
@@ -32,6 +34,10 @@ const signupSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
   lastName: z.string().min(2, "Last name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
+  age: z.string().refine((val) => {
+    const num = parseInt(val);
+    return !isNaN(num) && num >= 18;
+  }, "You must be 18+ to create an account"),
   password: z.string().min(8, "Password must be at least 8 characters"),
   confirmPassword: z.string()
 }).refine((data) => data.password === data.confirmPassword, {
@@ -54,8 +60,9 @@ export function Signup() {
   });
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [trialDetailsLoading, setTrialDetailsLoading] = useState(false);
+  const isExactContactPhone = (value: string) => /^\+\d{12}$/.test(value.trim());
   const contactValid = trialContact.name.trim().length >= 2 
-    && /^\+?\d{7,}$/.test(trialContact.phone.trim())
+    && isExactContactPhone(trialContact.phone)
     && trialContact.relationship.trim().length >= 2;
 
   const form = useForm<SignupFormValues>({
@@ -65,6 +72,7 @@ export function Signup() {
       firstName: "",
       lastName: "",
       email: "",
+      age: "",
       password: "",
       confirmPassword: "",
     },
@@ -117,10 +125,16 @@ export function Signup() {
 
   const handleGoogleLogin = async () => {
     try {
+      await supabase.auth.signOut({ scope: "global" }).catch(() => undefined);
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            prompt: "select_account",
+            access_type: "offline",
+          },
         },
       });
       if (error) throw error;
@@ -188,13 +202,13 @@ export function Signup() {
       if (selectedPlan === 'trial') {
         // For free trial: create account client-side so a session is established immediately
         
-        const {
-          emailRedirectTo: redirectUrl,
-          targetPath,
-          baseUrl,
-          isLocal,
-          source,
-        } = resolveVerificationRedirectForFlow("trial");
+        // Trial hardening: always use the *current browser origin* for email redirects.
+        // This prevents any env/config mismatch from forcing production URLs during local dev.
+        const redirectUrl = `${window.location.origin}/app/user-profile`;
+        const targetPath = "/app/user-profile";
+        const baseUrl = window.location.origin;
+        const isLocal = true;
+        const source = "window.location.origin(trial_hardcode)";
         
         // Required debug logging: exact emailRedirectTo passed to Supabase.
         console.log("Trial signup: supabase.auth.signUp emailRedirectTo (exact):", redirectUrl, {
@@ -219,8 +233,10 @@ export function Signup() {
             data: {
               first_name: data.firstName,
               last_name: data.lastName,
+              age: data.age,
               email_verification_required: true,
               signup_type: 'trial',
+              signup_source: 'app',
             },
           },
         });
@@ -241,6 +257,7 @@ export function Signup() {
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
+        age: data.age,
         stripe_session_id: stripeSessionId || undefined
       });
 
@@ -289,7 +306,7 @@ export function Signup() {
     {
       icon: CheckCircle2,
       title: "24/7 Access",
-      description: "Connect with Ezri anytime, anywhere"
+      description: "Connect with Solace anytime, anywhere"
     },
     {
       icon: CheckCircle2,
@@ -333,9 +350,9 @@ export function Signup() {
               initial={{ scale: 0, rotate: -180 }}
               animate={{ scale: 1, rotate: 0 }}
               transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.2 }}
-              className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center mb-6 shadow-xl"
+              className="flex items-center justify-center mb-6"
             >
-              <Heart className="w-8 h-8 text-white" fill="white" />
+              <BrandLogo heightClass="h-16" />
             </motion.div>
             
             <motion.div
@@ -355,7 +372,7 @@ export function Signup() {
                 </motion.div>
               </div>
               <p className="text-muted-foreground mb-8 text-lg">
-                Join thousands who trust Ezri for their mental health and wellbeing
+                Join thousands who trust Solace for their mental health and wellbeing
               </p>
             </motion.div>
             
@@ -529,6 +546,32 @@ export function Signup() {
                     <motion.div
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.425 }}
+                    >
+                      <FormField
+                        control={form.control}
+                        name="age"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Age</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                min="18"
+                                placeholder="18"
+                                className="bg-input-background transition-all focus:scale-[1.02]"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </motion.div>
+                    
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.45 }}
                     >
                       <FormField
@@ -545,6 +588,7 @@ export function Signup() {
                                 {...field}
                               />
                             </FormControl>
+                            <PasswordStrengthMeter password={field.value ?? ""} />
                             <FormMessage />
                           </FormItem>
                         )}
@@ -631,8 +675,8 @@ export function Signup() {
                         onChange={(value) => setTrialContact({ ...trialContact, phone: value || '' })}
                         placeholder="Phone number"
                       />
-                      {trialContact.phone && !/^\+?\d{7,}$/.test(trialContact.phone.trim()) && (
-                        <p className="text-xs text-red-600 mt-1">Enter a valid phone number</p>
+                      {trialContact.phone && !isExactContactPhone(trialContact.phone) && (
+                        <p className="text-xs text-red-600 mt-1">Use country code and exactly 12 digits total</p>
                       )}
                     </div>
                     <div className="space-y-2">
@@ -675,7 +719,7 @@ export function Signup() {
                           if (!contactValid) {
                             const errors = [];
                             if (trialContact.name.trim().length < 2) errors.push("name (minimum 2 characters)");
-                            if (!/^\+?\d{7,}$/.test(trialContact.phone.trim())) errors.push("phone (minimum 7 digits)");
+                            if (!isExactContactPhone(trialContact.phone)) errors.push("phone (country code + exactly 12 digits)");
                             if (trialContact.relationship.trim().length < 2) errors.push("relationship (minimum 2 characters)");
                             toast.error(`Please complete emergency contact details correctly: ${errors.join(", ")}`);
                             return;
@@ -711,13 +755,11 @@ export function Signup() {
                                     action: {
                                       label: "Resend Email",
                                       onClick: async () => {
-                                        const {
-                                          emailRedirectTo: redirectUrl,
-                                          targetPath,
-                                          baseUrl,
-                                          isLocal,
-                                          source,
-                                        } = resolveVerificationRedirectForFlow("trial");
+                                        const redirectUrl = `${window.location.origin}/app/user-profile`;
+                                        const targetPath = "/app/user-profile";
+                                        const baseUrl = window.location.origin;
+                                        const isLocal = true;
+                                        const source = "window.location.origin(trial_hardcode)";
 
                                         // Required debug logging: exact emailRedirectTo passed to Supabase.
                                         console.log("Trial retry resend: supabase.auth.resend emailRedirectTo (exact):", redirectUrl, {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -11,7 +11,7 @@ import {
   Filter,
   Download,
   MoreVertical,
-  Eye,
+  Info,
   Mail,
   Ban,
   CheckCircle2,
@@ -21,6 +21,8 @@ import {
   UserX,
   Shield,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   SlidersHorizontal,
   X,
   RefreshCw,
@@ -30,6 +32,8 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../../lib/api";
 import { format } from "date-fns";
+import { toast } from "sonner";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 
 interface User {
   id: string;
@@ -61,17 +65,27 @@ import {
 
 export function UserManagement() {
   const [users, setUsers] = useState<User[]>([]);
+  const [realCounts, setRealCounts] = useState<{
+    total: number;
+    active: number;
+    suspended: number;
+    inactive: number;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isBackgroundLoading, setIsBackgroundLoading] = useState(false);
+  const [nextPage, setNextPage] = useState<number | null>(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterType>("all");
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
   const [subscriptionFilter, setSubscriptionFilter] = useState<SubscriptionFilter>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [sortField, setSortField] = useState<SortField>("name");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [sortField, setSortField] = useState<SortField>("joinDate");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [addUserSubmitting, setAddUserSubmitting] = useState(false);
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -96,36 +110,98 @@ export function UserManagement() {
     subscription: "trial",
     organization: "",
   });
-  const usersPerPage = 10;
+  const usersPerPage = pageSize;
+  const usersFirstLoad = useRef(true);
+  const fetchAbortRef = useRef<AbortController | null>(null);
+  const hasStartedInitialFetchRef = useRef(false);
 
-  const fetchUsers = async () => {
+  const mapApiUser = (u: any): User => ({
+    id: u.id,
+    name: u.full_name || u.email.split("@")[0],
+    email: u.email,
+    status: u.status || "active",
+    joinDate: u.created_at,
+    sessions: typeof u.session_count === "number" ? u.session_count : 0,
+    lastActive: u.last_active || u.updated_at,
+    riskLevel: (u.risk_level as User["riskLevel"]) || "low",
+    subscription: u.subscription || "trial",
+    organization: u.organization || "",
+  });
+
+  const fetchFirstPage = async () => {
     try {
-      setIsLoading(true);
-      const data = await api.admin.getUsers();
-      
-      const mappedUsers = data.map((u: any) => ({
-        id: u.id,
-        name: u.full_name || u.email.split('@')[0],
-        email: u.email,
-        status: u.status || 'active',
-        joinDate: u.created_at,
-        sessions: typeof u.session_count === "number" ? u.session_count : 0,
-        lastActive: u.last_active || u.updated_at,
-        riskLevel: (u.risk_level as User["riskLevel"]) || 'low',
-        subscription: u.subscription || 'trial',
-        organization: u.organization || ''
-      }));
-      setUsers(mappedUsers);
+      // Cancel any in-flight fetch (e.g. refresh / re-mount).
+      fetchAbortRef.current?.abort();
+      fetchAbortRef.current = new AbortController();
+
+      if (usersFirstLoad.current) setIsLoading(true);
+
+      // Fetch real counts and first page of users in parallel.
+      const FIRST_PAGE_LIMIT = 100;
+      const [first, counts] = await Promise.all([
+        api.admin.getUsers({ page: 1, limit: FIRST_PAGE_LIMIT }),
+        api.admin.getUserCounts().catch(() => null),
+      ]);
+      const mappedFirst = (Array.isArray(first) ? first : []).map(mapApiUser);
+      setUsers(mappedFirst);
+      setNextPage(mappedFirst.length < FIRST_PAGE_LIMIT ? null : 2);
+      if (counts) setRealCounts(counts);
+
+      if (usersFirstLoad.current) {
+        setIsLoading(false);
+        usersFirstLoad.current = false;
+      }
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       console.error("Failed to fetch users:", error);
     } finally {
       setIsLoading(false);
+      setIsBackgroundLoading(false);
+    }
+  };
+
+  const loadMoreUsers = async () => {
+    if (!nextPage) return;
+    try {
+      setIsBackgroundLoading(true);
+      const PAGE_LIMIT = 250;
+      const page = nextPage;
+      const chunk = await api.admin.getUsers({ page, limit: PAGE_LIMIT });
+      const rows = (Array.isArray(chunk) ? chunk : []).map(mapApiUser);
+      setUsers((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        const next = [...prev];
+        for (const r of rows) {
+          if (!seen.has(r.id)) next.push(r);
+        }
+        return next;
+      });
+      setNextPage(rows.length < PAGE_LIMIT ? null : page + 1);
+    } catch (error) {
+      console.error("Failed to load more users:", error);
+    } finally {
+      setIsBackgroundLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchUsers();
+    // React StrictMode in dev runs effects twice; guard to avoid duplicate API calls.
+    if (hasStartedInitialFetchRef.current) return;
+    hasStartedInitialFetchRef.current = true;
+    fetchFirstPage();
+    return () => {
+      fetchAbortRef.current?.abort();
+    };
   }, []);
+
+  const refreshCounts = async () => {
+    try {
+      const counts = await api.admin.getUserCounts();
+      setRealCounts(counts);
+    } catch {
+      // best-effort
+    }
+  };
 
   const handleAction = async (userId: string, action: 'suspend' | 'activate' | 'delete' | 'email') => {
     const onConfirm = async () => {
@@ -133,20 +209,23 @@ export function UserManagement() {
         if (action === 'delete') {
           await api.admin.deleteUser(userId);
           setUsers(users.filter((u) => u.id !== userId));
+          refreshCounts();
         } else if (action === 'suspend') {
           await api.admin.updateUser(userId, { status: 'suspended' });
           setUsers(users.map((u) => (u.id === userId ? { ...u, status: 'suspended' } : u)));
+          refreshCounts();
         } else if (action === 'activate') {
           await api.admin.updateUser(userId, { status: 'active' });
           setUsers(users.map((u) => (u.id === userId ? { ...u, status: 'active' } : u)));
+          refreshCounts();
         } else if (action === 'email') {
           const user = users.find((u) => u.id === userId);
           if (!user) {
             throw new Error("User not found");
           }
-          const subject = "Message from Ezri Admin";
-          const text = `Hello ${user.name},\n\nYou have received a message from the Ezri admin team.`;
-          const html = `<p>Hello ${user.name},</p><p>You have received a message from the Ezri admin team.</p>`;
+          const subject = "Message from Solace Admin";
+          const text = `Hello ${user.name},\n\nYou have received a message from the Solace Admin team.`;
+          const html = `<p>Hello ${user.name},</p><p>You have received a message from the Solace Admin team.</p>`;
           await api.sendEmail(user.email, subject, html, text);
         }
         setConfirmationModal((prev) => ({ ...prev, isOpen: false }));
@@ -176,51 +255,70 @@ export function UserManagement() {
     });
   };
 
-  // Filter users
-  let filteredUsers = users.filter((user) => {
-    const matchesSearch =
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "all" || user.status === statusFilter;
-    const matchesRisk = riskFilter === "all" || user.riskLevel === riskFilter;
-    const matchesSubscription = subscriptionFilter === "all" || user.subscription === subscriptionFilter;
-    
-    return matchesSearch && matchesStatus && matchesRisk && matchesSubscription;
-  });
+  const filteredUsers = useMemo(() => {
+    const filtered = users.filter((user) => {
+      const matchesSearch =
+        user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === "all" || user.status === statusFilter;
+      const matchesRisk = riskFilter === "all" || user.riskLevel === riskFilter;
+      const matchesSubscription =
+        subscriptionFilter === "all" || user.subscription === subscriptionFilter;
 
-  // Sort users
-  filteredUsers.sort((a, b) => {
-    let aVal: any = a[sortField];
-    let bVal: any = b[sortField];
+      return matchesSearch && matchesStatus && matchesRisk && matchesSubscription;
+    });
 
-    if (sortField === "joinDate" || sortField === "lastActive") {
-      if (sortField === "joinDate") {
-        aVal = new Date(a.joinDate).getTime();
-        bVal = new Date(b.joinDate).getTime();
-      } else {
-        aVal = new Date(a.lastActive).getTime();
-        bVal = new Date(b.lastActive).getTime();
+    return [...filtered].sort((a, b) => {
+      let aVal: any = a[sortField];
+      let bVal: any = b[sortField];
+
+      if (sortField === "joinDate" || sortField === "lastActive") {
+        if (sortField === "joinDate") {
+          aVal = new Date(a.joinDate).getTime();
+          bVal = new Date(b.joinDate).getTime();
+        } else {
+          aVal = new Date(a.lastActive).getTime();
+          bVal = new Date(b.lastActive).getTime();
+        }
       }
-    }
 
-    if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
-    if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
-    return 0;
-  });
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [
+    users,
+    searchQuery,
+    statusFilter,
+    riskFilter,
+    subscriptionFilter,
+    sortField,
+    sortDirection,
+  ]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, riskFilter, subscriptionFilter]);
+
+  useEffect(() => {
+    const tp = Math.max(1, Math.ceil(filteredUsers.length / pageSize) || 1);
+    setCurrentPage((p) => (p > tp ? tp : p));
+  }, [filteredUsers.length, pageSize]);
 
   // Pagination
-  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+  const totalPages = Math.ceil(filteredUsers.length / usersPerPage) || 1;
   const paginatedUsers = filteredUsers.slice(
     (currentPage - 1) * usersPerPage,
     currentPage * usersPerPage
   );
+  const shouldAnimateRows = paginatedUsers.length <= 25;
 
-  // Stats
+  // Stats — use authoritative DB counts when available, fall back to loaded users.
   const stats = {
-    total: users.length,
-    active: users.filter((u) => u.status === "active").length,
-    suspended: users.filter((u) => u.status === "suspended").length,
-    inactive: users.filter((u) => u.status === "inactive").length,
+    total: realCounts?.total ?? users.length,
+    active: realCounts?.active ?? users.filter((u) => u.status === "active").length,
+    suspended: realCounts?.suspended ?? users.filter((u) => u.status === "suspended").length,
+    inactive: realCounts?.inactive ?? users.filter((u) => u.status === "inactive").length,
     highRisk: users.filter((u) => u.riskLevel === "high").length,
   };
 
@@ -282,7 +380,9 @@ export function UserManagement() {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
-      setSortDirection("asc");
+      setSortDirection(
+        field === "joinDate" || field === "lastActive" ? "desc" : "asc"
+      );
     }
   };
 
@@ -299,7 +399,7 @@ export function UserManagement() {
       `${u.name},${u.email},${u.status},${u.subscription},${u.sessions},${u.riskLevel},${u.lastActive}`
     ).join('\n');
     
-    const csvContent = `Name,Email,Status,Subscription,Sessions,Risk Level,Last Active\n${csvData}`;
+    const csvContent = `Name,Email,Status,Subscription,Talk it out,Risk Level,Last Active\n${csvData}`;
     
     // Create a blob and download
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -330,6 +430,7 @@ export function UserManagement() {
               selectedUsers.includes(u.id) ? { ...u, status: "active" } : u
             )
           );
+          refreshCounts();
         } else if (action === "suspend") {
           await Promise.all(
             selectedUsers.map((userId) => api.admin.updateUser(userId, { status: "suspended" }))
@@ -339,13 +440,14 @@ export function UserManagement() {
               selectedUsers.includes(u.id) ? { ...u, status: "suspended" } : u
             )
           );
+          refreshCounts();
         } else if (action === "email") {
           const usersToEmail = users.filter((u) => selectedUsers.includes(u.id));
           await Promise.all(
             usersToEmail.map((user) => {
-              const subject = "Message from Ezri Admin";
-              const text = `Hello ${user.name},\n\nYou have received a message from the Ezri admin team.`;
-              const html = `<p>Hello ${user.name},</p><p>You have received a message from the Ezri admin team.</p>`;
+              const subject = "Message from Solace Admin";
+              const text = `Hello ${user.name},\n\nYou have received a message from the Solace Admin team.`;
+              const html = `<p>Hello ${user.name},</p><p>You have received a message from the Solace Admin team.</p>`;
               return api.sendEmail(user.email, subject, html, text);
             })
           );
@@ -396,11 +498,11 @@ export function UserManagement() {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="gap-2" onClick={handleExport}>
+              <Button type="button" variant="outline" className="gap-2" onClick={handleExport}>
                 <Download className="w-4 h-4" />
                 Export
               </Button>
-              <Button className="gap-2" onClick={handleAddUser}>
+              <Button type="button" className="gap-2" onClick={handleAddUser}>
                 <UserPlus className="w-4 h-4" />
                 Add User
               </Button>
@@ -409,7 +511,11 @@ export function UserManagement() {
         </motion.div>
 
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div
+          className={`grid grid-cols-1 md:grid-cols-5 gap-4 transition-opacity ${
+            isLoading ? "opacity-40 pointer-events-none" : ""
+          }`}
+        >
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -646,6 +752,7 @@ export function UserManagement() {
                   </div>
                   <div className="flex gap-2">
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={() => handleBulkAction("activate")}
@@ -654,6 +761,7 @@ export function UserManagement() {
                       Activate
                     </Button>
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={() => handleBulkAction("suspend")}
@@ -662,6 +770,7 @@ export function UserManagement() {
                       Suspend
                     </Button>
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={() => handleBulkAction("email")}
@@ -670,6 +779,7 @@ export function UserManagement() {
                       Email
                     </Button>
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       onClick={() => setSelectedUsers([])}
@@ -697,8 +807,12 @@ export function UserManagement() {
                     <th className="px-4 py-3 text-left">
                       <input
                         type="checkbox"
-                        checked={selectedUsers.length === paginatedUsers.length}
+                        checked={
+                          paginatedUsers.length > 0 &&
+                          selectedUsers.length === paginatedUsers.length
+                        }
                         onChange={toggleSelectAll}
+                        disabled={isLoading}
                         className="rounded"
                       />
                     </th>
@@ -728,7 +842,7 @@ export function UserManagement() {
                       onClick={() => handleSort("sessions")}
                     >
                       <div className="flex items-center gap-2">
-                        Sessions
+                        Talk it out
                         {sortField === "sessions" && (
                           <ChevronDown
                             className={`w-4 h-4 transition-transform ${
@@ -762,12 +876,22 @@ export function UserManagement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {paginatedUsers.map((user, index) => (
+                  {isLoading && (
+                    <AdminTableSkeletonRows
+                      columns={8}
+                      rows={8}
+                      showCheckboxColumn
+                      firstColumnWide
+                      padding="compact"
+                    />
+                  )}
+                  {!isLoading &&
+                    paginatedUsers.map((user, index) => (
                     <motion.tr
                       key={user.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
+                      initial={shouldAnimateRows ? { opacity: 0, y: 10 } : false}
+                      animate={shouldAnimateRows ? { opacity: 1, y: 0 } : undefined}
+                      transition={shouldAnimateRows ? { delay: index * 0.02 } : undefined}
                       className="hover:bg-gray-50 transition-colors"
                     >
                       <td className="px-4 py-4">
@@ -823,17 +947,26 @@ export function UserManagement() {
                         </span>
                       </td>
                       <td className="px-4 py-4 text-sm text-muted-foreground">
-                        {user.lastActive}
+                        {(() => {
+                          try {
+                            const d = new Date(user.lastActive);
+                            return isNaN(d.getTime()) ? user.lastActive : format(d, "MMM d, yyyy h:mm a");
+                          } catch {
+                            return user.lastActive;
+                          }
+                        })()}
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             className="gap-2"
+                            aria-label="User info"
+                            title="User info"
                             onClick={() => navigate(`/admin/user-details-enhanced/${user.id}`)}
                           >
-                            <Eye className="w-4 h-4" />
+                            <Info className="w-4 h-4" />
                           </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -873,41 +1006,53 @@ export function UserManagement() {
               </table>
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="border-t px-4 py-3 flex items-center justify-between">
-                <div className="text-sm text-muted-foreground">
-                  Showing {(currentPage - 1) * usersPerPage + 1} to{" "}
-                  {Math.min(currentPage * usersPerPage, filteredUsers.length)} of{" "}
-                  {filteredUsers.length} users
+            {/* Pagination: page size + range + prev/next (compact) */}
+            {filteredUsers.length > 0 && (
+              <div className="border-t px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <label htmlFor="user-page-size" className="sr-only">
+                    Records per page
+                  </label>
+                  <select
+                    id="user-page-size"
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 pr-9 text-sm font-medium text-blue-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500/30 cursor-pointer"
+                  >
+                    {[10, 25, 50, 100].map((n) => (
+                      <option key={n} value={n}>
+                        {n} Records per page
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
+                <div className="flex items-center justify-center gap-2 sm:justify-end">
+                  <button
+                    type="button"
+                    aria-label="Previous page"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
+                    disabled={currentPage <= 1}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
                   >
-                    Previous
-                  </Button>
-                  {[...Array(totalPages)].map((_, i) => (
-                    <Button
-                      key={i}
-                      variant={currentPage === i + 1 ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentPage(i + 1)}
-                    >
-                      {i + 1}
-                    </Button>
-                  ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="min-w-[9rem] text-center text-sm tabular-nums text-gray-600">
+                    {(currentPage - 1) * usersPerPage + 1} to{" "}
+                    {Math.min(currentPage * usersPerPage, filteredUsers.length)} of{" "}
+                    {filteredUsers.length}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Next page"
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
+                    disabled={currentPage >= totalPages}
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
                   >
-                    Next
-                  </Button>
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
             )}
@@ -915,7 +1060,7 @@ export function UserManagement() {
         </motion.div>
 
         {/* Empty State */}
-        {filteredUsers.length === 0 && (
+        {!isLoading && filteredUsers.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -930,6 +1075,21 @@ export function UserManagement() {
               Clear Filters
             </Button>
           </motion.div>
+        )}
+
+        {!isLoading && (
+          <div className="flex items-center justify-center gap-3 -mt-4">
+            {isBackgroundLoading && (
+              <div className="text-xs text-muted-foreground text-center">
+                Loading more users…
+              </div>
+            )}
+            {!isBackgroundLoading && nextPage != null && (
+              <Button variant="outline" size="sm" type="button" onClick={loadMoreUsers}>
+                Load more
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
@@ -1048,25 +1208,53 @@ export function UserManagement() {
                     Cancel
                   </Button>
                   <Button
-                    onClick={() => {
+                    disabled={addUserSubmitting}
+                    onClick={async () => {
                       if (!newUser.name || !newUser.email) {
-                        alert("Please fill in all required fields (Name and Email)");
+                        toast.error("Please enter name and email.");
                         return;
                       }
-                      alert(`✅ User "${newUser.name}" (${newUser.email}) has been added!\n\nDetails:\n• Status: ${newUser.status}\n• Subscription: ${newUser.subscription}${newUser.organization ? `\n• Organization: ${newUser.organization}` : ""}\n\nThis is a demo - in production, this would create the user in the database.`);
-                      setShowAddUserModal(false);
-                      setNewUser({
-                        name: "",
-                        email: "",
-                        status: "active",
-                        subscription: "trial",
-                        organization: "",
-                      });
+                      const emailTrim = newUser.email.trim();
+                      const emailLooksValid =
+                        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim);
+                      if (!emailLooksValid) {
+                        toast.error(
+                          "Please enter a valid email address (use a dot before the domain, e.g. user@maildrop.cc)."
+                        );
+                        return;
+                      }
+                      setAddUserSubmitting(true);
+                      try {
+                        await api.admin.createUser({
+                          email: emailTrim,
+                          full_name: newUser.name.trim(),
+                          status: newUser.status,
+                          subscription: newUser.subscription,
+                        });
+                        toast.success(
+                          "Invite sent. The user will receive an email to set their password (from your Supabase / SMTP settings)."
+                        );
+                        setShowAddUserModal(false);
+                        setNewUser({
+                          name: "",
+                          email: "",
+                          status: "active",
+                          subscription: "trial",
+                          organization: "",
+                        });
+                        await fetchFirstPage();
+                      } catch (e: unknown) {
+                        const msg =
+                          e instanceof Error ? e.message : "Could not create user.";
+                        toast.error(msg);
+                      } finally {
+                        setAddUserSubmitting(false);
+                      }
                     }}
                     className="gap-2"
                   >
                     <UserPlus className="w-4 h-4" />
-                    Add User
+                    {addUserSubmitting ? "Adding…" : "Add User"}
                   </Button>
                 </div>
               </Card>

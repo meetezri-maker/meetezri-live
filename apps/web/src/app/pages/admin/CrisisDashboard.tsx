@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
-import { AlertTriangle, Phone, Mail, Eye, CheckCircle, Clock, TrendingDown, Shield, MessageSquare, User, Bell, ArrowRight, AlertCircle, Activity, Users, Calendar, Filter, Download } from "lucide-react";
+import { AlertTriangle, Phone, Mail, Eye, CheckCircle, Clock, TrendingDown, Shield, MessageSquare, User, ArrowRight, AlertCircle, Activity, Calendar, Download, X, ChevronRight, Zap, ClipboardList, RotateCcw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../../../lib/api";
 
@@ -24,7 +24,6 @@ interface CrisisEvent {
   resolvedAt?: string;
 }
 
-type FilterType = "all" | "pending" | "contacted" | "in-progress" | "resolved";
 type RiskFilter = "all" | "critical" | "high" | "medium";
 
 function formatRelativeTime(timestamp: string | null | undefined) {
@@ -105,21 +104,97 @@ function mapApiCrisisEvent(event: any): CrisisEvent {
   };
 }
 
+function getPreviousStatus(status: CrisisEvent["status"]): CrisisEvent["status"] | null {
+  const map: Partial<Record<CrisisEvent["status"], CrisisEvent["status"]>> = {
+    contacted: "pending",
+    "in-progress": "contacted",
+    resolved: "in-progress",
+  };
+  return map[status] ?? null;
+}
+
+function getPreviousStatusLabel(status: CrisisEvent["status"]): string {
+  const map: Partial<Record<CrisisEvent["status"], string>> = {
+    contacted: "Pending",
+    "in-progress": "Contacted",
+    resolved: "In Progress",
+  };
+  return map[status] ?? "";
+}
+
+// Workflow steps definition
+const WORKFLOW_STEPS: { status: CrisisEvent["status"]; label: string; color: string; bg: string }[] = [
+  { status: "pending",     label: "Pending",     color: "text-red-600",    bg: "bg-red-500" },
+  { status: "contacted",   label: "Contacted",   color: "text-yellow-600", bg: "bg-yellow-500" },
+  { status: "in-progress", label: "In Progress", color: "text-blue-600",   bg: "bg-blue-500" },
+  { status: "resolved",    label: "Resolved",    color: "text-green-600",  bg: "bg-green-500" },
+];
+
+function WorkflowStepper({ currentStatus }: { currentStatus: CrisisEvent["status"] }) {
+  const currentIdx = WORKFLOW_STEPS.findIndex((s) => s.status === currentStatus);
+  return (
+    <div className="flex items-center gap-0 my-3">
+      {WORKFLOW_STEPS.map((step, idx) => {
+        const isCompleted = idx < currentIdx;
+        const isCurrent = idx === currentIdx;
+        return (
+          <div key={step.status} className="flex items-center flex-1 last:flex-none">
+            <div className="flex flex-col items-center gap-1">
+              <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
+                  isCompleted
+                    ? `${step.bg} border-transparent text-white`
+                    : isCurrent
+                    ? `border-current ${step.color} bg-white shadow-md ring-2 ring-offset-1 ring-current`
+                    : "border-gray-200 text-gray-300 bg-white"
+                }`}
+              >
+                {isCompleted ? <CheckCircle className="w-4 h-4" /> : <span>{idx + 1}</span>}
+              </div>
+              <span
+                className={`text-[10px] font-semibold whitespace-nowrap ${
+                  isCompleted ? step.color : isCurrent ? step.color : "text-gray-300"
+                }`}
+              >
+                {step.label}
+              </span>
+            </div>
+            {idx < WORKFLOW_STEPS.length - 1 && (
+              <div
+                className={`h-0.5 flex-1 mx-1 rounded transition-all ${
+                  idx < currentIdx ? step.bg : "bg-gray-200"
+                }`}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function CrisisDashboard() {
-  const [statusFilter, setStatusFilter] = useState<FilterType>("all");
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
-  const [showFilters, setShowFilters] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CrisisEvent | null>(null);
-  const [showContactModal, setShowContactModal] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
+  // Step-specific modals
+  const [showContactModal, setShowContactModal] = useState(false);       // pending → contacted
+  const [showInterventionModal, setShowInterventionModal] = useState(false); // contacted → in-progress
+  const [showResolveModal, setShowResolveModal] = useState(false);       // in-progress → resolved
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [contactMethod, setContactMethod] = useState<"phone" | "email" | "in-app">("phone");
   const [contactNotes, setContactNotes] = useState("");
-  const [statusNotes, setStatusNotes] = useState("");
-  const [newStatus, setNewStatus] = useState<"contacted" | "in-progress" | "resolved">("contacted");
+  const [interventionNotes, setInterventionNotes] = useState("");
+  const [resolutionNotes, setResolutionNotes] = useState("");
+  const [resolutionOutcome, setResolutionOutcome] = useState<"safe" | "referred" | "no-contact">("safe");
   const [events, setEvents] = useState<CrisisEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [bannerReviewed, setBannerReviewed] = useState(false);
+  const [highlightCritical, setHighlightCritical] = useState(false);
+  const [showMoveBackModal, setShowMoveBackModal] = useState(false);
+  const [moveBackEvent, setMoveBackEvent] = useState<CrisisEvent | null>(null);
+  const kanbanRef = useRef<HTMLDivElement>(null);
 
   const loadEvents = async () => {
     try {
@@ -129,7 +204,9 @@ export function CrisisDashboard() {
       setEvents(items.map(mapApiCrisisEvent));
     } catch (err) {
       console.error("Failed to fetch crisis events", err);
-      setError("Failed to load crisis events");
+      const msg =
+        err instanceof Error ? err.message : "Failed to load crisis events";
+      setError(msg || "Failed to load crisis events");
     } finally {
       setIsLoading(false);
     }
@@ -139,12 +216,10 @@ export function CrisisDashboard() {
     loadEvents();
   }, []);
 
-  // Filter events
-  const filteredEvents = events.filter((event) => {
-    const matchesStatus = statusFilter === "all" || event.status === statusFilter;
-    const matchesRisk = riskFilter === "all" || event.riskLevel === riskFilter;
-    return matchesStatus && matchesRisk;
-  });
+  // Filter events by risk level; kanban columns further filter by status
+  const filteredEvents = events.filter((event) =>
+    riskFilter === "all" || event.riskLevel === riskFilter
+  );
 
   // Stats
   const stats = {
@@ -260,7 +335,7 @@ export function CrisisDashboard() {
         </motion.div>
 
         {/* Critical Alert Banner */}
-        {stats.critical > 0 && (
+        {stats.critical > 0 && !bannerReviewed && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -279,12 +354,29 @@ export function CrisisDashboard() {
                     </p>
                   </div>
                 </div>
-                <Button className="bg-red-600 hover:bg-red-700" onClick={() => {
-                  setStatusFilter("pending");
-                  setRiskFilter("critical");
-                }}>
-                  Review Now
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    className="bg-red-600 hover:bg-red-700"
+                    onClick={() => {
+                      setBannerReviewed(true);
+                      setRiskFilter("critical");
+                      setHighlightCritical(true);
+                      setTimeout(() => setHighlightCritical(false), 3000);
+                      setTimeout(() => {
+                        kanbanRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }, 100);
+                    }}
+                  >
+                    Review Now
+                  </Button>
+                  <button
+                    onClick={() => setBannerReviewed(true)}
+                    className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                    aria-label="Dismiss alert"
+                  >
+                    <X className="w-4 h-4 text-red-500" />
+                  </button>
+                </div>
               </div>
             </Card>
           </motion.div>
@@ -313,7 +405,7 @@ export function CrisisDashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
           >
-            <Card className="p-4 border-l-4 border-yellow-500 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setStatusFilter("pending")}>
+            <Card className="p-4 border-l-4 border-yellow-500">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Pending</p>
@@ -389,206 +481,391 @@ export function CrisisDashboard() {
           </motion.div>
         </div>
 
-        {/* Filters */}
+        {/* Pipeline toolbar */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
+          className="flex items-center justify-between gap-3 flex-wrap"
         >
-          <Card className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex gap-2">
-                <Button
-                  variant={statusFilter === "all" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setStatusFilter("all")}
-                >
-                  All Events
-                </Button>
-                <Button
-                  variant={statusFilter === "pending" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setStatusFilter("pending")}
-                  className={statusFilter === "pending" ? "bg-red-600 hover:bg-red-700" : ""}
-                >
-                  Pending
-                </Button>
-                <Button
-                  variant={statusFilter === "contacted" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setStatusFilter("contacted")}
-                >
-                  Contacted
-                </Button>
-                <Button
-                  variant={statusFilter === "in-progress" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setStatusFilter("in-progress")}
-                >
-                  In Progress
-                </Button>
-                <Button
-                  variant={statusFilter === "resolved" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setStatusFilter("resolved")}
-                >
-                  Resolved
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <select
-                  className="px-3 py-2 border rounded-lg text-sm"
-                  value={riskFilter}
-                  onChange={(e) => setRiskFilter(e.target.value as RiskFilter)}
-                >
-                  <option value="all">All Risk Levels</option>
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                </select>
-                <Link to="/admin/crisis-follow-up-queue">
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Calendar className="w-4 h-4" />
-                    Follow-up Queue
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </Card>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-muted-foreground">Filter by risk:</span>
+            <select
+              className="px-3 py-2 border rounded-lg text-sm bg-white"
+              value={riskFilter}
+              onChange={(e) => setRiskFilter(e.target.value as RiskFilter)}
+            >
+              <option value="all">All Risk Levels</option>
+              <option value="critical">Critical Only</option>
+              <option value="high">High Only</option>
+              <option value="medium">Medium Only</option>
+            </select>
+          </div>
+          <Link to="/admin/crisis-follow-up-queue">
+            <Button variant="outline" size="sm" className="gap-2">
+              <Calendar className="w-4 h-4" />
+              Follow-up Queue
+            </Button>
+          </Link>
         </motion.div>
 
-        {/* Crisis Events List */}
-        <div className="space-y-4">
-          {filteredEvents.map((event, index) => (
-            <motion.div
-              key={event.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.6 + index * 0.05 }}
-            >
-              <Card className={`p-6 border-l-4 ${getRiskBorderColor(event.riskLevel)} hover:shadow-lg transition-shadow`}>
-                <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                  {/* Event Info */}
-                  <div className="flex-1">
-                    <div className="flex items-start gap-4 mb-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-bold flex-shrink-0">
+        {/* ── Kanban Pipeline Board ── */}
+        {highlightCritical && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold"
+          >
+            <AlertTriangle className="w-4 h-4 animate-pulse" />
+            Showing critical cases only — scroll down to review each one
+          </motion.div>
+        )}
+        <motion.div
+          ref={kanbanRef}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.55 }}
+          className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4"
+        >
+          {/* ── Column: Pending ── */}
+          {(() => {
+            const col = filteredEvents.filter((e) => e.status === "pending");
+            return (
+              <div className="flex flex-col gap-3">
+                {/* Column header */}
+                <div className="flex items-center justify-between px-3 py-2.5 bg-red-50 border border-red-200 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                    <span className="font-bold text-red-800 text-sm">Pending</span>
+                  </div>
+                  <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">{col.length}</span>
+                </div>
+                <p className="text-xs text-muted-foreground px-1 -mt-1">Awaiting first contact — act immediately</p>
+
+                {/* Arrow to next */}
+                <div className="hidden xl:flex items-center justify-end pr-1 -mb-1">
+                  <ArrowRight className="w-4 h-4 text-red-400" />
+                </div>
+
+                {col.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-8 border-2 border-dashed border-red-200 rounded-xl text-red-400">
+                    <CheckCircle className="w-8 h-8 mb-2 opacity-50" />
+                    <p className="text-xs font-medium">No pending events</p>
+                  </div>
+                )}
+                {col.map((event, i) => (
+                  <motion.div
+                    key={event.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6 + i * 0.04 }}
+                    className={`bg-white border-l-4 ${getRiskBorderColor(event.riskLevel)} rounded-xl shadow-sm hover:shadow-md transition-shadow p-4`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
                         {event.userName.charAt(0)}
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-bold text-lg">{event.userName}</h3>
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${getRiskColor(event.riskLevel)}`}>
-                            {event.riskLevel.toUpperCase()}
-                          </span>
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(event.status)}`}>
-                            {event.status.replace("-", " ").toUpperCase()}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-2">
-                          User ID: {event.userId} • {event.timestamp}
-                        </p>
-                        <div className="mb-3">
-                          <p className="font-medium text-sm mb-1">{event.type}</p>
-                          <div className="flex flex-wrap gap-2">
-                            {event.keywords.map((keyword, i) => (
-                              <span
-                                key={i}
-                                className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium"
-                              >
-                                {keyword}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-4 text-sm">
-                          <div className="flex items-center gap-1">
-                            <Shield className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-muted-foreground">AI Confidence:</span>
-                            <span className="font-medium">{event.aiConfidence}%</span>
-                          </div>
-                          {event.responseTime && (
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-muted-foreground">Response Time:</span>
-                              <span className="font-medium">{event.responseTime}</span>
-                            </div>
-                          )}
-                          {event.assignedTo && (
-                            <div className="flex items-center gap-1">
-                              <User className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-muted-foreground">Assigned:</span>
-                              <span className="font-medium">{event.assignedTo}</span>
-                            </div>
-                          )}
-                          {event.lastContact && (
-                            <div className="flex items-center gap-1">
-                              <MessageSquare className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-muted-foreground">Last Contact:</span>
-                              <span className="font-medium">{event.lastContact}</span>
-                            </div>
-                          )}
-                        </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate">{event.userName}</p>
+                        <p className="text-xs text-muted-foreground">{event.timestamp}</p>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0 ${getRiskColor(event.riskLevel)}`}>
+                        {event.riskLevel.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-2 truncate">{event.type}</p>
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {event.keywords.slice(0, 3).map((kw, ki) => (
+                        <span key={ki} className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs">{kw}</span>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground mb-3">
+                      <Shield className="w-3 h-3" />
+                      <span>AI: {event.aiConfidence}%</span>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Button
+                        size="sm"
+                        className="w-full bg-red-600 hover:bg-red-700 gap-1.5 text-xs h-8"
+                        onClick={() => { setSelectedEvent(event); setShowContactModal(true); }}
+                      >
+                        <Phone className="w-3 h-3" />
+                        Log Contact
+                        <ChevronRight className="w-3 h-3 ml-auto" />
+                      </Button>
+                      <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs h-7" asChild>
+                        <Link to={`/admin/crisis-event-details?id=${encodeURIComponent(event.id)}`}>
+                          <Eye className="w-3 h-3" />
+                          View Details
+                        </Link>
+                      </Button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* ── Column: Contacted ── */}
+          {(() => {
+            const col = filteredEvents.filter((e) => e.status === "contacted");
+            return (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between px-3 py-2.5 bg-yellow-50 border border-yellow-200 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                    <span className="font-bold text-yellow-800 text-sm">Contacted</span>
+                  </div>
+                  <span className="px-2 py-0.5 bg-yellow-500 text-white text-xs font-bold rounded-full">{col.length}</span>
+                </div>
+                <p className="text-xs text-muted-foreground px-1 -mt-1">Contact made — begin active intervention</p>
+
+                {col.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-8 border-2 border-dashed border-yellow-200 rounded-xl text-yellow-400">
+                    <Phone className="w-8 h-8 mb-2 opacity-50" />
+                    <p className="text-xs font-medium">No contacted cases</p>
+                  </div>
+                )}
+                {col.map((event, i) => (
+                  <motion.div
+                    key={event.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.65 + i * 0.04 }}
+                    className={`bg-white border-l-4 border-yellow-400 rounded-xl shadow-sm hover:shadow-md transition-shadow p-4`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-orange-400 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                        {event.userName.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate">{event.userName}</p>
+                        <p className="text-xs text-muted-foreground">{event.timestamp}</p>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0 ${getRiskColor(event.riskLevel)}`}>
+                        {event.riskLevel.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-2 truncate">{event.type}</p>
+                    {/* Status context */}
+                    <div className="flex items-center gap-1.5 mb-3 px-2 py-1.5 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <Phone className="w-3 h-3 text-yellow-600" />
+                      <span className="text-xs text-yellow-800 font-medium">Contact logged — awaiting intervention</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground mb-3">
+                      <Shield className="w-3 h-3" />
+                      <span>AI: {event.aiConfidence}%</span>
+                      {event.assignedTo && (
+                        <>
+                          <span className="mx-1">•</span>
+                          <User className="w-3 h-3" />
+                          <span className="truncate max-w-[80px]">{event.assignedTo}</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Button
+                        size="sm"
+                        className="w-full bg-blue-600 hover:bg-blue-700 gap-1.5 text-xs h-8"
+                        onClick={() => { setSelectedEvent(event); setShowInterventionModal(true); }}
+                      >
+                        <Zap className="w-3 h-3" />
+                        Begin Intervention
+                        <ChevronRight className="w-3 h-3 ml-auto" />
+                      </Button>
+                      <div className="flex gap-1.5">
+                        <Button variant="outline" size="sm" className="flex-1 gap-1.5 text-xs h-7" asChild>
+                          <Link to={`/admin/crisis-event-details?id=${encodeURIComponent(event.id)}`}>
+                            <Eye className="w-3 h-3" />
+                            View Details
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 text-xs h-7 text-gray-500 hover:text-orange-100 hover:border-orange-600"
+                          onClick={() => { setMoveBackEvent(event); setShowMoveBackModal(true); }}
+                          title="Move back to Pending"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Undo
+                        </Button>
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
+                ))}
+              </div>
+            );
+          })()}
 
-                  {/* Actions */}
-                  <div className="flex lg:flex-col gap-2 lg:items-end">
-                    <Button 
-                      variant="outline" 
-                      className="w-full gap-2"
-                      onClick={() => {
-                        setSelectedEvent(event);
-                        setShowDetailsModal(true);
-                      }}
-                    >
-                      <Eye className="w-4 h-4" />
-                      View Details
-                    </Button>
-                    {event.status === "pending" && (
-                      <Button 
-                        className="flex-1 lg:flex-initial bg-red-600 hover:bg-red-700 gap-2"
-                        onClick={() => {
-                          setSelectedEvent(event);
-                          setShowContactModal(true);
-                        }}
-                      >
-                        <Phone className="w-4 h-4" />
-                        Contact Now
-                      </Button>
-                    )}
-                    {event.status === "contacted" && (
-                      <Button 
-                        className="flex-1 lg:flex-initial gap-2"
-                        onClick={() => {
-                          setSelectedEvent(event);
-                          setShowStatusModal(true);
-                        }}
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        Update Status
-                      </Button>
-                    )}
-                    {event.status === "in-progress" && (
-                      <Button 
-                        className="flex-1 lg:flex-initial gap-2"
-                        onClick={() => {
-                          setSelectedEvent(event);
-                          setShowStatusModal(true);
-                        }}
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                        Continue
-                      </Button>
-                    )}
+          {/* ── Column: In Progress ── */}
+          {(() => {
+            const col = filteredEvents.filter((e) => e.status === "in-progress");
+            return (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between px-3 py-2.5 bg-blue-50 border border-blue-200 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
+                    <span className="font-bold text-blue-800 text-sm">In Progress</span>
                   </div>
+                  <span className="px-2 py-0.5 bg-blue-500 text-white text-xs font-bold rounded-full">{col.length}</span>
                 </div>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
+                <p className="text-xs text-muted-foreground px-1 -mt-1">Active intervention underway — resolve when done</p>
 
-        {/* Empty State */}
+                {col.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-8 border-2 border-dashed border-blue-200 rounded-xl text-blue-400">
+                    <Zap className="w-8 h-8 mb-2 opacity-50" />
+                    <p className="text-xs font-medium">No active interventions</p>
+                  </div>
+                )}
+                {col.map((event, i) => (
+                  <motion.div
+                    key={event.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.7 + i * 0.04 }}
+                    className={`bg-white border-l-4 border-blue-500 rounded-xl shadow-sm hover:shadow-md transition-shadow p-4`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                        {event.userName.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate">{event.userName}</p>
+                        <p className="text-xs text-muted-foreground">{event.timestamp}</p>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0 ${getRiskColor(event.riskLevel)}`}>
+                        {event.riskLevel.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-2 truncate">{event.type}</p>
+                    {/* Status context */}
+                    <div className="flex items-center gap-1.5 mb-3 px-2 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
+                      <Activity className="w-3 h-3 text-blue-600" />
+                      <span className="text-xs text-blue-800 font-medium">Intervention active — monitoring closely</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground mb-3">
+                      <Shield className="w-3 h-3" />
+                      <span>AI: {event.aiConfidence}%</span>
+                      {event.responseTime && (
+                        <>
+                          <span className="mx-1">•</span>
+                          <Clock className="w-3 h-3" />
+                          <span>{event.responseTime}</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Button
+                        size="sm"
+                        className="w-full bg-green-600 hover:bg-green-700 gap-1.5 text-xs h-8"
+                        onClick={() => { setSelectedEvent(event); setShowResolveModal(true); }}
+                      >
+                        <CheckCircle className="w-3 h-3" />
+                        Resolve Case
+                        <ChevronRight className="w-3 h-3 ml-auto" />
+                      </Button>
+                      <div className="flex gap-1.5">
+                        <Button variant="outline" size="sm" className="flex-1 gap-1.5 text-xs h-7" asChild>
+                          <Link to={`/admin/crisis-event-details?id=${encodeURIComponent(event.id)}`}>
+                            <Eye className="w-3 h-3" />
+                            View Details
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 text-xs h-7 text-gray-500 hover:text-orange-600 hover:border-orange-300"
+                          onClick={() => { setMoveBackEvent(event); setShowMoveBackModal(true); }}
+                          title="Move back to Contacted"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Undo
+                        </Button>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* ── Column: Resolved ── */}
+          {(() => {
+            const col = filteredEvents.filter((e) => e.status === "resolved");
+            return (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between px-3 py-2.5 bg-green-50 border border-green-200 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-green-500" />
+                    <span className="font-bold text-green-800 text-sm">Resolved</span>
+                  </div>
+                  <span className="px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded-full">{col.length}</span>
+                </div>
+                <p className="text-xs text-muted-foreground px-1 -mt-1">Case closed — intervention complete</p>
+
+                {col.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-8 border-2 border-dashed border-green-200 rounded-xl text-green-400">
+                    <CheckCircle className="w-8 h-8 mb-2 opacity-50" />
+                    <p className="text-xs font-medium">No resolved cases yet</p>
+                  </div>
+                )}
+                {col.map((event, i) => (
+                  <motion.div
+                    key={event.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.75 + i * 0.04 }}
+                    className="bg-white border-l-4 border-green-400 rounded-xl shadow-sm p-4 opacity-90"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                        {event.userName.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate">{event.userName}</p>
+                        <p className="text-xs text-muted-foreground">{event.timestamp}</p>
+                      </div>
+                      <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                    </div>
+                    <p className="text-xs text-gray-600 mb-2 truncate">{event.type}</p>
+                    <div className="flex items-center gap-1.5 mb-3 px-2 py-1.5 bg-green-50 border border-green-200 rounded-lg">
+                      <CheckCircle className="w-3 h-3 text-green-600" />
+                      <span className="text-xs text-green-800 font-medium">Case successfully resolved</span>
+                    </div>
+                    {event.responseTime && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground mb-3">
+                        <Clock className="w-3 h-3" />
+                        <span>Total time: {event.responseTime}</span>
+                      </div>
+                    )}
+                    <div className="flex gap-1.5">
+                      <Button variant="outline" size="sm" className="flex-1 gap-1.5 text-xs h-7" asChild>
+                        <Link to={`/admin/crisis-event-details?id=${encodeURIComponent(event.id)}`}>
+                          <Eye className="w-3 h-3" />
+                          View Report
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 text-xs h-7 text-gray-500 hover:text-orange-600 hover:border-orange-300"
+                        onClick={() => { setMoveBackEvent(event); setShowMoveBackModal(true); }}
+                        title="Move back to In Progress"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        Undo
+                      </Button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            );
+          })()}
+        </motion.div>
+
+        {/* Empty state: no events at all */}
         {filteredEvents.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -597,9 +874,7 @@ export function CrisisDashboard() {
           >
             <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
             <h3 className="font-bold text-xl mb-2">No Crisis Events</h3>
-            <p className="text-muted-foreground">
-              No events match the current filters
-            </p>
+            <p className="text-muted-foreground">No events match the current risk filter</p>
           </motion.div>
         )}
 
@@ -635,7 +910,7 @@ export function CrisisDashboard() {
         </motion.div>
       </div>
 
-      {/* Contact Now Modal */}
+      {/* ── Step 1 Modal: Pending → Contacted ── */}
       {showContactModal && selectedEvent && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -649,113 +924,80 @@ export function CrisisDashboard() {
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
           >
-            <div className="flex items-start justify-between mb-6">
+            {/* Header */}
+            <div className="flex items-start justify-between mb-4">
               <div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">Contact Crisis Event</h3>
-                <p className="text-gray-600">Event #{selectedEvent.id} - {selectedEvent.userName}</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full uppercase tracking-wide">Step 1 of 3</span>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900">Log Contact Attempt</h3>
+                <p className="text-gray-500 text-sm mt-1">{selectedEvent.userName} — {selectedEvent.riskLevel.toUpperCase()} risk</p>
               </div>
-              <button
-                onClick={() => setShowContactModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <AlertCircle className="w-5 h-5 text-gray-500" />
+              <button onClick={() => setShowContactModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
 
-            {/* Event Summary */}
-            <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle className="w-5 h-5 text-red-600" />
-                <h4 className="font-bold text-red-900">Crisis Event Summary</h4>
+            {/* Workflow progress */}
+            <div className="mb-5">
+              <WorkflowStepper currentStatus="pending" />
+              <p className="text-xs text-gray-400 text-center mt-1">After confirming contact, this case moves to <strong>Contacted</strong></p>
+            </div>
+
+            {/* Crisis summary */}
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="w-4 h-4 text-red-600" />
+                <span className="font-semibold text-red-900 text-sm">Crisis Details</span>
               </div>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-gray-600">User ID:</p>
-                  <p className="font-semibold text-gray-900">{selectedEvent.userId}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Risk Level:</p>
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${getRiskColor(selectedEvent.riskLevel)}`}>
-                    {selectedEvent.riskLevel.toUpperCase()}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-gray-600">Event Type:</p>
-                  <p className="font-semibold text-gray-900">{selectedEvent.type}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">AI Confidence:</p>
-                  <p className="font-semibold text-gray-900">{selectedEvent.aiConfidence}%</p>
-                </div>
+              <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                <div><span className="text-gray-500">Event type:</span> <span className="font-medium">{selectedEvent.type}</span></div>
+                <div><span className="text-gray-500">AI confidence:</span> <span className="font-medium">{selectedEvent.aiConfidence}%</span></div>
               </div>
-              <div className="mt-3">
-                <p className="text-gray-600 text-sm mb-2">Detected Keywords:</p>
-                <div className="flex flex-wrap gap-2">
-                  {selectedEvent.keywords.map((keyword, i) => (
-                    <span key={i} className="px-2 py-1 bg-red-200 text-red-800 rounded text-xs font-medium">
-                      {keyword}
-                    </span>
-                  ))}
-                </div>
+              <div className="flex flex-wrap gap-2">
+                {selectedEvent.keywords.map((kw, i) => (
+                  <span key={i} className="px-2 py-0.5 bg-red-200 text-red-800 rounded text-xs font-medium">{kw}</span>
+                ))}
               </div>
             </div>
 
-            {/* Contact Method */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">Contact Method</label>
+            {/* Contact method */}
+            <div className="mb-5">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">How did you reach out?</label>
               <div className="grid grid-cols-3 gap-3">
-                <button className="p-4 border-2 border-blue-500 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors">
-                  <Phone className="w-6 h-6 text-blue-600 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-blue-900">Phone Call</p>
-                  <p className="text-xs text-blue-600 mt-1">Immediate</p>
-                </button>
-                <button className="p-4 border-2 border-gray-300 bg-white rounded-xl hover:bg-gray-50 transition-colors">
-                  <Mail className="w-6 h-6 text-gray-600 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-gray-900">Email</p>
-                  <p className="text-xs text-gray-500 mt-1">Follow-up</p>
-                </button>
-                <button className="p-4 border-2 border-gray-300 bg-white rounded-xl hover:bg-gray-50 transition-colors">
-                  <MessageSquare className="w-6 h-6 text-gray-600 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-gray-900">In-App</p>
-                  <p className="text-xs text-gray-500 mt-1">Message</p>
-                </button>
+                {(["phone", "email", "in-app"] as const).map((method) => {
+                  const Icon = method === "phone" ? Phone : method === "email" ? Mail : MessageSquare;
+                  const labels: Record<string, [string, string]> = {
+                    phone: ["Phone Call", "Immediate"],
+                    email: ["Email", "Follow-up"],
+                    "in-app": ["In-App", "Message"],
+                  };
+                  const [label, sub] = labels[method];
+                  const active = contactMethod === method;
+                  return (
+                    <button
+                      key={method}
+                      onClick={() => setContactMethod(method)}
+                      className={`p-4 border-2 rounded-xl transition-all ${active ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white hover:bg-gray-50"}`}
+                    >
+                      <Icon className={`w-6 h-6 mx-auto mb-2 ${active ? "text-blue-600" : "text-gray-400"}`} />
+                      <p className={`text-sm font-medium ${active ? "text-blue-900" : "text-gray-700"}`}>{label}</p>
+                      <p className={`text-xs mt-0.5 ${active ? "text-blue-600" : "text-gray-400"}`}>{sub}</p>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Emergency Resources */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">Quick Actions</label>
-              <div className="space-y-2">
-                <button className="w-full p-3 bg-red-100 border border-red-300 rounded-xl text-left hover:bg-red-200 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <AlertTriangle className="w-5 h-5 text-red-600" />
-                    <div>
-                      <p className="font-semibold text-red-900">Activate Crisis Protocol</p>
-                      <p className="text-xs text-red-700">Connect to emergency services</p>
-                    </div>
-                  </div>
-                </button>
-                <button className="w-full p-3 bg-blue-100 border border-blue-300 rounded-xl text-left hover:bg-blue-200 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <Phone className="w-5 h-5 text-blue-600" />
-                    <div>
-                      <p className="font-semibold text-blue-900">Call Emergency Contact</p>
-                      <p className="text-xs text-blue-700">Notify registered contact</p>
-                    </div>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* Contact Notes */}
-            <div className="mb-6">
+            {/* Notes */}
+            <div className="mb-5">
               <label className="block text-sm font-semibold text-gray-700 mb-2">Contact Notes</label>
               <textarea
                 value={contactNotes}
                 onChange={(e) => setContactNotes(e.target.value)}
-                rows={4}
-                placeholder="Document your interaction, actions taken, and next steps..."
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                rows={3}
+                placeholder="What happened? Who answered? What was communicated?"
+                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none text-sm"
               />
             </div>
 
@@ -775,24 +1017,19 @@ export function CrisisDashboard() {
                     await loadEvents();
                     setShowContactModal(false);
                     setContactNotes("");
-                  } catch (error) {
-                    console.error("Failed to update crisis event", error);
+                    setContactMethod("phone");
+                  } catch (err) {
+                    console.error("Failed to update crisis event", err);
                   } finally {
                     setIsUpdating(false);
                   }
                 }}
               >
                 <Phone className="w-4 h-4" />
-                Confirm Contact
+                {isUpdating ? "Saving…" : "Confirm Contact → Mark as Contacted"}
+                {!isUpdating && <ArrowRight className="w-4 h-4 ml-auto" />}
               </Button>
-              <Button
-                variant="outline"
-                className="px-6"
-                onClick={() => {
-                  setShowContactModal(false);
-                  setContactNotes("");
-                }}
-              >
+              <Button variant="outline" className="px-5" onClick={() => { setShowContactModal(false); setContactNotes(""); }}>
                 Cancel
               </Button>
             </div>
@@ -800,13 +1037,13 @@ export function CrisisDashboard() {
         </motion.div>
       )}
 
-      {/* Update Status Modal */}
-      {showStatusModal && selectedEvent && (
+      {/* ── Step 2 Modal: Contacted → In Progress ── */}
+      {showInterventionModal && selectedEvent && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => setShowStatusModal(false)}
+          onClick={() => setShowInterventionModal(false)}
         >
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
@@ -814,86 +1051,248 @@ export function CrisisDashboard() {
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl"
           >
-            <div className="flex items-start justify-between mb-6">
+            <div className="flex items-start justify-between mb-4">
               <div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">Update Event Status</h3>
-                <p className="text-gray-600">Event #{selectedEvent.id} - {selectedEvent.userName}</p>
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-full uppercase tracking-wide">Step 2 of 3</span>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">Begin Intervention</h3>
+                <p className="text-gray-500 text-sm mt-1">{selectedEvent.userName}</p>
               </div>
-              <button
-                onClick={() => setShowStatusModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <AlertCircle className="w-5 h-5 text-gray-500" />
+              <button onClick={() => setShowInterventionModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
 
-            {/* Current Status */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Current Status</label>
-              <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium border ${getStatusColor(selectedEvent.status)}`}>
-                {selectedEvent.status.replace("-", " ").toUpperCase()}
-              </span>
+            <div className="mb-5">
+              <WorkflowStepper currentStatus="contacted" />
+              <p className="text-xs text-gray-400 text-center mt-1">This case will move to <strong>In Progress</strong></p>
             </div>
 
-            {/* New Status */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">Update To</label>
-              <select
-                value={newStatus}
-                onChange={(e) => setNewStatus(e.target.value as any)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
-              >
-                <option value="contacted">Contacted</option>
-                <option value="in-progress">In Progress</option>
-                <option value="resolved">Resolved</option>
-              </select>
-            </div>
-
-            {/* Status Notes */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Status Update Notes</label>
+            {/* Intervention plan */}
+            <div className="mb-5">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <ClipboardList className="w-4 h-4 inline mr-1" />
+                Intervention Plan / Actions Being Taken
+              </label>
               <textarea
-                value={statusNotes}
-                onChange={(e) => setStatusNotes(e.target.value)}
+                value={interventionNotes}
+                onChange={(e) => setInterventionNotes(e.target.value)}
                 rows={4}
-                placeholder="Describe the current situation, actions taken, and next steps..."
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                placeholder="Describe the active intervention steps — e.g. connected with therapist, counselling session scheduled, safety plan in place…"
+                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none text-sm"
               />
             </div>
 
-            {/* Actions */}
             <div className="flex gap-3">
               <Button
-                className="flex-1 gap-2"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 gap-2"
                 disabled={isUpdating}
                 onClick={async () => {
                   if (!selectedEvent) return;
                   try {
                     setIsUpdating(true);
                     await api.admin.updateCrisisEventStatus(selectedEvent.id, {
-                      status: newStatus,
-                      notes: statusNotes || undefined,
+                      status: "in-progress",
+                      notes: interventionNotes || undefined,
                     });
                     await loadEvents();
-                    setShowStatusModal(false);
-                    setStatusNotes("");
-                  } catch (error) {
-                    console.error("Failed to update crisis event", error);
+                    setShowInterventionModal(false);
+                    setInterventionNotes("");
+                  } catch (err) {
+                    console.error("Failed to update crisis event", err);
+                  } finally {
+                    setIsUpdating(false);
+                  }
+                }}
+              >
+                <Zap className="w-4 h-4" />
+                {isUpdating ? "Saving…" : "Start Intervention → In Progress"}
+                {!isUpdating && <ArrowRight className="w-4 h-4 ml-auto" />}
+              </Button>
+              <Button variant="outline" className="px-5" onClick={() => { setShowInterventionModal(false); setInterventionNotes(""); }}>
+                Cancel
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* ── Step 3 Modal: In Progress → Resolved ── */}
+      {showResolveModal && selectedEvent && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowResolveModal(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded-full uppercase tracking-wide">Step 3 of 3</span>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">Resolve Case</h3>
+                <p className="text-gray-500 text-sm mt-1">{selectedEvent.userName}</p>
+              </div>
+              <button onClick={() => setShowResolveModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="mb-5">
+              <WorkflowStepper currentStatus="in-progress" />
+              <p className="text-xs text-gray-400 text-center mt-1">This case will be marked as <strong>Resolved</strong></p>
+            </div>
+
+            {/* Outcome */}
+            <div className="mb-5">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Resolution Outcome</label>
+              <div className="space-y-2">
+                {([
+                  { value: "safe",       label: "User is safe",               sub: "Crisis de-escalated, user confirmed safe",         color: "green" },
+                  { value: "referred",   label: "Referred to professional",    sub: "User connected with mental health professional",   color: "blue" },
+                  { value: "no-contact", label: "Could not reach user",        sub: "All attempts exhausted, escalated to authorities", color: "orange" },
+                ] as const).map(({ value, label, sub, color }) => {
+                  const active = resolutionOutcome === value;
+                  return (
+                    <button
+                      key={value}
+                      onClick={() => setResolutionOutcome(value)}
+                      className={`w-full p-3 border-2 rounded-xl text-left transition-all ${
+                        active ? `border-${color}-400 bg-${color}-50` : "border-gray-200 bg-white hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${active ? `border-${color}-500 bg-${color}-500` : "border-gray-300"}`} />
+                        <div>
+                          <p className={`text-sm font-semibold ${active ? `text-${color}-900` : "text-gray-800"}`}>{label}</p>
+                          <p className="text-xs text-gray-500">{sub}</p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Resolution notes */}
+            <div className="mb-5">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Resolution Notes</label>
+              <textarea
+                value={resolutionNotes}
+                onChange={(e) => setResolutionNotes(e.target.value)}
+                rows={3}
+                placeholder="Summarise what was done, who was involved, and what follow-up (if any) is needed…"
+                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-green-500 outline-none resize-none text-sm"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                className="flex-1 bg-green-600 hover:bg-green-700 gap-2"
+                disabled={isUpdating}
+                onClick={async () => {
+                  if (!selectedEvent) return;
+                  try {
+                    setIsUpdating(true);
+                    await api.admin.updateCrisisEventStatus(selectedEvent.id, {
+                      status: "resolved",
+                      notes: resolutionNotes || undefined,
+                    });
+                    await loadEvents();
+                    setShowResolveModal(false);
+                    setResolutionNotes("");
+                  } catch (err) {
+                    console.error("Failed to update crisis event", err);
                   } finally {
                     setIsUpdating(false);
                   }
                 }}
               >
                 <CheckCircle className="w-4 h-4" />
-                Update Status
+                {isUpdating ? "Saving…" : "Mark as Resolved"}
+                {!isUpdating && <ArrowRight className="w-4 h-4 ml-auto" />}
+              </Button>
+              <Button variant="outline" className="px-5" onClick={() => { setShowResolveModal(false); setResolutionNotes(""); }}>
+                Cancel
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* ── Move Back Confirmation Modal ── */}
+      {showMoveBackModal && moveBackEvent && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowMoveBackModal(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                  <RotateCcw className="w-5 h-5 text-orange-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Move Case Back?</h3>
+                  <p className="text-sm text-gray-500">{moveBackEvent.userName}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowMoveBackModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-5">
+              <p className="text-sm text-orange-800">
+                This will move <strong>{moveBackEvent.userName}</strong>'s case from{" "}
+                <strong className="capitalize">{moveBackEvent.status.replace("-", " ")}</strong> back to{" "}
+                <strong>{getPreviousStatusLabel(moveBackEvent.status)}</strong>.
+              </p>
+              <p className="text-xs text-orange-600 mt-2">
+                Use this only to correct an accidental status change. All previous notes will be preserved.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                className="flex-1 bg-orange-500 hover:bg-orange-600 gap-2"
+                disabled={isUpdating}
+                onClick={async () => {
+                  if (!moveBackEvent) return;
+                  const prevStatus = getPreviousStatus(moveBackEvent.status);
+                  if (!prevStatus) return;
+                  try {
+                    setIsUpdating(true);
+                    await api.admin.updateCrisisEventStatus(moveBackEvent.id, {
+                      status: prevStatus,
+                    });
+                    await loadEvents();
+                    setShowMoveBackModal(false);
+                    setMoveBackEvent(null);
+                  } catch (err) {
+                    console.error("Failed to move case back", err);
+                  } finally {
+                    setIsUpdating(false);
+                  }
+                }}
+              >
+                <RotateCcw className="w-4 h-4" />
+                {isUpdating ? "Saving…" : `Move Back to ${getPreviousStatusLabel(moveBackEvent.status)}`}
               </Button>
               <Button
                 variant="outline"
-                className="px-6"
-                onClick={() => {
-                  setShowStatusModal(false);
-                  setStatusNotes("");
-                }}
+                className="px-5"
+                onClick={() => { setShowMoveBackModal(false); setMoveBackEvent(null); }}
               >
                 Cancel
               </Button>
@@ -1105,38 +1504,33 @@ export function CrisisDashboard() {
               {selectedEvent.status === "pending" && (
                 <Button
                   className="flex-1 bg-red-600 hover:bg-red-700 gap-2"
-                  onClick={() => {
-                    setShowDetailsModal(false);
-                    setShowContactModal(true);
-                  }}
+                  onClick={() => { setShowDetailsModal(false); setShowContactModal(true); }}
                 >
                   <Phone className="w-4 h-4" />
-                  Contact Now
+                  Log Contact
+                  <ArrowRight className="w-4 h-4 ml-auto" />
                 </Button>
               )}
-              {(selectedEvent.status === "contacted" || selectedEvent.status === "in-progress") && (
+              {selectedEvent.status === "contacted" && (
                 <Button
-                  className="flex-1 gap-2"
-                  onClick={() => {
-                    setShowDetailsModal(false);
-                    setShowStatusModal(true);
-                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 gap-2"
+                  onClick={() => { setShowDetailsModal(false); setShowInterventionModal(true); }}
+                >
+                  <Zap className="w-4 h-4" />
+                  Begin Intervention
+                  <ArrowRight className="w-4 h-4 ml-auto" />
+                </Button>
+              )}
+              {selectedEvent.status === "in-progress" && (
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700 gap-2"
+                  onClick={() => { setShowDetailsModal(false); setShowResolveModal(true); }}
                 >
                   <CheckCircle className="w-4 h-4" />
-                  Update Status
+                  Resolve Case
+                  <ArrowRight className="w-4 h-4 ml-auto" />
                 </Button>
               )}
-              <Button
-                variant="outline"
-                className="flex-1 gap-2"
-                onClick={() => {
-                  // Export details
-                  console.log('Exporting event details:', selectedEvent.id);
-                }}
-              >
-                <Download className="w-4 h-4" />
-                Export Report
-              </Button>
               <Button
                 variant="outline"
                 className="px-6"

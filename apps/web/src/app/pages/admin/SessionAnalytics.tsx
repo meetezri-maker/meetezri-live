@@ -2,17 +2,19 @@ import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { StatsCard } from "../../components/StatsCard";
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
+import { datesForPreset, downloadCsv } from "@/lib/adminAnalytics";
+import { mergeCompanionAvatarCountsClient } from "@/lib/avatar/adminAvatarAnalytics";
 import {
   MessageSquare,
   Clock,
   TrendingUp,
   Users,
-  Calendar,
 } from "lucide-react";
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   BarChart,
   Bar,
   PieChart,
@@ -25,62 +27,75 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { api } from "../../../lib/api";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
+import { useAdminStats, useAdminRecentActivity } from "@/lib/queries/adminQueries";
+
+const COMPANION_PIE_COLOR: Record<string, string> = {
+  "Not set": "#94a3b8",
+  Alex: "#3b82f6",
+  "Alex Rivera": "#3b82f6",
+  "Sara Mitchell": "#ec4899",
+  "Sarah Mitchell": "#ec4899",
+  "Jordan Taylor": "#10b981",
+  "Maya Chen": "#8b5cf6",
+  Other: "#64748b",
+};
+const PIE_FALLBACK = ["#0ea5e9", "#f97316", "#a855f7", "#14b8a6", "#eab308"];
+
+function formatAnalyticsRangeLabel(from: string, to: string): string {
+  try {
+    const a = new Date(`${from}T12:00:00Z`);
+    const b = new Date(`${to}T12:00:00Z`);
+    const o: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+    return `${a.toLocaleDateString(undefined, o)} – ${b.toLocaleDateString(undefined, o)}`;
+  } catch {
+    return `${from} – ${to}`;
+  }
+}
 
 export function SessionAnalytics() {
-  const [statsData, setStatsData] = useState<any | null>(null);
-  const [recentSessions, setRecentSessions] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
+  const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
 
-  useEffect(() => {
-    let isMounted = true;
+  const { data: statsData, isLoading: statsLoading, isFetching, error, refetch } = useAdminStats({
+    chartPeriod: "month",
+    dateFrom,
+    dateTo,
+  });
+  const { data: recentData, isLoading: recentLoading } = useAdminRecentActivity();
 
-    const fetchData = async () => {
-      try {
-        const [stats, recent] = await Promise.all([
-          api.admin.getStats(),
-          api.admin.getRecentActivity(),
-        ]);
-        if (!isMounted) {
-          return;
-        }
-        setStatsData(stats);
-        setRecentSessions(recent.sessions || []);
-      } catch (err: any) {
-        console.error("Failed to fetch session analytics", err);
-        if (isMounted) {
-          setError(err.message || "Failed to load session analytics");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
+  const isLoading = statsLoading || recentLoading;
+  const recentSessions: any[] = recentData?.sessions || [];
 
-    fetchData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const totalSessions = statsData?.totalSessions || 0;
   const totalUsers = statsData?.totalUsers || 0;
-  const avgSessionLength = statsData?.avgSessionLength || 0;
 
-  const sessionActivity = (statsData?.sessionActivity || []) as any[];
+  const sessionActivity = (statsData?.sessionActivity || []) as Array<{
+    day: string;
+    sessions: number;
+    duration: number;
+  }>;
 
-  const sessionTrendData = sessionActivity.map((item: any) => ({
+  const sessionsInRange = sessionActivity.reduce(
+    (sum, item) => sum + (Number(item.sessions) || 0),
+    0
+  );
+  const dayCount = Math.max(1, sessionActivity.length);
+  const avgDurationInRange =
+    sessionsInRange > 0
+      ? Math.round(
+          sessionActivity.reduce(
+            (sum, item) =>
+              sum + (Number(item.sessions) || 0) * (Number(item.duration) || 0),
+            0
+          ) / sessionsInRange
+        )
+      : 0;
+  const avgDailySessions = Math.round(sessionsInRange / dayCount);
+
+  const sessionTrendData = sessionActivity.map((item) => ({
     date: item.day,
     sessions: item.sessions,
   }));
-
-  const sessionsThisWeek = sessionActivity.reduce(
-    (sum, item: any) => sum + item.sessions,
-    0
-  );
 
   const hourlyActivity = (statsData?.hourlyActivity || []) as any[];
 
@@ -89,51 +104,70 @@ export function SessionAnalytics() {
     count: item.sessions,
   }));
 
+  const totalSessionsAllTime = statsData?.totalSessions ?? 0;
+
   const statsCards = [
     {
-      title: "Total Sessions",
-      value: totalSessions.toLocaleString(),
+      title: "Total Talk it out",
+      value: totalSessionsAllTime.toLocaleString(),
       change: "0.0%",
       changeType: "positive",
       icon: MessageSquare,
       color: "primary",
       delay: 0,
+      sub: "all time · completed",
+    },
+    {
+      title: "Talk it out in Period",
+      value: sessionsInRange.toLocaleString(),
+      change: "0.0%",
+      changeType: "positive",
+      icon: TrendingUp,
+      color: "success",
+      delay: 0.1,
+      sub: "selected date range",
     },
     {
       title: "Avg Duration",
-      value: `${avgSessionLength} min`,
+      value: `${avgDurationInRange} min`,
       change: "0.0",
       changeType: "positive",
       icon: Clock,
       color: "secondary",
-      delay: 0.1,
+      delay: 0.2,
+      sub: "per completed session",
     },
     {
-      title: "Active Users",
+      title: "Registered users",
       value: totalUsers.toLocaleString(),
       change: "0.0%",
       changeType: "positive",
       icon: Users,
       color: "accent",
-      delay: 0.2,
-    },
-    {
-      title: "Sessions This Week",
-      value: sessionsThisWeek.toLocaleString(),
-      change: "0.0%",
-      changeType: "positive",
-      icon: TrendingUp,
-      color: "success",
       delay: 0.3,
+      sub: "total registered",
     },
   ];
 
-  const avatarUsageData: { name: string; value: number; color: string }[] = [
-    { name: "AI Sessions", value: totalSessions, color: "#9b87f5" },
-    { name: "Mood Tracking", value: 0, color: "#7c3aed" },
-    { name: "Journal", value: 0, color: "#d946ef" },
-    { name: "Other", value: 0, color: "#0ea5e9" },
-  ];
+  const avatarUsageData: { name: string; value: number; count: number; color: string }[] = (() => {
+    const raw = statsData?.avatarDistribution as
+      | Array<{ name: string; value?: number; count?: number; color?: string }>
+      | undefined;
+    if (!raw?.length) {
+      return [{ name: "No data", value: 100, count: 0, color: "#94a3b8" }];
+    }
+    const merged = mergeCompanionAvatarCountsClient(
+      raw.map((r) => ({ name: r.name, c: Number(r.count ?? 0) }))
+    );
+    const total = merged.reduce((s, r) => s + r.count, 0);
+    return merged.map((r, i) => {
+      const name = r.name;
+      const count = r.count;
+      const value = total > 0 ? Math.round((count / total) * 100) : 0;
+      const color = COMPANION_PIE_COLOR[name] ?? PIE_FALLBACK[i % PIE_FALLBACK.length];
+      return { name, value, count, color };
+    });
+  })();
 
   const topicDistributionData = sessionActivity.map((item: any) => ({
     topic: item.day,
@@ -172,16 +206,6 @@ export function SessionAnalytics() {
     };
   });
 
-  if (isLoading) {
-    return (
-      <AdminLayoutNew>
-        <div className="flex items-center justify-center h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-        </div>
-      </AdminLayoutNew>
-    );
-  }
-
   if (error) {
     return (
       <AdminLayoutNew>
@@ -190,7 +214,7 @@ export function SessionAnalytics() {
           <p className="text-muted-foreground mb-4">
             Failed to load session analytics. Please try again later.
           </p>
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-red-600">{error?.message ?? String(error)}</p>
         </div>
       </AdminLayoutNew>
     );
@@ -203,26 +227,66 @@ export function SessionAnalytics() {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between"
         >
-          <h1 className="text-3xl font-bold mb-2">Session Analytics</h1>
-          <p className="text-muted-foreground">
-            Monitor AI session usage patterns and metrics
-          </p>
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Session Analytics</h1>
+            <p className="text-muted-foreground">
+              {formatAnalyticsRangeLabel(dateFrom, dateTo)} · KPIs and charts use this period (session trend matches
+              totals).
+            </p>
+          </div>
+          <AdminAnalyticsToolbar
+            showChartPeriod={false}
+            showRangePreset={false}
+            chartPeriod="month"
+            onChartPeriodChange={() => {}}
+            rangePreset="30d"
+            onRangePresetChange={() => {}}
+            useCustomRange
+            onUseCustomRangeChange={() => {}}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            onRefresh={() => void refetch()}
+            isLoading={isFetching}
+            onExport={() => {
+              if (!statsData) return;
+              const rows = (statsData.sessionActivity || []).map((r: any, i: number) => ({
+                i,
+                day: r.day,
+                sessions: r.sessions,
+                avgDurationMin: r.duration,
+              }));
+              downloadCsv(`session-analytics-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+            }}
+          />
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {statsCards.map((card) => (
-            <StatsCard
-              key={card.title}
-              title={card.title}
-              value={card.value}
-              change={card.change}
-              changeType={card.changeType as "positive" | "negative" | "neutral"}
-              icon={card.icon}
-              color={card.color as any}
-              delay={card.delay}
-            />
-          ))}
+          {isLoading
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="rounded-xl border border-gray-200 bg-white p-6 h-32 animate-pulse"
+                >
+                  <div className="h-4 w-24 bg-gray-200 rounded mb-4" />
+                  <div className="h-8 w-20 bg-gray-200 rounded" />
+                </div>
+              ))
+            : statsCards.map((card) => (
+                <StatsCard
+                  key={card.title}
+                  title={card.title}
+                  value={card.value}
+                  change={card.change}
+                  changeType={card.changeType as "positive" | "negative" | "neutral"}
+                  icon={card.icon}
+                  color={card.color as any}
+                  delay={card.delay}
+                />
+              ))}
         </div>
 
         {/* Charts Row 1 */}
@@ -234,29 +298,47 @@ export function SessionAnalytics() {
             transition={{ delay: 0.4 }}
           >
             <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6">Session Trend (7 Days)</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={sessionTrendData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="date" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
+              <h2 className="text-xl font-bold mb-1">Session trend</h2>
+              <p className="text-sm text-muted-foreground mb-6">Daily sessions in selected range</p>
+              <ResponsiveContainer width="100%" height={340}>
+                <AreaChart data={sessionTrendData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
+                  <defs>
+                    <linearGradient id="sessionTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#9b87f5" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#9b87f5" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis
+                    dataKey="date"
+                    stroke="#94a3b8"
+                    tick={{ fontSize: 11, fill: "#64748b" }}
+                    angle={-35}
+                    textAnchor="end"
+                    height={64}
+                    interval="preserveStartEnd"
+                    minTickGap={28}
+                  />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 11, fill: "#64748b" }} width={40} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "10px",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                      fontSize: 12,
                     }}
                   />
-                  <Legend />
-                  <Line
+                  <Area
                     type="monotone"
                     dataKey="sessions"
                     stroke="#9b87f5"
-                    strokeWidth={3}
-                    dot={{ fill: "#9b87f5", r: 5 }}
-                    activeDot={{ r: 7 }}
+                    strokeWidth={2.5}
+                    fill="url(#sessionTrendGrad)"
+                    dot={false}
+                    activeDot={{ r: 6, fill: "#9b87f5", strokeWidth: 0 }}
                   />
-                </LineChart>
+                </AreaChart>
               </ResponsiveContainer>
             </Card>
           </motion.div>
@@ -268,34 +350,59 @@ export function SessionAnalytics() {
             transition={{ delay: 0.5 }}
           >
             <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6">Avatar Preferences</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
+              <h2 className="text-xl font-bold mb-2">Companion avatar (profile selection)</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Grouped to the same four companions as Session Lobby; unrecognized values go to &quot;Other&quot;.
+              </p>
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
                   <Pie
                     data={avatarUsageData}
                     cx="50%"
-                    cy="50%"
+                    cy="45%"
                     labelLine={false}
-                    label={({ name, percent }) =>
-                      `${name.split(" ")[0]} ${(percent * 100).toFixed(0)}%`
-                    }
-                    outerRadius={100}
+                    label={false}
+                    isAnimationActive={false}
+                    innerRadius={55}
+                    outerRadius={90}
                     fill="#8884d8"
                     dataKey="value"
+                    paddingAngle={3}
                   >
                     {avatarUsageData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                      <Cell key={`cell-${entry.name}-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip
+                    formatter={(value: number, _n: string, item: { payload?: { name?: string; count?: number } }) => [
+                      `${item.payload?.count ?? "—"} profiles (${value}%)`,
+                      item.payload?.name ?? "",
+                    ]}
                     contentStyle={{
                       backgroundColor: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "10px",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                      fontSize: 12,
                     }}
                   />
                 </PieChart>
               </ResponsiveContainer>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+                {avatarUsageData.map((a) => (
+                  <div key={a.name} className="flex items-start gap-2 text-sm">
+                    <div
+                      className="w-3 h-3 rounded-full mt-1 shrink-0"
+                      style={{ backgroundColor: a.color }}
+                    />
+                    <span className="text-muted-foreground">
+                      <span className="font-medium text-foreground">{a.name}</span>
+                      <span className="mx-1">·</span>
+                      {a.count} profiles ({a.value}%)
+                    </span>
+                  </div>
+                ))}
+              </div>
             </Card>
           </motion.div>
         </div>
@@ -309,20 +416,32 @@ export function SessionAnalytics() {
             transition={{ delay: 0.6 }}
           >
             <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6">Popular Topics</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={topicDistributionData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis type="number" stroke="#6b7280" />
-                  <YAxis dataKey="topic" type="category" stroke="#6b7280" width={100} />
+              <h2 className="text-xl font-bold mb-1">Talk it out by Day</h2>
+              <p className="text-sm text-muted-foreground mb-6">Daily session volume in selected range</p>
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={topicDistributionData} margin={{ top: 4, right: 12, left: 0, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis
+                    dataKey="topic"
+                    stroke="#94a3b8"
+                    tick={{ fontSize: 10, fill: "#64748b" }}
+                    angle={-35}
+                    textAnchor="end"
+                    height={56}
+                    interval="preserveStartEnd"
+                    minTickGap={20}
+                  />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 11, fill: "#64748b" }} width={36} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "10px",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                      fontSize: 12,
                     }}
                   />
-                  <Bar dataKey="count" fill="#9b87f5" radius={[0, 8, 8, 0]} />
+                  <Bar dataKey="count" name="Talk it out" fill="#9b87f5" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -335,27 +454,39 @@ export function SessionAnalytics() {
             transition={{ delay: 0.7 }}
           >
             <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6">Session Duration Distribution</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={sessionDurationData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="range" stroke="#6b7280" />
-                  <YAxis stroke="#6b7280" />
+              <h2 className="text-xl font-bold mb-1">Active Talk it out by Hour</h2>
+              <p className="text-sm text-muted-foreground mb-6">Session volume distribution by hour of day</p>
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={sessionDurationData} margin={{ top: 4, bottom: 8, left: 0, right: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis
+                    dataKey="range"
+                    stroke="#94a3b8"
+                    tick={{ fontSize: 10, fill: "#64748b" }}
+                    angle={-35}
+                    textAnchor="end"
+                    height={56}
+                    interval="preserveStartEnd"
+                    minTickGap={8}
+                  />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 11, fill: "#64748b" }} width={36} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "white",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "10px",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                      fontSize: 12,
                     }}
                   />
-                  <Bar dataKey="count" fill="#7c3aed" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="count" name="Talk it out" fill="#7c3aed" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
           </motion.div>
         </div>
 
-        {/* Recent Sessions Table */}
+        {/* Recent Talk it out Table */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -363,7 +494,7 @@ export function SessionAnalytics() {
         >
           <Card className="overflow-hidden">
             <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold">Recent Sessions</h2>
+              <h2 className="text-xl font-bold">Recent Talk it out</h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -389,8 +520,17 @@ export function SessionAnalytics() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {mappedRecentSessions.map((session) => (
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {isLoading && (
+                    <AdminTableSkeletonRows
+                      columns={6}
+                      rows={8}
+                      firstColumnWide
+                      padding="comfortable"
+                    />
+                  )}
+                  {!isLoading &&
+                    mappedRecentSessions.map((session) => (
                     <tr key={session.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-3">
@@ -427,6 +567,16 @@ export function SessionAnalytics() {
                       </td>
                     </tr>
                   ))}
+                  {!isLoading && mappedRecentSessions.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="px-6 py-12 text-center text-sm text-muted-foreground"
+                      >
+                        No recent sessions in this range.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

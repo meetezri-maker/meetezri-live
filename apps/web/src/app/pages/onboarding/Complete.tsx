@@ -3,11 +3,14 @@ import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { Heart, Sparkles, Video, MessageSquare, TrendingUp, ArrowRight, Loader2 } from "lucide-react";
+import { Sparkles, Video, MessageSquare, TrendingUp, ArrowRight, Loader2 } from "lucide-react";
+import { BrandLogo } from "../../components/BrandLogo";
 import { FloatingElement } from "../../components/FloatingElement";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useEffect, useRef } from "react";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
+import { EmojiText } from "@/components/ui/EmojiText";
 
 export function OnboardingComplete() {
   const { completeOnboarding, isLoading } = useOnboarding();
@@ -64,7 +67,12 @@ export function OnboardingComplete() {
     <OnboardingLayout
       currentStep={8}
       totalSteps={8}
-      title="You're All Set! 🎉"
+      title={
+        <span className="inline-flex flex-wrap items-center justify-center gap-2">
+          <span>You&apos;re All Set!</span>
+          <FluentEmoji emoji="🎉" size={40} />
+        </span>
+      }
       subtitle="Your personalized wellness journey starts now"
     >
       <div className="space-y-6">
@@ -77,8 +85,8 @@ export function OnboardingComplete() {
         >
           <FloatingElement yOffset={15} duration={3}>
             <div className="relative">
-              <div className="w-32 h-32 bg-gradient-to-br from-primary via-accent to-secondary rounded-3xl flex items-center justify-center shadow-2xl">
-                <Heart className="w-16 h-16 text-white" fill="white" />
+              <div className="flex items-center justify-center py-2">
+                <BrandLogo heightClass="h-28" />
               </div>
               
               {/* Sparkles around the heart */}
@@ -180,7 +188,7 @@ export function OnboardingComplete() {
                 "✅ Your profile is complete and saved",
                 "✅ Ezri is ready for your first session",
                 "✅ You can customize settings anytime",
-                "✅ Crisis resources are available 24/7"
+                "✅ Emergency resources are available 24/7",
               ].map((item, index) => (
                 <motion.li
                   key={index}
@@ -189,7 +197,7 @@ export function OnboardingComplete() {
                   transition={{ delay: 1 + index * 0.05 }}
                   className="flex items-center gap-2 text-sm"
                 >
-                  {item}
+                  <EmojiText emojiSize={18}>{item}</EmojiText>
                 </motion.li>
               ))}
             </ul>
@@ -255,7 +263,9 @@ export function OnboardingComplete() {
         >
           <Card className="p-5 bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
             <p className="text-sm italic text-muted-foreground">
-              "Every journey begins with a single step. We're proud of you for taking this one." 💙
+              <EmojiText emojiSize={20}>
+                &quot;Every journey begins with a single step. We&apos;re proud of you for taking this one.&quot; 💙
+              </EmojiText>
             </p>
           </Card>
         </motion.div>

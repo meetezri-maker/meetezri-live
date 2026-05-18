@@ -1,6 +1,13 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { createWellnessTool, deleteWellnessTool, getWellnessToolById, getWellnessTools, updateWellnessTool, trackWellnessProgress, getUserWellnessProgress, startWellnessSession, completeWellnessSession, getWellnessStats, getWellnessChallengesWithStats, toggleWellnessToolFavorite } from './wellness.service';
-import { CreateWellnessToolInput, UpdateWellnessToolInput, TrackProgressInput } from './wellness.schema';
+import { createWellnessTool, createWellnessChallenge, deleteWellnessTool, getWellnessToolById, getWellnessTools, updateWellnessTool, trackWellnessProgress, getUserWellnessProgress, startWellnessSession, completeWellnessSession, getWellnessStats, getWellnessChallengesWithStats, getWellnessChallengesForUserDashboard, toggleWellnessToolFavorite, updateWellnessChallenge, joinWellnessChallenge, unjoinWellnessChallenge } from './wellness.service';
+import {
+  CreateWellnessChallengeInput,
+  CreateWellnessToolInput,
+  UpdateWellnessToolInput,
+  TrackProgressInput,
+  createWellnessChallengeSchema,
+  updateWellnessChallengeSchema,
+} from './wellness.schema';
 
 export async function createWellnessToolHandler(
   request: FastifyRequest<{ Body: CreateWellnessToolInput }>,
@@ -152,13 +159,93 @@ export async function getWellnessStatsHandler(
 }
 
 export async function getWellnessChallengesHandler(
+  request: FastifyRequest<{ Querystring: { scope?: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    if (request.query?.scope === 'dashboard') {
+      const userId = (request.user as { sub: string }).sub;
+      const data = await getWellnessChallengesForUserDashboard(userId);
+      return reply.send(data);
+    }
+    const payload = await getWellnessChallengesWithStats();
+    return reply.send(payload);
+  } catch (error) {
+    return reply.code(500).send({ message: 'Failed to fetch wellness challenges' });
+  }
+}
+
+export async function getWellnessChallengesMeHandler(
   request: FastifyRequest,
   reply: FastifyReply
 ) {
   try {
-    const challenges = await getWellnessChallengesWithStats();
-    return reply.send(challenges);
+    const userId = (request.user as { sub: string }).sub;
+    const data = await getWellnessChallengesForUserDashboard(userId);
+    return reply.send(data);
   } catch (error) {
-    return reply.code(500).send({ message: 'Failed to fetch wellness challenges' });
+    return reply.code(500).send({ message: 'Failed to fetch your wellness challenges' });
+  }
+}
+
+export async function createWellnessChallengeHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  try {
+    const body: CreateWellnessChallengeInput = createWellnessChallengeSchema.parse(request.body);
+    const created = await createWellnessChallenge(body);
+    return reply.code(201).send(created);
+  } catch (error: any) {
+    const message =
+      error?.name === 'ZodError'
+        ? 'Invalid challenge payload'
+        : error?.message || 'Failed to create wellness challenge';
+    return reply.code(400).send({ message });
+  }
+}
+
+export async function joinWellnessChallengeHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const userId = (request.user as { sub: string }).sub;
+    const result = await joinWellnessChallenge(userId, request.params.id);
+    return reply.code(201).send(result);
+  } catch (error: any) {
+    if (error.message === 'Challenge not found') {
+      return reply.code(404).send({ message: 'Challenge not found' });
+    }
+    throw error;
+  }
+}
+
+export async function unjoinWellnessChallengeHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  const userId = (request.user as { sub: string }).sub;
+  await unjoinWellnessChallenge(userId, request.params.id);
+  return reply.code(204).send();
+}
+
+export async function updateWellnessChallengeHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const body = updateWellnessChallengeSchema.parse(request.body);
+    const updated = await updateWellnessChallenge(request.params.id, body);
+    return reply.send(updated);
+  } catch (error: any) {
+    if (error?.message === 'Wellness challenge not found') {
+      return reply.code(404).send({ message: 'Wellness challenge not found' });
+    }
+    const message =
+      error?.name === 'ZodError'
+        ? 'Invalid challenge payload'
+        : error?.message || 'Failed to update wellness challenge';
+    return reply.code(400).send({ message });
   }
 }

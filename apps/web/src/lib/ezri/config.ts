@@ -8,6 +8,8 @@ export type EzriConfig = {
   apiBase: string;
   wsBase: string;
   defaults: EzriProviders;
+  /** Fallback voice env; companion-specific voices use {@link resolveEzriWsVoiceForCompanion}. */
+  voice: string;
 };
 
 function requireEnv(name: string, value: string | undefined): string {
@@ -39,15 +41,19 @@ export function getEzriConfig(): EzriConfig {
     deriveWsBaseFromApiBase(apiBase);
 
   const brainProvider =
-    (import.meta.env.VITE_DEFAULT_BRAIN_PROVIDER as string | undefined) || "groq";
+    (import.meta.env.VITE_DEFAULT_BRAIN_PROVIDER as string | undefined) || "runpod";
   const ttsProvider =
-    (import.meta.env.VITE_DEFAULT_TTS_PROVIDER as string | undefined) || "pocket_tts";
+    (import.meta.env.VITE_DEFAULT_TTS_PROVIDER as string | undefined) || "runpod";
   const sttProvider =
-    (import.meta.env.VITE_DEFAULT_STT_PROVIDER as string | undefined) || "browser";
+    (import.meta.env.VITE_DEFAULT_STT_PROVIDER as string | undefined) || "runpod";
+
+  const voice =
+    (import.meta.env.VITE_DEFAULT_EZRI_VOICE as string | undefined)?.trim() || "af_sky";
 
   return {
     apiBase,
     wsBase,
     defaults: { brainProvider, ttsProvider, sttProvider },
+    voice,
   };
 }

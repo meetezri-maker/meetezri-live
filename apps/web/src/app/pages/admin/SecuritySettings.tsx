@@ -6,18 +6,89 @@ import {
   Key,
   Eye,
   AlertTriangle,
-  CheckCircle,
   Users,
   Clock,
   Smartphone,
-  Mail,
   FileText,
   Activity,
-  Settings,
   Save,
-  X
+  X,
+  Loader2,
+  Download,
+  LogOut,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
+
+const SECURITY_SETTINGS_KEY = "admin_security_settings";
+
+export type AdminSecurityForm = {
+  twoFactorEnabled: boolean;
+  twoFactorSms: boolean;
+  twoFactorTotp: boolean;
+  twoFactorEmail: boolean;
+  ssoEnabled: boolean;
+  ssoGoogle: boolean;
+  ssoAzure: boolean;
+  ssoSaml: boolean;
+  minPasswordLength: number;
+  passwordExpiry: string;
+  maxLoginAttempts: string;
+  lockoutMinutes: string;
+  requireUppercase: boolean;
+  requireLowercase: boolean;
+  requireNumbers: boolean;
+  requireSpecial: boolean;
+  preventReuse: boolean;
+  sessionTimeout: string;
+  maxConcurrentSessions: string;
+  rememberDevice: boolean;
+  forceLogoutOnPasswordChange: boolean;
+  allowConcurrentSameIp: boolean;
+};
+
+const DEFAULT_SECURITY_FORM: AdminSecurityForm = {
+  twoFactorEnabled: true,
+  twoFactorSms: true,
+  twoFactorTotp: true,
+  twoFactorEmail: false,
+  ssoEnabled: true,
+  ssoGoogle: true,
+  ssoAzure: false,
+  ssoSaml: false,
+  minPasswordLength: 12,
+  passwordExpiry: "90",
+  maxLoginAttempts: "5",
+  lockoutMinutes: "30",
+  requireUppercase: true,
+  requireLowercase: true,
+  requireNumbers: true,
+  requireSpecial: true,
+  preventReuse: true,
+  sessionTimeout: "30",
+  maxConcurrentSessions: "3",
+  rememberDevice: true,
+  forceLogoutOnPasswordChange: true,
+  allowConcurrentSameIp: false,
+};
+
+function mergeSecurityPayload(raw: unknown): AdminSecurityForm {
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_SECURITY_FORM };
+  const o = raw as Record<string, unknown>;
+  const next = { ...DEFAULT_SECURITY_FORM };
+  (Object.keys(DEFAULT_SECURITY_FORM) as Array<keyof AdminSecurityForm>).forEach((k) => {
+    if (!(k in o)) return;
+    const v = o[k];
+    const d = DEFAULT_SECURITY_FORM[k];
+    if (typeof d === "boolean" && typeof v === "boolean") (next as Record<string, unknown>)[k] = v;
+    else if (typeof d === "number" && typeof v === "number" && Number.isFinite(v))
+      (next as Record<string, unknown>)[k] = Math.min(128, Math.max(6, Math.round(v)));
+    else if (typeof d === "string" && typeof v === "string") (next as Record<string, unknown>)[k] = v;
+  });
+  return next;
+}
 
 interface SecurityLog {
   id: string;
@@ -30,23 +101,108 @@ interface SecurityLog {
 }
 
 export function SecuritySettings() {
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
-  const [passwordExpiry, setPasswordExpiry] = useState("90");
-  const [maxLoginAttempts, setMaxLoginAttempts] = useState("5");
-  const [sessionTimeout, setSessionTimeout] = useState("30");
+  const [form, setForm] = useState<AdminSecurityForm>(DEFAULT_SECURITY_FORM);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [showLogDetails, setShowLogDetails] = useState(false);
   const [selectedLog, setSelectedLog] = useState<SecurityLog | null>(null);
-  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
+  const [isTerminating, setIsTerminating] = useState(false);
 
-  const handleSaveChanges = () => {
-    console.log("Saving security settings:", {
-      twoFactorEnabled,
-      passwordExpiry,
-      maxLoginAttempts,
-      sessionTimeout
-    });
-    setShowSaveConfirmation(true);
-    setTimeout(() => setShowSaveConfirmation(false), 3000);
+  const patchForm = useCallback((partial: Partial<AdminSecurityForm>) => {
+    setForm((f) => ({ ...f, ...partial }));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await api.getSettings();
+        const list = Array.isArray(rows) ? rows : [];
+        const row = list.find((r: { key?: string }) => r.key === SECURITY_SETTINGS_KEY);
+        const raw = row?.value;
+        if (!cancelled) {
+          setForm(mergeSecurityPayload(raw));
+          setSettingsLoaded(true);
+        }
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) {
+          toast.error("Could not load saved security settings (using defaults).");
+          setSettingsLoaded(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSaveChanges = async () => {
+    setIsSaving(true);
+    try {
+      await api.updateSetting(
+        SECURITY_SETTINGS_KEY,
+        form,
+        "Admin security policy configuration (UI preferences; enforce in auth layer separately)"
+      );
+      toast.success("Security settings saved successfully.");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to save security settings.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleTerminateAllSessions = async () => {
+    if (!window.confirm("This will sign out your current session. All other active sessions will expire at their next token refresh. Continue?")) return;
+    setIsTerminating(true);
+    try {
+      await supabase.auth.signOut({ scope: "global" });
+      toast.success("All sessions terminated. You have been signed out.");
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to terminate sessions.");
+      setIsTerminating(false);
+    }
+  };
+
+  const handleExportLogs = () => {
+    if (securityLogs.length === 0) {
+      toast.error("No security logs to export.");
+      return;
+    }
+    const headers = ["ID", "Event", "Severity", "User", "IP Address", "Timestamp", "Action"];
+    const rows = securityLogs.map((log) => [
+      log.id,
+      `"${log.event.replace(/"/g, '""')}"`,
+      log.severity,
+      log.user,
+      log.ipAddress,
+      log.timestamp.toISOString(),
+      `"${log.action.replace(/"/g, '""')}"`,
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `security-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${securityLogs.length} security log entries.`);
+  };
+
+  const handleExportSingleLog = (log: SecurityLog) => {
+    const data = JSON.stringify(log, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `security-log-${log.id}-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success("Log exported as JSON.");
   };
 
   const handleViewLog = (log: SecurityLog) => {
@@ -54,54 +210,69 @@ export function SecuritySettings() {
     setShowLogDetails(true);
   };
 
-  // Mock security logs
-  const securityLogs: SecurityLog[] = [
-    {
-      id: "log001",
-      event: "Failed login attempt",
-      severity: "medium",
-      user: "unknown",
-      timestamp: new Date(Date.now() - 15 * 60 * 1000),
-      ipAddress: "192.168.1.45",
-      action: "Account locked after 5 attempts"
-    },
-    {
-      id: "log002",
-      event: "Password changed",
-      severity: "low",
-      user: "admin@ezri.com",
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      ipAddress: "192.168.1.12",
-      action: "Password updated successfully"
-    },
-    {
-      id: "log003",
-      event: "Suspicious activity detected",
-      severity: "high",
-      user: "user@example.com",
-      timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000),
-      ipAddress: "45.123.67.89",
-      action: "Multiple location login attempts"
-    },
-    {
-      id: "log004",
-      event: "2FA enabled",
-      severity: "low",
-      user: "sarah@ezri.com",
-      timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
-      ipAddress: "192.168.1.23",
-      action: "Two-factor authentication activated"
-    },
-    {
-      id: "log005",
-      event: "API key regenerated",
-      severity: "medium",
-      user: "admin@ezri.com",
-      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000),
-      ipAddress: "192.168.1.12",
-      action: "Production API key rotated"
-    }
-  ];
+  const [securityLogs, setSecurityLogs] = useState<SecurityLog[]>([]);
+  const [dashStats, setDashStats] = useState<{
+    totalUsers: number;
+    activeSessions: number;
+    openErrors: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [stats, errs, audits] = await Promise.all([
+          api.admin.getStats(),
+          api.admin.getErrorLogs({ page: 1, limit: 40 }),
+          api.admin.getAuditLogs({ page: 1, limit: 25 }),
+        ]);
+        if (cancelled) return;
+        const errList = Array.isArray(errs) ? errs : [];
+        const auditList = Array.isArray(audits) ? audits : [];
+        setDashStats({
+          totalUsers: stats?.totalUsers ?? 0,
+          activeSessions: stats?.activeSessions ?? 0,
+          openErrors: errList.filter((e: any) => e.status === "open").length,
+        });
+        const fromErrors: SecurityLog[] = errList.slice(0, 12).map((e: any) => {
+          const sev = String(e.severity || "").toLowerCase();
+          const severity: SecurityLog["severity"] =
+            sev === "error" || sev === "fatal" ? "high" : sev === "warn" || sev === "warning" ? "medium" : "low";
+          return {
+            id: `err-${e.id}`,
+            event: e.message || "Error",
+            severity,
+            user: "system",
+            timestamp: e.created_at ? new Date(e.created_at) : new Date(),
+            ipAddress: "—",
+            action: `status: ${e.status || "open"}`,
+          };
+        });
+        const fromAudit: SecurityLog[] = auditList.slice(0, 12).map((a: any) => {
+          const actor = a.profiles;
+          return {
+            id: `audit-${a.id}`,
+            event: a.action || "Audit event",
+            severity: "low",
+            user: actor?.email || actor?.full_name || "actor",
+            timestamp: a.created_at ? new Date(a.created_at) : new Date(),
+            ipAddress: "—",
+            action: "Audit log",
+          };
+        });
+        const merged = [...fromErrors, ...fromAudit].sort(
+          (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+        );
+        setSecurityLogs(merged.slice(0, 20));
+      } catch (e) {
+        console.error(e);
+        setSecurityLogs([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const getSeverityColor = (severity: string) => {
     switch(severity) {
@@ -114,10 +285,10 @@ export function SecuritySettings() {
   };
 
   const stats = {
-    totalUsers: 1205,
-    twoFactorEnabled: 892,
-    activeSession: 234,
-    failedLogins: 12
+    totalUsers: dashStats?.totalUsers ?? 0,
+    twoFactorEnabled: "—" as const,
+    activeSession: dashStats?.activeSessions ?? 0,
+    failedLogins: dashStats?.openErrors ?? 0,
   };
 
   return (
@@ -135,13 +306,15 @@ export function SecuritySettings() {
           </div>
 
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg"
+            type="button"
+            disabled={!settingsLoaded || isSaving}
+            whileHover={{ scale: settingsLoaded && !isSaving ? 1.02 : 1 }}
+            whileTap={{ scale: settingsLoaded && !isSaving ? 0.98 : 1 }}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg disabled:opacity-60 disabled:pointer-events-none"
             onClick={handleSaveChanges}
           >
-            <Save className="w-4 h-4" />
-            Save Changes
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {isSaving ? "Saving…" : "Save Changes"}
           </motion.button>
         </motion.div>
 
@@ -174,8 +347,9 @@ export function SecuritySettings() {
                 <Shield className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">2FA Enabled</p>
+                <p className="text-gray-600 text-sm">2FA enrollment</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.twoFactorEnabled}</p>
+                <p className="text-xs text-gray-500 mt-1">Not stored in app DB</p>
               </div>
             </div>
           </motion.div>
@@ -191,7 +365,7 @@ export function SecuritySettings() {
                 <Activity className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Active Sessions</p>
+                <p className="text-gray-600 text-sm">Active Talk it out</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.activeSession}</p>
               </div>
             </div>
@@ -208,7 +382,7 @@ export function SecuritySettings() {
                 <AlertTriangle className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Failed Logins (24h)</p>
+                <p className="text-gray-600 text-sm">Open error logs</p>
                 <p className="text-2xl font-bold text-red-600">{stats.failedLogins}</p>
               </div>
             </div>
@@ -237,15 +411,30 @@ export function SecuritySettings() {
                   <p className="text-sm text-gray-600">Require users to verify identity with a second factor</p>
                   <div className="mt-3 space-y-2">
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="rounded" defaultChecked />
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={form.twoFactorSms}
+                        onChange={(e) => patchForm({ twoFactorSms: e.target.checked })}
+                      />
                       <span className="text-gray-700">SMS verification</span>
                     </label>
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="rounded" defaultChecked />
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={form.twoFactorTotp}
+                        onChange={(e) => patchForm({ twoFactorTotp: e.target.checked })}
+                      />
                       <span className="text-gray-700">Authenticator app (TOTP)</span>
                     </label>
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="rounded" />
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={form.twoFactorEmail}
+                        onChange={(e) => patchForm({ twoFactorEmail: e.target.checked })}
+                      />
                       <span className="text-gray-700">Email verification</span>
                     </label>
                   </div>
@@ -253,14 +442,15 @@ export function SecuritySettings() {
               </div>
 
               <motion.button
+                type="button"
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setTwoFactorEnabled(!twoFactorEnabled)}
+                onClick={() => patchForm({ twoFactorEnabled: !form.twoFactorEnabled })}
                 className={`relative w-14 h-7 rounded-full transition-colors ${
-                  twoFactorEnabled ? "bg-green-500" : "bg-gray-300"
+                  form.twoFactorEnabled ? "bg-green-500" : "bg-gray-300"
                 }`}
               >
                 <motion.div
-                  animate={{ x: twoFactorEnabled ? 28 : 0 }}
+                  animate={{ x: form.twoFactorEnabled ? 28 : 0 }}
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
                   className="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow-md"
                 />
@@ -276,15 +466,30 @@ export function SecuritySettings() {
                   <p className="text-sm text-gray-600">Allow users to login with third-party providers</p>
                   <div className="mt-3 space-y-2">
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="rounded" defaultChecked />
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={form.ssoGoogle}
+                        onChange={(e) => patchForm({ ssoGoogle: e.target.checked })}
+                      />
                       <span className="text-gray-700">Google OAuth</span>
                     </label>
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="rounded" />
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={form.ssoAzure}
+                        onChange={(e) => patchForm({ ssoAzure: e.target.checked })}
+                      />
                       <span className="text-gray-700">Microsoft Azure AD</span>
                     </label>
                     <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" className="rounded" />
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={form.ssoSaml}
+                        onChange={(e) => patchForm({ ssoSaml: e.target.checked })}
+                      />
                       <span className="text-gray-700">SAML 2.0</span>
                     </label>
                   </div>
@@ -292,11 +497,15 @@ export function SecuritySettings() {
               </div>
 
               <motion.button
+                type="button"
                 whileTap={{ scale: 0.95 }}
-                className="relative w-14 h-7 rounded-full transition-colors bg-green-500"
+                onClick={() => patchForm({ ssoEnabled: !form.ssoEnabled })}
+                className={`relative w-14 h-7 rounded-full transition-colors ${
+                  form.ssoEnabled ? "bg-green-500" : "bg-gray-300"
+                }`}
               >
                 <motion.div
-                  animate={{ x: 28 }}
+                  animate={{ x: form.ssoEnabled ? 28 : 0 }}
                   className="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow-md"
                 />
               </motion.button>
@@ -321,9 +530,14 @@ export function SecuritySettings() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Minimum Password Length
               </label>
-              <input
+                  <input
                 type="number"
-                defaultValue="12"
+                min={6}
+                max={128}
+                value={form.minPasswordLength}
+                onChange={(e) =>
+                  patchForm({ minPasswordLength: Math.min(128, Math.max(6, Number(e.target.value) || 6)) })
+                }
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
@@ -333,8 +547,8 @@ export function SecuritySettings() {
                 Password Expiry (days)
               </label>
               <select
-                value={passwordExpiry}
-                onChange={(e) => setPasswordExpiry(e.target.value)}
+                value={form.passwordExpiry}
+                onChange={(e) => patchForm({ passwordExpiry: e.target.value })}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="30">30 days</option>
@@ -349,8 +563,8 @@ export function SecuritySettings() {
                 Max Login Attempts
               </label>
               <select
-                value={maxLoginAttempts}
-                onChange={(e) => setMaxLoginAttempts(e.target.value)}
+                value={form.maxLoginAttempts}
+                onChange={(e) => patchForm({ maxLoginAttempts: e.target.value })}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="3">3 attempts</option>
@@ -363,7 +577,11 @@ export function SecuritySettings() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Account Lockout Duration (minutes)
               </label>
-              <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
+              <select
+                value={form.lockoutMinutes}
+                onChange={(e) => patchForm({ lockoutMinutes: e.target.value })}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+              >
                 <option value="15">15 minutes</option>
                 <option value="30">30 minutes</option>
                 <option value="60">1 hour</option>
@@ -374,23 +592,48 @@ export function SecuritySettings() {
 
           <div className="mt-6 space-y-3">
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" defaultChecked />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.requireUppercase}
+                onChange={(e) => patchForm({ requireUppercase: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Require uppercase letters</span>
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" defaultChecked />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.requireLowercase}
+                onChange={(e) => patchForm({ requireLowercase: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Require lowercase letters</span>
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" defaultChecked />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.requireNumbers}
+                onChange={(e) => patchForm({ requireNumbers: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Require numbers</span>
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" defaultChecked />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.requireSpecial}
+                onChange={(e) => patchForm({ requireSpecial: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Require special characters</span>
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" defaultChecked />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.preventReuse}
+                onChange={(e) => patchForm({ preventReuse: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Prevent password reuse (last 5 passwords)</span>
             </label>
           </div>
@@ -414,8 +657,8 @@ export function SecuritySettings() {
                 Session Timeout (minutes)
               </label>
               <select
-                value={sessionTimeout}
-                onChange={(e) => setSessionTimeout(e.target.value)}
+                value={form.sessionTimeout}
+                onChange={(e) => patchForm({ sessionTimeout: e.target.value })}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="15">15 minutes</option>
@@ -427,9 +670,13 @@ export function SecuritySettings() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Max Concurrent Sessions
+                Max Concurrent Talk it out
               </label>
-              <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
+              <select
+                value={form.maxConcurrentSessions}
+                onChange={(e) => patchForm({ maxConcurrentSessions: e.target.value })}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+              >
                 <option value="1">1 device</option>
                 <option value="3">3 devices</option>
                 <option value="5">5 devices</option>
@@ -440,17 +687,57 @@ export function SecuritySettings() {
 
           <div className="mt-6 space-y-3">
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" defaultChecked />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.rememberDevice}
+                onChange={(e) => patchForm({ rememberDevice: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Remember device for 30 days</span>
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" defaultChecked />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.forceLogoutOnPasswordChange}
+                onChange={(e) => patchForm({ forceLogoutOnPasswordChange: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Force logout on password change</span>
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" className="rounded" />
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={form.allowConcurrentSameIp}
+                onChange={(e) => patchForm({ allowConcurrentSameIp: e.target.checked })}
+              />
               <span className="text-sm text-gray-700">Allow concurrent logins from same IP</span>
             </label>
+          </div>
+
+          {/* Terminate All Talk it out */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-xl">
+              <div>
+                <h3 className="font-bold text-gray-900 mb-1">Terminate All Talk it out</h3>
+                <p className="text-sm text-gray-600">Sign out all users from all devices immediately. Use with caution.</p>
+              </div>
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                disabled={isTerminating}
+                onClick={() => void handleTerminateAllSessions()}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {isTerminating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <LogOut className="w-4 h-4" />
+                )}
+                {isTerminating ? "Terminating…" : "Terminate All Talk it out"}
+              </motion.button>
+            </div>
           </div>
         </motion.div>
 
@@ -461,9 +748,22 @@ export function SecuritySettings() {
           transition={{ delay: 0.7 }}
           className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
         >
-          <div className="flex items-center gap-3 mb-6">
-            <FileText className="w-6 h-6 text-purple-600" />
-            <h2 className="text-xl font-bold text-gray-900">Recent Security Events</h2>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <FileText className="w-6 h-6 text-purple-600" />
+              <h2 className="text-xl font-bold text-gray-900">Recent Security Events</h2>
+            </div>
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleExportLogs}
+              disabled={securityLogs.length === 0}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm font-medium text-gray-700 disabled:opacity-40 disabled:pointer-events-none"
+            >
+              <Download className="w-4 h-4" />
+              Export All ({securityLogs.length})
+            </motion.button>
           </div>
 
           <div className="space-y-3">
@@ -517,19 +817,6 @@ export function SecuritySettings() {
             ))}
           </div>
         </motion.div>
-
-        {/* Save Confirmation Toast */}
-        {showSaveConfirmation && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-10 right-10 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 z-50"
-          >
-            <CheckCircle className="w-5 h-5" />
-            <span className="font-medium">Settings saved successfully!</span>
-          </motion.div>
-        )}
 
         {/* Log Details Modal */}
         {showLogDetails && selectedLog && (
@@ -639,12 +926,13 @@ export function SecuritySettings() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow-lg"
+                    className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium shadow-lg flex items-center justify-center gap-2"
                     onClick={() => {
-                      console.log("Exporting log:", selectedLog.id);
+                      handleExportSingleLog(selectedLog);
                       setShowLogDetails(false);
                     }}
                   >
+                    <Download className="w-4 h-4" />
                     Export Log
                   </motion.button>
                 </div>

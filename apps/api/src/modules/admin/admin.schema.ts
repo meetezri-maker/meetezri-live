@@ -26,6 +26,7 @@ export const dashboardStatsSchema = z.object({
   })),
   hourlyActivity: z.array(z.object({
     hour: z.string(),
+    hourNum: z.number().optional(),
     sessions: z.number()
   })),
   revenueData: z.array(z.object({
@@ -41,7 +42,63 @@ export const dashboardStatsSchema = z.object({
     feature: z.string(),
     usage: z.number()
   })),
-  mockedSections: z.array(z.string()).optional()
+  mockedSections: z.array(z.string()).optional(),
+  chartPeriod: z.enum(['week', 'month', 'year']).optional(),
+  sessionWeekOffset: z.number().optional(),
+  rangeDays: z.number().optional(),
+  rangeStart: z.string().optional(),
+  rangeEnd: z.string().optional(),
+  avatarDistribution: z
+    .array(
+      z.object({
+        name: z.string(),
+        value: z.number(),
+        count: z.number().optional(),
+        color: z.string(),
+      })
+    )
+    .optional(),
+  onboardingStats: z
+    .object({
+      signupsInRange: z.number(),
+      completionsInRange: z.number(),
+      completionRatePercent: z.number(),
+      daily: z.array(
+        z.object({
+          date: z.string(),
+          signups: z.number(),
+          completions: z.number(),
+        })
+      ),
+    })
+    .optional(),
+  winbackStats: z
+    .object({
+      atRisk30: z.number(),
+      dormant60: z.number(),
+      lost90: z.number(),
+    })
+    .optional(),
+  kpi: z
+    .object({
+      signupsLast7Days: z.number(),
+      signupsPrev7Days: z.number(),
+      signupsWeekOverWeekPct: z.number(),
+      sessionsLastHour: z.number(),
+      paymentVolumeThisMonthCents: z.number(),
+      paymentVolumePrevMonthCents: z.number(),
+      paymentMomPct: z.number(),
+      subscriptionMrrApprox: z.number(),
+      completedPaymentsUsdApprox: z.number(),
+    })
+    .optional(),
+  processHealth: z
+    .object({
+      databaseConnected: z.boolean(),
+      errors24h: z.number(),
+      uptimeSeconds: z.number(),
+    })
+    .optional(),
 });
 
 export type DashboardStats = z.infer<typeof dashboardStatsSchema>;
@@ -61,6 +118,9 @@ export const userSchema = z.object({
   last_active: z.date().nullable().optional(),
   risk_level: z.string().optional(),
   organization: z.string().optional(),
+  signup_type: z.string().nullable().optional(),
+  /** app | admin_user | admin_companion | admin_org */
+  signup_source: z.string().nullable().optional(),
 });
 
 export const userListSchema = z.array(userSchema);
@@ -69,3 +129,19 @@ export const updateUserSchema = z.object({
   status: z.enum(['active', 'suspended', 'inactive']).optional(),
   role: z.string().optional(),
 });
+
+export const createAdminUserSchema = z.object({
+  email: z
+    .string()
+    .transform((s) => s.trim().toLowerCase())
+    .pipe(z.string().min(3).email('Invalid email address')),
+  full_name: z
+    .string()
+    .transform((s) => s.trim())
+    .pipe(z.string().min(1, 'Name is required').max(200)),
+  status: z.enum(['active', 'suspended', 'inactive']).optional(),
+  subscription: z.enum(['trial', 'core', 'pro']).optional(),
+});
+
+/** Output after validation/transform — use for services (not raw request body input). */
+export type CreateAdminUserInput = z.output<typeof createAdminUserSchema>;

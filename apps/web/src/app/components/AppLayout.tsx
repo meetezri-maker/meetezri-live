@@ -1,37 +1,38 @@
-import { ReactNode, useEffect, useState, useMemo } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState, useMemo } from "react";
+import { Link, useNavigate, Outlet } from "react-router-dom";
 import { motion } from "motion/react";
 import { 
-  Home, 
-  Video, 
-  Heart, 
-  BookOpen, 
-  User,
   Bell,
   Settings,
   LogOut,
-  TrendingUp,
-  Moon,
-  Target,
-  Clock,
-  Sparkles,
-  CreditCard,
-  AlertTriangle
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { MobileBottomNav } from "./MobileBottomNav";
+import { BrandLogo } from "./BrandLogo";
+import { SolaceSidebar } from "@/app/solace";
 import { useAuth } from "../contexts/AuthContext";
 import { useNotifications } from "../contexts/NotificationsContext";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 
-interface AppLayoutProps {
-  children: ReactNode;
-}
-
-export function AppLayout({ children }: AppLayoutProps) {
-  const location = useLocation();
+/**
+ * Exactly one member shell per tree: sidebar, header, main scroll region, mobile nav.
+ * Child routes render via `<Outlet />` — do not nest another AppLayout inside pages.
+ */
+export function AppLayout() {
   const navigate = useNavigate();
-  const { signOut, user } = useAuth();
+  const { signOut, user, profile } = useAuth();
   const { unreadCount } = useNotifications();
 
   const appearanceStorageKey = useMemo(() => {
@@ -44,12 +45,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     backgroundStyle: string;
     compactMode: boolean;
     theme: string;
+    accentColor: string;
   }>(() => {
     // Initial state setup to avoid flash of wrong theme
     const defaults = {
       backgroundStyle: "gradient",
       compactMode: false,
-      theme: "light"
+      theme: "light",
+      accentColor: "pink"
     };
 
     if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
@@ -83,7 +86,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         return {
           backgroundStyle: parsed.backgroundStyle || "gradient",
           compactMode: Boolean(parsed.compactMode),
-          theme: parsed.theme || "light"
+          theme: parsed.theme || "light",
+          accentColor: parsed.accentColor || "pink"
         };
       } catch {
         return defaults;
@@ -92,6 +96,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     
     return defaults;
   });
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
@@ -104,13 +110,15 @@ export function AppLayout({ children }: AppLayoutProps) {
         setAppearance({
           backgroundStyle: parsed.backgroundStyle || "gradient",
           compactMode: Boolean(parsed.compactMode),
-          theme: parsed.theme || "light"
+          theme: parsed.theme || "light",
+          accentColor: parsed.accentColor || "pink"
         });
       } catch {
         setAppearance({
           backgroundStyle: "gradient",
           compactMode: false,
-          theme: "light"
+          theme: "light",
+          accentColor: "pink"
         });
       }
     }
@@ -161,11 +169,18 @@ export function AppLayout({ children }: AppLayoutProps) {
     const handler = (event: Event) => {
       const custom = event as CustomEvent<any>;
       const detail = custom.detail || {};
-      setAppearance({
-        backgroundStyle: detail.backgroundStyle || "gradient",
-        compactMode: Boolean(detail.compactMode),
-        theme: detail.theme || "light"
-      });
+      // Merge so partial events (e.g. theme-only) do not wipe compactMode / accent.
+      setAppearance((prev) => ({
+        backgroundStyle:
+          typeof detail.backgroundStyle === "string"
+            ? detail.backgroundStyle
+            : prev.backgroundStyle,
+        compactMode:
+          typeof detail.compactMode === "boolean" ? detail.compactMode : prev.compactMode,
+        theme: typeof detail.theme === "string" ? detail.theme : prev.theme,
+        accentColor:
+          typeof detail.accentColor === "string" ? detail.accentColor : prev.accentColor,
+      }));
     };
 
     window.addEventListener("ezri-appearance-change", handler as EventListener);
@@ -175,29 +190,21 @@ export function AppLayout({ children }: AppLayoutProps) {
     };
   }, []);
 
-  const navItems = [
-    { path: "/app/dashboard", icon: Home, label: "Home" },
-    { path: "/app/session-lobby", icon: Video, label: "Session" },
-    { path: "/app/mood-checkin", icon: Heart, label: "Mood" },
-    { path: "/app/journal", icon: BookOpen, label: "Journal" },
-    { path: "/app/user-profile", icon: User, label: "Profile" }
-  ];
+  const compact = appearance.compactMode;
+  const headerHeightClass = compact ? "h-14" : "h-16";
+  const headerInnerClass = compact ? "px-3 sm:px-4" : "px-4 sm:px-6";
+  /** Mobile bottom nav fills <lg; Solace sidebar is lg+ only — avoids duplicated nav stacks (tablet). */
+  const mainPaddingClass = compact
+    ? "pb-[5.25rem] lg:pb-5 lg:pl-[280px]"
+    : "pb-[5.75rem] lg:pb-8 lg:pl-[280px]";
 
-  const isActive = (path: string) => location.pathname === path;
-
-  const backgroundClass =
-    appearance.backgroundStyle === "solid"
-      ? "bg-gray-50 dark:bg-slate-950"
-      : appearance.backgroundStyle === "pattern"
-      ? "bg-gray-50 dark:bg-slate-950"
-      : "bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950";
-
-  const mainPaddingClass = appearance.compactMode
-    ? "pb-12 sm:pb-4 sm:pl-64"
-    : "pb-20 sm:pb-6 sm:pl-72";
-
-  // Check both standard Supabase verification AND our custom metadata flag
-  const isUnverified = user && (!user.email_confirmed_at || user.user_metadata?.email_verification_required);
+  // Prefer backend-derived verification (source of truth), fall back to Supabase session flags.
+  // Supabase user metadata can remain stale in the client session after verification.
+  const isUnverified =
+    (profile
+      ? profile.needs_email_verification === true || profile.email_verified !== true
+      : false) ||
+    (user ? (!user.email_confirmed_at || user.user_metadata?.email_verification_required) : false);
 
   const resendVerification = async () => {
     if (!user?.email) return;
@@ -210,205 +217,154 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   const handleLogout = async () => {
-    await signOut();
-    navigate("/login");
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = async () => {
+    setLogoutLoading(true);
+    try {
+      await signOut();
+      setShowLogoutModal(false);
+      navigate("/login");
+    } finally {
+      setLogoutLoading(false);
+    }
   };
 
   return (
-    <div className={`h-screen overflow-auto ${backgroundClass} flex flex-col`}>
-      {/* Header */}
+    <div className="solace-app flex h-dvh max-h-dvh flex-col overflow-hidden bg-[var(--solace-bg)] text-[var(--solace-text)]">
       <motion.header
         initial={{ y: -100 }}
         animate={{ y: 0 }}
-        className="bg-white/80 dark:bg-slate-900/90 backdrop-blur-lg border-b border-gray-200 dark:border-slate-700 sticky top-0 z-40 shadow-sm"
+        className="sticky top-0 z-40 border-b border-white/[0.08] bg-[color-mix(in_oklab,var(--solace-bg-elevated)_92%,transparent)] shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-xl"
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div
+          className={`mx-auto flex items-center justify-between ${headerInnerClass} ${headerHeightClass}`}
+        >
+          <Link to="/app/dashboard" className="flex items-center gap-2">
             <motion.div
-              animate={{ 
-                rotate: [0, 10, -10, 0],
-                scale: [1, 1.1, 1]
+              animate={{
+                rotate: [0, 6, -6, 0],
+                scale: [1, 1.03, 1],
               }}
-              transition={{ 
-                duration: 3,
+              transition={{
+                duration: 4,
                 repeat: Infinity,
-                repeatDelay: 5
+                repeatDelay: 6,
               }}
-              className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold"
+              className="flex items-center justify-center"
             >
-              E
+              <BrandLogo heightClass={compact ? "h-8" : "h-9"} />
             </motion.div>
-            <h1 className="font-bold text-xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              Ezri
-            </h1>
-          </div>
+          </Link>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <Link to="/app/notifications">
               <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors relative group"
+                type="button"
+                whileHover={{ scale: 1.06 }}
+                whileTap={{ scale: 0.94 }}
+                className="relative rounded-full p-2.5 text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
               >
-                <Bell className="w-5 h-5 text-gray-600 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+                <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.55)]" />
                 )}
               </motion.button>
             </Link>
-            
+
             <Link to="/app/settings">
               <motion.button
-                whileHover={{ scale: 1.1, rotate: 90 }}
-                whileTap={{ scale: 0.9 }}
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors group"
+                type="button"
+                whileHover={{ scale: 1.06, rotate: 90 }}
+                whileTap={{ scale: 0.94 }}
+                className="rounded-full p-2.5 text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
               >
-                <Settings className="w-5 h-5 text-gray-600 dark:text-gray-300 group-hover:text-black dark:group-hover:text-white transition-colors" />
+                <Settings className="h-5 w-5" />
               </motion.button>
             </Link>
 
             <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
+              type="button"
+              whileHover={{ scale: 1.06 }}
+              whileTap={{ scale: 0.94 }}
               onClick={handleLogout}
-              className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/40 transition-colors"
+              className="rounded-full p-2.5 text-rose-300/90 transition-colors hover:bg-rose-500/15"
               title="Logout"
             >
-              <LogOut className="w-5 h-5 text-red-600" />
+              <LogOut className="h-5 w-5" />
             </motion.button>
           </div>
         </div>
       </motion.header>
 
-      {/* Main Content */}
-      <main className={`flex-1 overflow-y-auto ${mainPaddingClass}`}>
+      <main
+        className={`solace-scroll flex-1 min-h-0 overflow-y-auto overscroll-contain antialiased ${mainPaddingClass}`}
+      >
         {isUnverified && (
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-4 m-4 rounded shadow-sm">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <AlertTriangle className="h-5 w-5 text-yellow-400" aria-hidden="true" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-yellow-700 dark:text-yellow-200">
-                  Your email address is not verified. Please check your inbox for the verification link.
-                  <button 
-                    onClick={resendVerification} 
-                    className="font-medium underline ml-2 hover:text-yellow-600 dark:hover:text-yellow-100"
-                  >
-                    Resend verification email
-                  </button>
-                </p>
-              </div>
+          <div className="m-4 rounded-xl border border-amber-500/25 bg-amber-950/35 p-4 shadow-[0_0_32px_rgba(245,158,11,0.12)]">
+            <div className="flex gap-3">
+              <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400" aria-hidden />
+              <p className="text-sm text-amber-100/90">
+                Your email address is not verified. Please check your inbox for the verification link.
+                <button
+                  type="button"
+                  onClick={resendVerification}
+                  className="ml-2 font-medium text-amber-200 underline underline-offset-2 hover:text-white"
+                >
+                  Resend verification email
+                </button>
+              </p>
             </div>
           </div>
         )}
-        {children}
+        <Outlet />
       </main>
 
-      {/* Bottom Navigation - Mobile Only */}
-      <MobileBottomNav />
+      <MobileBottomNav compact={compact} />
 
-      {/* Desktop Sidebar - Hidden on mobile */}
-      <div className="hidden sm:block fixed left-0 top-16 bottom-0 w-64 bg-white/80 dark:bg-slate-900/90 backdrop-blur-lg border-r border-gray-200 dark:border-slate-700 z-30">
-        <nav className="p-4 space-y-2">
-          {navItems.map((item, index) => {
-            const Icon = item.icon;
-            const active = isActive(item.path);
+      {/* Environmental sidebar — desktop / tablet */}
+      <aside
+        className={`pointer-events-none fixed bottom-3 left-3 z-30 hidden w-[var(--solace-sidebar-w)] lg:block ${compact ? "top-[calc(3.5rem+0.5rem)]" : "top-[calc(4rem+0.5rem)]"}`}
+      >
+        <div className="pointer-events-auto flex h-full flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-[color-mix(in_oklab,var(--solace-panel)_96%,transparent)] shadow-[var(--solace-glow-purple),0_20px_60px_-28px_rgba(0,0,0,0.75)] backdrop-blur-xl">
+          <SolaceSidebar />
+        </div>
+      </aside>
 
-            return (
-              <Link key={item.path} to={item.path}>
-                <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  whileHover={{ scale: 1.02, x: 5 }}
-                  whileTap={{ scale: 0.98 }}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                    active
-                      ? "bg-gradient-to-r from-primary to-secondary dark:from-blue-600 dark:to-indigo-600 text-white shadow-lg"
-                      : "hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200"
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className="font-medium">{item.label}</span>
-                </motion.div>
-              </Link>
-            );
-          })}
-
-          {/* Additional Desktop Nav Items */}
-          <div className="border-t border-gray-200 dark:border-slate-700 pt-4 mt-4 space-y-2">
-            <Link to="/app/session-history">
-              <motion.div
-                whileHover={{ scale: 1.02, x: 5 }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all"
-              >
-                <Clock className="w-5 h-5" />
-                <span className="font-medium">Session History</span>
-              </motion.div>
-            </Link>
-
-            <Link to="/app/wellness-tools">
-              <motion.div
-                whileHover={{ scale: 1.02, x: 5 }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all"
-              >
-                <Sparkles className="w-5 h-5" />
-                <span className="font-medium">Wellness Tools</span>
-              </motion.div>
-            </Link>
-            
-            <Link to="/app/progress">
-              <motion.div
-                whileHover={{ scale: 1.02, x: 5 }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all"
-              >
-                <TrendingUp className="w-5 h-5" />
-                <span className="font-medium">Progress</span>
-              </motion.div>
-            </Link>
-
-            <Link to="/app/sleep-tracker">
-              <motion.div
-                whileHover={{ scale: 1.02, x: 5 }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all"
-              >
-                <Moon className="w-5 h-5" />
-                <span className="font-medium">Sleep Tracker</span>
-              </motion.div>
-            </Link>
-
-            <Link to="/app/billing">
-              <motion.div
-                whileHover={{ scale: 1.02, x: 5 }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 dark:hover:from-emerald-900 dark:hover:to-emerald-800 text-gray-700 dark:text-gray-200 hover:text-green-700 transition-all border border-transparent hover:border-green-200 dark:hover:border-emerald-600"
-              >
-                <CreditCard className="w-5 h-5" />
-                <span className="font-medium">Billing & Credits</span>
-              </motion.div>
-            </Link>
-
-            <Link to="/app/habit-tracker">
-              <motion.div
-                whileHover={{ scale: 1.02, x: 5 }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200 transition-all"
-              >
-                <Target className="w-5 h-5" />
-                <span className="font-medium">Habit Tracker</span>
-              </motion.div>
-            </Link>
-
-            <motion.button
-              onClick={handleLogout}
-              whileHover={{ scale: 1.02, x: 5 }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/40 text-red-600 transition-all"
+      <AlertDialog
+        open={showLogoutModal}
+        onOpenChange={(open) => {
+          if (logoutLoading) return;
+          setShowLogoutModal(open);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Log out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out of your account?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={logoutLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmLogout}
+              className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
+              disabled={logoutLoading}
             >
-              <LogOut className="w-5 h-5" />
-              <span className="font-medium">Logout</span>
-            </motion.button>
-          </div>
-        </nav>
-      </div>
+              {logoutLoading ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Logging out...
+                </span>
+              ) : (
+                "Log Out"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

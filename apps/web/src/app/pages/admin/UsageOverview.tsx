@@ -1,14 +1,11 @@
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import {
-  Users,
   Activity,
   Clock,
   TrendingUp,
   TrendingDown,
   Calendar,
-  Download,
-  RefreshCw,
   BarChart3,
   PieChart,
   Zap,
@@ -31,53 +28,37 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Card } from "@/app/components/ui/card";
-import { Button } from "@/app/components/ui/button";
-import { api } from "../../../lib/api";
+import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
+import { buildStatsQuery, datesForPreset, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
+import { useAdminStats } from "@/lib/queries/adminQueries";
+
+function rollingSum(sessions: number[], windowSize: number, i: number): number {
+  let s = 0;
+  const start = Math.max(0, i - windowSize + 1);
+  for (let j = start; j <= i; j++) s += sessions[j] || 0;
+  return s;
+}
 
 export function UsageOverview() {
-  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("30d");
-  const [viewMode, setViewMode] = useState<"daily" | "weekly" | "monthly">("daily");
-  const [statsData, setStatsData] = useState<any | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
+  const [rangePreset, setRangePreset] = useState<DashboardTimePreset>("30d");
+  const [useCustomRange, setUseCustomRange] = useState(false);
+  const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
+  const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchStats = async () => {
-      try {
-        const data = await api.admin.getStats();
-        if (isMounted) {
-          setStatsData(data);
-        }
-      } catch (err: any) {
-        console.error("Failed to fetch usage overview stats", err);
-        if (isMounted) {
-          setError(err.message || "Failed to load usage overview");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    fetchStats();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const statsParams = buildStatsQuery({ chartPeriod, rangePreset, useCustomRange, dateFrom, dateTo });
+  const { data: statsData, isLoading, isFetching, error, refetch } = useAdminStats(statsParams);
 
   const sessionActivity = (statsData?.sessionActivity || []) as any[];
+  const sessionCounts = sessionActivity.map((item: any) => Number(item.sessions) || 0);
 
-  const dailyActiveUsersData = sessionActivity.map((item: any) => ({
+  const dailyActiveUsersData = sessionActivity.map((item: any, i: number) => ({
     date: item.day,
     dau: item.sessions,
-    wau: item.sessions,
-    mau: item.sessions,
+    wau: rollingSum(sessionCounts, 7, i),
+    mau: rollingSum(sessionCounts, 30, i),
   }));
 
   const sessionData = sessionActivity.map((item: any) => ({
@@ -111,13 +92,20 @@ export function UsageOverview() {
     { name: "Inactive (no sessions this week)", value: inactiveUsers, color: "#6b7280" },
   ];
 
-  const latestDay = sessionActivity.length > 0 ? sessionActivity[sessionActivity.length - 1] : null;
-  const previousDay = sessionActivity.length > 1 ? sessionActivity[sessionActivity.length - 2] : null;
+  /** KPIs summarize the full selected date range (charts use the same series). The last day alone is often “today” with 0 sessions while history has activity — that made cards show 0. */
+  const daysInRange = sessionActivity.length;
+  const totalSessionsInRange = sessionCounts.reduce((a, b) => a + b, 0);
+  const totalMinutesInRange = sessionData.reduce((a, b) => a + (Number(b.totalMinutes) || 0), 0);
+  const avgSessionDurationInRange =
+    totalSessionsInRange > 0
+      ? Math.round((totalMinutesInRange / totalSessionsInRange) * 10) / 10
+      : statsData?.avgSessionLength || 0;
 
-  const dailyActiveUsers = latestDay ? latestDay.sessions : 0;
-  const totalSessionsToday = latestDay ? latestDay.sessions : 0;
-  const totalMinutesToday = latestDay ? latestDay.sessions * latestDay.duration : 0;
-  const avgSessionDurationToday = latestDay ? latestDay.duration : statsData?.avgSessionLength || 0;
+  const half = Math.floor(daysInRange / 2);
+  const sumSessions = (from: number, to: number) =>
+    sessionCounts.slice(from, to).reduce((a, b) => a + b, 0);
+  const sumMinutes = (from: number, to: number) =>
+    sessionData.slice(from, to).reduce((a, b) => a + (Number(b.totalMinutes) || 0), 0);
 
   const getPercentChange = (current: number, previous: number | null) => {
     if (previous === null || previous === 0) {
@@ -126,71 +114,78 @@ export function UsageOverview() {
     return ((current - previous) / previous) * 100;
   };
 
-  const formatChange = (value: number) => {
-    const fixed = value.toFixed(1);
-    return `${value >= 0 ? "+" : ""}${fixed}%`;
-  };
+  const formatChange = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
 
-  const dailyActiveUsersChange = getPercentChange(
-    dailyActiveUsers,
-    previousDay ? previousDay.sessions : null
-  );
+  let sessionsPrev: number | null = null;
+  let minutesPrev: number | null = null;
+  let avgDurFirst: number | null = null;
+  let avgDurSecond: number | null = null;
 
-  const sessionsChange = getPercentChange(
-    totalSessionsToday,
-    previousDay ? previousDay.sessions : null
-  );
+  if (daysInRange >= 2 && half >= 1) {
+    const firstHalfSessions = sumSessions(0, half);
+    const secondHalfSessions = sumSessions(half, daysInRange);
+    const firstHalfMinutes = sumMinutes(0, half);
+    const secondHalfMinutes = sumMinutes(half, daysInRange);
+    sessionsPrev = firstHalfSessions;
+    minutesPrev = firstHalfMinutes;
+    avgDurFirst = firstHalfSessions > 0 ? firstHalfMinutes / firstHalfSessions : null;
+    avgDurSecond = secondHalfSessions > 0 ? secondHalfMinutes / secondHalfSessions : null;
+  }
 
-  const minutesChange = getPercentChange(
-    totalMinutesToday,
-    previousDay ? previousDay.sessions * previousDay.duration : null
-  );
+  const sessionsChange =
+    sessionsPrev != null && half >= 1
+      ? getPercentChange(sumSessions(half, daysInRange), sessionsPrev)
+      : 0;
+  const minutesChange =
+    minutesPrev != null && half >= 1
+      ? getPercentChange(sumMinutes(half, daysInRange), minutesPrev)
+      : 0;
+  const durationChange =
+    avgDurFirst != null && avgDurSecond != null && avgDurFirst > 0
+      ? getPercentChange(avgDurSecond, avgDurFirst)
+      : 0;
 
-  const durationChange = getPercentChange(
-    avgSessionDurationToday,
-    previousDay ? previousDay.duration : null
-  );
+  const avgSessionsPerDay =
+    daysInRange > 0 ? Math.round((totalSessionsInRange / daysInRange) * 10) / 10 : 0;
 
   const stats = [
     {
-      label: "Daily Active Users",
-      value: dailyActiveUsers.toLocaleString(),
-      change: formatChange(dailyActiveUsersChange),
-      trend: (dailyActiveUsersChange >= 0 ? "up" : "down") as "up" | "down",
-      icon: Users,
-      color: "from-blue-500 to-cyan-600",
-      description: "vs previous period",
-    },
-    {
-      label: "Total Sessions Today",
-      value: totalSessionsToday.toLocaleString(),
+      label: "Total sessions",
+      value: (statsData?.totalSessions ?? 0).toLocaleString(),
       change: formatChange(sessionsChange),
       trend: (sessionsChange >= 0 ? "up" : "down") as "up" | "down",
       icon: Activity,
       color: "from-purple-500 to-pink-600",
-      description: "sessions started",
+      description: "all time · completed sessions",
     },
     {
-      label: "Total Minutes Consumed",
-      value: totalMinutesToday.toLocaleString(),
+      label: "Avg sessions / day",
+      value: avgSessionsPerDay.toLocaleString(),
+      change: formatChange(sessionsChange),
+      trend: (sessionsChange >= 0 ? "up" : "down") as "up" | "down",
+      icon: Calendar,
+      color: "from-blue-500 to-cyan-600",
+      description: `over selected range (${daysInRange}d)`,
+    },
+    {
+      label: "Total minutes",
+      value: Math.round(totalMinutesInRange).toLocaleString(),
       change: formatChange(minutesChange),
       trend: (minutesChange >= 0 ? "up" : "down") as "up" | "down",
       icon: Clock,
       color: "from-green-500 to-emerald-600",
-      description: "therapy minutes",
+      description: "therapy minutes in range",
     },
     {
-      label: "Avg Session Duration",
-      value: `${avgSessionDurationToday.toFixed(1)} min`,
+      label: "Avg session duration",
+      value: `${avgSessionDurationInRange.toFixed(1)} min`,
       change: formatChange(durationChange),
       trend: (durationChange >= 0 ? "up" : "down") as "up" | "down",
       icon: Target,
       color: "from-orange-500 to-red-600",
-      description: "per session",
+      description: "weighted across range",
     },
   ];
-
-  const COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#6b7280"];
 
   if (isLoading) {
     return (
@@ -210,7 +205,7 @@ export function UsageOverview() {
           <p className="text-gray-600 mb-4">
             Failed to load usage data. Please try again later.
           </p>
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-red-600">{error?.message ?? String(error)}</p>
         </div>
       </AdminLayoutNew>
     );
@@ -231,38 +226,34 @@ export function UsageOverview() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Time Range Selector */}
-            <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1 border border-gray-200">
-              {(["7d", "30d", "90d"] as const).map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    timeRange === range
-                      ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-                      : "text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {range === "7d" ? "7 Days" : range === "30d" ? "30 Days" : "90 Days"}
-                </button>
-              ))}
-            </div>
-
-            {/* Export Button */}
-            <Button className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white">
-              <Download className="w-4 h-4 mr-2" />
-              Export Report
-            </Button>
-
-            {/* Refresh Button */}
-            <Button
-              variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-          </div>
+          <AdminAnalyticsToolbar
+            chartPeriod={chartPeriod}
+            onChartPeriodChange={setChartPeriod}
+            rangePreset={rangePreset}
+            onRangePresetChange={setRangePreset}
+            useCustomRange={useCustomRange}
+            onUseCustomRangeChange={setUseCustomRange}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            onRefresh={() => void refetch()}
+            isLoading={isFetching}
+            exportLabel="Export report"
+            onExport={() => {
+              if (!statsData) return;
+              const rows: Record<string, unknown>[] = (statsData.sessionActivity || []).map((r: any, i: number) => ({
+                i,
+                day: r.day,
+                sessions: r.sessions,
+                avgDuration: r.duration,
+                dau_proxy: r.sessions,
+                wau_rolling7: rollingSum(sessionCounts, 7, i),
+                mau_rolling30: rollingSum(sessionCounts, 30, i),
+              }));
+              downloadCsv(`usage-overview-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+            }}
+          />
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -316,7 +307,7 @@ export function UsageOverview() {
                   Active Users Trend
                 </h3>
                 <p className="text-sm !text-gray-600">
-                  Daily, Weekly, and Monthly Active Users
+                  DAU = sessions that day; WAU/MAU = rolling 7 / 30‑day session totals (volume proxy)
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -345,10 +336,11 @@ export function UsageOverview() {
                 <YAxis stroke="#9ca3af" />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#1f2937",
-                    border: "1px solid #374151",
-                    borderRadius: "8px",
-                    color: "#fff",
+                    backgroundColor: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                    fontSize: 12,
                   }}
                 />
                 <Legend />
@@ -381,9 +373,9 @@ export function UsageOverview() {
           </Card>
         </motion.div>
 
-        {/* Sessions & Minutes */}
+        {/* Talk it out & Minutes */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Sessions Chart */}
+          {/* Talk it out Chart */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -393,16 +385,16 @@ export function UsageOverview() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-xl font-bold !text-gray-900 mb-1">
-                    Total Sessions
+                    Total Talk it out
                   </h3>
-                  <p className="text-sm !text-gray-600">Sessions started per day</p>
+                  <p className="text-sm !text-gray-600">Talk it out started per day</p>
                 </div>
                 <Activity className="w-5 h-5 text-purple-600" />
               </div>
 
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={sessionData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="date" stroke="#9ca3af" />
                   <YAxis stroke="#9ca3af" />
                   <Tooltip
@@ -438,7 +430,7 @@ export function UsageOverview() {
 
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={sessionData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="date" stroke="#9ca3af" />
                   <YAxis stroke="#9ca3af" />
                   <Tooltip
@@ -490,7 +482,7 @@ export function UsageOverview() {
                       <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="hour" stroke="#9ca3af" />
                   <YAxis stroke="#9ca3af" />
                   <Tooltip
@@ -537,12 +529,12 @@ export function UsageOverview() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) =>
-                      `${(percent * 100).toFixed(0)}%`
-                    }
+                    label={false}
+                    innerRadius={55}
                     outerRadius={100}
                     fill="#8884d8"
                     dataKey="value"
+                    paddingAngle={3}
                   >
                     {activityDistribution.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />

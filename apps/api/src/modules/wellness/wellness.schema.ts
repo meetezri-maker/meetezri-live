@@ -1,10 +1,27 @@
 import { z } from 'zod';
 
+/** Must match apps/web/src/lib/wellnessToolCategories.ts */
+export const WELLNESS_TOOL_CATEGORIES = [
+  'Anxiousness',
+  'Stress Management',
+  'Meditation',
+  'Sleep Health',
+  'Exercise',
+  'Self-Care',
+  'Relaxation',
+  'Low morale support',
+  'Mindfulness',
+] as const;
+
+export const wellnessToolCategorySchema = z.enum(WELLNESS_TOOL_CATEGORIES);
+
 export const createWellnessToolSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
-  category: z.string(),
+  category: wellnessToolCategorySchema,
   duration_minutes: z.number().optional(),
+  /** Exact length in seconds (preferred over duration_minutes for timers). */
+  duration_seconds: z.number().int().min(0).optional(),
   content: z.string().optional(),
   image_url: z.string().optional(),
   is_premium: z.boolean().default(false),
@@ -16,8 +33,10 @@ export const createWellnessToolSchema = z.object({
 export const updateWellnessToolSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
-  category: z.string().optional(),
+  category: wellnessToolCategorySchema.optional(),
   duration_minutes: z.number().optional(),
+  duration_seconds: z.number().int().min(0).optional(),
+  /** Guided script JSON; stored in DB `content_url` (text). */
   content: z.string().optional(),
   image_url: z.string().optional(),
   is_premium: z.boolean().optional(),
@@ -34,6 +53,7 @@ export const wellnessToolResponseSchema = z.object({
   description: z.string().nullable(),
   category: z.string(),
   duration_minutes: z.number().nullable(),
+  duration_seconds: z.number().nullable().optional(),
   content_url: z.string().nullable(),
   is_premium: z.boolean().nullable(),
   difficulty: z.string().nullable(),
@@ -76,6 +96,34 @@ export const wellnessChallengeResponseSchema = z.object({
   participants: z.number().optional(),
   completionRate: z.number().optional(),
 });
+
+export const createWellnessChallengeSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  start_date: z.string().min(1),
+  end_date: z.string().min(1),
+  reward_points: z.number().int().min(0).optional().nullable(),
+  goal_criteria: z.unknown().optional().nullable(),
+});
+
+export const updateWellnessChallengeSchema = z
+  .object({
+    title: z.string().min(1).optional(),
+    description: z.string().nullable().optional(),
+    category: z.string().nullable().optional(),
+    start_date: z.string().min(1).optional(),
+    end_date: z.string().min(1).optional(),
+    reward_points: z.number().int().min(0).nullable().optional(),
+    goal_criteria: z.unknown().optional().nullable(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: 'At least one field is required for update',
+  });
+
+/** Same shape as validated POST /wellness/challenges body — use for service + controller typing. */
+export type CreateWellnessChallengeInput = z.infer<typeof createWellnessChallengeSchema>;
+export type UpdateWellnessChallengeInput = z.infer<typeof updateWellnessChallengeSchema>;
 
 export type CreateWellnessToolInput = z.infer<typeof createWellnessToolSchema>;
 export type UpdateWellnessToolInput = z.infer<typeof updateWellnessToolSchema>;

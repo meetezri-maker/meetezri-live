@@ -1,9 +1,22 @@
 import { FastifyInstance } from 'fastify';
 import { createSleepEntrySchema, updateSleepEntrySchema, sleepEntryResponseSchema } from './sleep.schema';
-import { createSleepEntryHandler, deleteSleepEntryHandler, getSleepEntriesHandler, getSleepEntryByIdHandler, updateSleepEntryHandler, getUserSleepEntriesHandler } from './sleep.controller';
+import { createSleepEntryHandler, deleteSleepEntryHandler, getAllSleepEntriesAdminHandler, getSleepEntriesHandler, getSleepEntryByIdHandler, updateSleepEntryHandler, getUserSleepEntriesHandler } from './sleep.controller';
 import { z } from 'zod';
 
 export async function sleepRoutes(app: FastifyInstance) {
+  app.get(
+    '/admin',
+    {
+      schema: {
+        response: {
+          200: z.array(sleepEntryResponseSchema),
+        },
+      },
+      preHandler: [app.authenticate, app.authorize(['super_admin', 'org_admin', 'team_admin'])],
+    },
+    getAllSleepEntriesAdminHandler
+  );
+
   app.get(
     '/admin/users/:userId/sleep',
     {
@@ -13,7 +26,7 @@ export async function sleepRoutes(app: FastifyInstance) {
           200: z.array(sleepEntryResponseSchema),
         },
       },
-      preHandler: [app.authenticate, app.authorize(['super_admin', 'org_admin'])],
+      preHandler: [app.authenticate, app.authorize(['super_admin', 'org_admin', 'team_admin'])],
     },
     getUserSleepEntriesHandler
   );

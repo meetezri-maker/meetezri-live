@@ -1,6 +1,7 @@
 import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 import cors from '@fastify/cors';
+import compress from '@fastify/compress';
 import rawBody from 'fastify-raw-body';
 import jwt from '@fastify/jwt';
 import dotenv from 'dotenv';
@@ -20,25 +21,37 @@ import { sleepRoutes } from './modules/sleep/sleep.routes';
 import { habitsRoutes } from './modules/habits/habits.routes';
 import { emergencyContactRoutes } from './modules/users/emergency-contacts.routes';
 import { notificationRoutes } from './modules/notifications/notifications.routes';
+import { notificationsService } from './modules/notifications/notifications.service';
 import { aiAvatarsRoutes } from './modules/ai-avatars/ai-avatars.routes';
+import { communityRoutes } from './modules/community/community.routes';
+import { goalsRoutes } from './modules/goals/goals.routes';
+import { customAchievementRoutes } from './modules/custom-achievements/custom-achievements.routes';
+import { supportTicketsRoutes } from './modules/support-tickets/support-tickets.routes';
+import { sttRoutes } from './modules/stt/stt.routes';
+import { safetyResourceInteractionsRoutes } from './modules/safety-resource-interactions/safety-resource-interactions.routes';
 import jwkToPem from 'jwk-to-pem';
+import prisma from './lib/prisma';
 const jwtLib = require('jsonwebtoken');
 
 dotenv.config();
 
 // Debugging for Vercel Environment
-console.log('Starting API...');
-const dbUrl = process.env.DATABASE_URL || '';
-const dbHost = dbUrl.includes('@') ? dbUrl.split('@')[1] : 'Unknown';
-const dbUser = dbUrl.includes('://') ? dbUrl.split('://')[1].split(':')[0] : 'Unknown';
-
-console.log('Environment Debug:', {
-  NODE_ENV: process.env.NODE_ENV,
-  PORT: process.env.PORT,
-  DATABASE_URL_HOST: dbHost, 
-  DATABASE_USER: dbUser, // Log the user to verify if it's 'postgres' or 'postgres.[ref]'
-  DIRECT_URL_SET: !!process.env.DIRECT_URL,
-});
+const DEBUG_API = process.env.DEBUG_API === '1' || process.env.DEBUG_API === 'true';
+const DEBUG_API_TIMING =
+  process.env.DEBUG_API_TIMING === '1' || process.env.DEBUG_API_TIMING === 'true';
+if (DEBUG_API) {
+  console.log('Starting API...');
+  const dbUrl = process.env.DATABASE_URL || '';
+  const dbHost = dbUrl.includes('@') ? dbUrl.split('@')[1] : 'Unknown';
+  const dbUser = dbUrl.includes('://') ? dbUrl.split('://')[1].split(':')[0] : 'Unknown';
+  console.log('Environment Debug:', {
+    NODE_ENV: process.env.NODE_ENV,
+    PORT: process.env.PORT,
+    DATABASE_URL_HOST: dbHost,
+    DATABASE_USER: dbUser,
+    DIRECT_URL_SET: !!process.env.DIRECT_URL,
+  });
+}
 
 const app = Fastify({ logger: true }).withTypeProvider<ZodTypeProvider>();
 
@@ -49,6 +62,20 @@ app.setSerializerCompiler(serializerCompiler);
 app.addHook('onRequest', (request, reply, done) => {
   (request as any).startTime = performance.now();
   done();
+});
+
+app.addHook('onSend', (request, reply, payload, done) => {
+  const startTime = (request as any).startTime;
+  if (startTime) {
+    const duration = performance.now() - startTime;
+    if (DEBUG_API_TIMING) {
+      const ms = Math.max(0, Math.round(duration));
+      // Useful for Chrome DevTools and quick perf triage.
+      reply.header('x-api-ms', String(ms));
+      reply.header('Server-Timing', `app;dur=${ms}`);
+    }
+  }
+  done(null, payload);
 });
 
 app.addHook('onResponse', (request, reply, done) => {
@@ -66,26 +93,26 @@ app.addHook('onResponse', (request, reply, done) => {
   done();
 });
 
-// Fix for Vercel Serverless: Handle pre-parsed body
+// Fix for Vercel Serverless: prefer parsing the raw JSON string when present.
+// (req.raw as any).body can be {} (truthy) and would skip real JSON, breaking POST bodies.)
 app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
-  // If the body is already parsed by the environment (e.g. Vercel), use it
-  if (req.raw && (req.raw as any).body) {
-    done(null, (req.raw as any).body);
-  } else {
-    // Empty or missing body (e.g. POST with no body) -> treat as {}
-    const raw = (body as string) ?? '';
-    if (raw.trim() === '') {
-      done(null, {});
-      return;
-    }
+  const raw = typeof body === 'string' ? body : String(body ?? '');
+  if (raw.trim() !== '') {
     try {
-      const json = JSON.parse(raw);
-      done(null, json);
+      done(null, JSON.parse(raw));
+      return;
     } catch (err: any) {
       err.statusCode = 400;
       done(err, undefined);
+      return;
     }
   }
+  const pre = req.raw && (req.raw as any).body;
+  if (pre != null && typeof pre === 'object' && !Buffer.isBuffer(pre)) {
+    done(null, pre);
+    return;
+  }
+  done(null, {});
 });
 
 // Register core plugins
@@ -94,6 +121,10 @@ app.register(cors, {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 });
+
+// Compress responses (JSON/text) to reduce payload size and improve perceived latency.
+// Works well on serverless too; clients usually send `Accept-Encoding: gzip, br`.
+app.register(compress, { global: true });
 
 app.register(rateLimit, {
   max: 300, // 300 requests per minute per IP
@@ -115,9 +146,9 @@ if (rawSecret) {
   if (rawSecret.length > 20 && !rawSecret.includes(' ') && rawSecret.endsWith('=')) {
     try {
       secret = Buffer.from(rawSecret, 'base64');
-      console.log('Detected Base64 JWT Secret, decoded to buffer.');
+      if (DEBUG_API) console.log('Detected Base64 JWT Secret, decoded to buffer.');
     } catch (e) {
-      console.log('Failed to decode JWT Secret as Base64, using as string.');
+      if (DEBUG_API) console.log('Failed to decode JWT Secret as Base64, using as string.');
       secret = rawSecret;
     }
   } else {
@@ -143,7 +174,7 @@ const getJwks = async (projectUrl: string) => {
     const data = await response.json();
     cachedJwks = data;
     lastJwksFetch = now;
-    console.log('Fetched JWKS keys:', data.keys?.length);
+    if (DEBUG_API) console.log('Fetched JWKS keys:', data.keys?.length);
     return data;
   } catch (err) {
     console.error('Error fetching JWKS:', err);
@@ -243,17 +274,51 @@ app.register(habitsRoutes, { prefix: '/api/habits' });
 app.register(emergencyContactRoutes, { prefix: '/api/emergency-contacts' });
 app.register(notificationRoutes, { prefix: '/api/notifications' });
 app.register(aiAvatarsRoutes, { prefix: '/api/ai-avatars' });
+app.register(communityRoutes, { prefix: '/api/community' });
+app.register(goalsRoutes, { prefix: '/api/goals' });
+app.register(customAchievementRoutes, { prefix: '/api/custom-achievements' });
+app.register(supportTicketsRoutes, { prefix: '/api/support' });
+app.register(sttRoutes);
+app.register(safetyResourceInteractionsRoutes, { prefix: '/api/safety-resource-interactions' });
 
 app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) => {
+  // Zod / response validation errors often omit statusCode and would default to 500.
+  const inferredFromName =
+    error?.name === 'ZodError' || error?.name === 'ResponseValidationError' ? 400 : undefined;
+
   const statusCode =
     typeof error?.statusCode === 'number'
       ? error.statusCode
       : typeof error?.status === 'number'
       ? error.status
-      : 500;
+      : inferredFromName ?? 500;
 
   const isServerError = statusCode >= 500;
-  const message = isServerError ? 'An unexpected error occurred' : (error?.message || 'Request failed');
+  let message = isServerError
+    ? 'Something went wrong on Server side. Please try again in a moment.'
+    : (error?.message || 'Request failed');
+
+  // Friendly copy for Zod / schema validation (avoid raw JSON in message)
+  if (!isServerError && Array.isArray(error?.validation) && error.validation.length > 0) {
+    const v = error.validation[0] as { message?: string; instancePath?: string };
+    if (v?.message && typeof v.message === 'string') {
+      message = v.message;
+    }
+  }
+  if (
+    !isServerError &&
+    typeof message === 'string' &&
+    message.trim().startsWith('[')
+  ) {
+    try {
+      const parsed = JSON.parse(message) as Array<{ message?: string; path?: string[] }>;
+      if (Array.isArray(parsed) && parsed[0]?.message) {
+        message = parsed[0].message;
+      }
+    } catch {
+      /* keep */
+    }
+  }
   const errorName =
     typeof error?.name === 'string'
       ? error.name
@@ -263,6 +328,39 @@ app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) =
 
   if (isServerError) {
     request.log.error({ err: error, requestId: request.id }, 'Unhandled API error');
+
+    // Persist server errors for the admin Error Tracking UI.
+    // Best-effort only (never block the response; ignore DB failures).
+    try {
+      const ctx: Record<string, unknown> = {
+        title: typeof error?.name === 'string' ? error.name : 'UnhandledError',
+        endpoint: request.routerPath || request.url,
+        method: request.method,
+        status_code: statusCode,
+        requestId: request.id,
+        ip:
+          (typeof request.headers['x-forwarded-for'] === 'string' && request.headers['x-forwarded-for']) ||
+          request.ip,
+        // If auth plugin attaches a user object, record it.
+        user_id:
+          (request as any)?.user?.sub ||
+          (request as any)?.user?.id ||
+          (request as any)?.auth?.sub ||
+          null,
+      };
+      // Fire and forget
+      void prisma.error_logs.create({
+        data: {
+          message: typeof error?.message === 'string' && error.message.trim() ? error.message : message,
+          stack_trace: typeof error?.stack === 'string' ? error.stack : null,
+          context: ctx as any,
+          severity: 'error',
+          status: 'open',
+        },
+      });
+    } catch {
+      /* ignore */
+    }
   }
 
   reply.code(statusCode).send({
@@ -277,6 +375,37 @@ app.setErrorHandler((error: any, request: FastifyRequest, reply: FastifyReply) =
 app.get('/health', async () => ({ ok: true }));
 app.get('/api/health', async () => ({ ok: true }));
 app.get('/', async () => ({ message: 'MeetEzri API' }));
+
+// Secured cron: streak reminders (configure CRON_SECRET + Vercel cron hitting this URL).
+// Register both paths: some Vercel/serverless setups pass `req.url` with or without the `/api` prefix.
+async function streakRemindersCronHandler(request: FastifyRequest, reply: FastifyReply) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    return reply.code(503).send({ ok: false, message: 'CRON_SECRET is not configured' });
+  }
+  const authHeader = request.headers.authorization;
+  const bearer =
+    typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : undefined;
+  const headerSecret = request.headers['x-cron-secret'];
+  const token =
+    bearer || (typeof headerSecret === 'string' ? headerSecret : undefined);
+  if (token !== secret) {
+    return reply.code(401).send({ ok: false, message: 'Unauthorized' });
+  }
+  try {
+    const result = await notificationsService.processStreakReminderCronJob();
+    return reply.send({ ok: true, ...result });
+  } catch (err: unknown) {
+    request.log.error(err);
+    const message = err instanceof Error ? err.message : 'Cron failed';
+    return reply.code(500).send({ ok: false, message });
+  }
+}
+
+app.get('/api/cron/streak-reminders', streakRemindersCronHandler);
+app.get('/cron/streak-reminders', streakRemindersCronHandler);
 
 export default app;
 

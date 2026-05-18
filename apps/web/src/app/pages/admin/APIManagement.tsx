@@ -16,7 +16,9 @@ import {
   AlertCircle,
   Globe
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface APIKey {
@@ -52,93 +54,71 @@ export function APIManagement() {
   const [selectedWebhook, setSelectedWebhook] = useState<Webhook | null>(null);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [newKeyEnv, setNewKeyEnv] = useState<APIKey["environment"]>("production");
+  const [newKeyRate, setNewKeyRate] = useState("1000/hour");
+  const [saving, setSaving] = useState(false);
 
-  // Mock API keys
-  const [apiKeys, setApiKeys] = useState<APIKey[]>([
-    {
-      id: "key1",
-      name: "Production API Key",
-      key: "ezri_prod_xk7b9m3n2p5q8w1e4r6t",
-      created: new Date("2024-01-15"),
-      lastUsed: new Date(Date.now() - 5 * 60 * 1000),
-      requests: 125420,
-      rateLimit: "1000/hour",
-      status: "active",
-      environment: "production"
-    },
-    {
-      id: "key2",
-      name: "Mobile App Key",
-      key: "ezri_prod_a5c8f2k9m7n4p1q3r6s8",
-      created: new Date("2024-02-01"),
-      lastUsed: new Date(Date.now() - 30 * 60 * 1000),
-      requests: 89234,
-      rateLimit: "5000/hour",
-      status: "active",
-      environment: "production"
-    },
-    {
-      id: "key3",
-      name: "Development Key",
-      key: "ezri_dev_h2j5k8l1m4n7p0q3r6s9",
-      created: new Date("2024-03-10"),
-      lastUsed: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      requests: 3456,
-      rateLimit: "100/hour",
-      status: "active",
-      environment: "development"
-    },
-    {
-      id: "key4",
-      name: "Legacy API Key",
-      key: "ezri_prod_z9x8c7v6b5n4m3k2j1h0",
-      created: new Date("2023-11-20"),
-      lastUsed: new Date("2024-06-15"),
-      requests: 234890,
-      rateLimit: "500/hour",
-      status: "inactive",
-      environment: "production"
-    }
-  ]);
+  const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
+  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
 
-  // Mock webhooks
-  const [webhooks, setWebhooks] = useState<Webhook[]>([
-    {
-      id: "wh1",
-      name: "User Events",
-      url: "https://api.example.com/webhooks/users",
-      events: ["user.created", "user.updated", "user.deleted"],
-      status: "active",
-      lastTriggered: new Date(Date.now() - 10 * 60 * 1000),
-      successRate: 99.8
-    },
-    {
-      id: "wh2",
-      name: "Session Analytics",
-      url: "https://analytics.example.com/session-data",
-      events: ["session.started", "session.completed"],
-      status: "active",
-      lastTriggered: new Date(Date.now() - 25 * 60 * 1000),
-      successRate: 98.5
-    },
-    {
-      id: "wh3",
-      name: "Crisis Alerts",
-      url: "https://alerts.example.com/crisis",
-      events: ["crisis.detected", "crisis.escalated"],
-      status: "active",
-      lastTriggered: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      successRate: 100
-    },
-    {
-      id: "wh4",
-      name: "Payment Notifications",
-      url: "https://billing.example.com/webhook",
-      events: ["payment.success", "payment.failed", "subscription.updated"],
-      status: "inactive",
-      successRate: 95.2
+  const parseApiKey = (raw: Record<string, unknown>): APIKey => ({
+    id: String(raw.id),
+    name: String(raw.name),
+    key: String(raw.key),
+    created: new Date(String(raw.created)),
+    lastUsed: new Date(String(raw.lastUsed)),
+    requests: typeof raw.requests === "number" ? raw.requests : 0,
+    rateLimit: String(raw.rateLimit ?? "1000/hour"),
+    status: (raw.status === "inactive" ? "inactive" : "active") as APIKey["status"],
+    environment: (String(raw.environment || "production") as APIKey["environment"]),
+  });
+
+  const parseWebhook = (raw: Record<string, unknown>): Webhook => ({
+    id: String(raw.id),
+    name: String(raw.name),
+    url: String(raw.url),
+    events: Array.isArray(raw.events) ? (raw.events as string[]) : [],
+    status: (String(raw.status || "active") as Webhook["status"]),
+    lastTriggered: raw.lastTriggered ? new Date(String(raw.lastTriggered)) : undefined,
+    successRate: typeof raw.successRate === "number" ? raw.successRate : 0,
+  });
+
+  const persistConfig = async (keys: APIKey[], hooks: Webhook[]) => {
+    await api.saveApiPlatformConfig({
+      apiKeys: keys.map((k) => ({
+        ...k,
+        created: k.created instanceof Date ? k.created.toISOString() : k.created,
+        lastUsed: k.lastUsed instanceof Date ? k.lastUsed.toISOString() : k.lastUsed,
+      })),
+      webhooks: hooks.map((w) => ({
+        ...w,
+        lastTriggered: w.lastTriggered ? w.lastTriggered.toISOString() : undefined,
+      })),
+    });
+  };
+
+  const loadConfig = useCallback(async () => {
+    setLoading(true);
+    try {
+      const cfg = (await api.getApiPlatformConfig()) as {
+        apiKeys?: Record<string, unknown>[];
+        webhooks?: Record<string, unknown>[];
+      };
+      setApiKeys((cfg.apiKeys || []).map((k) => parseApiKey(k)));
+      setWebhooks((cfg.webhooks || []).map((w) => parseWebhook(w)));
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to load API configuration");
+    } finally {
+      setLoading(false);
     }
-  ]);
+  }, []);
+
+  useEffect(() => {
+    loadConfig();
+  }, [loadConfig]);
 
   // Mock API usage data
   const usageData = [
@@ -228,6 +208,49 @@ export function APIManagement() {
   const activeKeys = apiKeys.filter(k => k.status === "active").length;
   const activeWebhooks = webhooks.filter(w => w.status === "active").length;
 
+  const handleCreateKey = async () => {
+    if (!newKeyName.trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    setSaving(true);
+    try {
+      const created = (await api.createAdminApiKey({
+        name: newKeyName.trim(),
+        environment: newKeyEnv,
+        rateLimit: newKeyRate,
+      })) as Record<string, unknown>;
+      const row = parseApiKey(created);
+      setApiKeys((prev) => [row, ...prev]);
+      setShowCreateModal(false);
+      setNewKeyName("");
+      setNewKeyEnv("production");
+      setNewKeyRate("1000/hour");
+      toast.success("API key created — copy it now; it is stored securely.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to create key");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDeleteKey = async () => {
+    if (!selectedAPIKey) return;
+    setSaving(true);
+    try {
+      const next = apiKeys.filter((k) => k.id !== selectedAPIKey.id);
+      setApiKeys(next);
+      await persistConfig(next, webhooks);
+      setShowDeleteModal(false);
+      setSelectedAPIKey(null);
+      toast.success("API key removed");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete key");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <AdminLayoutNew>
       <div className="max-w-7xl mx-auto space-y-6">
@@ -246,7 +269,8 @@ export function APIManagement() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg"
+            disabled={loading}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
             Create API Key
@@ -342,9 +366,14 @@ export function APIManagement() {
           className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
         >
           <h2 className="text-xl font-bold text-gray-900 mb-6">API Keys</h2>
+
+          {loading && <p className="text-gray-600 py-4">Loading API keys…</p>}
+          {!loading && apiKeys.length === 0 && (
+            <p className="text-gray-600 py-4">No API keys yet. Create one to get a token.</p>
+          )}
           
           <div className="space-y-4">
-            {apiKeys.map((key, index) => {
+            {!loading && apiKeys.map((key, index) => {
               const isVisible = visibleKeys.has(key.id);
               const isCopied = copiedKey === key.id;
               
@@ -569,6 +598,8 @@ export function APIManagement() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Key Name</label>
                   <input
                     type="text"
+                    value={newKeyName}
+                    onChange={(e) => setNewKeyName(e.target.value)}
                     placeholder="e.g., Mobile App Production"
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
@@ -576,21 +607,29 @@ export function APIManagement() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Environment</label>
-                  <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
-                    <option>Production</option>
-                    <option>Development</option>
-                    <option>Staging</option>
+                  <select
+                    value={newKeyEnv}
+                    onChange={(e) => setNewKeyEnv(e.target.value as APIKey["environment"])}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="production">Production</option>
+                    <option value="development">Development</option>
+                    <option value="staging">Staging</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Rate Limit</label>
-                  <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
-                    <option>100 requests/hour</option>
-                    <option>500 requests/hour</option>
-                    <option>1000 requests/hour</option>
-                    <option>5000 requests/hour</option>
-                    <option>Unlimited</option>
+                  <select
+                    value={newKeyRate}
+                    onChange={(e) => setNewKeyRate(e.target.value)}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="100/hour">100 requests/hour</option>
+                    <option value="500/hour">500 requests/hour</option>
+                    <option value="1000/hour">1000 requests/hour</option>
+                    <option value="5000/hour">5000 requests/hour</option>
+                    <option value="unlimited">Unlimited</option>
                   </select>
                 </div>
               </div>
@@ -600,6 +639,7 @@ export function APIManagement() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setShowCreateModal(false)}
+                  disabled={saving}
                   className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
                 >
                   Cancel
@@ -608,10 +648,11 @@ export function APIManagement() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
+                  onClick={() => void handleCreateKey()}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium disabled:opacity-50"
                 >
-                  Create Key
+                  {saving ? "Creating…" : "Create Key"}
                 </motion.button>
               </div>
             </motion.div>
@@ -715,6 +756,7 @@ export function APIManagement() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setShowDeleteModal(false)}
+                  disabled={saving}
                   className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
                 >
                   Cancel
@@ -723,10 +765,11 @@ export function APIManagement() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowDeleteModal(false)}
-                  className="flex-1 px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium"
+                  onClick={() => void confirmDeleteKey()}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium disabled:opacity-50"
                 >
-                  Delete Key
+                  {saving ? "Deleting…" : "Delete Key"}
                 </motion.button>
               </div>
             </motion.div>

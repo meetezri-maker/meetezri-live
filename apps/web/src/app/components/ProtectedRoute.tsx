@@ -1,19 +1,37 @@
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
+import { api } from '@/lib/api';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/app/components/ui/dialog';
+import { Button } from '@/app/components/ui/button';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: string[];
 }
 
+const ALLOW_EXPIRED_PLAN_ROUTES = new Set(['/app/dashboard', '/app/billing']);
+
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { user, profile, isLoading, hasRole } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const isOnboardingRoute = location.pathname.startsWith('/onboarding');
+  const [isCancelling, setIsCancelling] = useState(false);
 
   if (isLoading) {
     // If we already have a signed-in user, never unmount the entire route tree.
     // Background auth refreshes (often triggered by tab switching) should be silent.
+    // Do NOT redirect away from /onboarding during hydration — paid users land here right after email verify.
     if (user) {
       return <>{children}</>;
     }
@@ -49,16 +67,70 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const signupType = (profile?.signup_type as 'trial' | 'plan' | undefined) ?? (profile?.subscription_plan === 'trial' ? 'trial' : 'plan');
   const onboardingStartRoute =
     signupType === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome';
-  const isOnboardingRoute = location.pathname.startsWith('/onboarding');
   const isAppRoute = location.pathname.startsWith('/app');
+  const isPlanPackageExpired =
+    signupType === 'plan' &&
+    (profile?.subscription_plan === 'trial' ||
+      profile?.subscription_status === 'canceled' ||
+      profile?.subscription_status === 'cancelled' ||
+      profile?.subscription_status === 'expired');
+  if (
+    isAppRoute &&
+    isPlanPackageExpired &&
+    !ALLOW_EXPIRED_PLAN_ROUTES.has(location.pathname)
+  ) {
+    const handleGoToBilling = () => navigate('/app/billing');
+    const handleUnsubscribe = async () => {
+      setIsCancelling(true);
+      try {
+        await api.billing.cancelSubscription();
+        toast.success('Subscription cancelled. Auto-renew has been turned off.');
+      } catch (error: any) {
+        toast.error(error?.message || 'Failed to cancel subscription');
+      } finally {
+        setIsCancelling(false);
+        navigate('/app/billing');
+      }
+    };
+
+    return (
+      <>
+        <div className="min-h-screen bg-background" />
+        <Dialog open>
+          <DialogContent
+            className="sm:max-w-md"
+            onInteractOutside={(event) => event.preventDefault()}
+          >
+            <DialogHeader>
+              <DialogTitle>Your package has ended</DialogTitle>
+              <DialogDescription>
+                This feature is locked until you renew your plan. Go to billing to renew
+                now, or unsubscribe to stop future renewals.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={handleUnsubscribe}
+                isLoading={isCancelling}
+                disabled={isCancelling}
+              >
+                Unsubscribe
+              </Button>
+              <Button onClick={handleGoToBilling} disabled={isCancelling}>
+                Go to Billing
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
 
   // Trial flow rule (per spec):
   // - trial users must NEVER be redirected to any /onboarding/* route
   // - trial users may access session lobby + dashboard + user profile
   if (signupType === 'trial') {
-    if (isOnboardingRoute) {
-      return <Navigate to="/app/dashboard" replace />;
-    }
     if (
       location.pathname === '/app/dashboard' ||
       location.pathname === '/app/user-profile' ||
@@ -79,7 +151,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     const isTrialUserProfileRoute =
       location.pathname === "/app/user-profile" ||
       location.pathname.startsWith("/app/user-profile?");
-    if (signupType === "trial" && (isDashboardRoute || isTrialUserProfileRoute)) {
+    if (isDashboardRoute || (signupType === "trial" && isTrialUserProfileRoute)) {
       return <>{children}</>;
     }
     return <Navigate to={onboardingStartRoute} replace />;

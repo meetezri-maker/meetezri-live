@@ -1,6 +1,8 @@
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
+import { api } from "@/lib/api";
+import { format } from "date-fns";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -23,17 +25,67 @@ import {
   XCircle,
   Plus,
   X,
+  ClipboardCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
 type Policy = {
+  id: string;
   dataType: string;
   retention: string;
   autoDelete: boolean;
   lastReview: string;
-  itemsAffected: number;
+  itemsAffected: number | null;
+  itemsNote?: string;
   status: string;
 };
+
+type PrivacyReq = {
+  id: number;
+  type: string;
+  user: string;
+  email: string;
+  requestDate: string;
+  status: string;
+  completedDate: string | null;
+};
+
+const CUSTOM_POLICIES_KEY = "ezri-admin-retention-policies";
+const REVIEW_DATES_KEY = "ezri-admin-retention-reviews";
+
+type ReviewRecord = {
+  date: string;
+  reviewer: string;
+  notes: string;
+};
+
+function parseStoredReviews(raw: string | null): Record<string, ReviewRecord> {
+  if (!raw) return {};
+  try {
+    const data = JSON.parse(raw) as unknown;
+    if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+    return data as Record<string, ReviewRecord>;
+  } catch {
+    return {};
+  }
+}
+
+function parseStoredPolicies(raw: string | null): Policy[] {
+  if (!raw) return [];
+  try {
+    const data = JSON.parse(raw) as unknown;
+    if (!Array.isArray(data)) return [];
+    return data.filter(
+      (p): p is Policy =>
+        p &&
+        typeof p === "object" &&
+        typeof (p as Policy).id === "string" &&
+        typeof (p as Policy).dataType === "string"
+    );
+  } catch {
+    return [];
+  }
+}
 
 export function DataRetentionPrivacy() {
   const [activeTab, setActiveTab] = useState<"retention" | "privacy" | "requests">("retention");
@@ -41,121 +93,118 @@ export function DataRetentionPrivacy() {
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showConfigureModal, setShowConfigureModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedPolicy, setSelectedPolicy] = useState<Policy | null>(null);
+  const [customPolicies, setCustomPolicies] = useState<Policy[]>(() =>
+    typeof window !== "undefined" ? parseStoredPolicies(window.localStorage.getItem(CUSTOM_POLICIES_KEY)) : []
+  );
+  const [reviewDates, setReviewDates] = useState<Record<string, ReviewRecord>>(() =>
+    typeof window !== "undefined" ? parseStoredReviews(window.localStorage.getItem(REVIEW_DATES_KEY)) : {}
+  );
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [reviewerName, setReviewerName] = useState("");
+  const [newDataType, setNewDataType] = useState("");
+  const [newRetention, setNewRetention] = useState("");
+  const [newAutoDelete, setNewAutoDelete] = useState(false);
+  const [dash, setDash] = useState<{ totalUsers?: number; totalSessions?: number } | null>(null);
+  const [auditLoaded, setAuditLoaded] = useState(0);
 
-  const retentionPolicies: Policy[] = [
-    {
-      dataType: "User Personal Information",
-      retention: "Account lifetime + 7 years",
-      autoDelete: false,
-      lastReview: "Dec 15, 2024",
-      itemsAffected: 8234,
-      status: "active",
-    },
-    {
-      dataType: "Session Transcripts",
-      retention: "7 years (HIPAA requirement)",
-      autoDelete: false,
-      lastReview: "Dec 15, 2024",
-      itemsAffected: 45678,
-      status: "active",
-    },
-    {
-      dataType: "Mood Check-in Data",
-      retention: "5 years",
-      autoDelete: true,
-      lastReview: "Dec 1, 2024",
-      itemsAffected: 123456,
-      status: "active",
-    },
-    {
-      dataType: "Journal Entries",
-      retention: "User-controlled (default: account lifetime)",
-      autoDelete: false,
-      lastReview: "Nov 20, 2024",
-      itemsAffected: 34567,
-      status: "active",
-    },
-    {
-      dataType: "Audit Logs",
-      retention: "7 years",
-      autoDelete: true,
-      lastReview: "Dec 15, 2024",
-      itemsAffected: 987654,
-      status: "active",
-    },
-    {
-      dataType: "Temporary Session Data",
-      retention: "24 hours",
-      autoDelete: true,
-      lastReview: "Dec 29, 2024",
-      itemsAffected: 1234,
-      status: "active",
-    },
-    {
-      dataType: "Marketing Communications Data",
-      retention: "2 years after last contact",
-      autoDelete: true,
-      lastReview: "Dec 1, 2024",
-      itemsAffected: 5432,
-      status: "active",
-    },
-  ];
+  useEffect(() => {
+    let c = false;
+    (async () => {
+      try {
+        const [s, audits] = await Promise.all([
+          api.admin.getStats(),
+          api.admin.getAuditLogs({ page: 1, limit: 100 }),
+        ]);
+        if (c) return;
+        setDash(s ?? null);
+        setAuditLoaded(Array.isArray(audits) ? audits.length : 0);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    return () => {
+      c = true;
+    };
+  }, []);
 
-  const privacyRequests = [
-    {
-      id: 1,
-      type: "Data Export",
-      user: "Sarah Johnson",
-      email: "sarah.j@example.com",
-      requestDate: "Dec 28, 2024",
-      status: "completed",
-      completedDate: "Dec 28, 2024",
-    },
-    {
-      id: 2,
-      type: "Account Deletion",
-      user: "Michael Chen",
-      email: "michael.c@example.com",
-      requestDate: "Dec 27, 2024",
-      status: "in_progress",
-      completedDate: null,
-    },
-    {
-      id: 3,
-      type: "Data Export",
-      user: "Emily Davis",
-      email: "emily.d@example.com",
-      requestDate: "Dec 26, 2024",
-      status: "completed",
-      completedDate: "Dec 26, 2024",
-    },
-    {
-      id: 4,
-      type: "Data Correction",
-      user: "James Wilson",
-      email: "james.w@example.com",
-      requestDate: "Dec 25, 2024",
-      status: "pending",
-      completedDate: null,
-    },
-    {
-      id: 5,
-      type: "Data Export",
-      user: "Lisa Anderson",
-      email: "lisa.a@example.com",
-      requestDate: "Dec 24, 2024",
-      status: "completed",
-      completedDate: "Dec 24, 2024",
-    },
-  ];
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CUSTOM_POLICIES_KEY, JSON.stringify(customPolicies));
+    } catch {
+      /* ignore quota */
+    }
+  }, [customPolicies]);
 
-  const stats = {
-    totalPolicies: retentionPolicies.length,
-    activePolicies: retentionPolicies.filter(p => p.status === "active").length,
-    totalRequests: privacyRequests.length,
-    pendingRequests: privacyRequests.filter(r => r.status === "pending" || r.status === "in_progress").length,
-  };
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(REVIEW_DATES_KEY, JSON.stringify(reviewDates));
+    } catch {
+      /* ignore quota */
+    }
+  }, [reviewDates]);
+
+  const baseRetentionPolicies: Policy[] = useMemo(() => {
+    const tu = dash?.totalUsers ?? 0;
+    const ts = dash?.totalSessions ?? 0;
+    return [
+      {
+        id: "builtin-profiles",
+        dataType: "User profiles",
+        retention: "Defined by your organization and applicable law (review with counsel).",
+        autoDelete: false,
+        lastReview: "—",
+        itemsAffected: tu,
+        status: "active",
+      },
+      {
+        id: "builtin-sessions",
+        dataType: "App sessions (historical)",
+        retention: "Defined by your organization; align with clinical / retention policy.",
+        autoDelete: false,
+        lastReview: "—",
+        itemsAffected: ts,
+        status: "active",
+      },
+      {
+        id: "builtin-audit",
+        dataType: "Audit log rows (admin sample)",
+        retention: "Typically multi-year; confirm with legal.",
+        autoDelete: false,
+        lastReview: "—",
+        itemsAffected: auditLoaded,
+        itemsNote: "Rows loaded in this view (max 100)",
+        status: "active",
+      },
+      {
+        id: "builtin-ugc",
+        dataType: "Journal, mood, sleep, habits (user-generated)",
+        retention: "User-controlled or policy-driven — row counts not summarized in admin stats yet.",
+        autoDelete: false,
+        lastReview: "—",
+        itemsAffected: null,
+        status: "reference",
+      },
+    ];
+  }, [dash, auditLoaded]);
+
+  const retentionPolicies = useMemo(
+    () => [...baseRetentionPolicies, ...customPolicies],
+    [baseRetentionPolicies, customPolicies]
+  );
+
+  const privacyRequests: PrivacyReq[] = [];
+
+  const stats = useMemo(
+    () => ({
+      totalPolicies: retentionPolicies.length,
+      activePolicies: retentionPolicies.filter((p) => p.status === "active").length,
+      totalRequests: privacyRequests.length,
+      pendingRequests: privacyRequests.filter((r) => r.status === "pending" || r.status === "in_progress").length,
+    }),
+    [retentionPolicies, privacyRequests]
+  );
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -168,6 +217,8 @@ export function DataRetentionPrivacy() {
         return "bg-yellow-100 text-yellow-700 border-yellow-300";
       case "inactive":
         return "bg-gray-100 text-gray-700 border-gray-300";
+      case "reference":
+        return "bg-slate-100 text-slate-700 border-slate-300";
       default:
         return "bg-gray-100 text-gray-700";
     }
@@ -192,8 +243,33 @@ export function DataRetentionPrivacy() {
   };
 
   const handleAddPolicy = () => {
-    toast.success("New retention policy added successfully!");
+    const dt = newDataType.trim();
+    const rt = newRetention.trim();
+    if (!dt || !rt) {
+      toast.error("Enter a data type and retention period.");
+      return;
+    }
+    const id =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `custom-${Date.now()}`;
+    setCustomPolicies((prev) => [
+      ...prev,
+      {
+        id,
+        dataType: dt,
+        retention: rt,
+        autoDelete: newAutoDelete,
+        lastReview: format(new Date(), "MMM d, yyyy"),
+        itemsAffected: null,
+        status: "active",
+      },
+    ]);
+    toast.success("Retention policy added.");
     setShowAddPolicyModal(false);
+    setNewDataType("");
+    setNewRetention("");
+    setNewAutoDelete(false);
   };
 
   const handleViewPolicy = (policy: Policy) => {
@@ -210,6 +286,34 @@ export function DataRetentionPrivacy() {
     toast.success(`Configuration saved for ${selectedPolicy?.dataType}`);
     setShowConfigureModal(false);
     setSelectedPolicy(null);
+  };
+
+  const handleOpenReview = (policy: Policy) => {
+    setSelectedPolicy(policy);
+    const existing = reviewDates[policy.id];
+    setReviewerName(existing?.reviewer ?? "");
+    setReviewNotes(existing?.notes ?? "");
+    setShowReviewModal(true);
+  };
+
+  const handleSubmitReview = () => {
+    if (!selectedPolicy) return;
+    const name = reviewerName.trim();
+    if (!name) {
+      toast.error("Please enter your name before marking as reviewed.");
+      return;
+    }
+    const record: ReviewRecord = {
+      date: format(new Date(), "MMM d, yyyy"),
+      reviewer: name,
+      notes: reviewNotes.trim(),
+    };
+    setReviewDates((prev) => ({ ...prev, [selectedPolicy.id]: record }));
+    toast.success(`"${selectedPolicy.dataType}" marked as reviewed.`);
+    setShowReviewModal(false);
+    setSelectedPolicy(null);
+    setReviewNotes("");
+    setReviewerName("");
   };
 
   const handleProcessRequest = (requestId: number) => {
@@ -263,6 +367,7 @@ export function DataRetentionPrivacy() {
                 Archive Old Data
               </Button>
               <Button
+                type="button"
                 className="gap-2"
                 onClick={() => setShowAddPolicyModal(true)}
               >
@@ -371,72 +476,108 @@ export function DataRetentionPrivacy() {
         {/* Retention Policies Tab */}
         {activeTab === "retention" && (
           <div className="space-y-4">
-            {retentionPolicies.map((policy, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 + index * 0.05 }}
-              >
-                <Card className="p-6 hover:shadow-lg transition-shadow">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Database className="w-5 h-5 text-primary" />
-                        <h3 className="font-bold text-lg">{policy.dataType}</h3>
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadge(policy.status)}`}>
-                          {policy.status}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                        <div>
-                          <p className="text-muted-foreground mb-1">Retention Period</p>
-                          <p className="font-medium">{policy.retention}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground mb-1">Items Affected</p>
-                          <p className="font-medium">{policy.itemsAffected.toLocaleString()}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground mb-1">Last Review</p>
-                          <p className="font-medium">{policy.lastReview}</p>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center gap-2">
-                        {policy.autoDelete ? (
-                          <span className="flex items-center gap-1 text-sm text-green-600">
-                            <CheckCircle className="w-4 h-4" />
-                            Auto-deletion enabled
+            {retentionPolicies.map((policy, index) => {
+              const review = reviewDates[policy.id];
+              const displayReview = review ? review.date : "—";
+              const isOverdue =
+                !review &&
+                policy.status !== "reference";
+              return (
+                <motion.div
+                  key={policy.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 + index * 0.05 }}
+                >
+                  <Card className={`p-6 hover:shadow-lg transition-shadow ${isOverdue ? "border-yellow-300" : ""}`}>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Database className="w-5 h-5 text-primary" />
+                          <h3 className="font-bold text-lg">{policy.dataType}</h3>
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadge(policy.status)}`}>
+                            {policy.status}
                           </span>
-                        ) : (
-                          <span className="flex items-center gap-1 text-sm text-yellow-600">
-                            <AlertTriangle className="w-4 h-4" />
-                            Manual review required
-                          </span>
-                        )}
+                          {isOverdue && (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 border border-yellow-300 flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" />
+                              Needs Review
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                          <div>
+                            <p className="text-muted-foreground mb-1">Retention Period</p>
+                            <p className="font-medium">{policy.retention}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground mb-1">Items Affected</p>
+                            <p className="font-medium">
+                              {policy.itemsAffected == null ? "—" : policy.itemsAffected.toLocaleString()}
+                            </p>
+                            {policy.itemsNote && (
+                              <p className="text-xs text-muted-foreground mt-0.5">{policy.itemsNote}</p>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground mb-1">Last Review</p>
+                            <p className="font-medium">{displayReview}</p>
+                            {review?.reviewer && (
+                              <p className="text-xs text-muted-foreground mt-0.5">by {review.reviewer}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-3 flex items-center gap-4 flex-wrap">
+                          {policy.autoDelete ? (
+                            <span className="flex items-center gap-1 text-sm text-green-600">
+                              <CheckCircle className="w-4 h-4" />
+                              Auto-deletion enabled
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-sm text-yellow-600">
+                              <AlertTriangle className="w-4 h-4" />
+                              Manual review required
+                            </span>
+                          )}
+                          {review?.notes && (
+                            <span className="flex items-center gap-1 text-sm text-muted-foreground italic">
+                              <FileText className="w-3.5 h-3.5" />
+                              {review.notes.length > 60 ? review.notes.slice(0, 60) + "…" : review.notes}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 flex-wrap justify-end">
+                        <Button
+                          variant={isOverdue ? "default" : "outline"}
+                          size="sm"
+                          className="gap-1"
+                          onClick={() => handleOpenReview(policy)}
+                        >
+                          <ClipboardCheck className="w-4 h-4" />
+                          {review ? "Re-review" : "Mark Reviewed"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleConfigurePolicy(policy)}
+                        >
+                          <Settings className="w-4 h-4 mr-2" />
+                          Configure
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewPolicy(policy)}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleConfigurePolicy(policy)}
-                      >
-                        <Settings className="w-4 h-4 mr-2" />
-                        Configure
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewPolicy(policy)}
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
+                  </Card>
+                </motion.div>
+              );
+            })}
           </div>
         )}
 
@@ -559,6 +700,13 @@ export function DataRetentionPrivacy() {
                     </tr>
                   </thead>
                   <tbody>
+                    {privacyRequests.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                          No privacy or DSAR requests are stored in the database.
+                        </td>
+                      </tr>
+                    )}
                     {privacyRequests.map((request, index) => {
                       const Icon = getRequestTypeIcon(request.type);
                       return (
@@ -625,7 +773,7 @@ export function DataRetentionPrivacy() {
 
         {/* Archive Old Data Modal */}
         {showArchiveModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -678,7 +826,7 @@ export function DataRetentionPrivacy() {
 
         {/* Add Policy Modal */}
         {showAddPolicyModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -701,17 +849,30 @@ export function DataRetentionPrivacy() {
                   <Label className="block text-sm font-medium text-gray-700 mb-2">
                     Data Type
                   </Label>
-                  <Input placeholder="e.g., User Analytics Data" />
+                  <Input
+                    placeholder="e.g., User Analytics Data"
+                    value={newDataType}
+                    onChange={(e) => setNewDataType(e.target.value)}
+                  />
                 </div>
                 <div>
                   <Label className="block text-sm font-medium text-gray-700 mb-2">
                     Retention Period
                   </Label>
-                  <Input placeholder="e.g., 2 years" />
+                  <Input
+                    placeholder="e.g., 2 years"
+                    value={newRetention}
+                    onChange={(e) => setNewRetention(e.target.value)}
+                  />
                 </div>
                 <div>
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" className="w-4 h-4" />
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4"
+                      checked={newAutoDelete}
+                      onChange={(e) => setNewAutoDelete(e.target.checked)}
+                    />
                     <span className="text-sm font-medium text-gray-700">
                       Enable auto-deletion
                     </span>
@@ -719,12 +880,14 @@ export function DataRetentionPrivacy() {
                 </div>
                 <div className="flex gap-3 pt-4">
                   <Button
+                    type="button"
                     className="flex-1"
                     onClick={handleAddPolicy}
                   >
                     Add Policy
                   </Button>
                   <Button
+                    type="button"
                     variant="outline"
                     className="flex-1"
                     onClick={() => setShowAddPolicyModal(false)}
@@ -739,7 +902,7 @@ export function DataRetentionPrivacy() {
 
         {/* View Policy Modal */}
         {showViewModal && selectedPolicy && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -780,21 +943,53 @@ export function DataRetentionPrivacy() {
                   </div>
                   <div>
                     <Label className="text-sm font-medium text-gray-500">Items Affected</Label>
-                    <p className="mt-1 text-gray-900">{selectedPolicy.itemsAffected.toLocaleString()}</p>
+                    <p className="mt-1 text-gray-900">
+                      {selectedPolicy.itemsAffected == null
+                        ? "—"
+                        : selectedPolicy.itemsAffected.toLocaleString()}
+                    </p>
+                    {selectedPolicy.itemsNote && (
+                      <p className="text-xs text-muted-foreground mt-1">{selectedPolicy.itemsNote}</p>
+                    )}
                   </div>
                   <div>
                     <Label className="text-sm font-medium text-gray-500">Last Review</Label>
-                    <p className="mt-1 text-gray-900">{selectedPolicy.lastReview}</p>
+                    {reviewDates[selectedPolicy.id] ? (
+                      <>
+                        <p className="mt-1 text-gray-900 font-medium">{reviewDates[selectedPolicy.id].date}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">by {reviewDates[selectedPolicy.id].reviewer}</p>
+                      </>
+                    ) : (
+                      <p className="mt-1 text-yellow-600 font-medium flex items-center gap-1">
+                        <AlertTriangle className="w-4 h-4" /> Not yet reviewed
+                      </p>
+                    )}
                   </div>
                   <div>
                     <Label className="text-sm font-medium text-gray-500">Auto-deletion</Label>
                     <p className="mt-1 text-gray-900">{selectedPolicy.autoDelete ? "Enabled" : "Disabled"}</p>
                   </div>
                 </div>
-                <div className="pt-4 border-t border-gray-200">
+                {reviewDates[selectedPolicy.id]?.notes && (
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <Label className="text-sm font-medium text-gray-500">Review Notes</Label>
+                    <p className="mt-1 text-gray-700 text-sm whitespace-pre-wrap">{reviewDates[selectedPolicy.id].notes}</p>
+                  </div>
+                )}
+                <div className="pt-4 border-t border-gray-200 flex gap-3">
+                  <Button
+                    className="flex-1 gap-2"
+                    onClick={() => {
+                      setShowViewModal(false);
+                      handleOpenReview(selectedPolicy);
+                    }}
+                  >
+                    <ClipboardCheck className="w-4 h-4" />
+                    {reviewDates[selectedPolicy.id] ? "Re-review" : "Mark as Reviewed"}
+                  </Button>
                   <Button
                     variant="outline"
-                    className="w-full"
+                    className="flex-1"
                     onClick={() => {
                       setShowViewModal(false);
                       setSelectedPolicy(null);
@@ -808,9 +1003,103 @@ export function DataRetentionPrivacy() {
           </div>
         )}
 
+        {/* Mark as Reviewed Modal */}
+        {showReviewModal && selectedPolicy && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-lg w-full"
+            >
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                      <ClipboardCheck className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900">Mark Policy as Reviewed</h2>
+                      <p className="text-sm text-muted-foreground">{selectedPolicy.dataType}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowReviewModal(false);
+                      setSelectedPolicy(null);
+                      setReviewNotes("");
+                      setReviewerName("");
+                    }}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-green-800">Review date will be set to today</p>
+                      <p className="text-sm text-green-700 mt-0.5">{format(new Date(), "MMMM d, yyyy")}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium text-gray-700 mb-2">
+                    Reviewer Name <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    placeholder="Enter your name"
+                    value={reviewerName}
+                    onChange={(e) => setReviewerName(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium text-gray-700 mb-2">
+                    Review Notes <span className="text-muted-foreground font-normal">(optional)</span>
+                  </Label>
+                  <textarea
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    rows={4}
+                    placeholder="Add any observations, compliance notes, or next steps…"
+                    value={reviewNotes}
+                    onChange={(e) => setReviewNotes(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    className="flex-1 gap-2"
+                    onClick={handleSubmitReview}
+                  >
+                    <ClipboardCheck className="w-4 h-4" />
+                    Confirm Review
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setShowReviewModal(false);
+                      setSelectedPolicy(null);
+                      setReviewNotes("");
+                      setReviewerName("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {/* Configure Policy Modal */}
         {showConfigureModal && selectedPolicy && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}

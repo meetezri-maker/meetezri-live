@@ -74,12 +74,48 @@ const countries = [
 export interface PhoneInputProps {
   value?: string
   onChange?: (value: string) => void
+  onBlur?: React.FocusEventHandler<HTMLInputElement>
+  name?: string
+  id?: string
   disabled?: boolean
   className?: string
+  buttonClassName?: string
+  inputClassName?: string
   placeholder?: string
 }
 
-export function PhoneInput({ value = "", onChange, disabled, className, placeholder }: PhoneInputProps) {
+const MAX_PHONE_DIGITS = 12
+
+const countDigits = (value: string) => (value.match(/\d/g) || []).length
+
+const limitLocalPhoneDigits = (value: string, countryCode: string) => {
+  const allowedDigits = Math.max(0, MAX_PHONE_DIGITS - countDigits(countryCode))
+  let localDigits = 0
+  let limitedValue = ""
+
+  for (const char of value) {
+    if (/\d/.test(char)) {
+      if (localDigits >= allowedDigits) continue
+      localDigits += 1
+    }
+    limitedValue += char
+  }
+
+  return limitedValue
+}
+
+export function PhoneInput({
+  value = "",
+  onChange,
+  onBlur,
+  name,
+  id,
+  disabled,
+  className,
+  buttonClassName,
+  inputClassName,
+  placeholder,
+}: PhoneInputProps) {
   const [open, setOpen] = React.useState(false)
   
   // Parse value into country code and number
@@ -109,30 +145,32 @@ export function PhoneInput({ value = "", onChange, disabled, className, placehol
   const handleCountrySelect = (currentValue: string) => {
     const newCountry = countries.find((c) => c.value === currentValue) || countries[0]
     setOpen(false)
+    const limitedNumber = limitLocalPhoneDigits(phoneNumber, newCountry.value)
+    setPhoneNumber(limitedNumber)
     if (onChange) {
-      onChange(newCountry.value + phoneNumber)
+      onChange(newCountry.value + limitedNumber)
     }
   }
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newNumber = e.target.value.replace(/[^0-9\s-().+]/g, "") // Allow digits and formatting
-    if (newNumber.length > 20) return // Simple length limit
+    const newNumber = e.target.value.replace(/[^0-9\s\-()]/g, "") // digits and common formatting only; + is handled by the dropdown
+    const limitedNumber = limitLocalPhoneDigits(newNumber, selectedCountry.value)
     
-    setPhoneNumber(newNumber)
+    setPhoneNumber(limitedNumber)
     if (onChange) {
-      onChange(selectedCountry.value + newNumber)
+      onChange(selectedCountry.value + limitedNumber)
     }
   }
 
   return (
-    <div className={cn("flex gap-2", className)}>
+    <div className={cn("flex w-full min-w-0 gap-2", className)}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="w-[140px] justify-between px-3"
+            className={cn("w-[120px] shrink-0 justify-between px-3 sm:w-[140px]", buttonClassName)}
             disabled={disabled}
           >
             <div className="flex items-center gap-2">
@@ -142,7 +180,7 @@ export function PhoneInput({ value = "", onChange, disabled, className, placehol
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0" align="start">
+        <PopoverContent className="z-[200] w-[300px] p-0" align="start">
           <Command>
             <CommandInput placeholder="Search country..." />
             <CommandList>
@@ -170,12 +208,17 @@ export function PhoneInput({ value = "", onChange, disabled, className, placehol
         </PopoverContent>
       </Popover>
       <Input
+        id={id}
+        name={name}
         type="tel"
+        inputMode="tel"
+        autoComplete="tel-national"
         value={phoneNumber}
         onChange={handlePhoneChange}
+        onBlur={onBlur}
         disabled={disabled}
         placeholder={placeholder || "Phone number"}
-        className="flex-1"
+        className={cn("min-w-0 flex-1", inputClassName)}
       />
     </div>
   )

@@ -112,6 +112,15 @@ function mapApiCrisisEventToCrisisCase(event: any): CrisisCase {
   };
 }
 
+/** US 988 Lifeline by default; override with VITE_CRISIS_EMERGENCY_HOTLINE (digits, +E.164, or formatted). */
+function getEmergencyHotlineTel(): { href: string; label: string } {
+  const raw = (import.meta.env.VITE_CRISIS_EMERGENCY_HOTLINE as string | undefined)?.trim();
+  if (!raw) return { href: "tel:988", label: "988" };
+  const tel = raw.replace(/[^\d+]/g, "");
+  if (!tel) return { href: "tel:988", label: "988" };
+  return { href: `tel:${tel}`, label: raw };
+}
+
 function getAverageResponseTime(cases: CrisisCase[]): string {
   let totalMinutes = 0;
   let count = 0;
@@ -130,6 +139,7 @@ function getAverageResponseTime(cases: CrisisCase[]): string {
 }
 
 export function CrisisProtocol() {
+  const emergencyHotline = getEmergencyHotlineTel();
   const [selectedCase, setSelectedCase] = useState<CrisisCase | null>(null);
   const [activeStep, setActiveStep] = useState(1);
   const [showContactModal, setShowContactModal] = useState(false);
@@ -331,14 +341,17 @@ export function CrisisProtocol() {
           </div>
 
           <div className="flex gap-3">
-            <motion.button
+            <motion.a
+              href={emergencyHotline.href}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className="px-4 py-2 rounded-xl bg-red-500 text-white flex items-center gap-2 shadow-lg"
+              aria-label={`Call emergency hotline (${emergencyHotline.label})`}
+              title={`Call ${emergencyHotline.label}`}
             >
               <Phone className="w-4 h-4" />
               Emergency Hotline
-            </motion.button>
+            </motion.a>
           </div>
         </motion.div>
 

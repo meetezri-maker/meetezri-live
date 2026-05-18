@@ -7,57 +7,56 @@ import {
   DollarSign,
   ArrowUp,
   ArrowDown,
-  Download,
-  Calendar,
   BarChart3,
   PieChart,
   Target
 } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, PieChart as RechartsPie, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../lib/api";
+import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
+import { buildStatsQuery, datesForPreset, downloadCsv, type DashboardTimePreset } from "@/lib/adminAnalytics";
 
 export function Analytics() {
-  const [timeRange, setTimeRange] = useState("30d");
+  const [chartPeriod, setChartPeriod] = useState<"week" | "month" | "year">("month");
+  const [rangePreset, setRangePreset] = useState<DashboardTimePreset>("30d");
+  const [useCustomRange, setUseCustomRange] = useState(false);
+  const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
+  const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
+
   const [dashboard, setDashboard] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadStats = useCallback(async (forceRefresh?: boolean) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const q = buildStatsQuery({
+        chartPeriod,
+        rangePreset,
+        useCustomRange,
+        dateFrom,
+        dateTo,
+      });
+      const data = await api.admin.getStats({ ...q, ...(forceRefresh ? { refresh: true } : {}) });
+      setDashboard(data);
+    } catch (err: any) {
+      console.error("Failed to fetch analytics stats", err);
+      setError(err.message || "Failed to load analytics");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [chartPeriod, rangePreset, useCustomRange, dateFrom, dateTo]);
+
   useEffect(() => {
-    let isMounted = true;
+    void loadStats();
+  }, [loadStats]);
 
-    const fetchStats = async () => {
-      try {
-        const data = await api.admin.getStats();
-        if (isMounted) {
-          setDashboard(data);
-        }
-      } catch (err: any) {
-        console.error("Failed to fetch analytics stats", err);
-        if (isMounted) {
-          setError(err.message || "Failed to load analytics");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    fetchStats();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const userGrowthData =
-    (dashboard?.userGrowth || []).map((item: any) => ({
-      date: item.month,
-      users: item.users,
-      active: Math.round(item.users * 0.8),
-      premium: Math.round(item.users * 0.2)
-    }));
+  const userGrowthData = (dashboard?.userGrowth || []).map((item: any) => ({
+    date: item.month,
+    users: item.users,
+  }));
 
   const sessionData =
     (dashboard?.sessionActivity || []).map((item: any) => ({
@@ -134,7 +133,7 @@ export function Analytics() {
     ? [
         {
           label: "Total Revenue",
-          value: `$${dashboard.revenue.toLocaleString()}`,
+          value: `$${dashboard.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
           change: revenueChange || "0.0%",
           trend: revenueTrend,
           icon: DollarSign,
@@ -202,27 +201,46 @@ export function Analytics() {
             <p className="text-gray-600 mt-1">Comprehensive insights and performance metrics</p>
           </div>
 
-          <div className="flex gap-3">
-            <select
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value)}
-              className="px-4 py-2 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-              <option value="90d">Last 90 days</option>
-              <option value="1y">Last year</option>
-            </select>
-
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg"
-            >
-              <Download className="w-4 h-4" />
-              Export
-            </motion.button>
-          </div>
+          <AdminAnalyticsToolbar
+            chartPeriod={chartPeriod}
+            onChartPeriodChange={setChartPeriod}
+            rangePreset={rangePreset}
+            onRangePresetChange={setRangePreset}
+            useCustomRange={useCustomRange}
+            onUseCustomRangeChange={setUseCustomRange}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            onRefresh={() => void loadStats(true)}
+            isLoading={isLoading}
+            onExport={() => {
+              if (!dashboard) return;
+              const rows: Record<string, unknown>[] = [
+                { section: "summary", totalUsers: dashboard.totalUsers, totalSessions: dashboard.totalSessions, revenue: dashboard.revenue },
+                ...(dashboard.sessionActivity || []).map((r: any, i: number) => ({
+                  section: "session_day",
+                  i,
+                  day: r.day,
+                  sessions: r.sessions,
+                  avgDurationMin: r.duration,
+                })),
+                ...(dashboard.userGrowth || []).map((r: any, i: number) => ({
+                  section: "user_growth",
+                  i,
+                  period: r.month,
+                  users: r.users,
+                })),
+                ...(dashboard.revenueData || []).map((r: any, i: number) => ({
+                  section: "revenue",
+                  i,
+                  period: r.month,
+                  revenue: r.revenue,
+                })),
+              ];
+              downloadCsv(`platform-analytics-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+            }}
+          />
         </motion.div>
 
         {mockedSections.length > 0 && (
@@ -274,7 +292,7 @@ export function Analytics() {
           <div className="flex justify-between items-center mb-6">
             <div>
               <h2 className="text-xl font-bold text-gray-900">User Growth</h2>
-              <p className="text-gray-600 text-sm mt-1">Total, active, and premium users over time</p>
+              <p className="text-gray-600 text-sm mt-1">Registered users ({chartPeriod === "week" ? "weekly" : chartPeriod === "year" ? "yearly" : "monthly"} series)</p>
             </div>
             <BarChart3 className="w-5 h-5 text-blue-500" />
           </div>
@@ -285,14 +303,6 @@ export function Analytics() {
                   <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
                   <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
                 </linearGradient>
-                <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                </linearGradient>
-                <linearGradient id="colorPremium" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
               <XAxis dataKey="date" stroke="#6b7280" />
@@ -301,9 +311,7 @@ export function Analytics() {
                 contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px' }}
               />
               <Legend />
-              <Area type="monotone" dataKey="users" stroke="#3b82f6" fillOpacity={1} fill="url(#colorUsers)" name="Total Users" />
-              <Area type="monotone" dataKey="active" stroke="#8b5cf6" fillOpacity={1} fill="url(#colorActive)" name="Active Users" />
-              <Area type="monotone" dataKey="premium" stroke="#10b981" fillOpacity={1} fill="url(#colorPremium)" name="Premium Users" />
+              <Area type="monotone" dataKey="users" stroke="#3b82f6" fillOpacity={1} fill="url(#colorUsers)" name="Users (cumulative signups)" />
             </AreaChart>
           </ResponsiveContainer>
         </motion.div>
@@ -315,7 +323,7 @@ export function Analytics() {
             transition={{ delay: 0.3 }}
             className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
           >
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Weekly Sessions</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-6">Weekly Talk it out</h2>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={sessionData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -325,7 +333,7 @@ export function Analytics() {
                   contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px' }}
                 />
                 <Legend />
-                <Bar dataKey="sessions" fill="#3b82f6" radius={[8, 8, 0, 0]} name="Sessions" />
+                <Bar dataKey="sessions" fill="#3b82f6" radius={[8, 8, 0, 0]} name="Talk it out" />
                 <Bar dataKey="duration" fill="#8b5cf6" radius={[8, 8, 0, 0]} name="Avg Duration (min)" />
               </BarChart>
             </ResponsiveContainer>
@@ -414,7 +422,7 @@ export function Analytics() {
               <YAxis stroke="#6b7280" />
               <Tooltip 
                 contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px' }}
-                formatter={(value: number) => `$${value.toLocaleString()}`}
+                  formatter={(value: number) => `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
               />
               <Legend />
               <Line type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} name="Total Revenue" />

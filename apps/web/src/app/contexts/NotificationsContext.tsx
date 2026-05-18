@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
+import { queryKeys } from '@/lib/queries';
 
 export interface Notification {
   id: string;
@@ -25,94 +27,97 @@ interface NotificationsContextType {
 
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined);
 
+function computeUnreadCount(items: Notification[]) {
+  return items.reduce((count, item) => {
+    if (!item || typeof item !== 'object') return count;
+    return count + (item.is_read === true ? 0 : 1);
+  }, 0);
+}
+
+function normalizeNotifications(payload: unknown): Notification[] {
+  if (Array.isArray(payload)) return payload as Notification[];
+
+  if (payload && typeof payload === 'object') {
+    const maybeItems = (payload as { notifications?: unknown }).notifications;
+    if (Array.isArray(maybeItems)) return maybeItems as Notification[];
+  }
+
+  return [];
+}
+
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  const computeUnreadCount = (items: Notification[]) =>
-    items.reduce((count, item) => count + (item.is_read ? 0 : 1), 0);
+  // Replace fetchNotifications useState+useEffect with useQuery.
+  // staleTime: 30_000 per .cursorrules (Notifications list).
+  const { data: notificationsRaw, isLoading } = useQuery({
+    queryKey: queryKeys.notifications.byUser(user?.id),
+    queryFn: () => api.notifications.getAll(),
+    enabled: !!user,
+    staleTime: 30_000,
+  });
 
-  const syncUnreadCount = async () => {
-    try {
-      const result = await api.notifications.getUnreadCount();
-      const count = Number(result?.count ?? 0);
-      if (!Number.isNaN(count)) {
-        setUnreadCount(count);
-      }
-    } catch (error) {
-      console.error('Failed to sync unread count:', error);
-    }
-  };
+  const notifications = notificationsRaw ? normalizeNotifications(notificationsRaw) : [];
+  const unreadCount = computeUnreadCount(notifications);
 
-  const fetchNotifications = async () => {
-    if (!user) return;
-    try {
-      const data = await api.notifications.getAll();
-      setNotifications(data);
-      setUnreadCount(computeUnreadCount(data));
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  // Realtime subscription — NOT migrated to useQuery per .cursorrules.
+  // Channel name, cleanup, and CHANNEL_ERROR handling are per .cursorrules spec.
   useEffect(() => {
-    if (user) {
-      fetchNotifications();
+    if (!user) return;
 
-      // Subscribe to realtime changes
-      const channel = supabase
-        .channel('public:notifications')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'notifications',
-            filter: `user_id=eq.${user.id}`,
-          },
-          async (payload) => {
-            const newNotification = payload.new as Notification;
-            setNotifications((prev) => {
-              // Realtime can replay inserts on reconnect; dedupe by id.
-              if (prev.some((item) => item.id === newNotification.id)) {
-                return prev;
+    const channel = supabase
+      .channel(`notifications:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newNotification = payload.new as Notification;
+          if (!newNotification || !newNotification.id) return;
+
+          // Prepend into the query cache so all consumers update immediately.
+          queryClient.setQueryData(
+            queryKeys.notifications.byUser(user.id),
+            (old: unknown) => {
+              const existing = normalizeNotifications(old);
+              // Dedupe by id — realtime can replay inserts on reconnect.
+              if (existing.some((item) => item.id === newNotification.id)) {
+                return existing;
               }
-              const next = [newNotification, ...prev];
-              setUnreadCount(computeUnreadCount(next));
-              return next;
-            });
-            
-            // Show toast
-            toast(newNotification.title || 'New Notification', {
-                description: newNotification.message,
-            });
-            await syncUnreadCount();
-          }
-        )
-        .subscribe();
+              return [newNotification, ...existing];
+            }
+          );
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    } else {
-        setNotifications([]);
-        setUnreadCount(0);
-    }
-  }, [user?.id]);
+          toast(newNotification.title || 'New Notification', {
+            description: newNotification.message,
+          });
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('[NotificationsContext] Realtime channel error for user', user.id);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient]);
 
   const markAsRead = async (id: string) => {
     try {
       await api.notifications.markAsRead(id);
-      setNotifications((prev) => {
-        const next = prev.map((n) => (n.id === id ? { ...n, is_read: true } : n));
-        setUnreadCount(computeUnreadCount(next));
-        return next;
-      });
-      await syncUnreadCount();
+      queryClient.setQueryData(
+        queryKeys.notifications.byUser(user?.id),
+        (old: unknown) => normalizeNotifications(old).map((n) =>
+          n.id === id ? { ...n, is_read: true } : n
+        )
+      );
     } catch (error) {
       console.error('Failed to mark as read:', error);
       toast.error('Failed to mark as read');
@@ -122,14 +127,20 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const markAllAsRead = async () => {
     try {
       await api.notifications.markAllAsRead();
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-      setUnreadCount(0);
-      await syncUnreadCount();
+      queryClient.setQueryData(
+        queryKeys.notifications.byUser(user?.id),
+        (old: unknown) => normalizeNotifications(old).map((n) => ({ ...n, is_read: true }))
+      );
     } catch (error) {
       console.error('Failed to mark all as read:', error);
       toast.error('Failed to mark all as read');
     }
   };
+
+  const refreshNotifications = () =>
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.notifications.byUser(user?.id),
+    });
 
   return (
     <NotificationsContext.Provider
@@ -139,7 +150,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         isLoading,
         markAsRead,
         markAllAsRead,
-        refreshNotifications: fetchNotifications,
+        refreshNotifications,
       }}
     >
       {children}

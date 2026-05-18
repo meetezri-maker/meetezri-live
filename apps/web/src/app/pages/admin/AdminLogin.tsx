@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { Heart, ArrowRight, Shield, Crown, Building2, Users, Home, ArrowLeft, Lock } from "lucide-react";
+import { ArrowRight, Shield, Crown, Building2, Users, Home, ArrowLeft, Lock } from "lucide-react";
+import { BrandLogo } from "../../components/BrandLogo";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -68,11 +69,10 @@ export function AdminLogin() {
     setMfaFactorId(null);
   };
 
-  const verifyRoleAndNavigate = async () => {
+  const verifyRoleAndNavigate = async (accessToken?: string) => {
     if (!selectedRole) return;
 
-    // Verify role
-    const profile = await api.getMe();
+    const profile = await api.getMe(accessToken);
     
     // Strict role check: The user must have the exact role or be a super_admin
     // Exception: If the user is a super_admin in DB, they can login as any role they want (for testing/management)
@@ -116,7 +116,9 @@ export function AdminLogin() {
     setIsLoading(true);
 
     try {
-      const { data: { user }, error: authError } = await supabase.auth.signInWithPassword({
+      await supabase.auth.signOut({ scope: "local" });
+
+      const { data: { user, session }, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -130,10 +132,10 @@ export function AdminLogin() {
       if (factorsError) throw factorsError;
 
       const totpFactor = factors?.totp?.[0];
+      const accessToken = session?.access_token;
 
-      // Check global 2FA requirement
       try {
-        const settings = await api.getSettings();
+        const settings = await api.getSettings(accessToken);
         const require2FA = settings.find((s: any) => s.key === 'security.require_2fa');
         
         if (require2FA?.value === true && !totpFactor) {
@@ -172,7 +174,7 @@ export function AdminLogin() {
         return;
       }
 
-      await verifyRoleAndNavigate();
+      await verifyRoleAndNavigate(accessToken);
 
     } catch (err: any) {
       const rawMsg = err?.message || "Authentication failed";
@@ -185,7 +187,9 @@ export function AdminLogin() {
         try {
           // Small backoff then retry once
           await new Promise((r) => setTimeout(r, 500));
-          const { data: { user }, error: retryError } = await supabase.auth.signInWithPassword({
+          await supabase.auth.signOut({ scope: "local" });
+
+          const { data: { user, session }, error: retryError } = await supabase.auth.signInWithPassword({
             email,
             password,
           });
@@ -197,13 +201,14 @@ export function AdminLogin() {
           const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
           if (factorsError) throw factorsError;
           const totpFactor = factors?.totp?.[0];
+          const accessToken = session?.access_token;
           if (totpFactor) {
             setMfaFactorId(totpFactor.id);
             setStep("mfa");
             setIsLoading(false);
             return;
           }
-          await verifyRoleAndNavigate();
+          await verifyRoleAndNavigate(accessToken);
           return;
         } catch (retryErr: any) {
           console.error("Retry sign-in failed:", retryErr);
@@ -295,9 +300,9 @@ export function AdminLogin() {
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl"
+            className="flex items-center justify-center mx-auto mb-4"
           >
-            <Heart className="w-8 h-8 text-white" fill="white" />
+            <BrandLogo heightClass="h-16" />
           </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 10 }}

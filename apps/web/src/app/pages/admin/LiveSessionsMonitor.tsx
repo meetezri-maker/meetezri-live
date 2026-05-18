@@ -34,7 +34,6 @@ import {
   UserX,
   FileText,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 
 interface LiveSession {
   id: string;
@@ -52,6 +51,8 @@ interface LiveSession {
   device: string;
   connectionQuality: "excellent" | "good" | "fair" | "poor";
   aiConfidence: number;
+  /** ms since epoch; for aggregate stats only */
+  startedAtMs?: number;
 }
 
 export function LiveSessionsMonitor() {
@@ -77,45 +78,44 @@ export function LiveSessionsMonitor() {
   }, []);
 
   useEffect(() => {
-    const fetchLiveSessions = async () => {
+    const fetchLiveSessions = async (showSpinner: boolean) => {
       try {
-        setIsLoading(true);
+        if (showSpinner) setIsLoading(true);
         const data = await api.admin.getLiveSessions();
-        // Map backend data to frontend interface
         const mappedSessions: LiveSession[] = data.map((s: any) => ({
           id: s.id,
           userId: s.user_id,
-          userName: s.profiles?.full_name || 'Unknown User',
-          avatar: s.profiles?.avatar_url || 'Unknown',
-          sessionType: s.type || 'therapy',
+          userName: s.profiles?.full_name || "Unknown User",
+          avatar: (typeof s.config?.ai_name === "string" && s.config.ai_name) || "AI Assistant",
+          sessionType: (s.type || "therapy") as LiveSession["sessionType"],
           startTime: s.started_at
-            ? new Date(s.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            : 'Unknown',
+            ? new Date(s.started_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            : "Unknown",
+          startedAtMs: s.started_at ? new Date(s.started_at).getTime() : undefined,
           duration: s.started_at
             ? `${Math.max(1, Math.floor((Date.now() - new Date(s.started_at).getTime()) / 60000))} min`
             : s.duration_minutes
-            ? `${s.duration_minutes} min`
-            : 'Just started',
+              ? `${s.duration_minutes} min`
+              : "Just started",
           messageCount: s._count?.session_messages ?? 0,
-          sentiment: (s.config?.sentiment || 'neutral') as any,
-          status: 'active',
-          riskLevel: (s.config?.risk_level || 'low') as any,
-          location: s.config?.location || 'Unknown',
-          device: s.config?.device || 'Unknown',
-          connectionQuality: (s.config?.connection_quality || 'good') as any,
-          aiConfidence: typeof s.config?.ai_confidence === 'number' ? s.config.ai_confidence : 0,
+          sentiment: (s.config?.sentiment || "neutral") as LiveSession["sentiment"],
+          status: "active",
+          riskLevel: (s.config?.risk_level || "low") as LiveSession["riskLevel"],
+          location: s.config?.location || "Unknown",
+          device: s.config?.device || "Unknown",
+          connectionQuality: (s.config?.connection_quality || "good") as LiveSession["connectionQuality"],
+          aiConfidence: typeof s.config?.ai_confidence === "number" ? s.config.ai_confidence : 0,
         }));
         setLiveSessions(mappedSessions);
       } catch (error) {
         console.error("Failed to fetch live sessions:", error);
       } finally {
-        setIsLoading(false);
+        if (showSpinner) setIsLoading(false);
       }
     };
 
-    fetchLiveSessions();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchLiveSessions, 30000);
+    void fetchLiveSessions(true);
+    const interval = setInterval(() => void fetchLiveSessions(false), 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -134,7 +134,40 @@ export function LiveSessionsMonitor() {
     crisis: liveSessions.filter((s) => s.sessionType === "crisis").length,
     wellness: liveSessions.filter((s) => s.sessionType === "wellness").length,
     critical: liveSessions.filter((s) => s.riskLevel === "critical").length,
-    avgDuration: "23:15",
+    avgDuration: (() => {
+      const starts = liveSessions.map((s) => s.startedAtMs).filter((t): t is number => t != null);
+      if (starts.length === 0) return "—";
+      const avgMin =
+        starts.reduce((acc, t) => acc + (Date.now() - t) / 60000, 0) / starts.length;
+      return `${Math.round(avgMin)} min`;
+    })(),
+  };
+
+  const handleExportAll = () => {
+    const rows = [
+      ["session_id", "user_id", "user_name", "type", "duration_label", "messages", "risk", "sentiment", "started_at"],
+      ...liveSessions.map((s) => [
+        s.id,
+        s.userId,
+        s.userName,
+        s.sessionType,
+        s.duration,
+        String(s.messageCount),
+        s.riskLevel,
+        s.sentiment,
+        s.startedAtMs ? new Date(s.startedAtMs).toISOString() : "",
+      ]),
+    ];
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `live-sessions-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const getSentimentColor = (sentiment: string) => {
@@ -293,7 +326,7 @@ export function LiveSessionsMonitor() {
                 <Activity className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold">Live Sessions Monitor</h1>
+                <h1 className="text-3xl font-bold">Live Talk it out Monitor</h1>
                 <p className="text-muted-foreground">
                   Real-time monitoring of active therapy sessions
                 </p>
@@ -306,7 +339,7 @@ export function LiveSessionsMonitor() {
                   Live • {currentTime.toLocaleTimeString()}
                 </span>
               </div>
-              <Button variant="outline" className="gap-2">
+              <Button variant="outline" className="gap-2" onClick={handleExportAll} disabled={isLoading}>
                 <Download className="w-4 h-4" />
                 Export
               </Button>
@@ -314,7 +347,7 @@ export function LiveSessionsMonitor() {
           </div>
         </motion.div>
 
-        {/* Critical Sessions Alert */}
+        {/* Critical Talk it out Alert */}
         {stats.critical > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -347,7 +380,7 @@ export function LiveSessionsMonitor() {
             <Card className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Active Sessions</p>
+                  <p className="text-sm text-muted-foreground mb-1">Active Talk it out</p>
                   <p className="text-2xl font-bold">{stats.total}</p>
                 </div>
                 <Users className="w-8 h-8 text-primary" />
@@ -481,7 +514,14 @@ export function LiveSessionsMonitor() {
           </Card>
         </motion.div>
 
-        {/* Live Sessions Grid */}
+        {/* Live Talk it out Grid */}
+        {isLoading ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {[1, 2].map((i) => (
+              <Card key={i} className="p-6 animate-pulse h-64 bg-muted/40" />
+            ))}
+          </div>
+        ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {filteredSessions.map((session, index) => (
             <motion.div
@@ -637,16 +677,17 @@ export function LiveSessionsMonitor() {
             </motion.div>
           ))}
         </div>
+        )}
 
         {/* Empty State */}
-        {filteredSessions.length === 0 && (
+        {!isLoading && filteredSessions.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="text-center py-12"
           >
             <Activity className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="font-bold text-xl mb-2">No Active Sessions</h3>
+            <h3 className="font-bold text-xl mb-2">No Active Talk it out</h3>
             <p className="text-muted-foreground">
               No sessions match the current filters
             </p>
@@ -743,40 +784,13 @@ export function LiveSessionsMonitor() {
                       </div>
                     </div>
 
-                    {/* Live Conversation Preview */}
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-900 mb-3">Recent Conversation</h3>
-                      <div className="bg-gray-50 rounded-lg p-4 space-y-3 max-h-60 overflow-y-auto">
-                        <div className="bg-white rounded-lg p-3 border border-gray-200">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">
-                              {monitoringSession.userName.charAt(0)}
-                            </div>
-                            <span className="text-xs font-medium text-gray-900">{monitoringSession.userName}</span>
-                            <span className="text-xs text-gray-500">2 min ago</span>
-                          </div>
-                          <p className="text-sm text-gray-700">I'm feeling really overwhelmed today...</p>
-                        </div>
-                        <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-white text-xs font-bold">
-                              AI
-                            </div>
-                            <span className="text-xs font-medium text-gray-900">{monitoringSession.avatar}</span>
-                            <span className="text-xs text-gray-500">1 min ago</span>
-                          </div>
-                          <p className="text-sm text-gray-700">I understand you're feeling overwhelmed. Can you tell me more about what's causing these feelings?</p>
-                        </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-200">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">
-                              {monitoringSession.userName.charAt(0)}
-                            </div>
-                            <span className="text-xs font-medium text-gray-900">{monitoringSession.userName}</span>
-                            <span className="text-xs text-gray-500">30 sec ago</span>
-                          </div>
-                          <p className="text-sm text-gray-700">Everything seems to be piling up and I don't know where to start...</p>
-                        </div>
+                      <h3 className="text-sm font-semibold text-gray-900 mb-3">Live transcript</h3>
+                      <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-600 border border-gray-200">
+                        Live message content is not streamed to this admin view. Use{" "}
+                        <span className="font-medium text-gray-800">Session Recordings</span> after the session ends
+                        to review the full transcript ({monitoringSession.messageCount} message
+                        {monitoringSession.messageCount !== 1 ? "s" : ""} so far).
                       </div>
                     </div>
 

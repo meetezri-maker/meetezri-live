@@ -17,6 +17,7 @@ import {
   FormLabel,
   FormMessage,
 } from "../../components/ui/form";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 const wellnessBaselineSchema = z.object({
   currentMood: z.string().optional(),
@@ -47,14 +48,22 @@ export function OnboardingWellnessBaseline() {
   ];
 
   const goals = [
-    { value: "reduce-stress", label: "Reduce Stress", emoji: "🧘" },
-    { value: "manage-anxiety", label: "Manage Anxiety", emoji: "💭" },
-    { value: "improve-sleep", label: "Improve Sleep", emoji: "😴" },
-    { value: "boost-mood", label: "Boost Mood", emoji: "✨" },
-    { value: "build-confidence", label: "Build Confidence", emoji: "💪" },
+    { value: "feel-calm-in-control", label: "Feel Calm & In Control", emoji: "🧘" },
+    { value: "boost-mood-daily-energy", label: "Boost Mood & Daily Energy", emoji: "✨" },
+    { value: "sleep-recovery", label: "Sleep & Recovery", emoji: "😴" },
+    { value: "build-confidence-self-trust", label: "Build Confidence & Self Trust", emoji: "💪" },
+    { value: "strengthen-relationships", label: "Strengthen Relationships", emoji: "❤️" },
+    { value: "navigate-life-changes", label: "Navigate Life Changes", emoji: "🧭" },
     { value: "work-life-balance", label: "Work-Life Balance", emoji: "⚖️" },
-    { value: "relationship-support", label: "Relationship Support", emoji: "❤️" },
-    { value: "grief-loss", label: "Grief & Loss", emoji: "🕊️" }
+    { value: "career-growth-advancement", label: "Career Growth & Advancement", emoji: "📈" },
+    { value: "business-entrepreneurship", label: "Business & Entrepreneurship", emoji: "🚀" },
+    { value: "time-management-productivity", label: "Time Management & Productivity", emoji: "⏱️" },
+    { value: "financial-wellness", label: "Financial Wellness", emoji: "💰" },
+    { value: "health-fitness-body-goals", label: "Health, Fitness & Body Goals", emoji: "🏃" },
+    { value: "daily-habits-discipline", label: "Daily Habits & Discipline", emoji: "📅" },
+    { value: "mindfulness-presence", label: "Mindfulness & Presence", emoji: "🌿" },
+    { value: "personal-goal-life-direction", label: "Personal Goal & Life Direction", emoji: "🎯" },
+    { value: "faith-purpose-inner-grounding", label: "Faith, Purpose & Inner Grounding", emoji: "🙏" }
   ];
 
   const onSubmit = (values: WellnessBaselineValues) => {
@@ -165,7 +174,7 @@ export function OnboardingWellnessBaseline() {
                             }`}
                           >
                             <div className="flex items-center gap-3">
-                              <span className="text-2xl">{goal.emoji}</span>
+                              <FluentEmoji emoji={goal.emoji} size={28} className="shrink-0" />
                               <span className="font-medium">{goal.label}</span>
                               {(field.value || []).includes(goal.value) && (
                                 <motion.div

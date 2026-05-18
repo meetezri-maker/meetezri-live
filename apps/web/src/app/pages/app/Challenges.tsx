@@ -1,4 +1,3 @@
-import { AppLayout } from "@/app/components/AppLayout";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { motion } from "motion/react";
@@ -12,198 +11,161 @@ import {
   CheckCircle2,
   Lock,
   Award,
-  TrendingUp,
-  Calendar,
-  Users,
   Clock,
-  Gift,
-  ChevronRight
+  UserPlus,
+  UserMinus,
+  Loader2,
+  ArrowRight,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import {
+  mapWellnessChallengeDashboardToRows,
+  type WellnessChallengeDashboardPayload,
+  type WellnessChallengeRow,
+} from "@/app/features/wellness/challengesMapper";
 
-interface Challenge {
-  id: string;
-  title: string;
-  description: string;
-  progress: number;
-  target: number;
-  reward: number;
-  difficulty: "Easy" | "Medium" | "Hard";
-  icon: typeof Trophy;
-  color: string;
-  isCompleted: boolean;
-  isLocked: boolean;
-  category: "Daily" | "Weekly" | "Monthly" | "Special";
-  expiresIn?: string;
+function formatCategoryBadge(categoryLabel?: string | null) {
+  const label = (categoryLabel || "General").trim();
+  const key = label.toLowerCase();
+  if (key.includes("mind")) return { label, className: "bg-purple-100 text-purple-700" };
+  if (key.includes("sleep")) return { label, className: "bg-indigo-100 text-indigo-700" };
+  if (key.includes("journal")) return { label, className: "bg-pink-100 text-pink-700" };
+  if (key.includes("habit")) return { label, className: "bg-orange-100 text-orange-700" };
+  if (key.includes("exerc") || key.includes("fitness")) return { label, className: "bg-green-100 text-green-700" };
+  return { label, className: "bg-blue-100 text-blue-700" };
+}
+
+function formatEndDate(endDate?: string | null) {
+  if (!endDate) return null;
+  const d = new Date(endDate);
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return "Ended";
+  if (diffDays === 0) return "Ends today";
+  if (diffDays === 1) return "1 day left";
+  return `${diffDays} days left`;
+}
+
+function getUserChallengeStatus(challenge: WellnessChallengeRow): {
+  label: string;
+  className: string;
+  helperText: string;
+} {
+  if (challenge.isLocked) {
+    return {
+      label: "Locked",
+      className: "bg-gray-100 text-gray-700",
+      helperText: "Finish earlier challenges to unlock this one.",
+    };
+  }
+  if (challenge.isCompleted) {
+    return {
+      label: "Completed",
+      className: "bg-green-100 text-green-700",
+      helperText: "Great work. Reward points are already counted.",
+    };
+  }
+  if (challenge.isJoined) {
+    return {
+      label: "In Progress",
+      className: "bg-blue-100 text-blue-700",
+      helperText: "Keep going to reach the target and complete it.",
+    };
+  }
+  return {
+    label: "Not Joined",
+    className: "bg-amber-100 text-amber-700",
+    helperText: "Join this challenge to start tracking progress.",
+  };
 }
 
 export function Challenges() {
   const [activeTab, setActiveTab] = useState<"all" | "active" | "completed">("all");
-  const [challenges] = useState<Challenge[]>([
-    {
-      id: "daily-checkin",
-      title: "Daily Check-In Streak",
-      description: "Check in for 7 days in a row",
-      progress: 5,
-      target: 7,
-      reward: 100,
-      difficulty: "Easy",
-      icon: Flame,
-      color: "from-orange-400 to-red-500",
-      isCompleted: false,
-      isLocked: false,
-      category: "Daily",
-      expiresIn: "2 days"
-    },
-    {
-      id: "meditation-master",
-      title: "Meditation Master",
-      description: "Complete 10 meditation sessions",
-      progress: 6,
-      target: 10,
-      reward: 200,
-      difficulty: "Medium",
-      icon: Star,
-      color: "from-purple-400 to-pink-500",
-      isCompleted: false,
-      isLocked: false,
-      category: "Weekly"
-    },
-    {
-      id: "breath-work",
-      title: "Breath Work Pro",
-      description: "Complete 5 breathing exercises",
-      progress: 5,
-      target: 5,
-      reward: 150,
-      difficulty: "Easy",
-      icon: Zap,
-      color: "from-blue-400 to-cyan-500",
-      isCompleted: true,
-      isLocked: false,
-      category: "Weekly"
-    },
-    {
-      id: "journal-writer",
-      title: "Journal Writer",
-      description: "Write 15 journal entries",
-      progress: 12,
-      target: 15,
-      reward: 250,
-      difficulty: "Medium",
-      icon: Heart,
-      color: "from-pink-400 to-rose-500",
-      isCompleted: false,
-      isLocked: false,
-      category: "Monthly"
-    },
-    {
-      id: "wellness-warrior",
-      title: "Wellness Warrior",
-      description: "Complete 30 wellness activities",
-      progress: 8,
-      target: 30,
-      reward: 500,
-      difficulty: "Hard",
-      icon: Trophy,
-      color: "from-amber-400 to-yellow-500",
-      isCompleted: false,
-      isLocked: false,
-      category: "Monthly"
-    },
-    {
-      id: "perfect-week",
-      title: "Perfect Week",
-      description: "Complete all daily goals for 7 days",
-      progress: 0,
-      target: 7,
-      reward: 1000,
-      difficulty: "Hard",
-      icon: Target,
-      color: "from-green-400 to-emerald-500",
-      isCompleted: false,
-      isLocked: true,
-      category: "Special"
-    },
-    {
-      id: "mood-tracker",
-      title: "Mood Tracker",
-      description: "Log your mood for 14 consecutive days",
-      progress: 9,
-      target: 14,
-      reward: 300,
-      difficulty: "Medium",
-      icon: Heart,
-      color: "from-red-400 to-pink-500",
-      isCompleted: false,
-      isLocked: false,
-      category: "Weekly"
-    },
-    {
-      id: "sleep-champion",
-      title: "Sleep Champion",
-      description: "Track sleep for 10 nights in a row",
-      progress: 7,
-      target: 10,
-      reward: 200,
-      difficulty: "Easy",
-      icon: Star,
-      color: "from-indigo-400 to-blue-500",
-      isCompleted: false,
-      isLocked: false,
-      category: "Weekly"
-    },
-    {
-      id: "gratitude-guru",
-      title: "Gratitude Guru",
-      description: "Complete 20 gratitude exercises",
-      progress: 15,
-      target: 20,
-      reward: 350,
-      difficulty: "Medium",
-      icon: Gift,
-      color: "from-yellow-400 to-orange-500",
-      isCompleted: false,
-      isLocked: false,
-      category: "Monthly"
-    },
-    {
-      id: "early-bird",
-      title: "Early Bird",
-      description: "Complete morning meditation 5 times",
-      progress: 5,
-      target: 5,
-      reward: 150,
-      difficulty: "Easy",
-      icon: Zap,
-      color: "from-cyan-400 to-blue-500",
-      isCompleted: true,
-      isLocked: false,
-      category: "Daily",
-      expiresIn: "5 days"
-    }
-  ]);
-
-  const totalPoints = 750;
-  const currentLevel = 5;
-  const pointsToNextLevel = 250;
-
-  const filteredChallenges = challenges.filter(challenge => {
-    if (activeTab === "active") return !challenge.isCompleted && !challenge.isLocked;
-    if (activeTab === "completed") return challenge.isCompleted;
-    return true;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState({
+    totalPoints: 0,
+    currentLevel: 1,
+    pointsToNextLevel: 250,
+    levelProgressPercent: 0,
   });
+  const [challenges, setChallenges] = useState<WellnessChallengeRow[]>([]);
+  const [joiningId, setJoiningId] = useState<string | null>(null);
+
+  const loadChallenges = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const raw = (await api.wellness.getChallengesForMe()) as WellnessChallengeDashboardPayload;
+      setSummary({
+        totalPoints: raw.totalPoints ?? 0,
+        currentLevel: raw.currentLevel ?? 1,
+        pointsToNextLevel: raw.pointsToNextLevel ?? 250,
+        levelProgressPercent: typeof raw.levelProgressPercent === "number" ? raw.levelProgressPercent : 0,
+      });
+      setChallenges(mapWellnessChallengeDashboardToRows(raw));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load challenges");
+      setChallenges([]);
+      setSummary({ totalPoints: 0, currentLevel: 1, pointsToNextLevel: 250, levelProgressPercent: 0 });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadChallenges();
+  }, [loadChallenges]);
+
+  const handleJoinToggle = useCallback(async (challenge: WellnessChallengeRow) => {
+    if (joiningId || challenge.isCompleted || challenge.isLocked) return;
+    setJoiningId(challenge.id);
+    try {
+      if (challenge.isJoined) {
+        await api.wellness.unjoinChallenge(challenge.id);
+        setChallenges(prev =>
+          prev.map(c => c.id === challenge.id ? { ...c, isJoined: false } : c)
+        );
+        toast.success(`You left "${challenge.title}"`);
+      } else {
+        await api.wellness.joinChallenge(challenge.id);
+        setChallenges(prev =>
+          prev.map(c => c.id === challenge.id ? { ...c, isJoined: true } : c)
+        );
+        toast.success(`You joined "${challenge.title}"`);
+      }
+    } catch (e) {
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : "Could not update your challenge. Please try again."
+      );
+    } finally {
+      setJoiningId(null);
+    }
+  }, [joiningId]);
+
+  const filteredChallenges = useMemo(() => {
+    return challenges.filter((challenge) => {
+      if (activeTab === "active") return challenge.isJoined && !challenge.isCompleted && !challenge.isLocked;
+      if (activeTab === "completed") return challenge.isCompleted;
+      return true;
+    });
+  }, [activeTab, challenges]);
 
   const stats = [
-    { label: "Active Challenges", value: challenges.filter(c => !c.isCompleted && !c.isLocked).length, icon: Target },
-    { label: "Completed", value: challenges.filter(c => c.isCompleted).length, icon: CheckCircle2 },
-    { label: "Total Points", value: totalPoints, icon: Star },
-    { label: "Current Level", value: currentLevel, icon: Award }
+    { label: "In Progress", value: challenges.filter((c) => c.isJoined && !c.isCompleted && !c.isLocked).length, icon: Target },
+    { label: "Completed", value: challenges.filter((c) => c.isCompleted).length, icon: CheckCircle2 },
+    { label: "Total Points", value: summary.totalPoints, icon: Star },
+    { label: "Current Level", value: summary.currentLevel, icon: Award },
   ];
 
   return (
-    <AppLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -217,6 +179,24 @@ export function Challenges() {
           <p className="text-muted-foreground">
             Complete challenges to earn points, level up, and build healthy habits
           </p>
+          {error && (
+            <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">{error}</p>
+          )}
+        </motion.div>
+
+        {/* How it works */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+        >
+          <Card className="p-4 mb-6 border-primary/20 bg-primary/5">
+            <h2 className="text-sm font-semibold mb-1">How challenge completion works</h2>
+            <p className="text-sm text-muted-foreground">
+              Join a challenge, then complete the required wellness activities. Your progress updates automatically.
+              When your progress reaches the target, the challenge moves to Completed and points are added.
+            </p>
+          </Card>
         </motion.div>
 
         {/* Level Progress Card */}
@@ -238,24 +218,25 @@ export function Challenges() {
               </div>
               <div className="text-center">
                 <div className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent mb-1">
-                  Level {currentLevel}
+                  Level {summary.currentLevel}
                 </div>
-                <div className="text-sm text-muted-foreground">{totalPoints} points</div>
+                <div className="text-sm text-muted-foreground">{summary.totalPoints} points</div>
               </div>
             </div>
 
-            {/* Level Progress Bar */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Next Level</span>
                 <span className="text-sm text-muted-foreground">
-                  {pointsToNextLevel} points needed
+                  {summary.pointsToNextLevel} points needed
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                 <motion.div
                   initial={{ width: 0 }}
-                  animate={{ width: `${((totalPoints % 1000) / 1000) * 100}%` }}
+                  animate={{
+                    width: `${Math.min(100, Math.max(0, summary.levelProgressPercent))}%`,
+                  }}
                   transition={{ duration: 1, ease: "easeOut" }}
                   className="h-full bg-gradient-to-r from-primary to-secondary rounded-full"
                 />
@@ -293,62 +274,42 @@ export function Challenges() {
           className="mb-6"
         >
           <div className="flex gap-2 border-b border-gray-200">
-            <button
-              onClick={() => setActiveTab("all")}
-              className={`px-4 py-2 font-medium transition-colors relative ${
-                activeTab === "all"
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-gray-900"
-              }`}
-            >
-              All Challenges
-              {activeTab === "all" && (
-                <motion.div
-                  layoutId="activeTab"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
-                />
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab("active")}
-              className={`px-4 py-2 font-medium transition-colors relative ${
-                activeTab === "active"
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-gray-900"
-              }`}
-            >
-              Active
-              {activeTab === "active" && (
-                <motion.div
-                  layoutId="activeTab"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
-                />
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab("completed")}
-              className={`px-4 py-2 font-medium transition-colors relative ${
-                activeTab === "completed"
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-gray-900"
-              }`}
-            >
-              Completed
-              {activeTab === "completed" && (
-                <motion.div
-                  layoutId="activeTab"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
-                />
-              )}
-            </button>
+            {(["all", "active", "completed"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 font-medium transition-colors relative capitalize ${
+                  activeTab === tab
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-gray-900"
+                }`}
+              >
+                {tab === "all" ? "All Challenges" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {activeTab === tab && (
+                  <motion.div
+                    layoutId="activeTab"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                  />
+                )}
+              </button>
+            ))}
           </div>
         </motion.div>
 
         {/* Challenges Grid */}
         <div className="space-y-4">
+          {loading && (
+            <Card className="p-5 text-sm text-muted-foreground">
+              Loading your challenges…
+            </Card>
+          )}
           {filteredChallenges.map((challenge, index) => {
             const Icon = challenge.icon;
-            const progressPercentage = (challenge.progress / challenge.target) * 100;
+            const progressPercentage = Math.min(100, (challenge.progress / challenge.target) * 100);
+            const badge = formatCategoryBadge(challenge.categoryLabel);
+            const timeLeft = formatEndDate(challenge.endDate);
+            const isJoiningThis = joiningId === challenge.id;
+            const userStatus = getUserChallengeStatus(challenge);
 
             return (
               <motion.div
@@ -360,10 +321,10 @@ export function Challenges() {
                 <Card
                   className={`p-5 transition-all ${
                     challenge.isLocked
-                      ? "opacity-50 cursor-not-allowed"
+                      ? "opacity-50"
                       : challenge.isCompleted
                       ? "bg-gradient-to-r from-green-50 to-emerald-50 border-green-200"
-                      : "hover:shadow-lg cursor-pointer"
+                      : "hover:shadow-lg"
                   }`}
                 >
                   <div className="flex items-start gap-4">
@@ -392,29 +353,30 @@ export function Challenges() {
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 mb-3">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <h3 className="font-bold text-lg">{challenge.title}</h3>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                              challenge.category === "Daily" ? "bg-blue-100 text-blue-700" :
-                              challenge.category === "Weekly" ? "bg-purple-100 text-purple-700" :
-                              challenge.category === "Monthly" ? "bg-orange-100 text-orange-700" :
-                              "bg-pink-100 text-pink-700"
-                            }`}>
-                              {challenge.category}
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.className}`}>
+                              {badge.label}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${userStatus.className}`}>
+                              {userStatus.label}
                             </span>
                           </div>
                           <p className="text-sm text-muted-foreground mb-2">
                             {challenge.description}
                           </p>
-                          {challenge.expiresIn && !challenge.isCompleted && (
-                            <div className="flex items-center gap-1 text-xs text-orange-600">
-                              <Clock className="w-3 h-3" />
-                              <span>Expires in {challenge.expiresIn}</span>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {timeLeft && (
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Clock className="w-3 h-3" />
+                                <span>{timeLeft}</span>
+                              </div>
+                            )}
+                            <span className="text-xs text-muted-foreground">{userStatus.helperText}</span>
+                          </div>
                         </div>
-                        <div className="flex flex-col items-end gap-2">
+                        <div className="flex flex-col items-end gap-2 flex-shrink-0">
                           <div className="px-2 py-1 bg-gray-100 rounded-full text-xs font-medium">
                             {challenge.difficulty}
                           </div>
@@ -459,6 +421,11 @@ export function Challenges() {
                               </span>
                             )}
                           </div>
+                          {!challenge.isCompleted && (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Complete {Math.max(challenge.target - challenge.progress, 0)} more to finish this challenge.
+                            </p>
+                          )}
                         </>
                       )}
 
@@ -466,6 +433,40 @@ export function Challenges() {
                         <div className="flex items-center gap-2 text-xs text-muted-foreground italic">
                           <Lock className="w-3 h-3" />
                           Complete previous challenges to unlock
+                        </div>
+                      )}
+
+                      {/* Join / Leave button */}
+                      {!challenge.isLocked && !challenge.isCompleted && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant={challenge.isJoined ? "outline" : "default"}
+                            className="gap-1.5"
+                            disabled={isJoiningThis}
+                            onClick={() => handleJoinToggle(challenge)}
+                          >
+                            {isJoiningThis ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : challenge.isJoined ? (
+                              <UserMinus className="w-3.5 h-3.5" />
+                            ) : (
+                              <UserPlus className="w-3.5 h-3.5" />
+                            )}
+                            {isJoiningThis
+                              ? "Loading…"
+                              : challenge.isJoined
+                              ? "Leave This Challenge"
+                              : "Join and Start"}
+                          </Button>
+                          {challenge.isJoined && (
+                            <Button asChild size="sm" className="gap-1.5">
+                              <Link to="/app/wellness-tools" aria-label="Open Wellness Tools to continue challenge progress">
+                                Open Wellness Tools
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </Link>
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -476,7 +477,7 @@ export function Challenges() {
           })}
         </div>
 
-        {filteredChallenges.length === 0 && (
+        {!loading && filteredChallenges.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -485,13 +486,14 @@ export function Challenges() {
             <Trophy className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-xl font-bold text-gray-900 mb-2">No challenges found</h3>
             <p className="text-gray-600">
-              {activeTab === "completed" 
+              {activeTab === "completed"
                 ? "You haven't completed any challenges yet. Keep working on your active challenges!"
+                : activeTab === "active"
+                ? "You're not currently enrolled in any active challenges. Join one from All Challenges."
                 : "All challenges completed! Check back soon for new challenges."}
             </p>
           </motion.div>
         )}
       </div>
-    </AppLayout>
   );
 }

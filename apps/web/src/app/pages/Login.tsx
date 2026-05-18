@@ -4,7 +4,8 @@ import { Input } from "../components/ui/input";
 import { Card } from "../components/ui/card";
 import { Label } from "../components/ui/label";
 import { Link, useNavigate } from "react-router-dom";
-import { Heart, ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, Lock } from "lucide-react";
+import { BrandLogo } from "../components/BrandLogo";
 import { motion } from "motion/react";
 import { FloatingElement } from "../components/FloatingElement";
 import { PublicNav } from "../components/PublicNav";
@@ -12,6 +13,7 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "../contexts/AuthContext";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "../components/ui/input-otp";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -36,9 +38,25 @@ export function Login() {
   const navigate = useNavigate();
   const { user, profile, isLoading: isAuthLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [loginStep, setLoginStep] = useState<"credentials" | "mfa" | "knowledge">("credentials");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [knowledgeCode, setKnowledgeCode] = useState("");
+  const [emailAuthCode, setEmailAuthCode] = useState("");
+  const [emailAuthCodeSent, setEmailAuthCodeSent] = useState(false);
+  const [knowledgeEmailEnabled, setKnowledgeEmailEnabled] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [recoveryCodeSent, setRecoveryCodeSent] = useState(false);
+
+  const isMfaStillRequired = async () => {
+    const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (error) return false;
+    return data.nextLevel === "aal2" && data.currentLevel !== "aal2";
+  };
 
   const onboardingStartRoute =
-    profile?.signup_type === 'trial' ? '/onboarding/profile-setup' : '/onboarding/welcome';
+    profile?.signup_type === 'trial' ? '/app/dashboard' : '/onboarding/welcome';
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema as any),
@@ -49,21 +67,60 @@ export function Login() {
   });
 
   useEffect(() => {
-    if (!isAuthLoading && user && profile) {
+    if (loginStep !== "credentials") return;
+    if (isAuthLoading || !user || !profile) return;
+    let cancelled = false;
+    (async () => {
+      const needsMfa = await isMfaStillRequired();
+      if (cancelled || needsMfa) return;
       if (profile.onboarding_completed === true) {
         navigate("/app/dashboard");
       } else {
         navigate(onboardingStartRoute);
       }
-    }
-  }, [user, profile, isAuthLoading, navigate, onboardingStartRoute]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, profile, isAuthLoading, navigate, onboardingStartRoute, loginStep]);
+
+  useEffect(() => {
+    if (loginStep !== "knowledge") return;
+    if (!knowledgeEmailEnabled) return;
+    let cancelled = false;
+    const sendCode = async () => {
+      try {
+        await api.requestKnowledgeTwoFactorLoginCode();
+        if (!cancelled) {
+          setEmailAuthCodeSent(true);
+          toast.success("Authentication code sent to your email.");
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          toast.error(error.message || "Failed to send authentication code");
+        }
+      }
+    };
+    void sendCode();
+    return () => {
+      cancelled = true;
+    };
+  }, [loginStep, knowledgeEmailEnabled]);
 
   const handleGoogleLogin = async () => {
     try {
+      // Clear the current Supabase session (local + revoke refresh) so OAuth cannot
+      // silently continue as the previous user. Then force Google's account picker.
+      await supabase.auth.signOut({ scope: "global" }).catch(() => undefined);
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            prompt: "select_account",
+            access_type: "offline",
+          },
         },
       });
       if (error) throw error;
@@ -112,6 +169,26 @@ export function Login() {
     }
   };
 
+  const continueAfterLogin = async () => {
+    try {
+      const needsMfa = await isMfaStillRequired();
+      if (needsMfa) return;
+      const me = await api.getMe();
+      const resolvedOnboardingStartRoute =
+        me?.signup_type === "trial" ? "/app/dashboard" : "/onboarding/welcome";
+      navigate(
+        me?.onboarding_completed === true ? "/app/dashboard" : resolvedOnboardingStartRoute
+      );
+    } catch (err: any) {
+      if (err.message === "Profile not found") {
+        navigate(onboardingStartRoute);
+      } else {
+        console.error("Profile fetch error:", err);
+        toast.error("Failed to load profile. Please try again.");
+      }
+    }
+  };
+
   const onSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
     try {
@@ -122,24 +199,31 @@ export function Login() {
 
       if (error) throw error;
 
-      // Check if profile exists
-      try {
-        const me = await api.getMe();
-        const resolvedOnboardingStartRoute =
-          me?.signup_type === "trial" ? "/onboarding/profile-setup" : "/onboarding/welcome";
-        navigate(
-          me?.onboarding_completed === true ? "/app/dashboard" : resolvedOnboardingStartRoute
-        );
-      } catch (err: any) {
-        // Only redirect to onboarding if profile is explicitly not found
-        if (err.message === 'Profile not found') {
-          navigate(onboardingStartRoute);
-        } else {
-          // For other errors (server down, etc), show error
-          console.error('Profile fetch error:', err);
-          toast.error("Failed to load profile. Please try again.");
-        }
+      const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
+      if (factorsError) throw factorsError;
+      const totpFactor = factors?.totp?.[0];
+
+      if (totpFactor) {
+        setMfaFactorId(totpFactor.id);
+        setMfaCode("");
+        setLoginStep("mfa");
+        return;
       }
+
+      const knowledgeStatus = (await api.getKnowledgeTwoFactorStatus()) as {
+        enabled: boolean;
+        email_code_enabled?: boolean;
+      };
+      if (knowledgeStatus.enabled === true) {
+        setKnowledgeCode("");
+        setEmailAuthCode("");
+        setEmailAuthCodeSent(false);
+        setKnowledgeEmailEnabled(knowledgeStatus.email_code_enabled === true);
+        setLoginStep("knowledge");
+        return;
+      }
+
+      await continueAfterLogin();
     } catch (error: any) {
       if (error.message.includes("Email not confirmed")) {
         toast.error("Email not confirmed", {
@@ -152,6 +236,91 @@ export function Login() {
       } else {
         toast.error(error.message || "Failed to sign in");
       }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaFactorId || mfaCode.length !== 6) return;
+    setIsLoading(true);
+    try {
+      const { data, error: challengeError } = await supabase.auth.mfa.challenge({
+        factorId: mfaFactorId,
+      });
+      if (challengeError) throw challengeError;
+
+      const { error: verifyError } = await supabase.auth.mfa.verify({
+        factorId: mfaFactorId,
+        challengeId: data.id,
+        code: mfaCode,
+      });
+      if (verifyError) throw verifyError;
+
+      await continueAfterLogin();
+    } catch (error: any) {
+      toast.error(error.message || "Invalid verification code");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKnowledgeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!knowledgeCode.trim()) return;
+    setIsLoading(true);
+    try {
+      await api.verifyKnowledgeTwoFactor(knowledgeCode.trim());
+      await continueAfterLogin();
+    } catch (error: any) {
+      toast.error(error.message || "Invalid 2FA PIN or answer");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRequestRecoveryCode = async () => {
+    setIsLoading(true);
+    try {
+      await api.requestKnowledgeTwoFactorRecovery();
+      setRecoveryCodeSent(true);
+      toast.success("Recovery code sent to your email.");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to send recovery code");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyRecoveryCode = async () => {
+    if (!/^\d{6}$/.test(recoveryCode.trim())) {
+      toast.error("Enter a valid 6-digit recovery code");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await api.verifyKnowledgeTwoFactorRecovery(recoveryCode.trim());
+      toast.success("Recovery successful. Knowledge 2FA has been disabled.");
+      await continueAfterLogin();
+    } catch (error: any) {
+      toast.error(error.message || "Invalid recovery code");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyEmailAuthCode = async () => {
+    if (!/^\d{6}$/.test(emailAuthCode.trim())) {
+      toast.error("Enter a valid 6-digit authentication code");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await api.verifyKnowledgeTwoFactorLoginCode(emailAuthCode.trim());
+      await continueAfterLogin();
+    } catch (error: any) {
+      toast.error(error.message || "Invalid authentication code");
     } finally {
       setIsLoading(false);
     }
@@ -182,9 +351,9 @@ export function Login() {
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl"
+            className="flex items-center justify-center mx-auto mb-4"
           >
-            <Heart className="w-8 h-8 text-white" fill="white" />
+            <BrandLogo heightClass="h-16" />
           </motion.div>
           <motion.h1
             initial={{ opacity: 0, y: 10 }}
@@ -210,11 +379,12 @@ export function Login() {
           transition={{ delay: 0.4, duration: 0.5 }}
         >
           <Card className="p-6 md:p-8 shadow-xl hover:shadow-2xl transition-shadow backdrop-blur-sm bg-white/80">
+            {loginStep === "credentials" && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.45 }}
-              className="mb-6"
+              className="mb-2"
             >
               <Button
                 type="button"
@@ -243,7 +413,7 @@ export function Login() {
                 <span className="text-base text-black">Continue with Google</span>
               </Button>
 
-              <div className="relative my-6">
+              <div className="relative mt-6">
                 <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t border-muted-foreground/20" />
                 </div>
@@ -254,7 +424,9 @@ export function Login() {
                 </div>
               </div>
             </motion.div>
+            )}
 
+            {loginStep === "credentials" ? (
             <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <motion.div
@@ -346,6 +518,232 @@ export function Login() {
               </motion.div>
             </form>
             </Form>
+            ) : loginStep === "mfa" ? (
+            <motion.form
+              onSubmit={handleMfaSubmit}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              <div className="text-center mb-2">
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Lock className="w-6 h-6 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-bold">Two-Factor Authentication</h3>
+                <p className="text-sm text-muted-foreground">
+                  Enter the 6-digit code from your authenticator app.
+                </p>
+              </div>
+
+              <div className="flex justify-center py-2">
+                <InputOTP
+                  maxLength={6}
+                  value={mfaCode}
+                  onChange={(value) => setMfaCode(value)}
+                >
+                  <InputOTPGroup>
+                    <InputOTPSlot index={0} />
+                    <InputOTPSlot index={1} />
+                    <InputOTPSlot index={2} />
+                    <InputOTPSlot index={3} />
+                    <InputOTPSlot index={4} />
+                    <InputOTPSlot index={5} />
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading || mfaCode.length !== 6}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Verifying...
+                  </>
+                ) : (
+                  "Verify Code"
+                )}
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  setLoginStep("credentials");
+                  setMfaCode("");
+                }}
+                disabled={isLoading}
+              >
+                Back to Login
+              </Button>
+            </motion.form>
+            ) : (
+            <motion.form
+              onSubmit={handleKnowledgeSubmit}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              <div className="text-center mb-2">
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Lock className="w-6 h-6 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-bold">Two-Factor Authentication</h3>
+                <p className="text-sm text-muted-foreground">
+                  {knowledgeEmailEnabled
+                    ? "Enter your email authentication code."
+                    : "Enter your 2FA PIN or security answer."}
+                </p>
+              </div>
+
+              {knowledgeEmailEnabled && (
+                <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+                  <p className="text-xs text-muted-foreground">
+                    A 6-digit authentication code is sent to your account email at login.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={async () => {
+                      setIsLoading(true);
+                      try {
+                        await api.requestKnowledgeTwoFactorLoginCode();
+                        setEmailAuthCodeSent(true);
+                        toast.success("Authentication code sent to your email.");
+                      } catch (error: any) {
+                        toast.error(error.message || "Failed to send authentication code");
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    disabled={isLoading}
+                  >
+                    {emailAuthCodeSent ? "Resend authentication code" : "Send authentication code"}
+                  </Button>
+                  <div className="flex justify-center">
+                    <InputOTP
+                      maxLength={6}
+                      value={emailAuthCode}
+                      onChange={(value) => setEmailAuthCode(value)}
+                    >
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} />
+                        <InputOTPSlot index={1} />
+                        <InputOTPSlot index={2} />
+                        <InputOTPSlot index={3} />
+                        <InputOTPSlot index={4} />
+                        <InputOTPSlot index={5} />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+                  <Button
+                    type="button"
+                    className="w-full"
+                    onClick={handleVerifyEmailAuthCode}
+                    disabled={isLoading || emailAuthCode.trim().length !== 6}
+                  >
+                    Verify authentication code
+                  </Button>
+                </div>
+              )}
+
+              <Input
+                type="password"
+                value={knowledgeCode}
+                onChange={(e) => setKnowledgeCode(e.target.value)}
+                placeholder={knowledgeEmailEnabled ? "PIN/answer not required" : "Enter PIN or answer"}
+                className="bg-input-background"
+              />
+
+              {!showRecovery ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="w-full -mt-2"
+                  onClick={() => setShowRecovery(true)}
+                  disabled={isLoading}
+                >
+                  Lost PIN or answer? Try another way
+                </Button>
+              ) : (
+                <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
+                  <p className="text-xs text-muted-foreground">
+                    We will email a 6-digit recovery code to your account email. Verifying it will disable knowledge 2FA for this login.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleRequestRecoveryCode}
+                    disabled={isLoading}
+                  >
+                    {recoveryCodeSent ? "Resend recovery code" : "Send recovery code"}
+                  </Button>
+                  <div className="flex justify-center">
+                    <InputOTP
+                      maxLength={6}
+                      value={recoveryCode}
+                      onChange={(value) => setRecoveryCode(value)}
+                    >
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} />
+                        <InputOTPSlot index={1} />
+                        <InputOTPSlot index={2} />
+                        <InputOTPSlot index={3} />
+                        <InputOTPSlot index={4} />
+                        <InputOTPSlot index={5} />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+                  <Button
+                    type="button"
+                    className="w-full"
+                    onClick={handleVerifyRecoveryCode}
+                    disabled={isLoading || recoveryCode.trim().length !== 6}
+                  >
+                    Verify recovery code
+                  </Button>
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading || knowledgeEmailEnabled || !knowledgeCode.trim()}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Verifying...
+                  </>
+                ) : (
+                  "Verify"
+                )}
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  setLoginStep("credentials");
+                  setKnowledgeCode("");
+                  setEmailAuthCode("");
+                  setEmailAuthCodeSent(false);
+                  setShowRecovery(false);
+                  setRecoveryCode("");
+                  setRecoveryCodeSent(false);
+                }}
+                disabled={isLoading}
+              >
+                Back to Login
+              </Button>
+            </motion.form>
+            )}
             
             <motion.div
               initial={{ opacity: 0 }}

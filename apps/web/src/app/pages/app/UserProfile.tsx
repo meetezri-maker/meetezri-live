@@ -1,10 +1,7 @@
-import { AppLayout } from "../../components/AppLayout";
-import { Card } from "../../components/ui/card";
-import { Button } from "../../components/ui/button";
-import { Label } from "../../components/ui/label";
-import { Badge } from "../../components/ui/badge";
 import { motion } from "motion/react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { format, differenceInCalendarDays, parseISO } from "date-fns";
+import Cropper, { type Area } from "react-easy-crop";
 import {
   User,
   Mail,
@@ -21,25 +18,31 @@ import {
   Palette,
   LogOut,
   ChevronRight,
-  Trash2,
   AlertTriangle,
-  X,
+  Info,
   Activity,
-  Pill,
   Target,
   Zap,
   Users,
-  Loader2
+  Loader2,
+  Trophy,
+  Check,
+  CheckCircle2,
+  ChevronsUpDown,
+  Circle,
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 
 import { api } from "@/lib/api";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { profileAgeStorageToDisplayYears } from "@/lib/profileAge";
 import { resolveVerificationRedirectForFlow } from "@/lib/verificationRedirect";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Progress } from "../../components/ui/progress";
+import { Switch } from "../../components/ui/switch";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -52,7 +55,6 @@ import {
   FormLabel,
   FormMessage,
 } from "../../components/ui/form";
-import { Input } from "../../components/ui/input";
 import { PhoneInput } from "../../components/ui/phone-input";
 import {
   AlertDialog,
@@ -63,68 +65,234 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../components/ui/dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "../../components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
+
+/* ─── style constants (orange → pink dashboard theme) ─── */
+const GRAD =
+  "linear-gradient(135deg, #ff7a18 0%, #ff5c87 48%, #e040fb 100%)";
+const GRAD_SOFT = "linear-gradient(135deg, rgba(255,122,24,0.12) 0%, rgba(224,64,251,0.1) 100%)";
+const GRAD2 = "linear-gradient(135deg, #6366f1 0%, #a855f7 100%)";
+const AVATAR_EXPORT_WIDTH = 1200;
+const AVATAR_EXPORT_HEIGHT = 900;
+type CropArea = { x: number; y: number; width: number; height: number };
+
+const loadImage = (src: string) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+
+const getCroppedAvatarBlob = async (imageSrc: string, pixelCrop: Area): Promise<Blob> => {
+  const image = await loadImage(imageSrc);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas not available");
+  canvas.width = AVATAR_EXPORT_WIDTH;
+  canvas.height = AVATAR_EXPORT_HEIGHT;
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("Could not export cropped image"));
+    }, "image/jpeg", 0.92);
+  });
+};
+
+const toCropArea = (value: unknown): CropArea | null => {
+  if (!value || typeof value !== "object") return null;
+  const maybe = value as Partial<CropArea>;
+  const { x, y, width, height } = maybe;
+  if ([x, y, width, height].every((n) => typeof n === "number" && Number.isFinite(n))) {
+    return { x: x as number, y: y as number, width: width as number, height: height as number };
+  }
+  return null;
+};
+const PILL =
+  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold";
+const CARD_SHELL =
+  "rounded-[1.25rem] bg-white dark:bg-gray-950 shadow-[0_4px_24px_rgba(15,23,42,0.06)] border border-gray-100/90 dark:border-gray-800";
+const CARD_HEADER_ROW = "flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800";
 
 const goalsOptions = [
-  { value: "reduce-stress", label: "Reduce Stress", emoji: "🧘" },
-  { value: "manage-anxiety", label: "Manage Anxiety", emoji: "💭" },
-  { value: "improve-sleep", label: "Improve Sleep", emoji: "😴" },
-  { value: "boost-mood", label: "Boost Mood", emoji: "✨" },
-  { value: "build-confidence", label: "Build Confidence", emoji: "💪" },
+  { value: "feel-calm-in-control", label: "Feel Calm & In Control", emoji: "🧘" },
+  { value: "boost-mood-daily-energy", label: "Boost Mood & Daily Energy", emoji: "✨" },
+  { value: "sleep-recovery", label: "Sleep & Recovery", emoji: "😴" },
+  { value: "build-confidence-self-trust", label: "Build Confidence & Self Trust", emoji: "💪" },
+  { value: "strengthen-relationships", label: "Strengthen Relationships", emoji: "❤️" },
+  { value: "navigate-life-changes", label: "Navigate Life Changes", emoji: "🧭" },
   { value: "work-life-balance", label: "Work-Life Balance", emoji: "⚖️" },
-  { value: "relationship-support", label: "Relationship Support", emoji: "❤️" },
-  { value: "grief-loss", label: "Grief & Loss", emoji: "🕊️" }
+  { value: "career-growth-advancement", label: "Career Growth & Advancement", emoji: "📈" },
+  { value: "business-entrepreneurship", label: "Business & Entrepreneurship", emoji: "🚀" },
+  { value: "time-management-productivity", label: "Time Management & Productivity", emoji: "⏱️" },
+  { value: "financial-wellness", label: "Financial Wellness", emoji: "💰" },
+  { value: "health-fitness-body-goals", label: "Health, Fitness & Body Goals", emoji: "🏃" },
+  { value: "daily-habits-discipline", label: "Daily Habits & Discipline", emoji: "📅" },
+  { value: "mindfulness-presence", label: "Mindfulness & Presence", emoji: "🌿" },
+  { value: "personal-goal-life-direction", label: "Personal Goal & Life Direction", emoji: "🎯" },
+  { value: "faith-purpose-inner-grounding", label: "Faith, Purpose & Inner Grounding", emoji: "🙏" },
 ];
 
 const triggersOptions = [
-  { value: "violence", label: "Violence" },
-  { value: "self-harm", label: "Self-harm" },
-  { value: "substance-abuse", label: "Substance Abuse" },
-  { value: "eating-disorders", label: "Eating Disorders" },
-  { value: "trauma", label: "Trauma/PTSD" },
-  { value: "none", label: "None of the above" }
+  { value: "crowds", label: "Crowds" },
+  { value: "procrastination", label: "Procrastination" },
+  { value: "overthinking", label: "Overthinking" },
+  { value: "low-energy-days", label: "Low-energy days" },
+  { value: "focus-issues", label: "Focus issues" },
+  { value: "motivation-dips", label: "Motivation dips" },
+  { value: "sleep-routine", label: "Sleep routine" },
+  { value: "time-management", label: "Time management" },
+  { value: "difficult-conversations", label: "Difficult conversations" },
+  { value: "uncertainty", label: "Uncertainty" },
+  { value: "workload-pressure", label: "Workload pressure" },
+  { value: "decision-making", label: "Decision-making" },
+  { value: "distractions", label: "Distractions" },
+  { value: "confidence-dips", label: "Confidence dips" },
+  { value: "social-situations", label: "Social situations" },
 ];
+const pronounsOptions = [
+  "she/her",
+  "he/him",
+  "they/them",
+  "she/they",
+  "he/they",
+  "prefer not to say",
+];
+const fallbackTimezones = [
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Toronto",
+  "Europe/London",
+  "Europe/Berlin",
+  "Asia/Karachi",
+  "Asia/Dubai",
+  "Asia/Kolkata",
+  "Asia/Singapore",
+  "Australia/Sydney",
+];
+
+const getBrowserTimezone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+};
+
+const formatTimezoneOptionLabel = (timezone: string) => {
+  const place = timezone.replace(/_/g, " ").replace(/\//g, ", ");
+  try {
+    const offsetPart = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      timeZoneName: "shortOffset",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date()).find((part) => part.type === "timeZoneName")?.value;
+    return offsetPart ? `${place} (${offsetPart})` : place;
+  } catch {
+    return place;
+  }
+};
+
+const MAX_PHONE_DIGITS = 12;
+const countPhoneDigits = (v: string) => (v.match(/\d/g) || []).length;
 
 const profileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
-
   phone: z
     .string()
     .optional()
     .or(z.literal(""))
-    .refine((v) => !v || /^\+?[\d\s-().]+$/.test(v), "Phone must contain valid characters (digits, spaces, dashes, +, ())"),
-
+    .refine((v) => !v || /^\+[\d\s\-().]+$/.test(v), "Select a country from the dropdown first")
+    .refine((v) => !v || countPhoneDigits(v) === MAX_PHONE_DIGITS, "Enter exactly 12 digits total (country code + number)"),
   birthday: z.string().optional(),
   pronouns: z.string().optional(),
   location: z.string().optional(),
   in_therapy: z.string().optional(),
-  // on_medication: z.string().optional(),
   selected_goals: z.array(z.string()).optional(),
   selected_triggers: z.array(z.string()).optional(),
-
-  emergency_contact_name: z.string().min(2, "Contact name is required").optional().or(z.literal("")),
-
+  emergency_contact_name: z.string().min(2).optional().or(z.literal("")),
   emergency_contact_phone: z
     .string()
     .optional()
     .or(z.literal(""))
-    .refine((v) => !v || /^\+?[\d\s-().]+$/.test(v), "Valid phone number is required"),
-
+    .refine((v) => !v || /^\+[\d\s\-().]+$/.test(v), "Select a country from the dropdown first")
+    .refine((v) => !v || countPhoneDigits(v) === MAX_PHONE_DIGITS, "Enter exactly 12 digits total (country code + number)"),
   emergency_contact_relationship: z.string().optional(),
 });
-
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
 const toProfileGoals = (value: unknown): string[] => {
   if (Array.isArray(value)) return value as string[];
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
+  if (typeof value === "string")
+    return value.split(",").map((s) => s.trim()).filter(Boolean);
   return [];
 };
+
+/* ─── small reusable field wrapper ─── */
+function FieldRow({
+  icon,
+  label,
+  editing,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  editing: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`flex items-start gap-3 px-4 py-3.5 rounded-2xl transition-all border ${
+        editing
+          ? "border-orange-200/80 bg-orange-50/50 dark:bg-orange-950/20 dark:border-orange-900/40"
+          : "border-transparent bg-gray-50/80 dark:bg-gray-900/30 hover:bg-gray-50 dark:hover:bg-gray-900/50"
+      }`}
+    >
+      <span className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center bg-white dark:bg-gray-800 shadow-sm text-gray-500 dark:text-gray-400 ring-1 ring-gray-100 dark:ring-gray-700">
+        {icon}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1 font-semibold">
+          {label}
+        </p>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export function UserProfile() {
   const navigate = useNavigate();
@@ -139,1311 +307,1361 @@ export function UserProfile() {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [joinedAt, setJoinedAt] = useState<string>("");
   const [resending, setResending] = useState(false);
-  
+  const [avatarEditorOpen, setAvatarEditorOpen] = useState(false);
+  const [avatarEditorImageUrl, setAvatarEditorImageUrl] = useState<string | null>(null);
+  const [avatarCrop, setAvatarCrop] = useState({ x: 0, y: 0 });
+  const [avatarZoom, setAvatarZoom] = useState(1);
+  const [avatarInitialCropArea, setAvatarInitialCropArea] = useState<CropArea | null>(null);
+  const [avatarCroppedAreaPercentages, setAvatarCroppedAreaPercentages] = useState<CropArea | null>(null);
+  const [avatarCroppedAreaPixels, setAvatarCroppedAreaPixels] = useState<Area | null>(null);
+  const [avatarSourceSize, setAvatarSourceSize] = useState<{ width: number; height: number } | null>(null);
+  const [timezoneOpen, setTimezoneOpen] = useState(false);
+  const [emergencyInfoOpen, setEmergencyInfoOpen] = useState(false);
+  const [emergencyConsentChecked, setEmergencyConsentChecked] = useState(false);
+  const availableTimezones = useMemo<string[]>(() => {
+    try {
+      const list = ((Intl as any).supportedValuesOf?.("timeZone") || []) as string[];
+      return list.length ? list : fallbackTimezones;
+    } catch {
+      return fallbackTimezones;
+    }
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get("verified") === "true") {
       setShowVerifiedAlert(true);
-      // Deterministic: after successful email verification redirect,
-      // force a fresh `/api/users/me` fetch so `email_verified`-based UI updates.
       refreshProfile().catch(() => {});
-      // Clean up the URL
       navigate(location.pathname, { replace: true });
     }
   }, [location, navigate, refreshProfile]);
 
-  // Use React Hook Form
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema as any),
     defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
-      birthday: "",
-      location: "",
-      pronouns: "",
-      emergency_contact_name: "",
-      emergency_contact_phone: "",
-      emergency_contact_relationship: "",
-      in_therapy: "",
-      // on_medication: "",
-      selected_goals: [],
-      selected_triggers: [],
+      name: "", email: "", phone: "", birthday: "", location: "",
+      pronouns: "", emergency_contact_name: "", emergency_contact_phone: "",
+      emergency_contact_relationship: "", in_therapy: "",
+      selected_goals: [], selected_triggers: [],
     },
   });
 
-  const [userStats, setUserStats] = useState({
-    sessions: 0,
-    checkins: 0,
-    daysActive: 0
-  });
-
-  // Additional state for non-form fields if any (e.g. preferences that are not part of main form)
+  const [userStats, setUserStats] = useState({ sessions: 0, checkins: 0, daysActive: 0 });
   const [preferencesData, setPreferencesData] = useState({
-    selected_avatar: "",
-    selected_voice: "",
-    selected_environment: ""
+    selected_avatar: "", selected_voice: "", selected_environment: "",
   });
-
-  // Keep a copy of raw profile if needed later
   const [rawProfile, setRawProfile] = useState<any | null>(null);
+  const avatarPrivacySaveRef = useRef(0);
 
-  useEffect(() => {
-    if (user) {
-      loadProfile();
-    }
-  }, [user]);
+  useEffect(() => { if (user) loadProfile(); }, [user]);
 
   const loadProfile = async () => {
     try {
       const profile = await api.getMe();
-      console.log("Loaded profile data:", profile); // Debug logging
       setRawProfile(profile);
-      
       form.reset({
         name: profile.full_name || "",
         email: profile.email || user?.email || "",
         phone: profile.phone || "",
-        birthday: profile.age ? `${profile.age}` : "",
-        location: profile.timezone || "",
+        birthday: profileAgeStorageToDisplayYears(profile.age),
+        location: profile.timezone || getBrowserTimezone(),
         pronouns: profile.pronouns || "",
         emergency_contact_name: profile.emergency_contact_name || "",
         emergency_contact_phone: profile.emergency_contact_phone || "",
         emergency_contact_relationship: profile.emergency_contact_relationship || "",
         in_therapy: profile.in_therapy || "Not specified",
-        // on_medication: profile.on_medication || "Not specified",
-        selected_goals: Array.isArray(profile.selected_goals) 
-          ? profile.selected_goals 
-          : (typeof profile.selected_goals === 'string' ? profile.selected_goals.split(',').map((s: string) => s.trim()) : []),
-        selected_triggers: Array.isArray(profile.selected_triggers) 
-          ? profile.selected_triggers 
-          : (typeof profile.selected_triggers === 'string' ? profile.selected_triggers.split(',').map((s: string) => s.trim()) : []),
+        selected_goals: Array.isArray(profile.selected_goals)
+          ? profile.selected_goals
+          : typeof profile.selected_goals === "string"
+          ? profile.selected_goals.split(",").map((s: string) => s.trim())
+          : [],
+        selected_triggers: Array.isArray(profile.selected_triggers)
+          ? profile.selected_triggers
+          : typeof profile.selected_triggers === "string"
+          ? profile.selected_triggers.split(",").map((s: string) => s.trim())
+          : [],
       });
-      
       setPreferencesData({
         selected_avatar: profile.selected_avatar || "Default Avatar",
         selected_voice: profile.selected_voice || "Default Voice",
-        selected_environment: profile.selected_environment || "Default Environment"
+        selected_environment: profile.selected_environment || "Default Environment",
       });
-
       setProfileImage(profile.avatar_url);
-      if (profile.created_at) {
-        setJoinedAt(new Date(profile.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short' }));
-      }
-
-      // Update stats from real data
+      if (profile.created_at)
+        setJoinedAt(new Date(profile.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short" }));
       if (profile.stats) {
-        setUserStats({
-          sessions: profile.stats.completed_sessions || 0,
-          checkins: profile.stats.total_checkins || 0,
-          daysActive: profile.stats.streak_days || 0
-        });
+        setUserStats({ sessions: profile.stats.completed_sessions || 0, checkins: profile.stats.total_checkins || 0, daysActive: profile.stats.streak_days || 0 });
       } else {
-        // Fallback for partial data
-        setUserStats({
-          sessions: 0,
-          checkins: 0,
-          daysActive: profile.streak_days || 0
-        });
+        setUserStats({ sessions: 0, checkins: 0, daysActive: profile.streak_days || 0 });
       }
-    } catch (error) {
-      console.error("Failed to load profile:", error);
+    } catch {
       toast.error("Failed to load profile");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Watch form values so completion updates as the user edits
   const watchedValues = form.watch();
 
-  // Compute profile completion based on current (watched) form values
   const profileCompletion = useMemo(() => {
     const values = watchedValues as ProfileFormValues;
-
-    const fields: {
-      key: keyof ProfileFormValues;
-      label: string;
-      type?: "string" | "array";
-      treatNotSpecifiedAsEmpty?: boolean;
-    }[] = [
+    const fields: { key: keyof ProfileFormValues; label: string; type?: "string" | "array"; treatNotSpecifiedAsEmpty?: boolean }[] = [
       { key: "name", label: "Name", type: "string" },
       { key: "phone", label: "Phone", type: "string" },
       { key: "birthday", label: "Birthday", type: "string" },
       { key: "location", label: "Location", type: "string" },
       { key: "pronouns", label: "Pronouns", type: "string" },
       { key: "in_therapy", label: "In therapy", type: "string", treatNotSpecifiedAsEmpty: true },
-      // { key: "on_medication", label: "On medication", type: "string", treatNotSpecifiedAsEmpty: true },
       { key: "emergency_contact_name", label: "Emergency contact name", type: "string" },
       { key: "emergency_contact_phone", label: "Emergency contact phone", type: "string" },
       { key: "emergency_contact_relationship", label: "Emergency contact relationship", type: "string" },
       { key: "selected_goals", label: "Wellness goals", type: "array" },
       { key: "selected_triggers", label: "Content triggers", type: "array" },
     ];
-
     let completed = 0;
-    const missingLabels: string[] = [];
     const missingFields: { label: string; key: string }[] = [];
-
-    fields.forEach((field) => {
-      const value = values[field.key] as any;
-      let isFilled = false;
-
-      if (field.type === "array") {
-        isFilled = Array.isArray(value) && value.length > 0;
-      } else {
+    fields.forEach((f) => {
+      const value = values[f.key] as any;
+      let filled = false;
+      if (f.type === "array") filled = Array.isArray(value) && value.length > 0;
+      else {
         const str = (value ?? "").toString().trim();
-        if (field.treatNotSpecifiedAsEmpty && str.toLowerCase() === "not specified") {
-          isFilled = false;
-        } else {
-          isFilled = str.length > 0;
-        }
+        filled = f.treatNotSpecifiedAsEmpty && str.toLowerCase() === "not specified" ? false : str.length > 0;
       }
-
-      if (isFilled) {
-        completed += 1;
-      } else {
-        missingLabels.push(field.label);
-        missingFields.push({ label: field.label, key: field.key as string });
-      }
+      if (filled) completed++;
+      else missingFields.push({ label: f.label, key: f.key as string });
     });
-
-    const total = fields.length;
-    const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
-
-    return {
-      percent,
-      missingLabels,
-      missingFields,
-      isComplete: percent === 100,
-    };
+    const percent = Math.round((completed / fields.length) * 100);
+    return { percent, missingFields, isComplete: percent === 100 };
   }, [watchedValues]);
 
-  const scrollToProfileField = (fieldKey: string) => {
-    const el = document.getElementById(`profile-field-${fieldKey}`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
+  const milestones = useMemo(() => {
+    const { sessions, checkins, daysActive: streak } = userStats;
+    return [
+      { id: "join", label: "Joined Solace", unlocked: Boolean(rawProfile?.created_at) },
+      { id: "onboarding", label: "Completed onboarding", unlocked: Boolean(rawProfile?.onboarding_completed) },
+      { id: "first-talk", label: "First Talk completed", unlocked: sessions >= 1 },
+      { id: "talks-5", label: "5 Talks completed", unlocked: sessions >= 5 },
+      { id: "talks-10", label: "10 Talks completed", unlocked: sessions >= 10 },
+      { id: "checkins-10", label: "10 mood check-ins", unlocked: checkins >= 10 },
+      { id: "streak-7", label: "7-day activity streak", unlocked: streak >= 7 },
+      { id: "profile-full", label: "Profile fully complete", unlocked: profileCompletion.isComplete },
+    ];
+  }, [rawProfile, userStats, profileCompletion.isComplete]);
+
+  const joiningDetails = useMemo(() => {
+    const created = rawProfile?.created_at as string | undefined;
+    if (!created) return { joinDateLabel: "—", tenureLabel: "", onboardingDoneLabel: null as string | null, planLabel: "—" };
+    try {
+      const d = parseISO(created);
+      const days = differenceInCalendarDays(new Date(), d);
+      const obAt = rawProfile?.onboarding_completed_at as string | undefined;
+      let onboardingDoneLabel: string | null = null;
+      if (obAt) { try { onboardingDoneLabel = format(parseISO(obAt), "MMM d, yyyy"); } catch {} }
+      return {
+        joinDateLabel: format(d, "MMMM d, yyyy"),
+        tenureLabel: days >= 0 ? `${days} day${days === 1 ? "" : "s"} with Solace` : "",
+        onboardingDoneLabel,
+        planLabel: typeof rawProfile?.subscription_plan === "string" ? rawProfile.subscription_plan : "trial",
+      };
+    } catch { return { joinDateLabel: joinedAt || "—", tenureLabel: "", onboardingDoneLabel: null, planLabel: "—" }; }
+  }, [rawProfile, joinedAt]);
+
+  const scrollToProfileField = (key: string) => {
+    document.getElementById(`profile-field-${key}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  const communityAvatarPublic =
+    (rawProfile?.privacy_settings as { showAvatarInCommunity?: boolean } | undefined)?.showAvatarInCommunity !== false;
+  const avatarOriginalUrl =
+    (rawProfile?.privacy_settings as { avatarOriginalUrl?: string } | undefined)?.avatarOriginalUrl || null;
+  const avatarSavedCropArea = toCropArea(
+    (rawProfile?.privacy_settings as { avatarCropAreaPercentages?: unknown } | undefined)?.avatarCropAreaPercentages
+  );
+
+  const handleCommunityAvatarToggle = async (nextPublic: boolean) => {
+    const saveId = ++avatarPrivacySaveRef.current;
+    const prevPrivacy = rawProfile?.privacy_settings;
+    const nextPrivacy = { ...(rawProfile?.privacy_settings && typeof rawProfile.privacy_settings === "object" ? rawProfile.privacy_settings : {}), showAvatarInCommunity: nextPublic };
+    setRawProfile((p: any) => p ? { ...p, privacy_settings: nextPrivacy } : p);
+    try {
+      const updated = await api.updateProfile({ privacy_settings: nextPrivacy });
+      if (avatarPrivacySaveRef.current !== saveId) return;
+      if (updated && typeof updated === "object") setRawProfile(updated);
+      void refreshProfile();
+      toast.success(nextPublic ? "Photo visible in community" : "Photo hidden from community");
+    } catch (err: any) {
+      if (avatarPrivacySaveRef.current !== saveId) return;
+      setRawProfile((p: any) => p ? { ...p, privacy_settings: prevPrivacy } : p);
+      toast.error(err instanceof Error ? err.message : "Could not update visibility");
     }
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && user) {
-      setIsUploading(true);
-      try {
-        const fileExt = file.name.split('.').pop();
-        const filePath = `${user.id}/${Math.random()}.${fileExt}`;
+    if (!file || !user) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const imageUrl = typeof reader.result === "string" ? reader.result : null;
+      if (!imageUrl) return;
+      const img = new Image();
+      img.onload = () => {
+        setAvatarSourceSize({ width: img.naturalWidth, height: img.naturalHeight });
+        setAvatarEditorImageUrl(imageUrl);
+        setAvatarCrop({ x: 0, y: 0 });
+        setAvatarZoom(1);
+        setAvatarInitialCropArea(null);
+        setAvatarCroppedAreaPercentages(null);
+        setAvatarCroppedAreaPixels(null);
+        setAvatarEditorOpen(true);
+      };
+      img.src = imageUrl;
+    };
+    reader.readAsDataURL(file);
+    // Allow selecting the same file again.
+    e.target.value = "";
+  };
 
-        const { error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(filePath, file);
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(filePath);
-
-        setProfileImage(publicUrl);
-        
-        // Auto-save the profile image
-        await api.updateProfile({
-          avatar_url: publicUrl
+  const handleOpenExistingAvatarEditor = async () => {
+    const sourceForEdit = avatarOriginalUrl || profileImage;
+    if (!sourceForEdit) {
+      document.getElementById("profile-image-upload")?.click();
+      return;
+    }
+    try {
+      let editableUrl = sourceForEdit;
+      // Convert remote image to data URL so canvas export remains reliable.
+      if (!sourceForEdit.startsWith("data:")) {
+        const resp = await fetch(sourceForEdit);
+        const blob = await resp.blob();
+        editableUrl = await new Promise<string>((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(typeof fr.result === "string" ? fr.result : "");
+          fr.onerror = () => reject(new Error("Could not load image"));
+          fr.readAsDataURL(blob);
         });
-        
-        toast.success("Profile photo updated successfully");
-      } catch (error) {
-        console.error('Error uploading image:', error);
-        toast.error("Error uploading image");
-      } finally {
-        setIsUploading(false);
       }
+      const img = new Image();
+      img.onload = () => {
+        setAvatarSourceSize({ width: img.naturalWidth, height: img.naturalHeight });
+        setAvatarEditorImageUrl(editableUrl);
+        setAvatarCrop({ x: 0, y: 0 });
+        setAvatarZoom(1);
+        setAvatarInitialCropArea(avatarSavedCropArea);
+        setAvatarCroppedAreaPercentages(avatarSavedCropArea);
+        setAvatarCroppedAreaPixels(null);
+        setAvatarEditorOpen(true);
+      };
+      img.src = editableUrl;
+    } catch {
+      toast.error("Could not open current photo for editing");
     }
   };
+
+  const handleAvatarSave = async () => {
+    if (!avatarEditorImageUrl || !avatarCroppedAreaPixels || !user) return;
+    setIsUploading(true);
+    try {
+      const uploadBlob = await getCroppedAvatarBlob(avatarEditorImageUrl, avatarCroppedAreaPixels);
+      const originalBlob = await fetch(avatarEditorImageUrl).then((r) => r.blob());
+      const filePath = `${user.id}/${Math.random()}.jpg`;
+      const originalPath = `${user.id}/original-${Math.random()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, uploadBlob, { contentType: "image/jpeg", upsert: true });
+      if (uploadError) throw uploadError;
+      const { error: originalUploadError } = await supabase.storage
+        .from("avatars")
+        .upload(originalPath, originalBlob, { contentType: originalBlob.type || "image/jpeg", upsert: true });
+      if (originalUploadError) throw originalUploadError;
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      const { data: { publicUrl: originalUrl } } = supabase.storage.from("avatars").getPublicUrl(originalPath);
+      setProfileImage(publicUrl);
+      const nextPrivacy = {
+        ...(rawProfile?.privacy_settings && typeof rawProfile.privacy_settings === "object" ? rawProfile.privacy_settings : {}),
+        avatarOriginalUrl: originalUrl,
+        avatarCropAreaPercentages: avatarCroppedAreaPercentages || avatarSavedCropArea || undefined,
+      };
+      const updated = await api.updateProfile({ avatar_url: publicUrl, privacy_settings: nextPrivacy });
+      if (updated && typeof updated === "object") setRawProfile(updated);
+      await refreshProfile();
+      setAvatarEditorOpen(false);
+      toast.success("Profile photo updated");
+    } catch {
+      toast.error("Error uploading image");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isEditing || !rawProfile) return;
+    // Ensure emergency contact fields are hydrated immediately when entering edit mode.
+    form.setValue("emergency_contact_name", rawProfile.emergency_contact_name || "", { shouldDirty: false });
+    form.setValue("emergency_contact_relationship", rawProfile.emergency_contact_relationship || "", { shouldDirty: false });
+    form.setValue("emergency_contact_phone", rawProfile.emergency_contact_phone || "", { shouldDirty: false });
+    const hasExistingEmergencyContact = Boolean(
+      rawProfile.emergency_contact_name || rawProfile.emergency_contact_phone || rawProfile.emergency_contact_relationship
+    );
+    setEmergencyConsentChecked(hasExistingEmergencyContact);
+  }, [isEditing, rawProfile, form]);
 
   const onSubmit = async (data: ProfileFormValues) => {
     setIsSaving(true);
     try {
-      const dirty = form.formState.dirtyFields;
-      const profilePatch: Record<string, unknown> = {};
-
-      if (dirty.name) profilePatch.full_name = data.name;
-      if (dirty.email) profilePatch.email = data.email;
-      if (dirty.phone) profilePatch.phone = data.phone;
-      if (dirty.birthday) profilePatch.age = data.birthday; // mapped from age input
-      if (dirty.pronouns) profilePatch.pronouns = data.pronouns;
-      if (dirty.location) profilePatch.timezone = data.location;
-      if (dirty.in_therapy) profilePatch.in_therapy = data.in_therapy;
-      if (dirty.selected_goals) profilePatch.selected_goals = data.selected_goals || [];
-      if (dirty.selected_triggers) profilePatch.selected_triggers = data.selected_triggers || [];
-
-      // Avatar is uploaded independently; only patch it when it changed.
-      if (profileImage !== rawProfile?.avatar_url) {
-        profilePatch.avatar_url = profileImage;
-      }
-
-      // Keep emergency contact updates partial-safe while preserving schema compatibility.
-      const emergencyDirty =
-        !!dirty.emergency_contact_name ||
-        !!dirty.emergency_contact_phone ||
-        !!dirty.emergency_contact_relationship;
-
-      if (emergencyDirty) {
-        profilePatch.emergency_contact_name = data.emergency_contact_name || rawProfile?.emergency_contact_name || "";
-        profilePatch.emergency_contact_phone = data.emergency_contact_phone || rawProfile?.emergency_contact_phone || "";
-        profilePatch.emergency_contact_relationship =
-          data.emergency_contact_relationship || rawProfile?.emergency_contact_relationship || "";
-      }
-
-      if (Object.keys(profilePatch).length === 0) {
-        toast.success("No changes to save");
-        setIsEditing(false);
+      const hasEmergencyContactInput = Boolean(
+        data.emergency_contact_name?.trim() ||
+        data.emergency_contact_phone?.trim() ||
+        data.emergency_contact_relationship?.trim()
+      );
+      if (hasEmergencyContactInput && !emergencyConsentChecked) {
+        toast.error("Please confirm emergency contact consent before saving");
+        scrollToProfileField("emergency_contact_name");
+        setIsSaving(false);
         return;
       }
-
-      const updatedProfile = await api.updateProfile(profilePatch);
-      
-      // Update form with returned data to ensure sync
+      const dirty = form.formState.dirtyFields;
+      const patch: Record<string, unknown> = {};
+      const nextPronouns = (data.pronouns || "").trim();
+      const currentPronouns = (rawProfile?.pronouns || "").trim();
+      if (dirty.name) patch.full_name = data.name;
+      if (dirty.email) patch.email = data.email;
+      if (dirty.phone) patch.phone = data.phone;
+      if (dirty.birthday) patch.age = data.birthday;
+      // Pronouns can be changed via dropdown/custom input; compare values directly
+      // so updates do not depend on dirty field tracking quirks.
+      if (nextPronouns !== currentPronouns) patch.pronouns = nextPronouns;
+      if (dirty.location) patch.timezone = data.location;
+      if (dirty.in_therapy) patch.in_therapy = data.in_therapy;
+      if (dirty.selected_goals) patch.selected_goals = data.selected_goals || [];
+      if (dirty.selected_triggers) patch.selected_triggers = data.selected_triggers || [];
+      if (profileImage !== rawProfile?.avatar_url) patch.avatar_url = profileImage;
+      if (dirty.emergency_contact_name || dirty.emergency_contact_phone || dirty.emergency_contact_relationship) {
+        patch.emergency_contact_name = data.emergency_contact_name || rawProfile?.emergency_contact_name || "";
+        patch.emergency_contact_phone = data.emergency_contact_phone || rawProfile?.emergency_contact_phone || "";
+        patch.emergency_contact_relationship = data.emergency_contact_relationship || rawProfile?.emergency_contact_relationship || "";
+      }
+      if (!Object.keys(patch).length) { toast.success("No changes to save"); setIsEditing(false); return; }
+      const updated = await api.updateProfile(patch);
       form.reset({
-        name: updatedProfile.full_name || '',
-        email: updatedProfile.email || '',
-        phone: updatedProfile.phone || '',
-        birthday: updatedProfile.age || '',
-        pronouns: updatedProfile.pronouns || '',
-        location: updatedProfile.timezone || '',
-        in_therapy: updatedProfile.in_therapy || 'Not specified',
-        // on_medication: updatedProfile.on_medication || 'Not specified',
-        selected_goals: toProfileGoals(updatedProfile.selected_goals),
-        selected_triggers: toProfileGoals(updatedProfile.selected_triggers),
-        emergency_contact_name: updatedProfile.emergency_contact_name || '',
-        emergency_contact_phone: updatedProfile.emergency_contact_phone || '',
-        emergency_contact_relationship: updatedProfile.emergency_contact_relationship || ''
+        name: updated.full_name || "", email: updated.email || "", phone: updated.phone || "",
+        birthday: profileAgeStorageToDisplayYears(updated.age), pronouns: updated.pronouns || "",
+        location: updated.timezone || "", in_therapy: updated.in_therapy || "Not specified",
+        selected_goals: toProfileGoals(updated.selected_goals),
+        selected_triggers: toProfileGoals(updated.selected_triggers),
+        emergency_contact_name: updated.emergency_contact_name || "",
+        emergency_contact_phone: updated.emergency_contact_phone || "",
+        emergency_contact_relationship: updated.emergency_contact_relationship || "",
       });
-
-      toast.success("Profile updated successfully!");
+      toast.success("Profile updated!");
       setIsEditing(false);
-    } catch (error) {
-      console.error("Profile update error:", error);
-      toast.error("Failed to update profile");
-    } finally {
-      setIsSaving(false);
-    }
+    } catch { toast.error("Failed to update profile"); }
+    finally { setIsSaving(false); }
   };
 
   const handleResendVerification = async () => {
     if (!user?.email) return;
+    setResending(true);
     try {
-      setResending(true);
-      
-      const signupType =
-        (user as any)?.user_metadata?.signup_type === "trial" ? "trial" : "plan";
-      const { emailRedirectTo: redirectTo, targetPath, baseUrl, isLocal, source } =
-        resolveVerificationRedirectForFlow(signupType);
-      
-      // Required debug logging: exact emailRedirectTo passed to Supabase.
-      console.log("Resend (UserProfile): supabase.auth.resend emailRedirectTo (exact):", redirectTo, {
-        flow: "frontend_userprofile_supabase_resend",
-        origin: window.location.origin,
-        hostname: window.location.hostname,
-        env: import.meta.env.DEV ? "dev" : "prod",
-        isLocal,
-        signupType,
-        targetPath,
-        VITE_WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
-        WEB_BASE_URL: import.meta.env.VITE_WEB_BASE_URL,
-        APP_URL: undefined,
-        baseUrlResolved: baseUrl,
-        baseUrlSource: source,
-      });
-      
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: user.email,
-        options: {
-          emailRedirectTo: redirectTo,
-        },
-      });
+      const signupType = (user as any)?.user_metadata?.signup_type === "trial" ? "trial" : "plan";
+      const { emailRedirectTo: redirectTo } = resolveVerificationRedirectForFlow(signupType);
+      const { error } = await supabase.auth.resend({ type: "signup", email: user.email, options: { emailRedirectTo: redirectTo } });
       if (error) throw error;
-      toast.success("Verification email sent! Please check your inbox.");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to resend verification email");
-    } finally {
-      setResending(false);
-    }
+      toast.success("Verification email sent!");
+    } catch (err: any) { toast.error(err.message || "Failed to resend"); }
+    finally { setResending(false); }
   };
 
   const handleLogout = async () => {
-    if (confirm('Are you sure you want to log out?')) {
-      setIsLoggingOut(true);
-      try {
-        await signOut();
-        navigate('/login');
-      } catch (error) {
-        console.error("Logout error:", error);
-        toast.error("Failed to log out");
-        setIsLoggingOut(false);
-      }
-    }
+    if (!confirm("Are you sure you want to log out?")) return;
+    setIsLoggingOut(true);
+    try { await signOut(); navigate("/login"); }
+    catch { toast.error("Failed to log out"); setIsLoggingOut(false); }
   };
 
-  const stats = [
-    { label: "Sessions", value: userStats.sessions.toString(), icon: Heart },
-    { label: "Check-ins", value: userStats.checkins.toString(), icon: Calendar },
-    { label: "Days Active", value: userStats.daysActive.toString(), icon: Calendar }
-  ];
+  // Use auth session as source of truth for verification state.
+  // Profile patch responses may not include reliable verification flags.
+  const effectiveNeedsVerification = !!user && !(user as any).email_confirmed_at;
+  const isTrialUser =
+    (rawProfile as any)?.signup_type === "trial" ||
+    (rawProfile as any)?.subscription_plan === "trial" ||
+    (user as any)?.user_metadata?.signup_type === "trial";
+  const showTrialIncompleteBanner = isTrialUser && !profileCompletion.isComplete;
 
-  const preferences = [
-    {
-      icon: Volume2,
-      title: "Voice",
-      value: preferencesData.selected_voice || "Not set",
-      link: "/app/settings"
-    },
-    {
-      icon: User,
-      title: "Avatar",
-      value: preferencesData.selected_avatar || "Not set",
-      link: "/app/settings"
-    },
-    {
-      icon: Palette,
-      title: "Environment",
-      value: preferencesData.selected_environment || "Not set",
-      link: "/app/settings"
-    }
-  ];
-
-  const settingsSections = [
-    {
-      title: "Account",
-      items: [
-        { icon: Bell, label: "Notifications", link: "/app/settings/notifications" },
-        { icon: Lock, label: "Privacy & Security", link: "/app/settings/privacy" },
-        { icon: Shield, label: "Data & Permissions", link: "/app/settings/privacy" }
-      ]
-    },
-    {
-      title: "Support",
-      items: [
-        { icon: Heart, label: "Emergency Contacts", link: "/app/settings/emergency-contacts" },
-        { icon: Mail, label: "Contact Support", link: "/app/settings/help-support" },
-        { icon: Shield, label: "Safety Plan", link: "/app/settings/safety-plan" }
-      ]
-    }
-  ];
-  
-  const needsEmailVerification = !!user && !(user as any).email_confirmed_at;
-  const effectiveNeedsVerification =
-    (rawProfile as any)?.needs_email_verification ??
-    (rawProfile ? !(rawProfile as any)?.email_verified : needsEmailVerification);
-
+  /* ─── loading skeleton ─── */
   if (isLoading) {
     return (
-      <AppLayout>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-          <div className="mb-8">
-            <Skeleton className="h-8 w-64 mb-2" />
-            <Skeleton className="h-4 w-80" />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="space-y-6">
-              <Card className="p-6">
-                <div className="flex flex-col items-center mb-6">
-                  <Skeleton className="w-32 h-32 rounded-full mb-4" />
-                  <Skeleton className="h-5 w-40 mb-1" />
-                  <Skeleton className="h-4 w-32" />
-                </div>
-                <div className="grid grid-cols-3 gap-3 mb-6">
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} className="text-center space-y-2">
-                      <Skeleton className="h-4 w-4 mx-auto" />
-                      <Skeleton className="h-5 w-10 mx-auto" />
-                      <Skeleton className="h-3 w-16 mx-auto" />
-                    </div>
-                  ))}
-                </div>
-                <Skeleton className="h-10 w-full" />
-              </Card>
-              <Card className="p-6">
-                <Skeleton className="h-5 w-40 mb-4" />
-                <div className="space-y-3">
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <Skeleton className="h-8 w-8 rounded-lg" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-3 w-40" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="p-6">
-                <Skeleton className="h-5 w-48 mb-4" />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {[...Array(6)].map((_, i) => (
-                    <div key={i} className="space-y-2">
-                      <Skeleton className="h-4 w-24" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  ))}
-                </div>
-              </Card>
-              <Card className="p-6">
-                <Skeleton className="h-5 w-40 mb-4" />
-                <div className="space-y-3">
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Skeleton className="h-8 w-8 rounded-full" />
-                        <div className="space-y-2">
-                          <Skeleton className="h-4 w-32" />
-                          <Skeleton className="h-3 w-40" />
-                        </div>
-                      </div>
-                      <Skeleton className="h-4 w-4" />
-                    </div>
-                  ))}
-                </div>
-              </Card>
+      <div className="relative min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] overflow-hidden">
+          <div className="pointer-events-none absolute -top-24 -right-24 h-80 w-80 rounded-[2.5rem] bg-gradient-to-br from-orange-400/25 via-pink-400/20 to-fuchsia-500/15 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-32 -left-16 h-72 w-72 rounded-[2rem] bg-gradient-to-tr from-amber-300/20 to-pink-500/15 blur-3xl" />
+          <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+            <Skeleton className="h-9 w-56 rounded-xl" />
+            <div className="grid grid-cols-1 lg:grid-cols-[4fr_6fr] gap-6">
+              <div className="space-y-4 min-w-0">
+                <Skeleton className="h-72 rounded-[1.25rem]" />
+                <Skeleton className="h-40 rounded-[1.25rem]" />
+              </div>
+              <div className="space-y-4 min-w-0">
+                <Skeleton className="h-48 rounded-[1.25rem]" />
+                <Skeleton className="h-64 rounded-[1.25rem]" />
+              </div>
             </div>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
+  /* ─── main render ─── */
   return (
-    <AppLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {effectiveNeedsVerification && (
-          <div className="mb-6 p-4 border-2 border-yellow-300 bg-yellow-50 rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-700" />
-              <div>
-                <p className="font-semibold text-yellow-900">Verify your email</p>
-                <p className="text-sm text-yellow-800">Please verify your email to secure your account and unlock all features.</p>
-              </div>
-            </div>
-            <Button variant="outline" onClick={handleResendVerification} disabled={resending}>
-              {resending ? 'Sending...' : 'Resend link'}
-            </Button>
-          </div>
-        )}
-        {/* Profile completion status (hidden when profile is 100% complete) */}
-        {!profileCompletion.isComplete && (
-        <div className="mb-6">
-          <Card className="relative overflow-hidden border border-primary/20 bg-gradient-to-r from-primary/5 via-primary/10 to-background shadow-sm">
-            <div className="pointer-events-none absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_top_left,rgba(129,140,248,0.35),transparent_55%),radial-gradient(circle_at_bottom_right,rgba(236,72,153,0.25),transparent_55%)]" />
-            <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between p-4 md:p-5">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary shadow-sm">
-                  <Activity className="h-4 w-4" />
-                </div>
-                <div className="space-y-1.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold">
-                      Profile {profileCompletion.percent}% complete
-                    </p>
-                    {!profileCompletion.isComplete && (
-                      <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-primary">
-                        Recommended setup
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {profileCompletion.isComplete
-                      ? "Amazing – your profile is fully set up and Ezri can personalize support for you."
-                      : profileCompletion.missingFields.length > 0
-                        ? "You’re almost there. Tap a chip below to jump to that part of your profile."
-                        : "Add a few more details so Ezri can better understand and support you."}
-                  </p>
-                  {!profileCompletion.isComplete && profileCompletion.missingFields.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {profileCompletion.missingFields.slice(0, 6).map((item) => (
-                        <button
-                          key={item.key}
-                          type="button"
-                          onClick={() => scrollToProfileField(item.key)}
-                          className="inline-flex items-center rounded-full border border-primary/30 bg-background/60 px-2.5 py-0.5 text-[11px] font-medium text-primary shadow-sm hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                        >
-                          <span className="mr-1 h-1.5 w-1.5 rounded-full bg-primary" />
-                          {item.label}
-                        </button>
-                      ))}
-                      {profileCompletion.missingFields.length > 6 && (
-                        <span className="text-[11px] text-muted-foreground">
-                          +{profileCompletion.missingFields.length - 6} more
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex w-full flex-col gap-2 md:w-64">
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>{profileCompletion.percent >= 50 ? "Looking good" : "Let’s get you set up"}</span>
-                  <span className="font-semibold text-foreground">
-                    {profileCompletion.percent}%
-                  </span>
-                </div>
-                <Progress value={profileCompletion.percent} />
-                {!profileCompletion.isComplete && (
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-7 px-3 text-[11px]"
-                      onClick={() => scrollToProfileField(profileCompletion.missingFields[0]?.key || "name")}
-                    >
-                      Finish profile
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </Card>
-        </div>
-        )}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <h1 className="text-3xl font-bold mb-2">Profile & Settings</h1>
-          <p className="text-muted-foreground">
-            Manage your account and preferences
-          </p>
-        </motion.div>
+    <>
+      {/* ── page background (dashboard-style) ── */}
+      <div className="relative min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] overflow-hidden">
+        <div className="pointer-events-none absolute -top-28 -right-20 h-[28rem] w-[28rem] rounded-[3rem] bg-gradient-to-bl from-orange-400/30 via-pink-400/15 to-transparent blur-3xl" />
+        <div className="pointer-events-none absolute top-1/3 -left-24 h-80 w-80 rounded-[2.5rem] bg-gradient-to-tr from-fuchsia-500/12 to-amber-300/10 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-0 right-1/4 h-64 w-96 rounded-full bg-gradient-to-t from-pink-400/10 to-transparent blur-3xl" />
+        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8">
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column: Profile Card & Preferences */}
-          <div className="lg:col-span-1 space-y-6">
+          {/* email verification banner */}
+          {effectiveNeedsVerification && (
             <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 }}
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`mb-6 flex items-center justify-between gap-4 px-5 py-4 ${CARD_SHELL} bg-amber-50/90 dark:bg-amber-950/30 border-amber-200/80 dark:border-amber-800`}
             >
-              <Card className="p-6 shadow-xl">
-                <div className="text-center mb-6">
-                  <div className="relative inline-block mb-4">
-                    <input
-                      type="file"
-                      id="profile-image-upload"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-800 flex items-center justify-center">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <p className="font-bold text-amber-900 dark:text-amber-300 text-sm">Verify your email</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400">Secure your account and unlock all features.</p>
+                </div>
+              </div>
+              <button
+                onClick={handleResendVerification}
+                disabled={resending}
+                className="shrink-0 px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-60"
+              >
+                {resending ? "Sending…" : "Resend link"}
+              </button>
+            </motion.div>
+          )}
+
+          {/* trial profile completion banner */}
+          {showTrialIncompleteBanner && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`mb-6 flex items-center justify-between gap-4 px-5 py-4 ${CARD_SHELL} bg-blue-50/90 dark:bg-blue-950/25 border-blue-200/80 dark:border-blue-800`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">Complete your trial profile</p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    Your profile is {profileCompletion.percent}% complete. Add missing details to finish setup.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditing(true);
+                  scrollToProfileField(profileCompletion.missingFields[0]?.key || "name");
+                }}
+                className="shrink-0 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+              >
+                Complete now
+              </button>
+            </motion.div>
+          )}
+
+          {/* page title */}
+          {/* <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 sm:mb-10"
+          >
+            <div className="inline-flex flex-col gap-2 sm:gap-3 max-w-2xl">
+              <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-orange-600/90 dark:text-orange-400/90">
+                Account
+              </p>
+              <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-gray-900 dark:text-white">
+                My Profile
+              </h1>
+              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 leading-relaxed">
+                Welcome back — manage your account, wellness goals, and preferences.
+              </p>
+            </div>
+          </motion.div> */}
+
+          {/* ── main layout: 40% left / 60% right (lg+) ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-[4fr_6fr] gap-6">
+
+            {/* LEFT: profile card + prefs */}
+            <div className="space-y-5 min-w-0">
+              {/* profile card (dashboard-style) */}
+              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}>
+                <div className={`${CARD_SHELL} overflow-hidden`}>
+                  <div className="relative aspect-[4/3] w-full">
+                    <div
+                      className="absolute inset-0 opacity-40"
+                      style={{ background: GRAD }}
                     />
+                    <input type="file" id="profile-image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" />
                     <motion.div
-                      whileHover={{ scale: 1.05 }}
-                      onClick={() => !isUploading && document.getElementById('profile-image-upload')?.click()}
-                      className="w-32 h-32 bg-gradient-to-br from-blue-600 to-indigo-600 dark:from-blue-500 dark:to-indigo-500 rounded-full flex items-center justify-center text-5xl cursor-pointer relative overflow-hidden"
+                      whileHover={{ scale: 1.01 }}
+                      onClick={() => !isUploading && document.getElementById("profile-image-upload")?.click()}
+                      className="absolute inset-4 sm:inset-6 rounded-2xl overflow-hidden border-4 border-white/90 dark:border-gray-800 shadow-xl cursor-pointer bg-gray-300 dark:bg-gray-700"
                     >
                       {isUploading && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
                           <Loader2 className="w-8 h-8 text-white animate-spin" />
                         </div>
                       )}
                       {profileImage ? (
-                        <img src={profileImage} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                        <img src={profileImage} alt="" className="w-full h-full object-cover object-center" />
                       ) : (
-                        '👤'
+                        <div className="w-full h-full flex items-center justify-center text-6xl bg-gray-200 dark:bg-gray-800">👤</div>
                       )}
-                      <motion.div
-                        whileHover={{ opacity: 1 }}
-                        className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 transition-opacity"
-                      >
-                        <div className="text-center">
-                          <Camera className="w-8 h-8 text-white mx-auto mb-1" />
-                          <p className="text-white text-xs">Change Photo</p>
-                        </div>
-                      </motion.div>
+                      <div className="absolute inset-0 bg-black/35 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Camera className="w-10 h-10 text-white drop-shadow-lg" />
+                      </div>
                     </motion.div>
-                    <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => document.getElementById('profile-image-upload')?.click()}
-                      className="absolute bottom-0 right-0 p-2 bg-blue-600 dark:bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-700 dark:hover:bg-blue-400 transition-colors"
+                    <button
+                      type="button"
+                      onClick={handleOpenExistingAvatarEditor}
+                      className="absolute bottom-6 right-6 w-10 h-10 rounded-full bg-white dark:bg-gray-900 text-gray-900 dark:text-white flex items-center justify-center shadow-lg hover:scale-105 transition-transform ring-2 ring-orange-200/80 dark:ring-orange-900/50"
+                      aria-label="Change photo"
                     >
                       <Edit className="w-4 h-4" />
-                    </motion.button>
+                    </button>
                   </div>
-                  <h2 className="text-2xl font-bold mb-1">{form.watch('name')}</h2>
-                  <p className="text-muted-foreground text-sm">Member since {joinedAt || '...'}</p>
-                </div>
 
-                {/* Quick Stats */}
-                <div className="grid grid-cols-3 gap-3 mb-6">
-                  {stats.map((stat, index) => {
-                    const Icon = stat.icon;
-                    return (
-                      <motion.div
-                        key={index}
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.2 + index * 0.05 }}
-                        className="text-center"
+                  <div className="px-4 sm:px-5 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-900/40 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-gray-800 dark:text-gray-100">Photo in community</p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">
+                        Show your profile picture to other members
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Switch
+                        id="community-avatar-toggle-profile"
+                        checked={communityAvatarPublic}
+                        onCheckedChange={handleCommunityAvatarToggle}
+                      />
+                      <label
+                        htmlFor="community-avatar-toggle-profile"
+                        className="text-[11px] font-medium text-gray-600 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap"
                       >
-                        <Icon className="w-5 h-5 text-primary mx-auto mb-1" />
-                        <div className="text-xl font-bold">{stat.value}</div>
-                        <div className="text-xs text-muted-foreground">{stat.label}</div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-
-                {isEditing ? (
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={form.handleSubmit(onSubmit)}
-                      className="flex-1"
-                      isLoading={isSaving}
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setIsEditing(false);
-                        // Reset form to last loaded values (reload profile to be safe or use form.reset() with saved values if tracked)
-                        loadProfile(); 
-                      }}
-                      variant="outline"
-                      className="flex-1"
-                      disabled={isSaving}
-                    >
-                      Cancel
-                    </Button>
+                        {communityAvatarPublic ? "Public" : "Hidden"}
+                      </label>
+                    </div>
                   </div>
-                ) : (
-                  <Button
-                    onClick={() => setIsEditing(true)}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    <Edit className="w-4 h-4 mr-2" />
-                    Edit Profile
-                  </Button>
-                )}
-              </Card>
-            </motion.div>
 
-            {/* Session Preferences */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card className="p-6 shadow-xl">
-                <h3 className="font-bold mb-4">Session Preferences</h3>
-                <div className="space-y-3">
-                  {preferences.map((pref, index) => {
-                    const Icon = pref.icon;
-                    return (
-                      <Link key={index} to={pref.link}>
-                        <motion.div
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.4 + index * 0.05 }}
-                          whileHover={{ x: 5 }}
-                          className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer group"
-                        >
-                          <div className="p-2 bg-white dark:bg-gray-900 rounded-lg group-hover:bg-primary group-hover:text-white transition-colors">
-                            <Icon className="w-4 h-4" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">{pref.title}</p>
-                            <p className="text-xs text-muted-foreground">{pref.value}</p>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-primary transition-colors" />
-                        </motion.div>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </Card>
-            </motion.div>
-          </div>
+                  <div className="px-5 pt-5 pb-5">
+                    <div className="flex items-start justify-between gap-3 mb-4">
+                      <h2 className="text-lg font-bold text-gray-900 dark:text-white">My profile</h2>
+                      <div className="text-right text-[11px] text-gray-400 dark:text-gray-500 leading-tight max-w-[55%]">
+                        <p>Member since</p>
+                        <p className="font-semibold text-gray-600 dark:text-gray-300">{joinedAt || "—"}</p>
+                        <p className="mt-1 text-[10px] uppercase tracking-wide text-gray-400">Plan · {joiningDetails.planLabel}</p>
+                      </div>
+                    </div>
 
-          {/* Right Column: Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Personal Information */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)}>
-                  <Card className={`p-6 shadow-xl transition-all ${isEditing ? 'ring-2 ring-primary shadow-2xl' : ''}`}>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-bold text-lg">Personal Information</h3>
-                      {isEditing && (
-                        <motion.span
-                          initial={{ opacity: 0, scale: 0.8 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          className="text-xs bg-primary text-white px-3 py-1 rounded-full"
+                    <p className="text-center text-base font-semibold text-gray-900 dark:text-white mb-1">
+                      {form.watch("name") || "Your name"}
+                    </p>
+                    <p className="text-center text-xs text-gray-500 dark:text-gray-400 mb-5 line-clamp-2">
+                      {form.watch("email") || user?.email || ""}
+                    </p>
+
+                    <div className="flex justify-center gap-4 sm:gap-6 py-4 rounded-2xl bg-gray-50/90 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800">
+                      {[
+                        { label: "Talk it out", value: userStats.sessions },
+                        { label: "Check-ins", value: userStats.checkins },
+                        { label: "Days", value: userStats.daysActive },
+                      ].map((s) => (
+                        <div key={s.label} className="flex flex-col items-center min-w-[3.5rem]">
+                          <span className="text-xl font-black text-orange-600 dark:text-orange-300 tabular-nums">
+                            {s.value}
+                          </span>
+                          <span className="text-[10px] text-gray-500 dark:text-gray-200 uppercase tracking-wider">{s.label}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {!profileCompletion.isComplete && (
+                      <div
+                        className="mt-4 rounded-2xl border border-gray-100 dark:border-gray-800 p-4 space-y-3"
+                        style={{ background: GRAD_SOFT }}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div
+                              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-white shadow-sm"
+                              style={{ background: GRAD }}
+                            >
+                              <Activity className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400">Profile progress</p>
+                              <p className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                                {profileCompletion.percent}% complete
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="h-2 rounded-full bg-white/70 dark:bg-gray-800 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{ width: `${profileCompletion.percent}%`, background: GRAD }}
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {profileCompletion.missingFields.slice(0, 5).map((f) => (
+                            <button
+                              key={f.key}
+                              type="button"
+                              onClick={() => scrollToProfileField(f.key)}
+                              className="text-[10px] px-2 py-0.5 rounded-full bg-white/80 dark:bg-gray-900/60 text-orange-600 dark:text-orange-400 border border-orange-200/80 dark:border-orange-800 hover:bg-white dark:hover:bg-gray-800 transition-colors"
+                            >
+                              {f.label}
+                            </button>
+                          ))}
+                          {profileCompletion.missingFields.length > 5 && (
+                            <span className="text-[10px] text-gray-400 self-center">
+                              +{profileCompletion.missingFields.length - 5} more
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => scrollToProfileField(profileCompletion.missingFields[0]?.key || "name")}
+                          className="text-xs font-semibold text-orange-600 dark:text-orange-400 hover:underline w-full text-left"
                         >
-                          Editing Mode
-                        </motion.span>
+                          Finish profile →
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="mt-6">
+                      {isEditing ? (
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <button
+                            type="button"
+                            onClick={form.handleSubmit(onSubmit)}
+                            disabled={isSaving}
+                            className="flex-1 py-3.5 rounded-2xl text-sm font-bold text-white shadow-lg shadow-orange-500/25 transition-opacity hover:opacity-95 disabled:opacity-60 flex items-center justify-center gap-2"
+                            style={{ background: GRAD }}
+                          >
+                            {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                            Save changes
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setIsEditing(false); loadProfile(); }}
+                            disabled={isSaving}
+                            className="flex-1 py-3.5 rounded-2xl text-sm font-semibold border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditing(true)}
+                          className="w-full py-3.5 rounded-2xl text-sm font-bold text-white shadow-md transition-opacity hover:opacity-95 flex items-center justify-center gap-2"
+                          style={{ background: GRAD }}
+                        >
+                          <Edit className="w-4 h-4" /> Edit profile
+                        </button>
                       )}
                     </div>
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="name"
-                          render={({ field }) => (
-                            <FormItem id="profile-field-name" className="scroll-mt-24">
-                              <FormLabel>Full Name</FormLabel>
-                              <FormControl>
-                                <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
-                                  isEditing 
-                                    ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
-                                    : 'border-gray-300 dark:border-gray-700'
-                                }`}>
-                                  <User className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                                  <input
-                                    {...field}
-                                    disabled={!isEditing || isSaving}
-                                    className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-                                  />
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                  </div>
+                </div>
+              </motion.div>
 
-                        <FormField
-                          control={form.control}
-                          name="email"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Email</FormLabel>
-                              <FormControl>
-                                <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
-                                  isEditing 
-                                    ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
-                                    : 'border-gray-300 dark:border-gray-700'
-                                }`}>
-                                  <Mail className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                                  <input
-                                    {...field}
-                                    disabled={!isEditing || isSaving}
-                                    className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-                                  />
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
+              {/* session preferences */}
+              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
+                <div className={`${CARD_SHELL} p-5`}>
+                  <p className="text-xs uppercase tracking-widest font-bold text-gray-400 mb-4">Session preferences</p>
+                  <div className="space-y-2">
+                    {[
+                      { icon: <Volume2 className="w-4 h-4" />, title: "Voice", value: preferencesData.selected_voice || "Not set", link: "/app/session-lobby?customize=voice" },
+                      { icon: <User className="w-4 h-4" />, title: "Avatar", value: preferencesData.selected_avatar || "Not set", link: "/app/settings/change-avatar" },
+                      { icon: <Palette className="w-4 h-4" />, title: "Environment", value: preferencesData.selected_environment || "Not set", link: "/app/session-lobby?customize=environment" },
+                    ].map((p, i) => (
+                      <Link key={i} to={p.link}>
+                        <motion.div
+                          whileHover={{ x: 3 }}
+                          className="flex items-center gap-3 p-3 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group cursor-pointer"
+                        >
+                          <span className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 group-hover:text-white group-hover:bg-gradient-to-r group-hover:from-orange-500 group-hover:via-pink-500 group-hover:to-fuchsia-500 flex items-center justify-center text-gray-500 transition-colors">
+                            {p.icon}
+                          </span>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-gray-800 dark:text-white">{p.title}</p>
+                            <p className="text-xs text-gray-400">{p.value}</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500" />
+                        </motion.div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+              <Dialog open={avatarEditorOpen} onOpenChange={setAvatarEditorOpen}>
+                <DialogContent className="sm:max-w-xl">
+                  <DialogHeader>
+                    <DialogTitle>Adjust profile photo</DialogTitle>
+                    <DialogDescription>Crop and zoom your image before saving.</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="relative mx-auto w-full max-w-[22rem] rounded-2xl border border-gray-200 dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-900">
+                      <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800">
+                        {avatarEditorImageUrl && (
+                          <Cropper
+                            key={`${avatarEditorImageUrl || "none"}-${avatarInitialCropArea ? JSON.stringify(avatarInitialCropArea) : "no-initial-crop"}`}
+                            image={avatarEditorImageUrl}
+                            crop={avatarCrop}
+                            zoom={avatarZoom}
+                            aspect={4 / 3}
+                            initialCroppedAreaPercentages={avatarInitialCropArea || undefined}
+                            onCropChange={setAvatarCrop}
+                            onZoomChange={setAvatarZoom}
+                            onCropComplete={(croppedAreaPercentages, croppedAreaPixels) => {
+                              setAvatarCroppedAreaPercentages(croppedAreaPercentages as CropArea);
+                              setAvatarCroppedAreaPixels(croppedAreaPixels);
+                            }}
+                            showGrid
+                          />
+                        )}
+                      </div>
+                      <span className="absolute bottom-4 right-4 rounded-lg bg-black/65 px-2 py-1 text-[10px] font-semibold text-white">
+                        {AVATAR_EXPORT_WIDTH} x {AVATAR_EXPORT_HEIGHT}px
+                      </span>
+                    </div>
+                    {avatarSourceSize && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Original image: {avatarSourceSize.width} x {avatarSourceSize.height}px
+                      </p>
+                    )}
+                    <div className="space-y-3">
+                      <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400">
+                        Zoom ({avatarZoom.toFixed(1)}x)
+                        <input
+                          type="range"
+                          min={1}
+                          max={3}
+                          step={0.1}
+                          value={avatarZoom}
+                          onChange={(e) => setAvatarZoom(Number(e.target.value))}
+                          className="mt-1 w-full"
                         />
+                      </label>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Drag the image to adjust crop area.</p>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <button
+                      type="button"
+                      onClick={() => setAvatarEditorOpen(false)}
+                      disabled={isUploading}
+                      className="px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAvatarSave}
+                      disabled={isUploading}
+                      className="px-4 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-60"
+                      style={{ background: GRAD }}
+                    >
+                      {isUploading ? "Saving..." : "Save photo"}
+                    </button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
+              {/* account settings */}
+              {[
+                {
+                  title: "Account",
+                  items: [
+                    { icon: <Bell className="w-4 h-4" />, label: "Notifications", link: "/app/settings/notifications" },
+                    { icon: <Lock className="w-4 h-4" />, label: "Privacy & Security", link: "/app/settings/privacy" },
+                    { icon: <Shield className="w-4 h-4" />, label: "Data & Permissions", link: "/app/settings/privacy" },
+                  ],
+                },
+                {
+                  title: "Support",
+                  items: [
+                    { icon: <Heart className="w-4 h-4" />, label: "Emergency Contacts", link: "/app/settings/emergency-contacts" },
+                    { icon: <Mail className="w-4 h-4" />, label: "Contact Support", link: "/app/settings/help-support" },
+                    { icon: <Shield className="w-4 h-4" />, label: "Wellness Plan", link: "/app/settings/wellness-plan" },
+                  ],
+                },
+              ].map((section, si) => (
+                <motion.div
+                  key={si}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.25 + si * 0.05 }}
+                >
+                  <div className={`${CARD_SHELL} p-5`}>
+                    <p className="text-xs uppercase tracking-widest font-bold text-gray-400 mb-3">{section.title}</p>
+                    <div className="space-y-1">
+                      {section.items.map((item, ii) => (
+                        <Link key={ii} to={item.link}>
+                          <motion.div
+                            whileHover={{ x: 3 }}
+                            className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group cursor-pointer"
+                          >
+                            <span className="text-gray-400 group-hover:text-orange-500 transition-colors">{item.icon}</span>
+                            <span className="flex-1 text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
+                            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500" />
+                          </motion.div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+
+              {/* danger zone */}
+              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.35 }}>
+                <div className={`${CARD_SHELL} border-red-100 dark:border-red-900/30 p-5`}>
+                  <p className="text-xs uppercase tracking-widest font-bold text-red-400 mb-3">Danger Zone</p>
+                  <button
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-2xl border-2 border-red-100 dark:border-red-900/40 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors group disabled:opacity-60"
+                  >
+                    <div className="flex items-center gap-3">
+                      {isLoggingOut
+                        ? <Loader2 className="w-4 h-4 text-red-500 animate-spin" />
+                        : <LogOut className="w-4 h-4 text-red-400 group-hover:text-red-600" />}
+                      <div className="text-left">
+                        <p className="text-sm font-bold text-red-500">{isLoggingOut ? "Logging out…" : "Log Out"}</p>
+                        <p className="text-[10px] text-red-300">End your current session</p>
+                      </div>
+                    </div>
+                    {!isLoggingOut && <ChevronRight className="w-4 h-4 text-red-300 group-hover:text-red-500" />}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+
+            {/* RIGHT: main form */}
+            <div className="space-y-5 min-w-0">
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+
+                  {/* personal info */}
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                    <div className={`${CARD_SHELL} transition-all overflow-hidden ${isEditing ? "ring-2 ring-orange-200/60 dark:ring-orange-900/40 border-orange-200/80 dark:border-orange-900/50" : ""}`}>
+                      <div className={`${CARD_HEADER_ROW} bg-gradient-to-r from-orange-50/50 to-transparent dark:from-orange-950/20`}>
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md" style={{ background: GRAD }}>
+                            <User className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-gray-900 dark:text-white">Personal information</h3>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400">Name, contact &amp; location</p>
+                          </div>
+                        </div>
+                        {isEditing && (
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[11px] font-bold px-3 py-1.5 rounded-full text-white shadow-sm" style={{ background: GRAD }}>
+                              Editing
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {[
+                          { name: "name" as const, label: "Full Name", icon: <User className="w-3.5 h-3.5" />, placeholder: "Your name" },
+                          { name: "email" as const, label: "Email", icon: <Mail className="w-3.5 h-3.5" />, placeholder: "you@email.com" },
+                          { name: "birthday" as const, label: "Age", icon: <Calendar className="w-3.5 h-3.5" />, placeholder: "Age", numeric: true },
+                          { name: "pronouns" as const, label: "Pronouns", icon: <User className="w-3.5 h-3.5" />, placeholder: "they/them" },
+                          { name: "location" as const, label: "Location / Timezone", icon: <MapPin className="w-3.5 h-3.5" />, placeholder: "City, Timezone" },
+                        ].map((f) => (
+                          <FormField
+                            key={f.name}
+                            control={form.control}
+                            name={f.name}
+                            render={({ field }) => (
+                              <FormItem id={`profile-field-${f.name}`} className="scroll-mt-24">
+                                <FieldRow icon={f.icon} label={f.label} editing={isEditing}>
+                                  {isEditing ? (
+                                    f.name === "pronouns" ? (
+                                      <div className="space-y-2">
+                                        <select
+                                          value={pronounsOptions.includes((field.value || "").toLowerCase()) ? (field.value || "").toLowerCase() : "__custom__"}
+                                          disabled={isSaving}
+                                          onChange={(e) => {
+                                            const v = e.target.value;
+                                            if (v === "__custom__") {
+                                              field.onChange("");
+                                              return;
+                                            }
+                                            field.onChange(v);
+                                          }}
+                                          className="w-full text-sm font-semibold bg-transparent outline-none text-gray-900 dark:text-white disabled:opacity-60"
+                                        >
+                                          <option value="" style={{ color: "#111827", backgroundColor: "#ffffff" }}>Select pronouns</option>
+                                          {pronounsOptions.map((option) => (
+                                            <option
+                                              key={option}
+                                              value={option}
+                                              style={{ color: "#111827", backgroundColor: "#ffffff" }}
+                                            >
+                                              {option}
+                                            </option>
+                                          ))}
+                                          <option value="__custom__" style={{ color: "#111827", backgroundColor: "#ffffff" }}>
+                                            Other (custom)
+                                          </option>
+                                        </select>
+                                        {!pronounsOptions.includes((field.value || "").toLowerCase()) && (
+                                          <input
+                                            value={field.value || ""}
+                                            disabled={isSaving}
+                                            placeholder="Type custom pronouns"
+                                            onChange={(e) => field.onChange(e.target.value)}
+                                            className="w-full text-sm font-semibold bg-transparent outline-none text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600 disabled:opacity-60"
+                                          />
+                                        )}
+                                      </div>
+                                    ) : f.name === "location" ? (
+                                      <Popover open={timezoneOpen} onOpenChange={setTimezoneOpen}>
+                                        <PopoverTrigger asChild>
+                                          <button
+                                            type="button"
+                                            disabled={isSaving}
+                                            className="w-full flex items-center justify-between text-sm font-semibold bg-transparent outline-none text-gray-900 dark:text-white disabled:opacity-60"
+                                          >
+                                            <span className="truncate text-left">
+                                              {field.value ? formatTimezoneOptionLabel(field.value) : "Select timezone"}
+                                            </span>
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
+                                          </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                          <Command>
+                                            <CommandInput placeholder="Search timezone or city..." />
+                                            <CommandList>
+                                              <CommandEmpty>No timezone found.</CommandEmpty>
+                                              <CommandGroup>
+                                                {availableTimezones.map((timezone) => (
+                                                  <CommandItem
+                                                    key={timezone}
+                                                    value={`${timezone} ${formatTimezoneOptionLabel(timezone)}`}
+                                                    onSelect={() => {
+                                                      field.onChange(timezone);
+                                                      setTimezoneOpen(false);
+                                                    }}
+                                                  >
+                                                    <Check
+                                                      className={`h-4 w-4 ${field.value === timezone ? "opacity-100" : "opacity-0"}`}
+                                                    />
+                                                    <span className="truncate">{formatTimezoneOptionLabel(timezone)}</span>
+                                                  </CommandItem>
+                                                ))}
+                                              </CommandGroup>
+                                            </CommandList>
+                                          </Command>
+                                        </PopoverContent>
+                                      </Popover>
+                                    ) : (
+                                      <input
+                                        {...field}
+                                        disabled={isSaving}
+                                        placeholder={f.placeholder}
+                                        inputMode={f.numeric ? "numeric" : undefined}
+                                        onChange={f.numeric ? (e) => field.onChange(e.target.value.replace(/\D/g, "")) : field.onChange}
+                                        className="w-full text-sm font-semibold bg-transparent outline-none text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600 disabled:opacity-60"
+                                      />
+                                    )
+                                  ) : (
+                                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
+                                      {f.numeric && field.value
+                                        ? `${String(field.value).replace(/\D/g, "")} years old`
+                                        : f.name === "location" && field.value
+                                          ? formatTimezoneOptionLabel(String(field.value))
+                                          : field.value || <span className="text-gray-300 dark:text-gray-600 font-normal">Not set</span>}
+                                    </p>
+                                  )}
+                                </FieldRow>
+                                <FormMessage className="text-xs mt-0.5 px-1" />
+                              </FormItem>
+                            )}
+                          />
+                        ))}
+
+                        {/* phone (special input) */}
                         <FormField
                           control={form.control}
                           name="phone"
                           render={({ field }) => (
-                            <FormItem id="profile-field-phone" className="scroll-mt-24">
-                              <FormLabel>Phone</FormLabel>
+                            <FormItem id="profile-field-phone" className="scroll-mt-24 sm:col-span-2">
+                              <FieldRow icon={<Phone className="w-3.5 h-3.5" />} label="Phone" editing={isEditing}>
+                                {isEditing ? (
+                                  <PhoneInput
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    disabled={isSaving}
+                                    placeholder="Phone number"
+                                    className="w-full min-w-0"
+                                  />
+                                ) : (
+                                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                                    {field.value || <span className="text-gray-300 dark:text-gray-600 font-normal">Not set</span>}
+                                  </p>
+                                )}
+                              </FieldRow>
+                              <FormMessage className="text-xs mt-0.5 px-1" />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  {/* wellness profile */}
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+                    <div className={`${CARD_SHELL} overflow-hidden`}>
+                      <div className={`${CARD_HEADER_ROW} bg-gradient-to-r from-violet-50/50 to-transparent dark:from-violet-950/20`}>
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md" style={{ background: GRAD2 }}>
+                            <Activity className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-gray-900 dark:text-white">Wellness profile</h3>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400">Goals &amp; content preferences</p>
+                          </div>
+                        </div>
+                        {isSaving && <Loader2 className="w-4 h-4 animate-spin text-violet-500 shrink-0" />}
+                      </div>
+
+                      <div className="p-5 space-y-6">
+                        {/* in therapy */}
+                        <FormField
+                          control={form.control}
+                          name="in_therapy"
+                          render={({ field }) => (
+                            <FormItem id="profile-field-in_therapy" className="scroll-mt-24">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Users className="w-4 h-4 text-purple-500" />
+                                <FormLabel className="font-bold text-sm text-gray-700 dark:text-gray-300">Therapist</FormLabel>
+                              </div>
                               <FormControl>
+                                {isEditing ? (
+                                  <select
+                                    {...field}
+                                    disabled={isSaving}
+                                    className="w-full sm:w-48 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-semibold text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-300"
+                                  >
+                                    <option value="">Select…</option>
+                                    <option>Yes</option>
+                                    <option>No</option>
+                                    <option>Prefer not to say</option>
+                                  </select>
+                                ) : (
+                                  <span className={`${PILL} bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800`}>
+                                    {field.value || "Not specified"}
+                                  </span>
+                                )}
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* goals */}
+                        <FormField
+                          control={form.control}
+                          name="selected_goals"
+                          render={({ field }) => (
+                            <FormItem id="profile-field-selected_goals" className="scroll-mt-24">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Target className="w-4 h-4 text-emerald-500" />
+                                <FormLabel className="font-bold text-sm text-gray-700 dark:text-gray-300">Wellness Goals</FormLabel>
+                              </div>
+                              <FormControl>
+                                {isEditing ? (
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {goalsOptions.map((g) => {
+                                      const selected = (field.value || []).includes(g.value);
+                                      return (
+                                        <button
+                                          key={g.value}
+                                          type="button"
+                                          disabled={isSaving}
+                                          onClick={() => field.onChange(selected ? field.value!.filter((v: string) => v !== g.value) : [...(field.value || []), g.value])}
+                                          className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl text-sm font-semibold text-left transition-all border-2 ${selected ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300" : "border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-emerald-200"}`}
+                                        >
+                                          <FluentEmoji emoji={g.emoji} size={18} className="shrink-0" /> {g.label}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-wrap gap-2">
+                                    {field.value?.length ? field.value.map((v: string, i: number) => {
+                                      const opt = goalsOptions.find(o => o.value === v);
+                                      return (
+                                        <span key={i} className={`${PILL} bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1`}>
+                                          {opt?.emoji ? <FluentEmoji emoji={opt.emoji} size={18} /> : null} {opt?.label || v}
+                                        </span>
+                                      );
+                                    }) : <p className="text-sm text-gray-400 italic">No goals selected</p>}
+                                  </div>
+                                )}
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* triggers */}
+                        <FormField
+                          control={form.control}
+                          name="selected_triggers"
+                          render={({ field }) => (
+                            <FormItem id="profile-field-selected_triggers" className="scroll-mt-24">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Zap className="w-4 h-4 text-orange-500" />
+                                <FormLabel className="font-bold text-sm text-gray-700 dark:text-gray-300">Challenges</FormLabel>
+                              </div>
+                              <FormControl>
+                                {isEditing ? (
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {triggersOptions.map((t) => {
+                                      const selected = (field.value || []).includes(t.value);
+                                      return (
+                                        <button
+                                          key={t.value}
+                                          type="button"
+                                          disabled={isSaving}
+                                          onClick={() => field.onChange(selected ? field.value!.filter((v: string) => v !== t.value) : [...(field.value || []), t.value])}
+                                          className={`px-3 py-2.5 rounded-2xl text-sm font-semibold text-left transition-all border-2 ${selected ? "border-orange-400 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300" : "border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:border-orange-200"}`}
+                                        >
+                                          {t.label}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-wrap gap-2">
+                                    {field.value?.length ? field.value.map((v: string, i: number) => {
+                                      const opt = triggersOptions.find(o => o.value === v);
+                                      return (
+                                        <span key={i} className={`${PILL} bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800`}>
+                                          {opt?.label || v}
+                                        </span>
+                                      );
+                                    }) : <p className="text-sm text-gray-400 italic">None specified</p>}
+                                  </div>
+                                )}
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  {/* milestones — directly below wellness profile */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.27 }}
+                    className={`overflow-hidden ${CARD_SHELL}`}
+                  >
+                    <div className="bg-gradient-to-r from-amber-50/80 via-white to-orange-50/40 dark:from-amber-950/25 dark:via-gray-950 dark:to-orange-950/20 px-6 py-5 border-b border-gray-100 dark:border-gray-800">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-gray-400 dark:text-gray-500 text-xs uppercase tracking-widest font-semibold mb-0.5">Progress</p>
+                          <h2 className="text-gray-900 dark:text-white font-bold text-lg flex items-center gap-2">
+                            <Trophy className="w-5 h-5 text-amber-500" /> Milestones
+                          </h2>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Track achievements on your Solace journey</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-5 sm:p-6">
+                      <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-2">
+                        {milestones.map((m) => (
+                          <li
+                            key={m.id}
+                            className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm ${
+                              m.unlocked
+                                ? "border-emerald-200/80 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20"
+                                : "border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30"
+                            }`}
+                          >
+                            {m.unlocked ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                            ) : (
+                              <Circle className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" />
+                            )}
+                            <span className={m.unlocked ? "text-gray-900 dark:text-gray-100 font-medium" : "text-gray-400"}>
+                              {m.label}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </motion.div>
+
+                  {/* emergency contact */}
+                  <motion.div
+                    initial={false}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <div className={`${CARD_SHELL} overflow-hidden border-l-[3px] border-l-pink-500`}>
+                      <div className={`${CARD_HEADER_ROW} bg-gradient-to-r from-rose-50/50 to-transparent dark:from-rose-950/20`}>
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center shrink-0">
+                            <Shield className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-gray-900 dark:text-white">Emergency contact</h3>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400">Trusted person we can reach if needed</p>
+                          </div>
+                        </div>
+                        <Popover open={emergencyInfoOpen} onOpenChange={setEmergencyInfoOpen}>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              onMouseEnter={() => setEmergencyInfoOpen(true)}
+                              onMouseLeave={() => setEmergencyInfoOpen(false)}
+                              onFocus={() => setEmergencyInfoOpen(true)}
+                              onBlur={() => setEmergencyInfoOpen(false)}
+                              className="inline-flex items-center gap-1 rounded-full border border-rose-200 dark:border-rose-900/50 px-2.5 py-1 text-[11px] font-semibold text-rose-600 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                              aria-label="Learn why emergency contact is needed"
+                            >
+                              <Info className="w-3.5 h-3.5" />
+                              Why we ask
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            align="end"
+                            className="max-w-xs text-xs text-gray-600 dark:text-gray-300"
+                            onMouseEnter={() => setEmergencyInfoOpen(true)}
+                            onMouseLeave={() => setEmergencyInfoOpen(false)}
+                          >
+                            We only use this contact during serious safety concerns, such as when we cannot reach you in a
+                            high-risk wellbeing event. It is never used for marketing or regular app notifications.
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div className="p-5 grid grid-cols-1 sm:grid-cols-12 gap-3">
+                        {[
+                          { name: "emergency_contact_name" as const, label: "Name", placeholder: "Contact name" },
+                          { name: "emergency_contact_relationship" as const, label: "Relationship", placeholder: "e.g. Parent" },
+                        ].map((f) => (
+                          <FormField
+                            key={f.name}
+                            control={form.control}
+                            name={f.name}
+                            render={({ field }) => (
+                              <FormItem id={`profile-field-${f.name}`} className="scroll-mt-24 sm:col-span-3">
+                                <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-1.5">{f.label}</p>
+                                {isEditing ? (
+                                  <input
+                                    {...field}
+                                    disabled={isSaving}
+                                    placeholder={f.placeholder}
+                                    className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-semibold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-red-200 transition-all"
+                                  />
+                                ) : (
+                                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{field.value || <span className="text-gray-300 font-normal">Not set</span>}</p>
+                                )}
+                                <FormMessage className="text-xs mt-0.5" />
+                              </FormItem>
+                            )}
+                          />
+                        ))}
+                        <FormField
+                          control={form.control}
+                          name="emergency_contact_phone"
+                          render={({ field }) => (
+                            <FormItem id="profile-field-emergency_contact_phone" className="scroll-mt-24 sm:col-span-6">
+                              <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-1.5">Phone</p>
+                              {isEditing ? (
                                 <PhoneInput
                                   value={field.value}
                                   onChange={field.onChange}
-                                  disabled={!isEditing || isSaving}
-                                  placeholder="Phone number"
+                                  disabled={isSaving}
+                                  placeholder="Contact phone"
+                                  className="w-full min-w-0"
+                                    buttonClassName="h-10 w-[110px] sm:w-[120px] rounded-xl text-sm"
+                                  inputClassName="h-10 rounded-xl text-sm"
                                 />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="birthday"
-                          render={({ field }) => (
-                            <FormItem id="profile-field-birthday" className="scroll-mt-24">
-                              <FormLabel>Age</FormLabel>
-                              <FormControl>
-                                <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
-                                  isEditing 
-                                    ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
-                                    : 'border-gray-300 dark:border-gray-700'
-                                }`}>
-                                  <Calendar className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                                  {isEditing ? (
-                                    <input
-                                      value={field.value || ""}
-                                      onChange={(e) => field.onChange(e.target.value.replace(/\D/g, ""))}
-                                      disabled={isSaving}
-                                      inputMode="numeric"
-                                      className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-                                      placeholder="Age"
-                                    />
-                                  ) : (
-                                    <p className="flex-1 font-medium text-gray-900 dark:text-gray-100">
-                                      {field.value ? `${field.value.toString().replace(/\D/g, '')} years old` : "Not set"}
-                                    </p>
-                                  )}
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <Phone className="w-3.5 h-3.5 text-gray-400" />
+                                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{field.value || <span className="text-gray-300 font-normal">Not set</span>}</p>
                                 </div>
-                              </FormControl>
-                              <FormMessage />
+                              )}
+                              <FormMessage className="text-xs mt-0.5" />
                             </FormItem>
                           )}
                         />
-
-                        <FormField
-                          control={form.control}
-                          name="pronouns"
-                          render={({ field }) => (
-                            <FormItem id="profile-field-pronouns" className="scroll-mt-24">
-                              <FormLabel>Pronouns</FormLabel>
-                              <FormControl>
-                                <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
-                                  isEditing 
-                                    ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
-                                    : 'border-gray-300 dark:border-gray-700'
-                                }`}>
-                                  <User className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                                  <input
-                                    {...field}
-                                    disabled={!isEditing || isSaving}
-                                    className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-                                  />
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="location"
-                          render={({ field }) => (
-                            <FormItem id="profile-field-location" className="scroll-mt-24">
-                              <FormLabel>Location/Timezone</FormLabel>
-                              <FormControl>
-                                <div className={`flex items-center gap-2 p-3 border rounded-lg transition-all ${
-                                  isEditing 
-                                    ? 'border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20' 
-                                    : 'border-gray-300 dark:border-gray-700'
-                                }`}>
-                                  <MapPin className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-                                  <input
-                                    {...field}
-                                    disabled={!isEditing || isSaving}
-                                    className="flex-1 outline-none bg-transparent disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-                                  />
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                        {isEditing && (
+                          <div className="sm:col-span-12 mt-1 rounded-xl border border-rose-100 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 px-3 py-2.5">
+                            <label className="flex items-start gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={emergencyConsentChecked}
+                                onChange={(e) => setEmergencyConsentChecked(e.target.checked)}
+                                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-rose-600 focus:ring-rose-400"
+                              />
+                              <span>
+                                I confirm this person knows they may be contacted only during urgent wellbeing or safety situations.
+                              </span>
+                            </label>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </Card>
-                
-            
-            {/* Wellness Profile (New Section) */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="mt-6"
-            >
-              <Card className="p-6 shadow-xl">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-primary" />
-                    <h3 className="font-bold text-lg">Wellness Profile</h3>
-                    {isSaving && <Loader2 className="w-4 h-4 animate-spin ml-2 text-primary" />}
-                  </div>
-                </div>
-                
-                <div className="space-y-6">
-                  {/* Therapy & Medication */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="in_therapy"
-                      render={({ field }) => (
-                        <FormItem id="profile-field-in_therapy" className="scroll-mt-24 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg space-y-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Users className="w-4 h-4 text-purple-500" />
-                            <FormLabel className="font-semibold text-sm">Professionol  Companion</FormLabel>
-                          </div>
-                          <FormControl>
-                            {isEditing ? (
-                              <select
-                                {...field}
-                                disabled={isSaving}
-                                className="w-full p-2 border dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-sm disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 dark:text-gray-100"
-                              >
-                                <option value="">Select...</option>
-                                <option value="Yes">Yes</option>
-                                <option value="No">No</option>
-                                <option value="Prefer not to say">Prefer Not to Say</option>
-                              </select>
-                            ) : (
-                              <p className="text-sm text-gray-700 dark:text-gray-300">{field.value || "Not specified"}</p>
-                            )}
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-{/* 
-                    <FormField
-                      control={form.control}
-                      name="on_medication"
-                      render={({ field }) => (
-                        <FormItem id="profile-field-on_medication" className="scroll-mt-24 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg space-y-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Pill className="w-4 h-4 text-blue-500" />
-                            <FormLabel className="font-semibold text-sm">Medication</FormLabel>
-                          </div>
-                          <FormControl>
-                            {isEditing ? (
-                              <select
-                                {...field}
-                                disabled={isSaving}
-                                className="w-full p-2 border dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <option value="">Select...</option>
-                                <option value="Yes">Yes</option>
-                                <option value="No">No</option>
-                                <option value="Prefer not to say">Prefer not to say</option>
-                              </select>
-                            ) : (
-                              <p className="text-sm text-gray-700 dark:text-gray-300">{field.value || "Not specified"}</p>
-                            )}
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    /> */}
-                  </div>
+                  </motion.div>
 
-                  {/* Goals */}
-                  <FormField
-                    control={form.control}
-                    name="selected_goals"
-                    render={({ field }) => (
-                      <FormItem id="profile-field-selected_goals" className="scroll-mt-24">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Target className="w-4 h-4 text-green-500" />
-                          <FormLabel className="font-semibold text-sm">Selected Goals</FormLabel>
-                        </div>
-                        <FormControl>
-                          {isEditing ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {goalsOptions.map((goal) => {
-                                const isSelected = (field.value || []).includes(goal.value);
-                                return (
-                                  <button
-                                    key={goal.value}
-                                    type="button"
-                                    disabled={isSaving}
-                                    onClick={() => {
-                                      const current = field.value || [];
-                                      const updated = isSelected
-                                        ? current.filter((v: string) => v !== goal.value)
-                                        : [...current, goal.value];
-                                      field.onChange(updated);
-                                    }}
-                                    className={`p-3 rounded-lg border text-sm text-left transition-all flex items-center gap-2 ${
-                                      isSelected
-                                        ? "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 ring-1 ring-green-500"
-                                        : "border-gray-200 dark:border-gray-700 hover:border-green-300 dark:hover:border-green-800 bg-white dark:bg-gray-900"
-                                    }`}
-                                  >
-                                    <span className="text-lg">{goal.emoji}</span>
-                                    <span className="font-medium">{goal.label}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="flex flex-wrap gap-2">
-                              {field.value && field.value.length > 0 ? (
-                                field.value.map((val: string, i: number) => {
-                                  const option = goalsOptions.find(opt => opt.value === val);
-                                  return (
-                                    <Badge key={i} variant="secondary" className="px-3 py-1 flex items-center gap-1.5 bg-green-50 text-green-700 border-green-200">
-                                      <span>{option?.emoji}</span>
-                                      <span>{option?.label || val}</span>
-                                    </Badge>
-                                  );
-                                })
-                              ) : (
-                                <p className="text-sm text-muted-foreground italic">No goals selected</p>
-                              )}
-                            </div>
-                          )}
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Triggers */}
-                  <FormField
-                    control={form.control}
-                    name="selected_triggers"
-                    render={({ field }) => (
-                      <FormItem id="profile-field-selected_triggers" className="scroll-mt-24">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Zap className="w-4 h-4 text-orange-500" />
-                          <FormLabel className="font-semibold text-sm">Triggers / Challenges</FormLabel>
-                        </div>
-                        <FormControl>
-                          {isEditing ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {triggersOptions.map((trigger) => {
-                                const isSelected = (field.value || []).includes(trigger.value);
-                                return (
-                                  <button
-                                    key={trigger.value}
-                                    type="button"
-                                    disabled={isSaving}
-                                    onClick={() => {
-                                      const current = field.value || [];
-                                      const updated = isSelected
-                                        ? current.filter((v: string) => v !== trigger.value)
-                                        : [...current, trigger.value];
-                                      field.onChange(updated);
-                                    }}
-                                    className={`p-3 rounded-lg border text-sm text-left transition-all flex items-center gap-2 ${
-                                      isSelected
-                                        ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 ring-1 ring-orange-500"
-                                        : "border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-800 bg-white dark:bg-gray-900"
-                                    }`}
-                                  >
-                                    <span className="font-medium">{trigger.label}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="flex flex-wrap gap-2">
-                              {field.value && field.value.length > 0 ? (
-                                field.value.map((val: string, i: number) => {
-                                  const option = triggersOptions.find(opt => opt.value === val);
-                                  return (
-                                    <Badge key={i} variant="outline" className="px-3 py-1 border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300">
-                                      {option?.label || val}
-                                    </Badge>
-                                  );
-                                })
-                              ) : (
-                                <p className="text-sm text-muted-foreground italic">No triggers specified</p>
-                              )}
-                            </div>
-                          )}
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </Card>
-            </motion.div>
-
-            {/* Emergency Contact (New Section) */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35 }}
-              className="mt-6"
-            >
-              <Card className="p-6 shadow-xl border-l-4 border-l-red-400">
-                <div className="flex items-center gap-2 mb-4">
-                  <Shield className="w-5 h-5 text-red-500" />
-                  <h3 className="font-bold text-lg">Emergency Contact</h3>
-                </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="emergency_contact_name"
-                    render={({ field }) => (
-                      <FormItem id="profile-field-emergency_contact_name" className="scroll-mt-24">
-                        <Label className="text-xs text-muted-foreground uppercase tracking-wider">Name</Label>
-                        <FormControl>
-                          {isEditing ? (
-                            <input
-                              {...field}
-                              disabled={isSaving}
-                              className="w-full mt-1 p-2 border rounded-lg border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20 outline-none text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                              placeholder="Contact Name"
-                            />
-                          ) : (
-                            <p className="font-medium mt-1">{field.value || "Not set"}</p>
-                          )}
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="emergency_contact_relationship"
-                    render={({ field }) => (
-                      <FormItem id="profile-field-emergency_contact_relationship" className="scroll-mt-24">
-                        <Label className="text-xs text-muted-foreground uppercase tracking-wider">Relationship</Label>
-                        <FormControl>
-                          {isEditing ? (
-                            <input
-                              {...field}
-                              disabled={isSaving}
-                              className="w-full mt-1 p-2 border rounded-lg border-primary bg-primary/5 dark:bg-primary/10 ring-2 ring-primary/20 outline-none text-gray-900 dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                              placeholder="Relationship"
-                            />
-                          ) : (
-                            <p className="font-medium mt-1">{field.value || "Not set"}</p>
-                          )}
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="emergency_contact_phone"
-                    render={({ field }) => (
-                      <FormItem id="profile-field-emergency_contact_phone" className="scroll-mt-24">
-                        <Label className="text-xs text-muted-foreground uppercase tracking-wider">Phone</Label>
-                        <FormControl>
-                          {isEditing ? (
-                            <PhoneInput
-                              value={field.value}
-                              onChange={field.onChange}
-                              disabled={isSaving}
-                              placeholder="Contact Phone"
-                              className="mt-1"
-                            />
-                          ) : (
-                            <div className="flex items-center gap-2 mt-1">
-                              <Phone className="w-3 h-3 text-gray-400 dark:text-gray-500" />
-                              <p className="font-medium">{field.value || "Not set"}</p>
-                            </div>
-                          )}
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </Card>
-            </motion.div>
-            </form>
-            </Form>
-          </motion.div>
-            {/* Settings Sections */}
-            {settingsSections.map((section, sectionIndex) => (
-              <motion.div
-                key={sectionIndex}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 + sectionIndex * 0.1 }}
-              >
-                <Card className="p-6 shadow-xl">
-                  <h3 className="font-bold text-lg mb-4">{section.title}</h3>
-                  <div className="space-y-2">
-                    {section.items.map((item, itemIndex) => {
-                      const Icon = item.icon;
-                      return (
-                        <Link key={itemIndex} to={item.link}>
-                          <motion.div
-                            whileHover={{ x: 5 }}
-                            className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer group"
-                          >
-                            <div className="flex items-center gap-3">
-                              <Icon className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-primary transition-colors" />
-                              <span className="font-medium">{item.label}</span>
-                            </div>
-                            <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500 group-hover:text-primary transition-colors" />
-                          </motion.div>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
-
-            {/* Danger Zone */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-            >
-              <Card className="p-6 shadow-xl border-red-200 dark:border-red-900/50">
-                <h3 className="font-bold text-lg mb-4 text-red-600 dark:text-red-400">Danger Zone</h3>
-                <div className="space-y-3">
-                  <motion.button
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    disabled={isLoggingOut}
-                    className="w-full flex items-center justify-between p-3 border-2 border-red-200 dark:border-red-900/50 rounded-lg hover:border-red-300 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={handleLogout}
-                  >
-                    <div className="flex items-center gap-3">
-                      {isLoggingOut ? (
-                        <Loader2 className="w-5 h-5 text-red-500 animate-spin" />
-                      ) : (
-                        <LogOut className="w-5 h-5 text-red-500 dark:text-red-400 group-hover:text-red-600 dark:group-hover:text-red-300" />
-                      )}
-                      <div className="text-left">
-                        <p className="font-bold text-red-600 dark:text-red-400">
-                          {isLoggingOut ? 'Logging Out...' : 'Log Out'}
-                        </p>
-                        <p className="text-xs text-red-400 dark:text-red-500">End your current session</p>
-                      </div>
-                    </div>
-                    {!isLoggingOut && (
-                      <ChevronRight className="w-5 h-5 text-red-300 dark:text-red-700 group-hover:text-red-500 dark:group-hover:text-red-400" />
-                    )}
-                  </motion.button>
-                  
-                  {/* Delete Account Button - Hidden by default or separate logic */}
-                </div>
-              </Card>
-            </motion.div>
+                </form>
+              </Form>
+            </div>
           </div>
         </div>
       </div>
 
+      {/* verified alert */}
       <AlertDialog open={showVerifiedAlert} onOpenChange={setShowVerifiedAlert}>
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-3xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-green-500" />
-              Email Verified Successfully!
+              <Shield className="w-5 h-5 text-green-500" /> Email Verified!
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Thank you for verifying your email. Your account is now fully active.
-              <br /><br />
-              Please take a moment to complete your profile details to personalize your experience.
+              Your account is now fully active. Complete your profile to personalise your experience.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={() => {
-              setShowVerifiedAlert(false);
-              setIsEditing(true);
-            }}>
+            <AlertDialogAction
+              onClick={() => { setShowVerifiedAlert(false); setIsEditing(true); }}
+              className="rounded-2xl"
+              style={{ background: GRAD }}
+            >
               Complete Profile
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppLayout>
+    </>
   );
 }

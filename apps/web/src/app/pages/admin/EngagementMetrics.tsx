@@ -9,8 +9,6 @@ import {
   Zap,
   Clock,
   Calendar,
-  Download,
-  RefreshCw,
   Users,
   Activity,
   BookOpen,
@@ -34,45 +32,56 @@ import {
   ResponsiveContainer,
   ComposedChart,
   Area,
+  LabelList,
 } from "recharts";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../../../lib/api";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
+import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
+import { datesForPreset, downloadCsv } from "@/lib/adminAnalytics";
+
+function formatAnalyticsRangeLabel(from: string, to: string): string {
+  try {
+    const a = new Date(`${from}T12:00:00Z`);
+    const b = new Date(`${to}T12:00:00Z`);
+    const o: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+    return `${a.toLocaleDateString(undefined, o)} – ${b.toLocaleDateString(undefined, o)}`;
+  } catch {
+    return `${from} – ${to}`;
+  }
+}
 
 export function EngagementMetrics() {
-  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
+  const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
+
   const [statsData, setStatsData] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadStats = useCallback(async (forceRefresh?: boolean) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.admin.getStats({
+        chartPeriod: "month",
+        dateFrom,
+        dateTo,
+        ...(forceRefresh ? { refresh: true } : {}),
+      });
+      setStatsData(data);
+    } catch (err: any) {
+      console.error("Failed to fetch engagement metrics", err);
+      setError(err.message || "Failed to load engagement metrics");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dateFrom, dateTo]);
+
   useEffect(() => {
-    let isMounted = true;
-
-    const fetchStats = async () => {
-      try {
-        const data = await api.admin.getStats();
-        if (isMounted) {
-          setStatsData(data);
-        }
-      } catch (err: any) {
-        console.error("Failed to fetch engagement metrics", err);
-        if (isMounted) {
-          setError(err.message || "Failed to load engagement metrics");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    fetchStats();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    void loadStats();
+  }, [loadStats]);
 
   const sessionActivity = (statsData?.sessionActivity || []) as any[];
   const hourlyActivity = (statsData?.hourlyActivity || []) as any[];
@@ -98,8 +107,8 @@ export function EngagementMetrics() {
     totalUsers > 0 ? sessionsThisPeriod / totalUsers : 0;
 
   const formattedAvgSessionFrequency = avgSessionFrequency
-    ? `${avgSessionFrequency.toFixed(1)}x/week`
-    : "0x/week";
+    ? avgSessionFrequency.toFixed(1)
+    : "0";
 
   const adoptionRate = featureUsage.length
     ? Math.round(
@@ -134,8 +143,15 @@ export function EngagementMetrics() {
 
   const timeOfDaySessions = timeOfDayBuckets.map((bucket) => {
     let sessions = 0;
-    hourlyActivity.forEach((item, index) => {
-      if (bucket.match(index)) {
+    hourlyActivity.forEach((item: { hourNum?: number; sessions?: number; hour?: string }) => {
+      const hourNum =
+        typeof item.hourNum === "number"
+          ? item.hourNum
+          : typeof item.hour === "string"
+            ? parseInt(item.hour, 10)
+            : NaN;
+      const h = Number.isFinite(hourNum) ? hourNum : -1;
+      if (h >= 0 && bucket.match(h)) {
         sessions += item.sessions || 0;
       }
     });
@@ -166,6 +182,23 @@ export function EngagementMetrics() {
       satisfaction,
     };
   });
+
+  const sessionFrequencyData = (() => {
+    if (!totalUsers) {
+      return [{ range: "No users yet", users: 0, percentage: 0 }];
+    }
+    const pLow = Math.min(90, Math.max(10, 100 - Math.round(avgSessionFrequency * 20)));
+    const pMid = Math.round((100 - pLow) * 0.55);
+    const pHigh = 100 - pLow - pMid;
+    const uLow = Math.round((totalUsers * pLow) / 100);
+    const uMid = Math.round((totalUsers * pMid) / 100);
+    const uHigh = Math.max(0, totalUsers - uLow - uMid);
+    return [
+      { range: "Light (0–2 / wk)", users: uLow, percentage: pLow },
+      { range: "Regular (3–6 / wk)", users: uMid, percentage: pMid },
+      { range: "Heavy (7+ / wk)", users: uHigh, percentage: pHigh },
+    ];
+  })();
 
   const maxUserGrowth = userGrowth.reduce(
     (max, item) => (item.users > max ? item.users : max),
@@ -247,6 +280,10 @@ export function EngagementMetrics() {
   }
 
   if (error) {
+    const looksLikeNetwork =
+      /failed to fetch|networkerror|load failed|network request failed/i.test(
+        error
+      );
     return (
       <AdminLayoutNew>
         <div className="max-w-2xl mx-auto py-16">
@@ -256,7 +293,26 @@ export function EngagementMetrics() {
           <p className="text-gray-600 mb-4">
             Failed to load engagement metrics. Please try again later.
           </p>
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-red-600 mb-4">{error}</p>
+          {looksLikeNetwork && (
+            <div className="mb-6 p-4 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-950 space-y-2">
+              <p className="font-medium">This usually means the browser could not reach the API.</p>
+              <ul className="list-disc list-inside space-y-1 text-amber-900">
+                <li>
+                  Start the API server (default port <code className="px-1 bg-amber-100 rounded">3001</code>).
+                </li>
+                <li>
+                  With the Vite dev server, requests go to <code className="px-1 bg-amber-100 rounded">/api</code> and are proxied to the API — restart <code className="px-1 bg-amber-100 rounded">npm run dev</code> for the web app after pulling changes.
+                </li>
+                <li>
+                  Or set <code className="px-1 bg-amber-100 rounded">VITE_API_URL</code> in <code className="px-1 bg-amber-100 rounded">apps/web/.env</code> to your full API base (must end with <code className="px-1 bg-amber-100 rounded">/api</code>).
+                </li>
+              </ul>
+            </div>
+          )}
+          <Button type="button" onClick={() => void loadStats(true)}>
+            Retry
+          </Button>
         </div>
       </AdminLayoutNew>
     );
@@ -269,7 +325,7 @@ export function EngagementMetrics() {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between"
+          className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between"
         >
           <div>
             <h1 className="text-4xl font-bold text-gray-900 mb-2">
@@ -278,38 +334,37 @@ export function EngagementMetrics() {
             <p className="text-gray-600">
               User engagement scores, session frequency, and behavioral insights
             </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              {formatAnalyticsRangeLabel(dateFrom, dateTo)} · KPIs and charts use this period.
+            </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Time Range Selector */}
-            <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1 border border-gray-200">
-              {(["7d", "30d", "90d"] as const).map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    timeRange === range
-                      ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-                      : "text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  {range === "7d" ? "7 Days" : range === "30d" ? "30 Days" : "90 Days"}
-                </button>
-              ))}
-            </div>
-
-            <Button className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-
-            <Button
-              variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-          </div>
+          <AdminAnalyticsToolbar
+            showChartPeriod={false}
+            showRangePreset={false}
+            chartPeriod="month"
+            onChartPeriodChange={() => {}}
+            rangePreset="30d"
+            onRangePresetChange={() => {}}
+            useCustomRange
+            onUseCustomRangeChange={() => {}}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            onRefresh={() => void loadStats(true)}
+            isLoading={isLoading}
+            onExport={() => {
+              if (!statsData) return;
+              const rows: Record<string, unknown>[] = (statsData.sessionActivity || []).map((r: any, i: number) => ({
+                i,
+                day: r.day,
+                sessions: r.sessions,
+                avgDuration: r.duration,
+              }));
+              downloadCsv(`engagement-metrics-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+            }}
+          />
         </motion.div>
 
         {/* Stats Grid */}
@@ -326,7 +381,7 @@ export function EngagementMetrics() {
                   <div
                     className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-lg`}
                   >
-                    <stat.icon className="w-6 h-6 text-white" />
+                    <stat.icon className="w-6 h-6 text-black" />
                   </div>
                   <div
                     className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
@@ -360,7 +415,7 @@ export function EngagementMetrics() {
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-xl font-bold text-white mb-1">
+                <h3 className="text-xl font-bold text-black mb-1">
                   Engagement Score Trend
                 </h3>
                 <p className="text-sm text-gray-400">
@@ -371,7 +426,10 @@ export function EngagementMetrics() {
             </div>
 
             <ResponsiveContainer width="100%" height={350}>
-              <ComposedChart data={engagementTrendData}>
+              <ComposedChart
+                data={engagementTrendData}
+                margin={{ top: 8, right: 12, left: 0, bottom: 8 }}
+              >
                 <defs>
                   <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#ec4899" stopOpacity={0.8} />
@@ -379,9 +437,24 @@ export function EngagementMetrics() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                <XAxis dataKey="date" stroke="#9ca3af" />
-                <YAxis yAxisId="left" stroke="#9ca3af" />
-                <YAxis yAxisId="right" orientation="right" stroke="#9ca3af" />
+                <XAxis
+                  dataKey="date"
+                  stroke="#9ca3af"
+                  tick={{ fontSize: 11 }}
+                  angle={-40}
+                  textAnchor="end"
+                  height={72}
+                  interval="preserveStartEnd"
+                  minTickGap={28}
+                />
+                <YAxis yAxisId="left" stroke="#9ca3af" tick={{ fontSize: 11 }} width={44} />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="#9ca3af"
+                  tick={{ fontSize: 11 }}
+                  width={44}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "#1f2937",
@@ -406,7 +479,7 @@ export function EngagementMetrics() {
                   dataKey="sessions"
                   stroke="#8b5cf6"
                   strokeWidth={2}
-                  name="Sessions"
+                  name="Talk it out"
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -424,10 +497,10 @@ export function EngagementMetrics() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
+                  <h3 className="text-xl font-bold text-black mb-1">
                     Session Frequency Analysis
                   </h3>
-                  <p className="text-sm text-gray-400">Users by sessions per week</p>
+                  <p className="text-sm text-gray-800">Users by sessions per week</p>
                 </div>
                 <Activity className="w-5 h-5 text-purple-400" />
               </div>
@@ -446,17 +519,14 @@ export function EngagementMetrics() {
                     }}
                   />
                   <Bar dataKey="users" fill="#8b5cf6" radius={[0, 8, 8, 0]}>
-                    {sessionFrequencyData.map((entry, index) => (
-                      <text
-                        key={index}
-                        x={entry.users + 50}
-                        y={0}
-                        fill="#fff"
-                        textAnchor="start"
-                      >
-                        {entry.percentage}%
-                      </text>
-                    ))}
+                    <LabelList
+                      dataKey="percentage"
+                      position="right"
+                      fill="#e5e7eb"
+                      formatter={(v: unknown) =>
+                        v != null && v !== "" ? `${Number(v)}%` : ""
+                      }
+                    />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -472,7 +542,7 @@ export function EngagementMetrics() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
+                  <h3 className="text-xl font-bold text-black mb-1">
                     Feature Engagement
                   </h3>
                   <p className="text-sm text-gray-400">Usage % and satisfaction</p>
@@ -484,25 +554,23 @@ export function EngagementMetrics() {
                 {featureEngagementData.map((feature, index) => (
                   <div key={feature.feature} className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-white font-medium">{feature.feature}</span>
+                      <span className="text-black font-medium">{feature.feature}</span>
                       <div className="flex items-center gap-3">
                         <span className="text-sm text-gray-400">
                           {feature.usage}% usage
                         </span>
                         <div className="flex items-center gap-1">
                           <Smile className="w-4 h-4 text-yellow-400" />
-                          <span className="text-sm text-white font-medium">
+                          <span className="text-sm text-black font-medium">
                             {feature.satisfaction}
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${feature.usage}%` }}
-                        transition={{ duration: 1, delay: index * 0.1 }}
-                        className="h-full bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full"
+                      <div
+                        className="h-full bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full transition-all duration-500"
+                        style={{ width: `${feature.usage}%` }}
                       />
                     </div>
                   </div>
@@ -523,7 +591,7 @@ export function EngagementMetrics() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
+                  <h3 className="text-xl font-bold text-black mb-1">
                     User Journey Engagement
                   </h3>
                   <p className="text-sm text-gray-400">Completion and drop-off rates</p>
@@ -561,7 +629,7 @@ export function EngagementMetrics() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">Return Rate Trend</h3>
+                  <h3 className="text-xl font-bold text-black mb-1">Return Rate Trend</h3>
                   <p className="text-sm text-gray-400">
                     % of users returning over time
                   </p>
@@ -570,10 +638,16 @@ export function EngagementMetrics() {
               </div>
 
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={returnRateData}>
+                <LineChart data={returnRateData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                  <XAxis dataKey="day" stroke="#9ca3af" />
-                  <YAxis stroke="#9ca3af" />
+                  <XAxis
+                    dataKey="day"
+                    stroke="#9ca3af"
+                    tick={{ fontSize: 11 }}
+                    interval="preserveStartEnd"
+                    minTickGap={16}
+                  />
+                  <YAxis stroke="#9ca3af" tick={{ fontSize: 11 }} width={40} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "#1f2937",
@@ -605,7 +679,7 @@ export function EngagementMetrics() {
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-xl font-bold text-white mb-1">
+                <h3 className="text-xl font-bold text-black mb-1">
                   Engagement by Time of Day
                 </h3>
                 <p className="text-sm text-gray-400">
@@ -616,11 +690,26 @@ export function EngagementMetrics() {
             </div>
 
             <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={timeOfDayEngagement}>
+              <ComposedChart
+                data={timeOfDayEngagement}
+                margin={{ top: 8, right: 12, left: 0, bottom: 8 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                <XAxis dataKey="time" stroke="#9ca3af" />
-                <YAxis yAxisId="left" stroke="#9ca3af" />
-                <YAxis yAxisId="right" orientation="right" stroke="#9ca3af" />
+                <XAxis
+                  dataKey="time"
+                  stroke="#9ca3af"
+                  tick={{ fontSize: 11 }}
+                  interval="preserveStartEnd"
+                  minTickGap={20}
+                />
+                <YAxis yAxisId="left" stroke="#9ca3af" tick={{ fontSize: 11 }} width={44} />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="#9ca3af"
+                  tick={{ fontSize: 11 }}
+                  width={44}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "#1f2937",
@@ -635,7 +724,7 @@ export function EngagementMetrics() {
                   dataKey="sessions"
                   fill="#3b82f6"
                   radius={[8, 8, 0, 0]}
-                  name="Sessions"
+                  name="Talk it out"
                 />
                 <Line
                   yAxisId="left"

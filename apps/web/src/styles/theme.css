@@ -2,6 +2,8 @@
 
 :root {
   --font-size: 16px;
+  --text-line-height: 1.5;
+  --text-letter-spacing: 0em;
   --background: #fafafa;
   --foreground: #1a1a2e;
   --card: #ffffff;
@@ -78,6 +80,320 @@
   --sidebar-ring: oklch(0.439 0 0);
 }
 
+/* ─── Dark mode: Recharts SVG text & tooltip overrides ─── */
+
+/* All SVG text inside charts */
+.dark .recharts-wrapper text,
+.dark .recharts-wrapper tspan {
+  fill: oklch(0.82 0 0) !important;
+}
+
+/* Axis tick labels specifically */
+.dark .recharts-cartesian-axis-tick-value,
+.dark .recharts-text,
+.dark .recharts-label {
+  fill: oklch(0.82 0 0) !important;
+}
+
+/* Axis lines (the lines drawn for X and Y axes) */
+.dark .recharts-cartesian-axis-line,
+.dark .recharts-cartesian-axis > line {
+  stroke: oklch(0.38 0 0) !important;
+}
+
+/* Axis tick marks */
+.dark .recharts-cartesian-axis-tick > line {
+  stroke: oklch(0.38 0 0) !important;
+}
+
+/* Cartesian grid lines */
+.dark .recharts-cartesian-grid-horizontal line,
+.dark .recharts-cartesian-grid-vertical line {
+  stroke: oklch(0.28 0 0) !important;
+}
+
+/* Reference lines */
+.dark .recharts-reference-line line {
+  stroke: oklch(0.45 0 0) !important;
+}
+
+/* Legend text */
+.dark .recharts-legend-item-text {
+  color: oklch(0.82 0 0) !important;
+}
+
+/* Default tooltip wrapper (the built-in white box) */
+.dark .recharts-default-tooltip {
+  background-color: oklch(0.22 0 0) !important;
+  border: 1px solid oklch(0.35 0 0) !important;
+  color: oklch(0.92 0 0) !important;
+}
+
+.dark .recharts-tooltip-label {
+  color: oklch(0.92 0 0) !important;
+}
+
+.dark .recharts-tooltip-item {
+  color: oklch(0.8 0 0) !important;
+}
+
+/* Custom tooltip divs (white bg cards rendered inside recharts-tooltip-wrapper) */
+.dark .recharts-tooltip-wrapper > div,
+.dark .recharts-tooltip-wrapper > div * {
+  background-color: oklch(0.22 0 0) !important;
+  border-color: oklch(0.35 0 0) !important;
+  color: oklch(0.92 0 0) !important;
+}
+
+/* Polar charts (radar, pie) axis labels */
+.dark .recharts-polar-angle-axis-tick-value,
+.dark .recharts-polar-radius-axis-tick-value {
+  fill: oklch(0.82 0 0) !important;
+}
+
+/* ─── Dark mode: force hardcoded Tailwind color classes to respect dark theme ─── */
+/* The admin panel uses many hardcoded bg-white / text-gray-* classes that don't
+   use dark: variants. These overrides ensure dark mode works consistently across
+   all pages, following the same pattern as .high-contrast below. */
+
+.dark body,
+.dark [class*="bg-white"],
+.dark [class*="bg-gray-50"],
+.dark [class*="bg-gray-100"],
+.dark [class*="bg-slate-50"],
+.dark [class*="bg-slate-100"],
+.dark [class*="bg-zinc-50"],
+.dark [class*="bg-zinc-100"],
+.dark [class*="bg-neutral-50"],
+.dark [class*="bg-neutral-100"] {
+  background-color: oklch(0.18 0 0) !important;
+}
+
+.dark [class*="bg-gray-200"],
+.dark [class*="bg-gray-300"],
+.dark [class*="bg-slate-200"],
+.dark [class*="bg-zinc-200"] {
+  background-color: oklch(0.23 0 0) !important;
+}
+
+/* Light pastel gradient backgrounds → solid dark (only -50 source/dest) */
+.dark [class*="from-gray-"],
+.dark [class*="from-slate-"],
+.dark [class*="from-zinc-"],
+.dark [class*="from-neutral-"],
+.dark [class*="from-white"],
+.dark [class*="from-blue-50"],
+.dark [class*="from-indigo-50"],
+.dark [class*="from-purple-50"],
+.dark [class*="from-green-50"],
+.dark [class*="from-emerald-50"],
+.dark [class*="from-teal-50"],
+.dark [class*="from-yellow-50"],
+.dark [class*="from-orange-50"],
+.dark [class*="from-red-50"],
+.dark [class*="from-pink-50"],
+.dark [class*="to-gray-"],
+.dark [class*="to-slate-"],
+.dark [class*="to-zinc-"],
+.dark [class*="to-white"],
+.dark [class*="to-blue-50"],
+.dark [class*="to-indigo-50"],
+.dark [class*="to-indigo-100"],
+.dark [class*="to-purple-50"],
+.dark [class*="to-green-50"],
+.dark [class*="to-emerald-50"] {
+  background: oklch(0.18 0 0) !important;
+  background-image: none !important;
+}
+
+/* Inline style gradients (page-level backgrounds, not icon chips) */
+.dark [style*="linear-gradient"],
+.dark [style*="radial-gradient"] {
+  background: oklch(0.18 0 0) !important;
+  background-image: none !important;
+}
+
+/* Re-allow vivid icon/button gradients that use darker from-* colors (500/600) */
+.dark [class*="from-blue-5"]:not([class*="from-blue-50"]),
+.dark [class*="from-green-5"]:not([class*="from-green-50"]),
+.dark [class*="from-purple-5"]:not([class*="from-purple-50"]),
+.dark [class*="from-red-5"]:not([class*="from-red-50"]),
+.dark [class*="from-orange-5"]:not([class*="from-orange-50"]),
+.dark [class*="from-pink-5"]:not([class*="from-pink-50"]),
+.dark [class*="from-indigo-5"]:not([class*="from-indigo-50"]),
+.dark [class*="from-emerald-5"]:not([class*="from-emerald-50"]),
+.dark [class*="from-teal-5"]:not([class*="from-teal-50"]),
+.dark [class*="from-yellow-5"]:not([class*="from-yellow-50"]),
+.dark [class*="from-cyan-5"]:not([class*="from-cyan-50"]),
+.dark [class*="from-violet-5"]:not([class*="from-violet-50"]) {
+  background: revert !important;
+  background-image: revert !important;
+}
+
+/* Text: force light color on dark backgrounds */
+.dark [class*="text-gray-900"],
+.dark [class*="text-gray-800"],
+.dark [class*="text-gray-700"],
+.dark [class*="text-slate-900"],
+.dark [class*="text-slate-800"],
+.dark [class*="text-slate-700"],
+.dark [class*="text-zinc-900"],
+.dark [class*="text-black"] {
+  color: oklch(0.92 0 0) !important;
+}
+
+.dark [class*="text-gray-600"],
+.dark [class*="text-gray-500"],
+.dark [class*="text-slate-600"],
+.dark [class*="text-slate-500"],
+.dark [class*="text-zinc-600"],
+.dark [class*="text-zinc-500"],
+.dark [class*="text-muted-foreground"] {
+  color: oklch(0.72 0 0) !important;
+}
+
+/* Borders */
+.dark [class*="border-gray-100"],
+.dark [class*="border-gray-200"],
+.dark [class*="border-gray-300"],
+.dark [class*="border-slate-200"],
+.dark [class*="border-slate-300"],
+.dark [class*="border-zinc-200"] {
+  border-color: oklch(0.3 0 0) !important;
+}
+
+/* Cards */
+.dark [class*="bg-white/"],
+.dark [class*="bg-gray-50/"],
+.dark [class*="bg-white "],
+.dark .bg-white {
+  background-color: oklch(0.2 0 0) !important;
+}
+
+/* Inputs, selects, textareas */
+.dark input:not([type="range"]),
+.dark textarea,
+.dark select {
+  background-color: oklch(0.22 0 0) !important;
+  color: oklch(0.92 0 0) !important;
+  border-color: oklch(0.32 0 0) !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: oklch(0.55 0 0) !important;
+}
+
+/* Colored light-tinted backgrounds (alerts, badges, pills).
+   Use direct background-color overrides — NOT filter — so text inside
+   inherits the dark theme's --foreground color correctly and stays readable. */
+
+/* Red / rose / pink */
+.dark [class*="bg-red-50"]    { background-color: rgba(80,  10, 10,  0.55) !important; }
+.dark [class*="bg-red-100"]   { background-color: rgba(100, 15, 15,  0.60) !important; }
+.dark [class*="bg-rose-50"]   { background-color: rgba(80,  10, 30,  0.55) !important; }
+.dark [class*="bg-rose-100"]  { background-color: rgba(100, 15, 40,  0.60) !important; }
+.dark [class*="bg-pink-50"]   { background-color: rgba(80,  10, 40,  0.55) !important; }
+.dark [class*="bg-pink-100"]  { background-color: rgba(100, 15, 55,  0.60) !important; }
+
+/* Orange / amber / yellow */
+.dark [class*="bg-orange-50"]  { background-color: rgba(90,  40, 5,   0.55) !important; }
+.dark [class*="bg-orange-100"] { background-color: rgba(110, 50, 8,   0.60) !important; }
+.dark [class*="bg-amber-50"]   { background-color: rgba(90,  45, 5,   0.55) !important; }
+.dark [class*="bg-amber-100"]  { background-color: rgba(110, 55, 8,   0.60) !important; }
+.dark [class*="bg-yellow-50"]  { background-color: rgba(80,  60, 5,   0.55) !important; }
+.dark [class*="bg-yellow-100"] { background-color: rgba(100, 75, 8,   0.60) !important; }
+.dark [class*="bg-lime-50"]    { background-color: rgba(40,  60, 5,   0.55) !important; }
+.dark [class*="bg-lime-100"]   { background-color: rgba(50,  75, 8,   0.60) !important; }
+
+/* Green / emerald / teal */
+.dark [class*="bg-green-50"]    { background-color: rgba(5,  60,  30,  0.55) !important; }
+.dark [class*="bg-green-100"]   { background-color: rgba(5,  75,  40,  0.60) !important; }
+.dark [class*="bg-emerald-50"]  { background-color: rgba(5,  60,  35,  0.55) !important; }
+.dark [class*="bg-emerald-100"] { background-color: rgba(5,  75,  45,  0.60) !important; }
+.dark [class*="bg-teal-50"]     { background-color: rgba(5,  55,  55,  0.55) !important; }
+.dark [class*="bg-teal-100"]    { background-color: rgba(5,  70,  70,  0.60) !important; }
+
+/* Blue / sky / cyan / indigo */
+.dark [class*="bg-blue-50"]    { background-color: rgba(10, 30,  90,  0.55) !important; }
+.dark [class*="bg-blue-100"]   { background-color: rgba(15, 40,  110, 0.60) !important; }
+.dark [class*="bg-sky-50"]     { background-color: rgba(8,  50,  90,  0.55) !important; }
+.dark [class*="bg-sky-100"]    { background-color: rgba(10, 65,  110, 0.60) !important; }
+.dark [class*="bg-cyan-50"]    { background-color: rgba(5,  55,  80,  0.55) !important; }
+.dark [class*="bg-cyan-100"]   { background-color: rgba(5,  70,  100, 0.60) !important; }
+.dark [class*="bg-indigo-50"]  { background-color: rgba(30, 20,  100, 0.55) !important; }
+.dark [class*="bg-indigo-100"] { background-color: rgba(40, 25,  120, 0.60) !important; }
+
+/* Purple / violet / fuchsia */
+.dark [class*="bg-purple-50"]   { background-color: rgba(55, 10,  100, 0.55) !important; }
+.dark [class*="bg-purple-100"]  { background-color: rgba(70, 15,  120, 0.60) !important; }
+.dark [class*="bg-violet-50"]   { background-color: rgba(60, 10,  100, 0.55) !important; }
+.dark [class*="bg-violet-100"]  { background-color: rgba(75, 15,  120, 0.60) !important; }
+.dark [class*="bg-fuchsia-50"]  { background-color: rgba(80, 10,  90,  0.55) !important; }
+.dark [class*="bg-fuchsia-100"] { background-color: rgba(100,15,  110, 0.60) !important; }
+
+/* Colored text — convert dark shades to light pastels so they're readable on dark backgrounds.
+   Using direct color overrides (NOT filter) to avoid cascading into child elements' backgrounds. */
+
+/* Red family */
+.dark [class*="text-red-500"], .dark [class*="text-red-600"],
+.dark [class*="text-red-700"], .dark [class*="text-red-800"],
+.dark [class*="text-red-900"] { color: #fca5a5 !important; }
+.dark [class*="text-red-400"] { color: #f87171 !important; }
+
+.dark [class*="text-rose-500"], .dark [class*="text-rose-600"],
+.dark [class*="text-rose-700"], .dark [class*="text-rose-800"] { color: #fda4af !important; }
+
+.dark [class*="text-pink-500"], .dark [class*="text-pink-600"],
+.dark [class*="text-pink-700"], .dark [class*="text-pink-800"] { color: #f9a8d4 !important; }
+
+/* Orange / amber / yellow */
+.dark [class*="text-orange-500"], .dark [class*="text-orange-600"],
+.dark [class*="text-orange-700"], .dark [class*="text-orange-800"] { color: #fdba74 !important; }
+
+.dark [class*="text-amber-500"], .dark [class*="text-amber-600"],
+.dark [class*="text-amber-700"], .dark [class*="text-amber-800"] { color: #fcd34d !important; }
+
+.dark [class*="text-yellow-500"], .dark [class*="text-yellow-600"],
+.dark [class*="text-yellow-700"], .dark [class*="text-yellow-800"] { color: #fde047 !important; }
+
+/* Green family */
+.dark [class*="text-green-500"], .dark [class*="text-green-600"],
+.dark [class*="text-green-700"], .dark [class*="text-green-800"] { color: #86efac !important; }
+.dark [class*="text-green-400"] { color: #4ade80 !important; }
+
+.dark [class*="text-emerald-500"], .dark [class*="text-emerald-600"],
+.dark [class*="text-emerald-700"], .dark [class*="text-emerald-800"] { color: #6ee7b7 !important; }
+
+.dark [class*="text-teal-500"], .dark [class*="text-teal-600"],
+.dark [class*="text-teal-700"], .dark [class*="text-teal-800"] { color: #5eead4 !important; }
+
+/* Blue family */
+.dark [class*="text-blue-500"], .dark [class*="text-blue-600"],
+.dark [class*="text-blue-700"], .dark [class*="text-blue-800"] { color: #93c5fd !important; }
+.dark [class*="text-blue-400"] { color: #60a5fa !important; }
+
+.dark [class*="text-sky-500"], .dark [class*="text-sky-600"],
+.dark [class*="text-sky-700"] { color: #7dd3fc !important; }
+
+.dark [class*="text-cyan-500"], .dark [class*="text-cyan-600"],
+.dark [class*="text-cyan-700"] { color: #67e8f9 !important; }
+
+.dark [class*="text-indigo-500"], .dark [class*="text-indigo-600"],
+.dark [class*="text-indigo-700"], .dark [class*="text-indigo-800"] { color: #a5b4fc !important; }
+
+/* Purple family */
+.dark [class*="text-purple-500"], .dark [class*="text-purple-600"],
+.dark [class*="text-purple-700"], .dark [class*="text-purple-800"] { color: #d8b4fe !important; }
+
+.dark [class*="text-violet-500"], .dark [class*="text-violet-600"],
+.dark [class*="text-violet-700"] { color: #c4b5fd !important; }
+
+.dark [class*="text-fuchsia-500"], .dark [class*="text-fuchsia-600"],
+.dark [class*="text-fuchsia-700"] { color: #f0abfc !important; }
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+
 .high-contrast {
   --background: #000000;
   --foreground: #ffffff;
@@ -101,11 +417,233 @@
   --switch-background: #ffffff;
 }
 
+/* Force utility-heavy UIs into true high contrast */
+.high-contrast,
+.high-contrast body {
+  background: #000 !important;
+  color: #fff !important;
+}
+
+.high-contrast [class*="text-gray-"],
+.high-contrast [class*="text-slate-"],
+.high-contrast [class*="text-zinc-"],
+.high-contrast [class*="text-neutral-"],
+.high-contrast [class*="text-black"],
+.high-contrast [class*="text-green-"],
+.high-contrast [class*="text-blue-"],
+.high-contrast [class*="text-purple-"],
+.high-contrast [class*="text-pink-"],
+.high-contrast [class*="text-indigo-"],
+.high-contrast [class*="text-emerald-"],
+.high-contrast [class*="text-orange-"],
+.high-contrast [class*="text-yellow-"],
+.high-contrast [class*="text-red-"] {
+  color: #fff !important;
+}
+
+.high-contrast [class*="bg-gray-"],
+.high-contrast [class*="bg-slate-"],
+.high-contrast [class*="bg-zinc-"],
+.high-contrast [class*="bg-neutral-"],
+.high-contrast [class*="bg-white"],
+.high-contrast [class*="bg-["],
+.high-contrast [class*="bg-green-"],
+.high-contrast [class*="bg-blue-"],
+.high-contrast [class*="bg-purple-"],
+.high-contrast [class*="bg-pink-"],
+.high-contrast [class*="bg-indigo-"],
+.high-contrast [class*="bg-emerald-"],
+.high-contrast [class*="bg-orange-"],
+.high-contrast [class*="bg-yellow-"],
+.high-contrast [class*="bg-red-"],
+.high-contrast [class*="from-gray-"],
+.high-contrast [class*="from-slate-"],
+.high-contrast [class*="from-green-"],
+.high-contrast [class*="from-blue-"],
+.high-contrast [class*="from-purple-"],
+.high-contrast [class*="from-pink-"],
+.high-contrast [class*="from-indigo-"],
+.high-contrast [class*="from-emerald-"],
+.high-contrast [class*="from-orange-"],
+.high-contrast [class*="from-yellow-"],
+.high-contrast [class*="from-red-"],
+.high-contrast [class*="to-gray-"],
+.high-contrast [class*="to-slate-"],
+.high-contrast [class*="to-green-"],
+.high-contrast [class*="to-blue-"],
+.high-contrast [class*="to-purple-"],
+.high-contrast [class*="to-pink-"],
+.high-contrast [class*="to-indigo-"],
+.high-contrast [class*="to-emerald-"],
+.high-contrast [class*="to-orange-"],
+.high-contrast [class*="to-yellow-"],
+.high-contrast [class*="to-red-"] {
+  background: #000 !important;
+  background-image: none !important;
+}
+
+/* Many pages use inline style backgrounds/gradients. Force them dark in high contrast. */
+.high-contrast [style*="background"] {
+  background: #000 !important;
+  background-image: none !important;
+}
+
+.high-contrast [class*="border-gray-"],
+.high-contrast [class*="border-slate-"],
+.high-contrast [class*="border-zinc-"],
+.high-contrast [class*="border-neutral-"],
+.high-contrast [class*="border-white"],
+.high-contrast [class*="border-green-"],
+.high-contrast [class*="border-blue-"],
+.high-contrast [class*="border-purple-"],
+.high-contrast [class*="border-pink-"],
+.high-contrast [class*="border-indigo-"],
+.high-contrast [class*="border-emerald-"],
+.high-contrast [class*="border-orange-"],
+.high-contrast [class*="border-yellow-"],
+.high-contrast [class*="border-red-"] {
+  border-color: #fff !important;
+}
+
+.high-contrast a,
+.high-contrast button,
+.high-contrast [role="button"] {
+  color: #fff !important;
+  border-color: #fff !important;
+}
+
+/* Keep button outlines visible in high contrast */
+.high-contrast button,
+.high-contrast [role="button"] {
+  border-width: 1px !important;
+}
+
+.high-contrast input,
+.high-contrast textarea,
+.high-contrast select,
+.high-contrast option {
+  background: #000 !important;
+  color: #fff !important;
+  border-color: #fff !important;
+}
+
+.high-contrast svg {
+  color: #fff !important;
+}
+
+/* Radix switch: keep clear checked/unchecked states */
+.high-contrast [data-slot="switch"] {
+  border: 2px solid #fff !important;
+  background: #000 !important;
+}
+
+.high-contrast [data-slot="switch"][data-state="checked"] {
+  background: #fff !important;
+}
+
+.high-contrast [data-slot="switch-thumb"] {
+  background: #fff !important;
+  border: 1px solid #000 !important;
+}
+
+.high-contrast [data-slot="switch"][data-state="checked"] [data-slot="switch-thumb"] {
+  background: #000 !important;
+  border-color: #fff !important;
+}
+
+/* Custom motion toggle buttons used in settings pages */
+.high-contrast button[class*="w-14"][class*="h-8"][class*="rounded-full"] {
+  border: 2px solid #fff !important;
+  background: #000 !important;
+}
+
+.high-contrast button[class*="w-14"][class*="h-8"][class*="rounded-full"] > div {
+  background: #fff !important;
+  border: 1px solid #000 !important;
+}
+
+/* Preserve intended colors for appearance color/theme previews. */
+.high-contrast .hc-preserve-color,
+.high-contrast .hc-preserve-color[class*="bg-"],
+.high-contrast .hc-preserve-color[class*="from-"],
+.high-contrast .hc-preserve-color[class*="to-"] {
+  background: revert !important;
+  background-image: revert !important;
+}
+
+/* Settings Hub icon chips: force white-outline style in high contrast */
+.high-contrast .settings-hub-icon-chip {
+  background: transparent !important;
+  border: 1px solid #fff !important;
+}
+
+.high-contrast .settings-hub-icon-chip svg {
+  color: #fff !important;
+}
+
+/* Sidebar: only active item should be bright in high contrast */
+.high-contrast .app-sidebar-item {
+  color: #bfc5cf !important;
+  border-color: transparent !important;
+}
+
+.high-contrast .app-sidebar-item svg,
+.high-contrast .app-sidebar-item span {
+  color: #bfc5cf !important;
+}
+
+.high-contrast .app-sidebar-item--active,
+.high-contrast .app-sidebar-item--active svg,
+.high-contrast .app-sidebar-item--active span {
+  color: #fff !important;
+}
+
+.high-contrast .app-sidebar-item--active {
+  border: 1px solid #fff !important;
+  background: #000 !important;
+}
+
+/* Coming Soon page: force readable, non-gradient text in high contrast */
+.high-contrast .coming-soon-page {
+  background: #000 !important;
+}
+
+.high-contrast .coming-soon-page .coming-soon-title {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  background: none !important;
+  background-image: none !important;
+}
+
+.high-contrast .coming-soon-page [class*="bg-gradient"],
+.high-contrast .coming-soon-page [style*="radial-gradient"],
+.high-contrast .coming-soon-page [style*="linear-gradient"] {
+  background-image: none !important;
+}
+
+/* Notification History cards: force visible white borders in high contrast */
+.high-contrast .notification-history-card {
+  border: 1px solid #fff !important;
+}
+
 .reduced-motion * {
   scroll-behavior: auto !important;
   animation-duration: 0ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0ms !important;
+}
+
+.appearance-no-animations * {
+  scroll-behavior: auto !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+.appearance-hide-avatars img[alt*="avatar" i],
+.appearance-hide-avatars img[alt*="profile" i],
+.appearance-hide-avatars [class*="avatar"],
+.appearance-hide-avatars [class*="Avatar"] {
+  display: none !important;
 }
 
 .focus-indicators *:focus-visible {
@@ -167,6 +705,8 @@
 
   body {
     @apply bg-background text-foreground;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 
   /**
@@ -181,42 +721,49 @@
   h1 {
     font-size: var(--text-2xl);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 
   h2 {
     font-size: var(--text-xl);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 
   h3 {
     font-size: var(--text-lg);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 
   h4 {
     font-size: var(--text-base);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 
   label {
     font-size: var(--text-base);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 
   button {
     font-size: var(--text-base);
     font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 
   input {
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
-    line-height: 1.5;
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
   }
 }

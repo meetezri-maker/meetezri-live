@@ -9,9 +9,9 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/favicon/Black.png",
+      "sizes": "954x954",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],
@@ -22,21 +22,21 @@
       "short_name": "Session",
       "description": "Begin a new AI therapy session",
       "url": "/app/session",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/favicon/Black.png", "sizes": "954x954" }]
     },
     {
       "name": "Quick Mood Check",
       "short_name": "Mood",
       "description": "Log your current mood",
       "url": "/app/mood",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/favicon/Black.png", "sizes": "954x954" }]
     },
     {
       "name": "Journal Entry",
       "short_name": "Journal",
       "description": "Write a journal entry",
       "url": "/app/journal",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/favicon/Black.png", "sizes": "954x954" }]
     }
   ]
 }

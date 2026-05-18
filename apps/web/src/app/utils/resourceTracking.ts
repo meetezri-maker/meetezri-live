@@ -1,14 +1,21 @@
 /**
  * EZRI — RESOURCE USAGE TRACKING
- * Track user interactions with safety resources for analytics and effectiveness
+ * Track user interactions with safety resources; persisted via API → Postgres for analytics.
  */
+
+import { api } from '@/lib/api';
 
 export interface ResourceInteraction {
   id: string;
   resourceId: string;
   resourceName: string;
-  resourceType: 'crisis_line' | 'text_line' | 'emergency' | 'support_group' | 'trusted_contact';
-  interactionType: 'view' | 'call' | 'text' | 'visit' | 'share';
+  resourceType:
+    | 'crisis_line'
+    | 'text_line'
+    | 'emergency'
+    | 'support_group'
+    | 'trusted_contact';
+  interactionType: 'view' | 'call' | 'text' | 'visit' | 'share' | 'copy';
   timestamp: string;
   sessionId?: string;
   safetyState?: string;
@@ -24,232 +31,246 @@ export interface ResourceAnalytics {
   totalVisits: number;
   firstInteraction?: string;
   lastInteraction?: string;
-  averageTimeToInteract?: number; // milliseconds from view to click
+  averageTimeToInteract?: number;
+}
+
+type InteractionSet = ResourceInteraction[];
+
+const LOCAL_KEY = 'ezri_resource_interactions';
+
+/** Map REST rows from `GET /safety-resource-interactions` into client analytics shape (snake_case → camelCase). */
+export function mapServerRowsToInteractions(
+  rows: Array<Record<string, unknown>>
+): ResourceInteraction[] {
+  return rows.map((r) => {
+    const created = r.created_at;
+    const ts =
+      typeof created === 'string'
+        ? created
+        : created instanceof Date
+          ? created.toISOString()
+          : new Date(String(created)).toISOString();
+
+    return {
+      id: String(r.id),
+      resourceId: String(r.resource_id),
+      resourceName: String(r.resource_name ?? ''),
+      resourceType: r.resource_type as ResourceInteraction['resourceType'],
+      interactionType: r.interaction_type as ResourceInteraction['interactionType'],
+      timestamp: ts,
+      sessionId: r.context_session_id ? String(r.context_session_id) : undefined,
+      safetyState: r.safety_state ? String(r.safety_state) : undefined,
+      userId: undefined,
+    };
+  });
 }
 
 /**
- * Track a resource interaction
+ * Track a resource interaction (local mirror + persisted to database when authenticated).
  */
 export function trackResourceInteraction(
   resourceId: string,
   resourceName: string,
-  resourceType: 'crisis_line' | 'text_line' | 'emergency' | 'support_group' | 'trusted_contact',
-  interactionType: 'view' | 'call' | 'text' | 'visit' | 'share',
-  sessionId?: string,
+  resourceType: ResourceInteraction['resourceType'],
+  interactionType: ResourceInteraction['interactionType'],
+  contextSessionId?: string,
   safetyState?: string
 ): void {
   const interaction: ResourceInteraction = {
-    id: `interaction_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    id: `interaction_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
     resourceId,
     resourceName,
     resourceType,
     interactionType,
     timestamp: new Date().toISOString(),
-    sessionId,
+    sessionId: contextSessionId,
     safetyState,
-    userId: getCurrentUserId()
+    userId: getCurrentUserId(),
   };
 
-  // Save to localStorage
-  const stored = localStorage.getItem('ezri_resource_interactions');
+  const stored = localStorage.getItem(LOCAL_KEY);
   const interactions: ResourceInteraction[] = stored ? JSON.parse(stored) : [];
   interactions.unshift(interaction);
-
-  // Keep last 500 interactions
   const trimmed = interactions.slice(0, 500);
-  localStorage.setItem('ezri_resource_interactions', JSON.stringify(trimmed));
+  localStorage.setItem(LOCAL_KEY, JSON.stringify(trimmed));
 
-  // Log to console (in production, send to analytics service)
-  console.log('📊 Resource Interaction:', interaction);
+  void api.safetyResourceInteractions
+    .record({
+      resource_id: resourceId,
+      resource_name: resourceName,
+      resource_type: resourceType,
+      interaction_type: interactionType,
+      context_session_id: contextSessionId,
+      safety_state: safetyState,
+    })
+    .catch(() => {
+      /* offline / session edge cases — kept in localStorage */
+    });
 }
 
-/**
- * Get all resource interactions
- */
 export function getResourceInteractions(): ResourceInteraction[] {
-  const stored = localStorage.getItem('ezri_resource_interactions');
+  const stored = localStorage.getItem(LOCAL_KEY);
   return stored ? JSON.parse(stored) : [];
 }
 
-/**
- * Get interactions for a specific resource
- */
 export function getResourceInteractionHistory(resourceId: string): ResourceInteraction[] {
-  const allInteractions = getResourceInteractions();
-  return allInteractions.filter(i => i.resourceId === resourceId);
+  return getResourceInteractions().filter((i) => i.resourceId === resourceId);
 }
 
-/**
- * Get analytics for a specific resource
- */
-export function getResourceAnalytics(resourceId: string): ResourceAnalytics {
-  const interactions = getResourceInteractionHistory(resourceId);
+function engagementInteractions(history: InteractionSet): ResourceInteraction[] {
+  return history.filter((i) =>
+    ['call', 'text', 'visit', 'share', 'copy'].includes(i.interactionType)
+  );
+}
+
+function getResourceAnalyticsFromInteractions(
+  resourceId: string,
+  interactions: InteractionSet
+): ResourceAnalytics {
+  const history = interactions.filter((i) => i.resourceId === resourceId);
+
+  const engaged = engagementInteractions(history);
 
   const analytics: ResourceAnalytics = {
     resourceId,
-    totalViews: interactions.filter(i => i.interactionType === 'view').length,
-    totalClicks: interactions.filter(i => ['call', 'text', 'visit'].includes(i.interactionType)).length,
-    totalCalls: interactions.filter(i => i.interactionType === 'call').length,
-    totalTexts: interactions.filter(i => i.interactionType === 'text').length,
-    totalVisits: interactions.filter(i => i.interactionType === 'visit').length,
+    totalViews: history.filter((i) => i.interactionType === 'view').length,
+    totalClicks: engaged.length,
+    totalCalls: history.filter((i) => i.interactionType === 'call').length,
+    totalTexts: history.filter((i) => i.interactionType === 'text').length,
+    totalVisits: history.filter((i) => i.interactionType === 'visit').length,
   };
 
-  if (interactions.length > 0) {
-    analytics.firstInteraction = interactions[interactions.length - 1].timestamp;
-    analytics.lastInteraction = interactions[0].timestamp;
+  if (history.length > 0) {
+    const sorted = [...history].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+    analytics.firstInteraction = sorted[0].timestamp;
+    analytics.lastInteraction = sorted[sorted.length - 1].timestamp;
   }
 
   return analytics;
 }
 
-/**
- * Get aggregate analytics for all resources
- */
-export function getAllResourceAnalytics(): Record<string, ResourceAnalytics> {
-  const interactions = getResourceInteractions();
-  const resourceIds = [...new Set(interactions.map(i => i.resourceId))];
+export function getResourceAnalytics(resourceId: string): ResourceAnalytics {
+  return getResourceAnalyticsFromInteractions(resourceId, getResourceInteractionHistory(resourceId));
+}
 
+export function getAllResourceAnalytics(
+  interactions: InteractionSet = getResourceInteractions()
+): Record<string, ResourceAnalytics> {
+  const resourceIds = [...new Set(interactions.map((i) => i.resourceId))];
   const analytics: Record<string, ResourceAnalytics> = {};
-  resourceIds.forEach(id => {
-    analytics[id] = getResourceAnalytics(id);
+  resourceIds.forEach((id) => {
+    analytics[id] = getResourceAnalyticsFromInteractions(id, interactions);
   });
-
   return analytics;
 }
 
-/**
- * Get most used resources
- */
-export function getMostUsedResources(limit: number = 5): Array<ResourceAnalytics & { rank: number }> {
-  const allAnalytics = getAllResourceAnalytics();
+/** Sort by views + engagements (totalClicks is non-view actions: call, text, visit, share, copy). */
+export function getMostUsedResources(
+  limit: number = 5,
+  interactions: InteractionSet = getResourceInteractions()
+): Array<ResourceAnalytics & { rank: number }> {
+  const allAnalytics = getAllResourceAnalytics(interactions);
   const sorted = Object.values(allAnalytics)
-    .sort((a, b) => b.totalClicks - a.totalClicks)
+    .map((a) => ({ ...a, _score: a.totalViews + a.totalClicks }))
+    .sort((a, b) => b._score - a._score)
     .slice(0, limit)
-    .map((analytics, index) => ({
+    .map(({ _score: _discardScore, ...analytics }, index) => ({
       ...analytics,
-      rank: index + 1
+      rank: index + 1,
     }));
 
   return sorted;
 }
 
-/**
- * Get resource effectiveness score (0-100)
- * Based on: views, clicks, and click-through rate
- */
-export function getResourceEffectivenessScore(resourceId: string): number {
-  const analytics = getResourceAnalytics(resourceId);
+export function getResourceEffectivenessScore(
+  resourceId: string,
+  interactions: InteractionSet = getResourceInteractions()
+): number {
+  const analytics = getResourceAnalyticsFromInteractions(resourceId, interactions);
 
   if (analytics.totalViews === 0) return 0;
 
-  // Click-through rate
   const ctr = (analytics.totalClicks / analytics.totalViews) * 100;
-
-  // Weight factors
-  const ctrWeight = 0.7; // 70% based on CTR
-  const volumeWeight = 0.3; // 30% based on absolute clicks
-
-  // Normalize volume score (cap at 50 clicks = 100 score)
+  const ctrWeight = 0.7;
+  const volumeWeight = 0.3;
   const volumeScore = Math.min((analytics.totalClicks / 50) * 100, 100);
-
-  // Calculate final score
-  const score = (ctr * ctrWeight) + (volumeScore * volumeWeight);
+  const score = ctr * ctrWeight + volumeScore * volumeWeight;
 
   return Math.round(Math.min(score, 100));
 }
 
-/**
- * Get interactions by safety state
- */
-export function getInteractionsBySafetyState(): Record<string, number> {
-  const interactions = getResourceInteractions();
+export function getInteractionsBySafetyState(
+  interactions: InteractionSet = getResourceInteractions()
+): Record<string, number> {
   const byState: Record<string, number> = {};
-
-  interactions.forEach(interaction => {
+  interactions.forEach((interaction) => {
     if (interaction.safetyState) {
       byState[interaction.safetyState] = (byState[interaction.safetyState] || 0) + 1;
     }
   });
-
   return byState;
 }
 
-/**
- * Get interactions by resource type
- */
-export function getInteractionsByResourceType(): Record<string, number> {
-  const interactions = getResourceInteractions();
+export function getInteractionsByResourceType(
+  interactions: InteractionSet = getResourceInteractions()
+): Record<string, number> {
   const byType: Record<string, number> = {};
-
-  interactions.forEach(interaction => {
+  interactions.forEach((interaction) => {
     byType[interaction.resourceType] = (byType[interaction.resourceType] || 0) + 1;
   });
-
   return byType;
 }
 
-/**
- * Get interactions by time period
- */
 export function getInteractionsByTimePeriod(
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  interactions: InteractionSet = getResourceInteractions()
 ): ResourceInteraction[] {
-  const interactions = getResourceInteractions();
-  return interactions.filter(interaction => {
+  return interactions.filter((interaction) => {
     const date = new Date(interaction.timestamp);
     return date >= startDate && date <= endDate;
   });
 }
 
-/**
- * Export analytics data (for admin dashboard or reports)
- */
-export function exportResourceAnalytics(): string {
-  const analytics = getAllResourceAnalytics();
-  const interactions = getResourceInteractions();
-
-  const exportData = {
-    exportDate: new Date().toISOString(),
-    totalInteractions: interactions.length,
-    analytics,
-    bySafetyState: getInteractionsBySafetyState(),
-    byResourceType: getInteractionsByResourceType(),
-    mostUsed: getMostUsedResources(10)
-  };
-
-  return JSON.stringify(exportData, null, 2);
+export function exportResourceAnalytics(
+  interactions: InteractionSet = getResourceInteractions()
+): string {
+  const analytics = getAllResourceAnalytics(interactions);
+  return JSON.stringify(
+    {
+      exportDate: new Date().toISOString(),
+      totalInteractions: interactions.length,
+      analytics,
+      bySafetyState: getInteractionsBySafetyState(interactions),
+      byResourceType: getInteractionsByResourceType(interactions),
+      mostUsed: getMostUsedResources(10, interactions),
+    },
+    null,
+    2
+  );
 }
 
-/**
- * Clear old interaction data (keep last 90 days)
- */
 export function cleanupOldInteractions(): void {
   const interactions = getResourceInteractions();
   const ninetyDaysAgo = new Date();
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-  const filtered = interactions.filter(interaction => {
-    const date = new Date(interaction.timestamp);
-    return date >= ninetyDaysAgo;
-  });
+  const filtered = interactions.filter((interaction) => new Date(interaction.timestamp) >= ninetyDaysAgo);
 
-  localStorage.setItem('ezri_resource_interactions', JSON.stringify(filtered));
-  console.log(`🧹 Cleaned up ${interactions.length - filtered.length} old interactions`);
+  localStorage.setItem(LOCAL_KEY, JSON.stringify(filtered));
 }
 
-/**
- * Get current user ID (helper function)
- */
 function getCurrentUserId(): string {
   try {
     const currentUser = localStorage.getItem('currentUser');
     if (currentUser) {
-      const user = JSON.parse(currentUser);
+      const user = JSON.parse(currentUser) as { id?: string };
       return user.id || 'anonymous';
     }
-  } catch (e) {
-    console.error('Error getting user ID:', e);
+  } catch {
+    /* ignore */
   }
   return 'anonymous';
 }

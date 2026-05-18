@@ -1,5 +1,4 @@
 import { motion } from "motion/react";
-import { AppLayout } from "@/app/components/AppLayout";
 import { 
   Bell, 
   Heart, 
@@ -10,15 +9,28 @@ import {
   TrendingUp,
   CheckCircle2,
   X,
-  AlertTriangle
+  AlertTriangle,
+  ArrowLeft,
+  Link as LinkIcon
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { useNotifications } from "@/app/contexts/NotificationsContext";
 import { formatDistanceToNow } from "date-fns";
+import { Link, useLocation } from "react-router-dom";
 
 export function Notifications() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, isLoading } = useNotifications();
+  const safeNotifications = Array.isArray(notifications) ? notifications : [];
+  const location = useLocation();
+  const isSettingsNotifications = location.pathname === "/app/settings/notifications";
+
+  const getRelativeTime = (value: string | null | undefined) => {
+    if (!value) return "Just now";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Just now";
+    return formatDistanceToNow(date, { addSuffix: true });
+  };
 
   // Helper to map type to UI properties
   const getNotificationStyle = (type: string) => {
@@ -44,8 +56,7 @@ export function Notifications() {
 
   if (isLoading) {
     return (
-      <AppLayout>
-        <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
+      <div className="min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] max-w-4xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
           <div className="mb-6">
             <div className="flex items-center gap-3">
               <Skeleton className="w-12 h-12 rounded-2xl" />
@@ -57,7 +68,7 @@ export function Notifications() {
           </div>
           <div className="space-y-3">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="bg-white rounded-2xl shadow-sm p-4 border-l-4 border-gray-200">
+              <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm p-4 border-l-4 border-gray-200 dark:border-slate-700">
                 <div className="flex gap-4">
                   <Skeleton className="w-12 h-12 rounded-xl" />
                   <div className="flex-1 space-y-2">
@@ -70,26 +81,34 @@ export function Notifications() {
             ))}
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
+    <div className="min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] max-w-4xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-6"
         >
+          {isSettingsNotifications && (
+            <Link 
+              to="/app/settings" 
+              className="inline-flex items-center gap-2 text-gray-700 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-200 mb-6 transition-colors font-medium"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back to Settings
+            </Link>
+          )}
           <div className="flex items-center justify-between mb-2">
+        
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
                 <Bell className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
-                <p className="text-gray-600">
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Notifications</h1>
+                <p className="text-gray-600 dark:text-slate-300">
                   {unreadCount > 0 
                     ? `You have ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}`
                     : "You're all caught up!"
@@ -119,20 +138,20 @@ export function Notifications() {
         </motion.div>
 
         <div className="space-y-3">
-          {notifications.length === 0 ? (
+          {safeNotifications.length === 0 ? (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="text-center py-12 bg-white rounded-2xl shadow-sm"
+              className="text-center py-12 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700"
             >
-              <Bell className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="font-bold text-xl text-gray-900 mb-2">No Notifications</h3>
-              <p className="text-gray-600">
+              <Bell className="w-16 h-16 text-gray-300 dark:text-slate-600 mx-auto mb-4" />
+              <h3 className="font-bold text-xl text-gray-900 dark:text-white mb-2">No Notifications</h3>
+              <p className="text-gray-600 dark:text-slate-300">
                 You're all caught up! Check back later for updates.
               </p>
             </motion.div>
           ) : (
-            notifications.map((notification, index) => {
+            safeNotifications.map((notification, index) => {
               const style = getNotificationStyle(notification.type);
               const Icon = style.icon;
               
@@ -143,10 +162,10 @@ export function Notifications() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.05 }}
                   whileHover={{ scale: 1.01 }}
-                  className={`bg-white rounded-2xl shadow-sm p-4 border-l-4 ${
+                  className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm p-4 border-l-4 ${
                     notification.is_read 
-                      ? "border-gray-200 opacity-75" 
-                      : "border-blue-500"
+                      ? "border-gray-200 dark:border-slate-700 opacity-75" 
+                      : "border-blue-500 dark:border-blue-400"
                   }`}
                 >
                   <div className="flex gap-4">
@@ -160,17 +179,17 @@ export function Notifications() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
                           <h3 className={`font-bold text-sm sm:text-base ${
-                            notification.is_read ? "text-gray-600" : "text-gray-900"
+                            notification.is_read ? "text-gray-600 dark:text-slate-400" : "text-gray-900 dark:text-white"
                           }`}>
                             {notification.title}
                           </h3>
                           <p className={`mt-1 text-xs sm:text-sm ${
-                            notification.is_read ? "text-gray-500" : "text-gray-700"
+                            notification.is_read ? "text-gray-500 dark:text-slate-500" : "text-gray-700 dark:text-slate-200"
                           }`}>
                             {notification.message}
                           </p>
-                          <p className="mt-2 text-xs text-gray-400">
-                            {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
+                          <p className="mt-2 text-xs text-gray-400 dark:text-slate-500">
+                            {getRelativeTime(notification.created_at)}
                           </p>
                         </div>
 
@@ -181,7 +200,7 @@ export function Notifications() {
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
                               onClick={() => markAsRead(notification.id)}
-                              className="p-2 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors"
+                              className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 transition-colors"
                               title="Mark as read"
                             >
                               <CheckCircle2 className="w-4 h-4" />
@@ -198,17 +217,16 @@ export function Notifications() {
         </div>
 
         {/* Footer Info */}
-        {notifications.length > 0 && (
+        {safeNotifications.length > 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
-            className="mt-8 text-center text-sm text-gray-500"
+            className="mt-8 text-center text-sm text-gray-500 dark:text-slate-400"
           >
-            Showing {notifications.length} notification{notifications.length !== 1 ? 's' : ''}
+            Showing {safeNotifications.length} notification{safeNotifications.length !== 1 ? 's' : ''}
           </motion.div>
         )}
       </div>
-    </AppLayout>
   );
 }

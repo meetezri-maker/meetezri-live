@@ -1,11 +1,15 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../lib/prisma';
 import { supabaseAdmin } from '../../config/supabase';
 import { OnboardingInput, UpdateProfileInput } from './user.schema';
 import { PLAN_LIMITS } from '../billing/billing.constants';
 import * as billingService from '../billing/billing.service';
-import { getLifetimeUsedSeconds } from '../billing/credit-balance.service';
+import { getLifetimeUsedSeconds, resolveBucketSeconds } from '../billing/credit-balance.service';
+import { pbkdf2Sync, randomBytes, randomInt, timingSafeEqual } from 'crypto';
+import { emailService } from '../email/email.service';
+import { sharedDel, sharedGetJson, sharedSetJson } from '../../lib/sharedCache';
 
-function calculateStreak(moodEntries: any[]) {
+export function calculateStreak(moodEntries: any[]) {
   if (!moodEntries || moodEntries.length === 0) return 0;
 
   let streak = 0;
@@ -75,6 +79,351 @@ export async function getUserEmail(userId: string): Promise<string | null> {
   return user?.email || null;
 }
 
+type KnowledgeTwoFactorConfig = {
+  enabled: boolean;
+  // PIN-based factor (optional so email-only 2FA can be enabled).
+  pin_hash?: string;
+  pin_salt?: string;
+  security_question?: string;
+  // Lower-cased answer hash for timing-safe compare.
+  answer_hash?: string;
+  answer_salt?: string;
+  // If true, the system will allow email authentication codes to be requested/verified.
+  email_code_enabled?: boolean;
+  updated_at: string;
+};
+
+const knowledgeRecoveryMap = new Map<
+  string,
+  { code: string; expiresAt: number; attempts: number; sentAt: number }
+>();
+const knowledgeLoginEmailCodeMap = new Map<
+  string,
+  { code: string; expiresAt: number; attempts: number; sentAt: number }
+>();
+const KNOWLEDGE_RECOVERY_TTL_MS = 10 * 60 * 1000;
+const KNOWLEDGE_RECOVERY_RESEND_MS = 60 * 1000;
+const KNOWLEDGE_RECOVERY_MAX_ATTEMPTS = 5;
+
+function hashSecret(secret: string, salt: string): string {
+  return pbkdf2Sync(secret, salt, 120000, 32, 'sha256').toString('hex');
+}
+
+function constantTimeEquals(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a, 'utf8');
+  const bBuf = Buffer.from(b, 'utf8');
+  if (aBuf.length !== bBuf.length) return false;
+  return timingSafeEqual(aBuf, bBuf);
+}
+
+async function getPermissions(userId: string): Promise<Record<string, any>> {
+  const profile = await prisma.profiles.findUnique({
+    where: { id: userId },
+    select: { permissions: true },
+  });
+  const permissions = profile?.permissions;
+  if (!permissions || typeof permissions !== 'object') return {};
+  return permissions as Record<string, any>;
+}
+
+export async function getKnowledgeTwoFactorStatus(userId: string) {
+  const permissions = await getPermissions(userId);
+  const cfg = permissions.two_factor_knowledge as Partial<KnowledgeTwoFactorConfig> | undefined;
+  return {
+    enabled: cfg?.enabled === true,
+    question: cfg?.security_question || null,
+    email_code_enabled: cfg?.email_code_enabled === true,
+  };
+}
+
+export async function setupKnowledgeTwoFactor(
+  userId: string,
+  input: { pin: string; securityQuestion: string; securityAnswer: string }
+) {
+  const pin = input.pin.trim();
+  const securityQuestion = input.securityQuestion.trim();
+  const securityAnswer = input.securityAnswer.trim();
+
+  if (!/^\d{4}$/.test(pin)) {
+    const err = new Error('PIN must be exactly 4 digits');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+  if (securityQuestion.length < 6 || securityQuestion.length > 160) {
+    const err = new Error('Security question must be 6 to 160 characters');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+  if (securityAnswer.length < 2 || securityAnswer.length > 120) {
+    const err = new Error('Security answer must be 2 to 120 characters');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const permissions = await getPermissions(userId);
+  const pinSalt = randomBytes(16).toString('hex');
+  const answerSalt = randomBytes(16).toString('hex');
+
+  const config: KnowledgeTwoFactorConfig = {
+    enabled: true,
+    pin_hash: hashSecret(pin, pinSalt),
+    pin_salt: pinSalt,
+    security_question: securityQuestion,
+    answer_hash: hashSecret(securityAnswer.toLowerCase(), answerSalt),
+    answer_salt: answerSalt,
+    email_code_enabled: false,
+    updated_at: new Date().toISOString(),
+  };
+
+  const nextPermissions = {
+    ...permissions,
+    two_factor_knowledge: config,
+  };
+
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: { permissions: nextPermissions as any },
+  });
+  invalidateUserProfileCache(userId);
+  return { enabled: true, question: securityQuestion };
+}
+
+export async function setupKnowledgeTwoFactorEmail(userId: string) {
+  const permissions = await getPermissions(userId);
+
+  const config: KnowledgeTwoFactorConfig = {
+    enabled: true,
+    email_code_enabled: true,
+    // Intentionally omit PIN/security hashes for email-only mode.
+    updated_at: new Date().toISOString(),
+  };
+
+  const nextPermissions = {
+    ...permissions,
+    two_factor_knowledge: config,
+  };
+
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: { permissions: nextPermissions as any },
+  });
+
+  invalidateUserProfileCache(userId);
+  return { enabled: true, question: null, email_code_enabled: true };
+}
+
+export async function verifyKnowledgeTwoFactor(
+  userId: string,
+  input: { code: string }
+) {
+  const code = input.code.trim();
+  if (!code) {
+    const err = new Error('Verification code is required');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const permissions = await getPermissions(userId);
+  const cfg = permissions.two_factor_knowledge as Partial<KnowledgeTwoFactorConfig> | undefined;
+  if (!cfg?.enabled || !cfg.pin_hash || !cfg.pin_salt || !cfg.answer_hash || !cfg.answer_salt) {
+    const err = new Error('Knowledge-based 2FA is not enabled');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+
+  const candidatePinHash = hashSecret(code, cfg.pin_salt);
+  const candidateAnswerHash = hashSecret(code.toLowerCase(), cfg.answer_salt);
+
+  const pinOk = constantTimeEquals(candidatePinHash, cfg.pin_hash);
+  const answerOk = constantTimeEquals(candidateAnswerHash, cfg.answer_hash);
+  if (!pinOk && !answerOk) {
+    const err = new Error('Invalid second-factor code');
+    (err as any).statusCode = 401;
+    throw err;
+  }
+  return { ok: true };
+}
+
+export async function disableKnowledgeTwoFactor(userId: string) {
+  const permissions = await getPermissions(userId);
+  const nextPermissions = { ...permissions };
+  delete (nextPermissions as any).two_factor_knowledge;
+
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: { permissions: nextPermissions as any },
+  });
+  invalidateUserProfileCache(userId);
+  return { enabled: false };
+}
+
+export async function requestKnowledgeTwoFactorRecovery(userId: string) {
+  const permissions = await getPermissions(userId);
+  const cfg = permissions.two_factor_knowledge as Partial<KnowledgeTwoFactorConfig> | undefined;
+  if (!cfg?.enabled) {
+    const err = new Error('Knowledge-based 2FA is not enabled');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+
+  const existing = knowledgeRecoveryMap.get(userId);
+  const now = Date.now();
+  if (existing && now - existing.sentAt < KNOWLEDGE_RECOVERY_RESEND_MS) {
+    const waitSeconds = Math.ceil((KNOWLEDGE_RECOVERY_RESEND_MS - (now - existing.sentAt)) / 1000);
+    const err = new Error(`Please wait ${waitSeconds}s before requesting another code`);
+    (err as any).statusCode = 429;
+    throw err;
+  }
+
+  const email = await getUserEmail(userId);
+  if (!email) {
+    const err = new Error('Email not found for account');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const code = String(randomInt(100000, 1000000));
+  knowledgeRecoveryMap.set(userId, {
+    code,
+    expiresAt: now + KNOWLEDGE_RECOVERY_TTL_MS,
+    attempts: 0,
+    sentAt: now,
+  });
+
+  await emailService.sendEmail(
+    email,
+    'Your Ezri 2FA Recovery Code',
+    `<p>Your one-time recovery code is:</p><p style="font-size:24px;font-weight:700;letter-spacing:2px;">${code}</p><p>It expires in 10 minutes.</p>`,
+    `Your one-time recovery code is ${code}. It expires in 10 minutes.`
+  );
+
+  return { sent: true };
+}
+
+export async function verifyKnowledgeTwoFactorRecovery(userId: string, input: { code: string }) {
+  const code = String(input.code || '').trim();
+  if (!/^\d{6}$/.test(code)) {
+    const err = new Error('Recovery code must be 6 digits');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const record = knowledgeRecoveryMap.get(userId);
+  if (!record) {
+    const err = new Error('No active recovery code. Request a new one.');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+
+  if (Date.now() > record.expiresAt) {
+    knowledgeRecoveryMap.delete(userId);
+    const err = new Error('Recovery code expired. Request a new one.');
+    (err as any).statusCode = 401;
+    throw err;
+  }
+
+  record.attempts += 1;
+  if (record.attempts > KNOWLEDGE_RECOVERY_MAX_ATTEMPTS) {
+    knowledgeRecoveryMap.delete(userId);
+    const err = new Error('Too many attempts. Request a new recovery code.');
+    (err as any).statusCode = 429;
+    throw err;
+  }
+
+  if (record.code !== code) {
+    const err = new Error('Invalid recovery code');
+    (err as any).statusCode = 401;
+    throw err;
+  }
+
+  knowledgeRecoveryMap.delete(userId);
+  await disableKnowledgeTwoFactor(userId);
+  return { ok: true, disabled: true };
+}
+
+export async function requestKnowledgeTwoFactorLoginCode(userId: string) {
+  const permissions = await getPermissions(userId);
+  const cfg = permissions.two_factor_knowledge as Partial<KnowledgeTwoFactorConfig> | undefined;
+  if (!cfg?.enabled || cfg?.email_code_enabled !== true) {
+    const err = new Error('Knowledge-based 2FA is not enabled');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+
+  const existing = knowledgeLoginEmailCodeMap.get(userId);
+  const now = Date.now();
+  if (existing && now - existing.sentAt < KNOWLEDGE_RECOVERY_RESEND_MS) {
+    const waitSeconds = Math.ceil((KNOWLEDGE_RECOVERY_RESEND_MS - (now - existing.sentAt)) / 1000);
+    const err = new Error(`Please wait ${waitSeconds}s before requesting another code`);
+    (err as any).statusCode = 429;
+    throw err;
+  }
+
+  const email = await getUserEmail(userId);
+  if (!email) {
+    const err = new Error('Email not found for account');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const code = String(randomInt(100000, 1000000));
+  knowledgeLoginEmailCodeMap.set(userId, {
+    code,
+    expiresAt: now + KNOWLEDGE_RECOVERY_TTL_MS,
+    attempts: 0,
+    sentAt: now,
+  });
+
+  await emailService.sendEmail(
+    email,
+    'Your Ezri Login Authentication Code',
+    `<p>Your one-time login authentication code is:</p><p style="font-size:24px;font-weight:700;letter-spacing:2px;">${code}</p><p>It expires in 10 minutes.</p>`,
+    `Your one-time login authentication code is ${code}. It expires in 10 minutes.`
+  );
+
+  return { sent: true };
+}
+
+export async function verifyKnowledgeTwoFactorLoginCode(userId: string, input: { code: string }) {
+  const code = String(input.code || '').trim();
+  if (!/^\d{6}$/.test(code)) {
+    const err = new Error('Authentication code must be 6 digits');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const record = knowledgeLoginEmailCodeMap.get(userId);
+  if (!record) {
+    const err = new Error('No active authentication code. Request a new one.');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+
+  if (Date.now() > record.expiresAt) {
+    knowledgeLoginEmailCodeMap.delete(userId);
+    const err = new Error('Authentication code expired. Request a new one.');
+    (err as any).statusCode = 401;
+    throw err;
+  }
+
+  record.attempts += 1;
+  if (record.attempts > KNOWLEDGE_RECOVERY_MAX_ATTEMPTS) {
+    knowledgeLoginEmailCodeMap.delete(userId);
+    const err = new Error('Too many attempts. Request a new code.');
+    (err as any).statusCode = 429;
+    throw err;
+  }
+
+  if (record.code !== code) {
+    const err = new Error('Invalid authentication code');
+    (err as any).statusCode = 401;
+    throw err;
+  }
+
+  knowledgeLoginEmailCodeMap.delete(userId);
+  return { ok: true };
+}
+
 type AccountState =
   | 'NO_ACCOUNT'
   | 'AUTH_CREATED_BUT_PROFILE_NOT_CREATED'
@@ -82,6 +431,10 @@ type AccountState =
   | 'EMAIL_UNVERIFIED'
   | 'EMAIL_VERIFIED_ONBOARDING_INCOMPLETE'
   | 'FULLY_ONBOARDED';
+
+const accountStateByEmailCache = new Map<string, { data: any; timestamp: number }>();
+const ACCOUNT_STATE_CACHE_TTL = 10 * 1000; // 10s: absorbs fast retries on signup/check.
+const accountStateByEmailInFlight = new Map<string, Promise<any>>();
 
 function resolveOnboardingCompleted(profile: any): boolean {
   const signupType =
@@ -133,6 +486,15 @@ function resolveOnboardingCompleted(profile: any): boolean {
 }
 
 export async function resolveAccountStateByEmail(email: string) {
+  const key = String(email || '').trim().toLowerCase();
+  const cached = accountStateByEmailCache.get(key);
+  if (cached && Date.now() - cached.timestamp < ACCOUNT_STATE_CACHE_TTL) {
+    return cached.data;
+  }
+  const inFlight = accountStateByEmailInFlight.get(key);
+  if (inFlight) return await inFlight;
+
+  const run = (async () => {
   const authUser = await prisma.users.findFirst({
     where: { email },
     select: {
@@ -279,6 +641,14 @@ export async function resolveAccountStateByEmail(email: string) {
     onboarding_completed_at: profile.onboarding_completed_at ?? null,
     signup_type: signupTypeResolved,
   };
+  })().finally(() => {
+    accountStateByEmailInFlight.delete(key);
+  });
+
+  accountStateByEmailInFlight.set(key, run);
+  const data = await run;
+  accountStateByEmailCache.set(key, { data, timestamp: Date.now() });
+  return data;
 }
 
 export async function checkUserExists(email: string) {
@@ -323,11 +693,15 @@ export async function setSignupTypeForProfile(userId: string, signupType: 'trial
   }
 }
 
+/** Where the account was created (distinct from signup_type = trial vs plan). */
+export type SignupSource = 'app' | 'admin_user' | 'admin_companion' | 'admin_org';
+
 export async function createProfile(
   userId: string,
   email: string,
   fullName?: string,
-  signupType?: 'trial' | 'plan' | null
+  signupType?: 'trial' | 'plan' | null,
+  signupSource?: SignupSource | null
 ) {
   // If signupType isn't explicitly provided, infer from Supabase auth metadata.
   const resolvedSignupType =
@@ -346,6 +720,7 @@ export async function createProfile(
         onboarding_completed: false,
         onboarding_completed_at: null,
         signup_type: resolvedSignupType,
+        ...(signupSource != null ? { signup_source: signupSource } : {}),
       },
       update: {
         email,
@@ -353,6 +728,7 @@ export async function createProfile(
         onboarding_completed: false,
         onboarding_completed_at: null,
         ...(resolvedSignupType ? { signup_type: resolvedSignupType } : {}),
+        ...(signupSource !== undefined ? { signup_source: signupSource } : {}),
       },
     });
   } catch {
@@ -399,7 +775,8 @@ export async function createProfileForPaidSignup(
   userId: string,
   email: string,
   fullName?: string,
-  signupType?: 'trial' | 'plan' | null
+  signupType?: 'trial' | 'plan' | null,
+  signupSource: SignupSource = 'app'
 ) {
   const resolvedSignupType = normalizeSignupType(signupType) ?? 'plan';
   try {
@@ -415,6 +792,7 @@ export async function createProfileForPaidSignup(
         onboarding_completed: false,
         onboarding_completed_at: null,
         signup_type: resolvedSignupType,
+        signup_source: signupSource,
       },
       update: {
         email,
@@ -422,6 +800,7 @@ export async function createProfileForPaidSignup(
         onboarding_completed: false,
         onboarding_completed_at: null,
         ...(resolvedSignupType ? { signup_type: resolvedSignupType } : {}),
+        signup_source: signupSource,
       },
     });
   } catch {
@@ -447,14 +826,49 @@ export async function createProfileForPaidSignup(
 const userProfileCache = new Map<string, { data: any; timestamp: number }>();
 const PROFILE_CACHE_TTL = 30 * 1000; // 30 seconds
 
+const creditsCache = new Map<string, { data: any; timestamp: number }>();
+const CREDITS_CACHE_TTL = 15 * 1000; // 15s: credits is expensive; UI doesn't need per-second accuracy.
+
+const creditsPeriodUsedCache = new Map<string, { totalSeconds: number; timestamp: number }>();
+const CREDITS_PERIOD_USED_TTL = 60 * 1000; // 60s: period sum is expensive; acceptable staleness for dashboard.
+
+const recentActivityCache = new Map<string, { data: any[]; timestamp: number }>();
+const RECENT_ACTIVITY_CACHE_TTL = 5 * 1000; // 5s: absorbs repeated dashboard loads / route changes.
+
+const creditsInFlight = new Map<string, Promise<any>>();
+const recentActivityInFlight = new Map<string, Promise<any[]>>();
+
+function recentActivityCacheKey(userId: string, limit: number) {
+  return `${userId}|${limit}`;
+}
+
 export function invalidateUserProfileCache(userId: string) {
   userProfileCache.delete(userId);
+  creditsCache.delete(userId);
+  void sharedDel(`users:credits:${userId}`);
+  // creditsPeriodUsedCache is keyed by period, so clear all for this user.
+  const prefix = `${userId}|`;
+  for (const key of creditsPeriodUsedCache.keys()) {
+    if (key.startsWith(prefix)) creditsPeriodUsedCache.delete(key);
+  }
+}
+
+export function invalidateRecentActivityCache(userId: string) {
+  const prefix = `${userId}|`;
+  for (const key of recentActivityCache.keys()) {
+    if (key.startsWith(prefix)) recentActivityCache.delete(key);
+  }
+  // Common limits used by UI (dashboard + lists).
+  void sharedDel(`users:activity:${userId}:10`);
+  void sharedDel(`users:activity:${userId}:25`);
+  void sharedDel(`users:activity:${userId}:50`);
 }
 
 export async function getProfile(userId: string) {
   // Check cache first
   const cached = userProfileCache.get(userId);
   let result: any;
+  let fromCache = false;
 
   if (cached && Date.now() - cached.timestamp < PROFILE_CACHE_TTL) {
     // If user just upgraded, cache can keep returning trial for a short window.
@@ -471,49 +885,87 @@ export async function getProfile(userId: string) {
       }
     } else {
       result = { ...cached.data };
+      fromCache = true;
     }
   }
 
+  // When the cache is valid, return immediately: the cached object already includes
+  // computed totals (`minutes_used`, `credits_total_seconds`) + verification flags.
+  // This avoids extra DB work on hot /users/me traffic (route changes / app boot).
+  if (fromCache && result) {
+    return result;
+  }
+
+  /** When cold-loading profile, we prefetch lifetime + auth in parallel to avoid 3+ sequential round-trips. */
+  let preloaded: {
+    usedSecondsLifetime: number;
+    authUser: {
+      email_confirmed_at: Date | null;
+      raw_user_meta_data: any;
+    } | null;
+  } | null = null;
+
   if (!result) {
-    // Optimized to use a single query to prevent connection pool exhaustion
-    const profileResult = await prisma.profiles.findUnique({
-      where: { id: userId },
-      include: {
-        companion_profiles: true,
-        subscriptions: {
-          where: { status: { in: ['active', 'trialing', 'past_due'] } },
-          orderBy: { created_at: 'desc' },
-          take: 1,
-        },
-        emergency_contacts: {
-          orderBy: { created_at: 'desc' },
-          take: 1,
-        },
-        // Include recent moods
-        mood_entries: {
-          orderBy: { created_at: 'desc' },
-          take: 30,
-        },
-        // Include scheduled appointments
-        appointments_appointments_user_idToprofiles: {
-          where: {
-            status: 'scheduled',
-            start_time: { gt: new Date() },
+    const now = new Date();
+    // Single round-trip: profile (no unused companion / appointment row scans) + count + hot aggregates
+    const [profileResult, upcomingApptCount, usedSecondsLifetime, authUser] = await Promise.all([
+      prisma.profiles.findUnique({
+        where: { id: userId },
+        include: {
+          subscriptions: {
+            where: { status: { in: ['active', 'trialing', 'past_due'] } },
+            orderBy: { created_at: 'desc' },
+            take: 1,
           },
-          orderBy: { start_time: 'asc' },
-        },
-        // Get counts
-        _count: {
-          select: {
-            app_sessions: { where: { ended_at: { not: null } } },
-            mood_entries: true,
-            journal_entries: true,
+          emergency_contacts: {
+            orderBy: { created_at: 'desc' },
+            take: 1,
+          },
+          mood_entries: {
+            orderBy: { created_at: 'desc' },
+            take: 30,
+          },
+          _count: {
+            select: {
+              app_sessions: { where: { ended_at: { not: null } } },
+              mood_entries: true,
+              journal_entries: true,
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.appointments.count({
+        where: {
+          user_id: userId,
+          status: 'scheduled',
+          start_time: { gt: now },
+        },
+      }),
+      getLifetimeUsedSeconds(userId),
+      prisma.users.findUnique({
+        where: { id: userId },
+        select: {
+          email_confirmed_at: true,
+          raw_user_meta_data: true,
+        },
+      }),
+    ]);
 
     if (!profileResult) return null;
+    preloaded = { usedSecondsLifetime, authUser };
+
+    // Stale `prisma generate` can omit `bio` from the client model; still read it from DB.
+    let profileBio: string | null | undefined = (profileResult as { bio?: string | null }).bio;
+    if (profileBio === undefined) {
+      try {
+        const bioRows = await prisma.$queryRaw<Array<{ bio: string | null }>>(
+          Prisma.sql`SELECT bio FROM public.profiles WHERE id = ${userId}::uuid LIMIT 1`
+        );
+        profileBio = bioRows[0]?.bio ?? null;
+      } catch {
+        profileBio = null;
+      }
+    }
 
     let activeSubscription = profileResult.subscriptions[0];
     const latestEmergencyContact = profileResult.emergency_contacts[0];
@@ -541,28 +993,26 @@ export async function getProfile(userId: string) {
     const journalEntriesCount = profileResult._count.journal_entries;
 
     const streakDays = calculateStreak(profileResult.mood_entries);
-    const scheduledAppointments =
-      profileResult.appointments_appointments_user_idToprofiles;
-    const upcomingSessions = scheduledAppointments.length;
+    const upcomingSessions = upcomingApptCount;
     const primaryContact = latestEmergencyContact;
 
     const internalPlanType = (activeSubscription?.plan_type ||
       "trial") as keyof typeof PLAN_LIMITS;
     const planDetails = PLAN_LIMITS[internalPlanType];
 
-    const subscriptionSeconds =
-      (profileResult.credits_seconds && profileResult.credits_seconds > 0)
-        ? profileResult.credits_seconds
-        : (profileResult.credits || 0) * 60;
-    const purchasedSeconds =
-      (profileResult.purchased_credits_seconds &&
-        profileResult.purchased_credits_seconds > 0)
-        ? profileResult.purchased_credits_seconds
-        : (profileResult.purchased_credits || 0) * 60;
+    const subscriptionSeconds = resolveBucketSeconds(
+      profileResult.credits,
+      profileResult.credits_seconds
+    );
+    const purchasedSeconds = resolveBucketSeconds(
+      profileResult.purchased_credits,
+      profileResult.purchased_credits_seconds
+    );
     const totalSeconds = subscriptionSeconds + purchasedSeconds;
 
     result = {
       ...profileResult,
+      bio: profileBio ?? null,
       emergency_contact_name:
         primaryContact?.name || profileResult.emergency_contact_name,
       emergency_contact_phone:
@@ -591,7 +1041,26 @@ export async function getProfile(userId: string) {
     userProfileCache.set(userId, { data: result, timestamp: Date.now() });
   }
 
-  const usedSecondsLifetime = await getLifetimeUsedSeconds(userId);
+  let usedSecondsLifetime: number;
+  let authForEmail: {
+    email_confirmed_at: Date | null;
+    raw_user_meta_data: any;
+  } | null;
+  if (preloaded) {
+    usedSecondsLifetime = preloaded.usedSecondsLifetime;
+    authForEmail = preloaded.authUser;
+  } else {
+    [usedSecondsLifetime, authForEmail] = await Promise.all([
+      getLifetimeUsedSeconds(userId),
+      prisma.users.findUnique({
+        where: { id: userId },
+        select: {
+          email_confirmed_at: true,
+          raw_user_meta_data: true,
+        },
+      }),
+    ]);
+  }
   const remainingSecondsForAccount =
     typeof result.credits_remaining_seconds === 'number'
       ? result.credits_remaining_seconds
@@ -604,36 +1073,22 @@ export async function getProfile(userId: string) {
   result.credits_total = result.total_minutes;
   result.credits_total_seconds = totalAccountSeconds;
 
-  // Always fetch fresh email verification status from Supabase.
+  // Resolve email verification from local auth mirror (`auth.users` exposed via prisma.users)
+  // to keep GET /users/me fast and avoid remote Supabase Admin API latency on dashboard load.
   // IMPORTANT: default to `false` when we cannot verify, so UI doesn't incorrectly
   // treat users as verified (which breaks the trial verification popup).
   let emailVerified = false;
   try {
-    const { data: authData } = await supabaseAdmin.auth.admin.getUserById(
-      userId,
-    );
-    const user = authData?.user;
-    const isConfirmed = !!user?.email_confirmed_at;
-    // Check custom metadata flag we set during trial signup
-    const verificationRequired = user?.user_metadata?.email_verification_required === true;
+    const isConfirmed = !!authForEmail?.email_confirmed_at;
+    const rawMeta = (authForEmail?.raw_user_meta_data ?? {}) as Record<string, any>;
+    // Check custom metadata flag we set during trial signup.
+    const verificationRequired = rawMeta?.email_verification_required === true;
 
     // Trial-only consistency:
-    // If Supabase confirms the email, clear the legacy trial flag so downstream
-    // `email_verified` becomes true. This is required when the verification link
-    // redirects directly to `/app/user-profile` (skipping `/auth/callback`).
+    // If email is confirmed, treat verification_required as cleared logically.
+    // (The callback flow may clear it later; we avoid write-side effects in GET /users/me.)
     const signupType = (result as any)?.signup_type;
     const isTrial = signupType === 'trial' || (result?.subscription_plan === 'trial');
-    if (isTrial && isConfirmed && verificationRequired) {
-      try {
-        await supabaseAdmin.auth.admin.updateUserById(userId, {
-          user_metadata: { ...(user?.user_metadata as any), email_verification_required: false },
-        });
-      } catch {
-        // best-effort; we'll still compute verified from current values below
-      }
-    }
-
-    // Recompute verificationRequired in case it was cleared successfully.
     const verificationRequiredAfter =
       isTrial && isConfirmed && verificationRequired
         ? false
@@ -642,16 +1097,18 @@ export async function getProfile(userId: string) {
     // User is verified ONLY if confirmed by Supabase AND doesn't have the required flag
     emailVerified = isConfirmed && !verificationRequiredAfter;
 
-  // Debug visibility: explain why `email_verified` was computed.
-  console.log("[emailVerified debug]", {
-    userId,
-    email_confirmed_at: user?.email_confirmed_at ?? null,
-    email_verification_required: user?.user_metadata?.email_verification_required ?? null,
-    verificationRequired,
-    computedEmailVerified: emailVerified,
-    subscription_plan: result?.subscription_plan ?? null,
-    signup_type: (result as any)?.signup_type ?? null,
-  });
+    // Debug visibility: explain why `email_verified` was computed.
+    if (process.env.DEBUG_API === '1' || process.env.DEBUG_API === 'true') {
+      console.log("[emailVerified debug]", {
+        userId,
+        email_confirmed_at: authForEmail?.email_confirmed_at ?? null,
+        email_verification_required: rawMeta?.email_verification_required ?? null,
+        verificationRequired,
+        computedEmailVerified: emailVerified,
+        subscription_plan: result?.subscription_plan ?? null,
+        signup_type: (result as any)?.signup_type ?? null,
+      });
+    }
   } catch {
     // If we can't fetch, fall back to whatever is already present (if any),
     // otherwise keep it as false (safe default for UX).
@@ -676,83 +1133,280 @@ export async function getProfile(userId: string) {
 }
 
 export async function getCredits(userId: string) {
-  const activeSub = await prisma.subscriptions.findFirst({
-    where: {
-      user_id: userId,
-      status: { in: ['active', 'trialing', 'past_due'] },
-    },
-    orderBy: { created_at: 'desc' },
-    select: {
-      start_date: true,
-      end_date: true,
-      created_at: true,
+  const cached = creditsCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < CREDITS_CACHE_TTL) {
+    return cached.data;
+  }
+
+  const shared = await sharedGetJson<any>(`users:credits:${userId}`);
+  if (shared) {
+    creditsCache.set(userId, { data: shared, timestamp: Date.now() });
+    return shared;
+  }
+
+  const inFlight = creditsInFlight.get(userId);
+  if (inFlight) return await inFlight;
+
+  const run = (async () => {
+    const [activeSub, profile] = await Promise.all([
+      prisma.subscriptions.findFirst({
+        where: {
+          user_id: userId,
+          status: { in: ['active', 'trialing', 'past_due'] },
+        },
+        orderBy: { created_at: 'desc' },
+        select: {
+          start_date: true,
+          end_date: true,
+          created_at: true,
+        },
+      }),
+      prisma.profiles.findUnique({
+        where: { id: userId },
+        select: {
+          credits: true,
+          purchased_credits: true,
+          credits_seconds: true,
+          purchased_credits_seconds: true,
+        },
+      }),
+    ]);
+
+    const subscriptionSeconds = resolveBucketSeconds(
+      profile?.credits,
+      profile?.credits_seconds
+    );
+    const purchasedSeconds = resolveBucketSeconds(
+      profile?.purchased_credits,
+      profile?.purchased_credits_seconds
+    );
+    const remainingSeconds = subscriptionSeconds + purchasedSeconds;
+
+    const ceilMin = (sec: number) => (sec === 0 ? 0 : Math.ceil(sec / 60));
+
+    // "Subscription total" should reflect the full allowance accrued this billing period,
+    // including stacked upgrades: total = remaining + used_this_period.
+    const periodStart = activeSub?.start_date || activeSub?.created_at || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const periodEnd = activeSub?.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    const periodKey = `${userId}|${periodStart.toISOString()}|${periodEnd.toISOString()}`;
+    const cachedPeriod = creditsPeriodUsedCache.get(periodKey);
+    let usedSecondsThisPeriod: number;
+    if (cachedPeriod && Date.now() - cachedPeriod.timestamp < CREDITS_PERIOD_USED_TTL) {
+      usedSecondsThisPeriod = cachedPeriod.totalSeconds;
+    } else {
+      const usedPeriodRows = await prisma.$queryRaw<[{ total: bigint | null }]>(
+        Prisma.sql`
+          SELECT COALESCE(SUM(COALESCE(s.billed_seconds, 0)), 0)::bigint AS total
+          FROM public.app_sessions s
+          WHERE s.user_id = ${userId}::uuid
+            AND s.status = 'completed'
+            AND s.ended_at IS NOT NULL
+            AND s.ended_at >= ${periodStart}
+            AND s.ended_at <= ${periodEnd}
+        `
+      );
+      usedSecondsThisPeriod = Math.max(0, Number(usedPeriodRows[0]?.total ?? 0) || 0);
+      creditsPeriodUsedCache.set(periodKey, { totalSeconds: usedSecondsThisPeriod, timestamp: Date.now() });
+    }
+    const subscriptionTotalSeconds = subscriptionSeconds + usedSecondsThisPeriod;
+
+    const result = {
+      credits: ceilMin(remainingSeconds),
+      subscription: ceilMin(subscriptionSeconds),
+      purchased: ceilMin(purchasedSeconds),
+      credits_seconds: remainingSeconds,
+      subscription_seconds: subscriptionSeconds,
+      purchased_seconds: purchasedSeconds,
+      subscription_total: subscriptionTotalSeconds === 0 ? 0 : Math.ceil(subscriptionTotalSeconds / 60),
+      subscription_total_seconds: subscriptionTotalSeconds,
+    };
+    creditsCache.set(userId, { data: result, timestamp: Date.now() });
+    void sharedSetJson(`users:credits:${userId}`, result, CREDITS_CACHE_TTL);
+    return result;
+  })().finally(() => {
+    creditsInFlight.delete(userId);
+  });
+
+  creditsInFlight.set(userId, run);
+  return await run;
+}
+
+export async function getRecentActivity(userId: string, limit: number = 25) {
+  const safeLimit = Math.min(Math.max(limit, 1), 100);
+  const cacheKey = recentActivityCacheKey(userId, safeLimit);
+  const cached = recentActivityCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < RECENT_ACTIVITY_CACHE_TTL) {
+    return cached.data;
+  }
+
+  const shared = await sharedGetJson<any[]>(`users:activity:${userId}:${safeLimit}`);
+  if (shared) {
+    recentActivityCache.set(cacheKey, { data: shared, timestamp: Date.now() });
+    return shared;
+  }
+
+  const inFlight = recentActivityInFlight.get(cacheKey);
+  if (inFlight) return await inFlight;
+
+  const run = (async () => {
+    const normalizeSessionTypeLabel = (value: string | null | undefined) => {
+      const raw = String(value || '').trim().toLowerCase();
+      if (!raw) return 'session';
+      if (raw === 'instant' || raw === 'scheduled') return raw;
+      return 'session';
+    };
+
+    const [activityEvents, moodEntries, journalEntries, sessions] = await Promise.all([
+      prisma.activity_events.findMany({
+        where: { user_id: userId },
+        orderBy: { timestamp: 'desc' },
+        take: safeLimit,
+        select: {
+          id: true,
+          timestamp: true,
+          app_name: true,
+          window_title: true,
+          metadata: true,
+        },
+      }),
+      prisma.mood_entries.findMany({
+        where: { user_id: userId },
+        orderBy: { created_at: 'desc' },
+        take: safeLimit,
+        select: {
+          id: true,
+          mood: true,
+          intensity: true,
+          created_at: true,
+        },
+      }),
+      prisma.journal_entries.findMany({
+        where: { user_id: userId },
+        orderBy: { created_at: 'desc' },
+        take: safeLimit,
+        select: {
+          id: true,
+          title: true,
+          created_at: true,
+        },
+      }),
+      prisma.app_sessions.findMany({
+        where: { user_id: userId },
+        orderBy: { created_at: 'desc' },
+        take: safeLimit,
+        select: {
+          id: true,
+          status: true,
+          type: true,
+          duration_minutes: true,
+          created_at: true,
+        },
+      }),
+    ]);
+
+  const merged = [
+    ...activityEvents.map((event) => ({
+      id: `event:${event.id}`,
+      type: 'event',
+      text:
+        event.window_title ||
+        event.app_name ||
+        ((event.metadata as Record<string, any> | null)?.action as string | undefined) ||
+        'Used the app',
+      created_at: event.timestamp.toISOString(),
+      metadata: event.metadata,
+    })),
+    ...moodEntries.map((entry) => ({
+      id: `mood:${entry.id}`,
+      type: 'mood',
+      text: `Logged ${entry.mood} (${entry.intensity}/10)`,
+      created_at: entry.created_at.toISOString(),
+      mood: entry.mood,
+    })),
+    ...journalEntries.map((entry) => ({
+      id: `journal:${entry.id}`,
+      type: 'journal',
+      text: `Wrote a journal entry${entry.title ? `: ${entry.title}` : ''}`,
+      created_at: entry.created_at.toISOString(),
+    })),
+    ...sessions.map((session) => ({
+      id: `session:${session.id}`,
+      type: 'session',
+      text: (() => {
+        const typeLabel = normalizeSessionTypeLabel(session.type);
+        if (session.status === 'completed') {
+          return `Completed ${typeLabel} session${session.duration_minutes ? ` (${session.duration_minutes} min)` : ''}`;
+        }
+        if (session.status === 'scheduled') {
+          return typeLabel === 'scheduled'
+            ? 'Scheduled session'
+            : `Scheduled ${typeLabel} session`;
+        }
+        return `Session ${session.status}`;
+      })(),
+      created_at: session.created_at.toISOString(),
+      status: session.status,
+    })),
+  ];
+
+    const result = merged
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, safeLimit);
+
+    recentActivityCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    void sharedSetJson(`users:activity:${userId}:${safeLimit}`, result, RECENT_ACTIVITY_CACHE_TTL);
+    return result;
+  })().finally(() => {
+    recentActivityInFlight.delete(cacheKey);
+  });
+
+  recentActivityInFlight.set(cacheKey, run);
+  return await run;
+}
+
+export async function createCrisisEventFromDetection(input: {
+  userId: string;
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  eventType?: string;
+  keywords?: string[];
+  aiConfidence?: number;
+  notes?: string;
+}) {
+  const keywords = (input.keywords || [])
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .slice(0, 20);
+
+  const event = await prisma.crisis_events.create({
+    data: {
+      user_id: input.userId,
+      risk_level: input.riskLevel,
+      event_type: input.eventType || 'keyword_detection',
+      keywords,
+      ai_confidence:
+        typeof input.aiConfidence === 'number'
+          ? Math.max(0, Math.min(100, Math.round(input.aiConfidence)))
+          : null,
+      notes: input.notes,
+      status: 'pending',
     },
   });
 
-  const profile = await prisma.profiles.findUnique({
-    where: { id: userId },
-    select: {
-      credits: true,
-      purchased_credits: true,
-      credits_seconds: true,
-      purchased_credits_seconds: true,
-    },
-  });
+  adminService.invalidateCrisisEventsCache();
 
-  const subscriptionSeconds =
-    (profile?.credits_seconds && profile.credits_seconds > 0)
-      ? profile.credits_seconds
-      : (profile?.credits || 0) * 60;
-  const purchasedSeconds =
-    (profile?.purchased_credits_seconds &&
-      profile.purchased_credits_seconds > 0)
-      ? profile.purchased_credits_seconds
-      : (profile?.purchased_credits || 0) * 60;
-  const remainingSeconds = subscriptionSeconds + purchasedSeconds;
-
-  const usedSecondsLifetime = await getLifetimeUsedSeconds(userId);
-  const totalAccountSeconds = remainingSeconds + usedSecondsLifetime;
-
-  const ceilMin = (sec: number) => (sec === 0 ? 0 : Math.ceil(sec / 60));
-
-  // "Subscription total" should reflect the full allowance accrued this billing period,
-  // including stacked upgrades: total = remaining + used_this_period.
-  const periodStart = activeSub?.start_date || activeSub?.created_at || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const periodEnd = activeSub?.end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-  const usedAgg = await prisma.app_sessions.aggregate({
-    where: {
-      user_id: userId,
-      status: 'completed',
-      ended_at: { not: null, gte: periodStart, lte: periodEnd },
-    },
-    _sum: { billed_seconds: true },
-  });
-
-  const usedSecondsThisPeriod = Math.max(0, usedAgg._sum.billed_seconds || 0);
-  const subscriptionTotalSeconds = subscriptionSeconds + usedSecondsThisPeriod;
-
-  return {
-    credits: ceilMin(remainingSeconds),
-    subscription: ceilMin(subscriptionSeconds),
-    purchased: ceilMin(purchasedSeconds),
-    credits_seconds: remainingSeconds,
-    subscription_seconds: subscriptionSeconds,
-    purchased_seconds: purchasedSeconds,
-    subscription_total: subscriptionTotalSeconds === 0 ? 0 : Math.ceil(subscriptionTotalSeconds / 60),
-    subscription_total_seconds: subscriptionTotalSeconds,
-  };
+  return event;
 }
 
 export async function updateProfile(userId: string, data: UpdateProfileInput) {
-  // console.log('Updating profile for user:', userId, 'Data:', data);
-
-  const { 
-    emergency_contact_name, 
-    emergency_contact_phone, 
-    emergency_contact_relationship, 
-    ...profileData 
-  } = data as any;
+  const {
+    emergency_contact_name,
+    emergency_contact_phone,
+    emergency_contact_relationship,
+    bio,
+    brain_health_settings,
+    ...profileForPrisma
+  } = data;
 
   console.log("Updating profile for user:", userId);
   console.log("Emergency Contact Data:", { emergency_contact_name, emergency_contact_phone, emergency_contact_relationship });
@@ -786,11 +1440,50 @@ export async function updateProfile(userId: string, data: UpdateProfileInput) {
       });
     }
   }
-  
-  return prisma.profiles.update({
-    where: { id: userId },
-    data: data as any, // Keep updating legacy fields for now for safety, or use profileData to exclude them
+
+  const bioDbValue =
+    bio === undefined
+      ? undefined
+      : typeof bio === 'string' && bio.trim() === ''
+        ? null
+        : bio;
+
+  const brainHealthDbValue =
+    brain_health_settings === undefined
+      ? undefined
+      : JSON.stringify(brain_health_settings);
+
+  // `bio` is written via raw SQL so profile saves work even when the generated Prisma
+  // client is stale (e.g. dev server locks query_engine during `prisma generate`).
+  const updated = await prisma.$transaction(async (tx) => {
+    const row = await tx.profiles.update({
+      where: { id: userId },
+      data: profileForPrisma as any,
+    });
+    if (bioDbValue !== undefined) {
+      await tx.$executeRaw(
+        Prisma.sql`UPDATE public.profiles SET bio = ${bioDbValue} WHERE id = ${userId}::uuid`
+      );
+    }
+    if (brainHealthDbValue !== undefined) {
+      await tx.$executeRaw(
+        Prisma.sql`UPDATE public.profiles SET brain_health_settings = ${brainHealthDbValue}::jsonb WHERE id = ${userId}::uuid`
+      );
+    }
+    return row;
   });
+
+  invalidateUserProfileCache(userId);
+  if (bioDbValue !== undefined || brainHealthDbValue !== undefined) {
+    return {
+      ...updated,
+      ...(bioDbValue !== undefined ? { bio: bioDbValue } : {}),
+      ...(brainHealthDbValue !== undefined
+        ? { brain_health_settings: brain_health_settings }
+        : {}),
+    };
+  }
+  return updated;
 }
 
 export async function completeOnboarding(userId: string, data: OnboardingInput) {
@@ -834,6 +1527,7 @@ export async function completeOnboarding(userId: string, data: OnboardingInput) 
     });
   }
 
+  invalidateUserProfileCache(userId);
   return getProfile(userId);
 }
 

@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import {
@@ -5,219 +6,168 @@ import {
   TrendingUp,
   TrendingDown,
   Zap,
-  Users,
   Activity,
   BookOpen,
   Smile,
   Heart,
   Brain,
   Target,
-  Download,
-  RefreshCw,
-  Calendar,
-  CheckCircle2,
-  XCircle,
   Clock,
+  AlertCircle,
 } from "lucide-react";
 import {
   BarChart,
   Bar,
-  LineChart,
   Line,
-  AreaChart,
-  Area,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-  FunnelChart,
-  Funnel,
+  ComposedChart,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
   ResponsiveContainer,
-  Cell,
 } from "recharts";
-import { useState } from "react";
 import { Card } from "@/app/components/ui/card";
-import { Button } from "@/app/components/ui/button";
+import { api } from "../../../lib/api";
+import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
+import { datesForPreset, downloadCsv } from "@/lib/adminAnalytics";
+
+function formatAnalyticsRangeLabel(from: string, to: string): string {
+  try {
+    const a = new Date(`${from}T12:00:00Z`);
+    const b = new Date(`${to}T12:00:00Z`);
+    const o: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+    return `${a.toLocaleDateString(undefined, o)} – ${b.toLocaleDateString(undefined, o)}`;
+  } catch {
+    return `${from} – ${to}`;
+  }
+}
+
+const ICON_MAP: Record<string, typeof Brain> = {
+  "AI Talk it out": Brain,
+  "Mood Tracking": Smile,
+  Journal: BookOpen,
+  "Wellness Tools": Heart,
+  "Sleep Tracker": Activity,
+  "Habit Tracker": Activity,
+  "Crisis Resources": AlertCircle,
+};
 
 export function FeatureAdoption() {
-  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
+  const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
+  const [dash, setDash] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Overall Feature Adoption
-  const featureAdoptionData = [
-    {
-      feature: "AI Therapy Sessions",
-      adoption: 95,
-      users: 4750,
-      growth: 12.5,
-      icon: Brain,
-      color: "#8b5cf6",
-    },
-    {
-      feature: "Mood Tracking",
-      adoption: 89,
-      users: 4450,
-      growth: 8.3,
-      icon: Smile,
-      color: "#ec4899",
-    },
-    {
-      feature: "Journaling",
-      adoption: 72,
-      users: 3600,
-      growth: 15.7,
-      icon: BookOpen,
-      color: "#3b82f6",
-    },
-    {
-      feature: "Wellness Tools",
-      adoption: 68,
-      users: 3400,
-      growth: 11.2,
-      icon: Heart,
-      color: "#10b981",
-    },
-    {
-      feature: "Progress Reports",
-      adoption: 54,
-      users: 2700,
-      growth: 5.8,
-      icon: Target,
-      color: "#f59e0b",
-    },
-    {
-      feature: "Avatar Customization",
-      adoption: 82,
-      users: 4100,
-      growth: -2.1,
-      icon: Users,
-      color: "#06b6d4",
-    },
+  const loadStats = useCallback(async (forceRefresh?: boolean) => {
+    setIsLoading(true);
+    try {
+      setDash(
+        await api.admin.getStats({
+          chartPeriod: "month",
+          dateFrom,
+          dateTo,
+          ...(forceRefresh ? { refresh: true } : {}),
+        })
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dateFrom, dateTo]);
+
+  useEffect(() => {
+    void loadStats();
+  }, [loadStats]);
+
+  const featureUsage = (dash?.featureUsage || []) as { feature: string; usage: number }[];
+  const sessionActivity = (dash?.sessionActivity || []) as {
+    day: string;
+    sessions: number;
+    duration: number;
+  }[];
+  const hourlyActivity = (dash?.hourlyActivity || []) as { hour: string; hourNum?: number; sessions: number }[];
+
+  const totalSessionsAllTime = Number(dash?.totalSessions) || 0;
+  const sessionsInRange = sessionActivity.reduce((s, x) => s + (Number(x.sessions) || 0), 0);
+
+  const sessionTrendData = sessionActivity.map((r) => ({
+    day: r.day,
+    sessions: Number(r.sessions) || 0,
+    avgDurationMin: Number(r.duration) || 0,
+  }));
+
+  const hourlyChartData = hourlyActivity.map((h) => ({
+    hour: h.hour,
+    sessions: Number(h.sessions) || 0,
+  }));
+
+  const featureAdoptionData = featureUsage.map((f, i) => ({
+    feature: f.feature,
+    adoption: Math.max(0, Math.min(100, Number(f.usage) || 0)),
+    icon: ICON_MAP[f.feature] ?? Brain,
+    color: ["#8b5cf6", "#ec4899", "#3b82f6", "#10b981", "#f59e0b", "#06b6d4", "#a855f7"][i % 7],
+  }));
+
+  const oc = dash?.onboardingStats as
+    | { signupsInRange?: number; completionsInRange?: number; completionRatePercent?: number }
+    | undefined;
+  const signupsR = Math.max(0, Number(oc?.signupsInRange) || 0);
+  const completionsR = Math.max(0, Number(oc?.completionsInRange) || 0);
+  const onboardingFunnelStages = [
+    { stage: "Signups (range)", value: signupsR, fill: "#8b5cf6" },
+    { stage: "Completed onboarding (range)", value: completionsR, fill: "#3b82f6" },
   ];
 
-  // Adoption Trend Over Time
-  const adoptionTrendData = [
-    { month: "Jul", aiSessions: 78, moodTracking: 65, journaling: 45, wellness: 52 },
-    { month: "Aug", aiSessions: 82, moodTracking: 70, journaling: 52, wellness: 58 },
-    { month: "Sep", aiSessions: 85, moodTracking: 75, journaling: 58, wellness: 61 },
-    { month: "Oct", aiSessions: 88, moodTracking: 80, journaling: 63, wellness: 64 },
-    { month: "Nov", aiSessions: 91, moodTracking: 84, journaling: 67, wellness: 66 },
-    { month: "Dec", aiSessions: 93, moodTracking: 87, journaling: 70, wellness: 67 },
-    { month: "Jan", aiSessions: 95, moodTracking: 89, journaling: 72, wellness: 68 },
-  ];
+  const featureShareBars = [...featureUsage]
+    .map((f) => ({
+      feature: f.feature,
+      share: Math.max(0, Math.min(100, Number(f.usage) || 0)),
+    }))
+    .sort((a, b) => b.share - a.share);
 
-  // Feature Rollout Impact
-  const rolloutImpactData = [
-    { week: "Pre-Launch", users: 0, engagement: 0 },
-    { week: "Week 1", users: 456, engagement: 23 },
-    { week: "Week 2", users: 1234, engagement: 45 },
-    { week: "Week 3", users: 2345, engagement: 62 },
-    { week: "Week 4", users: 3200, engagement: 74 },
-    { week: "Week 5", users: 3780, engagement: 81 },
-    { week: "Week 6", users: 4100, engagement: 85 },
-    { week: "Week 7", users: 4350, engagement: 87 },
-    { week: "Week 8", users: 4520, engagement: 89 },
-  ];
-
-  // Adoption Funnel
-  const adoptionFunnelData = [
-    { stage: "Signed Up", value: 5000, fill: "#8b5cf6" },
-    { stage: "Completed Onboarding", value: 4750, fill: "#3b82f6" },
-    { stage: "First Session", value: 4500, fill: "#10b981" },
-    { stage: "Used 2+ Features", value: 3800, fill: "#f59e0b" },
-    { stage: "Active User (7+ days)", value: 3200, fill: "#ec4899" },
-    { stage: "Power User (30+ days)", value: 2100, fill: "#06b6d4" },
-  ];
-
-  // Feature Comparison Radar
-  const featureComparisonData = [
+  const avgAdopt =
+    featureUsage.length > 0
+      ? Math.round(featureUsage.reduce((s, x) => s + x.usage, 0) / featureUsage.length)
+      : 0;
+  const topFeat = featureUsage.length
+    ? featureUsage.reduce((a, b) => (a.usage >= b.usage ? a : b))
+    : { feature: "—", usage: 0 };
+  const topStats = [
     {
-      feature: "Adoption Rate",
-      aiSessions: 95,
-      moodTracking: 89,
-      journaling: 72,
-      wellness: 68,
-    },
-    {
-      feature: "Daily Usage",
-      aiSessions: 78,
-      moodTracking: 85,
-      journaling: 62,
-      wellness: 54,
-    },
-    {
-      feature: "Satisfaction",
-      aiSessions: 92,
-      moodTracking: 88,
-      journaling: 90,
-      wellness: 85,
-    },
-    {
-      feature: "Retention",
-      aiSessions: 87,
-      moodTracking: 82,
-      journaling: 75,
-      wellness: 70,
-    },
-    {
-      feature: "Referrals",
-      aiSessions: 68,
-      moodTracking: 45,
-      journaling: 52,
-      wellness: 48,
-    },
-  ];
-
-  // Time to Adoption
-  const timeToAdoptionData = [
-    { feature: "AI Sessions", avgDays: 1.2 },
-    { feature: "Mood Tracking", avgDays: 2.5 },
-    { feature: "Wellness Tools", avgDays: 4.8 },
-    { feature: "Journaling", avgDays: 6.3 },
-    { feature: "Progress Reports", avgDays: 12.5 },
-  ];
-
-  const stats = [
-    {
-      label: "Overall Adoption Rate",
-      value: "76%",
-      change: "+8.7%",
+      label: "Avg relative usage",
+      value: `${avgAdopt}%`,
+      change: "—",
       trend: "up" as const,
       icon: Zap,
       color: "from-purple-500 to-indigo-600",
-      description: "of all features",
+      description: "mean of per-feature index (vs busiest feature)",
     },
     {
-      label: "Most Adopted Feature",
-      value: "AI Sessions",
-      change: "95%",
+      label: "Highest feature",
+      value: topFeat.feature,
+      change: `${topFeat.usage}%`,
       trend: "up" as const,
       icon: Brain,
       color: "from-pink-500 to-rose-600",
-      description: "adoption rate",
+      description: "relative activity share",
     },
     {
-      label: "Fastest Growing",
-      value: "Journaling",
-      change: "+15.7%",
+      label: "Total Talk it out",
+      value: totalSessionsAllTime.toLocaleString(),
+      change: `${sessionsInRange.toLocaleString()} in range`,
       trend: "up" as const,
       icon: BookOpen,
       color: "from-cyan-500 to-blue-600",
-      description: "this month",
+      description: "all-time ended sessions · badge shows count in selected dates",
     },
     {
-      label: "Avg Time to Adopt",
-      value: "5.4 days",
-      change: "-1.2 days",
+      label: "Onboarding completion",
+      value: `${dash?.onboardingStats?.completionRatePercent ?? 0}%`,
+      change: "—",
       trend: "up" as const,
       icon: Clock,
       color: "from-green-500 to-emerald-600",
-      description: "from signup",
+      description: "profiles completed / signups in range",
     },
   ];
 
@@ -228,50 +178,52 @@ export function FeatureAdoption() {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between"
+          className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between"
         >
           <div>
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Feature Adoption</h1>
             <p className="text-gray-600">
-              Track feature usage, adoption rates, and rollout performance
+              Relative platform activity by feature, session trends, and onboarding — for your selected dates
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              {formatAnalyticsRangeLabel(dateFrom, dateTo)} · Feature index uses all-time totals; sessions & onboarding
+              match the range.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Time Range Selector */}
-            <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1 border border-gray-200">
-              {(["7d", "30d", "90d"] as const).map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    timeRange === range
-                      ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-                      : "text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  {range === "7d" ? "7 Days" : range === "30d" ? "30 Days" : "90 Days"}
-                </button>
-              ))}
-            </div>
-
-            <Button className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-
-            <Button
-              variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-          </div>
+          <AdminAnalyticsToolbar
+            showChartPeriod={false}
+            showRangePreset={false}
+            chartPeriod="month"
+            onChartPeriodChange={() => {}}
+            rangePreset="30d"
+            onRangePresetChange={() => {}}
+            useCustomRange
+            onUseCustomRangeChange={() => {}}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            onRefresh={() => void loadStats(true)}
+            isLoading={isLoading}
+            onExport={() => {
+              if (!dash) return;
+              downloadCsv(`feature-adoption-${new Date().toISOString().slice(0, 10)}.csv`, [
+                ...featureUsage.map((f) => ({ feature: f.feature, relativeUsageIndex: f.usage })),
+                ...sessionTrendData.map((r, i) => ({
+                  row: i,
+                  day: r.day,
+                  sessions: r.sessions,
+                  avgDurationMin: r.avgDurationMin,
+                })),
+              ]);
+            }}
+          />
         </motion.div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, index) => (
+          {topStats.map((stat, index) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, scale: 0.9 }}
@@ -283,7 +235,7 @@ export function FeatureAdoption() {
                   <div
                     className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-lg`}
                   >
-                    <stat.icon className="w-6 h-6 text-white" />
+                    <stat.icon className="w-6 h-6 text-black" />
                   </div>
                   <div
                     className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
@@ -317,11 +269,11 @@ export function FeatureAdoption() {
           <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-xl font-bold text-white mb-1">
+                <h3 className="text-xl font-bold text-black mb-1">
                   Feature Adoption Overview
                 </h3>
                 <p className="text-sm text-gray-400">
-                  Current adoption rates and growth
+                  Relative activity index (0–100) vs the busiest feature — not a % of users
                 </p>
               </div>
               <Sparkles className="w-5 h-5 text-purple-400" />
@@ -347,17 +299,17 @@ export function FeatureAdoption() {
                       />
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-semibold text-white text-sm">
+                      <h4 className="font-semibold text-black text-sm">
                         {feature.feature}
                       </h4>
-                      <p className="text-xs text-gray-400">{feature.users.toLocaleString()} users</p>
+                      <p className="text-xs text-gray-400">Share of top feature’s volume</p>
                     </div>
                   </div>
 
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-400">Adoption</span>
-                      <span className="text-white font-bold">{feature.adoption}%</span>
+                      <span className="text-gray-400">Relative index</span>
+                      <span className="text-black font-bold">{feature.adoption}%</span>
                     </div>
                     <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                       <motion.div
@@ -367,17 +319,6 @@ export function FeatureAdoption() {
                         className="h-full rounded-full"
                         style={{ backgroundColor: feature.color }}
                       />
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-500">Growth</span>
-                      <span
-                        className={`font-medium ${
-                          feature.growth > 0 ? "text-green-400" : "text-red-400"
-                        }`}
-                      >
-                        {feature.growth > 0 ? "+" : ""}
-                        {feature.growth}%
-                      </span>
                     </div>
                   </div>
                 </motion.div>
@@ -397,19 +338,44 @@ export function FeatureAdoption() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
-                    Adoption Trend Over Time
+                  <h3 className="text-xl font-bold text-black mb-1">
+                    Talk it out per day (range)
                   </h3>
-                  <p className="text-sm text-gray-400">Monthly adoption rates</p>
+                  <p className="text-sm text-gray-400">
+                    From admin session activity for the selected dates (UTC buckets)
+                  </p>
                 </div>
                 <TrendingUp className="w-5 h-5 text-green-400" />
               </div>
 
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={adoptionTrendData}>
+                <ComposedChart data={sessionTrendData} margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                  <XAxis dataKey="month" stroke="#9ca3af" />
-                  <YAxis stroke="#9ca3af" />
+                  <XAxis
+                    dataKey="day"
+                    stroke="#9ca3af"
+                    tick={{ fontSize: 11 }}
+                    angle={-35}
+                    textAnchor="end"
+                    height={64}
+                    interval="preserveStartEnd"
+                    minTickGap={16}
+                  />
+                  <YAxis
+                    yAxisId="left"
+                    stroke="#9ca3af"
+                    tick={{ fontSize: 11 }}
+                    width={40}
+                    domain={[0, "auto"]}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    stroke="#9ca3af"
+                    tick={{ fontSize: 11 }}
+                    width={44}
+                    domain={[0, "auto"]}
+                  />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "#1f2937",
@@ -419,35 +385,24 @@ export function FeatureAdoption() {
                     }}
                   />
                   <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="aiSessions"
-                    stroke="#8b5cf6"
-                    strokeWidth={2}
-                    name="AI Sessions"
+                  <Bar
+                    yAxisId="left"
+                    dataKey="sessions"
+                    fill="#8b5cf6"
+                    name="Talk it out"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={32}
                   />
                   <Line
+                    yAxisId="right"
                     type="monotone"
-                    dataKey="moodTracking"
-                    stroke="#ec4899"
-                    strokeWidth={2}
-                    name="Mood Tracking"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="journaling"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    name="Journaling"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="wellness"
+                    dataKey="avgDurationMin"
                     stroke="#10b981"
                     strokeWidth={2}
-                    name="Wellness"
+                    dot={false}
+                    name="Avg duration (min)"
                   />
-                </LineChart>
+                </ComposedChart>
               </ResponsiveContainer>
             </Card>
           </motion.div>
@@ -461,30 +416,29 @@ export function FeatureAdoption() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
-                    Feature Rollout Impact
+                  <h3 className="text-xl font-bold text-black mb-1">
+                    Talk it out by hour (UTC)
                   </h3>
-                  <p className="text-sm text-gray-400">New feature adoption curve</p>
+                  <p className="text-sm text-gray-400">
+                    Distribution of sessions across the day for the selected range
+                  </p>
                 </div>
                 <Activity className="w-5 h-5 text-cyan-400" />
               </div>
 
               <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={rolloutImpactData}>
-                  <defs>
-                    <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorEngagement" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
+                <BarChart data={hourlyChartData} margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                  <XAxis dataKey="week" stroke="#9ca3af" />
-                  <YAxis yAxisId="left" stroke="#9ca3af" />
-                  <YAxis yAxisId="right" orientation="right" stroke="#9ca3af" />
+                  <XAxis
+                    dataKey="hour"
+                    stroke="#9ca3af"
+                    tick={{ fontSize: 10 }}
+                    interval={0}
+                    angle={-45}
+                    textAnchor="end"
+                    height={56}
+                  />
+                  <YAxis stroke="#9ca3af" tick={{ fontSize: 11 }} width={36} domain={[0, "auto"]} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "#1f2937",
@@ -493,26 +447,8 @@ export function FeatureAdoption() {
                       color: "#fff",
                     }}
                   />
-                  <Legend />
-                  <Area
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="users"
-                    stroke="#3b82f6"
-                    fillOpacity={1}
-                    fill="url(#colorUsers)"
-                    name="Users"
-                  />
-                  <Area
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="engagement"
-                    stroke="#10b981"
-                    fillOpacity={1}
-                    fill="url(#colorEngagement)"
-                    name="Engagement %"
-                  />
-                </AreaChart>
+                  <Bar dataKey="sessions" fill="#3b82f6" name="Talk it out" radius={[4, 4, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             </Card>
           </motion.div>
@@ -520,7 +456,7 @@ export function FeatureAdoption() {
 
         {/* Adoption Funnel & Time to Adoption */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Adoption Funnel */}
+          {/* Onboarding funnel (range) */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -529,40 +465,50 @@ export function FeatureAdoption() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
-                    Feature Adoption Funnel
+                  <h3 className="text-xl font-bold text-black mb-1">
+                    Onboarding funnel (range)
                   </h3>
-                  <p className="text-sm text-gray-400">User journey to power user</p>
+                  <p className="text-sm text-gray-400">
+                    Signups vs completed onboarding in the selected date window
+                  </p>
                 </div>
                 <Target className="w-5 h-5 text-orange-400" />
               </div>
 
-              <div className="space-y-3">
-                {adoptionFunnelData.map((stage, index) => {
-                  const percentage = ((stage.value / adoptionFunnelData[0].value) * 100).toFixed(0);
-                  return (
-                    <div key={stage.stage} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-white font-medium text-sm">
-                          {stage.stage}
-                        </span>
-                        <span className="text-gray-400 text-sm">
-                          {stage.value.toLocaleString()} ({percentage}%)
-                        </span>
-                      </div>
-                      <div className="h-8 rounded-lg overflow-hidden" style={{ width: `${percentage}%`, backgroundColor: stage.fill }}>
-                        <div className="h-full flex items-center justify-center text-white text-xs font-medium">
-                          {percentage}%
+              {signupsR === 0 && completionsR === 0 ? (
+                <p className="text-sm text-gray-500 py-8 text-center">No onboarding events in this range.</p>
+              ) : (
+                <div className="space-y-3">
+                  {onboardingFunnelStages.map((stage) => {
+                    const widthPct =
+                      signupsR > 0
+                        ? Math.min(100, Math.round((stage.value / signupsR) * 1000) / 10)
+                        : stage.value > 0
+                          ? 100
+                          : 0;
+                    return (
+                      <div key={stage.stage} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-black font-medium text-sm">{stage.stage}</span>
+                          <span className="text-gray-400 text-sm">{stage.value.toLocaleString()}</span>
+                        </div>
+                        <div className="h-8 rounded-lg overflow-hidden bg-white/5">
+                          <div
+                            className="h-full flex items-center justify-center text-black text-xs font-medium min-w-[2rem]"
+                            style={{ width: `${widthPct}%`, backgroundColor: stage.fill }}
+                          >
+                            {signupsR > 0 || stage.value > 0 ? `${widthPct}%` : ""}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </Card>
           </motion.div>
 
-          {/* Time to Adoption */}
+          {/* Feature share ranking */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -571,32 +517,47 @@ export function FeatureAdoption() {
             <Card className="bg-white/10 backdrop-blur-xl border-white/20 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-white mb-1">
-                    Time to Adoption
+                  <h3 className="text-xl font-bold text-black mb-1">
+                    Feature activity ranking
                   </h3>
                   <p className="text-sm text-gray-400">
-                    Avg days from signup to first use
+                    Same relative index as cards — sorted by share of the busiest feature
                   </p>
                 </div>
                 <Clock className="w-5 h-5 text-blue-400" />
               </div>
 
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={timeToAdoptionData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                  <XAxis type="number" stroke="#9ca3af" />
-                  <YAxis dataKey="feature" type="category" stroke="#9ca3af" width={120} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#1f2937",
-                      border: "1px solid #374151",
-                      borderRadius: "8px",
-                      color: "#fff",
-                    }}
-                  />
-                  <Bar dataKey="avgDays" fill="#3b82f6" radius={[0, 8, 8, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {featureShareBars.length === 0 ? (
+                <p className="text-sm text-gray-500 py-8 text-center">No feature usage data.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart
+                    data={featureShareBars}
+                    layout="vertical"
+                    margin={{ top: 8, right: 16, left: 8, bottom: 8 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                    <XAxis type="number" stroke="#9ca3af" domain={[0, 100]} tick={{ fontSize: 11 }} />
+                    <YAxis
+                      type="category"
+                      dataKey="feature"
+                      stroke="#9ca3af"
+                      width={128}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#1f2937",
+                        border: "1px solid #374151",
+                        borderRadius: "8px",
+                        color: "#fff",
+                      }}
+                      formatter={(v: number) => [`${v}%`, "Relative index"]}
+                    />
+                    <Bar dataKey="share" fill="#6366f1" radius={[0, 8, 8, 0]} name="Index" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </Card>
           </motion.div>
         </div>

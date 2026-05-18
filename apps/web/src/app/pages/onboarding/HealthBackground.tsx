@@ -1,11 +1,13 @@
 import { OnboardingLayout } from "../../components/OnboardingLayout";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
-import { Label } from "../../components/ui/label";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { ArrowRight, ArrowLeft, Info, Shield, Loader2 } from "lucide-react";
+import { ArrowRight, ArrowLeft, Shield, Loader2 } from "lucide-react";
+import { useAuth } from "@/app/contexts/AuthContext";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -29,6 +31,7 @@ type HealthBackgroundValues = z.infer<typeof healthBackgroundSchema>;
 
 export function OnboardingHealthBackground() {
   const navigate = useNavigate();
+  const { refreshProfile } = useAuth();
   const { data, updateData } = useOnboarding();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -42,20 +45,40 @@ export function OnboardingHealthBackground() {
   });
 
   const triggers = [
-    { value: "violence", label: "Violence" },
-    { value: "self-harm", label: "Self-harm" },
-    { value: "substance-abuse", label: "Substance Abuse" },
-    { value: "eating-disorders", label: "Eating Disorders" },
-    { value: "trauma", label: "Trauma/PTSD" },
-    { value: "none", label: "None of the above" }
+    { value: "crowds", label: "Crowds" },
+    { value: "procrastination", label: "Procrastination" },
+    { value: "overthinking", label: "Overthinking" },
+    { value: "low-energy-days", label: "Low-energy days" },
+    { value: "focus-issues", label: "Focus issues" },
+    { value: "motivation-dips", label: "Motivation dips" },
+    { value: "sleep-routine", label: "Sleep routine" },
+    { value: "time-management", label: "Time management" },
+    { value: "difficult-conversations", label: "Difficult conversations" },
+    { value: "uncertainty", label: "Uncertainty" },
+    { value: "workload-pressure", label: "Workload pressure" },
+    { value: "decision-making", label: "Decision-making" },
+    { value: "distractions", label: "Distractions" },
+    { value: "confidence-dips", label: "Confidence dips" },
+    { value: "social-situations", label: "Social situations" },
   ];
 
-  const onSubmit = (values: HealthBackgroundValues) => {
+  const onSubmit = async (values: HealthBackgroundValues) => {
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      await api.updateProfile({
+        selected_triggers: values.selectedTriggers ?? [],
+        ...(values.inTherapy?.trim() ? { in_therapy: values.inTherapy.trim() } : {}),
+        ...(values.onMedication?.trim() ? { on_medication: values.onMedication.trim() } : {}),
+      });
+      await refreshProfile();
       updateData(values);
       navigate("/onboarding/avatar-preferences");
-    }, 500);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Couldn't save — try again";
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -98,7 +121,7 @@ export function OnboardingHealthBackground() {
                 name="inTherapy"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-base mb-3 block">Are you currently working with a companion?</FormLabel>
+                    <FormLabel className="text-base mb-3 block">Are you currently working with a therapist?</FormLabel>
                     <FormControl>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         {["yes", "no", "prefer-not-to-say"].map((option, index) => (
@@ -126,14 +149,14 @@ export function OnboardingHealthBackground() {
                   </FormItem>
                 )}
               />
-              <p className="text-xs text-muted-foreground mt-3 flex items-start gap-2">
+              {/* <p className="text-xs text-muted-foreground mt-3 flex items-start gap-2">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <span>Ezri complements but doesn't replace professional companionship</span>
-              </p>
+                <span>Solace complements but doesn't replace professional companionship</span>
+              </p> */}
             </Card>
           </motion.div>
 
-          {/* Content Warnings */}
+          {/* Challenges (same options as profile) */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -145,9 +168,9 @@ export function OnboardingHealthBackground() {
                 name="selectedTriggers"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-base mb-2 block">Content Warning Preferences</FormLabel>
+                    <FormLabel className="text-base mb-2 block">Challenges</FormLabel>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Select topics you'd like Ezri to handle with extra care
+                      Select what tends to feel hard so we can tailor support (optional)
                     </p>
                     <FormControl>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -162,15 +185,12 @@ export function OnboardingHealthBackground() {
                             whileTap={{ scale: 0.97 }}
                             onClick={() => {
                               const current = field.value || [];
-                              if (trigger.value === "none") {
-                                field.onChange(["none"]);
-                              } else {
-                                const filtered = current.filter((t: string) => t !== "none");
-                                const newValue = filtered.includes(trigger.value)
-                                  ? filtered.filter((t: string) => t !== trigger.value)
-                                  : [...filtered, trigger.value];
-                                field.onChange(newValue);
-                              }
+                              const selected = current.includes(trigger.value);
+                              field.onChange(
+                                selected
+                                  ? current.filter((t: string) => t !== trigger.value)
+                                  : [...current, trigger.value]
+                              );
                             }}
                             className={`p-3 rounded-lg border-2 transition-all text-left ${
                               (field.value || []).includes(trigger.value)

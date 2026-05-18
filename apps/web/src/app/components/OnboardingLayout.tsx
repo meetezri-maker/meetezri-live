@@ -1,13 +1,14 @@
 import { ReactNode } from "react";
 import { motion } from "motion/react";
-import { Heart, Check, ArrowLeft } from "lucide-react";
+import { Check, ArrowLeft } from "lucide-react";
+import { BrandLogo } from "./BrandLogo";
 import { FloatingElement } from "./FloatingElement";
 
 interface OnboardingLayoutProps {
   children: ReactNode;
   currentStep: number;
   totalSteps: number;
-  title: string;
+  title: ReactNode;
   subtitle?: string;
   showBack?: boolean;
   onBack?: () => void;
@@ -56,9 +57,7 @@ export function OnboardingLayout({
                 transition={{ type: "spring", stiffness: 200, damping: 20 }}
                 className="flex items-center gap-2"
               >
-                <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center shadow-lg">
-                  <Heart className="w-5 h-5 text-white" fill="white" />
-                </div>
+                <BrandLogo heightClass="h-8" />
                 <span className="font-semibold">Ezri</span>
               </motion.div>
             </div>
@@ -92,7 +91,7 @@ export function OnboardingLayout({
           transition={{ duration: 0.5 }}
           className="text-center mb-8"
         >
-          <h1 className="text-3xl md:text-4xl font-bold mb-2">{title}</h1>
+          <h1 className="text-3xl md:text-4xl font-bold mb-2 inline-flex flex-wrap items-center justify-center gap-2">{title}</h1>
           {subtitle && (
             <p className="text-muted-foreground text-lg">{subtitle}</p>
           )}

@@ -16,8 +16,10 @@ import {
   ArrowRight,
   Plus
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 interface ABTest {
   id: string;
@@ -39,158 +41,52 @@ interface ABTest {
   winner?: string;
 }
 
+function mapRowToTest(row: Record<string, unknown>): ABTest {
+  const variantsRaw = row.variants;
+  const variants = Array.isArray(variantsRaw)
+    ? (variantsRaw as ABTest["variants"])
+    : [];
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    description: String(row.description ?? ""),
+    status: (String(row.status || "draft") as ABTest["status"]) || "draft",
+    startDate: new Date(String(row.startDate)),
+    endDate: row.endDate ? new Date(String(row.endDate)) : undefined,
+    variants,
+    goal: String(row.goal ?? ""),
+    confidence: typeof row.confidence === "number" ? row.confidence : 0,
+    winner: row.winner != null ? String(row.winner) : undefined,
+  };
+}
+
 export function ABTesting() {
   const [selectedTest, setSelectedTest] = useState<ABTest | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [abTests, setAbTests] = useState<ABTest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [detailsTest, setDetailsTest] = useState<ABTest | null>(null);
+  const [createName, setCreateName] = useState("");
+  const [createDescription, setCreateDescription] = useState("");
+  const [createGoal, setCreateGoal] = useState("Complete onboarding");
 
-  // Mock A/B tests
-  const abTests: ABTest[] = [
-    {
-      id: "test001",
-      name: "Onboarding Flow Optimization",
-      description: "Testing new avatar selection flow vs. traditional setup",
-      status: "active",
-      startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-      variants: [
-        {
-          id: "control",
-          name: "Control (Original)",
-          traffic: 50,
-          conversions: 342,
-          visitors: 1024,
-          conversionRate: 33.4
-        },
-        {
-          id: "variant_a",
-          name: "Interactive Avatar First",
-          traffic: 50,
-          conversions: 489,
-          visitors: 1018,
-          conversionRate: 48.0
-        }
-      ],
-      goal: "Complete onboarding",
-      confidence: 98.5
-    },
-    {
-      id: "test002",
-      name: "Dashboard Layout Test",
-      description: "Card-based vs. list-based dashboard design",
-      status: "active",
-      startDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-      variants: [
-        {
-          id: "control",
-          name: "Card Layout",
-          traffic: 50,
-          conversions: 234,
-          visitors: 856,
-          conversionRate: 27.3
-        },
-        {
-          id: "variant_a",
-          name: "List Layout",
-          traffic: 50,
-          conversions: 198,
-          visitors: 842,
-          conversionRate: 23.5
-        }
-      ],
-      goal: "Start therapy session",
-      confidence: 72.3
-    },
-    {
-      id: "test003",
-      name: "Pricing Page CTA",
-      description: "Testing different call-to-action button colors and text",
-      status: "completed",
-      startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-      endDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-      variants: [
-        {
-          id: "control",
-          name: "Blue 'Get Started'",
-          traffic: 33,
-          conversions: 145,
-          visitors: 2134,
-          conversionRate: 6.8
-        },
-        {
-          id: "variant_a",
-          name: "Green 'Start Trial'",
-          traffic: 33,
-          conversions: 203,
-          visitors: 2098,
-          conversionRate: 9.7
-        },
-        {
-          id: "variant_b",
-          name: "Purple 'Begin Your Journey'",
-          traffic: 34,
-          conversions: 178,
-          visitors: 2156,
-          conversionRate: 8.3
-        }
-      ],
-      goal: "Sign up conversion",
-      confidence: 99.2,
-      winner: "variant_a"
-    },
-    {
-      id: "test004",
-      name: "Session Reminder Timing",
-      description: "Testing optimal reminder notification timing",
-      status: "paused",
-      startDate: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
-      variants: [
-        {
-          id: "control",
-          name: "1 hour before",
-          traffic: 50,
-          conversions: 89,
-          visitors: 234,
-          conversionRate: 38.0
-        },
-        {
-          id: "variant_a",
-          name: "24 hours before",
-          traffic: 50,
-          conversions: 102,
-          visitors: 228,
-          conversionRate: 44.7
-        }
-      ],
-      goal: "Attend scheduled session",
-      confidence: 81.5
-    },
-    {
-      id: "test005",
-      name: "Mood Check-in Frequency",
-      description: "Daily vs. twice daily mood tracking prompts",
-      status: "draft",
-      startDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-      variants: [
-        {
-          id: "control",
-          name: "Once daily (9 AM)",
-          traffic: 50,
-          conversions: 0,
-          visitors: 0,
-          conversionRate: 0
-        },
-        {
-          id: "variant_a",
-          name: "Twice daily (9 AM, 9 PM)",
-          traffic: 50,
-          conversions: 0,
-          visitors: 0,
-          conversionRate: 0
-        }
-      ],
-      goal: "Complete mood check-in",
-      confidence: 0
+  const loadTests = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.listAbTests();
+      setAbTests((Array.isArray(data) ? data : []).map((r) => mapRowToTest(r as Record<string, unknown>)));
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to load A/B tests");
+    } finally {
+      setLoading(false);
     }
-  ];
+  }, []);
+
+  useEffect(() => {
+    loadTests();
+  }, [loadTests]);
 
   // Mock performance data
   const performanceData = [
@@ -223,11 +119,127 @@ export function ABTesting() {
     }
   };
 
+  const totalVisitors = abTests.reduce(
+    (sum, t) => sum + t.variants.reduce((s, v) => s + (v.visitors || 0), 0),
+    0
+  );
   const stats = {
-    activeTests: abTests.filter(t => t.status === "active").length,
-    completedTests: abTests.filter(t => t.status === "completed").length,
-    avgUplift: 14.6,
-    totalVisitors: 12456
+    activeTests: abTests.filter((t) => t.status === "active").length,
+    completedTests: abTests.filter((t) => t.status === "completed").length,
+    avgUplift:
+      abTests.length > 0
+        ? Math.round(
+            abTests.reduce((acc, t) => {
+              const rates = t.variants.map((v) => v.conversionRate || 0);
+              const spread = rates.length > 1 ? Math.max(...rates) - Math.min(...rates) : 0;
+              return acc + spread;
+            }, 0) / abTests.length
+          )
+        : 0,
+    totalVisitors,
+  };
+
+  const mergeUpdated = (updated: unknown) => {
+    const t = mapRowToTest(updated as Record<string, unknown>);
+    setAbTests((prev) => prev.map((x) => (x.id === t.id ? t : x)));
+    setSelectedTest((s) => (s?.id === t.id ? t : s));
+  };
+
+  const pauseTest = async (e: React.MouseEvent, testId: string) => {
+    e.stopPropagation();
+    setBusy(true);
+    try {
+      const u = await api.updateAbTest(testId, { status: "paused" });
+      mergeUpdated(u);
+      toast.success("Test paused");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to pause");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resumeTest = async (e: React.MouseEvent, testId: string) => {
+    e.stopPropagation();
+    setBusy(true);
+    try {
+      const u = await api.updateAbTest(testId, {
+        status: "active",
+        startDate: new Date().toISOString(),
+      });
+      mergeUpdated(u);
+      toast.success("Test resumed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to resume");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const declareWinner = async (e: React.MouseEvent, test: ABTest) => {
+    e.stopPropagation();
+    if (!test.variants.length) return;
+    const best = test.variants.reduce((a, b) =>
+      (b.conversionRate || 0) > (a.conversionRate || 0) ? b : a
+    );
+    setBusy(true);
+    try {
+      const u = await api.updateAbTest(test.id, {
+        status: "completed",
+        winner: best.id,
+        endDate: new Date().toISOString(),
+        confidence: Math.max(test.confidence, 95),
+      });
+      mergeUpdated(u);
+      toast.success(`Winner set: ${best.name}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to declare winner");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startTest = async (e: React.MouseEvent, testId: string) => {
+    e.stopPropagation();
+    setBusy(true);
+    try {
+      const u = await api.updateAbTest(testId, {
+        status: "active",
+        startDate: new Date().toISOString(),
+      });
+      mergeUpdated(u);
+      toast.success("Test started");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to start test");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitCreate = async () => {
+    if (!createName.trim()) {
+      toast.error("Test name is required");
+      return;
+    }
+    setBusy(true);
+    try {
+      const u = await api.createAbTest({
+        name: createName.trim(),
+        description: createDescription.trim(),
+        goal: createGoal,
+        status: "draft",
+      });
+      setAbTests((prev) => [mapRowToTest(u as Record<string, unknown>), ...prev]);
+      setShowCreateModal(false);
+      setCreateName("");
+      setCreateDescription("");
+      setCreateGoal("Complete onboarding");
+      toast.success("Created experiment");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create test");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -248,7 +260,8 @@ export function ABTesting() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg"
+            disabled={loading}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center gap-2 shadow-lg disabled:opacity-50"
           >
             <Plus className="w-4 h-4" />
             Create Test
@@ -334,8 +347,10 @@ export function ABTesting() {
         >
           <h2 className="text-xl font-bold text-gray-900 mb-6">All Experiments</h2>
 
+          {loading && <p className="text-gray-600 py-6">Loading experiments…</p>}
+
           <div className="space-y-4">
-            {abTests.map((test, index) => {
+            {!loading && abTests.map((test, index) => {
               const StatusIcon = getStatusIcon(test.status);
               const winner = test.winner ? test.variants.find(v => v.id === test.winner) : null;
               
@@ -480,13 +495,15 @@ export function ABTesting() {
                       )}
 
                       {/* Action Buttons */}
-                      <div className="flex gap-2 mt-4">
+                      <div className="flex flex-wrap gap-2 mt-4">
                         {test.status === "active" && (
                           <>
                             <motion.button
                               whileHover={{ scale: 1.02 }}
                               whileTap={{ scale: 0.98 }}
-                              className="px-3 py-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium flex items-center gap-1"
+                              disabled={busy}
+                              onClick={(e) => pauseTest(e, test.id)}
+                              className="px-3 py-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium flex items-center gap-1 disabled:opacity-50"
                             >
                               <Pause className="w-4 h-4" />
                               Pause
@@ -494,7 +511,9 @@ export function ABTesting() {
                             <motion.button
                               whileHover={{ scale: 1.02 }}
                               whileTap={{ scale: 0.98 }}
-                              className="px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium flex items-center gap-1"
+                              disabled={busy}
+                              onClick={(e) => declareWinner(e, test)}
+                              className="px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium flex items-center gap-1 disabled:opacity-50"
                             >
                               <CheckCircle className="w-4 h-4" />
                               Declare Winner
@@ -506,7 +525,9 @@ export function ABTesting() {
                           <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
-                            className="px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium flex items-center gap-1"
+                            disabled={busy}
+                            onClick={(e) => resumeTest(e, test.id)}
+                            className="px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium flex items-center gap-1 disabled:opacity-50"
                           >
                             <Play className="w-4 h-4" />
                             Resume
@@ -517,7 +538,9 @@ export function ABTesting() {
                           <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
-                            className="px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium flex items-center gap-1"
+                            disabled={busy}
+                            onClick={(e) => startTest(e, test.id)}
+                            className="px-3 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium flex items-center gap-1 disabled:opacity-50"
                           >
                             <Play className="w-4 h-4" />
                             Start Test
@@ -527,6 +550,10 @@ export function ABTesting() {
                         <motion.button
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDetailsTest(test);
+                          }}
                           className="px-3 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium flex items-center gap-1"
                         >
                           <Eye className="w-4 h-4" />
@@ -562,6 +589,8 @@ export function ABTesting() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Test Name</label>
                   <input
                     type="text"
+                    value={createName}
+                    onChange={(e) => setCreateName(e.target.value)}
                     placeholder="e.g., Homepage Hero Image Test"
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
@@ -570,43 +599,32 @@ export function ABTesting() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                   <textarea
+                    value={createDescription}
+                    onChange={(e) => setCreateDescription(e.target.value)}
                     placeholder="What are you testing and why?"
                     rows={3}
                     className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Goal Metric</label>
-                    <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
-                      <option>Sign up conversion</option>
-                      <option>Complete onboarding</option>
-                      <option>Start therapy session</option>
-                      <option>Complete mood check-in</option>
-                      <option>Subscribe to premium</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Traffic Split</label>
-                    <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
-                      <option>50/50 (2 variants)</option>
-                      <option>33/33/34 (3 variants)</option>
-                      <option>25/25/25/25 (4 variants)</option>
-                      <option>90/10 (Control heavy)</option>
-                    </select>
-                  </div>
-                </div>
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Number of Variants</label>
-                  <select className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
-                    <option>2 (Control + Variant A)</option>
-                    <option>3 (Control + Variant A + Variant B)</option>
-                    <option>4 (Control + 3 Variants)</option>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Goal Metric</label>
+                  <select
+                    value={createGoal}
+                    onChange={(e) => setCreateGoal(e.target.value)}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="Sign up conversion">Sign up conversion</option>
+                    <option value="Complete onboarding">Complete onboarding</option>
+                    <option value="Start therapy session">Start therapy session</option>
+                    <option value="Complete mood check-in">Complete mood check-in</option>
+                    <option value="Subscribe to premium">Subscribe to premium</option>
                   </select>
                 </div>
+
+                <p className="text-sm text-gray-500">
+                  Default control and variant A are created automatically. Start the test when ready.
+                </p>
               </div>
 
               <div className="flex gap-3 mt-6">
@@ -614,6 +632,7 @@ export function ABTesting() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setShowCreateModal(false)}
+                  disabled={busy}
                   className="flex-1 px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium"
                 >
                   Cancel
@@ -622,12 +641,54 @@ export function ABTesting() {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium"
+                  onClick={() => void submitCreate()}
+                  disabled={busy}
+                  className="flex-1 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium disabled:opacity-50"
                 >
-                  Create Test
+                  {busy ? "Creating…" : "Create Test"}
                 </motion.button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {detailsTest && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setDetailsTest(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto"
+            >
+              <h3 className="text-xl font-bold text-gray-900 mb-2">{detailsTest.name}</h3>
+              <p className="text-gray-600 text-sm mb-4">{detailsTest.description}</p>
+              <div className="flex flex-wrap gap-2 text-xs text-gray-600 mb-4">
+                <span className="px-2 py-1 bg-gray-100 rounded">Status: {detailsTest.status}</span>
+                <span className="px-2 py-1 bg-gray-100 rounded">Goal: {detailsTest.goal}</span>
+                <span className="px-2 py-1 bg-gray-100 rounded">Confidence: {detailsTest.confidence}%</span>
+              </div>
+              <div className="space-y-2">
+                <p className="font-medium text-gray-900">{detailsTest.variants.length} variants</p>
+                <ul className="text-sm text-gray-700 list-disc pl-5">
+                  {detailsTest.variants.map((v) => (
+                    <li key={v.id}>
+                      {v.name}: {Number(v.conversionRate ?? 0).toFixed(1)}% conv. · {Number(v.visitors ?? 0).toLocaleString()} visitors
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <button
+                type="button"
+                className="mt-6 w-full px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium"
+                onClick={() => setDetailsTest(null)}
+              >
+                Close
+              </button>
             </motion.div>
           </motion.div>
         )}

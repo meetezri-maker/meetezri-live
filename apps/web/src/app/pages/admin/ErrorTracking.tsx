@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
-import { api } from "../../../lib/api";
+import { api } from "@/lib/api";
 import {
   AlertTriangle,
   Bug,
@@ -10,15 +10,13 @@ import {
   User,
   Globe,
   Code,
-  Filter,
   Search,
   Eye,
   Archive,
-  TrendingDown,
   BarChart3,
   X,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import {
@@ -49,6 +47,7 @@ interface ErrorLog {
   firstSeen: string;
   lastSeen: string;
   resolved: boolean;
+  createdAt: Date;
 }
 
 export function ErrorTracking() {
@@ -62,93 +61,108 @@ export function ErrorTracking() {
   const [errorToResolve, setErrorToResolve] = useState<ErrorLog | null>(null);
   const [errors, setErrors] = useState<ErrorLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const loadErrors = useCallback(async () => {
+    try {
+      setFetchError(null);
+      const data = await api.admin.getErrorLogs({ page: 1, limit: 500 });
+      const mappedErrors: ErrorLog[] = data.map((log: any) => ({
+        id: log.id,
+        type: (log.severity || "error") as ErrorLog["type"],
+        title: log.context?.title || log.message.substring(0, 80) + (log.message.length > 80 ? "…" : ""),
+        message: log.message,
+        stackTrace: log.stack_trace || "No stack trace available",
+        endpoint: log.context?.endpoint || "Unknown",
+        method: log.context?.method || "GET",
+        statusCode: log.context?.status_code || 500,
+        user: log.context?.user_id,
+        browser: log.context?.browser || "Unknown",
+        os: log.context?.os || "Unknown",
+        occurrences: log.context?.occurrences || 1,
+        firstSeen: new Date(log.created_at).toLocaleString(),
+        lastSeen: new Date(log.created_at).toLocaleString(),
+        resolved: log.status === "resolved",
+        createdAt: new Date(log.created_at),
+      }));
+      setErrors(mappedErrors);
+    } catch (error) {
+      console.error("Failed to fetch error logs:", error);
+      setFetchError(error instanceof Error ? error.message : "Failed to load errors");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchErrors = async () => {
-      try {
-        const data = await api.admin.getErrorLogs();
-        const mappedErrors: ErrorLog[] = data.map((log: any) => ({
-          id: log.id,
-          type: (log.severity || 'error') as any,
-          title: log.context?.title || log.message.substring(0, 50) + '...',
-          message: log.message,
-          stackTrace: log.stack_trace || 'No stack trace available',
-          endpoint: log.context?.endpoint || 'Unknown',
-          method: log.context?.method || 'GET',
-          statusCode: log.context?.status_code || 500,
-          user: log.context?.user_id,
-          browser: log.context?.browser || 'Unknown',
-          os: log.context?.os || 'Unknown',
-          occurrences: log.context?.occurrences || 1,
-          firstSeen: new Date(log.created_at).toLocaleString(),
-          lastSeen: new Date(log.created_at).toLocaleString(),
-          resolved: log.status === 'resolved'
-        }));
-        setErrors(mappedErrors);
-      } catch (error) {
-        console.error("Failed to fetch error logs:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    void loadErrors();
+  }, [loadErrors]);
 
-    fetchErrors();
-  }, []);
-  
-  /* const errors: ErrorLog[] = [ ... ] */
+  const dayMs = 24 * 60 * 60 * 1000;
+  const errorsLast24h = useMemo(
+    () => errors.filter((e) => Date.now() - e.createdAt.getTime() <= dayMs),
+    [errors]
+  );
 
-  const stats = [
-    {
-      label: "Total Errors (24h)",
-      value: errors.length.toString(),
-      change: "-12%",
-      trend: "down",
-      icon: Bug,
-      color: "from-red-500 to-rose-600",
-    },
-    {
-      label: "Critical Issues",
-      value: errors.filter(e => e.type === 'critical').length.toString(),
-      change: "-50%",
-      trend: "down",
-      icon: AlertTriangle,
-      color: "from-orange-500 to-amber-600",
-    },
-    {
-      label: "Resolved Today",
-      value: errors.filter(e => e.resolved).length.toString(),
-      change: "+24%",
-      trend: "up",
-      icon: CheckCircle2,
-      color: "from-green-500 to-emerald-600",
-    },
-    {
-      label: "Avg Response Time",
-      value: "2.3h",
-      change: "-15%",
-      trend: "down",
-      icon: Clock,
-      color: "from-blue-500 to-cyan-600",
-    },
-  ];
+  const stats = useMemo(
+    () => [
+      {
+        label: "Total (loaded)",
+        value: String(errors.length),
+        sub: `${errorsLast24h.length} in last 24h`,
+        icon: Bug,
+        color: "from-red-500 to-rose-600",
+      },
+      {
+        label: "Critical",
+        value: String(errors.filter((e) => e.type === "critical").length),
+        sub: "in sample",
+        icon: AlertTriangle,
+        color: "from-orange-500 to-amber-600",
+      },
+      {
+        label: "Resolved",
+        value: String(errors.filter((e) => e.resolved).length),
+        sub: "marked in DB",
+        icon: CheckCircle2,
+        color: "from-green-500 to-emerald-600",
+      },
+      {
+        label: "Unresolved",
+        value: String(errors.filter((e) => !e.resolved).length),
+        sub: "needs attention",
+        icon: Clock,
+        color: "from-blue-500 to-cyan-600",
+      },
+    ],
+    [errors, errorsLast24h.length]
+  );
 
-  const trendData = [
-    { day: "Mon", critical: 12, error: 45, warning: 23 },
-    { day: "Tue", critical: 8, error: 38, warning: 19 },
-    { day: "Wed", critical: 15, error: 52, warning: 28 },
-    { day: "Thu", critical: 6, error: 34, warning: 16 },
-    { day: "Fri", critical: 10, error: 42, warning: 21 },
-    { day: "Sat", critical: 4, error: 28, warning: 12 },
-    { day: "Sun", critical: 3, error: 24, warning: 10 },
-  ];
+  const trendData = useMemo(() => {
+    const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const buckets = labels.map((day) => ({ day, critical: 0, error: 0, warning: 0 }));
+    for (const e of errors) {
+      const d = e.createdAt.getDay();
+      const b = buckets[d];
+      if (!b) continue;
+      if (e.type === "critical") b.critical += 1;
+      else if (e.type === "error") b.error += 1;
+      else if (e.type === "warning") b.warning += 1;
+    }
+    return buckets;
+  }, [errors]);
 
-  const endpointData = [
-    { endpoint: "/api/sessions", errors: 156 },
-    { endpoint: "/api/ai-session", errors: 134 },
-    { endpoint: "/api/user/profile", errors: 89 },
-    { endpoint: "/api/mood-checkin", errors: 67 },
-    { endpoint: "/api/upload/avatar", errors: 45 },
-  ];
+  const endpointData = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of errors) {
+      const ep = e.endpoint || "Unknown";
+      counts.set(ep, (counts.get(ep) || 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([endpoint, err]) => ({ endpoint, errors: err }))
+      .sort((a, b) => b.errors - a.errors)
+      .slice(0, 8);
+  }, [errors]);
 
   const filteredErrors = errors.filter((error) => {
     const matchesSearch =
@@ -198,19 +212,31 @@ export function ErrorTracking() {
     setShowArchiveModal(true);
   };
 
-  const handleArchiveConfirmed = () => {
-    const unresolvedErrors = errors.filter((error) => !error.resolved);
-    setErrors(unresolvedErrors);
-    setShowArchiveModal(false);
+  const handleArchiveConfirmed = async () => {
+    try {
+      await api.admin.archiveResolvedErrorLogs();
+      setShowArchiveModal(false);
+      await loadErrors();
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "Failed to archive resolved errors");
+    }
   };
 
-  const handleResolveConfirmed = () => {
-    if (errorToResolve) {
-      const updatedErrors = errors.map((error) =>
-        error.id === errorToResolve.id ? { ...error, resolved: true } : error
+  const handleResolveConfirmed = async () => {
+    if (!errorToResolve) return;
+    try {
+      await api.admin.resolveErrorLog(errorToResolve.id);
+      setErrors((prev) =>
+        prev.map((error) =>
+          error.id === errorToResolve.id ? { ...error, resolved: true } : error
+        )
       );
-      setErrors(updatedErrors);
       setShowResolveModal(false);
+      setErrorToResolve(null);
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "Failed to mark resolved");
     }
   };
 
@@ -223,6 +249,7 @@ export function ErrorTracking() {
     setShowDetailsModal(false);
     setShowResolveModal(false);
     setShowArchiveModal(false);
+    setErrorToResolve(null);
   };
 
   return (
@@ -239,13 +266,15 @@ export function ErrorTracking() {
             <p className="text-gray-600">
               Application errors, logs, and stack traces
             </p>
+            {fetchError && <p className="text-sm text-red-600 mt-2">{fetchError}</p>}
           </div>
 
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
+              className="border-gray-300 text-gray-700 hover:bg-gray-500"
               onClick={handleArchiveErrors}
+              disabled={errors.filter((e) => e.resolved).length === 0 || isLoading}
             >
               <Archive className="w-4 h-4 mr-2" />
               Archive All Resolved
@@ -269,19 +298,10 @@ export function ErrorTracking() {
                   >
                     <stat.icon className="w-6 h-6 text-white" />
                   </div>
-                  <div
-                    className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                      stat.trend === "down"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    <TrendingDown className="w-3 h-3" />
-                    {stat.change}
-                  </div>
                 </div>
                 <h3 className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</h3>
                 <p className="text-sm text-gray-600">{stat.label}</p>
+                <p className="text-xs text-gray-500 mt-1">{stat.sub}</p>
               </Card>
             </motion.div>
           ))}
@@ -307,7 +327,7 @@ export function ErrorTracking() {
               </div>
 
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={trendData}>
+                <BarChart data={errors.length === 0 ? [{ day: "—", critical: 0, error: 0, warning: 0 }] : trendData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="day" stroke="#6b7280" />
                   <YAxis stroke="#6b7280" />
@@ -345,7 +365,10 @@ export function ErrorTracking() {
               </div>
 
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={endpointData} layout="vertical">
+                <BarChart
+                  data={endpointData.length ? endpointData : [{ endpoint: "No data", errors: 0 }]}
+                  layout="vertical"
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis type="number" stroke="#6b7280" />
                   <YAxis dataKey="endpoint" type="category" width={150} stroke="#6b7280" />
@@ -411,6 +434,13 @@ export function ErrorTracking() {
         </motion.div>
 
         {/* Error Logs */}
+        {isLoading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-40 rounded-xl bg-gray-100 animate-pulse" />
+            ))}
+          </div>
+        ) : (
         <div className="space-y-4">
           {filteredErrors.map((error, index) => {
             const TypeIcon = getTypeIcon(error.type);
@@ -537,9 +567,10 @@ export function ErrorTracking() {
             );
           })}
         </div>
+        )}
 
         {/* Empty State */}
-        {filteredErrors.length === 0 && (
+        {!isLoading && filteredErrors.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -637,7 +668,7 @@ export function ErrorTracking() {
                 <Button
                   variant="outline"
                   onClick={handleCloseModal}
-                  className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                  className="border-gray-300 text-gray-700 hover:bg-gray-500"
                 >
                   Close
                 </Button>
@@ -724,7 +755,7 @@ export function ErrorTracking() {
                 <Button
                   variant="outline"
                   onClick={handleCloseModal}
-                  className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                  className="border-gray-300 text-gray-700 hover:bg-gray-500"
                 >
                   Cancel
                 </Button>
@@ -798,7 +829,7 @@ export function ErrorTracking() {
                 <Button
                   variant="outline"
                   onClick={handleCloseModal}
-                  className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                  className="border-gray-300 text-gray-700 hover:bg-gray-500"
                 >
                   Cancel
                 </Button>

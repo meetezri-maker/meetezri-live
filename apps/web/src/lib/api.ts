@@ -1,34 +1,133 @@
 import { supabase } from './supabase';
 
+/** Base path for REST calls (no trailing slash). In local dev, defaults to `/api` and Vite proxies to the API server — see `apps/web/vite.config.ts`. */
 const API_URL =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.DEV
-    ? 'http://localhost:3001/api'
+    ? '/api'
     : 'https://meetezri-live-api.vercel.app/api');
 
-async function getHeaders() {
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
+async function getHeaders(accessToken?: string) {
+  const token =
+    accessToken ||
+    (await supabase.auth.getSession()).data.session?.access_token;
+
+  // Tells the API which SPA origin to use in email `redirect_to` (signup, resend, etc.).
+  // The server honors this over `Origin` when set (see `getWebBaseUrlFromRequest` in the API).
+  // Fixes local dev when links would otherwise pick up `WEB_BASE_URL` or a wrong host.
+  const webBase =
+    typeof window !== 'undefined' && window.location?.origin
+      ? { 'X-Web-Base-Url': window.location.origin }
+      : {};
 
   return {
     'Content-Type': 'application/json',
+    ...webBase,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
 
+/** Turn Fastify/Zod validation payloads into a short user-facing string. */
+function formatApiErrorBody(
+  errorData: Record<string, unknown>,
+  defaultErrorMessage: string
+): string {
+  const issues = errorData.issues as { fieldErrors?: Record<string, string[]> } | undefined;
+  const fe = issues?.fieldErrors;
+  if (fe && typeof fe === 'object') {
+    const first = Object.entries(fe).find(([, v]) => Array.isArray(v) && v.length);
+    if (first && first[1][0]) {
+      const label =
+        first[0] === 'email'
+          ? 'Email'
+          : first[0] === 'full_name'
+            ? 'Name'
+            : first[0].replace(/_/g, ' ');
+      return `${label}: ${first[1][0]}`;
+    }
+  }
+
+  const raw = errorData.message;
+  if (typeof raw === 'string' && raw.trim().startsWith('[')) {
+    try {
+      const parsed = JSON.parse(raw) as Array<{
+        message?: string;
+        path?: (string | number)[];
+        validation?: string;
+      }>;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const e = parsed[0];
+        const lastPath = e.path?.length ? String(e.path[e.path.length - 1]) : '';
+        if (lastPath === 'email' || e.validation === 'email') {
+          return 'Please enter a valid email address (e.g. name@domain.com).';
+        }
+        if (e.message) {
+          return lastPath ? `${lastPath.replace(/_/g, ' ')}: ${e.message}` : e.message;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (typeof raw === 'string' && raw.length > 0 && !raw.trim().startsWith('[')) {
+    return raw;
+  }
+
+  const validation = errorData.validation as
+    | Array<{ message?: string; instancePath?: string }>
+    | undefined;
+  if (Array.isArray(validation) && validation[0]?.message) {
+    return validation[0].message;
+  }
+
+  return defaultErrorMessage;
+}
+
 async function handleResponse(res: Response, defaultErrorMessage: string) {
   if (res.status === 401) {
+    const errorData = await res.json().catch(() => ({} as Record<string, unknown>));
+    const message = typeof errorData.message === 'string' ? errorData.message : '';
+
+    // Some endpoints (e.g. knowledge 2FA verify) legitimately return 401 for bad code.
+    // Preserve that message and avoid signing out a valid session.
+    if (message && message.toLowerCase().includes('invalid second-factor code')) {
+      throw new Error(message);
+    }
+
     // Session is invalid/expired on the server side
     await supabase.auth.signOut();
     throw new Error('Session expired. Please login again.');
   }
 
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.message || defaultErrorMessage);
+    const errorData = await res.json().catch(() => ({} as Record<string, unknown>));
+    throw new Error(formatApiErrorBody(errorData, defaultErrorMessage));
   }
 
   return res.json();
+}
+
+async function handleResponseAllowEmpty(res: Response, defaultErrorMessage: string) {
+  if (res.status === 401) {
+    const errorData = await res.json().catch(() => ({} as Record<string, unknown>));
+    const message = typeof errorData.message === 'string' ? errorData.message : '';
+
+    if (message && message.toLowerCase().includes('invalid second-factor code')) {
+      throw new Error(message);
+    }
+
+    await supabase.auth.signOut();
+    throw new Error('Session expired. Please login again.');
+  }
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({} as Record<string, unknown>));
+    throw new Error(formatApiErrorBody(errorData, defaultErrorMessage));
+  }
+  if (res.status === 204) return null;
+  const text = await res.text();
+  if (!text.trim()) return null;
+  return JSON.parse(text);
 }
 
 async function handleBlobResponse(res: Response, errorMessage: string) {
@@ -40,20 +139,109 @@ async function handleBlobResponse(res: Response, errorMessage: string) {
   return res.blob();
 }
 
-export const api = {
-  async getMe() {
-    const headers = await getHeaders();
-    const res = await fetch(`${API_URL}/users/me`, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-    });
-    
-    if (res.status === 404) {
-      throw new Error('Profile not found');
+function parseFilenameFromContentDisposition(contentDisposition: string | null) {
+  if (!contentDisposition) return null;
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]).replace(/["']/g, "");
+    } catch {
+      return utf8Match[1].replace(/["']/g, "");
     }
-    
-    return handleResponse(res, 'Failed to fetch user profile');
+  }
+
+  const plainMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+  return plainMatch?.[1] ?? null;
+}
+
+/** Merge overlapping GET /users/me calls (same tick / auth bootstrap). Admin calls pass explicit token and bypass. */
+let getMeInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /users/credits calls. */
+let getCreditsInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /journal list calls (auth/session churn on load). */
+let getJournalListInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /users/activity calls (dashboard widgets). */
+let getRecentActivityInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /notifications calls (header + page). */
+let getNotificationsInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /notifications/unread-count calls (header + page). */
+let getUnreadCountInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /wellness/challenges?scope=dashboard calls (dashboard). */
+let getChallengesForMeInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /ai-avatars calls (companion pickers). */
+let getAiAvatarsInFlight: Promise<any> | null = null;
+
+type CachedValue = { at: number; value: unknown };
+const shortGetCache = new Map<string, CachedValue>();
+const shortGetInFlight = new Map<string, Promise<unknown>>();
+
+function getCached<T>(key: string, ttlMs: number): T | null {
+  const hit = shortGetCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > ttlMs) return null;
+  return hit.value as T;
+}
+
+async function getJsonCached<T>(
+  cacheKey: string,
+  url: string,
+  headers: Record<string, string>,
+  defaultErrorMessage: string,
+  ttlMs: number
+): Promise<T> {
+  const cached = getCached<T>(cacheKey, ttlMs);
+  if (cached !== null) return cached;
+
+  const inFlight = shortGetInFlight.get(cacheKey);
+  if (inFlight) return (await inFlight) as T;
+
+  const run = (async () => {
+    const res = await fetch(url, { method: 'GET', headers, cache: 'no-store' });
+    const json = (await handleResponse(res, defaultErrorMessage)) as T;
+    shortGetCache.set(cacheKey, { at: Date.now(), value: json });
+    return json;
+  })().finally(() => {
+    shortGetInFlight.delete(cacheKey);
+  });
+
+  shortGetInFlight.set(cacheKey, run);
+  return (await run) as T;
+}
+
+export const api = {
+  async getMe(accessToken?: string) {
+    const run = async () => {
+      const headers = await getHeaders(accessToken);
+      const res = await fetch(`${API_URL}/users/me`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+
+      if (res.status === 404) {
+        throw new Error('Profile not found');
+      }
+
+      return handleResponse(res, 'Failed to fetch user profile');
+    };
+
+    if (accessToken) {
+      return run();
+    }
+    if (!getMeInFlight) {
+      // Short TTL cache to avoid repeated /users/me calls during route changes.
+      const cached = getCached<any>('GET:/users/me', 10_000);
+      if (cached !== null) return cached;
+
+      getMeInFlight = run().then((data) => {
+        shortGetCache.set('GET:/users/me', { at: Date.now(), value: data });
+        return data;
+      }).finally(() => {
+        getMeInFlight = null;
+      });
+    }
+    return getMeInFlight;
   },
 
   async initProfile() {
@@ -73,16 +261,268 @@ export const api = {
       headers,
       body: JSON.stringify(data),
     });
-    return handleResponse(res, 'Failed to update profile');
+    const result = await handleResponse(res, 'Failed to update profile');
+    shortGetCache.delete('GET:/users/me');
+    getMeInFlight = null;
+    return result;
+  },
+
+  async getCommunityOverview() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/overview`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+    return handleResponse(res, 'Failed to load community overview');
+  },
+
+  async getCommunityGroups() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/groups`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+    return handleResponse(res, 'Failed to load community groups');
+  },
+
+  async getCommunityPosts(limit = 30) {
+    const headers = await getHeaders();
+    const res = await fetch(
+      `${API_URL}/community/posts?${new URLSearchParams({ limit: String(limit) })}`,
+      { method: 'GET', headers, cache: 'no-store' }
+    );
+    return handleResponse(res, 'Failed to load community posts');
+  },
+
+  async createCommunityPost(body: {
+    content: string;
+    tags?: string[];
+    group_id?: string | null;
+  }) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/posts`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to create post');
+  },
+
+  async joinCommunityGroup(groupId: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/groups/${groupId}/join`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    return handleResponse(res, 'Failed to join group');
+  },
+
+  async leaveCommunityGroup(groupId: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/groups/${groupId}/leave`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    return handleResponse(res, 'Failed to leave group');
+  },
+
+  async likeCommunityPost(postId: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/posts/${postId}/like`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    return handleResponse(res, 'Failed to like post');
+  },
+
+  async addCommunityPostComment(postId: string, content: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/posts/${postId}/comments`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ content }),
+    });
+    return handleResponse(res, 'Failed to add comment');
+  },
+
+  async getCommunityPostComments(postId: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/posts/${postId}/comments`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+    return handleResponse(res, 'Failed to load comments');
+  },
+
+  async updateCommunityPostComment(postId: string, commentId: string, content: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/posts/${postId}/comments/${commentId}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ content }),
+    });
+    return handleResponse(res, 'Failed to update comment');
+  },
+
+  async deleteCommunityPostComment(postId: string, commentId: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/posts/${postId}/comments/${commentId}`, {
+      method: 'DELETE',
+      headers,
+    });
+    return handleResponse(res, 'Failed to delete comment');
+  },
+
+  async updateCommunityPost(postId: string, content: string, tags?: string[]) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/posts/${postId}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ content, ...(tags ? { tags } : {}) }),
+    });
+    return handleResponse(res, 'Failed to update post');
+  },
+
+  async deleteCommunityPost(postId: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/posts/${postId}`, {
+      method: 'DELETE',
+      headers,
+    });
+    return handleResponse(res, 'Failed to delete post');
+  },
+
+  async getCommunityMemberProfile(userId: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/community/members/${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+    return handleResponse(res, 'Failed to load member profile');
   },
 
   async resendVerificationEmail() {
     const headers = await getHeaders();
     const res = await fetch(`${API_URL}/users/resend-verification`, {
       method: 'POST',
-      headers,
+      headers: {
+        ...headers,
+        'x-web-base-url':
+          import.meta.env.VITE_WEB_BASE_URL ||
+          (typeof window !== 'undefined' ? window.location.origin : ''),
+      },
     });
     return handleResponse(res, 'Failed to send verification email');
+  },
+
+  async confirmEmail() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/confirm-email`, {
+      method: 'POST',
+      headers,
+    });
+    return handleResponse(res, 'Failed to confirm email');
+  },
+
+  async getKnowledgeTwoFactorStatus() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/status`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+    return handleResponse(res, 'Failed to load knowledge 2FA status');
+  },
+
+  async setupKnowledgeTwoFactor(body: {
+    pin: string;
+    securityQuestion: string;
+    securityAnswer: string;
+  }) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/setup`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to setup knowledge 2FA');
+  },
+
+  async setupKnowledgeTwoFactorEmail() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/setup-email`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    return handleResponse(res, 'Failed to setup email authentication code 2FA');
+  },
+
+  async verifyKnowledgeTwoFactor(code: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/verify`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ code }),
+    });
+    return handleResponse(res, 'Failed to verify knowledge 2FA');
+  },
+
+  async disableKnowledgeTwoFactor() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/disable`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    return handleResponse(res, 'Failed to disable knowledge 2FA');
+  },
+
+  async requestKnowledgeTwoFactorRecovery() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/recovery/request`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    return handleResponse(res, 'Failed to send recovery code');
+  },
+
+  async verifyKnowledgeTwoFactorRecovery(code: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/recovery/verify`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ code }),
+    });
+    return handleResponse(res, 'Failed to verify recovery code');
+  },
+
+  async requestKnowledgeTwoFactorLoginCode() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/login-code/request`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    return handleResponse(res, 'Failed to send authentication code');
+  },
+
+  async verifyKnowledgeTwoFactorLoginCode(code: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/2fa/knowledge/login-code/verify`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ code }),
+    });
+    return handleResponse(res, 'Failed to verify authentication code');
   },
 
   async completeOnboarding(data: any) {
@@ -111,25 +551,44 @@ export const api = {
       method: 'GET',
       headers,
     });
-    return handleBlobResponse(res, 'Failed to export user data');
+    const blob = await handleBlobResponse(res, 'Failed to export user data');
+    const contentDisposition = res.headers.get('content-disposition');
+    const contentType = res.headers.get('content-type') || blob.type || '';
+    const filename = parseFilenameFromContentDisposition(contentDisposition);
+
+    return {
+      blob,
+      filename,
+      contentType,
+    };
   },
 
   async checkUserExists(email: string) {
+    const origin =
+      typeof window !== 'undefined'
+        ? window.location.origin
+        : import.meta.env.VITE_WEB_BASE_URL || '';
     const res = await fetch(`${API_URL}/users/check`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(origin ? { 'x-web-base-url': origin } : {}),
       },
       body: JSON.stringify({ email }),
     });
     return handleResponse(res, 'Failed to check user existence');
   },
 
-  async signup(data: { email: string; password: string; firstName: string; lastName: string; stripe_session_id?: string }) {
+  async signup(data: { email: string; password: string; firstName: string; lastName: string; age: string; stripe_session_id?: string }) {
+    const origin =
+      typeof window !== 'undefined'
+        ? window.location.origin
+        : import.meta.env.VITE_WEB_BASE_URL || '';
     const res = await fetch(`${API_URL}/users/signup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(origin ? { 'x-web-base-url': origin } : {}),
       },
       body: JSON.stringify(data),
     });
@@ -147,8 +606,8 @@ export const api = {
     return handleResponse(res, 'Failed to send email');
   },
 
-  async getSettings() {
-    const headers = await getHeaders();
+  async getSettings(accessToken?: string) {
+    const headers = await getHeaders(accessToken);
     const res = await fetch(`${API_URL}/system-settings`, {
       method: 'GET',
       headers,
@@ -156,14 +615,68 @@ export const api = {
     return handleResponse(res, 'Failed to fetch settings');
   },
 
-  async getCredits() {
+  async getCredits(opts?: { bypassCache?: boolean }): Promise<any> {
+    if (opts?.bypassCache) {
+      shortGetCache.delete('GET:/users/credits');
+      getCreditsInFlight = null;
+    }
+    if (!getCreditsInFlight) {
+      const cached = getCached<any>('GET:/users/credits', 5_000);
+      if (cached !== null) return cached;
+
+      getCreditsInFlight = (async () => {
+        const headers = await getHeaders();
+        const data = await getJsonCached<any>(
+          'GET:/users/credits',
+          `${API_URL}/users/credits`,
+          headers,
+          'Failed to fetch credits',
+          5_000
+        );
+        return data;
+      })().finally(() => {
+        getCreditsInFlight = null;
+      });
+    }
+    return getCreditsInFlight;
+  },
+
+  async getRecentActivity(limit = 25) {
+    const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), 100);
+    const cacheKey = `GET:/users/activity?limit=${safeLimit}`;
+    if (!getRecentActivityInFlight) {
+      const cached = getCached<any>(cacheKey, 5_000);
+      if (cached !== null) return cached;
+      getRecentActivityInFlight = (async () => {
+        const headers = await getHeaders();
+        return await getJsonCached<any>(
+          cacheKey,
+          `${API_URL}/users/activity?${new URLSearchParams({ limit: String(safeLimit) })}`,
+          headers,
+          'Failed to fetch recent activity',
+          5_000
+        );
+      })().finally(() => {
+        getRecentActivityInFlight = null;
+      });
+    }
+    return getRecentActivityInFlight;
+  },
+
+  async reportCrisisEvent(data: {
+    riskLevel: 'low' | 'medium' | 'high' | 'critical';
+    eventType?: string;
+    keywords?: string[];
+    aiConfidence?: number;
+    notes?: string;
+  }) {
     const headers = await getHeaders();
-    const res = await fetch(`${API_URL}/users/credits`, {
-      method: 'GET',
+    const res = await fetch(`${API_URL}/users/crisis-events`, {
+      method: 'POST',
       headers,
-      cache: 'no-store',
+      body: JSON.stringify(data),
     });
-    return handleResponse(res, 'Failed to fetch credits');
+    return handleResponse(res, 'Failed to report crisis event');
   },
 
   async updateSetting(key: string, value: any, description?: string) {
@@ -174,6 +687,121 @@ export const api = {
       body: JSON.stringify({ key, value, description }),
     });
     return handleResponse(res, 'Failed to update setting');
+  },
+
+  /** Super admin: feature flags backed by DB */
+  async listFeatureFlags() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/feature-flags`, { method: 'GET', headers, cache: 'no-store' });
+    return handleResponse(res, 'Failed to load feature flags');
+  },
+  async createFeatureFlag(body: Record<string, unknown>) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/feature-flags`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to create feature flag');
+  },
+  async updateFeatureFlag(id: string, body: Record<string, unknown>) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/feature-flags/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to update feature flag');
+  },
+  async deleteFeatureFlag(id: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/feature-flags/${id}`, { method: 'DELETE', headers });
+    return handleResponseAllowEmpty(res, 'Failed to delete feature flag');
+  },
+
+  /** Super admin + org admin: A/B tests */
+  async listAbTests() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/ab-tests`, { method: 'GET', headers, cache: 'no-store' });
+    return handleResponse(res, 'Failed to load A/B tests');
+  },
+  async createAbTest(body: Record<string, unknown>) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/ab-tests`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to create A/B test');
+  },
+  async updateAbTest(id: string, body: Record<string, unknown>) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/ab-tests/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to update A/B test');
+  },
+  async deleteAbTest(id: string) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/ab-tests/${id}`, { method: 'DELETE', headers });
+    return handleResponseAllowEmpty(res, 'Failed to delete A/B test');
+  },
+
+  /** Super admin: API keys & webhooks (JSON in system_settings) */
+  async getApiPlatformConfig() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/platform/api-config`, { method: 'GET', headers, cache: 'no-store' });
+    return handleResponse(res, 'Failed to load API configuration');
+  },
+  async saveApiPlatformConfig(body: { apiKeys?: unknown[]; webhooks?: unknown[] }) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/platform/api-config`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to save API configuration');
+  },
+  async createAdminApiKey(body: { name: string; environment: string; rateLimit: string }) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/platform/api-keys`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res, 'Failed to create API key');
+  },
+
+  /** Integrations + branding (super_admin + org_admin) */
+  async getIntegrationsConfig() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/platform/integrations`, { method: 'GET', headers, cache: 'no-store' });
+    return handleResponse(res, 'Failed to load integrations');
+  },
+  async saveIntegrationsConfig(integrations: unknown[]) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/platform/integrations`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(integrations),
+    });
+    return handleResponse(res, 'Failed to save integrations');
+  },
+  async getBrandingConfig() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/platform/branding`, { method: 'GET', headers, cache: 'no-store' });
+    return handleResponse(res, 'Failed to load branding');
+  },
+  async saveBrandingConfig(payload: Record<string, unknown>) {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/admin/platform/branding`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res, 'Failed to save branding');
   },
 
   // Emergency Contacts API
@@ -236,14 +864,21 @@ export const api = {
       return handleResponse(res, 'Failed to create journal entry');
     },
 
-    async getAll() {
-      const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/journal`, {
-        method: 'GET',
-        headers,
-        cache: 'no-store',
-      });
-      return handleResponse(res, 'Failed to fetch journal entries');
+    async getAll(): Promise<any> {
+      if (!getJournalListInFlight) {
+        getJournalListInFlight = (async () => {
+          const headers = await getHeaders();
+          const res = await fetch(`${API_URL}/journal`, {
+            method: 'GET',
+            headers,
+            cache: 'no-store',
+          });
+          return handleResponse(res, 'Failed to fetch journal entries');
+        })().finally(() => {
+          getJournalListInFlight = null;
+        });
+      }
+      return getJournalListInFlight;
     },
 
     async get(id: string) {
@@ -288,12 +923,23 @@ export const api = {
 
     async getUserJournals(userId: string) { // Admin only
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/users/${userId}/journals`, {
+      const res = await fetch(`${API_URL}/journal/admin/users/${userId}/journals`, {
         method: 'GET',
         headers,
         cache: 'no-store',
       });
       return handleResponse(res, 'Failed to fetch user journals');
+    },
+
+    async getAllJournalsAdmin(params?: { startDate?: string; endDate?: string }) { // Admin only
+      const headers = await getHeaders();
+      const qs = params ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null) as [string, string][])).toString() : '';
+      const res = await fetch(`${API_URL}/journal/admin${qs}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch all journals');
     }
   },
 
@@ -380,6 +1026,97 @@ export const api = {
       return handleResponse(res, 'Failed to fetch wellness challenges');
     },
 
+    /** Per-user progress for dashboard (active challenges + level summary). Uses ?scope=dashboard on GET /challenges so older API deploys without /challenges/me still work. */
+    async getChallengesForMe() {
+      const cacheKey = 'GET:/wellness/challenges?scope=dashboard';
+      if (!getChallengesForMeInFlight) {
+        const cached = getCached<any>(cacheKey, 5_000);
+        if (cached !== null) return cached;
+        getChallengesForMeInFlight = (async () => {
+          const headers = await getHeaders();
+          const url = `${API_URL}/wellness/challenges?scope=dashboard`;
+          let res = await fetch(url, {
+            method: 'GET',
+            headers,
+            cache: 'no-store',
+          });
+          // Fallback if production API predates scope=dashboard (should not happen).
+          if (res.status === 404) {
+            res = await fetch(`${API_URL}/wellness/challenges/me`, {
+              method: 'GET',
+              headers,
+              cache: 'no-store',
+            });
+          }
+          const data = await handleResponse(res, 'Failed to fetch your wellness challenges');
+          shortGetCache.set(cacheKey, { at: Date.now(), value: data });
+          return data;
+        })().finally(() => {
+          getChallengesForMeInFlight = null;
+        });
+      }
+      return getChallengesForMeInFlight;
+    },
+
+    async createChallenge(data: {
+      title: string;
+      description?: string | null;
+      category?: string | null;
+      start_date: string;
+      end_date: string;
+      reward_points?: number | null;
+      goal_criteria?: unknown | null;
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/wellness/challenges`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to create wellness challenge');
+    },
+
+    async updateChallenge(
+      id: string,
+      data: {
+        title?: string;
+        description?: string | null;
+        category?: string | null;
+        start_date?: string;
+        end_date?: string;
+        reward_points?: number | null;
+        goal_criteria?: unknown | null;
+      }
+    ) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/wellness/challenges/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to update wellness challenge');
+    },
+
+    async joinChallenge(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/wellness/challenges/${encodeURIComponent(id)}/join`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      });
+      return handleResponse(res, 'Failed to join challenge');
+    },
+
+    async unjoinChallenge(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/wellness/challenges/${encodeURIComponent(id)}/join`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (res.status === 204) return true;
+      return handleResponse(res, 'Failed to leave challenge');
+    },
+
     async create(data: any) {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/wellness`, {
@@ -419,6 +1156,129 @@ export const api = {
       });
       return handleResponse(res, 'Failed to track progress');
     }
+  },
+
+  // Habits API
+  goals: {
+    async list() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals`, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      return handleResponse(res, "Failed to fetch goals");
+    },
+
+    async getById(goalId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals/${encodeURIComponent(goalId)}`, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      return handleResponse(res, "Failed to fetch goal");
+    },
+
+    async create(data: Record<string, unknown>) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, "Failed to create goal");
+    },
+
+    async update(goalId: string, data: Record<string, unknown>) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals/${encodeURIComponent(goalId)}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, "Failed to update goal");
+    },
+
+    async updateStatus(goalId: string, status: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals/${encodeURIComponent(goalId)}/status`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ status }),
+      });
+      return handleResponse(res, "Failed to update goal status");
+    },
+
+    async delete(goalId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals/${encodeURIComponent(goalId)}`, {
+        method: "DELETE",
+        headers,
+      });
+      return handleResponseAllowEmpty(res, "Failed to delete goal");
+    },
+
+    async listCheckIns(goalId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals/${encodeURIComponent(goalId)}/check-ins`, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      return handleResponse(res, "Failed to fetch goal check-ins");
+    },
+
+    async addCheckIn(goalId: string, payload: Record<string, unknown>) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/goals/${encodeURIComponent(goalId)}/check-ins`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      return handleResponse(res, "Failed to create goal check-in");
+    },
+  },
+
+  customAchievements: {
+    async list() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/custom-achievements`, {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      });
+      return handleResponse(res, "Failed to fetch custom achievements");
+    },
+
+    async create(data: Record<string, unknown>) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/custom-achievements`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, "Failed to create custom achievement");
+    },
+
+    async update(id: string, data: Record<string, unknown>) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/custom-achievements/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, "Failed to update custom achievement");
+    },
+
+    async delete(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/custom-achievements/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers,
+      });
+      return handleResponseAllowEmpty(res, "Failed to delete custom achievement");
+    },
   },
 
   // Habits API
@@ -492,10 +1352,21 @@ export const api = {
         cache: 'no-store',
       });
       return handleResponse(res, 'Failed to fetch user habits');
+    },
+
+    async getAllHabitsAdmin(params?: { startDate?: string; endDate?: string }) { // Admin only
+      const headers = await getHeaders();
+      const qs = params ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null) as [string, string][])).toString() : '';
+      const res = await fetch(`${API_URL}/habits/admin${qs}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch all habits');
     }
   },
 
-  // Sessions API
+  // Talk it out API
   sessions: {
     async create(data: { type: 'instant' | 'scheduled'; duration_minutes: number; scheduled_at?: string; config?: any }) {
       const headers = await getHeaders();
@@ -516,10 +1387,41 @@ export const api = {
       });
       return handleResponse(res, 'Failed to schedule session');
     },
-
-    async list(params?: { status?: string }) {
+    async cancelScheduled(id: string) {
       const headers = await getHeaders();
-      const query = params ? '?' + new URLSearchParams(params).toString() : '';
+      const res = await fetch(`${API_URL}/sessions/${id}/schedule`, {
+        method: 'DELETE',
+        headers,
+      });
+      return handleResponse(res, 'Failed to cancel scheduled session');
+    },
+    async updateScheduled(
+      id: string,
+      data: { duration_minutes?: number; scheduled_at?: string; config?: any }
+    ) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/sessions/${id}/schedule`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to update scheduled session');
+    },
+
+    /** Begin a scheduled session in place (same session id → active); removes it from upcoming lists. */
+    async startScheduled(id: string, data?: { duration_minutes?: number }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/sessions/${id}/start`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(data ?? {}),
+      });
+      return handleResponse(res, 'Failed to start scheduled session');
+    },
+
+    async list(params?: { status?: string; limit?: number }) {
+      const headers = await getHeaders();
+      const query = params ? '?' + new URLSearchParams(params as any).toString() : '';
       const res = await fetch(`${API_URL}/sessions${query}`, {
         method: 'GET',
         headers,
@@ -595,7 +1497,7 @@ export const api = {
 
     async getUserSessions(userId: string) { // Admin only
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/users/${userId}/sessions`, {
+      const res = await fetch(`${API_URL}/sessions/admin/users/${userId}/sessions`, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -638,7 +1540,7 @@ export const api = {
 
     async getUserMoods(userId: string) { // Admin only
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/users/${userId}/moods`, {
+      const res = await fetch(`${API_URL}/moods/admin/users/${userId}/moods`, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -649,9 +1551,29 @@ export const api = {
 
   // Admin API
   admin: {
-    async getStats() {
+    async getStats(params?: {
+      chartPeriod?: 'week' | 'month' | 'year';
+      sessionWeekOffset?: number;
+      rangeDays?: number;
+      dateFrom?: string;
+      dateTo?: string;
+      /** Bypass server 60s stats cache */
+      refresh?: boolean;
+    }) {
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/stats`, {
+      const search = new URLSearchParams();
+      if (params?.chartPeriod) search.set('chartPeriod', params.chartPeriod);
+      if (params?.sessionWeekOffset != null && params.sessionWeekOffset > 0) {
+        search.set('sessionWeekOffset', String(params.sessionWeekOffset));
+      }
+      if (params?.rangeDays != null && params.rangeDays > 0) {
+        search.set('rangeDays', String(params.rangeDays));
+      }
+      if (params?.dateFrom) search.set('dateFrom', params.dateFrom);
+      if (params?.dateTo) search.set('dateTo', params.dateTo);
+      if (params?.refresh) search.set('refresh', '1');
+      const qs = search.toString();
+      const res = await fetch(`${API_URL}/admin/stats${qs ? `?${qs}` : ''}`, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -669,14 +1591,43 @@ export const api = {
       return handleResponse(res, 'Failed to fetch recent activity');
     },
 
-    async getUsers() {
+    async getUserCounts(): Promise<{ total: number; active: number; suspended: number; inactive: number }> {
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/users`, {
+      const res = await fetch(`${API_URL}/admin/users/counts`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch user counts');
+    },
+
+    async getUsers(params?: { page?: number; limit?: number }) {
+      const headers = await getHeaders();
+      const search = new URLSearchParams();
+      if (params?.page != null && params.page > 0) search.set('page', String(params.page));
+      if (params?.limit != null && params.limit > 0) search.set('limit', String(params.limit));
+      const qs = search.toString();
+      const res = await fetch(`${API_URL}/admin/users${qs ? `?${qs}` : ''}`, {
         method: 'GET',
         headers,
         cache: 'no-store',
       });
       return handleResponse(res, 'Failed to fetch users');
+    },
+
+    async createUser(body: {
+      email: string;
+      full_name: string;
+      status?: 'active' | 'suspended' | 'inactive';
+      subscription?: 'trial' | 'core' | 'pro';
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/users`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to create user');
     },
 
     async getUserProfile(userId: string) {
@@ -718,9 +1669,134 @@ export const api = {
       return handleResponse(res, 'Failed to fetch user audit logs');
     },
 
+    async getOrganizationTeam(orgId?: string) {
+      const headers = await getHeaders();
+      const q = orgId ? `?org_id=${encodeURIComponent(orgId)}` : '';
+      const res = await fetch(`${API_URL}/admin/organization-team${q}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch organization team');
+    },
+
+    async addOrganizationTeamMember(body: {
+      org_id?: string;
+      email: string;
+      full_name: string;
+      phone?: string;
+      profile_role: 'org_admin' | 'team_admin' | 'user';
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/organization-team`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to add team member');
+    },
+
+    async updateOrganizationTeamMember(
+      userId: string,
+      query: { org_id?: string },
+      body: {
+        phone?: string;
+        profile_role?: 'org_admin' | 'team_admin' | 'user';
+        account_status?: string;
+        org_role?: string;
+      }
+    ) {
+      const headers = await getHeaders();
+      const q = query.org_id ? `?org_id=${encodeURIComponent(query.org_id)}` : '';
+      const res = await fetch(`${API_URL}/admin/organization-team/${userId}${q}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to update team member');
+    },
+
+    async removeOrganizationTeamMember(userId: string, orgId?: string) {
+      const headers = await getHeaders();
+      const q = orgId ? `?org_id=${encodeURIComponent(orgId)}` : '';
+      const res = await fetch(`${API_URL}/admin/organization-team/${userId}${q}`, {
+        method: 'DELETE',
+        headers,
+      });
+      return handleResponse(res, 'Failed to remove team member');
+    },
+
+    async getBackupRecovery() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/backup-recovery`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch backup & recovery');
+    },
+
+    async createBackupRecord(body: { kind?: 'full' | 'incremental' }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/backup-recovery`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to create backup');
+    },
+
+    async exportBackupMetadata(body?: {
+      exportType?: string;
+      format?: string;
+      dateRange?: string;
+      compression?: string;
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/backup-recovery/export`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body ?? {}),
+      });
+      return handleResponse(res, 'Failed to export data');
+    },
+
+    async requestBackupRestore(backupId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/backup-recovery/${backupId}/restore`, {
+        method: 'POST',
+        headers,
+      });
+      return handleResponse(res, 'Failed to request restore');
+    },
+
+    async downloadBackupRecordFile(backupId: string): Promise<void> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/backup-recovery/${backupId}/download`, {
+        method: 'GET',
+        headers,
+      });
+      if (res.status === 401) {
+        await supabase.auth.signOut();
+        throw new Error('Session expired. Please login again.');
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(formatApiErrorBody(err, 'Failed to download'));
+      }
+      const text = await res.text();
+      const blob = new Blob([text], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ezri-backup-record-${backupId}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+
     async getUserSubscription(userId: string) {
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/admin/users/${userId}/subscription`, {
+      const res = await fetch(`${API_URL}/billing/admin/users/${userId}/subscription`, {
         method: 'GET',
         headers,
         cache: 'no-store',
@@ -739,10 +1815,83 @@ export const api = {
       const res = await fetch(`${API_URL}/admin/user-segments`, { method: 'POST', headers, body: JSON.stringify(data) });
       return handleResponse(res, 'Failed to create segment');
     },
+    async updateUserSegment(id: string, data: any) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/user-segments/${id}`, { method: 'PUT', headers, body: JSON.stringify(data) });
+      return handleResponse(res, 'Failed to update segment');
+    },
     async deleteUserSegment(id: string) {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/admin/user-segments/${id}`, { method: 'DELETE', headers });
       return handleResponse(res, 'Failed to delete segment');
+    },
+    async getUserSegmentUsers(id: string, query?: { page?: number; limit?: number }) {
+      const headers = await getHeaders();
+      const sp = new URLSearchParams();
+      if (query?.page != null) sp.set('page', String(query.page));
+      if (query?.limit != null) sp.set('limit', String(query.limit));
+      const qs = sp.toString();
+      const res = await fetch(
+        `${API_URL}/admin/user-segments/${id}/users${qs ? `?${qs}` : ''}`,
+        { method: 'GET', headers, cache: 'no-store' }
+      );
+      return handleResponse(res, 'Failed to fetch segment users');
+    },
+
+    async getCompanions() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/companions`, { method: 'GET', headers, cache: 'no-store' });
+      return handleResponse(res, 'Failed to fetch companions');
+    },
+
+    async createCompanion(body: {
+      email: string;
+      full_name: string;
+      phone?: string;
+      license_number?: string;
+      specializations?: string[];
+      languages?: string[];
+      availability?: string;
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/companions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to create companion');
+    },
+
+    async updateCompanion(
+      id: string,
+      body: {
+        full_name?: string;
+        email?: string;
+        phone?: string;
+        license_number?: string;
+        specializations?: string[];
+        languages?: string[];
+        availability?: string;
+        is_verified?: boolean;
+        account_status?: string;
+      }
+    ) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/companions/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to update companion');
+    },
+
+    async deleteCompanion(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/companions/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers,
+      });
+      return handleResponse(res, 'Failed to delete companion');
     },
 
     // Notifications
@@ -847,6 +1996,14 @@ export const api = {
       const res = await fetch(`${API_URL}/admin/push-campaigns/${id}`, { method: 'DELETE', headers });
       return handleResponse(res, 'Failed to delete campaign');
     },
+    async dispatchPushCampaign(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/push-campaigns/${id}/dispatch`, {
+        method: 'POST',
+        headers,
+      });
+      return handleResponse(res, 'Failed to dispatch campaign');
+    },
 
     // Support Tickets
     async getSupportTickets(params?: { page?: number; limit?: number; status?: string }) {
@@ -861,10 +2018,44 @@ export const api = {
       const res = await fetch(`${API_URL}/admin/support-tickets${query}`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch tickets');
     },
+    async getSupportTicket(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/support-tickets/${encodeURIComponent(id)}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch ticket');
+    },
     async updateSupportTicket(id: string, data: any) {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/admin/support-tickets/${id}`, { method: 'PUT', headers, body: JSON.stringify(data) });
       return handleResponse(res, 'Failed to update ticket');
+    },
+
+    async getContentPerformance(params?: { range?: '7d' | '30d' | '90d' }) {
+      const headers = await getHeaders();
+      const q =
+        params?.range != null
+          ? `?${new URLSearchParams({ range: params.range }).toString()}`
+          : '';
+      const res = await fetch(`${API_URL}/admin/content-performance${q}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch content performance');
+    },
+
+    /** Platform-wide completion counts per wellness tool id (admin). */
+    async getWellnessToolUsage() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/wellness-tools/usage`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch wellness tool usage');
     },
 
     // Community
@@ -877,6 +2068,73 @@ export const api = {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/admin/community/groups`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch groups');
+    },
+    async getCommunityPosts() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/posts`, { method: 'GET', headers });
+      return handleResponse(res, 'Failed to fetch community posts');
+    },
+    async patchCommunityPost(id: string, data: { locked?: boolean; flag_count?: number }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/posts/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to update post');
+    },
+    async deleteCommunityPost(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/posts/${id}`, { method: 'DELETE', headers });
+      return handleResponseAllowEmpty(res, 'Failed to delete post');
+    },
+    async createCommunityGroup(data: { name: string; description: string; category: string; privacy: string }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/groups`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to create group');
+    },
+    async patchCommunityGroup(id: string, data: Record<string, unknown>) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/groups/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to update group');
+    },
+    async deleteCommunityGroup(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/groups/${id}`, { method: 'DELETE', headers });
+      return handleResponseAllowEmpty(res, 'Failed to delete group');
+    },
+    async getCommunityGroupMembers(groupId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/groups/${groupId}/members`, {
+        method: 'GET',
+        headers,
+      });
+      return handleResponse(res, 'Failed to fetch group members');
+    },
+    async addGroupMember(groupId: string, userId: string, role = 'member') {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/groups/${groupId}/members`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ userId, role }),
+      });
+      return handleResponse(res, 'Failed to add member');
+    },
+    async removeGroupMember(groupId: string, userId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/community/groups/${groupId}/members/${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+        headers,
+      });
+      return handleResponseAllowEmpty(res, 'Failed to remove member');
     },
 
     // Monitoring
@@ -907,6 +2165,18 @@ export const api = {
       const res = await fetch(`${API_URL}/admin/activity-logs${query}`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch activity logs');
     },
+    async getAuditLogs(params?: { page?: number; limit?: number }) {
+      const headers = await getHeaders();
+      const query = params
+        ? `?${new URLSearchParams(
+            Object.entries(params)
+              .filter(([, value]) => value !== undefined && value !== null)
+              .reduce((acc, [key, value]) => ({ ...acc, [key]: String(value) }), {} as Record<string, string>)
+          ).toString()}`
+        : '';
+      const res = await fetch(`${API_URL}/admin/audit-logs${query}`, { method: 'GET', headers, cache: 'no-store' });
+      return handleResponse(res, 'Failed to fetch audit logs');
+    },
     async getSessionRecordings(params?: { page?: number; limit?: number }) {
       const headers = await getHeaders();
       const query = params
@@ -935,6 +2205,44 @@ export const api = {
         : '';
       const res = await fetch(`${API_URL}/admin/error-logs${query}`, { method: 'GET', headers });
       return handleResponse(res, 'Failed to fetch error logs');
+    },
+    async resolveErrorLog(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/error-logs/${id}/resolve`, { method: 'PATCH', headers });
+      return handleResponseAllowEmpty(res, 'Failed to resolve error log');
+    },
+    async archiveResolvedErrorLogs() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/error-logs/archive-resolved`, { method: 'POST', headers });
+      return handleResponse(res, 'Failed to archive resolved errors');
+    },
+    async getSystemHealth() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/system-health`, { method: 'GET', headers, cache: 'no-store' });
+      return handleResponse(res, 'Failed to fetch system health');
+    },
+    async markSessionRecordingReviewed(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/session-recordings/${id}/reviewed`, { method: 'POST', headers });
+      return handleResponse(res, 'Failed to mark recording reviewed');
+    },
+    async updateSessionRecording(
+      id: string,
+      data: {
+        admin_flagged?: boolean;
+        review_notes?: string;
+        topics?: string[];
+        summary?: string;
+        status?: 'completed' | 'flagged' | 'reviewed' | 'escalated';
+      }
+    ) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/session-recordings/${id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to update session recording');
     },
 
     async getCrisisEvents(params?: { status?: string; page?: number; limit?: number }) {
@@ -975,10 +2283,124 @@ export const api = {
         body: JSON.stringify(data),
       });
       return handleResponse(res, 'Failed to update crisis event');
-    }
+    },
+
+    async getAchievements(): Promise<{
+      totalUsers: number;
+      achievements: {
+        id: string; name: string; description: string; category: string;
+        iconUrl: string; criteria: unknown; points: number; level: number;
+        maxLevel: number; createdAt: string; earnedCount: number;
+      }[];
+    }> {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/achievements`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch achievements');
+    },
+
+    async createAchievement(data: {
+      name: string; description?: string; category?: string; iconUrl?: string;
+      points?: number; level?: number; maxLevel?: number;
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/achievements`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to create achievement');
+    },
+
+    async updateAchievement(id: string, data: {
+      name?: string; description?: string; category?: string; iconUrl?: string;
+      points?: number; level?: number; maxLevel?: number;
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/achievements/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to update achievement');
+    },
+
+    async deleteAchievement(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/admin/achievements/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers,
+      });
+      if (res.status === 204) return true;
+      return handleResponse(res, 'Failed to delete achievement');
+    },
   },
 
 
+
+  // Support (end-user)
+  support: {
+    async listTickets(params?: { status?: string; limit?: number }) {
+      const headers = await getHeaders();
+      const search = new URLSearchParams();
+      if (params?.status) search.set('status', params.status);
+      if (params?.limit != null) search.set('limit', String(params.limit));
+      const qs = search.toString();
+      const res = await fetch(`${API_URL}/support/tickets${qs ? `?${qs}` : ''}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to load tickets');
+    },
+
+    async createTicket(body: {
+      subject: string;
+      description: string;
+      priority?: 'low' | 'medium' | 'high' | 'urgent';
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/support/tickets`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to create ticket');
+    },
+
+    async getTicket(ticketId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/support/tickets/${encodeURIComponent(ticketId)}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to load ticket');
+    },
+
+    async addMessage(ticketId: string, body: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/support/tickets/${encodeURIComponent(ticketId)}/messages`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ body }),
+      });
+      return handleResponse(res, 'Failed to send message');
+    },
+
+    async closeTicket(ticketId: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/support/tickets/${encodeURIComponent(ticketId)}/close`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      });
+      return handleResponse(res, 'Failed to close ticket');
+    },
+  },
 
   // Billing API
   billing: {
@@ -1113,6 +2535,28 @@ export const api = {
       return handleResponse(res, 'Failed to fetch PAYG transactions');
     },
 
+    /** DB aggregate only — fast for package manager (no Stripe). */
+    async getAdminPaygSummary() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/billing/admin/payg-summary`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch PAYG summary');
+    },
+
+    /** Single request: subscriptions + Stripe invoices + PAYG rows (faster than three separate calls). */
+    async getAdminBillingOverview() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/billing/admin/overview`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch admin billing overview');
+    },
+
     async updateSubscriptionById(id: string, data: { plan_type?: 'trial' | 'core' | 'pro'; billing_cycle?: 'monthly' | 'yearly'; status?: string }) { // Admin only
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/billing/admin/subscriptions/${id}`, {
@@ -1175,29 +2619,96 @@ export const api = {
         cache: 'no-store',
       });
       return handleResponse(res, 'Failed to fetch user sleep entries');
+    },
+
+    async getAllEntriesAdmin(params?: { startDate?: string; endDate?: string }) { // Admin only
+      const headers = await getHeaders();
+      const qs = params ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null) as [string, string][])).toString() : '';
+      const res = await fetch(`${API_URL}/sleep/admin${qs}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch all sleep entries');
     }
   },
 
+  safetyResourceInteractions: {
+    async record(body: {
+      resource_id: string;
+      resource_name: string;
+      resource_type: string;
+      interaction_type: string;
+      context_session_id?: string;
+      safety_state?: string;
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/safety-resource-interactions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      return handleResponse(res, 'Failed to record resource interaction');
+    },
 
+    async list(params?: { from?: string; to?: string; limit?: number }) {
+      const headers = await getHeaders();
+      const qs = new URLSearchParams();
+      if (params?.from) qs.set('from', params.from);
+      if (params?.to) qs.set('to', params.to);
+      if (params?.limit != null) qs.set('limit', String(params.limit));
+      const q = qs.toString();
+      const res = await fetch(`${API_URL}/safety-resource-interactions${q ? `?${q}` : ''}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to load resource interactions');
+    },
+  },
 
   // Notifications API
   notifications: {
     async getAll() {
-      const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/notifications`, {
-        method: 'GET',
-        headers,
-      });
-      return handleResponse(res, 'Failed to fetch notifications');
+      const cacheKey = 'GET:/notifications';
+      if (!getNotificationsInFlight) {
+        const cached = getCached<any>(cacheKey, 5_000);
+        if (cached !== null) return cached;
+        getNotificationsInFlight = (async () => {
+          const headers = await getHeaders();
+          return await getJsonCached<any>(
+            cacheKey,
+            `${API_URL}/notifications`,
+            headers,
+            'Failed to fetch notifications',
+            5_000
+          );
+        })().finally(() => {
+          getNotificationsInFlight = null;
+        });
+      }
+      return getNotificationsInFlight;
     },
 
     async getUnreadCount() {
-      const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/notifications/unread-count`, {
-        method: 'GET',
-        headers,
-      });
-      return handleResponse(res, 'Failed to fetch unread count');
+      const cacheKey = 'GET:/notifications/unread-count';
+      if (!getUnreadCountInFlight) {
+        const cached = getCached<any>(cacheKey, 5_000);
+        if (cached !== null) return cached;
+        getUnreadCountInFlight = (async () => {
+          const headers = await getHeaders();
+          return await getJsonCached<any>(
+            cacheKey,
+            `${API_URL}/notifications/unread-count`,
+            headers,
+            'Failed to fetch unread count',
+            5_000
+          );
+        })().finally(() => {
+          getUnreadCountInFlight = null;
+        });
+      }
+      return getUnreadCountInFlight;
     },
 
     async markAsRead(id: string) {
@@ -1245,12 +2756,37 @@ export const api = {
   // AI Avatars API
   aiAvatars: {
     async getAll() {
+      const cacheKey = 'GET:/ai-avatars';
+      if (!getAiAvatarsInFlight) {
+        const cached = getCached<any>(cacheKey, 30_000);
+        if (cached !== null) return cached;
+        getAiAvatarsInFlight = (async () => {
+          const headers = await getHeaders();
+          return await getJsonCached<any>(
+            cacheKey,
+            `${API_URL}/ai-avatars`,
+            headers,
+            'Failed to fetch AI avatars',
+            30_000
+          );
+        })().finally(() => {
+          getAiAvatarsInFlight = null;
+        });
+      }
+      return getAiAvatarsInFlight;
+    },
+
+    /** Admin-only: includes usage stats computed from session history. */
+    async getAllWithUsageStats() {
+      const cacheKey = 'GET:/ai-avatars/stats';
       const headers = await getHeaders();
-      const res = await fetch(`${API_URL}/ai-avatars`, {
-        method: 'GET',
+      return await getJsonCached<any>(
+        cacheKey,
+        `${API_URL}/ai-avatars/stats`,
         headers,
-      });
-      return handleResponse(res, 'Failed to fetch AI avatars');
+        'Failed to fetch AI avatars stats',
+        30_000
+      );
     },
 
     async getById(id: string) {
@@ -1290,6 +2826,25 @@ export const api = {
       });
       if (res.status === 204) return true;
       return handleResponse(res, 'Failed to delete AI avatar');
-    }
+    },
+
+    async getAvatarSessions(id: string, params?: { page?: number; limit?: number }) {
+      const headers = await getHeaders();
+      const query = params
+        ? `?${new URLSearchParams(
+            Object.entries(params)
+              .filter(([, value]) => value !== undefined && value !== null)
+              .reduce((acc, [key, value]) => ({ ...acc, [key]: String(value) }), {} as Record<string, string>)
+          ).toString()}`
+        : '';
+      const res = await fetch(`${API_URL}/ai-avatars/${id}/sessions${query}`, { method: 'GET', headers });
+      return handleResponse(res, 'Failed to fetch avatar sessions');
+    },
+
+    async getAvatarUsers(id: string) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/ai-avatars/${id}/users`, { method: 'GET', headers });
+      return handleResponse(res, 'Failed to fetch avatar users');
+    },
   }
 };

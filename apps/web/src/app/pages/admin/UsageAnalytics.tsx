@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
@@ -10,14 +10,9 @@ import {
   Clock,
   MessageSquare,
   Heart,
-  Calendar,
-  Download,
-  Filter,
   BarChart3,
   PieChart,
   LineChart,
-  ArrowUp,
-  ArrowDown,
 } from "lucide-react";
 import {
   LineChart as RechartsLine,
@@ -36,52 +31,81 @@ import {
   Area,
   AreaChart,
 } from "recharts";
-import { api } from "../../../lib/api";
+import { mergeCompanionAvatarCountsClient } from "@/lib/avatar/adminAvatarAnalytics";
+import { AdminAnalyticsToolbar } from "../../components/admin/AdminAnalyticsToolbar";
+import { datesForPreset, downloadCsv } from "@/lib/adminAnalytics";
+import { useAdminStats } from "@/lib/queries/adminQueries";
+
+const COMPANION_PIE_COLOR: Record<string, string> = {
+  "Not set": "#94a3b8",
+  Alex: "#3b82f6",
+  "Alex Rivera": "#3b82f6",
+  "Sara Mitchell": "#ec4899",
+  "Sarah Mitchell": "#ec4899",
+  "Jordan Taylor": "#10b981",
+  "Maya Chen": "#8b5cf6",
+  Other: "#64748b",
+};
+
+const PIE_FALLBACK_COLORS = ["#0ea5e9", "#f97316", "#a855f7", "#14b8a6", "#eab308", "#6366f1"];
+
+function formatAnalyticsRangeLabel(from: string, to: string): string {
+  try {
+    const a = new Date(`${from}T12:00:00Z`);
+    const b = new Date(`${to}T12:00:00Z`);
+    const o: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
+    return `${a.toLocaleDateString(undefined, o)} – ${b.toLocaleDateString(undefined, o)}`;
+  } catch {
+    return `${from} – ${to}`;
+  }
+}
 
 export function UsageAnalytics() {
-  const [timeRange, setTimeRange] = useState("7d");
-  const [selectedMetric, setSelectedMetric] = useState("sessions");
-  const [statsData, setStatsData] = useState<any | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState(datesForPreset("30d").dateFrom);
+  const [dateTo, setDateTo] = useState(datesForPreset("30d").dateTo);
 
-  useEffect(() => {
-    let isMounted = true;
+  const [selectedMetric, setSelectedMetric] = useState<"sessions" | "users" | "avgDuration">("sessions");
 
-    const fetchStats = async () => {
-      try {
-        const data = await api.admin.getStats();
-        if (isMounted) {
-          setStatsData(data);
-        }
-      } catch (err: any) {
-        console.error("Failed to fetch usage analytics", err);
-        if (isMounted) {
-          setError(err.message || "Failed to load usage analytics");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
+  const { data: statsData, isLoading, isFetching, error, refetch } = useAdminStats({
+    chartPeriod: "month",
+    dateFrom,
+    dateTo,
+  });
 
-    fetchStats();
+  const sessionActivity = (statsData?.sessionActivity || []) as Array<{
+    day: string;
+    sessions: number;
+    duration: number;
+  }>;
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const sessionData = sessionActivity.map((item) => ({
+    date: item.day,
+    sessions: item.sessions,
+    users: item.sessions,
+    avgDuration: item.duration,
+  }));
 
-  const sessionData =
-    (statsData?.sessionActivity || []).map((item: any) => ({
-      date: item.day,
-      sessions: item.sessions,
-      users: Math.max(item.sessions, 0),
-      avgDuration: item.duration,
-    }));
+  const trendKey = selectedMetric;
 
-  const totalSessions = statsData?.totalSessions || 0;
+  /** All-time completed sessions — matches Conversation Transcripts. */
+  const totalSessionsAllTime: number = statsData?.totalSessions ?? 0;
+
+  /** Talk it out in the selected date range (for charts only). */
+  const sessionsInRange = sessionActivity.reduce((sum, item) => sum + (Number(item.sessions) || 0), 0);
+
+  /** Weighted average duration across days in range; fall back to backend all-time avg. */
+  const avgDurationInRange: number = (() => {
+    if (sessionsInRange > 0) {
+      const weighted = sessionActivity.reduce(
+        (sum, item) => sum + (Number(item.sessions) || 0) * (Number(item.duration) || 0),
+        0
+      );
+      const val = Math.round((weighted / sessionsInRange) * 10) / 10;
+      if (val > 0) return val;
+    }
+    return Math.round(Number(statsData?.avgSessionLength ?? 0) * 10) / 10;
+  })();
+
   const featureUsage = statsData?.featureUsage || [];
 
   const getFeatureUsagePercent = (name: string) => {
@@ -93,28 +117,60 @@ export function UsageAnalytics() {
   const journalUsagePercent = getFeatureUsagePercent("Journal");
   const wellnessUsagePercent = getFeatureUsagePercent("Wellness Tools");
 
+  /** Completion rate = completed sessions / all sessions with a start_at (incl. active). */
+  const completionRate: string = (() => {
+    const completed = statsData?.totalSessions ?? 0;
+    // activeSessions from backend counts sessions started in last 4h; total is harder without raw count.
+    // Use sessionsInRange as denominator proxy only if data available.
+    if (!completed) return "N/A";
+    const allStarted = statsData?.allStartedSessions ?? completed; // backend may not expose this yet
+    if (!allStarted || allStarted <= 0) return "N/A";
+    return `${Math.min(100, Math.round((completed / allStarted) * 100))}%`;
+  })();
+
+  /** Average mood score from backend if available. */
+  const avgMoodScore: string = (() => {
+    const score = statsData?.avgMoodScore ?? statsData?.avg_mood_score ?? null;
+    if (score == null || score === 0) return "N/A";
+    return Number(score).toFixed(1);
+  })();
+
   const engagementData = [
     {
-      date: "All time",
-      moodChecks: Math.round((moodUsagePercent / 100) * totalSessions),
-      journalEntries: Math.round((journalUsagePercent / 100) * totalSessions),
-      wellness: Math.round((wellnessUsagePercent / 100) * totalSessions),
+      date: "Selected period",
+      moodChecks: Math.round((moodUsagePercent / 100) * sessionsInRange),
+      journalEntries: Math.round((journalUsagePercent / 100) * sessionsInRange),
+      wellness: Math.round((wellnessUsagePercent / 100) * sessionsInRange),
     },
   ];
 
-  const platformDistribution = statsData?.platformDistribution || [];
-
-  const avatarData = platformDistribution.map((item: any) => ({
-    name: item.name,
-    value: item.value,
-    color: item.color,
-  }));
+  /** Re-merge on the client so labels match Session Lobby; collapse strays into "Other". */
+  const avatarData = (() => {
+    const raw = (statsData?.avatarDistribution || []) as Array<{
+      name: string;
+      value?: number;
+      count?: number;
+      color?: string;
+    }>;
+    if (!raw.length) return [];
+    const merged = mergeCompanionAvatarCountsClient(
+      raw.map((r) => ({ name: r.name, c: Number(r.count ?? 0) }))
+    );
+    const total = merged.reduce((s, r) => s + r.count, 0);
+    return merged.map((r, i) => {
+      const name = r.name;
+      const count = r.count;
+      const value = total > 0 ? Math.round((count / total) * 100) : 0;
+      const color = COMPANION_PIE_COLOR[name] ?? PIE_FALLBACK_COLORS[i % PIE_FALLBACK_COLORS.length];
+      return { name, value, count, color };
+    });
+  })();
 
   const sessionTypeData = featureUsage.map((item: any) => ({
     name: item.feature,
     value: item.usage,
     color:
-      item.feature === "AI Sessions"
+      item.feature === "AI Talk it out"
         ? "#3B82F6"
         : item.feature === "Mood Tracking"
         ? "#10B981"
@@ -141,44 +197,40 @@ export function UsageAnalytics() {
   const stats = statsData
     ? [
         {
-          label: "Total Sessions",
-          value: statsData.totalSessions.toLocaleString(),
-          change: "0.0%",
+          label: "Total Talk it out",
+          value: totalSessionsAllTime.toLocaleString(),
+          sub: "all time · completed",
+          change: "",
           trend: "up",
           icon: MessageSquare,
           color: "text-blue-600",
           bg: "bg-blue-100",
         },
         {
-          label: "Active Users",
-          value: statsData.totalUsers.toLocaleString(),
-          change: "0.0%",
+          label: "Registered Users",
+          value: (statsData.totalUsers ?? 0).toLocaleString(),
+          sub: "all time",
+          change: "",
           trend: "up",
           icon: Users,
           color: "text-green-600",
           bg: "bg-green-100",
         },
         {
-          label: "Avg Session Time",
-          value: `${statsData.avgSessionLength || 0} min`,
-          change: "0.0%",
+          label: "Avg Session Duration",
+          value: avgDurationInRange > 0 ? `${avgDurationInRange} min` : "N/A",
+          sub: "completed sessions",
+          change: "",
           trend: "up",
           icon: Clock,
           color: "text-purple-600",
           bg: "bg-purple-100",
         },
         {
-          label: "Engagement Rate",
-          value:
-            featureUsage.length > 0
-              ? `${Math.round(
-                  featureUsage.reduce(
-                    (sum: number, item: any) => sum + item.usage,
-                    0
-                  ) / featureUsage.length
-                )}%`
-              : "0%",
-          change: "0.0%",
+          label: "Talk it out in Period",
+          value: sessionsInRange.toLocaleString(),
+          sub: `${dateFrom} – ${dateTo}`,
+          change: "",
           trend: "up",
           icon: Activity,
           color: "text-orange-600",
@@ -186,8 +238,9 @@ export function UsageAnalytics() {
         },
         {
           label: "Avg Mood Score",
-          value: "N/A",
-          change: "0.0",
+          value: avgMoodScore,
+          sub: avgMoodScore !== "N/A" ? "out of 10" : "no mood data yet",
+          change: "",
           trend: "up",
           icon: Heart,
           color: "text-pink-600",
@@ -195,8 +248,9 @@ export function UsageAnalytics() {
         },
         {
           label: "Completion Rate",
-          value: "N/A",
-          change: "0.0%",
+          value: completionRate,
+          sub: completionRate !== "N/A" ? "sessions with ended_at" : "data unavailable",
+          change: "",
           trend: "up",
           icon: TrendingUp,
           color: "text-emerald-600",
@@ -220,7 +274,7 @@ export function UsageAnalytics() {
       <AdminLayoutNew>
         <div className="max-w-2xl mx-auto py-16 text-center space-y-4">
           <h1 className="text-2xl font-bold">Usage analytics unavailable</h1>
-          <p className="text-muted-foreground">{error}</p>
+          <p className="text-muted-foreground">{error?.message ?? String(error)}</p>
         </div>
       </AdminLayoutNew>
     );
@@ -241,26 +295,32 @@ export function UsageAnalytics() {
               <div>
                 <h1 className="text-3xl font-bold">Usage Analytics</h1>
                 <p className="text-muted-foreground">
-                  Comprehensive insights into platform usage and engagement
+                  {formatAnalyticsRangeLabel(dateFrom, dateTo)} · Session totals and averages match the period below (not
+                  all-time database totals).
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
-              <select
-                className="px-3 py-2 border rounded-lg"
-                value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value)}
-              >
-                <option value="7d">Last 7 Days</option>
-                <option value="30d">Last 30 Days</option>
-                <option value="90d">Last 90 Days</option>
-                <option value="1y">Last Year</option>
-              </select>
-              <Button variant="outline" className="gap-2">
-                <Download className="w-4 h-4" />
-                Export
-              </Button>
-            </div>
+            <AdminAnalyticsToolbar
+              showChartPeriod={false}
+              showRangePreset={false}
+              chartPeriod="month"
+              onChartPeriodChange={() => {}}
+              rangePreset="30d"
+              onRangePresetChange={() => {}}
+              useCustomRange
+              onUseCustomRangeChange={() => {}}
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              onDateFromChange={setDateFrom}
+              onDateToChange={setDateTo}
+              onRefresh={() => void refetch()}
+              isLoading={isFetching}
+              onExport={() => {
+                if (!statsData) return;
+                const rows = sessionData.map((r) => ({ ...r }));
+                downloadCsv(`usage-analytics-${new Date().toISOString().slice(0, 10)}.csv`, rows);
+              }}
+            />
           </div>
         </motion.div>
 
@@ -277,15 +337,12 @@ export function UsageAnalytics() {
                   <div className={`w-12 h-12 rounded-lg ${stat.bg} flex items-center justify-center`}>
                     <stat.icon className={`w-6 h-6 ${stat.color}`} />
                   </div>
-                  <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                    stat.trend === "up" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                  }`}>
-                    {stat.trend === "up" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
-                    {stat.change}
-                  </div>
                 </div>
                 <p className="text-sm text-muted-foreground mb-1">{stat.label}</p>
                 <p className="text-2xl font-bold">{stat.value}</p>
+                {"sub" in stat && stat.sub && (
+                  <p className="text-xs text-muted-foreground mt-1">{stat.sub}</p>
+                )}
               </Card>
             </motion.div>
           ))}
@@ -310,7 +367,7 @@ export function UsageAnalytics() {
                   size="sm"
                   onClick={() => setSelectedMetric("sessions")}
                 >
-                  Sessions
+                  Talk it out
                 </Button>
                 <Button
                   variant={selectedMetric === "users" ? "default" : "outline"}
@@ -320,9 +377,9 @@ export function UsageAnalytics() {
                   Users
                 </Button>
                 <Button
-                  variant={selectedMetric === "duration" ? "default" : "outline"}
+                  variant={selectedMetric === "avgDuration" ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setSelectedMetric("duration")}
+                  onClick={() => setSelectedMetric("avgDuration")}
                 >
                   Duration
                 </Button>
@@ -332,21 +389,39 @@ export function UsageAnalytics() {
               <AreaChart data={sessionData}>
                 <defs>
                   <linearGradient id="colorSessions" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="date" stroke="#94a3b8" tick={{ fontSize: 11, fill: "#64748b" }} interval="preserveStartEnd" minTickGap={20} />
+                <YAxis stroke="#94a3b8" tick={{ fontSize: 11, fill: "#64748b" }} width={40} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                    fontSize: 12,
+                  }}
+                />
                 <Legend />
                 <Area
                   type="monotone"
-                  dataKey={selectedMetric}
+                  dataKey={trendKey}
+                  name={
+                    selectedMetric === "avgDuration"
+                      ? "Avg duration (min)"
+                      : selectedMetric === "users"
+                        ? "Talk it out (volume)"
+                        : "Talk it out"
+                  }
                   stroke="#3B82F6"
+                  strokeWidth={2.5}
                   fillOpacity={1}
                   fill="url(#colorSessions)"
+                  dot={false}
+                  activeDot={{ r: 6, fill: "#3B82F6", strokeWidth: 0 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -362,14 +437,22 @@ export function UsageAnalytics() {
             <h2 className="text-xl font-bold mb-6">User Engagement</h2>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={engagementData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="date" stroke="#94a3b8" tick={{ fontSize: 11, fill: "#64748b" }} />
+                <YAxis stroke="#94a3b8" tick={{ fontSize: 11, fill: "#64748b" }} width={40} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                    fontSize: 12,
+                  }}
+                />
                 <Legend />
-                <Bar dataKey="moodChecks" fill="#EC4899" name="Mood Checks" />
-                <Bar dataKey="journalEntries" fill="#8B5CF6" name="Journal Entries" />
-                <Bar dataKey="wellness" fill="#10B981" name="Wellness Tools" />
+                <Bar dataKey="moodChecks" fill="#EC4899" name="Mood Checks" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="journalEntries" fill="#8B5CF6" name="Journal Entries" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="wellness" fill="#10B981" name="Wellness Tools" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -383,34 +466,59 @@ export function UsageAnalytics() {
           >
             <Card className="p-6">
               <h2 className="text-xl font-bold mb-6">Platform Preferences</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <RechartsPie>
-                  <Pie
-                    data={avatarData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {avatarData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </RechartsPie>
-              </ResponsiveContainer>
-              <div className="grid grid-cols-2 gap-3 mt-4">
+              <p className="text-sm text-muted-foreground mb-4">
+                Companion choices grouped to the same four avatars as the user app (Session Lobby). Unrecognized values
+                roll into &quot;Other&quot;.
+              </p>
+              {avatarData.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-12 text-center">No avatar selection data available.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <RechartsPie margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+                    <Pie
+                      data={avatarData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      isAnimationActive={false}
+                      label={false}
+                      innerRadius={60}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                      paddingAngle={3}
+                    >
+                      {avatarData.map((entry, index) => (
+                        <Cell key={`cell-${entry.name}-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: number, name: string, item: { payload?: { count?: number } }) => [
+                        `${item.payload?.count ?? "—"} profiles (${value}%)`,
+                        name,
+                      ]}
+                      contentStyle={{
+                        backgroundColor: "white",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "10px",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                        fontSize: 12,
+                      }}
+                    />
+                  </RechartsPie>
+                </ResponsiveContainer>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
                 {avatarData.map((avatar) => (
-                  <div key={avatar.name} className="flex items-center gap-2">
+                  <div key={avatar.name} className="flex items-start gap-2 text-sm">
                     <div
-                      className="w-3 h-3 rounded-full"
+                      className="w-3 h-3 rounded-full mt-1 shrink-0"
                       style={{ backgroundColor: avatar.color }}
                     />
-                    <span className="text-sm">
-                      {avatar.name}: <span className="font-medium">{avatar.value}</span>
+                    <span className="text-muted-foreground">
+                      <span className="font-medium text-foreground">{avatar.name}</span>
+                      <span className="mx-1">·</span>
+                      {avatar.count} profiles ({avatar.value}%)
                     </span>
                   </div>
                 ))}
@@ -425,34 +533,55 @@ export function UsageAnalytics() {
           >
             <Card className="p-6">
               <h2 className="text-xl font-bold mb-6">Feature Usage</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <RechartsPie>
+              <p className="text-sm text-muted-foreground mb-4">
+                Relative share by feature activity in the product database (not the same denominator as session count
+                above).
+              </p>
+              <ResponsiveContainer width="100%" height={280}>
+                <RechartsPie margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
                   <Pie
                     data={sessionTypeData}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    isAnimationActive={false}
+                    label={false}
+                    innerRadius={60}
                     outerRadius={100}
                     fill="#8884d8"
                     dataKey="value"
+                    paddingAngle={3}
                   >
                     {sessionTypeData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip
+                    formatter={(value: number, _n, item: { payload?: { name?: string } }) => [
+                      `${value}% of max feature volume`,
+                      item.payload?.name ?? "",
+                    ]}
+                    contentStyle={{
+                      backgroundColor: "white",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "10px",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                      fontSize: 12,
+                    }}
+                  />
                 </RechartsPie>
               </ResponsiveContainer>
-              <div className="grid grid-cols-2 gap-3 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
                 {sessionTypeData.map((type) => (
-                  <div key={type.name} className="flex items-center gap-2">
+                  <div key={type.name} className="flex items-start gap-2 text-sm">
                     <div
-                      className="w-3 h-3 rounded-full"
+                      className="w-3 h-3 rounded-full mt-1 shrink-0"
                       style={{ backgroundColor: type.color }}
                     />
-                    <span className="text-sm">
-                      {type.name}: <span className="font-medium">{type.value}</span>
+                    <span className="text-muted-foreground">
+                      <span className="font-medium text-foreground">{type.name}</span>
+                      <span className="mx-1">·</span>
+                      relative {type.value}%
                     </span>
                   </div>
                 ))}
@@ -470,11 +599,19 @@ export function UsageAnalytics() {
             <h2 className="text-xl font-bold mb-6">Peak Usage Hours</h2>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={hourlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="hour" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="sessions" fill="#8B5CF6" radius={[8, 8, 0, 0]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="hour" stroke="#94a3b8" tick={{ fontSize: 11, fill: "#64748b" }} />
+                <YAxis stroke="#94a3b8" tick={{ fontSize: 11, fill: "#64748b" }} width={36} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                    fontSize: 12,
+                  }}
+                />
+                <Bar dataKey="sessions" fill="#8B5CF6" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -492,24 +629,33 @@ export function UsageAnalytics() {
               <AreaChart data={retentionData}>
                 <defs>
                   <linearGradient id="colorRetained" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="colorChurned" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#EF4444" stopOpacity={0.3} />
+                    <stop offset="5%" stopColor="#EF4444" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="week" />
-                <YAxis />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="week" stroke="#94a3b8" tick={{ fontSize: 11, fill: "#64748b" }} />
+                <YAxis stroke="#94a3b8" tick={{ fontSize: 11, fill: "#64748b" }} width={36} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                    fontSize: 12,
+                  }}
+                />
                 <Legend />
                 <Area
                   type="monotone"
                   dataKey="retained"
                   stackId="1"
                   stroke="#10B981"
+                  strokeWidth={2}
                   fill="url(#colorRetained)"
                   name="Retained %"
                 />
@@ -518,6 +664,7 @@ export function UsageAnalytics() {
                   dataKey="churned"
                   stackId="1"
                   stroke="#EF4444"
+                  strokeWidth={2}
                   fill="url(#colorChurned)"
                   name="Churned %"
                 />
@@ -526,7 +673,7 @@ export function UsageAnalytics() {
           </Card>
         </motion.div>
 
-        {/* Key Insights */}
+        {/* Key Insights — derived from real data */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -535,49 +682,66 @@ export function UsageAnalytics() {
           <Card className="p-6">
             <h2 className="text-xl font-bold mb-4">Key Insights</h2>
             <div className="grid md:grid-cols-2 gap-4">
+              {/* Session volume */}
               <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                 <div className="flex items-start gap-3">
                   <TrendingUp className="w-5 h-5 text-green-600 mt-1" />
                   <div>
-                    <h3 className="font-bold text-green-900 mb-1">Session Growth</h3>
+                    <h3 className="font-bold text-green-900 mb-1">Session Volume</h3>
                     <p className="text-sm text-green-700">
-                      Sessions increased by 12.5% compared to last week, with highest growth in wellness tools (+18%)
+                      {totalSessionsAllTime > 0
+                        ? `${totalSessionsAllTime.toLocaleString()} completed sessions all time. ${sessionsInRange > 0 ? `${sessionsInRange.toLocaleString()} occurred in the selected period.` : "No sessions in the selected period."}`
+                        : "No completed session data available yet."}
                     </p>
                   </div>
                 </div>
               </div>
 
+              {/* Avg session duration */}
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-start gap-3">
-                  <Users className="w-5 h-5 text-blue-600 mt-1" />
+                  <Clock className="w-5 h-5 text-blue-600 mt-1" />
                   <div>
-                    <h3 className="font-bold text-blue-900 mb-1">User Engagement</h3>
+                    <h3 className="font-bold text-blue-900 mb-1">Session Duration</h3>
                     <p className="text-sm text-blue-700">
-                      Average session duration increased to 45 minutes. Users are spending more quality time.
+                      {avgDurationInRange > 0
+                        ? `Average session duration is ${avgDurationInRange} min across completed sessions in the selected period.`
+                        : "No session duration data available for the selected period."}
                     </p>
                   </div>
                 </div>
               </div>
 
+              {/* Peak hour */}
               <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
                 <div className="flex items-start gap-3">
-                  <Clock className="w-5 h-5 text-purple-600 mt-1" />
+                  <Activity className="w-5 h-5 text-purple-600 mt-1" />
                   <div>
-                    <h3 className="font-bold text-purple-900 mb-1">Peak Hours</h3>
+                    <h3 className="font-bold text-purple-900 mb-1">Peak Usage Hour</h3>
                     <p className="text-sm text-purple-700">
-                      Highest activity between 6-9 PM. Consider optimizing server resources during peak hours.
+                      {(() => {
+                        const hourly = (statsData?.hourlyActivity || []) as Array<{ hour: string; sessions: number }>;
+                        if (!hourly.length) return "No hourly activity data available.";
+                        const peak = hourly.reduce((a, b) => (Number(b.sessions) > Number(a.sessions) ? b : a), hourly[0]);
+                        return `Highest activity at ${peak.hour} with ${Number(peak.sessions).toLocaleString()} session${Number(peak.sessions) !== 1 ? "s" : ""}. Plan support coverage around this window.`;
+                      })()}
                     </p>
                   </div>
                 </div>
               </div>
 
+              {/* Top companion */}
               <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
                 <div className="flex items-start gap-3">
-                  <Heart className="w-5 h-5 text-orange-600 mt-1" />
+                  <Users className="w-5 h-5 text-orange-600 mt-1" />
                   <div>
-                    <h3 className="font-bold text-orange-900 mb-1">User Satisfaction</h3>
+                    <h3 className="font-bold text-orange-900 mb-1">Top Companion</h3>
                     <p className="text-sm text-orange-700">
-                      Average mood score improved to 7.2/10. Serena remains the most popular avatar (28% preference).
+                      {(() => {
+                        if (!avatarData.length) return "No companion preference data available.";
+                        const top = avatarData.reduce((a, b) => (b.count > a.count ? b : a), avatarData[0]);
+                        return `${top.name} is the most selected companion with ${top.count.toLocaleString()} profile${top.count !== 1 ? "s" : ""} (${top.value}% of users).`;
+                      })()}
                     </p>
                   </div>
                 </div>

@@ -1,8 +1,8 @@
-import { AppLayout } from "@/app/components/AppLayout";
+import { CrisisResourcesCallout } from "@/app/components/safety/CrisisResourcesCallout";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { motion } from "motion/react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft,
   Bell,
@@ -14,31 +14,54 @@ import {
   XCircle,
   Clock,
   Shield,
-  User
 } from "lucide-react";
-import { useState, useEffect } from "react";
-import { getNotificationHistory, type NotificationEvent } from "@/app/utils/trustedContactNotifications";
+import { useMemo } from "react";
+import type { Notification } from "@/app/contexts/NotificationsContext";
+import { useNotifications } from "@/app/contexts/NotificationsContext";
+
+type HistoryRow = {
+  id: string;
+  timestamp: string;
+  headline: string;
+  safetyBadge: string;
+  method: "app";
+  status: "sent" | "failed" | "pending";
+  body: string;
+};
+
+function isAdminEmergencyNotification(n: Notification): boolean {
+  const md = n.metadata as Record<string, unknown> | null | undefined;
+  if (!md || typeof md !== "object") return false;
+  if (md.manual_admin_broadcast !== true) return false;
+  return md.notification_category === "emergency";
+}
 
 export function NotificationHistory() {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<NotificationEvent[]>([]);
-  const [filter, setFilter] = useState<'all' | 'sent' | 'failed'>('all');
+  const { notifications: appNotifications } = useNotifications();
 
-  useEffect(() => {
-    const history = getNotificationHistory();
-    setNotifications(history);
-  }, []);
-
-  const filteredNotifications = notifications.filter(n => {
-    if (filter === 'all') return true;
-    return n.status === filter;
-  });
+  const notifications: HistoryRow[] = useMemo(
+    () =>
+      appNotifications
+        .filter(isAdminEmergencyNotification)
+        .map((n) => ({
+          id: n.id,
+          timestamp: n.created_at,
+          headline: (n.title && n.title.trim()) || "Emergency notice",
+          safetyBadge: "From our team",
+          method: "app",
+          status: "sent",
+          body: (n.message && n.message.trim()) || "",
+        }))
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+    [appNotifications]
+  );
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'sent':
+      case "sent":
         return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case 'failed':
+      case "failed":
         return <XCircle className="w-5 h-5 text-red-500" />;
       default:
         return <Clock className="w-5 h-5 text-yellow-500" />;
@@ -46,22 +69,16 @@ export function NotificationHistory() {
   };
 
   const getMethodIcon = (method: string) => {
-    return method === 'sms' 
-      ? <Phone className="w-4 h-4" />
-      : <Mail className="w-4 h-4" />;
+    if (method === "sms") return <Phone className="w-4 h-4" />;
+    if (method === "email") return <Mail className="w-4 h-4" />;
+    return <Bell className="w-4 h-4" />;
   };
 
-  const getSafetyStateColor = (state: string) => {
-    switch (state) {
-      case 'SAFETY_MODE':
-        return 'bg-red-100 text-red-700 border-red-300';
-      case 'HIGH_RISK':
-        return 'bg-orange-100 text-orange-700 border-orange-300';
-      case 'ELEVATED_CONCERN':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-300';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-300';
+  const getSafetyStateColor = (label: string) => {
+    if (label === "From our team") {
+      return "bg-red-100 text-red-800 border-red-300 dark:bg-red-950/40 dark:text-red-200 dark:border-red-800";
     }
+    return "bg-gray-100 text-gray-700 border-gray-300";
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -72,17 +89,15 @@ export function NotificationHistory() {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Just now';
+    if (diffMins < 1) return "Just now";
     if (diffMins < 60) return `${diffMins} min ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
     return date.toLocaleDateString();
   };
 
   return (
-    <AppLayout>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-        {/* Header */}
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -93,114 +108,80 @@ export function NotificationHistory() {
             className="flex items-center gap-2 text-muted-foreground hover:text-primary mb-4 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back
+            Back to Settings
           </button>
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <Bell className="w-8 h-8 text-primary" />
-                <h1 className="text-3xl font-bold">Notification History</h1>
+                <h1 className="text-3xl font-bold">Emergency Notifications</h1>
               </div>
               <p className="text-muted-foreground">
-                View when your trusted contacts were notified
+                Notices flagged as emergency or safety notifications.
               </p>
             </div>
           </div>
         </motion.div>
 
-        {/* Info Card */}
-        <motion.div
+        {/* <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="mb-6"
         >
-          <Card className="p-4 bg-blue-50 border-blue-200">
+          <Card className="notification-history-card p-4 bg-blue-50 border-blue-200 dark:bg-slate-900 dark:border-blue-900">
             <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-semibold text-blue-900 mb-1">About Notifications</h3>
-                <p className="text-sm text-blue-800">
-                  Your trusted contacts receive supportive check-in messages when our safety system detects you may need extra support. All messages are privacy-safe and contain no medical details.
+                <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">What you’ll see</h3>
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  Only in-app messages your administrators send with <strong>Emergency / safety notice</strong> enabled
+                  are listed. Streak reminders, billing, and other updates are not shown on this page.
                 </p>
               </div>
             </div>
           </Card>
-        </motion.div>
+        </motion.div> */}
 
-        {/* Filter Tabs */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="mb-6"
-        >
-          <div className="flex gap-2">
-            <Button
-              variant={filter === 'all' ? 'default' : 'outline'}
-              onClick={() => setFilter('all')}
-              className="flex-1"
-            >
-              All ({notifications.length})
-            </Button>
-            <Button
-              variant={filter === 'sent' ? 'default' : 'outline'}
-              onClick={() => setFilter('sent')}
-              className="flex-1"
-            >
-              Sent ({notifications.filter(n => n.status === 'sent').length})
-            </Button>
-            <Button
-              variant={filter === 'failed' ? 'default' : 'outline'}
-              onClick={() => setFilter('failed')}
-              className="flex-1"
-            >
-              Failed ({notifications.filter(n => n.status === 'failed').length})
-            </Button>
-          </div>
-        </motion.div>
-
-        {/* Notifications List */}
         <div className="space-y-4">
-          {filteredNotifications.length === 0 ? (
+          {notifications.length === 0 ? (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="text-center py-12"
             >
               <Bell className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="font-bold text-lg mb-2">No Notifications Yet</h3>
-              <p className="text-muted-foreground mb-4">
-                {filter === 'all' 
-                  ? "Your trusted contacts haven't been notified yet"
-                  : `No ${filter} notifications found`
-                }
+              <h3 className="font-bold text-lg mb-2">No emergency notices yet</h3>
+              <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+                When our team sends you a safety-related in-app notice, it will appear here. For all other alerts, open
+                Notifications.
               </p>
-              <Button 
-                onClick={() => navigate('/app/emergency-contacts')}
-                variant="outline"
-              >
-                <Shield className="w-4 h-4 mr-2" />
-                Manage Trusted Contacts
-              </Button>
+              {/* <Button asChild variant="outline">
+                <Link to="/app/notifications">
+                  <Bell className="w-4 h-4 mr-2" />
+                  Open Notifications
+                </Link>
+              </Button> */}
             </motion.div>
           ) : (
-            filteredNotifications.map((notification, index) => (
+            notifications.map((notification, index) => (
               <motion.div
                 key={notification.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 + index * 0.05 }}
+                transition={{ delay: 0.05 + index * 0.04 }}
               >
-                <Card className="p-6 shadow-lg hover:shadow-xl transition-all">
+                <Card className="notification-history-card p-6 shadow-lg hover:shadow-xl transition-all">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-start gap-3 flex-1">
                       {getStatusIcon(notification.status)}
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-bold text-lg">{notification.contactName}</h3>
-                          <div className={`px-2 py-0.5 rounded-full border text-xs font-medium ${getSafetyStateColor(notification.safetyState)}`}>
-                            {notification.safetyState.replace('_', ' ')}
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <h3 className="font-bold text-lg">{notification.headline}</h3>
+                          <div
+                            className={`px-2 py-0.5 rounded-full border text-xs font-medium ${getSafetyStateColor(notification.safetyBadge)}`}
+                          >
+                            {notification.safetyBadge}
                           </div>
                         </div>
                         <p className="text-sm text-muted-foreground mb-3">
@@ -211,40 +192,28 @@ export function NotificationHistory() {
                   </div>
 
                   <div className="space-y-3 ml-8">
-                    {/* Method */}
                     <div className="flex items-center gap-2 text-sm">
                       {getMethodIcon(notification.method)}
-                      <span className="text-gray-600">
-                        Sent via {notification.method.toUpperCase()}
-                      </span>
+                      <span className="text-gray-600 dark:text-gray-300">Delivered in the app</span>
                     </div>
 
-                    {/* Status */}
                     <div className="flex items-center gap-2 text-sm">
                       <MessageSquare className="w-4 h-4 text-gray-400" />
-                      <span className={`font-medium ${
-                        notification.status === 'sent' ? 'text-green-600' :
-                        notification.status === 'failed' ? 'text-red-600' :
-                        'text-yellow-600'
-                      }`}>
-                        {notification.status === 'sent' ? 'Delivered successfully' :
-                         notification.status === 'failed' ? 'Delivery failed' :
-                         'Pending delivery'}
-                      </span>
+                      <span className="font-medium text-green-600 dark:text-green-400">Delivered successfully</span>
                     </div>
 
-                    {/* Message Preview (if available) */}
-                    {notification.messageTemplate && (
+                    {notification.body ? (
                       <details className="mt-3">
                         <summary className="text-sm text-primary cursor-pointer hover:underline">
                           View message content
                         </summary>
-                        <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm text-gray-700 whitespace-pre-wrap">
-                          {notification.messageTemplate.substring(0, 200)}
-                          {notification.messageTemplate.length > 200 && '...'}
+                        <div className="mt-3 p-4 bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">
+                          {notification.body.length > 2000
+                            ? `${notification.body.slice(0, 2000)}…`
+                            : notification.body}
                         </div>
                       </details>
-                    )}
+                    ) : null}
                   </div>
                 </Card>
               </motion.div>
@@ -252,47 +221,33 @@ export function NotificationHistory() {
           )}
         </div>
 
-        {/* Stats Summary */}
         {notifications.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: 0.2 }}
             className="mt-8"
           >
-            <Card className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200">
+            <Card className="notification-history-card p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200 dark:from-slate-900 dark:to-slate-900 dark:border-slate-700">
               <h3 className="font-bold mb-4 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-purple-600" />
+                <Shield className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                 Summary
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="text-center">
-                  <p className="text-3xl font-bold text-purple-600">{notifications.length}</p>
-                  <p className="text-sm text-gray-600">Total Sent</p>
+                  <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{notifications.length}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Emergency notices received</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-3xl font-bold text-green-600">
-                    {notifications.filter(n => n.status === 'sent').length}
-                  </p>
-                  <p className="text-sm text-gray-600">Delivered</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-orange-600">
-                    {notifications.filter(n => n.safetyState === 'HIGH_RISK').length}
-                  </p>
-                  <p className="text-sm text-gray-600">High Risk</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-red-600">
-                    {notifications.filter(n => n.safetyState === 'SAFETY_MODE').length}
-                  </p>
-                  <p className="text-sm text-gray-600">Safety Mode</p>
+                  <p className="text-3xl font-bold text-green-600 dark:text-green-400">{notifications.length}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Delivered in-app</p>
                 </div>
               </div>
             </Card>
           </motion.div>
         )}
+
+        <CrisisResourcesCallout />
       </div>
-    </AppLayout>
   );
 }

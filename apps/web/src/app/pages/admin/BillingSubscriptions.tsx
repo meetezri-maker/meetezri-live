@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
 import { AdminLayoutNew } from "../../components/AdminLayoutNew";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { api } from "../../../lib/api";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 import { format } from "date-fns";
 import {
   CreditCard,
@@ -18,13 +19,11 @@ import {
   CheckCircle,
   AlertCircle,
   Clock,
-  ArrowUpRight,
   ArrowDownRight,
   Package,
   Star,
   Crown,
   Zap,
-  Shield,
   X,
 } from "lucide-react";
 
@@ -49,71 +48,85 @@ interface Transaction {
   invoice: string;
 }
 
+interface UnifiedTransaction {
+  id: string;
+  displayId: string;
+  type: "subscription" | "payg";
+  date: Date;
+  customer: string;
+  plan: string;
+  minutes: number | null;
+  rate: number | null;
+  amount: number;
+  status: string;
+}
+
 export function BillingSubscriptions() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPlan, setFilterPlan] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"overview" | "subscriptions" | "transactions">("overview");
-  const [showProcessPaymentModal, setShowProcessPaymentModal] = useState(false);
+  const [searchTxn, setSearchTxn] = useState("");
+  const [filterTxnType, setFilterTxnType] = useState<"all" | "subscription" | "payg">("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [showManageSubscriptionModal, setShowManageSubscriptionModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [paygTransactions, setPaygTransactions] = useState<any[]>([]);
 
   // Edit states
   const [editPlan, setEditPlan] = useState<"trial" | "core" | "pro">("trial");
   const [editStatus, setEditStatus] = useState<string>("active");
   const [editBillingCycle, setEditBillingCycle] = useState<string>("monthly");
 
-  useEffect(() => {
-    fetchSubscriptions();
-    fetchInvoices();
-  }, []);
+  const mapApiSubscription = (sub: any): Subscription => {
+    const rawAmt = sub.amount != null ? Number(sub.amount) : NaN;
+    let mrr = 0;
+    if (Number.isFinite(rawAmt) && rawAmt > 0) {
+      mrr = sub.billing_cycle === "yearly" ? rawAmt / 12 : rawAmt;
+    } else if (sub.plan_type === "pro") {
+      mrr = sub.billing_cycle === "yearly" ? 40 : 49;
+    } else if (sub.plan_type === "core") {
+      mrr = sub.billing_cycle === "yearly" ? 20 : 25;
+    }
 
-  const fetchSubscriptions = async () => {
+    const rawStatus = sub.status === "canceled" ? "cancelled" : sub.status;
+
+    return {
+      id: sub.id,
+      organization: sub.profiles?.full_name || sub.profiles?.email || "Unknown User",
+      plan: (sub.plan_type || "trial") as Subscription["plan"],
+      status: rawStatus as Subscription["status"],
+      users: 1,
+      mrr,
+      nextBilling: sub.next_billing_at
+        ? new Date(sub.next_billing_at).toISOString().split("T")[0]
+        : "N/A",
+      startDate: sub.created_at ? new Date(sub.created_at).toISOString().split("T")[0] : "N/A",
+      billing_cycle: sub.billing_cycle || "monthly",
+    };
+  };
+
+  const loadBillingData = async () => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      const data = await api.billing.getAllSubscriptions();
-      
-      const mappedSubscriptions: Subscription[] = data.map((sub: any) => {
-        // Calculate MRR based on plan and cycle
-        let mrr = 0;
-        if (sub.plan_type === 'pro') {
-          mrr = sub.billing_cycle === 'yearly' ? 40 : 49;
-        } else if (sub.plan_type === 'core') {
-          mrr = sub.billing_cycle === 'yearly' ? 20 : 25;
-        }
-
-        return {
-          id: sub.id,
-          organization: sub.users?.profiles?.full_name || sub.users?.email || "Unknown User",
-          plan: (sub.plan_type || "trial") as any,
-          status: (sub.status === 'canceled' ? 'cancelled' : sub.status) as any,
-          users: 1, // Default to 1 as current model is individual subscriptions
-          mrr: mrr,
-          nextBilling: sub.current_period_end ? new Date(sub.current_period_end).toISOString().split('T')[0] : 'N/A',
-          startDate: sub.created_at ? new Date(sub.created_at).toISOString().split('T')[0] : 'N/A',
-          billing_cycle: sub.billing_cycle || 'monthly'
-        };
-      });
-
-      setSubscriptions(mappedSubscriptions);
+      const data = await api.billing.getAdminBillingOverview();
+      setInvoices(data?.invoices || []);
+      setPaygTransactions(data?.paygTransactions || []);
+      setSubscriptions((data?.subscriptions || []).map(mapApiSubscription));
     } catch (error) {
-      console.error("Failed to fetch subscriptions:", error);
+      console.error("Failed to fetch billing data:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const fetchInvoices = async () => {
-    try {
-      const data = await api.billing.getAdminInvoices();
-      setInvoices(data);
-    } catch (error) {
-      console.error("Failed to fetch invoices:", error);
-    }
-  };
+  useEffect(() => {
+    loadBillingData();
+  }, []);
   
   const handleUpdateSubscription = async () => {
     if (!selectedSubscription) return;
@@ -125,8 +138,7 @@ export function BillingSubscriptions() {
         billing_cycle: editBillingCycle as any
       });
       
-      // Refresh list
-      await fetchSubscriptions();
+      await loadBillingData();
       setShowManageSubscriptionModal(false);
       alert("Subscription updated successfully");
     } catch (error) {
@@ -160,16 +172,19 @@ export function BillingSubscriptions() {
       ].join("\n");
       filename = `subscriptions-${new Date().toISOString().split("T")[0]}.csv`;
     } else if (activeTab === "transactions") {
-      const headers = ["ID", "Date", "Organization", "Amount", "Status", "Invoice"];
+      const headers = ["Transaction ID", "Type", "Date", "Customer", "Plan", "Minutes", "Rate", "Total Cost", "Status"];
       csvContent = [
         headers.join(","),
-        ...transactions.map(txn => [
+        ...filteredAllTransactions.map(txn => [
           txn.id,
-          txn.date,
-          txn.organization,
-          `$${txn.amount}`,
+          txn.type,
+          txn.date.toISOString().split("T")[0],
+          `"${txn.customer}"`,
+          `"${txn.plan}"`,
+          txn.minutes ?? "—",
+          txn.rate != null ? `$${txn.rate.toFixed(4)}/min` : "—",
+          `$${txn.amount.toFixed(2)}`,
           txn.status,
-          txn.invoice
         ].join(","))
       ].join("\n");
       filename = `transactions-${new Date().toISOString().split("T")[0]}.csv`;
@@ -178,9 +193,10 @@ export function BillingSubscriptions() {
       const headers = ["Metric", "Value"];
       csvContent = [
         headers.join(","),
+        ["Cash revenue (30d)", `$${stats.cashRevenue30d.toFixed(2)}`].join(","),
         ["Total MRR", `$${stats.totalMRR.toLocaleString()}`].join(","),
         ["Active Subscriptions", stats.activeSubscriptions].join(","),
-        ["Trial Conversions", `${stats.trialConversions}%`].join(","),
+        ["Invoice revenue (30d)", `$${stats.invoiceRevenue30d.toFixed(2)}`].join(","),
         ["Churn Rate", `${stats.churnRate}%`].join(",")
       ].join("\n");
       filename = `billing-overview-${new Date().toISOString().split("T")[0]}.csv`;
@@ -203,7 +219,6 @@ export function BillingSubscriptions() {
     if (inv.status === "open" || inv.status === "draft") status = "pending";
     if (inv.status === "uncollectible") status = "failed";
     if (inv.status === "void" || inv.status === "refunded") status = "refunded";
-
     return {
       id: inv.id,
       date: inv.created ? new Date(inv.created).toISOString().split("T")[0] : "",
@@ -214,6 +229,82 @@ export function BillingSubscriptions() {
     };
   });
 
+  const allTransactions = useMemo((): UnifiedTransaction[] => {
+    const mapInvStatus = (s: string): string => {
+      if (s === "paid") return "paid";
+      if (s === "open" || s === "draft") return "pending";
+      if (s === "uncollectible") return "failed";
+      if (s === "void" || s === "refunded") return "refunded";
+      return "paid";
+    };
+
+    const fromInvoices: UnifiedTransaction[] = invoices.map((inv: any) => ({
+      id: inv.id,
+      displayId: String(inv.id ?? "").slice(0, 28),
+      type: "subscription",
+      date: inv.created ? new Date(inv.created) : new Date(0),
+      customer: inv.user_name || inv.user_email || "Unknown User",
+      plan: typeof inv.description === "string" && inv.description.trim()
+        ? inv.description.trim()
+        : "Subscription",
+      minutes: null,
+      rate: null,
+      amount: typeof inv.amount_due === "number" ? inv.amount_due : Number(inv.amount_due ?? 0),
+      status: mapInvStatus(String(inv.status ?? "")),
+    }));
+
+    const fromPayg: UnifiedTransaction[] = (paygTransactions || []).map((tx: any) => {
+      const amount = typeof tx.amount === "number" ? tx.amount : Number(tx.amount ?? 0);
+      const minutes = typeof tx.minutes_purchased === "number" && tx.minutes_purchased > 0
+        ? tx.minutes_purchased : null;
+      const rate = minutes ? Number((amount / minutes).toFixed(4)) : null;
+      const rawStatus = String(tx.status ?? "completed");
+      return {
+        id: tx.id,
+        displayId: String(tx.id ?? "").slice(0, 28),
+        type: "payg",
+        date: tx.created ? new Date(tx.created) : new Date(0),
+        customer: tx.user_name || tx.user_email || "Unknown User",
+        plan: typeof tx.plan_type === "string" && tx.plan_type.trim()
+          ? tx.plan_type.trim()
+          : "Pay-as-you-go",
+        minutes,
+        rate,
+        amount,
+        status: rawStatus === "completed" ? "paid"
+          : rawStatus === "pending" ? "pending"
+          : rawStatus === "failed" ? "failed"
+          : "paid",
+      };
+    });
+
+    return [...fromInvoices, ...fromPayg].sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [invoices, paygTransactions]);
+
+  const filteredAllTransactions = useMemo(() => {
+    return allTransactions.filter((tx) => {
+      if (filterTxnType !== "all" && tx.type !== filterTxnType) return false;
+      if (searchTxn) {
+        const q = searchTxn.toLowerCase();
+        if (
+          !tx.customer.toLowerCase().includes(q) &&
+          !tx.id.toLowerCase().includes(q)
+        ) return false;
+      }
+      if (dateFrom) {
+        const from = new Date(dateFrom);
+        from.setHours(0, 0, 0, 0);
+        if (tx.date < from) return false;
+      }
+      if (dateTo) {
+        const to = new Date(dateTo);
+        to.setHours(23, 59, 59, 999);
+        if (tx.date > to) return false;
+      }
+      return true;
+    });
+  }, [allTransactions, filterTxnType, searchTxn, dateFrom, dateTo]);
+
   const filteredSubscriptions = subscriptions.filter((sub) => {
     const matchesSearch = sub.organization.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesPlan = filterPlan === "all" || sub.plan === filterPlan;
@@ -221,14 +312,42 @@ export function BillingSubscriptions() {
     return matchesSearch && matchesPlan && matchesStatus;
   });
 
-  const stats = {
-    totalMRR: subscriptions.reduce((sum, sub) => sum + sub.mrr, 0),
-    activeSubscriptions: subscriptions.filter((s) => s.status === "active").length,
-    totalUsers: subscriptions.reduce((sum, sub) => sum + sub.users, 0),
-    growth: 23.5,
-    trialConversions: 20,
-    churnRate: 5,
-  };
+  const stats = useMemo(() => {
+    const now = new Date();
+    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const sumInvoices = (start: Date, end: Date) =>
+      invoices.reduce((sum, inv) => {
+        const d = new Date(inv.created);
+        if (d < start || d > end) return sum;
+        return sum + Number(inv.amount_due ?? 0);
+      }, 0);
+
+    const sumPayg = (start: Date, end: Date) =>
+      (paygTransactions || []).reduce((sum, tx) => {
+        const d = new Date(tx.created);
+        if (d < start || d > end) return sum;
+        return sum + Number(tx.amount ?? 0);
+      }, 0);
+
+    const invoiceRevenue30d = sumInvoices(monthAgo, now);
+    const paygRevenue30d = sumPayg(monthAgo, now);
+    const cashRevenue30d = invoiceRevenue30d + paygRevenue30d;
+
+    const activeSubscriptions = subscriptions.filter((s) => s.status === "active").length;
+    const canceledSubscriptions = subscriptions.filter((s) => s.status === "cancelled").length;
+    const churnDenom = activeSubscriptions + canceledSubscriptions;
+    const churnRate = churnDenom > 0 ? (canceledSubscriptions / churnDenom) * 100 : 0;
+
+    return {
+      totalMRR: subscriptions.reduce((sum, sub) => sum + sub.mrr, 0),
+      activeSubscriptions,
+      totalSubscriptions: subscriptions.length,
+      churnRate,
+      invoiceRevenue30d,
+      cashRevenue30d,
+    };
+  }, [subscriptions, invoices, paygTransactions]);
 
   const getPlanColor = (plan: string) => {
     switch (plan) {
@@ -289,6 +408,7 @@ export function BillingSubscriptions() {
   return (
     <AdminLayoutNew>
       <div className="space-y-6">
+        <>
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -302,7 +422,7 @@ export function BillingSubscriptions() {
               <div>
                 <h1 className="text-3xl font-bold">Billing & Subscriptions</h1>
                 <p className="text-muted-foreground">
-                  Manage subscriptions, plans, and billing (Placeholder)
+                  Subscriptions from the database; invoices from Stripe (last 100).
                 </p>
               </div>
             </div>
@@ -311,25 +431,21 @@ export function BillingSubscriptions() {
                 <Download className="w-4 h-4" />
                 Export
               </Button>
-              <Button className="gap-2" onClick={() => setShowProcessPaymentModal(true)}>
-                <CreditCard className="w-4 h-4" />
-                Process Payment
-              </Button>
-            </div>
-          </div>
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
-            <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-blue-900">Placeholder Mode</p>
-              <p className="text-xs text-blue-700">
-                This is a fully-designed billing interface. Connect to Stripe or your payment processor to enable real transactions.
-              </p>
             </div>
           </div>
         </motion.div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {isLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i} className="p-6 h-32 border-gray-200 animate-pulse bg-gray-50">
+                <div className="h-4 w-32 bg-gray-200 rounded mb-4" />
+                <div className="h-8 w-24 bg-gray-200 rounded" />
+              </Card>
+            ))
+          ) : (
+          <>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -337,15 +453,13 @@ export function BillingSubscriptions() {
           >
             <Card className="p-6">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-muted-foreground">Monthly Recurring Revenue</p>
+                <p className="text-sm text-muted-foreground">Cash revenue (last 30 days)</p>
                 <DollarSign className="w-5 h-5 text-green-600" />
               </div>
-              <p className="text-3xl font-bold mb-1">${stats.totalMRR.toLocaleString()}</p>
-              <div className="flex items-center gap-1 text-sm">
-                <ArrowUpRight className="w-4 h-4 text-green-600" />
-                <span className="text-green-600 font-medium">{stats.growth}%</span>
-                <span className="text-muted-foreground">vs last month</span>
-              </div>
+              <p className="text-3xl font-bold mb-1">
+                ${stats.cashRevenue30d.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-sm text-muted-foreground">Stripe invoices + PAYG</p>
             </Card>
           </motion.div>
 
@@ -356,12 +470,15 @@ export function BillingSubscriptions() {
           >
             <Card className="p-6">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-muted-foreground">Active Subscriptions</p>
-                <CheckCircle className="w-5 h-5 text-blue-600" />
+                <p className="text-sm text-muted-foreground">Monthly Recurring Revenue</p>
+                <DollarSign className="w-5 h-5 text-green-600" />
               </div>
-              <p className="text-3xl font-bold mb-1">{stats.activeSubscriptions}</p>
-              <p className="text-sm text-muted-foreground">
-                {subscriptions.length} total subscriptions
+              <p className="text-3xl font-bold mb-1">${stats.totalMRR.toLocaleString()}</p>
+              <p
+                className="text-sm text-muted-foreground"
+                title="Sum of estimated monthly recurring revenue from each subscription’s plan. Stripe invoice or cash totals can differ (timing, proration, one-time charges)."
+              >
+                Estimated from plans (not Stripe cash)
               </p>
             </Card>
           </motion.div>
@@ -373,11 +490,11 @@ export function BillingSubscriptions() {
           >
             <Card className="p-6">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-muted-foreground">Total Users</p>
-                <Users className="w-5 h-5 text-purple-600" />
+                <p className="text-sm text-muted-foreground">Active Subscriptions</p>
+                <CheckCircle className="w-5 h-5 text-blue-600" />
               </div>
-              <p className="text-3xl font-bold mb-1">{stats.totalUsers}</p>
-              <p className="text-sm text-muted-foreground">Across all plans</p>
+              <p className="text-3xl font-bold mb-1">{stats.activeSubscriptions}</p>
+              <p className="text-sm text-muted-foreground">{subscriptions.length} total subscriptions</p>
             </Card>
           </motion.div>
 
@@ -392,11 +509,13 @@ export function BillingSubscriptions() {
                 <TrendingUp className="w-5 h-5 text-orange-600" />
               </div>
               <p className="text-3xl font-bold mb-1">
-                ${(stats.totalMRR / stats.totalUsers).toFixed(2)}
+                ${(stats.totalMRR / Math.max(1, stats.activeSubscriptions)).toFixed(2)}
               </p>
-              <p className="text-sm text-muted-foreground">ARPU</p>
+              <p className="text-sm text-muted-foreground">ARPU (active)</p>
             </Card>
           </motion.div>
+          </>
+          )}
         </div>
 
         {/* Tabs */}
@@ -461,7 +580,7 @@ export function BillingSubscriptions() {
                       <h3 className="font-bold text-lg capitalize mb-1">{plan}</h3>
                       <p className="text-2xl font-bold text-primary mb-2">{count}</p>
                       <p className="text-sm text-muted-foreground">
-                        ${revenue.toLocaleString()}/mo revenue
+                        ${revenue.toLocaleString()}/mo MRR
                       </p>
                     </Card>
                   </motion.div>
@@ -469,21 +588,19 @@ export function BillingSubscriptions() {
               })}
             </div>
 
-            {/* Revenue Chart Placeholder */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.8 }}
             >
               <Card className="p-6">
-                <h3 className="font-bold text-lg mb-4">Revenue Trends</h3>
-                <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
-                  <div className="text-center">
-                    <TrendingUp className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-muted-foreground">Chart visualization would go here</p>
-                    <p className="text-sm text-muted-foreground">Connect your analytics to view trends</p>
-                  </div>
-                </div>
+                <h3 className="font-bold text-lg mb-4">Stripe invoice snapshot</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  {invoices.length} invoice{invoices.length === 1 ? "" : "s"} in the last fetch (up to 100). Use Billing &amp; Revenue for charts.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Churn rate (active vs cancelled in list): {stats.churnRate.toFixed(1)}%
+                </p>
               </Card>
             </motion.div>
           </div>
@@ -602,60 +719,218 @@ export function BillingSubscriptions() {
         {/* Transactions Tab */}
         {activeTab === "transactions" && (
           <div className="space-y-4">
+            {/* Section heading */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+              className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1"
+            >
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">All Transaction Details</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Stripe subscription invoices + Pay-as-you-go session charges ·{" "}
+                  <span className="font-medium text-gray-700">{filteredAllTransactions.length}</span> result{filteredAllTransactions.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <div className="flex gap-2 items-center">
+                <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  <CreditCard className="w-3 h-3" />
+                  {allTransactions.filter(t => t.type === "subscription").length} invoices
+                </span>
+                <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                  <Zap className="w-3 h-3" />
+                  {allTransactions.filter(t => t.type === "payg").length} PAYG
+                </span>
+              </div>
+            </motion.div>
+
+            {/* Filters */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
+            >
+              <Card className="p-4">
+                <div className="flex flex-col md:flex-row gap-3">
+                  {/* Search */}
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by customer name, email, or transaction ID…"
+                      className="pl-10"
+                      value={searchTxn}
+                      onChange={(e) => setSearchTxn(e.target.value)}
+                    />
+                  </div>
+                  {/* Type filter */}
+                  <select
+                    className="px-3 py-2 border rounded-lg text-sm min-w-[150px]"
+                    value={filterTxnType}
+                    onChange={(e) => setFilterTxnType(e.target.value as "all" | "subscription" | "payg")}
+                  >
+                    <option value="all">All Types</option>
+                    <option value="subscription">Subscription</option>
+                    <option value="payg">Pay-as-you-go</option>
+                  </select>
+                  {/* Date range */}
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                      <input
+                        type="date"
+                        className="pl-8 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        value={dateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        title="From date"
+                      />
+                    </div>
+                    <span className="text-muted-foreground text-sm">—</span>
+                    <div className="relative">
+                      <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                      <input
+                        type="date"
+                        className="pl-8 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        value={dateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        title="To date"
+                      />
+                    </div>
+                    {(dateFrom || dateTo) && (
+                      <button
+                        onClick={() => { setDateFrom(""); setDateTo(""); }}
+                        className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                        title="Clear date range"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+
+            {/* Table */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.45 }}
             >
               <Card className="overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b">
                       <tr>
-                        <th className="text-left p-4 font-medium">Date</th>
-                        <th className="text-left p-4 font-medium">Organization</th>
-                        <th className="text-left p-4 font-medium">Amount</th>
-                        <th className="text-left p-4 font-medium">Invoice</th>
-                        <th className="text-left p-4 font-medium">Status</th>
-                        <th className="text-left p-4 font-medium">Actions</th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Transaction ID
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Customer
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Plan
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Minutes
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Rate
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Total Cost
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Date
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Status
+                        </th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {transactions.map((txn, index) => (
+                    <tbody className="divide-y divide-gray-100 bg-white">
+                      {isLoading && (
+                        <AdminTableSkeletonRows columns={8} rows={8} padding="compact" />
+                      )}
+                      {!isLoading && filteredAllTransactions.map((txn, index) => (
                         <motion.tr
                           key={txn.id}
-                          initial={{ opacity: 0, x: -20 }}
+                          initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.5 + index * 0.05 }}
-                          className="border-b hover:bg-gray-50"
+                          transition={{ delay: 0.5 + Math.min(index, 15) * 0.03 }}
+                          className="hover:bg-gray-50 transition-colors"
                         >
-                          <td className="p-4">{txn.date}</td>
-                          <td className="p-4 font-medium">{txn.organization}</td>
-                          <td className="p-4 font-bold text-green-600">${txn.amount}</td>
-                          <td className="p-4">
-                            <code className="px-2 py-1 bg-gray-100 rounded text-sm">
-                              {txn.invoice}
-                            </code>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${txn.type === "payg" ? "bg-purple-500" : "bg-blue-500"}`} />
+                              <code className="text-xs text-gray-500 font-mono truncate max-w-[180px]" title={txn.id}>
+                                {txn.id}
+                              </code>
+                            </div>
                           </td>
-                          <td className="p-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getTransactionStatusBadge(txn.status)}`}>
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-gray-900 text-sm">{txn.customer}</p>
+                            <p className="text-xs text-gray-400 capitalize">
+                              {txn.type === "payg" ? "Pay-as-you-go" : "Subscription"}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                              txn.plan.toLowerCase().includes("pro") || txn.plan.toLowerCase().includes("clarity")
+                                ? "bg-purple-50 text-purple-700 border-purple-200"
+                                : txn.plan.toLowerCase().includes("core") || txn.plan.toLowerCase().includes("habit")
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : txn.plan.toLowerCase().includes("payg") || txn.plan.toLowerCase().includes("pay")
+                                    ? "bg-orange-50 text-orange-700 border-orange-200"
+                                    : "bg-gray-50 text-gray-700 border-gray-200"
+                            }`}>
+                              {txn.plan}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {txn.minutes != null ? (
+                              <span className="font-medium">{txn.minutes}</span>
+                            ) : (
+                              <span className="text-gray-300">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {txn.rate != null ? (
+                              <span>${txn.rate.toFixed(2)}/min</span>
+                            ) : (
+                              <span className="text-gray-300">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="font-bold text-green-600">
+                              ${txn.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+                            {txn.date.getTime() === 0 ? "—" : txn.date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${getTransactionStatusBadge(txn.status)}`}>
                               {txn.status}
                             </span>
                           </td>
-                          <td className="p-4">
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => {
-                                setSelectedTransaction(txn);
-                                setShowInvoiceModal(true);
-                              }}
-                            >
-                              <Download className="w-4 h-4" />
-                            </Button>
-                          </td>
                         </motion.tr>
                       ))}
+                      {!isLoading && filteredAllTransactions.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="px-6 py-14 text-center">
+                            <CreditCard className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">No transactions match your filters.</p>
+                            {(searchTxn || filterTxnType !== "all" || dateFrom || dateTo) && (
+                              <button
+                                className="mt-2 text-xs text-primary underline"
+                                onClick={() => { setSearchTxn(""); setFilterTxnType("all"); setDateFrom(""); setDateTo(""); }}
+                              >
+                                Clear all filters
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -663,120 +938,8 @@ export function BillingSubscriptions() {
             </motion.div>
           </div>
         )}
+        </>
       </div>
-
-      {/* Process Payment Modal */}
-      {showProcessPaymentModal && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onClick={() => setShowProcessPaymentModal(false)}
-        >
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl p-6 max-w-lg w-full"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold">Process Payment</h2>
-                  <p className="text-sm text-muted-foreground">Manual payment processing</p>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowProcessPaymentModal(false)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Organization</label>
-                <select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary">
-                  <option value="">Select organization</option>
-                  {subscriptions.map((sub) => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.organization} - {sub.plan}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Amount</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                  <Input
-                    type="number"
-                    placeholder="0.00"
-                    className="pl-8"
-                    step="0.01"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Payment Method</label>
-                <select className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary">
-                  <option value="credit_card">Credit Card</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="paypal">PayPal</option>
-                  <option value="wire">Wire Transfer</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Notes (Optional)</label>
-                <textarea
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary resize-none"
-                  rows={3}
-                  placeholder="Add any notes about this payment..."
-                />
-              </div>
-
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-blue-900">Placeholder Mode</p>
-                  <p className="text-xs text-blue-700">
-                    This would process a payment through your connected payment processor.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setShowProcessPaymentModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
-                  onClick={() => {
-                    console.log("Processing payment...");
-                    setShowProcessPaymentModal(false);
-                  }}
-                >
-                  Process Payment
-                </Button>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
 
       {/* Manage Subscription Modal */}
       {showManageSubscriptionModal && selectedSubscription && (
@@ -1008,12 +1171,12 @@ export function BillingSubscriptions() {
                 </span>
               </div>
 
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div className="p-3 bg-muted/50 border border-border rounded-lg flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-muted-foreground mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-blue-900">Placeholder Mode</p>
-                  <p className="text-xs text-blue-700">
-                    This would download the invoice from your connected payment processor.
+                  <p className="text-sm font-medium">Stripe-hosted PDF</p>
+                  <p className="text-xs text-muted-foreground">
+                    For the official invoice PDF, open the invoice in Stripe or use the billing portal.
                   </p>
                 </div>
               </div>
@@ -1029,8 +1192,7 @@ export function BillingSubscriptions() {
                 <Button
                   className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
                   onClick={() => {
-                    // Create invoice data
-                    const invoiceData = `INVOICE: ${selectedTransaction.invoice}\n\nDate: ${selectedTransaction.date}\nOrganization: ${selectedTransaction.organization}\nAmount: $${selectedTransaction.amount}\nStatus: ${selectedTransaction.status}\n\n---\nGenerated by Ezri Admin Dashboard`;
+                    const invoiceData = `INVOICE: ${selectedTransaction.invoice}\n\nDate: ${selectedTransaction.date}\nOrganization: ${selectedTransaction.organization}\nAmount: $${selectedTransaction.amount}\nStatus: ${selectedTransaction.status}\n\n---\nGenerated by Solace Admin Dashboard`;
                     
                     // Create and download file
                     const blob = new Blob([invoiceData], { type: 'text/plain' });

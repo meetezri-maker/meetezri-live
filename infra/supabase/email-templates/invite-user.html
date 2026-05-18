@@ -1,0 +1,242 @@
+<!--
+  Supabase Dashboard → Authentication → Email Templates → Invite user
+
+  Variables:
+  - {{ .ConfirmationURL }} — magic link (required for button + fallback link)
+
+  Redirect URLs: add your invite landing page, e.g.
+  http://localhost:5173/invite/create-password and https://your-domain.com/invite/create-password
+
+  Subject (set in dashboard): You're invited to Solace
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <title>You're invited to Solace</title>
+    <style>
+      body,
+      table,
+      td,
+      a {
+        font-family: Arial, Helvetica, sans-serif !important;
+      }
+      @media (max-width: 640px) {
+        .shell {
+          padding: 18px !important;
+        }
+        .hero-card {
+          padding: 28px 20px !important;
+          border-radius: 24px !important;
+        }
+        .hero-title {
+          font-size: 28px !important;
+          line-height: 36px !important;
+        }
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #09090f !important;
+        }
+        .shell {
+          background: #09090f !important;
+        }
+        .hero-card {
+          background: linear-gradient(145deg, #0f172a 0%, #1f1147 52%, #3b0764 100%) !important;
+          border-color: #4c1d95 !important;
+        }
+        .body-copy,
+        .detail-value,
+        .supporting-copy,
+        .spotlight-copy {
+          color: #e2e8f0 !important;
+        }
+        .hero-title {
+          color: #f8fafc !important;
+        }
+        .helper-copy,
+        .detail-label,
+        .spotlight-label,
+        .footer-copy {
+          color: #cbd5e1 !important;
+        }
+        .highlight-card {
+          background: rgba(76, 29, 149, 0.42) !important;
+          border-color: #7c3aed !important;
+          color: #f5d0fe !important;
+        }
+      }
+    </style>
+  </head>
+  <body style="margin: 0; padding: 0; background: #f5f3ff; font-family: Arial, Helvetica, sans-serif; color: #111827">
+    <div style="display: none; max-height: 0; overflow: hidden; opacity: 0">
+      You're invited to Solace — complete your account in a few taps.
+    </div>
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" class="shell" style="background: #f8fafc; padding: 32px 16px">
+      <tr>
+        <td align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width: 640px">
+            <tr>
+              <td style="padding: 0 0 20px; text-align: center">
+                <div
+                  style="
+                    display: inline-block;
+                    padding: 10px 18px;
+                    border-radius: 999px;
+                    background: #ede9fe;
+                    color: #6d28d9;
+                    font-size: 12px;
+                    font-weight: 700;
+                    letter-spacing: 0.08em;
+                    text-transform: uppercase;
+                  "
+                >
+                  You're invited
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td
+                class="hero-card"
+                style="
+                  background: linear-gradient(145deg, #ffffff 0%, #faf5ff 48%, #fdf2f8 100%);
+                  border-radius: 28px;
+                  padding: 40px 32px;
+                  border: 1px solid #f5d0fe;
+                  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+                "
+              >
+                <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 24px">
+                  <tr>
+                    <td align="left" valign="middle">
+                      <table role="presentation" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td
+                            style="
+                              height: 52px;
+                              width: 52px;
+                              border-radius: 18px;
+                              background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+                              box-shadow: 0 0 0 10px rgba(139, 92, 246, 0.12);
+                              text-align: center;
+                              font-size: 22px;
+                              font-weight: 700;
+                              color: #ffffff;
+                            "
+                          >
+                            S
+                          </td>
+                          <td style="padding-left: 16px">
+                            <div style="font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #64748b; font-weight: 700">Solace</div>
+                            <div style="margin-top: 4px; font-size: 18px; line-height: 24px; color: #111827; font-weight: 700">Calm support for every step</div>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                    <td align="right" valign="middle">
+                      <div
+                        style="
+                          display: inline-block;
+                          height: 72px;
+                          width: 72px;
+                          border-radius: 24px;
+                          background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+                          opacity: 0.94;
+                          box-shadow: 0 14px 36px rgba(168, 85, 247, 0.16);
+                        "
+                      ></div>
+                    </td>
+                  </tr>
+                </table>
+                <div style="height: 8px; width: 96px; border-radius: 999px; background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%); margin: 0 auto 28px"></div>
+                <h1 class="hero-title" style="margin: 0 0 18px; font-size: 34px; line-height: 42px; text-align: center; color: #111827">Join your team on Solace</h1>
+                <p class="body-copy" style="margin: 0 0 16px; font-size: 16px; line-height: 28px; color: #334155">Hi there,</p>
+                <p class="body-copy" style="margin: 0; font-size: 16px; line-height: 28px; color: #334155">
+                  An administrator invited you to Solace. Open your invite in a new tab to finish setup — you’ll create your password on the next screen.
+                </p>
+                <div style="margin: 24px 0 0; padding: 0">
+                  <div
+                    class="highlight-card"
+                    style="
+                      margin: 0 0 12px;
+                      padding: 16px 18px;
+                      border-radius: 16px;
+                      background: #f5f3ff;
+                      border: 1px solid #ddd6fe;
+                      font-size: 15px;
+                      line-height: 24px;
+                      color: #4c1d95;
+                    "
+                  >
+                    Your account is ready — complete it by choosing a secure password.
+                  </div>
+                  <div
+                    class="highlight-card"
+                    style="
+                      margin: 0 0 12px;
+                      padding: 16px 18px;
+                      border-radius: 16px;
+                      background: #f5f3ff;
+                      border: 1px solid #ddd6fe;
+                      font-size: 15px;
+                      line-height: 24px;
+                      color: #4c1d95;
+                    "
+                  >
+                    This link is unique to you — keep it private.
+                  </div>
+                </div>
+                <div style="margin: 32px 0 24px; text-align: center">
+                  <a
+                    href="{{ .ConfirmationURL }}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="cta-button"
+                    style="
+                      display: inline-block;
+                      padding: 16px 28px;
+                      border-radius: 999px;
+                      background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+                      color: #ffffff;
+                      text-decoration: none;
+                      font-size: 16px;
+                      font-weight: 700;
+                      box-shadow: 0 12px 30px rgba(124, 58, 237, 0.28);
+                    "
+                    >Accept invite</a
+                  >
+                </div>
+                <p class="helper-copy" style="margin: 0 0 8px; font-size: 13px; line-height: 22px; color: #64748b; text-align: center">
+                  If the button doesn’t work, copy and paste this link into your browser (opens in a new tab):
+                </p>
+                <p class="helper-copy" style="margin: 0 0 8px; font-size: 13px; line-height: 22px; color: #64748b; text-align: center">
+                  <a
+                    href="{{ .ConfirmationURL }}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style="color: #6d28d9; font-weight: 600; word-break: break-all"
+                    >{{ .ConfirmationURL }}</a
+                  >
+                </p>
+                <p class="supporting-copy" style="margin: 16px 0 0; font-size: 14px; line-height: 24px; color: #64748b">
+                  If you didn’t expect this invitation, you can ignore this email.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 18px 18px 0; text-align: center">
+                <p class="footer-copy" style="margin: 0; font-size: 13px; line-height: 22px; color: #64748b">
+                  You’re receiving this because an administrator added your email to Solace.
+                </p>
+                <p class="footer-copy" style="margin: 12px 0 0; font-size: 12px; line-height: 20px; color: #64748b; opacity: 0.82">Solace · Calm support, beautifully delivered</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

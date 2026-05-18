@@ -7,6 +7,7 @@ import { ConfirmationModal } from "../../components/ConfirmationModal";
 import { ArrowLeft, Mail, Phone, Calendar, Activity, MessageSquare, Heart, AlertTriangle, Ban, CheckCircle2, Clock, MapPin, Shield, Star, TrendingUp, TrendingDown, Edit, Trash2, Key, Send, Download, Eye, EyeOff, User, CreditCard, Bell, Settings, Moon, Sun } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../../lib/api";
+import { AdminTableSkeletonRows } from "../../components/admin/AdminTableSkeleton";
 
 export function UserDetailsEnhanced() {
   const { userId } = useParams<{ userId: string }>();
@@ -18,6 +19,8 @@ export function UserDetailsEnhanced() {
   const [userData, setUserData] = useState<any>(null);
   const [activityTimeline, setActivityTimeline] = useState<any[]>([]);
   const [recentSessions, setRecentSessions] = useState<any[]>([]);
+  const [sleepEntries, setSleepEntries] = useState<any[]>([]);
+  const [habitEntries, setHabitEntries] = useState<any[]>([]);
   const [securityLogs, setSecurityLogs] = useState<any[]>([]);
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
@@ -86,6 +89,8 @@ export function UserDetailsEnhanced() {
         
         setUserData(processedUser);
         setRecentSessions(sessions);
+        setSleepEntries(Array.isArray(sleep) ? sleep : []);
+        setHabitEntries(Array.isArray(habits) ? habits : []);
         setSecurityLogs(auditLogs);
         
         // Build timeline
@@ -127,7 +132,7 @@ export function UserDetailsEnhanced() {
             id: s.id,
             type: "sleep",
             title: "Sleep Log",
-            description: `Sleep Quality: ${s.quality_rating || 'N/A'}/5`,
+            description: `Sleep Quality: ${s.quality_rating || '–'}/5`,
             time: new Date(s.created_at).toLocaleString(),
             timestamp: new Date(s.created_at).getTime(),
             icon: Moon,
@@ -180,16 +185,23 @@ export function UserDetailsEnhanced() {
           const html = `<p>Hello ${userData.name},</p><p>An admin has requested a password reset for your Ezri account. If this was not you, please contact support.</p>`;
           await api.sendEmail(userData.email, subject, html, text);
         } else if (action === "send-message") {
-          const subject = "Message from Ezri Admin";
-          const text = `Hello ${userData.name},\n\nYou have received a message from the Ezri admin team.`;
-          const html = `<p>Hello ${userData.name},</p><p>You have received a message from the Ezri admin team.</p>`;
+          const subject = "Message from Solace Admin";
+          const text = `Hello ${userData.name},\n\nYou have received a message from the Solace Admin team.`;
+          const html = `<p>Hello ${userData.name},</p><p>You have received a message from the Solace Admin team.</p>`;
           await api.sendEmail(userData.email, subject, html, text);
         } else if (action === "export-data") {
-          const blob = await api.exportUserData();
+          const { blob, filename, contentType } = await api.exportUserData();
+          const fallbackExtension = contentType.includes("csv")
+            ? "csv"
+            : contentType.includes("zip")
+              ? "zip"
+              : "json";
+          const resolvedFilename =
+            filename?.trim() || `ezri-user-${userData.id}-data.${fallbackExtension}`;
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.href = url;
-          a.download = `ezri-user-${userData.id}-data.json`;
+          a.download = resolvedFilename;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
@@ -249,7 +261,7 @@ export function UserDetailsEnhanced() {
   };
   
   const statsCards = userData ? [
-    { label: "Total Sessions", value: userData.totalSessions.toString(), icon: MessageSquare, color: "text-blue-600", bg: "bg-blue-100" },
+    { label: "Total Talk it out", value: userData.totalSessions.toString(), icon: MessageSquare, color: "text-blue-600", bg: "bg-blue-100" },
     { label: "Mood Score", value: `${userData.avgMoodScore}/10`, icon: Heart, color: "text-pink-600", bg: "bg-pink-100" },
     { label: "Wellness Streak", value: `${userData.wellnessStreak} entries`, icon: TrendingUp, color: "text-green-600", bg: "bg-green-100" },
     { label: "Journal Entries", value: userData.journalEntries.toString(), icon: Edit, color: "text-purple-600", bg: "bg-purple-100" },
@@ -258,15 +270,60 @@ export function UserDetailsEnhanced() {
   const tabs = [
     { id: "overview", label: "Overview", icon: User },
     { id: "activity", label: "Activity", icon: Activity },
-    { id: "sessions", label: "Sessions", icon: MessageSquare },
+    { id: "sessions", label: "Talk it out", icon: MessageSquare },
     { id: "security", label: "Security", icon: Shield },
   ];
 
   if (loading) {
     return (
       <AdminLayoutNew>
-        <div className="flex items-center justify-center h-96">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="space-y-6 max-w-7xl mx-auto">
+          <div className="h-9 w-36 bg-gray-200 rounded animate-pulse" />
+          <div className="flex flex-col md:flex-row md:items-start gap-4">
+            <div className="w-20 h-20 rounded-full bg-gray-200 animate-pulse shrink-0" />
+            <div className="space-y-3 flex-1">
+              <div className="h-9 w-64 max-w-full bg-gray-200 rounded animate-pulse" />
+              <div className="h-4 w-80 max-w-full bg-gray-100 rounded animate-pulse" />
+              <div className="flex gap-2">
+                <div className="h-6 w-20 bg-gray-200 rounded-full animate-pulse" />
+                <div className="h-6 w-24 bg-gray-200 rounded-full animate-pulse" />
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i} className="p-6 h-28 animate-pulse bg-gray-50 border-gray-200">
+                <div className="h-3 w-24 bg-gray-200 rounded mb-3" />
+                <div className="h-7 w-16 bg-gray-200 rounded" />
+              </Card>
+            ))}
+          </div>
+          <Card className="p-6 overflow-hidden">
+            <div className="h-6 w-48 bg-gray-200 rounded animate-pulse mb-6" />
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Date
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Type
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Duration
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  <AdminTableSkeletonRows columns={4} rows={8} padding="compact" />
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
       </AdminLayoutNew>
     );
@@ -331,6 +388,30 @@ export function UserDetailsEnhanced() {
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <Link to={`/admin/user-analytics/moods/${userId}`}>
+                <Button variant="outline" className="gap-2">
+                  <Heart className="w-4 h-4" />
+                  Mood
+                </Button>
+              </Link>
+              <Link to={`/admin/user-analytics/journals/${userId}`}>
+                <Button variant="outline" className="gap-2">
+                  <Edit className="w-4 h-4" />
+                  Journal
+                </Button>
+              </Link>
+              <Link to={`/admin/user-analytics/sleep/${userId}`}>
+                <Button variant="outline" className="gap-2">
+                  <Moon className="w-4 h-4" />
+                  Sleep
+                </Button>
+              </Link>
+              <Link to={`/admin/user-analytics/habits/${userId}`}>
+                <Button variant="outline" className="gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Habits
+                </Button>
+              </Link>
               <Button
                 variant="outline"
                 className="gap-2"
@@ -584,39 +665,93 @@ export function UserDetailsEnhanced() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
             >
-              <Card className="p-6">
-                <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-primary" />
-                  Activity Timeline
-                </h2>
-                <div className="space-y-4">
-                  {activityTimeline.length > 0 ? activityTimeline.map((activity, index) => (
-                    <motion.div
-                      key={activity.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="flex gap-4 relative"
-                    >
-                      {index !== activityTimeline.length - 1 && (
-                        <div className="absolute left-5 top-12 bottom-0 w-0.5 bg-gray-200" />
-                      )}
-                      <div className={`w-10 h-10 rounded-full ${activity.bg} flex items-center justify-center flex-shrink-0 relative z-10`}>
-                        <activity.icon className={`w-5 h-5 ${activity.color}`} />
-                      </div>
-                      <div className="flex-1 pb-6">
-                        <div className="flex items-start justify-between mb-1">
-                          <p className="font-medium">{activity.title}</p>
-                          <span className="text-xs text-muted-foreground">{activity.time}</span>
+              <div className="space-y-6">
+                <Card className="p-6">
+                  <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-primary" />
+                    Activity Timeline
+                  </h2>
+                  <div className="space-y-4">
+                    {activityTimeline.length > 0 ? activityTimeline.map((activity, index) => (
+                      <motion.div
+                        key={activity.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className="flex gap-4 relative"
+                      >
+                        {index !== activityTimeline.length - 1 && (
+                          <div className="absolute left-5 top-12 bottom-0 w-0.5 bg-gray-200" />
+                        )}
+                        <div className={`w-10 h-10 rounded-full ${activity.bg} flex items-center justify-center flex-shrink-0 relative z-10`}>
+                          <activity.icon className={`w-5 h-5 ${activity.color}`} />
                         </div>
-                        <p className="text-sm text-muted-foreground">{activity.description}</p>
-                      </div>
-                    </motion.div>
-                  )) : (
-                    <div className="text-center py-8 text-muted-foreground">No recent activity</div>
-                  )}
+                        <div className="flex-1 pb-6">
+                          <div className="flex items-start justify-between mb-1">
+                            <p className="font-medium">{activity.title}</p>
+                            <span className="text-xs text-muted-foreground">{activity.time}</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{activity.description}</p>
+                        </div>
+                      </motion.div>
+                    )) : (
+                      <div className="text-center py-8 text-muted-foreground">No recent activity</div>
+                    )}
+                  </div>
+                </Card>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  <Card className="p-6">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <Moon className="w-5 h-5 text-indigo-600" />
+                      Sleep Tracker Data
+                    </h3>
+                    <div className="space-y-3">
+                      {sleepEntries.length > 0 ? (
+                        sleepEntries.slice(0, 8).map((entry) => (
+                          <div key={entry.id} className="rounded-lg border p-3">
+                            <p className="text-sm font-medium">
+                              {entry.created_at ? new Date(entry.created_at).toLocaleDateString() : "Unknown date"}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Bed: {entry.bed_time ? new Date(entry.bed_time).toLocaleTimeString() : "N/A"} | Wake: {entry.wake_time ? new Date(entry.wake_time).toLocaleTimeString() : "N/A"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Quality: {entry.quality_rating ?? "N/A"} | Notes: {entry.notes || "None"}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No sleep tracker entries found.</p>
+                      )}
+                    </div>
+                  </Card>
+
+                  <Card className="p-6">
+                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5 text-teal-600" />
+                      Habit Tracker Data
+                    </h3>
+                    <div className="space-y-3">
+                      {habitEntries.length > 0 ? (
+                        habitEntries.slice(0, 8).map((habit) => (
+                          <div key={habit.id} className="rounded-lg border p-3">
+                            <p className="text-sm font-medium">{habit.name || "Untitled habit"}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Category: {habit.category || "General"} | Frequency: {habit.frequency || "daily"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Created: {habit.created_at ? new Date(habit.created_at).toLocaleDateString() : "Unknown"}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No habit tracker entries found.</p>
+                      )}
+                    </div>
+                  </Card>
                 </div>
-              </Card>
+              </div>
             </motion.div>
           )}
 
@@ -630,7 +765,7 @@ export function UserDetailsEnhanced() {
               <Card className="p-6">
                 <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
                   <MessageSquare className="w-5 h-5 text-primary" />
-                  Recent Sessions
+                  Recent Talk it out
                 </h2>
                 <div className="overflow-x-auto">
                   <table className="w-full">

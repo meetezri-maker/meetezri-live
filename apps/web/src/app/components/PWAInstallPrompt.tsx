@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Download, X, Smartphone } from "lucide-react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -158,15 +159,21 @@ export function PWAInstallPrompt() {
               <div className="mt-4 pt-4 border-t border-white/20">
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
                   <div>
-                    <div className="font-bold">⚡</div>
+                    <div className="font-bold flex justify-center">
+                      <FluentEmoji emoji="⚡" size={20} />
+                    </div>
                     <div className="text-white/80">Faster</div>
                   </div>
                   <div>
-                    <div className="font-bold">📱</div>
+                    <div className="font-bold flex justify-center">
+                      <FluentEmoji emoji="📱" size={20} />
+                    </div>
                     <div className="text-white/80">Native Feel</div>
                   </div>
                   <div>
-                    <div className="font-bold">🔔</div>
+                    <div className="font-bold flex justify-center">
+                      <FluentEmoji emoji="🔔" size={20} />
+                    </div>
                     <div className="text-white/80">Notifications</div>
                   </div>
                 </div>

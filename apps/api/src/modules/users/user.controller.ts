@@ -11,6 +11,14 @@ interface UserPayload {
   role?: string;
 }
 
+type ReportCrisisBody = {
+  riskLevel?: 'low' | 'medium' | 'high' | 'critical';
+  eventType?: string;
+  keywords?: string[];
+  aiConfidence?: number;
+  notes?: string;
+};
+
 function sanitizeSelfProfileResponse(profile: Record<string, any> | null) {
   if (!profile) return profile;
   const sanitized = { ...profile };
@@ -20,53 +28,66 @@ function sanitizeSelfProfileResponse(profile: Record<string, any> | null) {
   delete (sanitized as any).stripe_subscription_id;
   delete (sanitized as any).organization_id;
   delete (sanitized as any).deleted_at;
+  if ((sanitized as any).permissions && typeof (sanitized as any).permissions === 'object') {
+    const perms = { ...((sanitized as any).permissions as Record<string, any>) };
+    if (perms.two_factor_knowledge && typeof perms.two_factor_knowledge === 'object') {
+      perms.two_factor_knowledge = {
+        enabled: perms.two_factor_knowledge.enabled === true,
+        security_question: perms.two_factor_knowledge.security_question || null,
+      };
+    }
+    (sanitized as any).permissions = perms;
+  }
 
   return sanitized;
 }
 
-function isLocalWebOrigin(value?: string | null) {
-  if (!value) return false;
+function tryParseHttpOrigin(value?: string | null): string | null {
+  if (!value) return null;
   try {
     const url = new URL(value);
-    const host = url.hostname;
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    return url.origin;
   } catch {
-    return value.includes('localhost') || value.includes('127.0.0.1') || value.includes('::1');
+    return null;
   }
 }
 
 function getWebBaseUrlFromRequest(
   request: FastifyRequest
 ): { webBaseUrl: string; source: string } {
+  const explicit = (request.headers['x-web-base-url'] as string | undefined) ?? null;
   const origin = request.headers.origin;
   const referer = request.headers.referer;
 
-  // 1) Prefer the actual browser origin when it is clearly local.
-  if (origin && isLocalWebOrigin(origin)) {
-    try {
-      return { webBaseUrl: new URL(origin).origin, source: 'request.origin' };
-    } catch {
-      return { webBaseUrl: origin, source: 'request.origin(raw)' };
-    }
+  const fromExplicit = tryParseHttpOrigin(explicit);
+  if (fromExplicit) {
+    return { webBaseUrl: fromExplicit, source: 'request.x-web-base-url' };
   }
 
-  // 2) If origin is missing, try referer.
-  if (referer && isLocalWebOrigin(referer)) {
-    try {
-      return { webBaseUrl: new URL(referer).origin, source: 'request.referer' };
-    } catch {
-      return { webBaseUrl: referer, source: 'request.referer(raw)' };
-    }
+  // Browser requests from the SPA always send Origin (same-origin POST) or Referer.
+  // Use that first so production (e.g. Vercel) verification links match the site the user
+  // signed up on. The previous logic only honored localhost origins and fell back to env /
+  // localhost, which broke deployed frontends when WEB_BASE_URL was unset on the API.
+  const fromOrigin = tryParseHttpOrigin(origin);
+  if (fromOrigin) {
+    return { webBaseUrl: fromOrigin, source: 'request.origin' };
   }
 
-  // 3) Environment-aware fallback.
-  // Prefer WEB_BASE_URL, then APP_URL (legacy), then localhost for safety.
-  const envWebBaseUrl =
-    process.env.WEB_BASE_URL ||
-    process.env.APP_URL ||
-    'http://localhost:5173';
+  const fromReferer = tryParseHttpOrigin(referer);
+  if (fromReferer) {
+    return { webBaseUrl: fromReferer, source: 'request.referer' };
+  }
 
-  return { webBaseUrl: envWebBaseUrl, source: 'env' };
+  const envCandidateRaw =
+    process.env.WEB_BASE_URL || process.env.APP_URL || process.env.CLIENT_URL || '';
+  const envCandidate = envCandidateRaw.trim();
+  const envParsed = tryParseHttpOrigin(envCandidate);
+  if (envParsed) {
+    return { webBaseUrl: envParsed, source: 'env' };
+  }
+
+  return { webBaseUrl: 'http://localhost:5173', source: 'fallback.localhost' };
 }
 
 function resolvePostVerificationTargetPath(signupType: 'trial' | 'plan') {
@@ -81,9 +102,35 @@ function buildVerificationRedirectTo(
   signupType: 'trial' | 'plan'
 ) {
   const targetPath = resolvePostVerificationTargetPath(signupType);
-  // Use exact final route URLs per flow so Supabase sends users directly.
-  const redirectTo = `${webBaseUrl}${targetPath}`;
+  // Always route through /auth/callback so the SPA can finalize verification consistently.
+  // This is important for magiclinks used in resend-verification, where Supabase may not
+  // mark email_confirmed_at as expected unless we explicitly confirm server-side.
+  const redirectTo = `${webBaseUrl}/auth/callback?redirect=${encodeURIComponent(targetPath)}&via=verification&flow=${signupType}`;
   return { redirectTo, targetPath };
+}
+
+export async function confirmEmailHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload & { email?: string };
+  const userId = user.sub;
+
+  try {
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      email_confirm: true,
+      user_metadata: {
+        email_verification_required: false,
+      },
+    } as any);
+
+    if (error) throw error;
+
+    return reply.code(200).send({ success: true });
+  } catch (error: any) {
+    request.log.error({ error, userId }, 'Failed to confirm email');
+    return reply.code(500).send({ message: error.message || 'Failed to confirm email' });
+  }
 }
 
 export async function checkUserExistsHandler(
@@ -116,6 +163,7 @@ export async function signupHandler(
 
   try {
     const fullName = `${firstName} ${lastName}`.trim();
+    const age = (request.body as any)?.age;
 
     // Reuse existing auth row when signup retry happens after partial failures.
     let authUserId = accountState.auth_user_id;
@@ -130,6 +178,8 @@ export async function signupHandler(
           user_metadata: {
             first_name: firstName,
             last_name: lastName,
+            age,
+            signup_source: 'app',
           },
         });
 
@@ -179,6 +229,7 @@ export async function signupHandler(
         request: {
           origin: request.headers.origin,
           referer: request.headers.referer,
+          x_web_base_url: request.headers['x-web-base-url'],
           baseUrl,
           baseUrlSource,
           isLocal: baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1'),
@@ -204,28 +255,50 @@ export async function signupHandler(
     });
 
     if (linkError) throw linkError;
-    const verificationLink = linkData.properties?.action_link;
+    const verificationLinkRaw = linkData.properties?.action_link;
 
-    if (!verificationLink) throw new Error('Failed to generate verification link');
+    if (!verificationLinkRaw) throw new Error('Failed to generate verification link');
+    // Supabase can sometimes rewrite/override redirect_to based on project URL config.
+    // Enforce our computed redirect explicitly so local dev stays on localhost.
+    let verificationLink = verificationLinkRaw;
+    try {
+      const u = new URL(verificationLinkRaw);
+      u.searchParams.set('redirect_to', finalRedirectTo);
+      verificationLink = u.toString();
+    } catch {
+      // If URL parsing fails, keep the original link.
+      verificationLink = verificationLinkRaw;
+    }
 
-    // 3. Send custom email with target="_blank"
-    await emailService.sendEmail(
-      email,
-      'Confirm your email - MeetEzri',
-      `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Welcome to MeetEzri!</h2>
-        <p>Hi ${firstName},</p>
-        <p>Please confirm your email address to get started.</p>
-        <p>Click the button below to verify your account:</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${verificationLink}" target="_blank" style="background-color: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Confirm Email</a>
-        </div>
-        <p>If you didn't sign up for MeetEzri, you can ignore this email.</p>
-      </div>
-      `,
-      `Confirm your email by visiting: ${verificationLink}`
-    );
+    try {
+      const u = new URL(verificationLink);
+      const rt = u.searchParams.get('redirect_to') || '';
+      const rtOrigin = rt ? (new URL(rt)).origin : null;
+      request.log.info(
+        { redirectToPassed: finalRedirectTo, redirectToInLinkOrigin: rtOrigin },
+        'Signup verification link redirect_to (origin only)'
+      );
+    } catch {
+      // ignore
+    }
+
+    const welcomeVerificationEmail = emailService.buildWelcomeVerificationEmail({
+      firstName,
+      verificationLink,
+      audience: signupType,
+    });
+
+    // Do not block signup on SMTP latency; link is already generated.
+    void emailService
+      .sendEmail(
+        email,
+        welcomeVerificationEmail.subject,
+        welcomeVerificationEmail.html,
+        welcomeVerificationEmail.text
+      )
+      .catch((error) => {
+        request.log.error({ error, email }, 'Failed to send signup verification email');
+      });
 
     return reply.code(201).send({
       success: true,
@@ -288,6 +361,7 @@ export async function resendVerificationHandler(
         request: {
           origin: request.headers.origin,
           referer: request.headers.referer,
+          x_web_base_url: request.headers['x-web-base-url'],
           baseUrl,
           baseUrlSource,
           isLocal: baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1'),
@@ -311,25 +385,41 @@ export async function resendVerificationHandler(
     });
 
     if (linkError) throw linkError;
-    const verificationLink = linkData.properties?.action_link;
-    if (!verificationLink) throw new Error('Failed to generate verification link');
+    const verificationLinkRaw = linkData.properties?.action_link;
+    if (!verificationLinkRaw) throw new Error('Failed to generate verification link');
+    // Supabase can sometimes rewrite/override redirect_to based on project URL config.
+    // Enforce our computed redirect explicitly so local dev stays on localhost.
+    let verificationLink = verificationLinkRaw;
+    try {
+      const u = new URL(verificationLinkRaw);
+      u.searchParams.set('redirect_to', redirectTo);
+      verificationLink = u.toString();
+    } catch {
+      verificationLink = verificationLinkRaw;
+    }
+
+    try {
+      const u = new URL(verificationLink);
+      const rt = u.searchParams.get('redirect_to') || '';
+      const rtOrigin = rt ? (new URL(rt)).origin : null;
+      request.log.info(
+        { redirectToPassed: redirectTo, redirectToInLinkOrigin: rtOrigin },
+        'Resend verification link redirect_to (origin only)'
+      );
+    } catch {
+      // ignore
+    }
+
+    const verificationReminderEmail = emailService.buildVerificationReminderEmail({
+      verificationLink,
+      audience: signupTypeResolved === 'trial' ? 'trial' : 'plan',
+    });
 
     await emailService.sendEmail(
       email,
-      'Verify your email - MeetEzri',
-      `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Verify your email</h2>
-        <p>Hi,</p>
-        <p>Please verify your email address to secure your MeetEzri free trial account.</p>
-        <p>Click the button below to verify:</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${verificationLink}" target="_blank" style="background-color: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Verify my email</a>
-        </div>
-        <p>If you didn't sign up for MeetEzri, you can ignore this email.</p>
-      </div>
-      `,
-      `Verify your email by visiting: ${verificationLink}`
+      verificationReminderEmail.subject,
+      verificationReminderEmail.html,
+      verificationReminderEmail.text
     );
 
     return reply.code(200).send({ success: true, message: 'Verification email sent' });
@@ -469,7 +559,7 @@ export async function initProfileHandler(
   }
 
   try {
-    const profile = await userService.createProfile(user.sub, email);
+    const profile = await userService.createProfile(user.sub, email, undefined, undefined, 'app');
     request.log.info({ profile }, 'Profile initialized successfully');
     return sanitizeSelfProfileResponse(profile as any);
   } catch (error) {
@@ -487,6 +577,194 @@ export async function getCreditsHandler(
   return credits;
 }
 
+export async function getRecentActivityHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const query = (request.query || {}) as { limit?: string | number };
+  const parsedLimit = Number(query.limit);
+  const limit = Number.isFinite(parsedLimit) ? parsedLimit : 25;
+  const activity = await userService.getRecentActivity(user.sub, limit);
+  return activity;
+}
+
+export async function reportCrisisEventHandler(
+  request: FastifyRequest<{ Body: ReportCrisisBody }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const body = (request.body || {}) as ReportCrisisBody;
+  const riskLevel = body.riskLevel;
+
+  if (!riskLevel || !['low', 'medium', 'high', 'critical'].includes(riskLevel)) {
+    return reply.code(400).send({ message: 'riskLevel is required' });
+  }
+
+  try {
+    const event = await userService.createCrisisEventFromDetection({
+      userId: user.sub,
+      riskLevel,
+      eventType: body.eventType,
+      keywords: Array.isArray(body.keywords) ? body.keywords : [],
+      aiConfidence:
+        typeof body.aiConfidence === 'number' ? body.aiConfidence : undefined,
+      notes: body.notes,
+    });
+    return reply.code(201).send(event);
+  } catch (error) {
+    request.log.error({ error }, 'Failed to create crisis event');
+    return reply.code(500).send({ message: 'Failed to create crisis event' });
+  }
+}
+
+export async function getKnowledgeTwoFactorStatusHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  try {
+    return await userService.getKnowledgeTwoFactorStatus(user.sub);
+  } catch (error: any) {
+    return reply.code(500).send({ message: error?.message || 'Failed to load 2FA status' });
+  }
+}
+
+export async function setupKnowledgeTwoFactorHandler(
+  request: FastifyRequest<{ Body: { pin: string; securityQuestion: string; securityAnswer: string } }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const { pin, securityQuestion, securityAnswer } = request.body || ({} as any);
+  try {
+    return await userService.setupKnowledgeTwoFactor(user.sub, {
+      pin: String(pin || ''),
+      securityQuestion: String(securityQuestion || ''),
+      securityAnswer: String(securityAnswer || ''),
+    });
+  } catch (error: any) {
+    const status = error?.statusCode === 400 ? 400 : 500;
+    return reply.code(status).send({ message: error?.message || 'Failed to setup knowledge 2FA' });
+  }
+}
+
+export async function setupKnowledgeTwoFactorEmailHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  try {
+    return await userService.setupKnowledgeTwoFactorEmail(user.sub);
+  } catch (error: any) {
+    return reply.code(500).send({ message: error?.message || 'Failed to setup knowledge 2FA email code' });
+  }
+}
+
+export async function verifyKnowledgeTwoFactorHandler(
+  request: FastifyRequest<{ Body: { code: string } }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const { code } = request.body || ({} as any);
+  try {
+    return await userService.verifyKnowledgeTwoFactor(user.sub, { code: String(code || '') });
+  } catch (error: any) {
+    const status =
+      error?.statusCode === 400 || error?.statusCode === 401 || error?.statusCode === 404
+        ? error.statusCode
+        : 500;
+    return reply.code(status).send({ message: error?.message || 'Failed to verify knowledge 2FA' });
+  }
+}
+
+export async function disableKnowledgeTwoFactorHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  try {
+    return await userService.disableKnowledgeTwoFactor(user.sub);
+  } catch (error: any) {
+    return reply.code(500).send({ message: error?.message || 'Failed to disable knowledge 2FA' });
+  }
+}
+
+export async function requestKnowledgeTwoFactorRecoveryHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  try {
+    return await userService.requestKnowledgeTwoFactorRecovery(user.sub);
+  } catch (error: any) {
+    const status =
+      error?.statusCode === 400 ||
+      error?.statusCode === 404 ||
+      error?.statusCode === 429
+        ? error.statusCode
+        : 500;
+    return reply.code(status).send({ message: error?.message || 'Failed to send recovery code' });
+  }
+}
+
+export async function verifyKnowledgeTwoFactorRecoveryHandler(
+  request: FastifyRequest<{ Body: { code: string } }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const { code } = request.body || ({} as any);
+  try {
+    return await userService.verifyKnowledgeTwoFactorRecovery(user.sub, { code: String(code || '') });
+  } catch (error: any) {
+    const status =
+      error?.statusCode === 400 ||
+      error?.statusCode === 401 ||
+      error?.statusCode === 404 ||
+      error?.statusCode === 429
+        ? error.statusCode
+        : 500;
+    return reply.code(status).send({ message: error?.message || 'Failed to verify recovery code' });
+  }
+}
+
+export async function requestKnowledgeTwoFactorLoginCodeHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  try {
+    return await userService.requestKnowledgeTwoFactorLoginCode(user.sub);
+  } catch (error: any) {
+    const status =
+      error?.statusCode === 400 ||
+      error?.statusCode === 404 ||
+      error?.statusCode === 429
+        ? error.statusCode
+        : 500;
+    return reply.code(status).send({ message: error?.message || 'Failed to send authentication code' });
+  }
+}
+
+export async function verifyKnowledgeTwoFactorLoginCodeHandler(
+  request: FastifyRequest<{ Body: { code: string } }>,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const { code } = request.body || ({} as any);
+  try {
+    return await userService.verifyKnowledgeTwoFactorLoginCode(user.sub, { code: String(code || '') });
+  } catch (error: any) {
+    const status =
+      error?.statusCode === 400 ||
+      error?.statusCode === 401 ||
+      error?.statusCode === 404 ||
+      error?.statusCode === 429
+        ? error.statusCode
+        : 500;
+    return reply.code(status).send({ message: error?.message || 'Failed to verify authentication code' });
+  }
+}
+
 export async function updateProfileHandler(
   request: FastifyRequest,
   reply: FastifyReply
@@ -497,7 +775,15 @@ export async function updateProfileHandler(
   const result = updateProfileSchema.safeParse(request.body);
   if (!result.success) {
     request.log.warn({ error: result.error }, 'Update profile validation failed');
-    return reply.code(400).send(result.error);
+    // Never send the ZodError instance: fastify-type-provider-zod's serializerCompiler
+    // validates outgoing payloads and will turn this into a 500 with error "ZodError".
+    const firstIssue = result.error.issues[0];
+    return reply.code(400).send({
+      statusCode: 400,
+      error: 'Bad Request',
+      message: firstIssue?.message ?? 'Validation failed',
+      issues: result.error.issues,
+    });
   }
 
   const updatedProfile = await userService.updateProfile(user.sub, result.data);
@@ -515,7 +801,27 @@ export async function completeOnboardingHandler(
   const result = onboardingSchema.safeParse(request.body);
   if (!result.success) {
     request.log.warn({ error: result.error }, 'Onboarding validation failed');
-    return reply.code(400).send(result.error);
+    const firstIssue = result.error.issues[0];
+    return reply.code(400).send({
+      statusCode: 400,
+      error: 'Bad Request',
+      message: firstIssue?.message ?? 'Validation failed',
+      issues: result.error.issues,
+    });
+  }
+
+  // Enforce age gate (18+) for onboarding completion.
+  // Allow missing `age` only if it was already stored on the user's profile (legacy clients/flows).
+  if (!result.data.age) {
+    const existing = await userService.getProfile(user.sub);
+    const storedAge = (existing as any)?.age;
+    if (!storedAge || (typeof storedAge === 'string' && !storedAge.trim())) {
+      return reply.code(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'Age is required (18+) to complete onboarding',
+      });
+    }
   }
 
   try {

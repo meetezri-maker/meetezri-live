@@ -13,36 +13,19 @@ import { SafetyState, SafetySignals } from '@/app/types/safety';
  * These are intentionally generic for testing purposes
  */
 const DETECTION_PATTERNS = {
-  ELEVATED_CONCERN: [
-    'overwhelmed',
-    'hopeless',
-    'can\'t cope',
-    'too much',
-    'exhausted',
-    'heavy',
-    'struggling',
-    'drowning',
-    'lost',
-  ],
+  ELEVATED_CONCERN: [],
   HIGH_RISK: [
-    'give up',
-    'no point',
-    'end it',
-    'not worth',
-    'better off',
-    'burden',
-    'escape',
-    'way out',
+    "suicide",
+    "kill myself",
+    "end it all",
+    "self-harm",
+    "hurt myself",
+    "want to die",
+    "better off dead",
+    "cutting",
+    "overdose",
   ],
-  SAFETY_MODE: [
-    'urgent crisis',
-    'immediate danger',
-    'right now',
-    'tonight',
-    'today',
-    'method',
-    'plan',
-  ],
+  SAFETY_MODE: [],
 };
 
 /**
@@ -52,6 +35,7 @@ export function analyzeTextForSafety(text: string, currentState: SafetyState): {
   suggestedState: SafetyState;
   detectedSignals: string[];
   confidence: number;
+  matchedKeywords: string[];
 } {
   const lowerText = text.toLowerCase();
   
@@ -59,11 +43,12 @@ export function analyzeTextForSafety(text: string, currentState: SafetyState): {
   const safetyModeMatches = DETECTION_PATTERNS.SAFETY_MODE.filter(pattern => 
     lowerText.includes(pattern)
   );
-  if (safetyModeMatches.length >= 2) {
+  if (safetyModeMatches.length >= 1) {
     return {
       suggestedState: 'SAFETY_MODE',
       detectedSignals: ['immediacyIndicators', 'unsafeBoundaryViolation'],
       confidence: 0.9,
+      matchedKeywords: safetyModeMatches,
     };
   }
 
@@ -71,11 +56,12 @@ export function analyzeTextForSafety(text: string, currentState: SafetyState): {
   const highRiskMatches = DETECTION_PATTERNS.HIGH_RISK.filter(pattern => 
     lowerText.includes(pattern)
   );
-  if (highRiskMatches.length >= 2) {
+  if (highRiskMatches.length >= 1) {
     return {
       suggestedState: 'HIGH_RISK',
       detectedSignals: ['lossOfDesireToContinue', 'boundaryCrossingRequests'],
       confidence: 0.8,
+      matchedKeywords: highRiskMatches,
     };
   }
 
@@ -88,6 +74,7 @@ export function analyzeTextForSafety(text: string, currentState: SafetyState): {
       suggestedState: 'ELEVATED_CONCERN',
       detectedSignals: ['persistentEmotionalHeaviness', 'overwhelmedLanguage'],
       confidence: 0.7,
+      matchedKeywords: elevatedConcernMatches,
     };
   }
 
@@ -101,12 +88,14 @@ export function analyzeTextForSafety(text: string, currentState: SafetyState): {
         suggestedState: 'ELEVATED_CONCERN',
         detectedSignals: ['stabilization'],
         confidence: 0.6,
+        matchedKeywords: positiveMatches,
       };
     } else if (currentState === 'ELEVATED_CONCERN') {
       return {
         suggestedState: 'NORMAL',
         detectedSignals: ['stabilization'],
         confidence: 0.6,
+        matchedKeywords: positiveMatches,
       };
     }
   }
@@ -116,6 +105,7 @@ export function analyzeTextForSafety(text: string, currentState: SafetyState): {
     suggestedState: currentState,
     detectedSignals: [],
     confidence: 0.5,
+    matchedKeywords: [],
   };
 }
 

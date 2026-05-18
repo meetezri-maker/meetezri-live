@@ -1,9 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { AppLayout } from '@/app/components/AppLayout';
-import { Brain, CheckCircle, Star, Users, Volume2, Heart, ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
+import { Brain, CheckCircle, Star, Users, Volume2, Heart, ArrowLeft, RefreshCw, AlertCircle, User } from 'lucide-react';
 import { AnimatedCard } from '@/app/components/AnimatedCard';
 import { Link } from 'react-router-dom';
+import { DEFAULT_AI_COMPANIONS, matchDefaultCompanionByAvatarName } from '@meetezri/shared';
+import {
+  companionCardImageUrl,
+  effectiveAvatarImageUrlFromDb,
+  tryResolveCompanionPortraitUrl,
+} from '@/lib/avatar/companionModelUrl';
+import { findLobbyAvatar, isPlaceholderAvatarName } from '@/lib/avatar/lobbyAvatars';
+import { useAuth } from '@/app/contexts/AuthContext';
+import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface AIAvatar {
   id: string;
@@ -13,100 +22,161 @@ interface AIAvatar {
   personality: string;
   specialty: string[];
   description: string;
-  image: string;
+  /** Portrait from DB URL/path or `public/avatars/<Name>.png` */
+  imageUrl?: string;
   voiceType: string;
   accentType: string;
   rating: number;
   totalUsers: number;
 }
 
+function mapApiRowToChangeAvatar(row: Record<string, unknown>): AIAvatar {
+  const name = String(row.name ?? "").trim();
+  const lobby = findLobbyAvatar(name);
+  const rawUrl =
+    typeof row.image_url === "string"
+      ? effectiveAvatarImageUrlFromDb(row.image_url.trim())
+      : "";
+
+  const imageUrl = rawUrl
+    ? rawUrl
+    : tryResolveCompanionPortraitUrl(name) ?? lobby?.cardImage ?? undefined;
+
+  const canon = matchDefaultCompanionByAvatarName(name);
+  const dbSpecialties = Array.isArray(row.specialties)
+    ? (row.specialties as string[])
+    : [];
+  const specialty = canon ? [...canon.specialties] : dbSpecialties;
+  const description = canon ? canon.description : String(row.description ?? "");
+  return {
+    id: String(row.id ?? name),
+    name,
+    gender: String(row.gender ?? ""),
+    ageRange: String(row.age_range ?? ""),
+    personality: String(row.personality ?? ""),
+    specialty,
+    description,
+    imageUrl,
+    voiceType: String(row.voice_type ?? ""),
+    accentType: String(row.accent_type ?? ""),
+    rating: Number(row.rating) || 0,
+    totalUsers: typeof row.unique_users === "number" ? row.unique_users : 0,
+  };
+}
+
+function fallbackAiAvatarsFromDefaults(): AIAvatar[] {
+  return DEFAULT_AI_COMPANIONS.map((c) => ({
+    id: c.name,
+    name: c.name,
+    gender: c.gender,
+    ageRange: c.age_range,
+    personality: c.personality,
+    specialty: [...c.specialties],
+    description: c.description,
+    imageUrl: companionCardImageUrl(c.portraitPng),
+    voiceType: c.voice_type,
+    accentType: c.accent_type,
+    rating: c.rating,
+    totalUsers: 0,
+  }));
+}
+
 export function ChangeAvatar() {
-  const [currentAvatarId, setCurrentAvatarId] = useState("maya");
-  const [selectedAvatarId, setSelectedAvatarId] = useState("maya");
+  const { profile, refreshProfile } = useAuth();
+  const [aiAvatars, setAiAvatars] = useState<AIAvatar[]>([]);
+  const [avatarsLoading, setAvatarsLoading] = useState(true);
+  const [currentAvatarId, setCurrentAvatarId] = useState("");
+  const [selectedAvatarId, setSelectedAvatarId] = useState("");
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [switchHistory, setSwitchHistory] = useState([
-    { date: "2026-01-15", from: "Alex Rivera", to: "Maya Chen" },
-    { date: "2025-12-20", from: "Jordan Taylor", to: "Alex Rivera" }
-  ]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [switchHistory, setSwitchHistory] = useState<{ date: string; from: string; to: string }[]>([]);
 
-  const aiAvatars: AIAvatar[] = [
-    {
-      id: "maya",
-      name: "Maya Chen",
-      gender: "Female",
-      ageRange: "35-40",
-      personality: "Warm, Empathetic, Supportive",
-      specialty: ["Anxiety", "Depression", "Stress Management"],
-      description: "A compassionate AI companion with a warm presence. Maya specializes in helping with anxiety, stress, and building emotional resilience through mindfulness.",
-      image: "👩‍💼",
-      voiceType: "Warm & Soothing",
-      accentType: "Neutral American",
-      rating: 4.9,
-      totalUsers: 2456
-    },
-    {
-      id: "alex",
-      name: "Alex Rivera",
-      gender: "Male",
-      ageRange: "30-35",
-      personality: "Calm, Patient, Understanding",
-      specialty: ["PTSD", "Trauma", "Life Transitions"],
-      description: "A gentle and patient listener who creates a safe space for healing. Alex focuses on trauma recovery and navigating life's big changes.",
-      image: "👨‍💼",
-      voiceType: "Deep & Calming",
-      accentType: "Neutral American",
-      rating: 4.8,
-      totalUsers: 1893
-    },
-    {
-      id: "jordan",
-      name: "Jordan Taylor",
-      gender: "Non-binary",
-      ageRange: "28-32",
-      personality: "Energetic, Positive, Supportive",
-      specialty: ["Self-Esteem", "Relationships", "Personal Growth"],
-      description: "An uplifting companion who helps you discover your strengths. Jordan specializes in building confidence and personal development.",
-      image: "🧑‍💼",
-      voiceType: "Bright & Encouraging",
-      accentType: "Neutral American",
-      rating: 4.7,
-      totalUsers: 1654
-    },
-    {
-      id: "sarah",
-      name: "Sarah Mitchell",
-      gender: "Female",
-      ageRange: "45-50",
-      personality: "Wise, Grounded, Nurturing",
-      specialty: ["Grief", "Family Issues", "Chronic Illness"],
-      description: "A wise and nurturing presence with deep empathy. Sarah brings years of life experience in supporting people through challenging times.",
-      image: "👩‍🦳",
-      voiceType: "Gentle & Maternal",
-      accentType: "British",
-      rating: 4.9,
-      totalUsers: 2103
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await api.aiAvatars.getAll();
+        if (!Array.isArray(rows) || rows.length === 0) {
+          if (!cancelled) setAiAvatars(fallbackAiAvatarsFromDefaults());
+          return;
+        }
+        const mapped = rows
+          .filter(
+            (r: Record<string, unknown>) =>
+              r.is_active !== false && typeof r.name === "string" && !isPlaceholderAvatarName(String(r.name))
+          )
+          .map((r: Record<string, unknown>) => mapApiRowToChangeAvatar(r));
+        if (!cancelled) {
+          setAiAvatars(mapped.length > 0 ? mapped : fallbackAiAvatarsFromDefaults());
+        }
+      } catch {
+        if (!cancelled) setAiAvatars(fallbackAiAvatarsFromDefaults());
+      } finally {
+        if (!cancelled) setAvatarsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const avatarIdByName = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const a of aiAvatars) {
+      m[a.name.trim().toLowerCase()] = a.id;
     }
-  ];
+    return m;
+  }, [aiAvatars]);
 
-  const currentAvatar = aiAvatars.find(a => a.id === currentAvatarId);
-  const selectedAvatar = aiAvatars.find(a => a.id === selectedAvatarId);
+  useEffect(() => {
+    if (aiAvatars.length === 0) return;
+    const selectedFromProfile = (profile?.selected_avatar || aiAvatars[0]?.name || "").trim().toLowerCase();
+    const nextAvatarId = avatarIdByName[selectedFromProfile] || aiAvatars[0].id;
+    setCurrentAvatarId(nextAvatarId);
+    setSelectedAvatarId(nextAvatarId);
+  }, [profile?.selected_avatar, avatarIdByName, aiAvatars]);
 
-  const handleConfirmChange = () => {
-    setCurrentAvatarId(selectedAvatarId);
-    setSwitchHistory([
-      {
-        date: new Date().toISOString().split('T')[0],
-        from: currentAvatar?.name || '',
-        to: selectedAvatar?.name || ''
-      },
-      ...switchHistory
-    ]);
-    setShowConfirmModal(false);
+  const currentAvatar = aiAvatars.find((a) => a.id === currentAvatarId);
+  const selectedAvatar = aiAvatars.find((a) => a.id === selectedAvatarId);
+
+  if (avatarsLoading || aiAvatars.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-gray-600 dark:text-slate-400">
+            <RefreshCw className="w-10 h-10 animate-spin text-purple-500" />
+            <p>Loading companions…</p>
+          </div>
+        </div>
+    );
+  }
+
+  const handleConfirmChange = async () => {
+    if (!selectedAvatar || isSaving) return;
+    setIsSaving(true);
+    try {
+      await api.updateProfile({ selected_avatar: selectedAvatar.name });
+      await refreshProfile();
+      setCurrentAvatarId(selectedAvatarId);
+      setSwitchHistory([
+        {
+          date: new Date().toISOString().split('T')[0],
+          from: currentAvatar?.name || '',
+          to: selectedAvatar?.name || ''
+        },
+        ...switchHistory
+      ]);
+      setShowConfirmModal(false);
+      toast.success(`AI companion changed to ${selectedAvatar.name}`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not update AI companion");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
-    <AppLayout>
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <div className="mb-8">
@@ -123,11 +193,11 @@ export function ChangeAvatar() {
                 <Brain className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Change AI Companion</h1>
-                <p className="text-gray-600 dark:text-slate-400">Switch to a different AI companion for your sessions</p>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Change Solace Avatar</h1>
+                <p className="text-gray-600 dark:text-slate-400">Switch to a different Avatar for your talks</p>
               </div>
             </div>
-          </div>
+          </div>  
 
           {/* Current Avatar */}
           {currentAvatar && (
@@ -135,11 +205,21 @@ export function ChangeAvatar() {
               <div className="bg-gradient-to-br from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 rounded-2xl border-2 border-purple-300 dark:border-purple-700 p-6 mb-8">
                 <div className="flex items-center gap-3 mb-4">
                   <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Current AI Companion</h2>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Current Avatar</h2>
                 </div>
 
                 <div className="flex items-start gap-6">
-                  <div className="text-7xl">{currentAvatar.image}</div>
+                  {currentAvatar.imageUrl ? (
+                    <img
+                      src={currentAvatar.imageUrl}
+                      alt=""
+                      className="h-28 w-28 shrink-0 rounded-2xl object-cover border-2 border-purple-200/80 dark:border-purple-700/80 shadow-md"
+                    />
+                  ) : (
+                    <div className="h-28 w-28 shrink-0 rounded-2xl border-2 border-purple-200/80 dark:border-purple-700/80 bg-muted flex items-center justify-center">
+                      <User className="h-14 w-14 text-muted-foreground" aria-hidden />
+                    </div>
+                  )}
                   <div className="flex-1">
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{currentAvatar.name}</h3>
                     <p className="text-gray-700 dark:text-slate-300 mb-3">
@@ -182,7 +262,7 @@ export function ChangeAvatar() {
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <RefreshCw className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-              Choose a New AI Companion
+              Choose a New Avatar
             </h2>
             <p className="text-gray-600 dark:text-slate-400 mb-6">
               Select a different AI companion that better fits your needs. Your session history will be preserved.
@@ -233,7 +313,17 @@ export function ChangeAvatar() {
                       <div className="p-6">
                         {/* Avatar Image & Basic Info */}
                         <div className="flex items-start gap-4 mb-4">
-                          <div className="text-6xl">{avatar.image}</div>
+                          {avatar.imageUrl ? (
+                            <img
+                              src={avatar.imageUrl}
+                              alt=""
+                              className="h-24 w-24 shrink-0 rounded-xl object-cover border border-gray-200 dark:border-slate-600"
+                            />
+                          ) : (
+                            <div className="h-24 w-24 shrink-0 rounded-xl border border-gray-200 dark:border-slate-600 bg-muted flex items-center justify-center">
+                              <User className="h-12 w-12 text-muted-foreground" aria-hidden />
+                            </div>
+                          )}
                           <div className="flex-1">
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">{avatar.name}</h3>
                             <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">
@@ -372,8 +462,9 @@ export function ChangeAvatar() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
+                    disabled={isSaving}
                     onClick={() => setShowConfirmModal(false)}
-                    className="flex-1 px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium"
+                    className="flex-1 px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium"
                   >
                     Cancel
                   </motion.button>
@@ -381,10 +472,11 @@ export function ChangeAvatar() {
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={handleConfirmChange}
-                    className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-medium"
+                    disabled={isSaving}
+                    onClick={() => void handleConfirmChange()}
+                    className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium"
                   >
-                    Confirm Change
+                    {isSaving ? "Saving..." : "Confirm Change"}
                   </motion.button>
                 </div>
               </motion.div>
@@ -392,6 +484,5 @@ export function ChangeAvatar() {
           )}
         </div>
       </div>
-    </AppLayout>
   );
 }

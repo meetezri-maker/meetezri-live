@@ -6,6 +6,10 @@ export type EzriChatRestRequest = {
   provider: string;
   userid: string;
   session_id: string;
+  /** Same Kokoro/RunPod voice id as WebSocket `voice=` (required for correct male/female TTS on REST). */
+  voice?: string;
+  /** Optional AbortSignal — pass one so the request can be cancelled on interruption. */
+  signal?: AbortSignal;
 };
 
 export type EzriChatRestResult = {
@@ -17,6 +21,10 @@ export type EzriChatRestResult = {
 export type EzriSpeakRestRequest = {
   text: string;
   tts_provider: string;
+  /** Same voice id as WS; without this, many backends default to a single (often female) voice. */
+  voice?: string;
+  /** Optional audio format override (e.g. "mp3", "wav"). Used for Firefox fallback. */
+  format?: string;
 };
 
 export type EzriSpeakRestResult = {
@@ -76,10 +84,12 @@ export function createEzriApiClient(apiBase: string) {
 
   return {
     async sendChatRest(req: EzriChatRestRequest): Promise<EzriChatRestResult> {
+      const { signal, ...reqBody } = req;
       const res = await fetch(`${base}/api/v1/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(req),
+        body: JSON.stringify(reqBody),
+        signal,
       });
 
       const body = await readJsonOrText(res);

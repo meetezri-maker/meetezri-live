@@ -107,8 +107,7 @@ export function resolveExpectedPostVerificationTargetPath(
   signupType: SignupType
 ): string {
   // IMPORTANT: Keep paid onboarding entry unchanged.
-  // Trial verification links should land on the in-app profile page
-  // (this does not alter onboarding order/guards; it only changes the post-email click landing route).
+  // Trial verification links should land on the in-app profile page.
   return signupType === "trial" ? "/app/user-profile" : "/onboarding/welcome";
 }
 

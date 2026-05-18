@@ -2,15 +2,20 @@
   "name": "@meetezri/api",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
+    "predev": "prisma generate",
     "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
-    "build": "node -e \"process.env.PRISMA_CLIENT_ENGINE_TYPE='binary';require('child_process').execSync('prisma generate',{stdio:'inherit'})\" && tsc",
+    "build": "pnpm --filter @meetezri/shared run build && prisma generate && tsc",
     "start": "node dist/src/app.js",
     "lint": "eslint src --ext .ts",
     "test": "jest",
     "db:pull": "prisma db pull",
     "db:studio": "prisma studio",
-    "db:generate": "prisma generate"
+    "db:generate": "prisma generate",
+    "db:seed-wellness": "ts-node-dev --transpile-only --no-notify scripts/seed-wellness-tools.ts",
+    "db:seed-avatars": "ts-node-dev --transpile-only --no-notify scripts/seed_avatars.ts",
+    "db:remove-placeholder-avatars": "ts-node-dev --transpile-only --no-notify scripts/remove-placeholder-ai-avatars.ts"
   },
   "dependencies": {
     "@fastify/compress": "^7.0.3",

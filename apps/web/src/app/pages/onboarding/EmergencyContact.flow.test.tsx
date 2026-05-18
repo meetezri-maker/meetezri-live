@@ -41,7 +41,21 @@ describe('OnboardingEmergencyContact', () => {
     vi.useRealTimers();
   });
 
-  it('blocks submit when only the contact name is filled', async () => {
+  it('keeps Continue disabled until phone and relationship are valid', async () => {
+    const user = userEvent.setup();
+    renderEmergencyStep();
+
+    const continueBtn = screen.getByRole('button', { name: /continue/i });
+    expect(continueBtn).toBeDisabled();
+
+    await user.type(
+      screen.getByPlaceholderText(/Mom, Best Friend, Partner/i),
+      'Jane Doe'
+    );
+    expect(continueBtn).toBeDisabled();
+  });
+
+  it('continues to the permissions step when all required fields are valid', async () => {
     const user = userEvent.setup();
     renderEmergencyStep();
 
@@ -49,16 +63,8 @@ describe('OnboardingEmergencyContact', () => {
       screen.getByPlaceholderText(/Mom, Best Friend, Partner/i),
       'Jane Doe'
     );
-    await user.click(screen.getByRole('button', { name: /continue/i }));
-
-    expect(
-      await screen.findByText(/Phone is required when adding an emergency contact/i)
-    ).toBeInTheDocument();
-  });
-
-  it('continues to the permissions step when optional fields are left empty', async () => {
-    const user = userEvent.setup();
-    renderEmergencyStep();
+    await user.type(screen.getByPlaceholderText(/^Phone number$/i), '5551234567');
+    await user.selectOptions(screen.getByLabelText(/^Relationship$/i), 'partner');
 
     await user.click(screen.getByRole('button', { name: /continue/i }));
 

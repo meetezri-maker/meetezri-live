@@ -3,9 +3,39 @@ import { CreateHabitInput, UpdateHabitInput, LogHabitInput } from "./habits.sche
 
 const HABITS_CACHE_TTL = 60 * 1000; // 60 seconds
 const habitsCache = new Map<string, { data: any[]; timestamp: number }>();
+const habitsInFlight = new Map<string, Promise<any[]>>();
 
 function clearHabitsCacheForUser(userId: string) {
   habitsCache.delete(userId);
+  habitsInFlight.delete(userId);
+}
+
+function patchHabitsCacheAddLog(userId: string, habitId: string, log: { id: string; habit_id: string; completed_at: Date }) {
+  const cached = habitsCache.get(userId);
+  if (!cached) return false;
+  const next = cached.data.map((h: any) => {
+    if (h?.id !== habitId) return h;
+    const prevLogs: any[] = Array.isArray(h?.habit_logs) ? h.habit_logs : [];
+    // Keep newest-first order, and cap at 365 to match query.
+    const merged = [log, ...prevLogs].slice(0, 365);
+    return { ...h, habit_logs: merged };
+  });
+  habitsCache.set(userId, { data: next, timestamp: Date.now() });
+  return true;
+}
+
+function patchHabitsCacheRemoveLogs(userId: string, habitId: string, logIds: string[]) {
+  const cached = habitsCache.get(userId);
+  if (!cached) return false;
+  const toRemove = new Set(logIds);
+  const next = cached.data.map((h: any) => {
+    if (h?.id !== habitId) return h;
+    const prevLogs: any[] = Array.isArray(h?.habit_logs) ? h.habit_logs : [];
+    const kept = prevLogs.filter((l) => !toRemove.has(String(l?.id)));
+    return { ...h, habit_logs: kept };
+  });
+  habitsCache.set(userId, { data: next, timestamp: Date.now() });
+  return true;
 }
 
 export async function createHabit(userId: string, data: CreateHabitInput) {
@@ -41,25 +71,76 @@ export async function getHabits(userId: string) {
     return cached.data;
   }
 
-  const result = await prisma.habits.findMany({
-    where: {
-      user_id: userId,
-      is_archived: false,
-    },
-    include: {
-      habit_logs: {
-        orderBy: {
-          completed_at: 'desc',
-        },
-        take: 365, // Fetch enough history for streaks
+  const inFlight = habitsInFlight.get(userId);
+  if (inFlight) return await inFlight;
+
+  const run = (async () => {
+    const result = await prisma.habits.findMany({
+      where: {
+        user_id: userId,
+        is_archived: false,
       },
-    },
-    orderBy: {
-      created_at: 'asc',
-    },
+      include: {
+        habit_logs: {
+          orderBy: {
+            completed_at: 'desc',
+          },
+          take: 365, // Fetch enough history for streaks
+        },
+      },
+      orderBy: {
+        created_at: 'asc',
+      },
+    });
+
+    habitsCache.set(userId, { data: result, timestamp: Date.now() });
+    return result;
+  })().finally(() => {
+    habitsInFlight.delete(userId);
   });
 
-  habitsCache.set(userId, { data: result, timestamp: Date.now() });
+  habitsInFlight.set(userId, run);
+  return await run;
+}
+
+const ALL_HABITS_CACHE_TTL = 120 * 1000; // 120 seconds
+let allHabitsCache: { data: any[]; timestamp: number } | null = null;
+
+export async function getAllHabitsAdmin(startDate?: Date, endDate?: Date) {
+  const isFiltered = startDate != null || endDate != null;
+
+  if (!isFiltered) {
+    const now = Date.now();
+    if (allHabitsCache && now - allHabitsCache.timestamp < ALL_HABITS_CACHE_TTL) {
+      return allHabitsCache.data;
+    }
+  }
+
+  const logsWhere: any = {};
+  if (startDate || endDate) {
+    logsWhere.completed_at = {};
+    if (startDate) logsWhere.completed_at.gte = startDate;
+    if (endDate) logsWhere.completed_at.lt = endDate;
+  }
+
+  const result = await prisma.habits.findMany({
+    where: { is_archived: false },
+    include: {
+      profiles: {
+        select: { email: true, full_name: true },
+      },
+      habit_logs: {
+        where: isFiltered ? logsWhere : undefined,
+        orderBy: { completed_at: "desc" },
+        take: isFiltered ? undefined : 60,
+      },
+    },
+    orderBy: { created_at: "desc" },
+  });
+
+  if (!isFiltered) {
+    allHabitsCache = { data: result, timestamp: Date.now() };
+  }
   return result;
 }
 
@@ -125,7 +206,10 @@ export async function logHabitCompletion(userId: string, habitId: string, data: 
       completed_at: completedAt,
     },
   });
-  clearHabitsCacheForUser(userId);
+  // Keep the next GET /habits fast by patching cache when present.
+  if (!patchHabitsCacheAddLog(userId, habitId, created as any)) {
+    clearHabitsCacheForUser(userId);
+  }
   return created;
 }
 
@@ -163,7 +247,10 @@ export async function removeHabitCompletion(userId: string, habitId: string, dat
         },
       },
     });
-    clearHabitsCacheForUser(userId);
+    // Keep the next GET /habits fast by patching cache when present.
+    if (!patchHabitsCacheRemoveLogs(userId, habitId, logs.map((l) => l.id))) {
+      clearHabitsCacheForUser(userId);
+    }
     return { success: true, count: logs.length };
   }
 

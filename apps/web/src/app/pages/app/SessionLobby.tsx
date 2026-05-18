@@ -1,27 +1,32 @@
-import { AppLayout } from "../../components/AppLayout";
 import { Card } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { motion, AnimatePresence } from "motion/react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams, Link } from "react-router-dom";
 import {
   Video,
   Calendar,
   Clock,
   Sparkles,
-  CheckCircle,
   User,
   Volume2,
-  Settings,
-  ArrowRight,
-  Play,
   X,
-  Check
+  Check,
+  Palette,
+  Loader2,
 } from "lucide-react";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Skeleton } from "../../components/ui/skeleton";
+import { preloadAvatarModel } from "@/lib/avatar/preloadAvatarModel";
+import {
+  companionSessionUses3dModel,
+  resolveCompanionModelUrl,
+} from "@/lib/avatar/companionModelUrl";
+import { LOBBY_AVATARS, lobbyAvatarByName, lobbyAvatarsFromApiRows } from "@/lib/avatar/lobbyAvatars";
+import { FluentEmoji } from "@/components/ui/FluentEmoji";
+import { TalkItOutLobbyLayout } from "./talk-it-out/TalkItOutLobbyLayout";
 
 interface BackendSession {
   id: string;
@@ -37,35 +42,86 @@ interface BackendSession {
 
 interface UpcomingSession {
   id: string;
-  avatar: string;
+  avatarName: string;
+  avatarImage?: string;
+  icon?: string;
+  comment?: string;
   type: string;
   date: string;
   duration: string;
   isExpired: boolean;
+  scheduledAt: string | null;
+  durationMinutes: number | null;
+}
+
+const SESSION_ENVIRONMENTS = [
+  { value: "beach", label: "Beach Sunset", emoji: "🏖️", gradient: "from-orange-300 to-blue-400" },
+  { value: "forest", label: "Peaceful Forest", emoji: "🌲", gradient: "from-green-400 to-emerald-600" },
+  { value: "mountains", label: "Mountain View", emoji: "⛰️", gradient: "from-blue-300 to-purple-400" },
+  { value: "space", label: "Starry Night", emoji: "🌌", gradient: "from-indigo-500 to-purple-900" },
+  { value: "minimal", label: "Minimal Studio", emoji: "⬜", gradient: "from-gray-100 to-gray-300" }
+];
+
+const LOBBY_DURATION_PRESETS: readonly number[] = [10, 25, 45];
+
+function environmentLabel(value: string | undefined | null): string {
+  if (!value) return "Default";
+  const found = SESSION_ENVIRONMENTS.find((e) => e.value === value);
+  return found?.label ?? value;
+}
+
+function isFemaleAvatarName(name: string | null | undefined): boolean {
+  const n = (name ?? "").trim().toLowerCase();
+  return n === "maya chen" || n === "maya" || n === "sara mitchell" || n === "sarah mitchell" || n === "sarah";
 }
 
 export function SessionLobby() {
-  const { profile } = useAuth();
+  const { profile, refreshProfile, user, isLoading: isAuthLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const voiceSectionRef = useRef<HTMLDivElement>(null);
+  const avatarSectionRef = useRef<HTMLDivElement>(null);
+  const environmentSectionRef = useRef<HTMLDivElement>(null);
+  const [showCarveoutBanner, setShowCarveoutBanner] = useState(false);
   const [selectedMode, setSelectedMode] = useState<"now" | "schedule">("now");
-  const [selectedDuration, setSelectedDuration] = useState(30);
+  const [selectedDuration, setSelectedDuration] = useState(25);
   const [showMinutesPicker, setShowMinutesPicker] = useState(false);
-  const [customMinutesInput, setCustomMinutesInput] = useState("30");
+  const [customMinutesInput, setCustomMinutesInput] = useState("25");
   const [showCustomizeModal, setShowCustomizeModal] = useState(false);
+  const [isSavingCustomize, setIsSavingCustomize] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState("Voice 1");
+  const [selectedVoice, setSelectedVoice] = useState(profile?.selected_voice || "Voice 1");
   const [selectedAvatar, setSelectedAvatar] = useState(profile?.selected_avatar || "Alex");
-  
+  const [selectedEnvironment, setSelectedEnvironment] = useState(
+    profile?.selected_environment || "minimal"
+  );
+  const [showUpcomingActionModal, setShowUpcomingActionModal] = useState(false);
+  const [activeUpcomingSession, setActiveUpcomingSession] = useState<UpcomingSession | null>(null);
+  const [scheduleAvatarOverride, setScheduleAvatarOverride] = useState<string | null>(null);
+  const [editingScheduledSessionId, setEditingScheduledSessionId] = useState<string | null>(null);
+  const [isCancelingScheduled, setIsCancelingScheduled] = useState(false);
+  const [sessionLengthKind, setSessionLengthKind] = useState<"fixed" | "free">("fixed");
+  const [connectMode, setConnectMode] = useState<"voice" | "text" | "deep" | "quick">("voice");
+  const [conversationEnergy, setConversationEnergy] = useState<
+    "gentle" | "reflective" | "grounding" | "open"
+  >("gentle");
+
   // Temporary state for modal
   const [tempSelectedVoice, setTempSelectedVoice] = useState(selectedVoice);
   const [tempSelectedAvatar, setTempSelectedAvatar] = useState(selectedAvatar);
+  const [tempSelectedEnvironment, setTempSelectedEnvironment] = useState(selectedEnvironment);
 
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
+  const [scheduleComment, setScheduleComment] = useState("");
+  const [scheduleIcon, setScheduleIcon] = useState("💬");
   const [isStarting, setIsStarting] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const [upcomingSessions, setUpcomingSessions] = useState<UpcomingSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
+  const [playingVoiceName, setPlayingVoiceName] = useState<string | null>(null);
+  const voicePreviewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     // Only sync avatar when that specific field changes (prevents effect loops)
@@ -76,23 +132,82 @@ export function SessionLobby() {
   }, [profile?.selected_avatar]);
 
   useEffect(() => {
-    // Load once on mount; avoid depending on `profile` identity
+    if (profile?.selected_voice) {
+      setSelectedVoice(profile.selected_voice);
+      setTempSelectedVoice(profile.selected_voice);
+    }
+  }, [profile?.selected_voice]);
+
+  useEffect(() => {
+    if (profile?.selected_environment) {
+      setSelectedEnvironment(profile.selected_environment);
+      setTempSelectedEnvironment(profile.selected_environment);
+    }
+  }, [profile?.selected_environment]);
+
+  useEffect(() => {
+    if (!companionSessionUses3dModel(profile?.selected_avatar)) return;
+    void preloadAvatarModel(resolveCompanionModelUrl(profile?.selected_avatar));
+  }, [profile?.selected_avatar]);
+
+  useEffect(() => {
+    // Wait for auth to hydrate before calling authed endpoints (prevents 401 + retries).
+    if (isAuthLoading || !user?.id) return;
     loadUpcomingSessions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isAuthLoading, user?.id]);
+
+  // After ending a session: show carve-out prompt once; clear router state so refresh/back don't repeat
+  useEffect(() => {
+    const st = location.state as { showCarveoutPrompt?: boolean } | null | undefined;
+    if (!st?.showCarveoutPrompt) return;
+    setShowCarveoutBanner(true);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state, location.pathname, navigate]);
 
   // Sync temp state when modal opens
   useEffect(() => {
     if (showCustomizeModal) {
       setTempSelectedVoice(selectedVoice);
       setTempSelectedAvatar(selectedAvatar);
+      setTempSelectedEnvironment(selectedEnvironment);
     }
-  }, [showCustomizeModal, selectedVoice, selectedAvatar]);
+  }, [showCustomizeModal, selectedVoice, selectedAvatar, selectedEnvironment]);
+
+  // Deep link from Profile → Session Preferences (Voice / Environment)
+  useEffect(() => {
+    const raw = searchParams.get("customize");
+    if (!raw) return;
+    const section = raw.toLowerCase();
+    if (!["voice", "avatar", "environment"].includes(section)) return;
+
+    setShowCustomizeModal(true);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("customize");
+        return next;
+      },
+      { replace: true }
+    );
+
+    const scrollTarget =
+      section === "voice"
+        ? voiceSectionRef
+        : section === "avatar"
+          ? avatarSectionRef
+          : environmentSectionRef;
+    const t = window.setTimeout(() => {
+      scrollTarget.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [searchParams, setSearchParams]);
 
   const [liveCreditsSeconds, setLiveCreditsSeconds] = useState<number | null>(null);
 
   useEffect(() => {
     // Use the dedicated credits endpoint (no-cache) so "Minutes available" matches Dashboard.
+    if (isAuthLoading || !user?.id) return;
     const loadCredits = async () => {
       try {
         const { credits_seconds, credits } = await api.getCredits();
@@ -108,7 +223,7 @@ export function SessionLobby() {
       }
     };
     loadCredits();
-  }, []);
+  }, [isAuthLoading, user?.id]);
 
   const minutesAvailable = useMemo(() => {
     if (liveCreditsSeconds !== null) {
@@ -141,16 +256,22 @@ export function SessionLobby() {
     profile?.purchased_credits,
   ]);
 
-  const durations = [15, 30, 45, 60];
+  const durations = LOBBY_DURATION_PRESETS;
   const durationDisabled = useMemo(() => {
     const map = new Map<number, boolean>();
     for (const d of durations) map.set(d, minutesAvailable < d);
     return map;
-  }, [minutesAvailable]);
+  }, [minutesAvailable, durations]);
 
   useEffect(() => {
-    // If user's remaining minutes drop below selection, snap to the largest allowed duration.
     if (minutesAvailable <= 0) return;
+    if (sessionLengthKind === "free") {
+      setSelectedDuration((prev) => {
+        const next = Math.max(1, minutesAvailable);
+        return prev === next ? prev : next;
+      });
+      return;
+    }
     if (selectedDuration <= minutesAvailable) return;
     const allowed = durations.filter((d) => d <= minutesAvailable);
     if (allowed.length > 0) {
@@ -158,7 +279,7 @@ export function SessionLobby() {
     } else {
       setSelectedDuration(Math.max(1, Math.floor(minutesAvailable)));
     }
-  }, [minutesAvailable, selectedDuration]);
+  }, [minutesAvailable, selectedDuration, sessionLengthKind, durations]);
 
   useEffect(() => {
     if (!showMinutesPicker) return;
@@ -174,7 +295,7 @@ export function SessionLobby() {
     setCustomMinutesInput(String(selectedDuration));
   }, [showMinutesPicker, selectedDuration]);
 
-  const isOnOwnPace = minutesAvailable > 0 && selectedDuration === minutesAvailable;
+  const isOnOwnPace = sessionLengthKind === "free";
   const customMinutesValue = Number(customMinutesInput);
   const isCustomMinutesValid =
     customMinutesInput.trim() !== "" &&
@@ -187,45 +308,95 @@ export function SessionLobby() {
       toast.error(`Enter minutes between 1 and ${minutesAvailable}.`);
       return;
     }
+    setSessionLengthKind("fixed");
     setSelectedDuration(Math.floor(customMinutesValue));
   };
 
-  const handleSaveCustomize = () => {
-    setSelectedVoice(tempSelectedVoice);
-    setSelectedAvatar(tempSelectedAvatar);
-    setShowCustomizeModal(false);
-    toast.success("Session settings updated");
+  const handleSaveCustomize = async () => {
+    if (isSavingCustomize) return;
+    setIsSavingCustomize(true);
+    try {
+      await api.updateProfile({
+        selected_voice: tempSelectedVoice,
+        selected_avatar: tempSelectedAvatar,
+        selected_environment: tempSelectedEnvironment
+      });
+      await refreshProfile();
+      setSelectedVoice(tempSelectedVoice);
+      setSelectedAvatar(tempSelectedAvatar);
+      setSelectedEnvironment(tempSelectedEnvironment);
+      setShowCustomizeModal(false);
+      toast.success("Session settings updated");
+      setIsSavingCustomize(false);
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not save session preferences");
+      setIsSavingCustomize(false);
+    }
+  };
+
+  const mapBackendSessionToUpcoming = (session: BackendSession): UpcomingSession => {
+    const now = new Date();
+    const scheduledDate = session.scheduled_at ? new Date(session.scheduled_at) : null;
+    const isExpired =
+      !!scheduledDate && scheduledDate.getTime() < now.getTime() && session.status === "scheduled";
+
+    const avatarName = session.config?.avatar || selectedAvatar || "Alex";
+    const avatarPreview = lobbyAvatarByName(avatarName);
+
+    const icon =
+      typeof session.config?.icon === "string"
+        ? session.config.icon
+        : typeof session.config?.emoji === "string"
+          ? session.config.emoji
+          : undefined;
+
+    const comment =
+      typeof session.config?.comment === "string"
+        ? session.config.comment
+        : typeof session.config?.notes === "string"
+          ? session.config.notes
+          : undefined;
+
+    const date = scheduledDate
+      ? scheduledDate.toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : new Date(session.created_at).toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
+
+    return {
+      id: session.id,
+      avatarName: avatarPreview.name,
+      avatarImage: avatarPreview.cardImage,
+      icon,
+      comment,
+      type: session.type === "instant" ? "Instant" : "Scheduled",
+      date,
+      duration: session.duration_minutes ? `${session.duration_minutes} min` : "N/A",
+      isExpired,
+      scheduledAt: session.scheduled_at,
+      durationMinutes: session.duration_minutes,
+    };
   };
 
   const loadUpcomingSessions = async () => {
     try {
       setIsLoadingSessions(true);
       const sessions = await api.sessions.list({ status: "scheduled" });
-      const now = new Date();
-      const mappedSessions: UpcomingSession[] = (sessions as BackendSession[]).map((session) => {
-        const scheduledDate = session.scheduled_at ? new Date(session.scheduled_at) : null;
-        const isExpired = !!scheduledDate && scheduledDate.getTime() < now.getTime() && session.status === "scheduled";
-        const date = scheduledDate
-          ? scheduledDate.toLocaleString("en-US", {
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            })
-          : new Date(session.created_at).toLocaleString("en-US", {
-              month: "short",
-              day: "numeric",
-            });
-
-        return {
-          id: session.id,
-          avatar: session.config?.avatar || "👨‍⚕️",
-          type: session.type === "instant" ? "Instant" : "Scheduled",
-          date,
-          duration: session.duration_minutes ? `${session.duration_minutes} min` : "N/A",
-          isExpired,
-        };
-      });
+      const nowMs = Date.now();
+      const mappedSessions: UpcomingSession[] = (sessions as BackendSession[])
+        .filter((s) => {
+          if (s.status !== "scheduled") return false;
+          const at = s.scheduled_at ? new Date(s.scheduled_at).getTime() : 0;
+          return at >= nowMs;
+        })
+        .map(mapBackendSessionToUpcoming);
       setUpcomingSessions(mappedSessions);
     } catch (err) {
       console.error("Failed to load sessions:", err);
@@ -234,30 +405,71 @@ export function SessionLobby() {
     }
   };
 
-  const handleStartSession = async () => {
+  const handleStartSession = async (opts?: {
+    avatarOverride?: string;
+    /** When set, activates this scheduled row instead of creating a new instant session */
+    scheduledSessionId?: string;
+  }) => {
     setIsStarting(true);
     try {
-      const session = await api.sessions.create({
-        type: 'instant',
-        duration_minutes: selectedDuration,
-        config: {
-          voice: selectedVoice,
-          avatar: selectedAvatar
-        }
-      });
+      const avatarToUse = opts?.avatarOverride || selectedAvatar;
+
+      try {
+        const fresh = await api.getCredits({ bypassCache: true });
+        const sec =
+          typeof fresh?.credits_seconds === "number"
+            ? Math.max(0, fresh.credits_seconds)
+            : typeof fresh?.credits === "number"
+              ? Math.max(0, fresh.credits) * 60
+              : null;
+        if (sec !== null) setLiveCreditsSeconds(sec);
+      } catch {
+        /* non-blocking: server is source of truth at create time */
+      }
+
+      const session = opts?.scheduledSessionId
+        ? await api.sessions.startScheduled(opts.scheduledSessionId, {
+            duration_minutes: selectedDuration,
+          })
+        : await api.sessions.create({
+            type: "instant",
+            duration_minutes: selectedDuration,
+            config: {
+              voice: selectedVoice,
+              avatar: avatarToUse,
+            },
+          });
+
+      if (opts?.scheduledSessionId) {
+        setUpcomingSessions((prev) => prev.filter((s) => s.id !== opts.scheduledSessionId));
+      }
+
+      const sessionConfig =
+        session && typeof session === "object" && "config" in session
+          ? (session as { config?: Record<string, unknown> }).config
+          : undefined;
+      const mergedConfig = {
+        voice: selectedVoice,
+        avatar: avatarToUse,
+        ...(sessionConfig && typeof sessionConfig === "object" ? sessionConfig : {}),
+      };
 
       // Persist sessionId so ActiveSession can recover after refresh
       try {
         window.localStorage.setItem("ezri_active_session_id", session.id);
       } catch {}
 
-      navigate(`/app/active-session?sessionId=${encodeURIComponent(session.id)}`, { 
-        state: { 
+      navigate(`/app/active-session?sessionId=${encodeURIComponent(session.id)}`, {
+        state: {
           sessionId: session.id,
-          config: session.config,
-          duration: session.duration_minutes
-        } 
+          config: mergedConfig,
+          duration:
+            (session as { duration_minutes?: number | null }).duration_minutes ??
+            selectedDuration,
+        },
       });
+
+      void loadUpcomingSessions();
     } catch (err: any) {
       const message = err?.message || "Failed to start session";
       if (message.includes("trial has expired")) {
@@ -284,17 +496,58 @@ export function SessionLobby() {
     setIsScheduling(true);
     try {
       const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
-      await api.sessions.schedule({
-        duration_minutes: selectedDuration,
-        scheduled_at: scheduledAt,
-        config: {
-          voice: selectedVoice,
-          avatar: selectedAvatar
+      const avatarToUse = scheduleAvatarOverride || selectedAvatar;
+      const nextComment = scheduleComment.trim();
+      const nextIcon = scheduleIcon.trim();
+      if (editingScheduledSessionId) {
+        const updated = (await api.sessions.updateScheduled(editingScheduledSessionId, {
+          duration_minutes: selectedDuration,
+          scheduled_at: scheduledAt,
+          config: {
+            voice: selectedVoice,
+            avatar: avatarToUse,
+            comment: nextComment || undefined,
+            icon: nextIcon || undefined,
+          }
+        })) as BackendSession | undefined;
+        toast.success("Scheduled session updated");
+
+        if (updated?.id) {
+          const mapped = mapBackendSessionToUpcoming(updated);
+          setUpcomingSessions((prev) =>
+            prev.map((s) => (s.id === mapped.id ? mapped : s))
+          );
+        } else {
+          void loadUpcomingSessions();
         }
-      });
-      toast.success("Session scheduled successfully");
+      } else {
+        const created = (await api.sessions.schedule({
+          duration_minutes: selectedDuration,
+          scheduled_at: scheduledAt,
+          config: {
+            voice: selectedVoice,
+            avatar: avatarToUse,
+            comment: nextComment || undefined,
+            icon: nextIcon || undefined,
+          }
+        })) as BackendSession | undefined;
+        toast.success("Session scheduled successfully");
+
+        if (created?.id) {
+          const mapped = mapBackendSessionToUpcoming(created);
+          setUpcomingSessions((prev) => {
+            const without = prev.filter((s) => s.id !== mapped.id);
+            return [mapped, ...without];
+          });
+        } else {
+          void loadUpcomingSessions();
+        }
+      }
       setShowScheduleModal(false);
-      loadUpcomingSessions();
+      setScheduleAvatarOverride(null);
+      setEditingScheduledSessionId(null);
+      setScheduleComment("");
+      setScheduleIcon("💬");
     } catch (err: any) {
       const message = err?.message || "Failed to schedule session";
       if (message.includes("trial has expired")) {
@@ -312,19 +565,145 @@ export function SessionLobby() {
     }
   };
 
+  const handleCancelScheduledSession = async () => {
+    if (!activeUpcomingSession?.id || isCancelingScheduled) return;
+    setIsCancelingScheduled(true);
+    try {
+      await api.sessions.cancelScheduled(activeUpcomingSession.id);
+      toast.success("Scheduled session canceled");
+      setShowUpcomingActionModal(false);
+      setUpcomingSessions((prev) => prev.filter((s) => s.id !== activeUpcomingSession.id));
+      setActiveUpcomingSession(null);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to cancel session");
+    } finally {
+      setIsCancelingScheduled(false);
+    }
+  };
+
+  const closeScheduleModal = () => {
+    setShowScheduleModal(false);
+    setEditingScheduledSessionId(null);
+    setScheduleAvatarOverride(null);
+    setScheduleComment("");
+    setScheduleIcon("💬");
+  };
+
   const voices = [
-    { id: "voice1", name: "Voice 1", description: "Warm and friendly", gender: "Female" },
-    { id: "voice2", name: "Voice 2", description: "Calm and reassuring", gender: "Male" },
-    { id: "voice3", name: "Voice 3", description: "Professional and clear", gender: "Female" },
-    { id: "voice4", name: "Voice 4", description: "Gentle and soothing", gender: "Male" }
+    { id: "voice1", name: "Voice 1", description: "Warm and friendly", gender: "Female", demoFile: "voice1female.wav" },
+    { id: "voice2", name: "Voice 2", description: "Calm and reassuring", gender: "Male", demoFile: "voice2male.wav" },
+    { id: "voice3", name: "Voice 3", description: "Professional and clear", gender: "Female", demoFile: "voice3female.wav" },
+    { id: "voice4", name: "Voice 4", description: "Gentle and soothing", gender: "Male", demoFile: "voice4male.wav" }
   ];
 
-  const avatars = [
-    { id: "Alex Rivera", name: "Alex Rivera", emoji: "👨‍⚕️", description: "Supportive and empathetic" },
-    { id: "Sarah Mitchell", name: "Sarah Mitchell", emoji: "👩‍⚕️", description: "Warm and understanding" },
-    { id: "Jordan Taylor", name: "Jordan Taylor", emoji: "👨‍💼", description: "Professional and attentive" },
-    { id: "Maya chen", name: "Maya Chen", emoji: "👩‍🦰", description: "Kind and patient" }
-  ];
+  const tempSelectedAvatarIsFemale = isFemaleAvatarName(tempSelectedAvatar);
+
+  const isVoiceDisabledForAvatar = (voiceGender: string): boolean => {
+    const vg = voiceGender.trim().toLowerCase();
+    if (tempSelectedAvatarIsFemale) return vg !== "female";
+    return vg !== "male";
+  };
+
+  const stopVoicePreview = () => {
+    const existing = voicePreviewAudioRef.current;
+    if (!existing) return;
+    existing.pause();
+    existing.currentTime = 0;
+    voicePreviewAudioRef.current = null;
+    setPlayingVoiceName(null);
+  };
+
+  const playVoicePreview = async (voiceName: string, demoFile: string) => {
+    try {
+      stopVoicePreview();
+      const base = import.meta.env.BASE_URL.endsWith("/")
+        ? import.meta.env.BASE_URL
+        : `${import.meta.env.BASE_URL}/`;
+      const audio = new Audio(`${base}avatarvoices/${encodeURIComponent(demoFile)}`);
+      voicePreviewAudioRef.current = audio;
+      setPlayingVoiceName(voiceName);
+      audio.onended = () => {
+        if (voicePreviewAudioRef.current === audio) {
+          voicePreviewAudioRef.current = null;
+          setPlayingVoiceName(null);
+        }
+      };
+      audio.onerror = () => {
+        if (voicePreviewAudioRef.current === audio) {
+          voicePreviewAudioRef.current = null;
+          setPlayingVoiceName(null);
+        }
+        toast.error("Could not play voice preview");
+      };
+      await audio.play();
+    } catch {
+      setPlayingVoiceName(null);
+      toast.error("Could not play voice preview");
+    }
+  };
+
+  const handleVoiceSelect = async (
+    voiceName: string,
+    voiceGender: string,
+    demoFile: string
+  ) => {
+    if (isVoiceDisabledForAvatar(voiceGender)) return;
+    setTempSelectedVoice(voiceName);
+    await playVoicePreview(voiceName, demoFile);
+  };
+
+  useEffect(() => {
+    return () => {
+      stopVoicePreview();
+    };
+  }, []);
+
+  useEffect(() => {
+    const selectedVoiceMeta = voices.find((v) => v.name === tempSelectedVoice);
+    if (!selectedVoiceMeta) return;
+    if (!isVoiceDisabledForAvatar(selectedVoiceMeta.gender)) return;
+
+    const fallback = voices.find((v) =>
+      tempSelectedAvatarIsFemale
+        ? v.gender.toLowerCase() === "female"
+        : v.gender.toLowerCase() === "male"
+    );
+    if (fallback) setTempSelectedVoice(fallback.name);
+  }, [tempSelectedAvatar, tempSelectedAvatarIsFemale, tempSelectedVoice]);
+
+  useEffect(() => {
+    if (showCustomizeModal) return;
+    stopVoicePreview();
+  }, [showCustomizeModal]);
+
+  const [sessionAvatarList, setSessionAvatarList] = useState(LOBBY_AVATARS);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (isAuthLoading || !user?.id) return;
+    (async () => {
+      try {
+        const rows = await api.aiAvatars.getAll();
+        if (!Array.isArray(rows) || rows.length === 0) return;
+        const mapped = lobbyAvatarsFromApiRows(rows);
+        if (!cancelled && mapped.length > 0) {
+          setSessionAvatarList(mapped);
+        }
+      } catch {
+        /* keep static LOBBY_AVATARS */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthLoading, user?.id]);
+
+  const avatars = sessionAvatarList;
+
+  const selectedCompanionPreview = useMemo(
+    () => lobbyAvatarByName(selectedAvatar),
+    [selectedAvatar]
+  );
 
   const [checklistItems, setChecklistItems] = useState([
     { label: "Find a quiet, private space", checked: true },
@@ -339,587 +718,324 @@ export function SessionLobby() {
     setChecklistItems(newItems);
   };
 
+  const companionTraitsLine = useMemo(() => {
+    const pty = selectedCompanionPreview.personality?.trim();
+    if (!pty) return "Calm • Empathetic • Supportive";
+    const parts = pty
+      .split(/[,•|]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.length >= 2) return parts.slice(0, 3).join(" • ");
+    return pty;
+  }, [selectedCompanionPreview]);
+
+  const applyDurationPreset = useCallback((d: number) => {
+    setSessionLengthKind("fixed");
+    setSelectedDuration(d);
+  }, []);
+
+  const selectFreeFlow = useCallback(() => {
+    setSessionLengthKind("free");
+    setSelectedDuration(Math.max(1, minutesAvailable));
+  }, [minutesAvailable]);
+
+  const persistEnvironmentSelection = useCallback(
+    async (value: string) => {
+      setSelectedEnvironment(value);
+      setTempSelectedEnvironment(value);
+      try {
+        await api.updateProfile({ selected_environment: value });
+        await refreshProfile();
+      } catch (err) {
+        console.error(err);
+        toast.error("Could not update environment");
+      }
+    },
+    [refreshProfile]
+  );
+
+  const openScheduleFlow = useCallback(() => {
+    setEditingScheduledSessionId(null);
+    setScheduleAvatarOverride(null);
+    setShowMinutesPicker(false);
+    setSelectedMode("schedule");
+    setShowScheduleModal(true);
+  }, []);
+
   if (isLoadingSessions) {
     return (
-      <AppLayout>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-          <div className="mb-8">
-            <Skeleton className="h-8 w-64 mb-2" />
-            <Skeleton className="h-4 w-80" />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="p-6 shadow-xl">
-                <Skeleton className="h-5 w-40 mb-4" />
-                <div className="grid grid-cols-2 gap-4">
-                  {[0, 1].map((i) => (
-                    <Skeleton key={i} className="h-24 w-full rounded-xl" />
-                  ))}
-                </div>
-              </Card>
-              <Card className="p-6 shadow-xl">
-                <Skeleton className="h-5 w-44 mb-4" />
-                <div className="grid grid-cols-4 gap-3">
-                  {[0, 1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-16 w-full rounded-xl" />
-                  ))}
-                </div>
-              </Card>
-              <Card className="p-6 shadow-xl">
-                <Skeleton className="h-5 w-40 mb-4" />
-                <Skeleton className="h-10 w-full mb-3 rounded-lg" />
-                <Skeleton className="h-24 w-full rounded-lg" />
-              </Card>
+      <div className="solace-canvas-bg relative min-h-[calc(100dvh-5rem)] pb-28 text-[var(--solace-text)] lg:pb-12">
+          <div className="relative z-[1] mx-auto max-w-[1680px] px-4 sm:px-5 lg:px-8">
+            <div className="mb-8 flex flex-col gap-2 border-b border-white/[0.05] pb-8 pt-6">
+              <Skeleton className="h-10 w-[14rem] rounded-lg bg-white/[0.06]" />
+              <Skeleton className="h-4 w-[20rem] max-w-full rounded-md bg-white/[0.05]" />
             </div>
-            <div className="space-y-6">
-              <Card className="p-6 shadow-xl">
-                <div className="flex items-center gap-3 mb-4">
-                  <Skeleton className="w-12 h-12 rounded-full" />
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-3 w-24" />
-                  </div>
-                </div>
-                <Skeleton className="h-10 w-full mb-4 rounded-lg" />
-                <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_308px]">
+              <div className="min-w-0 space-y-9">
+                <Skeleton className="h-[440px] w-full rounded-[1.75rem] bg-white/[0.05]" />
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <Skeleton className="w-4 h-4 rounded" />
-                      <Skeleton className="h-3 w-48" />
-                    </div>
+                    <Skeleton key={i} className="h-28 rounded-[1.2rem] bg-white/[0.05]" />
                   ))}
                 </div>
-              </Card>
-              <Card className="p-6 shadow-xl">
-                <Skeleton className="h-5 w-40 mb-4" />
-                <div className="space-y-3">
-                  {[0, 1].map((i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Skeleton className="w-10 h-10 rounded-full" />
-                        <div className="space-y-2">
-                          <Skeleton className="h-3 w-32" />
-                          <Skeleton className="h-3 w-20" />
-                        </div>
-                      </div>
-                      <Skeleton className="h-8 w-24 rounded-lg" />
-                    </div>
-                  ))}
-                </div>
-              </Card>
+                <Skeleton className="h-24 w-full rounded-[1.2rem] bg-white/[0.05]" />
+                <Skeleton className="h-40 w-full rounded-[1.2rem] bg-white/[0.05]" />
+              </div>
+              <div className="hidden min-w-0 space-y-5 xl:block">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <Skeleton key={i} className="h-32 w-full rounded-[1.2rem] bg-white/[0.05]" />
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      </AppLayout>
+      </div>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <h1 className="text-3xl font-bold mb-2">AI Session with Ezri</h1>
-          <p className="text-muted-foreground">
-            Start a conversation or schedule a session for later
-          </p>
-        </motion.div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Session Card */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Mode Selection */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
+    <>
+      <TalkItOutLobbyLayout
+        companionPill={`Your companion, ${selectedCompanionPreview.name}`}
+        companionPortraitUrl={selectedCompanionPreview.cardImage}
+        companionAlt=""
+        companionDisplayName={selectedCompanionPreview.name}
+        companionTraitsLine={companionTraitsLine}
+        heroMessageLine1="I'm here to listen"
+        heroMessageLine2="and support you."
+        heroSupporting="Whatever is on your mind, you don't have to carry it alone."
+        getSupportSlot={
+          <Link to="/app/emergency-resources" className="inline-flex">
+            <Button
+              type="button"
+              className="min-h-[44px] rounded-full bg-gradient-to-r from-violet-600/90 to-indigo-600/90 px-6 text-[13px] text-white shadow-[0_0_28px_rgba(76,29,149,0.35)] hover:from-violet-500 hover:to-indigo-500"
             >
-              <Card className="p-6 shadow-xl">
-                <h2 className="text-xl font-bold mb-4">Session Type</h2>
-                <div className="grid grid-cols-1 gap-4">
-                  <motion.button
-                    type="button"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      setSelectedMode("now");
-                      setShowMinutesPicker(true);
-                    }}
-                    className={`p-6 rounded-xl border-2 transition-all w-full ${
-                      selectedMode === "now"
-                        ? "border-primary bg-primary/10 shadow-lg"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    <Play className={`w-8 h-8 mb-3 mx-auto ${selectedMode === "now" ? "text-primary" : "text-gray-400"}`} />
-                    <h3 className="font-bold mb-1">Start Now</h3>
-                    <p className="text-sm text-muted-foreground">Begin immediately</p>
-                  </motion.button>
+              Get Support
+            </Button>
+          </Link>
+        }
+        minutesAvailable={minutesAvailable}
+        durations={durations}
+        durationDisabled={durationDisabled}
+        selectedDuration={selectedDuration}
+        applyDurationPreset={applyDurationPreset}
+        isFreeFlowActive={sessionLengthKind === "free"}
+        onSelectFreeFlow={selectFreeFlow}
+        selectedMode={selectedMode}
+        setSelectedMode={setSelectedMode}
+        setShowMinutesPicker={setShowMinutesPicker}
+        isStarting={isStarting}
+        showCarveoutBanner={showCarveoutBanner}
+        checklistItems={checklistItems}
+        toggleChecklist={toggleChecklist}
+        connectMode={connectMode}
+        setConnectMode={setConnectMode}
+        conversationEnergy={conversationEnergy}
+        setConversationEnergy={setConversationEnergy}
+        selectedEnvironment={selectedEnvironment}
+        onEnvironmentSelect={(v) => void persistEnvironmentSelection(v)}
+        onOpenCustomize={() => setShowCustomizeModal(true)}
+        onOpenSchedule={openScheduleFlow}
+        upcomingSessions={upcomingSessions}
+        isLoadingUpcoming={false}
+        onSelectUpcomingRow={(s) => {
+          setActiveUpcomingSession(s as UpcomingSession);
+          setShowUpcomingActionModal(true);
+        }}
+        onStartFreely={() => {
+          setConnectMode("voice");
+          setSelectedMode("now");
+          setShowMinutesPicker(true);
+        }}
+        onStartGuided={() => {
+          setSelectedMode("now");
+          setShowMinutesPicker(true);
+          toast("We'll begin with a few gentle questions when you're ready.");
+        }}
+        onStartDeep={() => {
+          setConnectMode("deep");
+          setSelectedMode("now");
+          setShowMinutesPicker(true);
+        }}
+        onQuickCheckInNavigate={() => navigate("/app/mood-checkin")}
+      />
 
-                </div>
-              </Card>
-            </motion.div>
-
-            {/* Duration Selection Popup */}
-            <AnimatePresence>
-              {selectedMode === "now" && showMinutesPicker && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  onClick={() => setShowMinutesPicker(false)}
-                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-                >
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-full max-w-xl flex flex-col"
-                  >
-                    <Card className="p-0 shadow-2xl bg-white dark:bg-gray-900 overflow-hidden border-0">
-                      <div className="relative px-6 py-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white">
-                        <div className="absolute -top-10 -right-10 w-28 h-28 rounded-full bg-white/20 blur-2xl" />
-                        <div className="absolute -bottom-12 -left-8 w-24 h-24 rounded-full bg-white/15 blur-2xl" />
-                        <div className="relative flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-5 h-5 text-white" />
-                            <h2 className="text-xl font-bold">Choose session minutes</h2>
-                          </div>
-                          <motion.button
-                            type="button"
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => setShowMinutesPicker(false)}
-                            className="p-2 rounded-full hover:bg-white/20 transition-colors"
-                          >
-                            <X className="w-5 h-5" />
-                          </motion.button>
+        <AnimatePresence>
+          {selectedMode === "now" && showMinutesPicker && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMinutesPicker(false)}
+              className="fixed left-0 top-0 z-50 flex h-[100dvh] w-screen items-center justify-center bg-black/60 backdrop-blur-sm"
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.94 }}
+                onClick={(e) => e.stopPropagation()}
+                className="flex w-full max-w-xl flex-col px-4"
+              >
+                <Card className="overflow-hidden rounded-[1.25rem] border border-white/[0.08] bg-zinc-950/95 text-zinc-100 shadow-2xl">
+                  <div className="relative border-b border-white/[0.06] bg-black/35 px-6 py-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-5 w-5 shrink-0 text-violet-300" aria-hidden />
+                        <div>
+                          <h2 className="text-lg font-semibold text-zinc-50">Choose talk duration</h2>
+                          <p className="mt-1 text-sm text-zinc-500">
+                            Pick how long you want to talk today.
+                          </p>
                         </div>
-                        <p className="relative mt-2 text-sm text-white/90">
-                          Pick how long you want to talk with Ezri today.
-                        </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowMinutesPicker(false)}
+                        className="rounded-full p-2 text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
+                        aria-label="Close"
+                      >
+                        <X className="h-5 w-5" aria-hidden />
+                      </button>
+                    </div>
+                  </div>
 
-                      <div className="p-6">
-                      <div className="flex items-center justify-between gap-3 mb-5 text-sm">
-                        <p className="text-muted-foreground">
-                          Remaining: <span className="font-semibold text-foreground">{minutesAvailable} min</span>
-                        </p>
-                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
-                          Selected: {selectedDuration} min
-                        </span>
-                      </div>
+                  <div className="space-y-5 p-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                      <p className="text-zinc-500">
+                        Remaining:{" "}
+                        <span className="font-semibold text-zinc-200">{minutesAvailable} min</span>
+                      </p>
+                      <span className="rounded-full border border-violet-400/35 bg-violet-500/[0.12] px-3 py-1 text-xs font-medium text-violet-100">
+                        Selected: {selectedDuration} min
+                      </span>
+                    </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {durations.map((duration, index) => {
-                          const isDisabled = !!durationDisabled.get(duration);
-                          const isSelected = selectedDuration === duration;
-                          return (
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {durations.map((duration, index) => {
+                        const isDisabled = !!durationDisabled.get(duration);
+                        const isSelected = selectedDuration === duration && sessionLengthKind === "fixed";
+                        return (
                           <motion.button
                             key={duration}
                             type="button"
-                            initial={{ opacity: 0, scale: 0.8 }}
+                            initial={{ opacity: 0, scale: 0.96 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.06 + index * 0.05 }}
-                            whileHover={isDisabled ? undefined : { y: -2, scale: 1.04 }}
-                            whileTap={{ scale: 0.96 }}
+                            transition={{ delay: 0.04 + index * 0.03 }}
                             onClick={() => {
                               if (isDisabled) return;
-                              setSelectedDuration(duration);
+                              applyDurationPreset(duration);
                             }}
                             disabled={isDisabled}
-                            className={`relative p-4 rounded-2xl border transition-all text-left ${
-                              isDisabled
-                                ? "border-border bg-muted/20 opacity-45 cursor-not-allowed"
-                                : isSelected
-                                ? "border-primary bg-gradient-to-br from-primary/15 to-fuchsia-500/10 shadow-lg ring-2 ring-primary/20"
-                                : "border-border bg-background hover:border-primary/40 hover:bg-primary/5"
-                            }`}
                             aria-pressed={isSelected}
+                            className={`relative rounded-2xl border p-4 text-left transition-all ${
+                              isDisabled
+                                ? "cursor-not-allowed border-white/[0.06] opacity-40"
+                                : isSelected
+                                  ? "border-violet-400/45 bg-violet-500/[0.12] shadow-[0_0_24px_rgba(139,92,246,0.2)]"
+                                  : "border-white/[0.08] bg-black/28 hover:border-violet-400/25"
+                            }`}
                           >
-                            <div className="text-2xl font-bold">{duration}</div>
-                            <div className="text-xs mt-1 text-muted-foreground">minutes</div>
-                            {isSelected && (
-                              <Check className="absolute top-3 right-3 w-4 h-4 text-primary" />
-                            )}
+                            <div className="text-2xl font-semibold">{duration}</div>
+                            <div className="mt-1 text-xs text-zinc-500">minutes</div>
+                            {isSelected ? (
+                              <Check
+                                className="absolute right-3 top-3 h-4 w-4 text-violet-300"
+                                aria-hidden
+                              />
+                            ) : null}
                           </motion.button>
-                        )})}
-                      </div>
+                        );
+                      })}
+                    </div>
 
-                      <div className="mt-4 rounded-2xl border border-border/70 bg-muted/20 p-3">
-                        <div className="flex items-center justify-between gap-3 mb-2">
-                          <p className="text-sm font-medium">Custom minutes</p>
-                          <p className="text-xs text-muted-foreground">
-                            1 - {minutesAvailable} min
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min={1}
-                            max={minutesAvailable}
-                            step={1}
-                            inputMode="numeric"
-                            value={customMinutesInput}
-                            onChange={(e) => setCustomMinutesInput(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") applyCustomMinutes();
-                            }}
-                            className="h-10 w-32 rounded-lg border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                            placeholder="e.g. 22"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="h-10"
-                            onClick={applyCustomMinutes}
-                            disabled={!isCustomMinutesValid}
-                          >
-                            Apply
-                          </Button>
-                        </div>
-                        {customMinutesInput.trim() !== "" && !isCustomMinutesValid && (
-                          <p className="mt-2 text-xs text-red-600 dark:text-red-400">
-                            Please enter a valid value between 1 and {minutesAvailable}.
-                          </p>
-                        )}
+                    <div className="rounded-2xl border border-white/[0.06] bg-black/25 p-4">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-zinc-100">Custom minutes</p>
+                        <p className="text-xs text-zinc-500">1 – {minutesAvailable} min</p>
                       </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          max={minutesAvailable}
+                          step={1}
+                          inputMode="numeric"
+                          value={customMinutesInput}
+                          onChange={(e) => setCustomMinutesInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") applyCustomMinutes();
+                          }}
+                          className="h-11 w-full min-w-[120px] max-w-[12rem] rounded-xl border border-white/[0.1] bg-black/35 px-3 text-sm text-zinc-100 outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35 sm:w-auto"
+                          placeholder="e.g. 22"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-11 border-white/[0.12] bg-transparent text-zinc-100 hover:bg-white/[0.04]"
+                          onClick={applyCustomMinutes}
+                          disabled={!isCustomMinutesValid}
+                        >
+                          Apply
+                        </Button>
+                      </div>
+                      {customMinutesInput.trim() !== "" && !isCustomMinutesValid ? (
+                        <p className="mt-2 text-xs text-rose-400">
+                          Enter a valid value between 1 and {minutesAvailable}.
+                        </p>
+                      ) : null}
+                    </div>
 
+                    <button
+                      type="button"
+                      onClick={() => selectFreeFlow()}
+                      disabled={minutesAvailable <= 0}
+                      aria-pressed={isOnOwnPace}
+                      className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${
+                        isOnOwnPace
+                          ? "border-amber-400/35 bg-amber-500/[0.1] shadow-[0_0_22px_rgba(245,158,11,0.12)]"
+                          : "border-white/[0.08] bg-black/28 hover:border-amber-400/25"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="flex items-center gap-2 font-semibold text-zinc-100">
+                          {isOnOwnPace ? (
+                            <Check className="h-4 w-4 text-amber-300" aria-hidden />
+                          ) : null}
+                          Free flow · use full balance
+                        </span>
+                        <span className="text-sm text-zinc-500">{minutesAvailable} min</span>
+                      </div>
+                    </button>
+
+                    <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => {
-                          if (minutesAvailable <= 0) return;
-                          setSelectedDuration(minutesAvailable);
-                        }}
-                        disabled={minutesAvailable <= 0}
-                        className={`mt-4 w-full h-12 border-amber-200 dark:border-amber-800 transition-all hover:text-black dark:hover:text-white ${
-                          isOnOwnPace
-                            ? "bg-gradient-to-r from-amber-100 to-orange-200 dark:from-amber-900/40 dark:to-orange-900/40 ring-2 ring-amber-500/30 shadow-md"
-                            : "bg-gradient-to-r from-amber-50 to-orange-100 dark:from-amber-900/25 dark:to-orange-900/25 hover:from-amber-100 hover:to-orange-200 dark:hover:from-amber-900/40 dark:hover:to-orange-900/40"
-                        }`}
-                        aria-pressed={isOnOwnPace}
+                        className="border-white/[0.1] bg-transparent text-zinc-100 hover:bg-white/[0.04]"
+                        onClick={() => setShowMinutesPicker(false)}
                       >
-                        <div className="flex items-center justify-between w-full gap-3">
-                          <div className="flex items-center gap-2">
-                            {isOnOwnPace ? <Check className="w-4 h-4 text-amber-700" /> : null}
-                            <span className="font-semibold">At your own pace</span>
-                          </div>
-                          <span className="text-sm text-muted-foreground">
-                            Use all {minutesAvailable} min
-                          </span>
-                        </div>
+                        Cancel
                       </Button>
-
-                      <div className="mt-5 flex items-center justify-between gap-3">
-                        <p className="text-xs text-muted-foreground">
-                          Selected duration: <span className="font-medium text-foreground">{selectedDuration} min</span>
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setShowMinutesPicker(false)}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            type="button"
-                            onClick={() => void handleStartSession()}
-                            disabled={
-                              isStarting ||
-                              minutesAvailable <= 0 ||
-                              selectedDuration > minutesAvailable ||
-                              selectedDuration < 1
-                            }
-                            className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white hover:shadow-2xl hover:shadow-purple-500/50 transition-all"
-                          >
-                            <Video className="w-4 h-4 mr-2" />
-                            Start Now
-                          </Button>
-                        </div>
-                      </div>
-                      </div>
-                    </Card>
-                  </motion.div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Ezri Preview */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Card className="p-6 shadow-xl bg-gradient-to-br from-blue-500 to-purple-600 text-white overflow-hidden relative">
-                <motion.div
-                  animate={{
-                    scale: [1, 1.2, 1],
-                    opacity: [0.3, 0.5, 0.3]
-                  }}
-                  transition={{ duration: 4, repeat: Infinity }}
-                  className="absolute -top-10 -right-10 w-40 h-40 bg-white/20 rounded-full blur-3xl"
-                />
-                <motion.div
-                  animate={{
-                    scale: [1, 1.3, 1],
-                    opacity: [0.2, 0.4, 0.2]
-                  }}
-                  transition={{ duration: 5, repeat: Infinity }}
-                  className="absolute -bottom-10 -left-10 w-40 h-40 bg-white/20 rounded-full blur-3xl"
-                />
-                
-                <div className="relative z-10">
-                  <div className="flex items-center gap-4 mb-4">
-                    <motion.div
-                      animate={{ 
-                        y: [0, -10, 0],
-                        rotate: [0, 5, -5, 0]
-                      }}
-                      transition={{ duration: 3, repeat: Infinity }}
-                      className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-4xl"
-                    >
-                      👨‍⚕️
-                    </motion.div>
-                    <div>
-                      <h3 className="font-bold text-lg">Ezri is ready</h3>
-                      <p className="text-white/90 text-sm">Your AI companion</p>
-                    </div>
-                  </div>
-                  <p className="text-white/90 mb-4">
-                    "I'm here to listen and support you. Let's have a meaningful conversation together."
-                  </p>
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="w-4 h-4" />
-                    <span>Available 24/7 • Private & Secure</span>
-                  </div>
-                </div>
-              </Card>
-            </motion.div>
-
-            {/* Pre-Session Checklist */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-            >
-              <Card className="p-6 shadow-xl">
-                <h2 className="text-xl font-bold mb-4">Before You Start</h2>
-                <div className="space-y-3">
-                  {checklistItems.map((item, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.6 + index * 0.05 }}
-                      onClick={() => toggleChecklist(index)}
-                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
-                    >
-                      <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                          item.checked
-                            ? "bg-green-500 border-green-500"
-                            : "border-gray-300 dark:border-gray-600"
-                        }`}
+                      <Button
+                        type="button"
+                        onClick={() => void handleStartSession()}
+                        disabled={
+                          isStarting ||
+                          minutesAvailable <= 0 ||
+                          selectedDuration > minutesAvailable ||
+                          selectedDuration < 1
+                        }
+                        className="bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 text-white shadow-[0_0_32px_rgba(139,92,246,0.35)] hover:opacity-95"
                       >
-                        {item.checked && (
-                          <CheckCircle className="w-4 h-4 text-white" />
-                        )}
-                      </div>
-                      <span className={item.checked ? "text-muted-foreground line-through transition-colors" : "transition-colors"}>
-                        {item.label}
-                      </span>
-                    </motion.div>
-                  ))}
-                </div>
-              </Card>
-            </motion.div>
-
-            {/* Start Button */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7 }}
-            >
-              {selectedMode === "now" ? (
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Button 
-                    type="button"
-                    className="w-full h-16 text-lg group relative overflow-hidden bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:shadow-2xl hover:shadow-purple-500/50 transition-all"
-                    onClick={() => setShowMinutesPicker(true)}
-                    disabled={isStarting || selectedDuration > minutesAvailable}
-                  >
-                    <motion.div
-                      className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 pointer-events-none"
-                      initial={{ x: "-100%" }}
-                      whileHover={{ x: 0 }}
-                      transition={{ duration: 0.3 }}
-                    />
-                    <span className="relative z-10 flex items-center justify-center gap-3">
-                      <motion.div
-                        animate={{ scale: [1, 1.1, 1] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                      >
-                        {isStarting ? (
-                          <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Video className="w-6 h-6" />
-                        )}
-                      </motion.div>
-                      <span className="font-bold">
-                        {isStarting ? "Starting Session..." : "Start Session Now"}
-                      </span>
-                      {!isStarting && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
-                    </span>
-                  </Button>
-                </motion.div>
-              ) : null}
-            </motion.div>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Session Settings */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card className="p-6 shadow-xl">
-                <div className="flex items-center gap-2 mb-4">
-                  <Settings className="w-5 h-5 text-primary" />
-                  <h3 className="font-bold">Session Settings</h3>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <Volume2 className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">Voice</span>
+                        <Video className="mr-2 h-4 w-4 shrink-0" aria-hidden />
+                        Let&apos;s Talk Now
+                      </Button>
                     </div>
-                    <span className="text-sm font-medium">{selectedVoice}</span>
                   </div>
-                  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">Avatar</span>
-                    </div>
-                    <span className="text-sm font-medium">{selectedAvatar}</span>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => setShowCustomizeModal(true)}
-                  >
-                    Customize
-                  </Button>
-                </div>
-              </Card>
+                </Card>
+              </motion.div>
             </motion.div>
-
-            {/* Schedule (moved above Upcoming) */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Card className="p-6 shadow-xl">
-                <div className="flex items-center gap-2 mb-4">
-                  <Calendar className="w-5 h-5 text-primary" />
-                  <h3 className="font-bold">Schedule</h3>
-                </div>
-                <Button
-                  type="button"
-                  disabled={minutesAvailable <= 0 || selectedDuration > minutesAvailable}
-                  className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-purple-500/10 hover:from-indigo-500 hover:to-purple-500 transition-all flex items-center gap-3 px-4"
-                  onClick={() => {
-                    setSelectedMode("schedule");
-                    setShowMinutesPicker(false);
-                    setShowScheduleModal(true);
-                  }}
-                >
-                  <Calendar className="w-5 h-5 mr-2" />
-                  <div className="flex flex-col leading-tight">
-                    <span className="font-bold text-sm">Schedule for later</span>
-                    <span className="text-xs text-white/80">Pick a date & time</span>
-                  </div>
-                </Button>
-              </Card>
-            </motion.div>
-
-            {/* Upcoming Sessions */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Card className="p-6 shadow-xl">
-                <div className="flex items-center gap-2 mb-4">
-                  <Calendar className="w-5 h-5 text-primary" />
-                  <h3 className="font-bold">Upcoming</h3>
-                </div>
-                <div className="space-y-3">
-                  {upcomingSessions.map((session, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5 + index * 0.1 }}
-                      whileHover={{ x: 5 }}
-                      className={`p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg transition-colors ${
-                        session.isExpired ? "opacity-60 cursor-not-allowed" : "hover:bg-gray-100 dark:hover:bg-gray-700/50 cursor-pointer"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="text-2xl">{session.avatar}</span>
-                        <div className="flex-1">
-                          <p className="font-medium text-sm">{session.type}</p>
-                          <p className="text-xs text-muted-foreground">{session.date}</p>
-                        </div>
-                        {session.isExpired && (
-                          <span className="text-[10px] uppercase font-semibold text-red-500">
-                            Expired
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Clock className="w-3 h-3" />
-                        {session.duration}
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </Card>
-            </motion.div>
-
-            {/* Tips */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5 }}
-            >
-              <Card className="p-6 shadow-xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 border-amber-200 dark:border-amber-800">
-                <div className="flex items-start gap-2 mb-3">
-                  <Sparkles className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                  <h3 className="font-bold text-amber-900 dark:text-amber-200">Session Tip</h3>
-                </div>
-                <p className="text-sm text-amber-800 dark:text-amber-300">
-                  Try to be present and honest during your session. There's no right or wrong way to feel.
-                </p>
-              </Card>
-            </motion.div>
-          </div>
-        </div>
+          )}
+        </AnimatePresence>
 
         {/* Customize Modal */}
         <AnimatePresence>
@@ -931,7 +1047,7 @@ export function SessionLobby() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setShowCustomizeModal(false)}
-                className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+                className="fixed left-0 top-0 w-screen h-[100dvh] bg-black/50 z-50 flex items-center justify-center p-4"
               >
                 {/* Modal */}
                 <motion.div
@@ -947,7 +1063,7 @@ export function SessionLobby() {
                       <div>
                         <h2 className="text-2xl font-bold">Customize Voice & Avatar</h2>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Personalize your session experience
+                          Personalize your talking experience
                         </p>
                       </div>
                       <motion.button
@@ -964,24 +1080,30 @@ export function SessionLobby() {
                     {/* Scrollable Content */}
                     <div className="p-6 overflow-y-auto">
                       {/* Voice Selection */}
-                      <div className="mb-6">
+                      <div ref={voiceSectionRef} className="mb-6 scroll-mt-4">
                         <div className="flex items-center gap-2 mb-4">
                           <Volume2 className="w-5 h-5 text-primary" />
                           <h3 className="font-bold text-lg">Voice Selection</h3>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {voices.map((voice, index) => (
+                            (() => {
+                              const isDisabled = isVoiceDisabledForAvatar(voice.gender);
+                              return (
                             <motion.button
                               key={voice.id}
                               type="button"
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.1 + index * 0.05 }}
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                              onClick={() => setTempSelectedVoice(voice.name)}
+                              whileHover={isDisabled ? undefined : { scale: 1.02 }}
+                              whileTap={isDisabled ? undefined : { scale: 0.98 }}
+                              onClick={() => void handleVoiceSelect(voice.name, voice.gender, voice.demoFile)}
+                              disabled={isDisabled}
                               className={`p-4 rounded-xl border-2 transition-all text-left relative ${
-                                tempSelectedVoice === voice.name
+                                isDisabled
+                                  ? "border-border bg-muted/40 text-muted-foreground opacity-60 cursor-not-allowed"
+                                  : tempSelectedVoice === voice.name
                                   ? "border-primary bg-primary/10 dark:bg-primary/20 shadow-lg"
                                   : "border-border hover:border-primary/50"
                               }`}
@@ -1003,13 +1125,22 @@ export function SessionLobby() {
                                 <span className="inline-block w-2 h-2 rounded-full bg-primary"></span>
                                 {voice.gender}
                               </div>
+                              <div className="mt-2 text-xs text-muted-foreground">
+                                {isDisabled
+                                  ? "Disabled for selected avatar"
+                                  : playingVoiceName === voice.name
+                                  ? "Playing demo..."
+                                  : "Click to preview"}
+                              </div>
                             </motion.button>
+                              );
+                            })()
                           ))}
                         </div>
                       </div>
 
                       {/* Avatar Selection */}
-                      <div className="mb-6">
+                      <div ref={avatarSectionRef} className="mb-6 scroll-mt-4">
                         <div className="flex items-center gap-2 mb-4">
                           <User className="w-5 h-5 text-primary" />
                           <h3 className="font-bold text-lg">Avatar Selection</h3>
@@ -1040,10 +1171,63 @@ export function SessionLobby() {
                                   <Check className="w-3 h-3 text-white" />
                                 </motion.div>
                               )}
-                              <div className="text-4xl mb-2">{avatar.emoji}</div>
+                              {avatar.cardImage ? (
+                                <img
+                                  src={avatar.cardImage}
+                                  alt=""
+                                  className="mx-auto mb-2 h-16 w-16 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                                  <User className="h-8 w-8 text-muted-foreground" aria-hidden />
+                                </div>
+                              )}
                               <div className="font-bold mb-1">{avatar.name}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {avatar.description}
+                              <div className="text-xs text-muted-foreground line-clamp-3">
+                                {avatar.personality?.trim() ||
+                                  avatar.description?.trim() ||
+                                  "No personality description available"}
+                              </div>
+                            </motion.button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Session background (environment) */}
+                      <div ref={environmentSectionRef} className="mb-2 scroll-mt-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Palette className="w-5 h-5 text-primary" />
+                          <h3 className="font-bold text-lg">Talking Background</h3>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Choose a calming background for your video sessions
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {SESSION_ENVIRONMENTS.map((env, index) => (
+                            <motion.button
+                              key={env.value}
+                              type="button"
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ delay: 0.05 * index }}
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => setTempSelectedEnvironment(env.value)}
+                              className={`rounded-lg border-2 overflow-hidden transition-all text-left ${
+                                tempSelectedEnvironment === env.value
+                                  ? "border-primary shadow-lg"
+                                  : "border-border hover:border-primary/50"
+                              }`}
+                            >
+                              <div
+                                className={`h-20 bg-gradient-to-br ${env.gradient} flex items-center justify-center dark:opacity-95`}
+                              >
+                                <span className="text-3xl leading-none flex items-center justify-center">
+                                  <FluentEmoji emoji={env.emoji} size={36} />
+                                </span>
+                              </div>
+                              <div className="p-2 bg-white dark:bg-gray-950">
+                                <p className="text-sm font-medium">{env.label}</p>
                               </div>
                             </motion.button>
                           ))}
@@ -1056,17 +1240,32 @@ export function SessionLobby() {
                       <Button
                         type="button"
                         variant="outline"
+                        disabled={isSavingCustomize}
                         onClick={() => setShowCustomizeModal(false)}
                       >
                         Cancel
                       </Button>
                       <Button
                         type="button"
-                        className="bg-gradient-to-r from-blue-600 to-purple-600 text-white"
-                        onClick={handleSaveCustomize}
+                        disabled={isSavingCustomize}
+                        aria-busy={isSavingCustomize}
+                        className="bg-gradient-to-r from-blue-600 to-purple-600 text-white min-w-[148px]"
+                        onClick={() => void handleSaveCustomize()}
                       >
-                        <Check className="w-4 h-4 mr-2" />
-                        Save Changes
+                        {isSavingCustomize ? (
+                          <>
+                            <Loader2
+                              className="w-4 h-4 mr-2 animate-spin shrink-0"
+                              aria-hidden
+                            />
+                            Saving…
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4 mr-2 shrink-0" />
+                            Save Changes
+                          </>
+                        )}
                       </Button>
                     </div>
                   </Card>
@@ -1085,8 +1284,8 @@ export function SessionLobby() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                onClick={() => setShowScheduleModal(false)}
-                className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+                onClick={closeScheduleModal}
+                className="fixed left-0 top-0 w-screen h-[100dvh] bg-black/50 z-50 flex items-center justify-center p-4"
               >
                 {/* Modal */}
                 <motion.div
@@ -1100,16 +1299,18 @@ export function SessionLobby() {
                     {/* Header - Fixed */}
                     <div className="flex items-center justify-between p-6 border-b shrink-0">
                       <div>
-                        <h2 className="text-2xl font-bold">Schedule a Session</h2>
+                        <h2 className="text-2xl font-bold">
+                          {editingScheduledSessionId ? "Edit Scheduled Talk" : "Schedule a Talk"}
+                        </h2>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Pick a date and time for your session
+                          Pick a date and time for your next talk
                         </p>
                       </div>
                       <motion.button
                         type="button"
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
-                        onClick={() => setShowScheduleModal(false)}
+                        onClick={closeScheduleModal}
                         className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                       >
                         <X className="w-5 h-5" />
@@ -1118,6 +1319,49 @@ export function SessionLobby() {
 
                     {/* Scrollable Content */}
                     <div className="p-6 overflow-y-auto">
+                      {/* Duration Selection */}
+                      <div className="mb-6">
+                        <div className="flex items-center justify-between gap-2 mb-4">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-5 h-5 text-primary" />
+                            <h3 className="font-bold text-lg">Talking Minutes</h3>
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            Selected: {selectedDuration} min
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {durations.map((duration) => {
+                            const isDisabled = !!durationDisabled.get(duration);
+                            const isSelected = selectedDuration === duration;
+                            return (
+                              <button
+                                key={duration}
+                                type="button"
+                                disabled={isDisabled}
+                                onClick={() => {
+                                  if (isDisabled) return;
+                                  setSelectedDuration(duration);
+                                }}
+                                className={`rounded-xl border p-3 text-center transition-all ${
+                                  isDisabled
+                                    ? "opacity-40 cursor-not-allowed"
+                                    : isSelected
+                                    ? "border-primary bg-primary/10"
+                                    : "hover:border-primary/40"
+                                }`}
+                              >
+                                <div className="text-lg font-bold">{duration}</div>
+                                <div className="text-[10px] text-muted-foreground">min</div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Minutes available: {minutesAvailable}
+                        </p>
+                      </div>
+
                       {/* Date and Time Selection */}
                       <div className="mb-6">
                         <div className="flex items-center gap-2 mb-4">
@@ -1143,6 +1387,29 @@ export function SessionLobby() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Comment & Icon */}
+                      <div className="mb-2">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Sparkles className="w-5 h-5 text-primary" />
+                          <h3 className="font-bold text-lg">Add a note</h3>
+                        </div>
+
+                        <div className=" ">
+                    
+
+                          <div className="sm:col-span-4 p-4 rounded-xl border-2 dark:border-gray-700 transition-all text-left relative bg-gray-50 dark:bg-gray-800/50">
+                            <label className="block text-xs text-muted-foreground mb-2">Comment</label>
+                            <textarea
+                              value={scheduleComment}
+                              onChange={(e) => setScheduleComment(e.target.value)}
+                              rows={3}
+                              placeholder="Optional: what would you like to focus on next time?"
+                              className="w-full resize-none p-2 border-none outline-none bg-transparent dark:text-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Footer Buttons - Fixed */}
@@ -1150,7 +1417,7 @@ export function SessionLobby() {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => setShowScheduleModal(false)}
+                        onClick={closeScheduleModal}
                         disabled={isScheduling}
                       >
                         Cancel
@@ -1160,9 +1427,10 @@ export function SessionLobby() {
                         className="bg-gradient-to-r from-blue-600 to-purple-600 text-white"
                         onClick={handleScheduleSession}
                         isLoading={isScheduling}
+                        disabled={isScheduling || selectedDuration > minutesAvailable || selectedDuration < 1}
                       >
                         <Check className="w-4 h-4 mr-2" />
-                        Schedule
+                        {editingScheduledSessionId ? "Update" : "Schedule"}
                       </Button>
                     </div>
                   </Card>
@@ -1171,7 +1439,135 @@ export function SessionLobby() {
             </>
           )}
         </AnimatePresence>
-      </div>
-    </AppLayout>
+
+        {/* Upcoming Session Action Modal */}
+        <AnimatePresence>
+          {showUpcomingActionModal && activeUpcomingSession && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowUpcomingActionModal(false)}
+              className="fixed left-0 top-0 w-screen h-[100dvh] bg-black/50 z-50 flex items-center justify-center p-4"
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.92 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-lg"
+              >
+                <Card className="p-6 shadow-2xl bg-white dark:bg-gray-900">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold">Talking Options</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {activeUpcomingSession.avatarName} • Choose minutes and action
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowUpcomingActionModal(false)}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 mb-4">
+                    {durations.map((duration) => {
+                      const isDisabled = !!durationDisabled.get(duration);
+                      const isSelected = selectedDuration === duration;
+                      return (
+                        <button
+                          key={duration}
+                          type="button"
+                          disabled={isDisabled}
+                          onClick={() => {
+                            if (isDisabled) return;
+                            applyDurationPreset(duration);
+                          }}
+                          className={`rounded-xl border p-3 text-center transition-all ${
+                            isDisabled
+                              ? "opacity-40 cursor-not-allowed"
+                              : isSelected
+                              ? "border-primary bg-primary/10"
+                              : "hover:border-primary/40"
+                          }`}
+                        >
+                          <div className="text-lg font-bold">{duration}</div>
+                          <div className="text-[10px] text-muted-foreground">min</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-5">
+                    <span>Minutes available: {minutesAvailable}</span>
+                    <span>Selected: {selectedDuration} min</span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button
+                      type="button"
+                      className="flex-1 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white"
+                      onClick={() => {
+                        void handleStartSession({
+                          avatarOverride: activeUpcomingSession.avatarName,
+                          scheduledSessionId: activeUpcomingSession.id,
+                        });
+                        setShowUpcomingActionModal(false);
+                      }}
+                      disabled={isStarting || selectedDuration > minutesAvailable || selectedDuration < 1}
+                    >
+                      Start Now
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => {
+                        setShowUpcomingActionModal(false);
+                        setSelectedMode("schedule");
+                        setScheduleAvatarOverride(activeUpcomingSession.avatarName);
+                        setEditingScheduledSessionId(activeUpcomingSession.id);
+                        setSelectedDuration(activeUpcomingSession.durationMinutes || selectedDuration);
+                        setScheduleComment(activeUpcomingSession.comment ?? "");
+                        setScheduleIcon(activeUpcomingSession.icon ?? "💬");
+                        if (activeUpcomingSession.scheduledAt) {
+                          const dt = new Date(activeUpcomingSession.scheduledAt);
+                          const yyyy = dt.getFullYear();
+                          const mm = String(dt.getMonth() + 1).padStart(2, "0");
+                          const dd = String(dt.getDate()).padStart(2, "0");
+                          const hh = String(dt.getHours()).padStart(2, "0");
+                          const min = String(dt.getMinutes()).padStart(2, "0");
+                          setScheduleDate(`${yyyy}-${mm}-${dd}`);
+                          setScheduleTime(`${hh}:${min}`);
+                        }
+                        setShowScheduleModal(true);
+                      }}
+                      disabled={isScheduling || selectedDuration > minutesAvailable || selectedDuration < 1}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1 border-red-300 text-red-600 hover:bg-red-500 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                      onClick={() => {
+                        void handleCancelScheduledSession();
+                      }}
+                      disabled={isCancelingScheduled}
+                    >
+                      {isCancelingScheduled ? "Canceling..." : "Cancel Talk"}
+                    </Button>
+                  </div>
+                </Card>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+    </>
   );
 }

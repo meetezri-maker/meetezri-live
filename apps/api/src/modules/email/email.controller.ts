@@ -53,23 +53,13 @@ export async function resetPasswordHandler(
       throw new Error('Failed to generate reset link');
     }
 
-    // Send email with the link
+    const passwordResetEmail = emailService.buildPasswordResetEmail({ resetLink });
+
     await emailService.sendEmail(
       email,
-      'Reset Your Password - MeetEzri',
-      `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Reset Your Password</h2>
-        <p>We received a request to reset your password for your MeetEzri account.</p>
-        <p>Click the button below to reset it:</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${resetLink}" target="_blank" style="background-color: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Reset Password</a>
-        </div>
-        <p>If you didn't request this, you can safely ignore this email.</p>
-        <p style="color: #666; font-size: 12px; margin-top: 30px;">Wait, this link will expire in 1 hour.</p>
-      </div>
-      `,
-      `Reset your password by visiting this link: ${resetLink}`
+      passwordResetEmail.subject,
+      passwordResetEmail.html,
+      passwordResetEmail.text
     );
 
     return reply.code(200).send({ success: true, message: 'Password reset email sent' });

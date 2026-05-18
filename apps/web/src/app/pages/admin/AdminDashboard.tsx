@@ -16,31 +16,12 @@ import {
   Smile,
 } from "lucide-react";
 import { Link } from "react-router";
-import { useEffect, useState } from "react";
-import { api } from "../../../lib/api";
+import { useAdminStats, useAdminRecentActivity } from "@/lib/queries/adminQueries";
 
 export function AdminDashboard() {
-  const [stats, setStats] = useState<any>(null);
-  const [recentActivity, setRecentActivity] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsData, activityData] = await Promise.all([
-          api.admin.getStats(),
-          api.admin.getRecentActivity()
-        ]);
-        setStats(statsData);
-        setRecentActivity(activityData);
-      } catch (error) {
-        console.error("Failed to fetch dashboard data", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+  const { data: stats, isLoading: statsLoading } = useAdminStats();
+  const { data: recentActivity, isLoading: recentLoading } = useAdminRecentActivity();
+  const isLoading = statsLoading || recentLoading;
 
   if (isLoading) {
     return (
@@ -82,7 +63,7 @@ export function AdminDashboard() {
             delay={0}
           />
           <StatsCard
-            title="Active Sessions"
+            title="Active Talk it out (4h)"
             value={stats?.activeSessions?.toLocaleString() || "0"}
             change="Live"
             changeType="positive"
@@ -91,7 +72,7 @@ export function AdminDashboard() {
             delay={0.1}
           />
           <StatsCard
-            title="Crisis Alerts"
+            title="Emergency alerts"
             value={stats?.crisisAlerts?.toLocaleString() || "0"}
             change={stats?.crisisAlerts > 0 ? "Requires Attention" : "All Good"}
             changeType={stats?.crisisAlerts > 0 ? "negative" : "positive"}
@@ -212,9 +193,12 @@ export function AdminDashboard() {
                         {mood.mood} • Intensity: {mood.intensity}/10
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(mood.created_at).toLocaleDateString()}
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-medium text-foreground">
+                        {new Date(mood.created_at).toLocaleString(undefined, {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
                       </p>
                     </div>
                   </motion.div>
@@ -248,7 +232,7 @@ export function AdminDashboard() {
                   className="p-4 rounded-lg border border-gray-200 hover:border-primary transition-colors text-center group"
                 >
                   <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-warning group-hover:scale-110 transition-transform" />
-                  <p className="font-medium text-sm">Crisis Monitor</p>
+                  <p className="font-medium text-sm">Emergency Monitor</p>
                 </motion.div>
               </Link>
               <Link to="/admin/reports-analytics">

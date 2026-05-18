@@ -347,7 +347,9 @@ describe('billing.webhook stripeWebhookHandler', () => {
 
     await stripeWebhookHandler(request, reply);
 
-    expect(mockStripe.subscriptions.retrieve).toHaveBeenCalledWith('sub_stripe_1');
+    expect(mockStripe.subscriptions.retrieve).toHaveBeenCalledWith('sub_stripe_1', {
+      expand: ['items.data.price'],
+    });
     expect(mockPrisma.subscriptions.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

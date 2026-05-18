@@ -35,7 +35,7 @@ describe("emergency-contacts.service", () => {
     mockPrisma.emergency_contacts.create.mockResolvedValue({ id: contactId });
     const created = await createEmergencyContact(userId, {
       name: "Jane",
-      phone: "123",
+      phone: "+15551234567",
       is_trusted: false,
     });
     expect(created).toEqual({ id: contactId });

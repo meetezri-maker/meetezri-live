@@ -3,10 +3,11 @@
  * User's personalized safety dashboard with patterns, trends, and recommendations
  */
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'motion/react';
-import { useNavigate } from 'react-router';
-import { AppLayout } from '@/app/components/AppLayout';
+import { useNavigate } from 'react-router-dom';
+import { CrisisResourcesCallout } from '@/app/components/safety/CrisisResourcesCallout';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import {
@@ -14,40 +15,68 @@ import {
   Shield,
   TrendingUp,
   TrendingDown,
-  Calendar,
   Clock,
   Heart,
   Activity,
   AlertTriangle,
-  CheckCircle,
   Star,
   Sparkles,
   Phone,
   Users,
   Moon,
   Sun,
-  Zap,
   Target,
   Award
 } from 'lucide-react';
 import { useSafety } from '@/app/contexts/SafetyContext';
-import { getSafetyEvents } from '@/app/utils/safetyLogger';
-import { getMostUsedResources, getInteractionsBySafetyState } from '@/app/utils/resourceTracking';
+import { getUserSafetyEvents } from '@/app/utils/safetyLogger';
+import {
+  getMostUsedResources,
+  getInteractionsBySafetyState,
+  mapServerRowsToInteractions,
+} from '@/app/utils/resourceTracking';
+import { getSafetyResources } from '@/app/utils/safetyResources';
+import { useAuth } from '@/app/contexts/AuthContext';
+import { api } from '@/lib/api';
+import { queryKeys } from '@/lib/queries';
 
 export function SafetyInsights() {
   const navigate = useNavigate();
-  const { } = useSafety();
+  const { currentState } = useSafety();
+  const { user } = useAuth();
   const [insights, setInsights] = useState<any>(null);
   const [safetyHistory, setSafetyHistory] = useState<any[]>([]);
 
-  useEffect(() => {
-    const history = getSafetyEvents();
-    setSafetyHistory(history);
+  const resourceIdToName = useMemo(() => {
+    const resources = getSafetyResources();
+    return new Map(resources.map((r) => [r.id, r.name]));
   }, []);
 
+  const { data: rawSafetyResourceIx } = useQuery({
+    queryKey: queryKeys.safetyResourceInteractions.list({
+      userId: user?.id,
+      window: 'safety-insights',
+    }),
+    queryFn: async () => {
+      const rows = (await api.safetyResourceInteractions.list({
+        limit: 3000,
+      })) as Array<Record<string, unknown>>;
+      return Array.isArray(rows) ? rows : [];
+    },
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  });
+
+  const resourceInteractions = useMemo(
+    () => mapServerRowsToInteractions(rawSafetyResourceIx ?? []),
+    [rawSafetyResourceIx]
+  );
+
   useEffect(() => {
-    calculateInsights();
-  }, [safetyHistory]);
+    const userId = user?.id || 'anonymous';
+    const history = getUserSafetyEvents(userId);
+    setSafetyHistory(history);
+  }, [user?.id]);
 
   const calculateInsights = () => {
     // Get safety events from history
@@ -94,11 +123,11 @@ export function SafetyInsights() {
         return acc;
       }, {});
 
-    // Most used resources
-    const topResources = getMostUsedResources(3);
+    // Most used resources (persisted server-side when signed in)
+    const topResources = getMostUsedResources(3, resourceInteractions);
 
     // Resource usage by safety state
-    const resourcesByState = getInteractionsBySafetyState();
+    const resourcesByState = getInteractionsBySafetyState(resourceInteractions);
 
     // Calculate trends (comparing last 14 days to previous 14 days)
     const last14Days = events.filter((e: any) => {
@@ -157,7 +186,8 @@ export function SafetyInsights() {
       highRiskLast14,
       highRiskPrevious14,
       recommendations,
-      safetyScore: calculateSafetyScore(stateDistribution, trend)
+      safetyScore: calculateSafetyScore(stateDistribution, trend),
+      currentState
     });
   };
 
@@ -190,7 +220,7 @@ export function SafetyInsights() {
         title: 'Common Trigger Identified',
         description: `"${topTrigger[0]}" has been detected ${topTrigger[1]} times. Consider adding coping strategies for this trigger to your Safety Plan.`,
         action: 'Update Safety Plan',
-        actionLink: '/app/settings/safety-plan'
+        actionLink: '/app/settings/wellness-plan'
       });
     }
 
@@ -202,7 +232,7 @@ export function SafetyInsights() {
         title: 'Explore Support Resources',
         description: 'You have resources available but haven\'t used them recently. Having quick access to support can be helpful during difficult moments.',
         action: 'View Resources',
-        actionLink: '/app/crisis-resources'
+        actionLink: '/app/emergency-resources'
       });
     }
 
@@ -264,6 +294,11 @@ export function SafetyInsights() {
     return Math.round(Math.min(100, Math.max(0, score + trendAdjustment)));
   };
 
+  useEffect(() => {
+    calculateInsights();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- full recompute mirrors prior single effect behavior
+  }, [safetyHistory, resourceInteractions, currentState]);
+
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
     if (score >= 60) return 'text-yellow-600';
@@ -280,19 +315,16 @@ export function SafetyInsights() {
 
   if (!insights) {
     return (
-      <AppLayout>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -386,11 +418,11 @@ export function SafetyInsights() {
                 </div>
               </div>
               <div className="flex gap-3">
-                <Button onClick={() => navigate('/app/settings/safety-plan')}>
+                <Button onClick={() => navigate('/app/settings/wellness-plan')}>
                   <Target className="w-4 h-4 mr-2" />
                   Safety Plan
                 </Button>
-                <Button variant="outline" onClick={() => navigate('/app/crisis-resources')}>
+                <Button variant="outline" onClick={() => navigate('/app/emergency-resources')}>
                   <Phone className="w-4 h-4 mr-2" />
                   Resources
                 </Button>
@@ -549,7 +581,9 @@ export function SafetyInsights() {
                       #{index + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">Resource {index + 1}</p>
+                      <p className="text-sm font-medium truncate">
+                        {resourceIdToName.get(resource.resourceId) || resource.resourceId}
+                      </p>
                       <p className="text-xs text-muted-foreground">{resource.totalClicks} uses</p>
                     </div>
                   </div>
@@ -579,7 +613,7 @@ export function SafetyInsights() {
               <Button
                 variant="outline"
                 className="h-auto flex-col py-4 gap-2"
-                onClick={() => navigate('/app/settings/safety-plan')}
+                onClick={() => navigate('/app/settings/wellness-plan')}
               >
                 <Target className="w-6 h-6" />
                 <span className="text-xs">Safety Plan</span>
@@ -611,7 +645,8 @@ export function SafetyInsights() {
             </div>
           </Card>
         </motion.div>
+
+        <CrisisResourcesCallout />
       </div>
-    </AppLayout>
   );
 }

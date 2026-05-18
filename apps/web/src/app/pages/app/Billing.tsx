@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { 
   CreditCard, 
   Clock, 
@@ -14,7 +15,7 @@ import {
   Calendar,
   DollarSign,
   Package,
-  Crown,
+  Shield,
   Download,
   RefreshCw,
   ShoppingCart,
@@ -22,21 +23,77 @@ import {
   ChevronRight,
   History,
   ExternalLink,
-  ArrowLeft
+  AlertTriangle
 } from "lucide-react";
+import { AdminPaginationBar } from "@/app/components/admin/AdminPaginationBar";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
-import { AppLayout } from "../../components/AppLayout";
 import { Skeleton } from "../../components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "../../components/ui/dialog";
 import { SUBSCRIPTION_PLANS } from "../../utils/subscriptionPlans";
 import type { PlanTier, UserSubscription, UsageRecord } from "../../utils/subscriptionPlans";
 
+const BILLING_LIST_PAGE_OPTIONS = [10, 20, 50] as const;
+
+/** DB `subscriptions.amount` is often unset until Stripe sync — use catalog monthly price as fallback */
+function subscriptionHistoryPaymentDisplay(entry: {
+  amount?: unknown;
+  plan_type?: string | null;
+}) {
+  const raw = entry?.amount;
+  if (raw !== null && raw !== undefined && raw !== "") {
+    const n = typeof raw === "number" ? raw : Number(raw);
+    if (Number.isFinite(n)) return { dollars: n, source: "record" as const };
+  }
+  const rawPlan = String(entry?.plan_type ?? "").toLowerCase();
+  const tier: PlanTier | null =
+    rawPlan === "pro" ? "pro" : rawPlan === "core" ? "core" : rawPlan === "trial" ? "trial" : null;
+  if (tier != null && SUBSCRIPTION_PLANS[tier]) {
+    return { dollars: SUBSCRIPTION_PLANS[tier].price, source: "plan" as const };
+  }
+  return null;
+}
+
 export function Billing() {
-  const { session, profile, refreshProfile } = useAuth();
+  const { session, profile } = useAuth();
   const [searchParams] = useSearchParams();
+  const checkoutSuccess = searchParams.get('success') === 'true';
   const [isLoading, setIsLoading] = useState(true);
   const [billingHistory, setBillingHistory] = useState<any[]>([]);
+  /** DB `subscriptions.id` for the subscription row shown as "current" in GET /billing — matches exactly one row in history when present */
+  const [currentSubscriptionRecordId, setCurrentSubscriptionRecordId] = useState<string | null>(null);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [subscriptionHistoryPage, setSubscriptionHistoryPage] = useState(1);
+  const [subscriptionHistoryPageSize, setSubscriptionHistoryPageSize] = useState(10);
+  const [invoiceListPage, setInvoiceListPage] = useState(1);
+  const [invoiceListPageSize, setInvoiceListPageSize] = useState(10);
+
+  const subscriptionHistoryTotalPages = Math.max(
+    1,
+    Math.ceil(billingHistory.length / subscriptionHistoryPageSize)
+  );
+  const subscriptionHistorySafePage = Math.min(
+    Math.max(1, subscriptionHistoryPage),
+    subscriptionHistoryTotalPages
+  );
+  const paginatedBillingHistory = useMemo(() => {
+    const start = (subscriptionHistorySafePage - 1) * subscriptionHistoryPageSize;
+    return billingHistory.slice(start, start + subscriptionHistoryPageSize);
+  }, [billingHistory, subscriptionHistorySafePage, subscriptionHistoryPageSize]);
+
+  const invoiceTotalPages = Math.max(1, Math.ceil(invoices.length / invoiceListPageSize));
+  const invoiceSafePage = Math.min(Math.max(1, invoiceListPage), invoiceTotalPages);
+  const paginatedInvoices = useMemo(() => {
+    const start = (invoiceSafePage - 1) * invoiceListPageSize;
+    return invoices.slice(start, start + invoiceListPageSize);
+  }, [invoices, invoiceSafePage, invoiceListPageSize]);
   const [userSubscription, setUserSubscription] = useState<UserSubscription>({
     userId: "",
     planId: "trial",
@@ -57,10 +114,13 @@ export function Billing() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!session?.user) return;
+      if (!session?.user) {
+        setIsLoading(false);
+        return;
+      }
       
       try {
-        if (searchParams.get('success') === 'true') {
+        if (checkoutSuccess) {
           try {
             await Promise.all([
               api.billing.syncSubscription(),
@@ -71,23 +131,24 @@ export function Billing() {
           }
         }
 
-        let latestProfile = profile;
-        try {
-           const refreshed = await refreshProfile();
-           if (refreshed) {
-             latestProfile = refreshed;
-           }
-        } catch (e) {
-          console.error("Error refreshing profile:", e);
-        }
-
-        const [subData, sessionsData, historyData, invoiceData, creditsData] = await Promise.all([
+        const [subDataRaw, sessionsDataRaw, historyDataRaw, invoiceDataRaw, creditsDataRaw] = await Promise.all([
           api.billing.getSubscription(),
-          api.sessions.list(),
+          api.sessions.list({ status: "completed", limit: 50 }),
           api.billing.getHistory(),
           api.billing.getInvoices(),
           api.getCredits()
         ]);
+
+        const subData = (subDataRaw && typeof subDataRaw === "object") ? subDataRaw as Record<string, any> : {};
+        const subRowId =
+          typeof subData.id === "string" && subData.id.length > 0 ? subData.id : null;
+        setCurrentSubscriptionRecordId(subRowId);
+        const sessionsData = Array.isArray(sessionsDataRaw) ? sessionsDataRaw : [];
+        const historyData = Array.isArray(historyDataRaw) ? historyDataRaw : [];
+        const invoiceData = Array.isArray(invoiceDataRaw) ? invoiceDataRaw : [];
+        const creditsData = (creditsDataRaw && typeof creditsDataRaw === "object")
+          ? creditsDataRaw as Record<string, any>
+          : {};
 
         const rawPlanId = subData.plan_type;
         // Fallback to trial if plan type is not recognized (e.g. legacy plans)
@@ -96,16 +157,16 @@ export function Billing() {
         const now = new Date();
         
         // Canonical amounts from GET /users/credits (subscription + PAYG + lifetime used)
-        const subscriptionCredits = creditsData.subscription ?? latestProfile?.credits ?? 0;
-        const purchasedCredits = creditsData.purchased ?? latestProfile?.purchased_credits ?? 0;
+        const subscriptionCredits = creditsData.subscription ?? profile?.credits ?? 0;
+        const purchasedCredits = creditsData.purchased ?? profile?.purchased_credits ?? 0;
         const accountRemainingMinutes =
           creditsData.remaining_minutes ??
           subscriptionCredits + purchasedCredits;
         const accountTotalMinutes =
           creditsData.total_minutes ??
-          accountRemainingMinutes + (creditsData.used_minutes ?? latestProfile?.minutes_used ?? 0);
+          accountRemainingMinutes + (creditsData.used_minutes ?? profile?.minutes_used ?? 0);
         const accountUsedMinutes =
-          creditsData.used_minutes ?? latestProfile?.minutes_used ?? 0;
+          creditsData.used_minutes ?? profile?.minutes_used ?? 0;
 
         const creditsRemaining = subscriptionCredits;
         const payAsYouGoCredits = purchasedCredits;
@@ -120,8 +181,16 @@ export function Billing() {
             sessionType: 'ai-avatar',
             avatarName: s.config?.avatar || 'Ezri',
             cost: 0 
-          }))
-          .slice(0, 5); 
+          }));
+
+        const subscriptionStartDate = subData.start_date || new Date().toISOString();
+        const parsedStartDate = new Date(subscriptionStartDate);
+        const trialFallbackEndDate = new Date(
+          (Number.isNaN(parsedStartDate.getTime()) ? now : parsedStartDate).getTime() + (30 * 24 * 60 * 60 * 1000)
+        ).toISOString();
+        const fallbackEndDate = planId === 'trial'
+          ? trialFallbackEndDate
+          : new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
 
         const subscription: UserSubscription = {
           userId: subData.user_id,
@@ -131,8 +200,8 @@ export function Billing() {
           // Show a stacked "total" when users upgrade mid-cycle (e.g., 200 + 400 = 600)
           creditsTotal: creditsData.subscription_total ?? plan.credits,
           billingCycle: {
-            startDate: subData.start_date || new Date().toISOString(),
-            endDate: subData.next_billing_at || new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString(),
+            startDate: subscriptionStartDate,
+            endDate: subData.next_billing_at || fallbackEndDate,
             renewsOn: subData.next_billing_at
           },
           payAsYouGoCredits,
@@ -146,36 +215,71 @@ export function Billing() {
         };
 
         setUserSubscription(subscription);
-        setBillingHistory(historyData || []);
-        setInvoices(invoiceData || []);
+        setBillingHistory(historyData);
+        setInvoices(invoiceData);
       } catch (error) {
         console.error('Failed to fetch billing data:', error);
+        setCurrentSubscriptionRecordId(null);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchData();
-  }, [session, searchParams]);
+  }, [session?.user?.id, checkoutSuccess]);
 
-  const currentPlan = SUBSCRIPTION_PLANS[userSubscription.planId];
+  const isCancelled = ['canceled', 'cancelled'].includes(
+    String(userSubscription.status || '').toLowerCase()
+  );
+  const currentPlan = SUBSCRIPTION_PLANS[userSubscription.planId] ?? SUBSCRIPTION_PLANS.trial;
+  const canCancelSubscription = ['active', 'trialing', 'past_due'].includes(
+    String(userSubscription.status || '').toLowerCase()
+  );
+  const PlanIcon =
+    userSubscription.planId === 'trial'
+      ? Shield
+      : userSubscription.planId === 'pro'
+        ? Zap
+        : Package;
   const usagePercentage = userSubscription.creditsTotal > 0 
     ? ((userSubscription.creditsTotal - userSubscription.creditsRemaining) / userSubscription.creditsTotal) * 100
     : 0;
-  const daysUntilRenewal = Math.ceil((new Date(userSubscription.billingCycle.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+  const billingEndDate = userSubscription.billingCycle.endDate
+    ? new Date(userSubscription.billingCycle.endDate)
+    : null;
+  const billingEndIsValid = !!billingEndDate && !Number.isNaN(billingEndDate.getTime());
+  const daysUntilRenewal = billingEndIsValid
+    ? Math.ceil((billingEndDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+  const normalizedDaysUntilRenewal = daysUntilRenewal == null ? null : Math.max(0, daysUntilRenewal);
+  const renewalStatusLabel = isCancelled
+    ? normalizedDaysUntilRenewal === 0
+      ? 'Access ends today'
+      : `Access ends in ${normalizedDaysUntilRenewal ?? 0} days`
+    : userSubscription.planId === 'trial'
+      ? normalizedDaysUntilRenewal === 0
+        ? 'Expires today'
+        : `Expires in ${normalizedDaysUntilRenewal ?? 0} days`
+      : normalizedDaysUntilRenewal === 0
+        ? 'Renews today'
+        : `Renews in ${normalizedDaysUntilRenewal ?? 0} days`;
+  const recentUsageHistory = userSubscription.usageHistory.slice(0, 5);
 
   const [showPAYGModal, setShowPAYGModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const [paygMinutes, setPaygMinutes] = useState(60);
   const [processingAction, setProcessingAction] = useState<string | null>(null);
+  const isActionLocked = processingAction !== null;
 
   const paygCost = currentPlan.payAsYouGoRate ? (currentPlan.payAsYouGoRate * paygMinutes) : 0;
 
   const handleSyncCredits = async () => {
+    if (isActionLocked) return;
     setProcessingAction('sync_credits');
     try {
       const result = await api.billing.syncCredits();
       if (result.added > 0) {
-        alert(`Synced ${result.added} credits from past purchases.`);
+        toast.success(`Synced ${result.added} credits from past purchases.`);
         window.location.reload();
       } else {
         // Just refresh the data silently if nothing new found, but show a toast if possible (using alert for now)
@@ -189,7 +293,7 @@ export function Billing() {
   };
 
   const handleBuyPAYG = async () => {
-    if (paygCost <= 0) return;
+    if (paygCost <= 0 || isActionLocked) return;
     setProcessingAction('buy_credits');
     try {
       const response = await api.billing.buyCredits({
@@ -200,13 +304,15 @@ export function Billing() {
       }
     } catch (error) {
       console.error('Failed to start credit purchase:', error);
-      alert('Failed to start purchase. Please try again.');
+      toast.error('Could not start checkout', {
+        description: 'Please wait a moment and try again.',
+      });
       setProcessingAction(null);
     }
   };
 
   const handleSubscribe = async (planId: PlanTier) => {
-    if (planId === 'trial') return; 
+    if (planId === 'trial' || isActionLocked) return; 
     setProcessingAction(`subscribe_${planId}`);
     try {
       const response = await api.billing.createSubscription({ plan_type: planId });
@@ -215,45 +321,99 @@ export function Billing() {
       }
     } catch (error) {
       console.error('Failed to start subscription:', error);
-      alert('Failed to start subscription. Please try again.');
+      toast.error('Could not start checkout', {
+        description: 'Please wait a moment and try again.',
+      });
       setProcessingAction(null);
     }
   };
 
   const handleManageBilling = async () => {
-     setProcessingAction('manage_billing');
-     try {
-       const response = await api.billing.createPortalSession();
-       if (response.portalUrl) {
-         window.location.href = response.portalUrl;
-       }
-     } catch (error) {
-       console.error('Failed to open billing portal:', error);
-       alert('Failed to open billing portal. Please try again.');
-       setProcessingAction(null);
-     }
-  };
-
-  const handleCancelSubscription = async () => {
-    if (userSubscription.planId === 'trial') return;
-    const confirmed = window.confirm("Are you sure you want to cancel your subscription? You will keep access until the end of the current billing period.");
-    if (!confirmed) return;
-    setProcessingAction('cancel_subscription');
+    if (isActionLocked) return;
+    setProcessingAction('manage_billing');
+    const portalErrorToast = () => {
+      toast.error('Unable to load Manage Billing', {
+        description:
+          'The billing page link did not open. Check your connection, try again in a moment, or contact support if you are on trial or have not completed a paid checkout yet.',
+      });
+    };
     try {
-      await api.billing.cancelSubscription();
-      alert("Your subscription has been cancelled. It will remain active until the end of the current billing period.");
-      window.location.reload();
+      const response = await api.billing.createPortalSession();
+      if (response.portalUrl) {
+        window.location.href = response.portalUrl;
+        return;
+      }
+      portalErrorToast();
     } catch (error) {
-      console.error('Failed to cancel subscription:', error);
-      alert('Failed to cancel subscription. Please try again.');
+      console.error('Failed to open billing portal:', error);
+      portalErrorToast();
+    } finally {
       setProcessingAction(null);
     }
   };
 
+  const handleCancelSubscription = () => {
+    if (isActionLocked) return;
+    setShowCancelModal(true);
+  };
+
+  const confirmCancelSubscription = async () => {
+    setShowCancelModal(false);
+    setProcessingAction('cancel_subscription');
+    try {
+      await api.billing.cancelSubscription();
+      toast.success("Subscription cancelled. You'll keep access until the end of the current billing period.");
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to cancel subscription:', error);
+      toast.error('Failed to cancel subscription. Please try again.');
+      setProcessingAction(null);
+    }
+  };
+
+  const handleExportSessions = () => {
+    if (userSubscription.usageHistory.length === 0) return;
+
+    const escapeCsv = (value: string | number) => {
+      const stringValue = String(value);
+      if (stringValue.includes(",") || stringValue.includes("\"") || stringValue.includes("\n")) {
+        return `"${stringValue.replace(/"/g, "\"\"")}"`;
+      }
+      return stringValue;
+    };
+
+    const rows = userSubscription.usageHistory.map((record) => {
+      const date = new Date(record.date);
+      return [
+        record.id,
+        Number.isNaN(date.getTime()) ? "" : date.toISOString(),
+        record.avatarName ?? "Ezri",
+        record.sessionType ?? "ai-avatar",
+        record.minutesUsed,
+        record.cost ?? 0,
+      ];
+    });
+
+    const csvLines = [
+      ["session_id", "session_date_utc", "avatar_name", "session_type", "minutes_used", "cost_usd"],
+      ...rows,
+    ].map((row) => row.map(escapeCsv).join(","));
+
+    const blob = new Blob([csvLines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const today = new Date().toISOString().slice(0, 10);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `billing-sessions-${today}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   if (isLoading) {
     return (
-      <AppLayout>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="mb-8">
             <Skeleton className="h-8 w-64 mb-2" />
             <Skeleton className="h-4 w-80" />
@@ -302,13 +462,12 @@ export function Billing() {
             </Card>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Billing & Subscription</h1>
           <p className="text-muted-foreground">
@@ -322,86 +481,263 @@ export function Billing() {
           )}
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <Card className="p-6 md:col-span-2 border-2 border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20">
-            <div className="flex items-start justify-between mb-4">
+        <Card className="p-6 mb-8">
+          <h3 className="text-xl font-bold mb-6">Compare All Plans</h3>
+          
+          <div className="grid md:grid-cols-3 gap-6">
+            {(Object.keys(SUBSCRIPTION_PLANS) as PlanTier[]).map((planId) => {
+              const plan = SUBSCRIPTION_PLANS[planId];
+              const isActivePlan = planId === userSubscription.planId && !isCancelled;
+              const isCancellingPlan = planId === userSubscription.planId && isCancelled;
+              const isCurrent = isActivePlan;
+              const ctaLabel =
+                planId === 'pro'
+                  ? 'Upgrade to Pro'
+                  : planId === 'core'
+                    ? 'Choose Core'
+                    : 'Start Free Trial';
+              
+              return (
+                <div
+                  key={planId}
+                  className={`p-4 rounded-xl border-2 transition-all ${
+                    isCurrent
+                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                      : isCancellingPlan
+                        ? 'border-red-300 bg-red-50/50 dark:bg-red-900/10 dark:border-red-800'
+                        : 'border-border bg-muted/30 hover:border-purple-300 dark:hover:border-purple-700'
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${plan.gradient} flex items-center justify-center mb-3`}>
+                    {(() => {
+                      const Icon = planId === 'trial' ? Shield : planId === 'pro' ? Zap : Package;
+                      return <Icon className="w-5 h-5 text-white" />;
+                    })()}
+                  </div>
+                  
+                  <h4 className="font-bold mb-1">{plan.displayName}</h4>
+                  <div className="flex items-baseline gap-1 mb-3">
+                    <span className="text-2xl font-bold">${plan.price}</span>
+                    <span className="text-sm text-muted-foreground">/mo</span>
+                  </div>
+                  
+                  <div className="mb-3 p-2 bg-background rounded-lg">
+                    <p className="text-sm font-medium">{plan.credits} minutes/mo</p>
+                    {plan.payAsYouGoRate && (
+                      <p className="text-xs text-muted-foreground">
+                        PAYG: ${plan.payAsYouGoRate}/min
+                      </p>
+                    )}
+                  </div>
+
+                  {plan.allowanceDescription && (
+                    <p className="text-xs text-muted-foreground mb-4 italic">
+                      {plan.allowanceDescription}
+                    </p>
+                  )}
+
+                  <div className="mb-4 rounded-xl border border-border bg-background/60 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                        Includes
+                      </p>
+                      <span className="text-[11px] text-muted-foreground">{plan.features.length} items</span>
+                    </div>
+                    <ul className="space-y-1.5 text-sm">
+                      {plan.features.map((f) => (
+                        <li key={f} className="flex items-start gap-2 text-slate-700 dark:text-slate-200">
+                          <Check className="w-4 h-4 mt-0.5 text-purple-600 dark:text-purple-300 shrink-0" />
+                          <span className="leading-5">{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {isCurrent ? (
+                    <div className="flex items-center justify-center gap-2 py-2 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-lg font-medium">
+                      <Check className="w-4 h-4" />
+                      Current Plan
+                    </div>
+                  ) : isCancellingPlan ? (
+                    <div className="flex flex-col items-center gap-1 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-lg">
+                      <div className="flex items-center gap-2 font-medium text-sm">
+                        <AlertTriangle className="w-4 h-4" />
+                        Cancelled
+                      </div>
+                      {billingEndIsValid && (
+                        <p className="text-[11px] text-red-500 dark:text-red-500">
+                          Access until {billingEndDate!.toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <Button 
+                      className={
+                        planId === 'pro'
+                          ? 'w-full rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md hover:from-purple-700 hover:to-pink-700 hover:text-pink-100 hover:shadow-lg'
+                          : planId === 'core'
+                            ? 'w-full rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md hover:from-blue-700 hover:to-cyan-700 hover:text-white hover:shadow-lg'
+                            : 'w-full rounded-xl border-purple-300 text-purple-700 bg-purple-50 hover:bg-purple-100 hover:text-purple-900 dark:border-purple-700 dark:text-purple-300 dark:bg-purple-900/20 dark:hover:bg-purple-900/30 dark:hover:text-purple-100'
+                      }
+                      variant={planId === 'pro' ? 'default' : 'outline'}
+                      onClick={() => handleSubscribe(planId)}
+                      isLoading={processingAction === `subscribe_${planId}`}
+                      disabled={isActionLocked}
+                    >
+                      {ctaLabel}
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
+          <Card className="p-5 h-full border border-purple-200/70 dark:border-purple-800/70 bg-white/95 dark:bg-slate-900/95 shadow-[0_20px_60px_-30px_rgba(168,85,247,0.45)] backdrop-blur">
+            <div className="flex items-start justify-between mb-3">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${currentPlan.gradient} flex items-center justify-center`}>
-                    <Package className="w-5 h-5 text-white" />
+                  <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${currentPlan.gradient} flex items-center justify-center shadow-lg shadow-purple-500/20`}>
+                    <PlanIcon className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Current Plan</p>
-                    <h3 className="text-2xl font-bold">{currentPlan.displayName}</h3>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-purple-500 dark:text-purple-300">Current Plan</p>
+                      {isCancelled && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400">
+                          <AlertTriangle className="w-3 h-3" />
+                          Cancelled
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{currentPlan.displayName}</h3>
                   </div>
                 </div>
-                <div className="flex items-baseline gap-2 mt-2">
+                {isCancelled && (
+                  <div className="mt-2 flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                    <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                      Your plan has been cancelled. You'll retain full access until{' '}
+                      <span className="font-semibold">
+                        {billingEndIsValid ? billingEndDate!.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : 'end of billing period'}
+                      </span>
+                      , then revert to the free plan.
+                    </p>
+                  </div>
+                )}
+                <div className="flex items-baseline gap-2 mt-3">
                   <span className="text-3xl font-bold text-purple-700 dark:text-purple-300">
                     ${currentPlan.price}
                   </span>
                   <span className="text-muted-foreground">/month</span>
                 </div>
               </div>
-              {userSubscription.planId !== 'trial' && (
-                <div className="flex flex-col gap-2 items-end">
-                  <Button 
-                    onClick={handleManageBilling}
-                    isLoading={processingAction === 'manage_billing'}
-                    disabled={processingAction !== null}
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-                  >
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    Manage Billing
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleCancelSubscription}
-                    isLoading={processingAction === 'cancel_subscription'}
-                    disabled={processingAction !== null}
-                    className="border-red-200 text-red-600 hover:bg-red-400 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/30"
-                  >
-                    Cancel Plan
-                  </Button>
-                </div>
-              )}
+              <div className="flex flex-col gap-2 items-end">
+                <Button
+                  onClick={handleManageBilling}
+                  isLoading={processingAction === 'manage_billing'}
+                  disabled={isActionLocked}
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                >
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Manage Billing
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleCancelSubscription}
+                  isLoading={processingAction === 'cancel_subscription'}
+                  disabled={isActionLocked || !canCancelSubscription}
+                  className="border-red-200 text-red-600 hover:bg-red-400 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/30"
+                >
+                  Cancel Plan
+                </Button>
+              </div>
             </div>
 
             {/* Renewal Info */}
-            <div className="flex items-center gap-2 p-3 bg-white/60 dark:bg-black/40 backdrop-blur-sm rounded-lg border border-purple-200 dark:border-purple-800">
+            <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-purple-50 to-white dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-purple-100 dark:border-slate-700">
               <Calendar className="w-4 h-4 text-purple-600 dark:text-purple-400" />
               <span className="text-sm">
                 <span className="font-medium">
-                  {userSubscription.planId === 'trial' ? 'Expires in ' : 'Renews in '} 
-                  {daysUntilRenewal} days
+                  {renewalStatusLabel}
                 </span> 
                 <span className="text-muted-foreground"> • 
                   {userSubscription.planId === 'trial' ? ' Expiry: ' : ' Next billing: '}
-                  {userSubscription.billingCycle.endDate ? new Date(userSubscription.billingCycle.endDate).toLocaleDateString() : 'N/A'}
+                  {billingEndIsValid ? billingEndDate!.toLocaleDateString() : '–'}
                 </span>
               </span>
+            </div>
+
+            {/* Plan Details */}
+            <div className="mt-4 grid gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-purple-100 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-purple-500 dark:text-purple-300">
+                    Monthly minutes
+                  </p>
+                  <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                    {currentPlan.credits} min
+                  </p>
+                  {currentPlan.allowanceDescription && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {currentPlan.allowanceDescription}
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-purple-100 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-purple-500 dark:text-purple-300">
+                    PAYG rate
+                  </p>
+                  <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                    {currentPlan.payAsYouGoRate != null ? `$${currentPlan.payAsYouGoRate}/min` : 'Not available'}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {currentPlan.payAsYouGoRate != null ? 'Buy extra minutes anytime' : 'Available on paid plans'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-purple-100 dark:border-slate-700 bg-gradient-to-br from-white to-purple-50/40 dark:from-slate-900/60 dark:to-slate-900 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-purple-500 dark:text-purple-300 mb-2">
+                  Includes
+                </p>
+                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                  {currentPlan.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-slate-700 dark:text-slate-200">
+                      <Check className="w-4 h-4 mt-0.5 text-purple-600 dark:text-purple-300 shrink-0" />
+                      <span className="leading-5">{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </Card>
 
           {/* Credits Remaining Card */}
-          <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-2 border-blue-200 dark:border-blue-800">
+          <Card className="p-5 h-full border border-blue-200/70 dark:border-blue-800/70 bg-white/95 dark:bg-slate-900/95 shadow-[0_20px_60px_-30px_rgba(59,130,246,0.4)] backdrop-blur">
             <div className="flex items-center gap-2 mb-2">
               <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               <h3 className="font-semibold text-blue-900 dark:text-blue-100">Minutes Balance</h3>
             </div>
-            {userSubscription.accountTotalMinutes != null && (
-              <p className="text-sm text-blue-800/80 dark:text-blue-200/80 mb-4">
-                Account:{" "}
-                <span className="font-semibold">{userSubscription.accountRemainingMinutes ?? 0} min</span>{" "}
-                remaining ·{" "}
-                <span className="font-semibold">{userSubscription.accountTotalMinutes} min</span> total ·{" "}
-                <span className="font-semibold">{userSubscription.accountUsedMinutes ?? 0} min</span> used
-              </p>
-            )}
+            <p className="text-sm text-blue-800/80 dark:text-blue-200/80 mb-4 leading-6">
+              <span className="font-semibold">{userSubscription.accountRemainingMinutes ?? 0} min</span> available
+              {userSubscription.payAsYouGoCredits > 0 && (
+                <>
+                  {" "}·{" "}
+                  <span className="font-semibold">{userSubscription.creditsRemaining} min</span> subscription
+                  {" + "}
+                  <span className="font-semibold">{userSubscription.payAsYouGoCredits} min</span> PAYG
+                </>
+              )}
+            </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               {/* Plan Minutes */}
-              <div className="p-4 bg-white/60 dark:bg-black/20 rounded-xl border border-blue-100 dark:border-blue-900/30">
-                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">Monthly Plan</p>
+              <div className="p-3 bg-gradient-to-br from-blue-50 to-white dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-blue-100 dark:border-slate-700 shadow-sm">
+                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-[0.18em] mb-2">Subscription Balance</p>
                 <div className="flex items-baseline gap-2 mb-2">
                   <span className="text-3xl font-bold text-blue-900 dark:text-blue-100">
                     {userSubscription.creditsRemaining}
@@ -411,7 +747,7 @@ export function Billing() {
                   </span>
                 </div>
                 {/* Progress Bar */}
-                <div className="w-full h-2 bg-blue-100 dark:bg-blue-900/50 rounded-full overflow-hidden mb-1">
+                <div className="w-full h-2.5 bg-blue-100 dark:bg-blue-900/50 rounded-full overflow-hidden mb-1.5">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${usagePercentage}%` }}
@@ -420,26 +756,26 @@ export function Billing() {
                   />
                 </div>
                 <p className="text-xs text-blue-500 dark:text-blue-400">
-                  {usagePercentage.toFixed(0)}% used
+                  {usagePercentage.toFixed(0)}% used this cycle
                 </p>
               </div>
 
               {/* PAYG Minutes */}
-              <div className="p-4 bg-green-50/50 dark:bg-green-900/10 rounded-xl border border-green-100 dark:border-green-900/30 group relative">
+              <div className="p-3 bg-gradient-to-br from-emerald-50 to-white dark:from-slate-800 dark:to-slate-900 rounded-2xl border border-emerald-100 dark:border-slate-700 group relative shadow-sm">
                 <div className="flex justify-between items-start mb-1">
-                  <p className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-wider">Pay-As-You-Go</p>
+                  <p className="text-xs font-semibold text-green-600 dark:text-green-400 uppercase tracking-[0.18em]">Pay-As-You-Go</p>
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={handleSyncCredits}
-                    disabled={processingAction === 'sync_credits'}
+                    disabled={processingAction === 'sync_credits' || isActionLocked}
                     title="Check for missing purchases"
                   >
                     <RefreshCw className={`w-3 h-3 ${processingAction === 'sync_credits' ? 'animate-spin' : ''}`} />
                   </Button>
                 </div>
-                <div className="flex items-baseline gap-2 mb-2">
+                <div className="flex items-baseline gap-2 mb-3">
                   <span className="text-3xl font-bold text-green-900 dark:text-green-100">
                     {userSubscription.payAsYouGoCredits}
                   </span>
@@ -453,23 +789,60 @@ export function Billing() {
               </div>
             </div>
 
-            <Link 
-              to="/app/settings" 
-              className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-2 transition-colors text-sm"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Settings
-            </Link>
+            {/* Details */}
+            <div className="mt-1 rounded-2xl border border-blue-100 dark:border-slate-700 bg-gradient-to-br from-white to-blue-50/40 dark:from-slate-900/60 dark:to-slate-900 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300 mb-3">
+                Details
+              </p>
 
-            {(userSubscription.accountRemainingMinutes ??
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-100 dark:border-slate-700 p-3">
+                  <p className="text-xs text-muted-foreground">Used this cycle</p>
+                  <p className="text-lg font-bold text-slate-900 dark:text-white">
+                    {Math.max(0, (userSubscription.creditsTotal ?? 0) - (userSubscription.creditsRemaining ?? 0))} min
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-100 dark:border-slate-700 p-3">
+                  <p className="text-xs text-muted-foreground">Total available</p>
+                  <p className="text-lg font-bold text-slate-900 dark:text-white">
+                    {userSubscription.creditsRemaining + userSubscription.payAsYouGoCredits} min
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-100 dark:border-slate-700 p-3">
+                  <p className="text-xs text-muted-foreground">Cycle start</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                    {userSubscription.billingCycle.startDate
+                      ? new Date(userSubscription.billingCycle.startDate).toLocaleDateString()
+                      : '–'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white/70 dark:bg-slate-900/60 border border-blue-100 dark:border-slate-700 p-3">
+                  <p className="text-xs text-muted-foreground">Next reset</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                    {userSubscription.billingCycle.endDate
+                      ? new Date(userSubscription.billingCycle.endDate).toLocaleDateString()
+                      : '–'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-start gap-2 text-xs text-blue-700/80 dark:text-blue-200/80">
+                <AlertCircle className="w-4 h-4 mt-0.5 text-blue-600 dark:text-blue-300 shrink-0" />
+                <p className="leading-5">
+                  Monthly minutes reset each billing cycle. Pay‑as‑you‑go minutes never expire.
+                </p>
+              </div>
+            </div>
+
+            {/* {(userSubscription.accountRemainingMinutes ??
               userSubscription.creditsRemaining + userSubscription.payAsYouGoCredits) <= 50 && (
-              <div className="flex items-start gap-2 p-3 mt-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <div className="flex items-start gap-2 p-4 mt-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl">
                 <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-amber-700 dark:text-amber-400">
                   Running low on minutes. Consider purchasing more or upgrading your plan.
                 </p>
               </div>
-            )}
+            )} */}
           </Card>
         </div>
 
@@ -531,7 +904,22 @@ export function Billing() {
               <div className="mb-6">
                 <h4 className="text-sm font-semibold mb-3 text-muted-foreground">Subscription history</h4>
                 <div className="space-y-3">
-                  {billingHistory.map((entry) => (
+                  {paginatedBillingHistory.map((entry) => {
+                    const entryId = String(entry?.id ?? "");
+                    const isCurrentRow =
+                      !!currentSubscriptionRecordId && entryId === currentSubscriptionRecordId;
+                    const rawStatus = String(entry?.status ?? "").toLowerCase();
+                    const historyStatusLabel = isCurrentRow
+                      ? "Current activated plan"
+                      : rawStatus === "canceled" || rawStatus === "cancelled"
+                        ? "Cancelled"
+                        : "Last activated plan";
+                    const historyStatusClass = isCurrentRow
+                      ? "text-green-700 dark:text-green-400 font-semibold"
+                      : "text-muted-foreground";
+                    const paymentInfo = subscriptionHistoryPaymentDisplay(entry);
+
+                    return (
                     <div
                       key={entry.id}
                       className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-border"
@@ -544,17 +932,39 @@ export function Billing() {
                           {entry.start_date ? new Date(entry.start_date).toLocaleDateString() : ''}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm capitalize">{entry.status}</p>
-                        {entry.amount != null && (
-                          <p className="text-xs text-muted-foreground">
-                            ${Number(entry.amount).toFixed(2)}
-                          </p>
+                      <div className="text-right space-y-0.5">
+                        {paymentInfo != null ? (
+                          <>
+                            <p className="text-sm font-semibold tabular-nums">
+                              ${paymentInfo.dollars.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </p>
+                            {paymentInfo.source === "plan" && (
+                              <p className="text-[10px] text-muted-foreground">
+                                Listed monthly rate
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Amount unavailable</p>
                         )}
+                        <p className={`text-xs ${historyStatusClass}`}>{historyStatusLabel}</p>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
+                <AdminPaginationBar
+                  total={billingHistory.length}
+                  page={subscriptionHistoryPage}
+                  pageSize={subscriptionHistoryPageSize}
+                  onPageChange={setSubscriptionHistoryPage}
+                  onPageSizeChange={setSubscriptionHistoryPageSize}
+                  selectId="billing-subscription-history-page-size"
+                  pageSizeOptions={[...BILLING_LIST_PAGE_OPTIONS]}
+                />
               </div>
             )}
 
@@ -565,8 +975,9 @@ export function Billing() {
                   You don’t have any invoices yet. Once a payment is processed, your invoices will appear here with links to view and download them.
                 </p>
               ) : (
+                <>
                 <div className="space-y-3">
-                  {invoices.map((invoice) => (
+                  {paginatedInvoices.map((invoice) => (
                     <div
                       key={invoice.id}
                       className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-border"
@@ -626,130 +1037,21 @@ export function Billing() {
                     </div>
                   ))}
                 </div>
+                <AdminPaginationBar
+                  total={invoices.length}
+                  page={invoiceListPage}
+                  pageSize={invoiceListPageSize}
+                  onPageChange={setInvoiceListPage}
+                  onPageSizeChange={setInvoiceListPageSize}
+                  selectId="billing-stripe-invoices-page-size"
+                  pageSizeOptions={[...BILLING_LIST_PAGE_OPTIONS]}
+                />
+                </>
               )}
             </div>
           </Card>
         )}
 
-        <Card className="p-6 mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <History className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-              <h3 className="text-xl font-bold">Recent Sessions</h3>
-            </div>
-            <Button variant="outline" size="sm">
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-          </div>
-
-          <div className="space-y-3">
-            {userSubscription.usageHistory.map((record) => (
-              <div 
-                key={record.id}
-                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-border hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Session with {record.avatarName}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(record.date).toLocaleDateString()} at {new Date(record.date).toLocaleTimeString()}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold">{record.minutesUsed} minutes</p>
-                  <p className="text-sm text-muted-foreground">
-                    {record.cost > 0 ? `$${record.cost.toFixed(2)}` : 'Included'}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {userSubscription.usageHistory.length === 0 && (
-            <div className="text-center py-12">
-              <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-              <p className="text-muted-foreground">No sessions yet</p>
-              <Link to="/app/session-lobby">
-                <Button className="mt-4">
-                  Start Your First Session
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </Link>
-            </div>
-          )}
-        </Card>
-
-        {/* All Available Plans */}
-        <Card className="p-6">
-          <h3 className="text-xl font-bold mb-6">Compare All Plans</h3>
-          
-          <div className="grid md:grid-cols-3 gap-6">
-            {(Object.keys(SUBSCRIPTION_PLANS) as PlanTier[]).map((planId) => {
-              const plan = SUBSCRIPTION_PLANS[planId];
-              const isCurrent = planId === userSubscription.planId;
-              
-              return (
-                <div
-                  key={planId}
-                  className={`p-4 rounded-xl border-2 transition-all ${
-                    isCurrent 
-                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' 
-                      : 'border-border bg-muted/30 hover:border-purple-300 dark:hover:border-purple-700'
-                  }`}
-                >
-                  <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${plan.gradient} flex items-center justify-center mb-3`}>
-                    {planId === 'core' && <Package className="w-5 h-5 text-white" />}
-                    {planId === 'pro' && <Zap className="w-5 h-5 text-white" />}
-                  </div>
-                  
-                  <h4 className="font-bold mb-1">{plan.displayName}</h4>
-                  <div className="flex items-baseline gap-1 mb-3">
-                    <span className="text-2xl font-bold">${plan.price}</span>
-                    <span className="text-sm text-muted-foreground">/mo</span>
-                  </div>
-                  
-                  <div className="mb-3 p-2 bg-background rounded-lg">
-                    <p className="text-sm font-medium">{plan.credits} minutes/mo</p>
-                    {plan.payAsYouGoRate && (
-                      <p className="text-xs text-muted-foreground">
-                        PAYG: ${plan.payAsYouGoRate}/min
-                      </p>
-                    )}
-                  </div>
-
-                  {plan.allowanceDescription && (
-                    <p className="text-xs text-muted-foreground mb-4 italic">
-                      {plan.allowanceDescription}
-                    </p>
-                  )}
-
-                  {isCurrent ? (
-                    <div className="flex items-center justify-center gap-2 py-2 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-lg font-medium">
-                      <Check className="w-4 h-4" />
-                      Current Plan
-                    </div>
-                  ) : (
-                    <Button 
-                      className="w-full" 
-                      variant={planId === 'pro' ? 'default' : 'outline'}
-                      onClick={() => handleSubscribe(planId)}
-                      isLoading={processingAction === `subscribe_${planId}`}
-                      disabled={processingAction !== null}
-                    >
-                      {SUBSCRIPTION_PLANS[planId].price > currentPlan.price ? 'Upgrade' : 'Switch'}
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                    </Button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Card>
       </div>
 
       {/* PAYG Purchase Modal */}
@@ -760,7 +1062,7 @@ export function Billing() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => !processingAction && setShowPAYGModal(false)}
+            onClick={() => !isActionLocked && setShowPAYGModal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -787,7 +1089,7 @@ export function Billing() {
                     <button
                       key={mins}
                       onClick={() => setPaygMinutes(mins)}
-                      disabled={processingAction !== null}
+                      disabled={isActionLocked}
                       className={`p-3 rounded-xl border-2 transition-all ${
                         paygMinutes === mins
                           ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-100'
@@ -807,7 +1109,7 @@ export function Billing() {
                     max="250"
                     step="25"
                     value={paygMinutes}
-                    disabled={processingAction !== null}
+                    disabled={isActionLocked}
                     onChange={(e) => setPaygMinutes(Number(e.target.value))}
                     className="flex-1 accent-green-600 dark:accent-green-500"
                   />
@@ -837,14 +1139,14 @@ export function Billing() {
                   variant="outline"
                   onClick={() => setShowPAYGModal(false)}
                   className="flex-1"
-                  disabled={processingAction !== null}
+                  disabled={isActionLocked}
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={handleBuyPAYG}
                   isLoading={processingAction === 'buy_credits'}
-                  disabled={processingAction !== null}
+                  disabled={isActionLocked}
                   className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
                 >
                   Purchase
@@ -854,6 +1156,45 @@ export function Billing() {
           </motion.div>
         )}
       </AnimatePresence>
-    </AppLayout>
+
+      {/* Cancel Subscription Confirmation Modal */}
+      <Dialog open={showCancelModal} onOpenChange={setShowCancelModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+              </div>
+              <DialogTitle className="text-lg">Cancel Subscription?</DialogTitle>
+            </div>
+            <DialogDescription className="text-sm text-muted-foreground leading-relaxed pt-1">
+              Are you sure you want to cancel your <span className="font-medium text-foreground">{currentPlan.name}</span> subscription?
+              <br /><br />
+              You'll keep full access to all features until the end of your current billing period
+              {billingEndIsValid && (
+                <> on <span className="font-medium text-foreground">{billingEndDate!.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</span></>
+              )}. After that, your account will revert to the free plan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowCancelModal(false)}
+              disabled={processingAction === 'cancel_subscription'}
+            >
+              Keep Subscription
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmCancelSubscription}
+              isLoading={processingAction === 'cancel_subscription'}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Yes, Cancel Plan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -3,7 +3,8 @@ import { PublicNav } from "../components/PublicNav";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { motion } from "motion/react";
-import { Check, X, Package, Zap, ArrowRight, Sparkles, Crown, Video, CheckCircle2, Clock, Shield, Heart } from "lucide-react";
+import { Check, X, Package, Zap, ArrowRight, Sparkles, Crown, Video, CheckCircle2, Clock, Shield } from "lucide-react";
+import { BrandLogo } from "../components/BrandLogo";
 import { SUBSCRIPTION_PLANS } from "../utils/subscriptionPlans";
 import { useState } from "react";
 import type { PlanTier } from "../utils/subscriptionPlans";
@@ -255,9 +256,7 @@ export function Pricing() {
                 whileHover={{ scale: 1.05 }}
                 className="flex items-center gap-2 mb-4"
               >
-                <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
-                  <Heart className="w-5 h-5 text-white" fill="white" />
-                </div>
+                <BrandLogo heightClass="h-8" />
                 <span className="text-xl font-semibold">Ezri</span>
               </motion.div>
               <p className="text-sm text-muted-foreground">

@@ -24,14 +24,50 @@ import {
   Target,
   X,
   Loader2,
+  Music,
+  Smile,
+  Activity,
+  Leaf,
+  HeartPulse,
+  Shield,
+  Waves,
+  CloudRain,
+  HandHelping,
+  Timer,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/app/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence } from "motion/react";
 import { api } from "../../../lib/api";
 import { formatDistanceToNow } from "date-fns";
+import { WELLNESS_TOOL_CATEGORIES, type WellnessToolCategory } from "../../../lib/wellnessToolCategories";
+import {
+  mergeWellnessToolsForAdminDisplay,
+  mergeApiBuiltinsForAdmin,
+  placeholderWellnessToolId,
+  isWellnessPlaceholderId,
+  CATEGORY_ICON_HEX,
+  CATEGORY_ICON_NAME,
+} from "../../../lib/mergeAdminWellnessTools";
+import {
+  WELLNESS_BUILTIN_TOOLS_ADMIN,
+  isBuiltinWellnessListId,
+  type WellnessBuiltinToolMeta,
+} from "../../../lib/wellnessBuiltinToolsMetadata";
+import {
+  formatSecondsAsMmSs,
+  mmssToRoundedMinutes,
+  WELLNESS_CATEGORY_DURATION_MMSS,
+} from "../../../lib/wellnessCategoryDurations";
 
 interface WellnessTool {
   id: string;
@@ -39,6 +75,8 @@ interface WellnessTool {
   category: string;
   description: string;
   duration: number;
+  /** Built-ins: exact label e.g. 15:29 */
+  durationDisplay?: string;
   difficulty: "Beginner" | "Intermediate" | "Advanced";
   status: "published" | "draft" | "archived";
   icon: any;
@@ -47,6 +85,10 @@ interface WellnessTool {
   rating: number;
   lastUpdated: string;
   createdBy: string;
+  /** Not persisted — shown until a real tool exists for this category */
+  isPlaceholder?: boolean;
+  /** Shipped with the app — same tools users see in Wellness Tools */
+  isBuiltin?: boolean;
 }
 
 const iconMap: Record<string, any> = {
@@ -58,7 +100,77 @@ const iconMap: Record<string, any> = {
   Sparkles,
   Sun,
   Zap,
+  Music,
+  Smile,
+  Activity,
+  Leaf,
+  HeartPulse,
+  Shield,
+  Waves,
+  CloudRain,
+  HandHelping,
+  Timer,
 };
+
+function formatToolDurationLabel(tool: WellnessTool): string {
+  if (tool.durationDisplay) {
+    return tool.durationDisplay === "∞" ? "∞" : tool.durationDisplay;
+  }
+  return tool.duration > 0 ? `${tool.duration} min` : "—";
+}
+
+function mapBuiltinMetaToTool(meta: WellnessBuiltinToolMeta): WellnessTool {
+  const cat = meta.category as WellnessToolCategory;
+  const iconName = CATEGORY_ICON_NAME[cat] || "Sparkles";
+  const durMin =
+    meta.duration === "∞"
+      ? 0
+      : meta.duration.includes(":")
+        ? mmssToRoundedMinutes(meta.duration)
+        : parseInt(meta.duration.replace(/\D/g, ""), 10) || 5;
+  return {
+    id: `builtin:${meta.id}`,
+    title: meta.title,
+    category: meta.category,
+    description: meta.description,
+    duration: durMin,
+    durationDisplay: meta.duration === "∞" ? "∞" : meta.duration,
+    difficulty: "Beginner",
+    status: "published",
+    icon: iconMap[iconName] || Sparkles,
+    iconColor: CATEGORY_ICON_HEX[cat],
+    usageCount: 0,
+    rating: 0,
+    lastUpdated: "Built-in",
+    createdBy: "Ezri app",
+    isPlaceholder: false,
+    isBuiltin: true,
+  };
+}
+
+function buildPlaceholderTool(category: WellnessToolCategory): WellnessTool {
+  const iconName = CATEGORY_ICON_NAME[category];
+  const mmss = WELLNESS_CATEGORY_DURATION_MMSS[category];
+  const durRounded = mmssToRoundedMinutes(mmss);
+  return {
+    id: placeholderWellnessToolId(category),
+    title: `${category} — add your tool`,
+    category,
+    description:
+      "No tool in the database for this category yet. Create and publish one in the editor to replace this row.",
+    duration: durRounded,
+    durationDisplay: mmss,
+    difficulty: "Beginner",
+    status: "draft",
+    icon: iconMap[iconName] || Sparkles,
+    iconColor: CATEGORY_ICON_HEX[category],
+    usageCount: 0,
+    rating: 0,
+    lastUpdated: "—",
+    createdBy: "—",
+    isPlaceholder: true,
+  };
+}
 
 export function WellnessToolsCMS() {
   const navigate = useNavigate();
@@ -82,48 +194,52 @@ export function WellnessToolsCMS() {
     try {
       setIsLoading(true);
       const tools = await api.wellness.getAll();
-      const mappedTools: WellnessTool[] = tools.map((t: any) => ({
+      const list = Array.isArray(tools) ? tools : [];
+      const builtinRows = WELLNESS_BUILTIN_TOOLS_ADMIN.map(mapBuiltinMetaToTool);
+      const mappedTools: WellnessTool[] = list.map((t: any) => ({
         id: t.id,
         title: t.title,
         category: t.category,
         description: t.description || "",
-        duration: t.duration_minutes || 0,
+        duration:
+          typeof t.duration_seconds === "number" && t.duration_seconds > 0
+            ? Math.max(1, Math.round(t.duration_seconds / 60))
+            : t.duration_minutes || 0,
+        durationDisplay:
+          typeof t.duration_seconds === "number" && t.duration_seconds > 0
+            ? formatSecondsAsMmSs(t.duration_seconds)
+            : undefined,
         difficulty: (t.difficulty as any) || "Beginner",
         status: (t.status as any) || "draft",
         icon: iconMap[t.icon || "Sparkles"] || Sparkles,
-        iconColor: "#8b5cf6", // Default purple for now, could be dynamic
+        iconColor: "#8b5cf6",
         usageCount: t.usage_count || 0,
         rating: Number(t.rating) || 0,
         lastUpdated: formatDistanceToNow(new Date(t.updated_at), { addSuffix: true }),
         createdBy: t.profiles?.full_name || "Admin",
+        isPlaceholder: false,
+        isBuiltin: false,
       }));
-      setWellnessTools(mappedTools);
+      const combined = mergeApiBuiltinsForAdmin(builtinRows, mappedTools);
+      const merged = mergeWellnessToolsForAdminDisplay(combined, buildPlaceholderTool);
+      setWellnessTools(merged);
     } catch (error) {
       console.error("Failed to fetch wellness tools:", error);
+      const builtinRows = WELLNESS_BUILTIN_TOOLS_ADMIN.map(mapBuiltinMetaToTool);
+      setWellnessTools(
+        mergeWellnessToolsForAdminDisplay(builtinRows, buildPlaceholderTool)
+      );
     } finally {
       setIsLoading(false);
     }
   };
-
-  const categories = [
-    "All Categories",
-    "Breathing",
-    "Meditation",
-    "Sleep",
-    "Anxiety Relief",
-    "Stress Management",
-    "Mindfulness",
-    "Energy Boost",
-  ];
 
   const filteredTools = wellnessTools.filter((tool) => {
     const matchesSearch =
       tool.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tool.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory =
-      selectedCategory === "all" ||
-      selectedCategory === "All Categories" ||
-      tool.category === selectedCategory;
+      selectedCategory === "all" || tool.category === selectedCategory;
     const matchesStatus =
       selectedStatus === "all" || tool.status === selectedStatus;
     return matchesSearch && matchesCategory && matchesStatus;
@@ -173,18 +289,24 @@ export function WellnessToolsCMS() {
   };
 
   const handleBulkAction = async (action: string) => {
-    console.log(`Bulk action: ${action} for tools:`, selectedTools);
+    const realIds = selectedTools.filter(
+      (id) => !isWellnessPlaceholderId(id) && !isBuiltinWellnessListId(id)
+    );
+    if (realIds.length === 0) {
+      alert("Select CMS tools only — built-ins and placeholders cannot be bulk-updated.");
+      return;
+    }
     try {
       if (action === "delete") {
-        if (!confirm(`Are you sure you want to delete ${selectedTools.length} tools?`)) return;
-        await Promise.all(selectedTools.map(id => api.wellness.delete(id)));
-        alert(`Successfully deleted ${selectedTools.length} tools`);
+        if (!confirm(`Are you sure you want to delete ${realIds.length} tools?`)) return;
+        await Promise.all(realIds.map((id) => api.wellness.delete(id)));
+        alert(`Successfully deleted ${realIds.length} tools`);
       } else if (action === "publish") {
-        await Promise.all(selectedTools.map(id => api.wellness.update(id, { status: "published" })));
-        alert(`Successfully published ${selectedTools.length} tools`);
+        await Promise.all(realIds.map((id) => api.wellness.update(id, { status: "published" })));
+        alert(`Successfully published ${realIds.length} tools`);
       } else if (action === "archive") {
-        await Promise.all(selectedTools.map(id => api.wellness.update(id, { status: "archived" })));
-        alert(`Successfully archived ${selectedTools.length} tools`);
+        await Promise.all(realIds.map((id) => api.wellness.update(id, { status: "archived" })));
+        alert(`Successfully archived ${realIds.length} tools`);
       }
       await fetchTools();
       setSelectedTools([]);
@@ -200,15 +322,39 @@ export function WellnessToolsCMS() {
   };
 
   const handleCopyTool = (tool: WellnessTool) => {
+    if (tool.isBuiltin) {
+      alert("Built-in tools are fixed in the app. Create a new tool in the editor to extend the library.");
+      return;
+    }
+    if (tool.isPlaceholder) {
+      alert("Create a real tool first — placeholders are not copied.");
+      return;
+    }
     alert(`Copied: ${tool.title}\n\nThis would create a duplicate of this tool that you can modify and publish as a new version.`);
   };
 
   const handleDeleteTool = (tool: WellnessTool) => {
+    if (tool.isBuiltin) {
+      alert("Built-in tools ship with the app and cannot be deleted here. Remove or archive CMS tools only.");
+      return;
+    }
+    if (tool.isPlaceholder) {
+      alert("This is a category placeholder — it disappears when you publish a tool for this category.");
+      return;
+    }
     setDeleteModalTool(tool);
   };
 
   const handleConfirmDelete = async () => {
     if (!deleteModalTool) return;
+    if (deleteModalTool.isBuiltin || isBuiltinWellnessListId(deleteModalTool.id)) {
+      setDeleteModalTool(null);
+      return;
+    }
+    if (deleteModalTool.isPlaceholder || isWellnessPlaceholderId(deleteModalTool.id)) {
+      setDeleteModalTool(null);
+      return;
+    }
     try {
       await api.wellness.delete(deleteModalTool.id);
       await fetchTools();
@@ -241,14 +387,14 @@ export function WellnessToolsCMS() {
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
+              className="border-gray-300 text-gray-700 hover:bg-gray-500"
             >
               <Upload className="w-4 h-4 mr-2" />
               Import
             </Button>
             <Button
               variant="outline"
-              className="border-gray-300 text-gray-700 hover:bg-gray-100"
+              className="border-gray-300 text-gray-700 hover:bg-gray-500"
             >
               <Download className="w-4 h-4 mr-2" />
               Export
@@ -316,7 +462,7 @@ export function WellnessToolsCMS() {
                 className="px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
                 <option value="all">All Categories</option>
-                {categories.slice(1).map((cat) => (
+                {WELLNESS_TOOL_CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
                     {cat}
                   </option>
@@ -376,7 +522,7 @@ export function WellnessToolsCMS() {
                       size="sm"
                       variant="outline"
                       onClick={() => handleBulkAction("publish")}
-                      className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                      className="border-gray-300 text-gray-700 hover:bg-gray-500"
                     >
                       Publish
                     </Button>
@@ -384,7 +530,7 @@ export function WellnessToolsCMS() {
                       size="sm"
                       variant="outline"
                       onClick={() => handleBulkAction("archive")}
-                      className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                      className="border-gray-300 text-gray-700 hover:bg-gray-500"
                     >
                       Archive
                     </Button>
@@ -392,7 +538,7 @@ export function WellnessToolsCMS() {
                       size="sm"
                       variant="outline"
                       onClick={() => handleBulkAction("delete")}
-                      className="border-red-300 text-red-600 hover:bg-red-50"
+                      className="border-red-300 text-red-600 hover:bg-red-500"
                     >
                       Delete
                     </Button>
@@ -440,9 +586,10 @@ export function WellnessToolsCMS() {
                     <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
+                        disabled={tool.isPlaceholder}
                         checked={selectedTools.includes(tool.id)}
                         onChange={() => handleSelectTool(tool.id)}
-                        className="w-4 h-4 rounded border-gray-300 text-purple-500 focus:ring-purple-500"
+                        className="w-4 h-4 rounded border-gray-300 text-purple-500 focus:ring-purple-500 disabled:opacity-40"
                       />
                       <div
                         className="w-12 h-12 rounded-xl flex items-center justify-center"
@@ -454,7 +601,12 @@ export function WellnessToolsCMS() {
                         />
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      {tool.isPlaceholder && (
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                          Placeholder
+                        </span>
+                      )}
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium ${
                           tool.status === "published"
@@ -466,9 +618,57 @@ export function WellnessToolsCMS() {
                       >
                         {tool.status}
                       </span>
-                      <button className="p-1 hover:bg-gray-100 rounded-lg transition-all">
-                        <MoreVertical className="w-4 h-4 text-gray-600" />
-                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="p-1 hover:bg-gray-100 rounded-lg transition-all outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                            aria-label={`Actions for ${tool.title}`}
+                          >
+                            <MoreVertical className="w-4 h-4 text-gray-600" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem
+                            onSelect={() => handleViewTool(tool)}
+                            className="cursor-pointer"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => handleCopyTool(tool)}
+                            disabled={tool.isBuiltin || tool.isPlaceholder}
+                            className="cursor-pointer"
+                          >
+                            <Copy className="w-4 h-4" />
+                            Duplicate…
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              tool.isBuiltin || tool.isPlaceholder
+                                ? navigate(
+                                    `/admin/wellness-tool-editor?category=${encodeURIComponent(tool.category)}`
+                                  )
+                                : navigate(`/admin/wellness-tool-editor?id=${tool.id}`)
+                            }
+                            className="cursor-pointer"
+                          >
+                            <Edit className="w-4 h-4" />
+                            {tool.isBuiltin || tool.isPlaceholder ? "Create in category" : "Edit"}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => handleDeleteTool(tool)}
+                            disabled={tool.isBuiltin || tool.isPlaceholder}
+                            className="cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
 
@@ -483,7 +683,7 @@ export function WellnessToolsCMS() {
                     <div>
                       <p className="text-xs text-gray-500">Duration</p>
                       <p className="text-sm text-gray-900 font-medium">
-                        {tool.duration} min
+                        {formatToolDurationLabel(tool)}
                       </p>
                     </div>
                     <div>
@@ -542,9 +742,20 @@ export function WellnessToolsCMS() {
                         size="sm"
                         variant="ghost"
                         onClick={() =>
-                          navigate(`/admin/wellness-tool-editor?id=${tool.id}`)
+                          tool.isBuiltin || tool.isPlaceholder
+                            ? navigate(
+                                `/admin/wellness-tool-editor?category=${encodeURIComponent(tool.category)}`
+                              )
+                            : navigate(`/admin/wellness-tool-editor?id=${tool.id}`)
                         }
                         className="text-blue-600 hover:text-blue-700"
+                        title={
+                          tool.isBuiltin
+                            ? "Add a CMS tool for this category"
+                            : tool.isPlaceholder
+                              ? "Create tool for this category"
+                              : "Edit"
+                        }
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
@@ -655,7 +866,7 @@ export function WellnessToolsCMS() {
                     </div>
                     <div>
                       <h3 className="text-sm font-medium text-gray-500 mb-1">Duration</h3>
-                      <p className="text-gray-900">{viewModalTool.duration} minutes</p>
+                      <p className="text-gray-900">{formatToolDurationLabel(viewModalTool)}</p>
                     </div>
                     <div>
                       <h3 className="text-sm font-medium text-gray-500 mb-1">Difficulty</h3>
@@ -695,7 +906,13 @@ export function WellnessToolsCMS() {
                       className="flex-1"
                       onClick={() => {
                         setViewModalTool(null);
-                        navigate(`/admin/wellness-tool-editor?id=${viewModalTool.id}`);
+                        if (viewModalTool.isBuiltin || viewModalTool.isPlaceholder) {
+                          navigate(
+                            `/admin/wellness-tool-editor?category=${encodeURIComponent(viewModalTool.category)}`
+                          );
+                        } else {
+                          navigate(`/admin/wellness-tool-editor?id=${viewModalTool.id}`);
+                        }
                       }}
                     >
                       <Edit className="w-4 h-4 mr-2" />

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Loader2 } from "lucide-react";
@@ -6,12 +6,72 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 
+const SS_REDIRECT = "ezri.auth.callback.redirect";
+const SS_FLOW = "ezri.auth.callback.flow";
+const SS_VIA = "ezri.auth.callback.via";
+
+/** Persist redirect/flow from URL before Supabase PKCE or history.replaceState drops query params. */
+function persistCallbackParamsFromUrl() {
+  if (typeof window === "undefined") return;
+  const p = new URLSearchParams(window.location.search);
+  const h = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const r = p.get("redirect") || p.get("next") || h.get("redirect") || h.get("next");
+  const f = p.get("flow") || h.get("flow");
+  const v = p.get("via") || h.get("via");
+  if (r) sessionStorage.setItem(SS_REDIRECT, r);
+  if (f) sessionStorage.setItem(SS_FLOW, f);
+  if (v) sessionStorage.setItem(SS_VIA, v);
+}
+
+function readStoredCallbackParams() {
+  if (typeof window === "undefined") {
+    return { redirect: null as string | null, flow: null as string | null, via: null as string | null };
+  }
+  return {
+    redirect: sessionStorage.getItem(SS_REDIRECT),
+    flow: sessionStorage.getItem(SS_FLOW),
+    via: sessionStorage.getItem(SS_VIA),
+  };
+}
+
+function clearStoredCallbackParams() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(SS_REDIRECT);
+  sessionStorage.removeItem(SS_FLOW);
+  sessionStorage.removeItem(SS_VIA);
+}
+/** PKCE codes are single-use; React Strict Mode / remounts must not exchange twice. */
+const pkceExchangeInflight = new Map<string, ReturnType<typeof supabase.auth.exchangeCodeForSession>>();
+const oauthFinalizeOnceKeys = new Set<string>();
+
+function exchangeCodeForSessionDeduped(code: string) {
+  let p = pkceExchangeInflight.get(code);
+  if (!p) {
+    p = supabase.auth.exchangeCodeForSession(code).finally(() => {
+      pkceExchangeInflight.delete(code);
+    });
+    pkceExchangeInflight.set(code, p);
+  }
+  return p;
+}
+
+function shouldFinalizeOAuthOnce(key: string) {
+  if (oauthFinalizeOnceKeys.has(key)) return false;
+  oauthFinalizeOnceKeys.add(key);
+  return true;
+}
+
 export function AuthCallback() {
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { user, isLoading: isAuthLoading, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [errorMessage, setErrorMessage] = useState<string>('');
+
+  // Capture ?redirect= / ?flow= before any async auth exchange mutates the URL.
+  useLayoutEffect(() => {
+    persistCallbackParamsFromUrl();
+  }, [location.search, location.hash]);
 
   const isSafeRedirectPath = (value: string) => {
     if (!value.startsWith('/')) return false;
@@ -22,28 +82,48 @@ export function AuthCallback() {
 
   const getRedirectPath = (currentUser?: any) => {
     const targetUser = currentUser || user;
-    
+    const stored = readStoredCallbackParams();
+
     // 1. Check standard search params
     const searchParams = new URLSearchParams(location.search);
-    let requested = searchParams.get('redirect') || searchParams.get('next');
-    
+    let requested =
+      searchParams.get("redirect") ||
+      searchParams.get("next") ||
+      stored.redirect ||
+      null;
+
     // 2. Check hash params (Supabase Implicit Flow / PKCE edge cases)
     if (!requested && location.hash) {
-       const hashStr = location.hash.substring(1);
-       const hashParams = new URLSearchParams(hashStr);
-       requested = hashParams.get('redirect') || hashParams.get('next');
+      const hashStr = location.hash.substring(1);
+      const hashParams = new URLSearchParams(hashStr);
+      requested = hashParams.get("redirect") || hashParams.get("next");
+    }
+
+    if (!requested && (stored.flow === "plan" || stored.flow === "trial")) {
+      requested =
+        stored.flow === "trial" ? "/app/user-profile" : "/onboarding/welcome";
     }
 
     console.log("Resolved Redirect Path:", requested);
 
     if (requested && isSafeRedirectPath(requested)) return requested;
 
+    const viaParam = searchParams.get("via") || stored.via;
+    const flowParam = searchParams.get("flow") || stored.flow;
+    if (viaParam === "verification") {
+      if (flowParam === "plan") return "/onboarding/welcome";
+      if (flowParam === "trial") return "/app/user-profile";
+      const su = targetUser?.user_metadata?.signup_type;
+      if (su === "trial") return "/app/user-profile";
+      return "/onboarding/welcome";
+    }
+
     // 3. Smart Fallback based on User Metadata
     // Trial users (Soft Verification) -> Profile to complete setup
     if (targetUser?.user_metadata?.email_verification_required) {
       // Only trial users land on the profile route after verification.
       const signupType = targetUser?.user_metadata?.signup_type;
-      if (signupType === 'trial') return '/onboarding/profile-setup';
+      if (signupType === 'trial') return '/app/user-profile';
       return '/onboarding/welcome';
     }
 
@@ -64,18 +144,63 @@ export function AuthCallback() {
   };
 
   const finalizeVerification = async (sessionUser: any) => {
-      // If this is a Trial User verifying for the first time
+      persistCallbackParamsFromUrl();
+      const stored = readStoredCallbackParams();
+      const searchParams = new URLSearchParams(
+        typeof window !== "undefined" ? window.location.search : location.search
+      );
+      const hashParams = new URLSearchParams(
+        typeof window !== "undefined"
+          ? window.location.hash.replace(/^#/, "")
+          : location.hash.replace(/^#/, "")
+      );
+
+      let via =
+        searchParams.get("via") ||
+        hashParams.get("via") ||
+        stored.via;
+      let requested =
+        searchParams.get("redirect") ||
+        searchParams.get("next") ||
+        hashParams.get("redirect") ||
+        hashParams.get("next") ||
+        stored.redirect;
+
+      const flow =
+        searchParams.get("flow") ||
+        hashParams.get("flow") ||
+        stored.flow;
+
+      if (!requested && (flow === "plan" || flow === "trial")) {
+        requested =
+          flow === "trial" ? "/app/user-profile" : "/onboarding/welcome";
+      }
+
+      // Verification magiclink: confirm server-side, then refresh profile so ProtectedRoute sees email_verified.
+      if (via === "verification") {
+        try {
+          await api.confirmEmail();
+        } catch (e) {
+          console.warn("AuthCallback: failed to confirm email via API", e);
+        }
+        try {
+          await refreshProfile();
+        } catch (e) {
+          console.warn("AuthCallback: refreshProfile after verify", e);
+        }
+      }
+
+      // Trial user soft-verification: land on profile.
       if (sessionUser?.user_metadata?.email_verification_required) {
         const signupType = sessionUser?.user_metadata?.signup_type;
-        if (signupType !== 'trial') {
-          // For non-trial users, fall through to deterministic routing.
-        } else {
+        if (signupType === "trial") {
           try {
             await supabase.auth.updateUser({
-              data: { email_verification_required: false }
+              data: { email_verification_required: false },
             });
             toast.success("Email verified successfully!");
-            navigate('/onboarding/profile-setup', { replace: true });
+            clearStoredCallbackParams();
+            navigate("/app/user-profile", { replace: true });
             return;
           } catch (e) {
             console.error("Failed to clear verification flag", e);
@@ -83,20 +208,16 @@ export function AuthCallback() {
         }
       }
 
-      // Deterministic routing:
-      // Prefer URL-provided redirect (for older links), otherwise resolve from backend profile.
-      const searchParams = new URLSearchParams(location.search);
-      let requested =
-        searchParams.get('redirect') || searchParams.get('next') || null;
-
-      if (!requested && location.hash) {
-        const hashStr = location.hash.substring(1);
-        const hashParams = new URLSearchParams(hashStr);
-        requested = hashParams.get('redirect') || hashParams.get('next') || null;
+      if (requested && isSafeRedirectPath(requested)) {
+        clearStoredCallbackParams();
+        navigate(requested, { replace: true });
+        return;
       }
 
-      if (requested && isSafeRedirectPath(requested)) {
-        navigate(requested, { replace: true });
+      const inviteFlow = sessionUser?.user_metadata?.invite_flow;
+      if (typeof inviteFlow === "string" && inviteFlow.startsWith("admin_")) {
+        clearStoredCallbackParams();
+        navigate("/invite/create-password", { replace: true });
         return;
       }
 
@@ -107,20 +228,46 @@ export function AuthCallback() {
           signup_type: me?.signup_type,
           onboarding_completed: me?.onboarding_completed,
         });
+
+        // Email verification hand-off: run before `onboarding_completed` (DB can be wrong for new signups).
+        if (via === "verification" && flow === "plan") {
+          clearStoredCallbackParams();
+          navigate("/onboarding/welcome", { replace: true });
+          return;
+        }
+        if (via === "verification" && flow === "trial") {
+          clearStoredCallbackParams();
+          navigate("/app/user-profile", { replace: true });
+          return;
+        }
+        if (via === "verification" && me?.signup_type === "plan") {
+          clearStoredCallbackParams();
+          navigate("/onboarding/welcome", { replace: true });
+          return;
+        }
+        if (via === "verification" && me?.signup_type === "trial") {
+          clearStoredCallbackParams();
+          navigate("/app/user-profile", { replace: true });
+          return;
+        }
+
         if (me?.onboarding_completed === true) {
-          navigate('/app/dashboard', { replace: true });
+          clearStoredCallbackParams();
+          navigate("/app/dashboard", { replace: true });
           return;
         }
 
-        if (me?.signup_type === 'trial') {
-          navigate('/onboarding/profile-setup', { replace: true });
+        if (me?.signup_type === "trial") {
+          clearStoredCallbackParams();
+          navigate("/app/user-profile", { replace: true });
           return;
         }
 
-        navigate('/onboarding/welcome', { replace: true });
+        clearStoredCallbackParams();
+        navigate("/onboarding/welcome", { replace: true });
         return;
       } catch (e) {
-        // Fallback: metadata/heuristics-based navigation.
+        clearStoredCallbackParams();
         navigate(getRedirectPath(sessionUser), { replace: true });
       }
   };
@@ -129,7 +276,11 @@ export function AuthCallback() {
     // Check if we are in the middle of an auth flow (Code Exchange or Implicit Flow)
     const searchParams = new URLSearchParams(location.search);
     const hasCode = searchParams.get('code');
-    const hasHash = location.hash.includes('access_token') || location.hash.includes('error') || location.hash.includes('type=recovery');
+    const hasHash =
+      location.hash.includes('access_token') ||
+      location.hash.includes('error') ||
+      location.hash.includes('type=recovery') ||
+      location.hash.includes('type=invite');
 
     // If there is a code or hash, we MUST wait for handleCallback to process the new session
     // DO NOT redirect based on potential stale user session
@@ -137,6 +288,9 @@ export function AuthCallback() {
       console.log("AuthCallback: Detected new auth flow parameters. Waiting for processing...");
       return;
     }
+
+    // Avoid navigating with a stale `user` while AuthProvider is still hydrating.
+    if (isAuthLoading) return;
 
     // Immediate redirect if user is already loaded AND we are not processing
     // the auth callback tokens (code/access_token) yet.
@@ -146,7 +300,8 @@ export function AuthCallback() {
       const hasHash =
         location.hash.includes('access_token') ||
         location.hash.includes('error') ||
-        location.hash.includes('type=recovery');
+        location.hash.includes('type=recovery') ||
+        location.hash.includes('type=invite');
 
       if (hasCode || hasHash) return;
 
@@ -162,13 +317,13 @@ export function AuthCallback() {
         }).then(() => {
           toast.success("Email verified successfully!");
         });
-        // Redirect to profile with verified flag
-        navigate('/onboarding/profile-setup', { replace: true });
+        // Trial users should land on the in-app profile page.
+        navigate('/app/user-profile', { replace: true });
         return;
       }
       navigate(getRedirectPath(), { replace: true });
     }
-  }, [user, navigate, location.search, location.hash]);
+  }, [user, navigate, location.search, location.hash, isAuthLoading]);
 
   useEffect(() => {
     console.log("AuthCallback mounted. URL:", window.location.href);
@@ -200,12 +355,14 @@ export function AuthCallback() {
       // 3. Handle Code Exchange (PKCE)
       if (code) {
         try {
-          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          const { data, error: exchangeError } = await exchangeCodeForSessionDeduped(code);
           if (exchangeError) throw exchangeError;
           
           if (data?.session) {
+            const onceKey = `pkce:${code}`;
+            if (!shouldFinalizeOAuthOnce(onceKey)) return;
             setStatus('success');
-            finalizeVerification(data.session.user);
+            await finalizeVerification(data.session.user);
             return;
           }
         } catch (err: any) {
@@ -233,20 +390,45 @@ export function AuthCallback() {
           }
           
           if (data?.session) {
+            const onceKey = `implicit:${accessToken.slice(0, 24)}`;
+            if (!shouldFinalizeOAuthOnce(onceKey)) return;
             setStatus('success');
-            finalizeVerification(data.session.user);
+            await finalizeVerification(data.session.user);
             return;
           }
       }
 
-      // 5. Verify Session Establishment
+      // No PKCE code / hash tokens: Supabase may have already persisted the session while the URL
+      // still shows ?redirect=&via=verification&flow=plan (especially after refresh).
+      if (!code && !(accessToken && refreshToken)) {
+        persistCallbackParamsFromUrl();
+        const sp = new URLSearchParams(location.search);
+        const st = readStoredCallbackParams();
+        const viaNoCode = sp.get("via") || st.via;
+        if (viaNoCode === "verification") {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (session?.user) {
+            const onceKey = `verify-no-code:${session.user.id}`;
+            if (!shouldFinalizeOAuthOnce(onceKey)) return;
+            setStatus("success");
+            await finalizeVerification(session.user);
+            return;
+          }
+        }
+        return;
+      }
+
+      // 5. Verify Session Establishment (PKCE path fell through without returning)
       const checkSession = async (attempts = 0) => {
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session) {
+          const onceKey = `session:${session.user.id}`;
+          if (!shouldFinalizeOAuthOnce(onceKey)) return;
           setStatus('success');
-          // Navigate immediately - user wants "nano seconds" response
-          finalizeVerification(session.user);
+          await finalizeVerification(session.user);
           return;
         }
 
