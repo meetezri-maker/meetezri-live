@@ -1,11 +1,11 @@
 import prisma from '../../lib/prisma';
 import { Prisma } from '@prisma/client';
-import { CreateNotificationInput } from './notifications.schema';
+import { CreateNotificationInput, PaginatedNotifications } from './notifications.schema';
 import { emailService } from '../email/email.service';
 
 type StreakReminderType = 'mood' | 'journal';
 
-const notificationsListCache = new Map<string, { data: any[]; timestamp: number }>();
+const notificationsListCache = new Map<string, { data: PaginatedNotifications; timestamp: number }>();
 const notificationsUnreadCountCache = new Map<string, { data: number; timestamp: number }>();
 const NOTIFICATIONS_CACHE_TTL = 5 * 1000; // 5 seconds
 

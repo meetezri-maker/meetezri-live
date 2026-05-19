@@ -31,3 +31,4 @@ export const createNotificationSchema = z.object({
 });
 
 export type CreateNotificationInput = z.infer<typeof createNotificationSchema>;
+export type PaginatedNotifications = z.infer<typeof paginatedNotificationsSchema>;
