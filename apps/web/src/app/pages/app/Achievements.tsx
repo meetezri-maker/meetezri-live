@@ -26,6 +26,7 @@ import type { LucideIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { ACHIEVEMENTS_IMAGES } from '@/lib/solace/achievementsImages';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -1199,29 +1200,32 @@ export function Achievements() {
 
           <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_280px] xl:gap-10">
             <div className="min-w-0 space-y-8 sm:space-y-10">
-              {/* Hero — cinematic vault */}
-              <section className="relative overflow-hidden rounded-3xl border border-white/[0.07] bg-[#0a0f1a]/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_24px_80px_-48px_rgba(0,0,0,0.85)] backdrop-blur-xl">
-                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_20%_0%,rgba(168,85,247,0.08),transparent_55%)]" />
-                <div className="relative grid gap-0 lg:min-h-[280px] lg:grid-cols-[minmax(0,1.02fr)_minmax(0,1.08fr)] lg:items-stretch">
-                  <div className="relative z-10 flex flex-col justify-center space-y-4 p-6 sm:p-8 lg:pr-6">
-                    <h1 className="font-serif text-4xl font-semibold tracking-tight text-white sm:text-[2.75rem] sm:leading-tight">
-                      Achievements
-                    </h1>
-                    <p className="max-w-md text-[15px] leading-relaxed text-zinc-400">
-                      Celebrate your growth and the milestones that shape your best self.
-                    </p>
-                  </div>
-                  <div className="relative min-h-[200px] border-t border-white/[0.06] lg:min-h-0 lg:border-l lg:border-t-0">
-                    <img
-                      src="/solace-achievements-hero.png"
-                      alt="Calm lake at dusk with a warm lantern on a pier—symbol of reflection and earned progress."
-                      className="h-full min-h-[200px] w-full object-cover object-center lg:min-h-full"
-                      width={960}
-                      height={540}
-                      loading="eager"
-                    />
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#05070f]/95 via-[#05070f]/35 to-transparent lg:bg-gradient-to-l" />
-                  </div>
+              {/* Hero — full-bleed lotus scene */}
+              <section className="relative overflow-hidden rounded-3xl border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_24px_80px_-48px_rgba(0,0,0,0.85)]">
+                <img
+                  src={ACHIEVEMENTS_IMAGES.hero}
+                  alt="Glowing lotus on a moonlit lake with mountains at twilight"
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[58%_50%]"
+                  width={1600}
+                  height={520}
+                  loading="eager"
+                  decoding="async"
+                />
+                <div
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0618]/68 via-[#0a0618]/32 to-transparent"
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#05070f]/50 via-transparent to-transparent"
+                  aria-hidden
+                />
+                <div className="relative z-10 flex min-h-[280px] flex-col justify-center px-6 py-10 sm:min-h-[320px] sm:px-10 sm:py-12 lg:min-h-[340px] lg:px-12">
+                  <h1 className="max-w-xl font-serif text-4xl font-semibold tracking-tight text-white sm:text-[2.75rem] sm:leading-tight [text-shadow:0_2px_24px_rgba(0,0,0,0.55)]">
+                    Achievements
+                  </h1>
+                  <p className="mt-4 max-w-md text-[15px] leading-relaxed text-zinc-200/95 [text-shadow:0_1px_16px_rgba(0,0,0,0.45)]">
+                    Celebrate your growth and the milestones that shape your best self.
+                  </p>
                 </div>
               </section>
 
