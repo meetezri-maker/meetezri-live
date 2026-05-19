@@ -23,7 +23,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { SOLACE_HERO_LANDSCAPE_SRC } from "@/lib/solace/referenceImagery";
+import { pickSolaceCinematicImage } from "@/lib/solace/solaceCinematicPool";
 import { SolaceHeroAtmosphere } from "@/app/solace/SolaceHeroAtmosphere";
 import { TalkItOutBottomDock } from "@/app/pages/app/talk-it-out/TalkItOutBottomDock";
 import { useState, useEffect, useMemo } from "react";
@@ -225,7 +225,7 @@ function JournalHeroBackdrop({ className }: JournalHeroBackdropProps) {
       )}
     >
       <img
-        src={SOLACE_HERO_LANDSCAPE_SRC}
+        src={pickSolaceCinematicImage("journal-hero")}
         alt=""
         className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[center_38%]"
       />

@@ -35,6 +35,10 @@ import { cn } from "@/lib/utils";
 import { TalkItOutBottomDock } from "@/app/pages/app/talk-it-out/TalkItOutBottomDock";
 import { TALK_ENV_LAKE, TALK_ENV_FOREST, TALK_ENV_CANDLE } from "@/lib/solace/referenceImagery";
 import {
+  pickSolaceCinematicImage,
+  SOLACE_CINEMATIC_POOL,
+} from "@/lib/solace/solaceCinematicPool";
+import {
   WELLNESS_TOOL_CATEGORIES,
   WELLNESS_CATEGORY_GRADIENT,
   type WellnessToolCategory,
@@ -271,8 +275,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   mind: {
     title: "Mind",
     subtitle: "Clear thoughts & focus",
-    image:
-      "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?auto=format&fit=crop&w=1400&q=86",
+    image: pickSolaceCinematicImage("wellness-explore-mind"),
     icon: Brain,
     iconTint: "text-violet-200 shadow-[0_0_28px_rgba(167,139,250,0.55)]",
     ambientOverlay:
@@ -281,8 +284,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   body: {
     title: "Body",
     subtitle: "Move, breathe & energize",
-    image:
-      "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=1400&q=86",
+    image: pickSolaceCinematicImage("wellness-explore-body"),
     icon: Heart,
     iconTint: "text-emerald-200 shadow-[0_0_28px_rgba(52,211,153,0.45)]",
     ambientOverlay:
@@ -291,8 +293,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   emotions: {
     title: "Emotions",
     subtitle: "Understand & manage feelings",
-    image:
-      "https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?auto=format&fit=crop&w=1400&q=86",
+    image: pickSolaceCinematicImage("wellness-explore-emotions"),
     icon: Sparkles,
     iconTint: "text-fuchsia-200 shadow-[0_0_28px_rgba(244,114,182,0.45)]",
     ambientOverlay:
@@ -301,8 +302,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   relax: {
     title: "Relax",
     subtitle: "Rest, breathe & unwind",
-    image:
-      "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1400&q=86",
+    image: pickSolaceCinematicImage("wellness-explore-relax"),
     icon: Droplets,
     iconTint: "text-sky-200 shadow-[0_0_28px_rgba(56,189,248,0.45)]",
     ambientOverlay:
@@ -311,8 +311,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   sleep: {
     title: "Sleep",
     subtitle: "Better sleep, better you",
-    image:
-      "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1400&q=86",
+    image: pickSolaceCinematicImage("wellness-explore-sleep"),
     icon: Moon,
     iconTint: "text-indigo-200 shadow-[0_0_28px_rgba(129,140,248,0.5)]",
     ambientOverlay:
@@ -334,48 +333,25 @@ const SUPPORT_PILLS: {
   { label: "Build Confidence", category: "Low morale support", icon: Shield, glow: "shadow-[0_0_28px_rgba(192,132,252,0.32)]" },
 ];
 
-/** Wide misty mountain lake — fog, reflections, peaks (cinematic depth; layered with warmth + candle glow). */
-const WELLNESS_HERO_BASE =
-  "https://images.unsplash.com/photo-1470770903676-69b18201ac71?auto=format&fit=crop&w=2400&q=88";
-/** Rose-gold dawn mist — warms the scene (lantern / candle emotional balance). */
-const WELLNESS_HERO_WARM_LAYER =
-  "https://images.unsplash.com/photo-1504893524553-b855bcef70d3?auto=format&fit=crop&w=2400&q=82";
-const WELLNESS_HERO_BASE_NARROW = WELLNESS_HERO_BASE.replace("w=2400", "w=1200").replace("q=88", "q=84");
-const WELLNESS_HERO_CANDLE_WIDE = TALK_ENV_CANDLE.replace("w=600", "w=1800").replace("q=80", "q=86");
+const WELLNESS_HERO_BASE = pickSolaceCinematicImage("wellness-hero-base");
+const WELLNESS_HERO_WARM_LAYER = pickSolaceCinematicImage("wellness-hero-warm");
+const WELLNESS_HERO_BASE_NARROW = WELLNESS_HERO_BASE;
+const WELLNESS_HERO_CANDLE_WIDE = TALK_ENV_CANDLE;
 
-function widenImageUrl(url: string): string {
-  return url.replace(/w=\d+/g, "w=1200").replace(/q=\d+/g, "q=82");
-}
-
-const WELLNESS_TOOL_CARD_FALLBACKS: string[] = [
-  WELLNESS_HERO_BASE_NARROW,
-  "https://images.unsplash.com/photo-1502134249126-9f3755a50d0b?auto=format&fit=crop&w=1200&q=82",
-  "https://images.unsplash.com/photo-1433863448220-78aaa154ff80?auto=format&fit=crop&w=1200&q=82",
-  "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1200&q=82",
-  "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1200&q=82",
-  "https://images.unsplash.com/photo-1511497584787-876760111969?auto=format&fit=crop&w=1200&q=82",
-  widenImageUrl(TALK_ENV_CANDLE),
-  widenImageUrl(TALK_ENV_FOREST),
-];
+const WELLNESS_TOOL_CARD_FALLBACKS: string[] = [...SOLACE_CINEMATIC_POOL];
 
 function exerciseCardBackdropSrc(exercise: WellnessExerciseItem): string {
   const byId: Record<string, string> = {
-    "grounding-54321": WELLNESS_HERO_BASE_NARROW,
-    "stress-release-waves":
-      "https://images.unsplash.com/photo-1504384308090-c54be3855836?auto=format&fit=crop&w=1200&q=82",
-    "body-scan":
-      "https://images.unsplash.com/photo-1511497584787-876760111969?auto=format&fit=crop&w=1200&q=82",
-    "sleep-meditation":
-      "https://images.unsplash.com/photo-1502134249126-9f3755a50d0b?auto=format&fit=crop&w=1200&q=82",
-    "gentle-movement":
-      "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1200&q=82",
-    gratitude:
-      "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1200&q=82",
-    "box-breathing": WELLNESS_HERO_BASE_NARROW,
-    "compassion-pause": widenImageUrl(TALK_ENV_CANDLE),
-    "mindful-anchor": widenImageUrl(TALK_ENV_FOREST),
-    "rain-sounds":
-      "https://images.unsplash.com/photo-1433863448220-78aaa154ff80?auto=format&fit=crop&w=1200&q=82",
+    "grounding-54321": pickSolaceCinematicImage("exercise-grounding"),
+    "stress-release-waves": pickSolaceCinematicImage("exercise-stress"),
+    "body-scan": pickSolaceCinematicImage("exercise-body-scan"),
+    "sleep-meditation": pickSolaceCinematicImage("exercise-sleep"),
+    "gentle-movement": pickSolaceCinematicImage("exercise-movement"),
+    gratitude: pickSolaceCinematicImage("exercise-gratitude"),
+    "box-breathing": pickSolaceCinematicImage("exercise-breathing"),
+    "compassion-pause": TALK_ENV_CANDLE,
+    "mindful-anchor": TALK_ENV_FOREST,
+    "rain-sounds": pickSolaceCinematicImage("exercise-rain"),
   };
   if (byId[exercise.id]) return byId[exercise.id]!;
   const byCat: Partial<Record<WellnessToolCategory, string>> = {
@@ -386,8 +362,8 @@ function exerciseCardBackdropSrc(exercise: WellnessExerciseItem): string {
     Exercise: byId["gentle-movement"]!,
     "Self-Care": byId["gratitude"]!,
     Relaxation: byId["rain-sounds"]!,
-    "Low morale support": widenImageUrl(TALK_ENV_CANDLE),
-    Mindfulness: widenImageUrl(TALK_ENV_FOREST),
+    "Low morale support": TALK_ENV_CANDLE,
+    Mindfulness: TALK_ENV_FOREST,
   };
   const fromCat = byCat[exercise.category as WellnessToolCategory];
   if (fromCat) return fromCat;

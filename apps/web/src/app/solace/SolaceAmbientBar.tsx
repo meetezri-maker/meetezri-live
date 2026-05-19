@@ -4,14 +4,24 @@ import { SolacePanel } from "./SolacePanel";
 
 interface SolaceAmbientBarProps {
   className?: string;
+  thumbnailSrc?: string;
 }
 
 /** Static presentation-only ambient player — no audio wiring */
-export function SolaceAmbientBar({ className }: SolaceAmbientBarProps) {
+export function SolaceAmbientBar({ className, thumbnailSrc }: SolaceAmbientBarProps) {
   return (
     <SolacePanel glow="cyan" soft className={cn("p-3 sm:p-4", className)}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
         <div className="flex min-w-0 flex-1 items-center gap-3">
+          {thumbnailSrc ? (
+            <img
+              src={thumbnailSrc}
+              alt=""
+              className="hidden h-11 w-11 shrink-0 rounded-lg object-cover ring-1 ring-white/10 sm:block"
+              loading="lazy"
+              decoding="async"
+            />
+          ) : null}
           <button
             type="button"
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-200 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--solace-cyan)]/40"

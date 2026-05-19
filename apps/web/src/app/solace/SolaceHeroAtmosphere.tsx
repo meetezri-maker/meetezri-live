@@ -1,7 +1,12 @@
 import { cn } from "@/lib/utils";
 
-/** Full-bleed night lake / candle-warmth atmosphere behind hero content */
-export function SolaceHeroAtmosphere({ className }: { className?: string }) {
+interface SolaceHeroAtmosphereProps {
+  className?: string;
+  backgroundSrc?: string;
+}
+
+/** Full-bleed night lake atmosphere behind hero content */
+export function SolaceHeroAtmosphere({ className, backgroundSrc }: SolaceHeroAtmosphereProps) {
   return (
     <div
       className={cn(
@@ -9,6 +14,15 @@ export function SolaceHeroAtmosphere({ className }: { className?: string }) {
         className
       )}
     >
+      {backgroundSrc ? (
+        <img
+          src={backgroundSrc}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover object-center opacity-55"
+          loading="eager"
+          decoding="async"
+        />
+      ) : null}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_130%_90%_at_20%_10%,rgba(76,29,149,0.25)_0%,transparent_50%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_90%_70%,rgba(14,165,233,0.08)_0%,transparent_45%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,8,16,0.2)_0%,rgba(4,6,12,0.92)_78%,rgba(2,3,8,0.98)_100%)]" />

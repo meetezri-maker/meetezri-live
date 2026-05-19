@@ -14,8 +14,7 @@ import { toast } from "sonner";
 import { useAuth } from "../../contexts/AuthContext";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { cn } from "@/lib/utils";
-import { SolaceHeroAtmosphere } from "@/app/solace/SolaceHeroAtmosphere";
-import { SOLACE_HERO_LANDSCAPE_SRC } from "@/lib/solace/referenceImagery";
+import { MOOD_CHECKIN_IMAGES } from "@/lib/solace/moodCheckInImages";
 import { lobbyAvatarByName } from "@/lib/avatar/lobbyAvatars";
 import { TalkItOutBottomDock } from "./talk-it-out/TalkItOutBottomDock";
 import {
@@ -227,41 +226,29 @@ export function MoodCheckIn() {
                 )}
               >
                 <img
-                  src={SOLACE_HERO_LANDSCAPE_SRC}
+                  src={MOOD_CHECKIN_IMAGES.heroBanner}
                   alt=""
-                  className="pointer-events-none absolute inset-0 h-full w-full scale-[1.02] object-cover"
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[62%_42%]"
+                  loading="eager"
+                  decoding="async"
                 />
-                <SolaceHeroAtmosphere className="rounded-none" />
+                {/* Light left scrim only — keeps the lake/lotus vivid like the reference */}
                 <div
-                  className="pointer-events-none absolute -right-[20%] top-[8%] h-[55%] w-[62%] bg-[radial-gradient(ellipse_at_40%_30%,rgba(236,72,153,0.09)_0%,transparent_65%)]"
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/55 via-[#0a0c14]/18 to-transparent"
                   aria-hidden
                 />
-                <div
-                  className="pointer-events-none absolute bottom-0 right-0 h-[62%] w-[46%] bg-[radial-gradient(circle_at_70%_90%,rgba(167,139,250,0.18)_0%,transparent_70%)]"
-                  aria-hidden
-                />
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-900/[0.07] via-transparent to-cyan-500/[0.04]" aria-hidden />
-                <div className="relative z-[2] grid min-h-[368px] grid-cols-1 gap-8 px-8 py-12 sm:min-h-[400px] sm:gap-10 sm:px-12 sm:py-14 lg:min-h-[430px] lg:grid-cols-[1fr_auto] lg:items-center lg:gap-14 lg:px-14 lg:py-14">
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#070a12]/92 via-[#070a12]/68 to-[#070a12]/38" />
+                <div className="relative z-[2] flex min-h-[368px] flex-col justify-center px-8 py-12 sm:min-h-[400px] sm:px-12 sm:py-14 lg:min-h-[430px] lg:px-14 lg:py-14">
                   <div className="relative z-[3] max-w-2xl">
-                    <h2 className="font-serif text-[clamp(1.6rem,4.25vw,2.35rem)] font-normal leading-[1.26] tracking-[-0.02em] text-zinc-50">
+                    <h2 className="font-serif text-[clamp(1.6rem,4.25vw,2.35rem)] font-normal leading-[1.26] tracking-[-0.02em] text-zinc-50 [text-shadow:0_2px_24px_rgba(0,0,0,0.65)]">
                       Let&apos;s check in with
                       <br />
                       how you&apos;re feeling <FluentEmoji emoji="💗" size={26} className="inline-block align-[-3px]" />
                     </h2>
-                    <p className="mt-6 max-w-xl text-[15px] leading-[1.82] tracking-[-0.01em] text-zinc-300/92 sm:text-[1.0625rem]">
+                    <p className="mt-6 max-w-xl text-[15px] leading-[1.82] tracking-[-0.01em] text-zinc-100/95 sm:text-[1.0625rem] [text-shadow:0_1px_16px_rgba(0,0,0,0.55)]">
                       There&apos;s no right or wrong way to feel.
                       <br />
                       We&apos;re here for you, always.
                     </p>
-                  </div>
-                  <div className="relative z-[3] flex justify-center lg:justify-end">
-                    <div className="relative h-40 w-40 sm:h-44 sm:w-44 lg:h-[11.75rem] lg:w-[11.75rem]">
-                      <div className="absolute inset-0 rounded-full bg-fuchsia-500/26 blur-[48px]" aria-hidden />
-                      <div className="relative flex h-full w-full items-center justify-center rounded-full border border-white/[0.11] bg-black/27 shadow-[inset_0_0_52px_rgba(236,72,153,0.1),0_22px_64px_-32px_rgba(76,29,149,0.35)]">
-                        <FluentEmoji emoji="🪷" size={84} className="drop-shadow-[0_0_34px_rgba(236,72,153,0.42)]" />
-                      </div>
-                    </div>
                   </div>
                 </div>
               </motion.section>

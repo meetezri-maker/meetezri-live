@@ -3,6 +3,7 @@ import { Phone, Shield, Video, BookMarked } from "lucide-react";
 import type { ReactNode } from "react";
 import { SolacePanel } from "./SolacePanel";
 import { cn } from "@/lib/utils";
+import { DASHBOARD_IMAGES } from "@/lib/solace/dashboardImages";
 
 interface SolaceSupportStripProps {
   getSupportSlot: ReactNode;
@@ -19,11 +20,20 @@ export function SolaceSupportStrip({ getSupportSlot, className }: SolaceSupportS
   return (
     <SolacePanel glow="violet" className={cn("p-4 sm:p-5", className)}>
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="space-y-1">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--solace-muted)]">
-            When you need a hand
-          </p>
-          <p className="text-base font-medium text-[var(--solace-text)]">Need support right now?</p>
+        <div className="flex items-start gap-4">
+          <img
+            src={DASHBOARD_IMAGES.quoteDecor}
+            alt=""
+            className="hidden h-14 w-14 shrink-0 rounded-xl object-cover object-center ring-1 ring-violet-400/20 sm:block"
+            loading="lazy"
+            decoding="async"
+          />
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--solace-muted)]">
+              When you need a hand
+            </p>
+            <p className="text-base font-medium text-[var(--solace-text)]">Need support right now?</p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">{getSupportSlot}</div>
       </div>

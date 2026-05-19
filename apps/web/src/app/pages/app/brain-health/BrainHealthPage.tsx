@@ -52,6 +52,7 @@ import {
 } from "./reflectionFlowConfig";
 import { BrainHealthRightRail, type BrainHealthRailTimeFilter } from "./BrainHealthRightRail";
 import { usePrefersReducedMotion } from "./usePrefersReducedMotion";
+import { BRAIN_HEALTH_IMAGES } from "@/lib/solace/brainHealthImages";
 
 type ExcludeHelpNull = "clear_head" | "slow_down" | "hold_together";
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -774,22 +775,15 @@ export function BrainHealthPage() {
               className="relative overflow-hidden rounded-[1.35rem] border border-violet-500/15 bg-[#060814]/90 shadow-[0_32px_90px_-40px_rgba(0,0,0,0.85),0_0_48px_-12px_rgba(139,92,246,0.15)] sm:rounded-[1.5rem]"
               aria-labelledby="guided-hero-heading"
             >
-              <div
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_20%,rgba(167,139,250,0.12),transparent_50%),radial-gradient(ellipse_at_80%_30%,rgba(56,189,248,0.08),transparent_45%),linear-gradient(115deg,rgba(15,23,42,0.2)_0%,rgba(3,7,18,0.92)_48%,rgba(49,46,129,0.35)_100%)]"
-                aria-hidden
+              <img
+                src={BRAIN_HEALTH_IMAGES.hero}
+                alt=""
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[62%_42%]"
+                loading="eager"
+                decoding="async"
               />
               <div
-                className="pointer-events-none absolute -right-4 top-1/2 h-[min(420px,55vw)] w-[min(420px,55vw)] -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(251,113,133,0.14),rgba(167,139,250,0.18)_35%,transparent_65%)] blur-2xl sm:right-8"
-                aria-hidden
-              />
-              <div
-                className="pointer-events-none absolute inset-0 opacity-[0.35] mix-blend-screen sm:opacity-40"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(165deg, rgba(30,27,75,0.5) 0%, transparent 42%), url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='400'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%2331245e'/%3E%3Cstop offset='1' stop-color='%230b1020'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect fill='url(%23g)' width='800' height='400'/%3E%3Cpath fill='%234c1d95' fill-opacity='0.15' d='M0 280 Q200 200 400 260 T800 220 L800 400 L0 400 Z'/%3E%3C/svg%3E\")",
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                }}
+                className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/58 via-[#0a0c14]/22 to-transparent"
                 aria-hidden
               />
 
@@ -839,8 +833,14 @@ export function BrainHealthPage() {
 
                 <div className="relative mx-auto flex h-[180px] w-[180px] items-center justify-center sm:h-[200px] sm:w-[200px] lg:mx-0 lg:mr-2" aria-hidden>
                   <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_40%_35%,rgba(253,186,116,0.35),rgba(244,63,94,0.12)_40%,transparent_68%)] blur-md" />
-                  <div className="relative flex h-[150px] w-[150px] items-center justify-center rounded-full border border-violet-400/20 bg-gradient-to-br from-violet-950/50 to-slate-950/80 shadow-[0_0_40px_rgba(167,139,250,0.25)]">
-                    <Brain className="h-[72px] w-[72px] text-violet-200/90 drop-shadow-[0_0_18px_rgba(167,139,250,0.55)]" />
+                  <div className="relative h-[150px] w-[150px] overflow-hidden rounded-full border border-violet-400/20 bg-black/40 shadow-[0_0_40px_rgba(167,139,250,0.25)]">
+                    <img
+                      src={BRAIN_HEALTH_IMAGES.companionOrb}
+                      alt=""
+                      className="h-full w-full object-cover object-center"
+                      loading="lazy"
+                      decoding="async"
+                    />
                     {!reducedMotion && (
                       <motion.div
                         className="pointer-events-none absolute inset-0 flex items-center justify-center"
@@ -1058,6 +1058,13 @@ export function BrainHealthPage() {
               className="relative overflow-hidden rounded-[1.35rem] border border-white/[0.07] bg-gradient-to-br from-[#070916] via-[#05060d] to-[#0c0612] p-5 shadow-[0_28px_80px_-48px_rgba(0,0,0,0.9)] sm:rounded-[1.5rem] sm:p-7"
               aria-labelledby="live-state-heading"
             >
+              <img
+                src={BRAIN_HEALTH_IMAGES.hero}
+                alt=""
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[70%_50%] opacity-[0.42]"
+                loading="lazy"
+                decoding="async"
+              />
               <div className="pointer-events-none absolute -right-10 bottom-0 h-64 w-64 rounded-full bg-[radial-gradient(circle_at_center,rgba(251,113,133,0.2),transparent_62%)] blur-2xl" aria-hidden />
               <div className="relative z-[1] grid gap-8 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
                 <div>
@@ -1085,8 +1092,14 @@ export function BrainHealthPage() {
                 </div>
                 <div className="relative mx-auto flex h-[200px] w-[200px] items-center justify-center" aria-hidden>
                   <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_45%,rgba(251,146,60,0.45),rgba(244,63,94,0.15)_42%,transparent_70%)] blur-md" />
-                  <div className="relative flex h-[168px] w-[168px] items-center justify-center rounded-full border border-orange-400/25 bg-gradient-to-b from-[#1a0a12]/90 to-[#06060f]/95 shadow-[0_0_48px_rgba(251,113,133,0.22)]">
-                    <Brain className="h-[76px] w-[76px] text-orange-100/90 drop-shadow-[0_0_22px_rgba(251,146,60,0.45)]" />
+                  <div className="relative h-[168px] w-[168px] overflow-hidden rounded-full border border-orange-400/25 bg-black/45 shadow-[0_0_48px_rgba(251,113,133,0.22)]">
+                    <img
+                      src={BRAIN_HEALTH_IMAGES.companionOrb}
+                      alt=""
+                      className="h-full w-full object-cover object-center"
+                      loading="lazy"
+                      decoding="async"
+                    />
                     {!reducedMotion &&
                       [0, 1, 2, 3, 4].map((i) => (
                         <motion.span

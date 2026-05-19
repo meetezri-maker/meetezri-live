@@ -3,7 +3,6 @@ import { motion } from "motion/react";
 import {
   ArrowRight,
   BookOpen,
-  Brain,
   Calendar,
   Clock,
   Flame,
@@ -31,6 +30,7 @@ import {
   SolaceSupportStrip,
   type JourneyAmbiance,
 } from "@/app/solace";
+import { DASHBOARD_IMAGES } from "@/lib/solace/dashboardImages";
 
 export interface SolaceQuickAction {
   icon: LucideIcon;
@@ -69,6 +69,7 @@ interface SolaceDashboardViewProps {
   companionTag: string;
   heroSubtext: string;
   portraitUrl: string;
+  portraitFallbackUrl?: string;
   companionImageAlt: string;
   lastSessionLabel: string | null;
   currentMood: string;
@@ -199,14 +200,21 @@ function RightRailContent({
         </SolacePanel>
       )}
 
-      <SolacePanel glow="cyan" soft className="p-5">
-        <span className="font-serif text-4xl leading-none text-violet-400/35" aria-hidden>
+      <SolacePanel glow="cyan" soft className="relative overflow-hidden p-5">
+        <img
+          src={DASHBOARD_IMAGES.todayFocusDecor}
+          alt=""
+          className="pointer-events-none absolute -right-4 bottom-0 top-0 w-[48%] max-w-[200px] object-cover object-center opacity-[0.22]"
+          loading="lazy"
+          decoding="async"
+        />
+        <span className="relative font-serif text-4xl leading-none text-violet-400/35" aria-hidden>
           “
         </span>
-        <p className="-mt-2 font-serif text-[17px] leading-relaxed text-zinc-200">
+        <p className="relative -mt-2 font-serif text-[17px] leading-relaxed text-zinc-200">
           Small steps taken with awareness create real change.
         </p>
-        <p className="mt-3 text-xs text-[var(--solace-muted)]">— Solace</p>
+        <p className="relative mt-3 text-xs text-[var(--solace-muted)]">— Solace</p>
       </SolacePanel>
 
       <SolacePanel glow="none" className="p-5">
@@ -303,13 +311,17 @@ function RightRailContent({
       <Link to="/app/brain-health" className="block focus-visible:outline-none">
         <SolacePanel
           glow="violet"
-          className="p-5 transition-[transform,box-shadow] duration-500 hover:-translate-y-0.5 hover:shadow-[0_0_40px_rgba(88,28,135,0.25)]"
+          className="relative overflow-hidden p-5 transition-[transform,box-shadow] duration-500 hover:-translate-y-0.5 hover:shadow-[0_0_40px_rgba(88,28,135,0.25)]"
         >
-          <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-400/25 bg-violet-500/10 text-violet-200">
-              <Brain className="h-5 w-5" aria-hidden />
-            </div>
-            <div>
+          <img
+            src={DASHBOARD_IMAGES.brainHealthAccent}
+            alt=""
+            className="pointer-events-none absolute -right-6 top-1/2 h-32 w-32 -translate-y-1/2 object-contain opacity-25 blur-[1px]"
+            loading="lazy"
+            decoding="async"
+          />
+          <div className="relative flex items-center gap-4">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-zinc-100">Brain health</p>
               <p className="mt-1 text-xs leading-relaxed text-[var(--solace-muted)]">
                 Light exercises for clarity and nervous-system kindness.
@@ -318,6 +330,13 @@ function RightRailContent({
                 Start exercise <ArrowRight className="h-3 w-3" aria-hidden />
               </span>
             </div>
+            <img
+              src={DASHBOARD_IMAGES.brainHealth}
+              alt=""
+              className="relative h-24 w-24 shrink-0 rounded-xl object-cover object-center ring-1 ring-violet-400/20 sm:h-28 sm:w-28"
+              loading="lazy"
+              decoding="async"
+            />
           </div>
         </SolacePanel>
       </Link>
@@ -333,6 +352,7 @@ export function SolaceDashboardView({
   companionTag,
   heroSubtext,
   portraitUrl,
+  portraitFallbackUrl,
   companionImageAlt,
   lastSessionLabel,
   currentMood,
@@ -389,30 +409,36 @@ export function SolaceDashboardView({
               >
                 <SolacePanel glow="violet" className="overflow-hidden p-0">
                   <div className="relative min-h-[300px] md:min-h-[380px]">
-                    <SolaceHeroAtmosphere />
                     <div className="relative z-[2] grid min-h-[300px] md:min-h-[380px] md:grid-cols-[42%_1fr]">
                       <div className="relative min-h-[220px] md:min-h-0">
                         <div className="absolute inset-0 bg-gradient-to-t from-[#050508] via-transparent to-transparent md:bg-gradient-to-r md:from-black/75 md:via-black/20 md:to-transparent" />
                         <img
                           src={portraitUrl}
                           alt={companionImageAlt}
-                          className="h-full w-full object-cover object-top"
+                          className="h-full w-full object-cover object-[center_12%]"
                           loading="eager"
+                          onError={(event) => {
+                            if (!portraitFallbackUrl) return;
+                            const img = event.currentTarget;
+                            if (img.src.endsWith(portraitFallbackUrl)) return;
+                            img.src = portraitFallbackUrl;
+                          }}
                         />
                         <div className="absolute inset-0 ring-1 ring-inset ring-white/[0.08]" />
                       </div>
-                      <div className="relative z-10 flex flex-col justify-center px-5 py-8 sm:px-8 sm:py-10 md:py-12">
-                        <p className="mb-3 inline-flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.26em] text-violet-200/85">
+                      <div className="relative z-10 flex flex-col justify-center overflow-hidden px-5 py-8 sm:px-8 sm:py-10 md:py-12">
+                        <SolaceHeroAtmosphere backgroundSrc={DASHBOARD_IMAGES.heroAtmosphere} />
+                        <p className="relative mb-3 inline-flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.26em] text-violet-200/85">
                           <Sparkles className="h-3.5 w-3.5 text-violet-300/90" aria-hidden />
                           {companionTag}
                         </p>
-                        <h1 className="hidden font-serif text-2xl font-normal leading-snug tracking-tight text-zinc-50 md:block lg:text-3xl">
+                        <h1 className="relative hidden font-serif text-2xl font-normal leading-snug tracking-tight text-zinc-50 md:block lg:text-3xl">
                           {greeting}, {firstName}
                         </h1>
-                        <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-zinc-400 md:mt-4">
+                        <p className="relative mt-3 max-w-lg text-[15px] leading-relaxed text-zinc-400 md:mt-4">
                           {heroSubtext}
                         </p>
-                        <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                        <div className="relative mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                           <Link to="/app/session-lobby" className="inline-flex">
                             <span className="group relative inline-flex overflow-hidden rounded-full shadow-[0_0_48px_rgba(109,40,217,0.35)]">
                               <span className="absolute inset-0 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 opacity-95 transition-opacity duration-500 group-hover:opacity-100" />
@@ -635,11 +661,18 @@ export function SolaceDashboardView({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
               >
-                <SolacePanel glow="violet" soft className="p-5 sm:p-6">
-                  <p className="font-serif text-[17px] leading-relaxed text-zinc-100/95">
+                <SolacePanel glow="violet" soft className="relative overflow-hidden p-5 sm:p-6">
+                  <img
+                    src={DASHBOARD_IMAGES.quoteDecor}
+                    alt=""
+                    className="pointer-events-none absolute -right-2 bottom-0 top-0 w-[38%] max-w-[180px] object-cover object-center opacity-[0.28] mix-blend-soft-light"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <p className="relative font-serif text-[17px] leading-relaxed text-zinc-100/95">
                     {quoteLines.line}
                   </p>
-                  <p className="mt-3 text-sm text-[var(--solace-muted)]">{quoteLines.attribution}</p>
+                  <p className="relative mt-3 text-sm text-[var(--solace-muted)]">{quoteLines.attribution}</p>
                 </SolacePanel>
               </motion.div>
 
@@ -661,7 +694,7 @@ export function SolaceDashboardView({
           {/* Bottom cinematic strips — full bleed of content column */}
           <div className="mt-10 space-y-4">
             <SolaceSupportStrip getSupportSlot={supportCta} />
-            <SolaceAmbientBar />
+            <SolaceAmbientBar thumbnailSrc={DASHBOARD_IMAGES.ambientPlayer} />
           </div>
         </div>
       </div>
