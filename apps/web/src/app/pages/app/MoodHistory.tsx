@@ -63,7 +63,7 @@ import {
 import { cn } from "@/lib/utils";
 import { SolacePanel } from "@/app/solace/SolacePanel";
 import { lobbyAvatarByName } from "@/lib/avatar/lobbyAvatars";
-import { SOLACE_HERO_LANDSCAPE_SRC } from "@/lib/solace/referenceImagery";
+import { MOOD_CHECKIN_IMAGES, moodCheckInImageForValue } from "@/lib/solace/moodCheckInImages";
 import {
   computeCheckInStreak,
   weeklyIntensitySeries,
@@ -110,13 +110,6 @@ const getMoodInfo = (mood: string) => {
 
 const MOOD_HISTORY_PAGE_OPTIONS = [10, 20, 50] as const;
 
-const THUMBNAIL_IMAGES = [
-  "https://images.unsplash.com/photo-1507400492013-162706c8c05e?w=200&h=120&fit=crop",
-  "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=200&h=120&fit=crop",
-  "https://images.unsplash.com/photo-1499002238440-d264edd596ec?w=200&h=120&fit=crop",
-  "https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=200&h=120&fit=crop",
-  "https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=200&h=120&fit=crop",
-];
 
 export function MoodHistory() {
   const { profile } = useAuth();
@@ -316,7 +309,7 @@ export function MoodHistory() {
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
               <div className="relative overflow-hidden rounded-[1.75rem] border border-white/[0.06]" style={{ background: "linear-gradient(135deg, rgba(88,28,135,0.15) 0%, rgba(15,23,42,0.9) 50%, rgba(30,41,59,0.8) 100%)" }}>
                 <div className="absolute inset-0">
-                  <img src={SOLACE_HERO_LANDSCAPE_SRC} alt="" className="h-full w-full object-cover opacity-40" />
+                  <img src={MOOD_CHECKIN_IMAGES.heroBanner} alt="" className="h-full w-full object-cover opacity-40" loading="lazy" decoding="async" />
                   <div className="absolute inset-0 bg-gradient-to-r from-[#0f0a1a]/95 via-[#0f0a1a]/70 to-transparent" />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#0a0612]/90 via-transparent to-[#1a0a2e]/30" />
                   <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(168,85,247,0.15),transparent_50%)]" />
@@ -412,7 +405,7 @@ export function MoodHistory() {
                       {displayedCheckIns.map((entry, idx) => {
                         const info = getMoodInfo(entry.mood);
                         const isFavorite = favoriteEntryIds.includes(getEntryKey(entry));
-                        const thumbnailUrl = THUMBNAIL_IMAGES[idx % THUMBNAIL_IMAGES.length];
+                        const thumbnailUrl = moodCheckInImageForValue(entry.mood);
                         
                         return (
                           <motion.div key={getEntryKey(entry)} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.05 }} className="group relative flex items-start gap-4">

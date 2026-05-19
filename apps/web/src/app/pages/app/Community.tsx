@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { pickSolaceCinematicImage } from "@/lib/solace/solaceCinematicPool";
 import { motion } from "motion/react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import {
@@ -182,11 +183,9 @@ const SUPPORT_SPACES: ReadonlyArray<{
 const FEED_PAGE_SIZE = 10;
 
 /** Cinematic hero — warm gathering scene (static asset, not post data). */
-const COMMUNITY_HERO_IMAGE =
-  "https://images.unsplash.com/photo-1478131143081-80f7f84ca84d?auto=format&fit=crop&w=1600&q=86";
+const COMMUNITY_HERO_IMAGE = pickSolaceCinematicImage("community-hero");
 
-const DAILY_REMINDER_IMAGE =
-  "https://images.unsplash.com/photo-1495616811223-4d98c6e9c869?auto=format&fit=crop&w=900&q=86";
+const DAILY_REMINDER_IMAGE = pickSolaceCinematicImage("community-daily-reminder");
 
 /** Faded atmospheric layers inside post cards (same box, low opacity). */
 const POST_CARD_ATMOSPHERES = [

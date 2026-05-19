@@ -18,6 +18,7 @@ import {
 } from "../../components/ui/dialog";
 import { queryKeys } from "@/lib/queries";
 import { resolveCompanionPortraitUrl } from "@/lib/avatar/companionModelUrl";
+import { DASHBOARD_IMAGES } from "@/lib/solace/dashboardImages";
 import {
   SolaceDashboardView,
   type SolaceJourneyCard,
@@ -543,7 +544,8 @@ export function Dashboard() {
         greeting={greeting}
         companionTag={companionTag}
         heroSubtext="I'm here for you, whenever you need. You've been showing up for yourself — I'm really proud of you."
-        portraitUrl={portraitUrl}
+        portraitUrl={DASHBOARD_IMAGES.companionHero}
+        portraitFallbackUrl={portraitUrl}
         companionImageAlt={`${companionDisplayName}, your companion`}
         lastSessionLabel={lastSessionLabel}
         currentMood={currentMood}

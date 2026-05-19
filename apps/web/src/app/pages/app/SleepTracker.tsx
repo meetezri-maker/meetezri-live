@@ -59,12 +59,12 @@ import { cn } from "@/lib/utils";
 import {
   SolaceAmbientBackground,
   SolaceGlassCard,
-  SolaceHeroEnvironment,
   SolaceGlowButton,
   SolaceProgressRing,
   SolaceRightRailCard,
 } from "@/app/solace";
 import { usePrefersReducedMotion } from "@/app/pages/app/brain-health/usePrefersReducedMotion";
+import { SLEEP_TRACKER_IMAGES } from "@/lib/solace/sleepTrackerImages";
 
 type SleepEntry = {
   id: string;
@@ -108,8 +108,6 @@ const JOURNEY_STAGES = [
     Icon: Star,
   },
 ] as const;
-
-const SLEEP_HERO_IMAGE = "/sleep/hero-ref.png";
 
 function safeNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) ? value : fallback;
@@ -669,22 +667,28 @@ export function SleepTracker() {
                 transition={{ duration: 0.55 }}
                 className="w-full"
               >
-                <SolaceHeroEnvironment
-                  imageSrc={SLEEP_HERO_IMAGE}
-                  imageAlt="Moonlit lake at night with soft lantern glow on the water"
-                  className="min-h-[min(380px,42vh)] w-full max-h-[400px]"
-                  contentClassName="h-full min-h-[min(380px,42vh)] max-h-[400px] justify-between p-6 sm:p-8 lg:p-10"
+                <div
+                  className={cn(
+                    "relative isolate min-h-[min(380px,42vh)] w-full max-h-[400px] overflow-hidden rounded-[28px]",
+                    "border border-[color:var(--solace-ds-border-glow)] bg-[var(--solace-ds-bg-raised)]",
+                    "shadow-[var(--solace-ds-shadow-cinematic)]"
+                  )}
                 >
-                  <div
-                    className="pointer-events-none absolute inset-0 bg-[linear-gradient(105deg,rgba(5,8,22,0.88)_0%,rgba(5,8,22,0.55)_42%,rgba(5,8,22,0.25)_72%,rgba(5,8,22,0.5)_100%)]"
-                    aria-hidden
+                  <img
+                    src={SLEEP_TRACKER_IMAGES.hero}
+                    alt="Moonlit lake at night with a wooden pier and glowing lantern"
+                    className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[62%_42%]"
+                    loading="eager"
+                    decoding="async"
+                    width={1600}
+                    height={900}
                   />
                   <div
-                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_70%_100%,rgba(251,191,36,0.12),transparent_55%)]"
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/62 via-[#0a0c14]/28 to-transparent"
                     aria-hidden
                   />
                   <HeroParticles reduced={prefersReducedMotion} />
-
+                  <div className="relative z-10 flex h-full min-h-[min(380px,42vh)] max-h-[400px] flex-col justify-between p-6 sm:p-8 lg:p-10">
                   <div className="relative flex min-h-0 w-full flex-1 flex-col gap-6 lg:flex-row lg:justify-between">
                     <div className="max-w-2xl space-y-4 lg:pr-8">
                       <Link
@@ -721,7 +725,8 @@ export function SleepTracker() {
                       </SolaceGlowButton>
                     </div>
                   </div>
-                </SolaceHeroEnvironment>
+                  </div>
+                </div>
               </motion.section>
 
               {/* 2. Sleep signal summary strip — one continuous glass bar */}
@@ -977,9 +982,20 @@ export function SleepTracker() {
                     })}
                   </div>
                   {sleepEntries.length === 0 ? (
-                    <p className="px-5 py-12 text-center text-sm text-zinc-500">
-                      No logs yet. When you record a night, it will appear here—softly, without judgment.
-                    </p>
+                    <motion.div className="flex flex-col items-center px-5 py-12 text-center">
+                      <div className="mb-4 h-[80px] w-[80px] overflow-hidden rounded-full border border-white/[0.1] bg-black/40 shadow-[0_0_32px_-6px_rgba(168,85,247,0.45)]">
+                        <img
+                          src={SLEEP_TRACKER_IMAGES.companionMascot}
+                          alt=""
+                          className="h-full w-full object-cover object-top"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      </div>
+                      <p className="text-sm text-zinc-500">
+                        No logs yet. When you record a night, it will appear here—softly, without judgment.
+                      </p>
+                    </motion.div>
                   ) : null}
                   {sleepEntries.length > 0 ? (
                     <div className="border-t border-white/[0.06] px-4 py-4 sm:px-5">
@@ -1071,6 +1087,13 @@ export function SleepTracker() {
                   <p className="mt-1 text-sm text-zinc-500">Small steps create better nights.</p>
                 </div>
                 <div className="relative overflow-hidden rounded-[28px] border border-white/[0.08] bg-[color-mix(in_oklab,var(--solace-ds-surface)_88%,transparent)] shadow-[0_0_56px_-28px_rgba(88,28,135,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl">
+                  <img
+                    src={SLEEP_TRACKER_IMAGES.starfieldAccent}
+                    alt=""
+                    className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.28]"
+                    loading="lazy"
+                    decoding="async"
+                  />
                   <div
                     className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_80%_at_50%_100%,rgba(30,58,138,0.35),transparent_55%),radial-gradient(ellipse_70%_50%_at_80%_0%,rgba(168,85,247,0.18),transparent_50%)]"
                     aria-hidden
@@ -1123,6 +1146,15 @@ export function SleepTracker() {
               <SolaceRightRailCard className="p-6">
                 <h2 className="font-serif text-lg font-light text-white">Sleep Recovery</h2>
                 <div className="mt-5 flex flex-col items-center">
+                  <div className="mb-4 h-[72px] w-[72px] overflow-hidden rounded-full border border-white/[0.1] bg-black/40 shadow-[0_0_36px_-6px_rgba(168,85,247,0.5)]">
+                    <img
+                      src={SLEEP_TRACKER_IMAGES.companionMascot}
+                      alt=""
+                      className="h-full w-full object-cover object-top"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </div>
                   <motion.div
                     animate={{ opacity: [0.85, 1, 0.85] }}
                     transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
@@ -1230,8 +1262,14 @@ export function SleepTracker() {
               <SolaceRightRailCard className="p-6">
                 <h2 className="font-serif text-lg font-light text-white">Wind Down Tip</h2>
                 <div className="mt-4 flex gap-4">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-violet-400/25 bg-violet-500/15 shadow-[0_0_28px_rgba(168,85,247,0.35)]">
-                    <Flower2 className="size-7 text-violet-200" aria-hidden />
+                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-violet-400/25 bg-black/40 shadow-[0_0_28px_rgba(168,85,247,0.35)]">
+                    <img
+                      src={SLEEP_TRACKER_IMAGES.candleAccent}
+                      alt=""
+                      className="h-full w-full object-cover opacity-[0.9]"
+                      loading="lazy"
+                      decoding="async"
+                    />
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm leading-relaxed text-zinc-300">
@@ -1250,6 +1288,13 @@ export function SleepTracker() {
 
               <SolaceRightRailCard className="overflow-hidden p-0">
                 <div className="relative min-h-[200px] bg-gradient-to-br from-amber-950/50 via-violet-950/80 to-black p-6">
+                  <img
+                    src={SLEEP_TRACKER_IMAGES.starfieldAccent}
+                    alt=""
+                    className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.45]"
+                    loading="lazy"
+                    decoding="async"
+                  />
                   <div
                     className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(251,191,36,0.2),transparent_45%),radial-gradient(circle_at_20%_100%,rgba(168,85,247,0.35),transparent_55%)]"
                     aria-hidden

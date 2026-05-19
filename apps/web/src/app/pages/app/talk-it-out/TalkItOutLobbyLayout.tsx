@@ -6,10 +6,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
-  Flower2,
-  Heart,
   Loader2,
-  MessageCircle,
   Mic,
   Shield,
   Sparkles,
@@ -26,12 +23,10 @@ import { Button } from "@/app/components/ui/button";
 import { cn } from "@/lib/utils";
 import { SolaceHeroAtmosphere } from "@/app/solace/SolaceHeroAtmosphere";
 import {
-  SOLACE_HERO_LANDSCAPE_SRC,
-  TALK_ENV_CANDLE,
-  TALK_ENV_FOREST,
-  TALK_ENV_LAKE,
-  TALK_ENV_STUDIO,
-} from "@/lib/solace/referenceImagery";
+  TALK_IT_OUT_ENVIRONMENT_THUMBS,
+  TALK_IT_OUT_IMAGES,
+  TALK_IT_OUT_START_CARDS,
+} from "@/lib/solace/talkItOutImages";
 import type { ReactNode } from "react";
 import { TalkItOutBottomDock } from "./TalkItOutBottomDock";
 
@@ -100,13 +95,6 @@ function mattePanelClass(extra?: string) {
   );
 }
 
-const RAIL_ENVIRONMENT_THUMBS: { label: string; image: string; value: string }[] = [
-  { label: "Night Lake", image: TALK_ENV_LAKE, value: "mountains" },
-  { label: "Forest Calm", image: TALK_ENV_FOREST, value: "forest" },
-  { label: "Warm Studio", image: TALK_ENV_STUDIO, value: "minimal" },
-  { label: "Candle Room", image: TALK_ENV_CANDLE, value: "beach" },
-];
-
 const SAFETY_ITEMS = [
   "This is a private space",
   "No judgement, ever",
@@ -171,20 +159,56 @@ export function TalkItOutLobbyLayout({
   const startCards: {
     title: string;
     body: string;
-    Icon: LucideIcon;
+    imageSrc: string;
     onClick: () => void;
   }[] = [
-    { title: "Talk freely", body: "Open conversation about anything", Icon: MessageCircle, onClick: onStartFreely },
-    { title: "Guided talk", body: "Answer a few questions to get started", Icon: Sparkles, onClick: onStartGuided },
-    { title: "Deep reflection", body: "Explore your thoughts in depth", Icon: Flower2, onClick: onStartDeep },
-    { title: "Quick check-in", body: "Share how you're feeling right now", Icon: Heart, onClick: onQuickCheckInNavigate },
+    {
+      title: TALK_IT_OUT_START_CARDS[0].title,
+      body: "Open conversation about anything",
+      imageSrc: TALK_IT_OUT_START_CARDS[0].image,
+      onClick: onStartFreely,
+    },
+    {
+      title: TALK_IT_OUT_START_CARDS[1].title,
+      body: "Answer a few questions to get started",
+      imageSrc: TALK_IT_OUT_START_CARDS[1].image,
+      onClick: onStartGuided,
+    },
+    {
+      title: TALK_IT_OUT_START_CARDS[2].title,
+      body: "Explore your thoughts in depth",
+      imageSrc: TALK_IT_OUT_START_CARDS[2].image,
+      onClick: onStartDeep,
+    },
+    {
+      title: TALK_IT_OUT_START_CARDS[3].title,
+      body: "Share how you're feeling right now",
+      imageSrc: TALK_IT_OUT_START_CARDS[3].image,
+      onClick: onQuickCheckInNavigate,
+    },
   ];
+
+  const heroPortraitSrc = companionPortraitUrl ?? TALK_IT_OUT_IMAGES.companionPortrait;
 
   const checklistIcons = ["text-emerald-400", "text-sky-400", "text-violet-400", "text-amber-400"] as const;
 
   return (
     <>
-      <div className="relative min-h-[calc(100dvh-5rem)] overflow-x-hidden pb-28 text-[var(--solace-text)] lg:pb-10 solace-canvas-bg">
+      <motion.div className="relative min-h-[calc(100dvh-5rem)] overflow-x-hidden pb-28 text-[var(--solace-text)] lg:pb-10">
+        <img
+          src={TALK_IT_OUT_IMAGES.pageBackground}
+          alt=""
+          className="pointer-events-none fixed inset-0 z-0 h-full w-full object-cover opacity-35"
+          loading="eager"
+          decoding="async"
+        />
+        <img
+          src={TALK_IT_OUT_IMAGES.pageGlow}
+          alt=""
+          className="pointer-events-none fixed inset-0 z-0 h-full w-full object-cover opacity-25 mix-blend-screen"
+          loading="lazy"
+          decoding="async"
+        />
         <div className="relative z-[1] mx-auto max-w-[1680px] px-4 sm:px-5 lg:px-8">
           <header className="mb-8 border-b border-white/[0.05] pb-8">
             <h1 className="font-serif text-[1.75rem] font-normal tracking-tight text-zinc-50 sm:text-[2rem]">
@@ -225,29 +249,50 @@ export function TalkItOutLobbyLayout({
                 )}
               >
                 <img
-                  src={SOLACE_HERO_LANDSCAPE_SRC}
+                  src={TALK_IT_OUT_IMAGES.heroBackground}
                   alt=""
                   className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+                  loading="eager"
+                  decoding="async"
+                />
+                <img
+                  src={TALK_IT_OUT_IMAGES.heroMoonLayer}
+                  alt=""
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-35 mix-blend-soft-light"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <img
+                  src={TALK_IT_OUT_IMAGES.heroCandleAccent}
+                  alt=""
+                  className="pointer-events-none absolute bottom-0 left-0 h-[55%] w-[62%] object-cover object-left-bottom opacity-70 mix-blend-soft-light"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <img
+                  src={TALK_IT_OUT_IMAGES.heroEmbers}
+                  alt=""
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-20 mix-blend-screen"
+                  loading="lazy"
+                  decoding="async"
                 />
                 <SolaceHeroAtmosphere className="rounded-none" />
-                {/* Candle warmth — bottom left */}
-                <div
-                  className="pointer-events-none absolute bottom-0 left-0 h-[42%] w-[55%] bg-[radial-gradient(ellipse_80%_90%_at_10%_100%,rgba(251,191,36,0.14)_0%,transparent_65%)]"
-                  aria-hidden
-                />
                 <div className="relative z-[2] flex min-h-[420px] flex-col items-center px-5 pb-10 pt-10 text-center sm:px-8 sm:pb-12 sm:pt-12">
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#060711]/55 via-[#060711]/75 to-[#060711]/92" />
                   <div className="relative z-[3] flex w-full max-w-lg flex-col items-center">
                     <div className="relative mb-7">
                       <div className="absolute inset-0 scale-110 rounded-full bg-violet-500/25 blur-2xl" aria-hidden />
                       <div className="relative h-[108px] w-[108px] overflow-hidden rounded-full border-2 border-violet-400/45 bg-black/40 shadow-[0_0_48px_rgba(139,92,246,0.45)] ring-4 ring-violet-500/15">
-                        {companionPortraitUrl ? (
-                          <img src={companionPortraitUrl} alt={companionAlt} className="h-full w-full object-cover object-top" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-zinc-500">
-                            <User className="h-12 w-12" aria-hidden />
-                          </div>
-                        )}
+                        <img
+                          src={heroPortraitSrc}
+                          alt={companionAlt}
+                          className="h-full w-full object-cover object-top"
+                          onError={(event) => {
+                            const img = event.currentTarget;
+                            if (img.src.endsWith(TALK_IT_OUT_IMAGES.companionPortrait)) return;
+                            img.src = TALK_IT_OUT_IMAGES.companionPortrait;
+                          }}
+                        />
                       </div>
                     </div>
                     <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.1] bg-black/35 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.22em] text-violet-200/88">
@@ -290,22 +335,31 @@ export function TalkItOutLobbyLayout({
               <section aria-label="How to start">
                 <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">How would you like to start?</h3>
                 <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {startCards.map(({ title, body, Icon, onClick }) => (
+                  {startCards.map(({ title, body, imageSrc, onClick }) => (
                     <button
                       key={title}
                       type="button"
                       onClick={onClick}
                       className={cn(
                         mattePanelClass(
-                          "min-h-[44px] w-full px-4 py-4 text-left transition-[transform,border-color,background-color] duration-300 hover:border-violet-400/28 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
+                          "group min-h-[44px] w-full overflow-hidden p-0 text-left transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-0.5 hover:border-violet-400/28 hover:shadow-[0_24px_64px_-40px_rgba(76,29,149,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
                         )
                       )}
                     >
-                      <div className="mb-3 inline-flex rounded-xl border border-white/[0.08] bg-violet-500/[0.1] p-2 text-violet-200">
-                        <Icon className="h-5 w-5" aria-hidden strokeWidth={1.6} />
-                      </div>
-                      <p className="font-medium text-zinc-100">{title}</p>
-                      <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--solace-muted)]">{body}</p>
+                      <span className="relative block aspect-[16/10] w-full overflow-hidden">
+                        <img
+                          src={imageSrc}
+                          alt=""
+                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                        <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/10" />
+                      </span>
+                      <span className="block px-4 py-4">
+                        <p className="font-medium text-zinc-100">{title}</p>
+                        <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--solace-muted)]">{body}</p>
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -314,9 +368,15 @@ export function TalkItOutLobbyLayout({
               <section aria-label="Preparation guidance">
                 <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">Before we begin</h3>
                 <div className={cn(mattePanelClass("relative mt-5 overflow-hidden"))}>
-                  <div className="pointer-events-none absolute -right-4 bottom-0 top-0 w-[38%] max-w-[200px] opacity-[0.14]">
-                    <div className="h-full w-full bg-[radial-gradient(circle_at_70%_80%,rgba(167,139,250,0.9)_0%,transparent_72%)]" />
-                    <Flower2 className="absolute bottom-8 right-10 h-28 w-28 text-violet-300/50" aria-hidden strokeWidth={1} />
+                  <div className="pointer-events-none absolute -right-2 bottom-0 top-0 w-[42%] max-w-[220px]">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(167,139,250,0.35)_0%,transparent_72%)]" aria-hidden />
+                    <img
+                      src={TALK_IT_OUT_IMAGES.lotusDecor}
+                      alt=""
+                      className="absolute bottom-4 right-2 h-auto w-full max-h-[88%] object-contain object-bottom opacity-[0.42]"
+                      loading="lazy"
+                      decoding="async"
+                    />
                   </div>
                   <div className="relative z-[1] flex flex-col gap-0 lg:flex-row lg:flex-wrap lg:items-stretch">
                     {checklistItems.map((item, idx) => {
@@ -474,23 +534,35 @@ export function TalkItOutLobbyLayout({
                 </div>
               </div>
 
-              <div className={mattePanelClass("p-5")}>
-                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
+              <div className={cn(mattePanelClass("relative overflow-hidden p-5"))}>
+                <img
+                  src={TALK_IT_OUT_IMAGES.environmentCozyCabin}
+                  alt=""
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.14]"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <p className="relative text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
                   Companion
                 </p>
                 <button
                   type="button"
                   onClick={onOpenCustomize}
-                  className="mt-4 flex min-h-[48px] w-full items-start justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/28 px-3 py-3 text-left transition-colors hover:border-violet-400/28 hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
+                  className="relative mt-4 flex min-h-[48px] w-full items-start justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/28 px-3 py-3 text-left transition-colors hover:border-violet-400/28 hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
                   aria-expanded={false}
                 >
                   <div className="flex items-center gap-3">
                     <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-white/[0.1] bg-black/40">
-                      {companionPortraitUrl ? (
-                        <img src={companionPortraitUrl} alt="" className="h-full w-full object-cover object-top" />
-                      ) : (
-                        <User className="m-3 h-5 w-5 text-zinc-500" aria-hidden />
-                      )}
+                      <img
+                        src={heroPortraitSrc}
+                        alt=""
+                        className="h-full w-full object-cover object-top"
+                        onError={(event) => {
+                          const img = event.currentTarget;
+                          if (img.src.endsWith(TALK_IT_OUT_IMAGES.companionPortrait)) return;
+                          img.src = TALK_IT_OUT_IMAGES.companionPortrait;
+                        }}
+                      />
                     </div>
                     <div>
                       <p className="text-[13.5px] font-medium text-zinc-100">{companionDisplayName}</p>
@@ -507,7 +579,7 @@ export function TalkItOutLobbyLayout({
                 </p>
                 <p className="mt-1 text-[12px] text-[var(--solace-muted)]">Set the mood for your session</p>
                 <div className="mt-5 grid grid-cols-4 gap-2">
-                  {RAIL_ENVIRONMENT_THUMBS.map((env) => {
+                  {TALK_IT_OUT_ENVIRONMENT_THUMBS.map((env) => {
                     const active = selectedEnvironment === env.value;
                     return (
                       <button
@@ -644,7 +716,7 @@ export function TalkItOutLobbyLayout({
             <TalkItOutBottomDock getSupportSlot={getSupportSlot} />
           </div>
         </div>
-      </div>
+      </motion.div>
     </>
   );
 }

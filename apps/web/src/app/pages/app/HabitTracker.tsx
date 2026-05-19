@@ -28,7 +28,7 @@ import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { format, isSameDay, subDays, startOfWeek, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { SolacePanel, SolaceHeroAtmosphere } from "@/app/solace";
-import { SOLACE_HERO_LANDSCAPE_SRC, TALK_ENV_CANDLE } from "@/lib/solace/referenceImagery";
+import { HABIT_TRACKER_IMAGES } from "@/lib/solace/habitTrackerImages";
 import { lobbyAvatarByName } from "@/lib/avatar/lobbyAvatars";
 import { TalkItOutBottomDock } from "./talk-it-out/TalkItOutBottomDock";
 import { Bar, BarChart, Cell, ResponsiveContainer, XAxis, YAxis } from "recharts";
@@ -418,7 +418,13 @@ function RightRailBlocks({ weeklyBarData, habitsCompletedWeek, habitsPotentialWe
             className="pointer-events-none absolute -bottom-14 -right-12 h-[11.5rem] w-[11.5rem] rounded-full opacity-[0.2]"
             aria-hidden
           >
-            <img src={TALK_ENV_CANDLE} alt="" className="h-full w-full rounded-full object-cover blur-[2px]" />
+            <img
+              src={HABIT_TRACKER_IMAGES.candleAccent}
+              alt=""
+              className="h-full w-full rounded-full object-cover blur-[2px]"
+              loading="lazy"
+              decoding="async"
+            />
           </div>
           <div className="relative z-[2]">
             <p className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-200/82">
@@ -943,9 +949,11 @@ export function HabitTracker() {
                 <SolacePanel glow="violet" className="overflow-hidden rounded-[2rem] p-0 shadow-[0_56px_140px_-58px_rgba(0,0,0,0.92)] ring-1 ring-inset ring-white/[0.09] sm:rounded-[2.1rem]">
                   <div className="relative min-h-[400px] md:min-h-[440px]">
                     <img
-                      src={SOLACE_HERO_LANDSCAPE_SRC}
+                      src={HABIT_TRACKER_IMAGES.hero}
                       alt=""
                       className="pointer-events-none absolute inset-0 h-full w-full scale-[1.05] object-cover object-[center_42%]"
+                      loading="eager"
+                      decoding="async"
                     />
                     <SolaceHeroAtmosphere className="rounded-none" />
 
@@ -971,7 +979,13 @@ export function HabitTracker() {
                       aria-hidden
                     >
                       <div className="relative h-[118px] w-[118px] overflow-hidden rounded-[1.08rem] border border-white/[0.09] bg-black/45 shadow-[0_0_44px_-8px_rgba(139,92,246,0.42),inset_0_0_28px_rgba(251,191,36,0.05)] lg:h-[126px] lg:w-[126px]">
-                        <img src={TALK_ENV_CANDLE} alt="" className="h-full w-full object-cover opacity-[0.82]" />
+                        <img
+                          src={HABIT_TRACKER_IMAGES.candleAccent}
+                          alt=""
+                          className="h-full w-full object-cover opacity-[0.82]"
+                          loading="lazy"
+                          decoding="async"
+                        />
                       </div>
                     </div>
 
@@ -1016,17 +1030,16 @@ export function HabitTracker() {
                             <div className="relative">
                               <div className="absolute -inset-5 rounded-full bg-gradient-to-br from-violet-500/25 via-transparent to-cyan-500/10 blur-2xl" aria-hidden />
                               <div className="relative h-[118px] w-[118px] overflow-hidden rounded-full border-2 border-white/[0.12] bg-black/50 shadow-[0_0_48px_-6px_rgba(139,92,246,0.42)] ring-[6px] ring-violet-500/12 backdrop-blur-[2px] sm:h-[132px] sm:w-[132px]">
-                                {companionPreview.cardImage ? (
-                                  <img
-                                    src={companionPreview.cardImage}
-                                    alt={companionPreview.name}
-                                    className="h-full w-full object-cover object-top"
-                                  />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center text-xs text-zinc-500">
-                                    Solace
-                                  </div>
-                                )}
+                                <img
+                                  src={companionPreview.cardImage ?? HABIT_TRACKER_IMAGES.companionMascot}
+                                  alt={companionPreview.name}
+                                  className="h-full w-full object-cover object-top"
+                                  onError={(event) => {
+                                    const img = event.currentTarget;
+                                    if (img.src.endsWith(HABIT_TRACKER_IMAGES.companionMascot)) return;
+                                    img.src = HABIT_TRACKER_IMAGES.companionMascot;
+                                  }}
+                                />
                               </div>
                               <div
                                 className="pointer-events-none absolute -bottom-5 left-1/2 h-5 w-[85%] -translate-x-1/2 rounded-full bg-black/55 blur-xl"
@@ -1115,6 +1128,15 @@ export function HabitTracker() {
 
                 {habits.length === 0 ? (
                   <SolacePanel glow="violet" soft className="p-8 text-center">
+                    <div className="mx-auto mb-5 h-[88px] w-[88px] overflow-hidden rounded-full border border-white/[0.1] bg-black/40 shadow-[0_0_40px_-8px_rgba(139,92,246,0.45)]">
+                      <img
+                        src={HABIT_TRACKER_IMAGES.companionMascot}
+                        alt=""
+                        className="h-full w-full object-cover object-top"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    </div>
                     <p className="font-serif text-[17px] text-zinc-200">Nothing to track yet</p>
                     <p className="mt-2 text-[14px] text-[var(--solace-muted)]">
                       Begin with something small — a single habit you&apos;d like to soften into.
