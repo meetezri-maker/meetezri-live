@@ -544,8 +544,8 @@ export function Dashboard() {
         greeting={greeting}
         companionTag={companionTag}
         heroSubtext="I'm here for you, whenever you need. You've been showing up for yourself — I'm really proud of you."
-        portraitUrl={DASHBOARD_IMAGES.companionHero}
-        portraitFallbackUrl={portraitUrl}
+        portraitUrl={portraitUrl}
+        portraitFallbackUrl={DASHBOARD_IMAGES.companionHero}
         companionImageAlt={`${companionDisplayName}, your companion`}
         lastSessionLabel={lastSessionLabel}
         currentMood={currentMood}

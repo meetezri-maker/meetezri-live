@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { pickSolaceCinematicImage } from "@/lib/solace/solaceCinematicPool";
+import {
+  COMMUNITY_IMAGES,
+  communityPostSceneForId,
+} from "@/lib/solace/communityImages";
 import { motion } from "motion/react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import {
@@ -182,26 +185,6 @@ const SUPPORT_SPACES: ReadonlyArray<{
 
 const FEED_PAGE_SIZE = 10;
 
-/** Cinematic hero — warm gathering scene (static asset, not post data). */
-const COMMUNITY_HERO_IMAGE = pickSolaceCinematicImage("community-hero");
-
-const DAILY_REMINDER_IMAGE = pickSolaceCinematicImage("community-daily-reminder");
-
-/** Faded atmospheric layers inside post cards (same box, low opacity). */
-const POST_CARD_ATMOSPHERES = [
-  "bg-[radial-gradient(ellipse_at_80%_20%,rgba(251,191,36,0.35)_0%,transparent_50%),radial-gradient(ellipse_at_20%_80%,rgba(99,102,241,0.3)_0%,transparent_55%),linear-gradient(165deg,#1e1b4b_0%,#0f172a_55%,#164e63_100%)]",
-  "bg-[radial-gradient(ellipse_at_30%_30%,rgba(236,72,153,0.22)_0%,transparent_50%),radial-gradient(ellipse_at_90%_70%,rgba(34,211,238,0.15)_0%,transparent_50%),linear-gradient(200deg,#0f172a_0%,#312e81_45%,#0c4a6e_100%)]",
-  "bg-[radial-gradient(ellipse_at_50%_0%,rgba(167,139,250,0.3)_0%,transparent_48%),radial-gradient(ellipse_at_100%_100%,rgba(52,211,153,0.12)_0%,transparent_50%),linear-gradient(180deg,#020617_0%,#1e1b4b_50%,#0f172a_100%)]",
-  "bg-[radial-gradient(ellipse_at_70%_60%,rgba(251,191,36,0.2)_0%,transparent_50%),radial-gradient(ellipse_at_0%_0%,rgba(192,132,252,0.28)_0%,transparent_48%),linear-gradient(175deg,#0a0a12_0%,#1e1b4b_40%,#0f172a_100%)]",
-  "bg-[radial-gradient(ellipse_at_20%_20%,rgba(14,165,233,0.18)_0%,transparent_45%),radial-gradient(ellipse_at_80%_90%,rgba(244,114,182,0.18)_0%,transparent_50%),linear-gradient(190deg,#0f172a_0%,#4c1d95_35%,#0c4a6e_100%)]",
-  "bg-[radial-gradient(ellipse_at_60%_80%,rgba(251,191,36,0.25)_0%,transparent_52%),radial-gradient(ellipse_at_40%_0%,rgba(129,140,248,0.22)_0%,transparent_50%),linear-gradient(185deg,#050816_0%,#1e1b4b_50%,#0f172a_100%)]",
-] as const;
-
-function atmosphereIndexForPost(postId: string): number {
-  let h = 0;
-  for (let i = 0; i < postId.length; i++) h = (h * 31 + postId.charCodeAt(i)) >>> 0;
-  return h % POST_CARD_ATMOSPHERES.length;
-}
 
 function findGroupForCircleTitle(title: string, groups: FeedGroup[]): FeedGroup | undefined {
   const t = title.toLowerCase();
@@ -903,16 +886,19 @@ export function Community() {
                 </div>
                 <div className="relative min-h-[200px] border-t border-white/10 lg:min-h-0 lg:border-l lg:border-t-0">
                   <img
-                    src={COMMUNITY_HERO_IMAGE}
-                    alt=""
+                    src={COMMUNITY_IMAGES.hero}
+                    alt="People gathered around a campfire by a lake at twilight"
                     width={1200}
                     height={800}
-                    className="absolute inset-0 h-full w-full object-cover"
+                    loading="eager"
+                    decoding="async"
+                    className="absolute inset-0 h-full w-full object-cover object-[62%_45%]"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#050816]/95 via-[#070a14]/55 to-transparent lg:from-[#050816]/88 lg:via-transparent" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#050816]/90 via-transparent to-violet-950/35" />
-                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_85%,rgba(251,191,36,0.35)_0%,transparent_55%)]" />
-                  <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_80px_rgba(0,0,0,0.45)]" />
+                  <div
+                    className="absolute inset-0 bg-gradient-to-r from-[#050816]/72 via-[#050816]/28 to-transparent lg:from-[#050816]/55 lg:via-transparent"
+                    aria-hidden
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#050816]/50 via-transparent to-transparent" />
                 </div>
               </div>
             </div>
@@ -1048,7 +1034,7 @@ export function Community() {
                     const hashtagsForDisplay = feedHashtagsExcludingDisplayedCategory(post);
                     const proofLine = emotionalSocialProofLine(post);
                     const moodTag = primaryEmotionalTag(post);
-                    const bgIdx = atmosphereIndexForPost(post.id);
+                    const postSceneSrc = communityPostSceneForId(post.id);
                     const timeLabel = (() => {
                       try {
                         return formatDistanceToNow(parseISO(post.createdAt), { addSuffix: true });
@@ -1109,12 +1095,24 @@ export function Community() {
                             className="relative overflow-hidden rounded-2xl border border-white/[0.08] shadow-[0_20px_55px_-38px_rgba(0,0,0,0.8)] transition-colors duration-300 hover:border-violet-400/25"
                           >
                             <div
-                              className={cn("pointer-events-none absolute inset-0 opacity-[0.18]", POST_CARD_ATMOSPHERES[bgIdx])}
+                              className="pointer-events-none absolute inset-y-0 right-0 hidden w-[min(44%,240px)] sm:block"
                               aria-hidden
-                            />
-                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#070a14]/93 via-[#050816]/90 to-[#050816]/96" aria-hidden />
+                            >
+                              <img
+                                src={postSceneSrc}
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                                width={480}
+                                height={320}
+                                className="h-full w-full object-cover object-center"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-l from-[#050816] via-[#050816]/82 to-transparent" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-[#050816]/40 via-transparent to-transparent" />
+                            </div>
+                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#070a14]/88 via-[#050816]/82 to-[#050816]/94 sm:bg-gradient-to-r sm:from-[#050816]/92 sm:via-[#050816]/88 sm:to-[#050816]/55" aria-hidden />
 
-                            <div className="relative z-10 px-4 pb-3 pt-3.5 sm:px-4">
+                            <div className="relative z-10 px-4 pb-3 pt-3.5 sm:pr-[min(46%,252px)] sm:px-4">
                               <div className="flex items-start justify-between gap-2">
                                 {post.authorUserId ? (
                                   <Link
@@ -1939,11 +1937,15 @@ export function Community() {
               <CinematicEnter delay={0.15}>
                 <div className="relative overflow-hidden rounded-[26px] border border-fuchsia-500/15 shadow-[0_28px_70px_-40px_rgba(0,0,0,0.8)]">
                   <img
-                    src={DAILY_REMINDER_IMAGE}
+                    src={COMMUNITY_IMAGES.dailyReminder}
                     alt=""
-                    className="absolute inset-0 h-full w-full object-cover opacity-40"
+                    loading="lazy"
+                    decoding="async"
+                    width={640}
+                    height={360}
+                    className="absolute inset-0 h-full w-full object-cover object-center"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#050816] via-[#050816]/88 to-[#1e1b4b]/70" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#050816]/92 via-[#050816]/55 to-[#1e1b4b]/35" />
                   <div className="relative space-y-3 p-6">
                     <div className="flex items-center gap-2">
                       <Heart className="h-4 w-4 text-fuchsia-300/90" aria-hidden />

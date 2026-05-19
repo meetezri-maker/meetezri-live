@@ -33,11 +33,12 @@ import { Link, useNavigate } from "react-router-dom";
 import { Skeleton } from "../../components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { TalkItOutBottomDock } from "@/app/pages/app/talk-it-out/TalkItOutBottomDock";
-import { TALK_ENV_LAKE, TALK_ENV_FOREST, TALK_ENV_CANDLE } from "@/lib/solace/referenceImagery";
 import {
-  pickSolaceCinematicImage,
-  SOLACE_CINEMATIC_POOL,
-} from "@/lib/solace/solaceCinematicPool";
+  WELLNESS_TOOLS_IMAGES,
+  WELLNESS_TOOLS_IMAGE_POOL,
+  wellnessToolsCategoryFallbackImage,
+  wellnessToolsExerciseImage,
+} from "@/lib/solace/wellnessToolsImages";
 import {
   WELLNESS_TOOL_CATEGORIES,
   WELLNESS_CATEGORY_GRADIENT,
@@ -275,7 +276,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   mind: {
     title: "Mind",
     subtitle: "Clear thoughts & focus",
-    image: pickSolaceCinematicImage("wellness-explore-mind"),
+    image: WELLNESS_TOOLS_IMAGES.explore.mind,
     icon: Brain,
     iconTint: "text-violet-200 shadow-[0_0_28px_rgba(167,139,250,0.55)]",
     ambientOverlay:
@@ -284,7 +285,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   body: {
     title: "Body",
     subtitle: "Move, breathe & energize",
-    image: pickSolaceCinematicImage("wellness-explore-body"),
+    image: WELLNESS_TOOLS_IMAGES.explore.body,
     icon: Heart,
     iconTint: "text-emerald-200 shadow-[0_0_28px_rgba(52,211,153,0.45)]",
     ambientOverlay:
@@ -293,7 +294,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   emotions: {
     title: "Emotions",
     subtitle: "Understand & manage feelings",
-    image: pickSolaceCinematicImage("wellness-explore-emotions"),
+    image: WELLNESS_TOOLS_IMAGES.explore.emotions,
     icon: Sparkles,
     iconTint: "text-fuchsia-200 shadow-[0_0_28px_rgba(244,114,182,0.45)]",
     ambientOverlay:
@@ -302,7 +303,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   relax: {
     title: "Relax",
     subtitle: "Rest, breathe & unwind",
-    image: pickSolaceCinematicImage("wellness-explore-relax"),
+    image: WELLNESS_TOOLS_IMAGES.explore.relax,
     icon: Droplets,
     iconTint: "text-sky-200 shadow-[0_0_28px_rgba(56,189,248,0.45)]",
     ambientOverlay:
@@ -311,7 +312,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   sleep: {
     title: "Sleep",
     subtitle: "Better sleep, better you",
-    image: pickSolaceCinematicImage("wellness-explore-sleep"),
+    image: WELLNESS_TOOLS_IMAGES.explore.sleep,
     icon: Moon,
     iconTint: "text-indigo-200 shadow-[0_0_28px_rgba(129,140,248,0.5)]",
     ambientOverlay:
@@ -333,39 +334,12 @@ const SUPPORT_PILLS: {
   { label: "Build Confidence", category: "Low morale support", icon: Shield, glow: "shadow-[0_0_28px_rgba(192,132,252,0.32)]" },
 ];
 
-const WELLNESS_HERO_BASE = pickSolaceCinematicImage("wellness-hero-base");
-const WELLNESS_HERO_WARM_LAYER = pickSolaceCinematicImage("wellness-hero-warm");
-const WELLNESS_HERO_BASE_NARROW = WELLNESS_HERO_BASE;
-const WELLNESS_HERO_CANDLE_WIDE = TALK_ENV_CANDLE;
-
-const WELLNESS_TOOL_CARD_FALLBACKS: string[] = [...SOLACE_CINEMATIC_POOL];
+const WELLNESS_TOOL_CARD_FALLBACKS: readonly string[] = WELLNESS_TOOLS_IMAGE_POOL;
 
 function exerciseCardBackdropSrc(exercise: WellnessExerciseItem): string {
-  const byId: Record<string, string> = {
-    "grounding-54321": pickSolaceCinematicImage("exercise-grounding"),
-    "stress-release-waves": pickSolaceCinematicImage("exercise-stress"),
-    "body-scan": pickSolaceCinematicImage("exercise-body-scan"),
-    "sleep-meditation": pickSolaceCinematicImage("exercise-sleep"),
-    "gentle-movement": pickSolaceCinematicImage("exercise-movement"),
-    gratitude: pickSolaceCinematicImage("exercise-gratitude"),
-    "box-breathing": pickSolaceCinematicImage("exercise-breathing"),
-    "compassion-pause": TALK_ENV_CANDLE,
-    "mindful-anchor": TALK_ENV_FOREST,
-    "rain-sounds": pickSolaceCinematicImage("exercise-rain"),
-  };
-  if (byId[exercise.id]) return byId[exercise.id]!;
-  const byCat: Partial<Record<WellnessToolCategory, string>> = {
-    Anxiousness: byId["grounding-54321"]!,
-    "Stress Management": byId["stress-release-waves"]!,
-    Meditation: byId["body-scan"]!,
-    "Sleep Health": byId["sleep-meditation"]!,
-    Exercise: byId["gentle-movement"]!,
-    "Self-Care": byId["gratitude"]!,
-    Relaxation: byId["rain-sounds"]!,
-    "Low morale support": TALK_ENV_CANDLE,
-    Mindfulness: TALK_ENV_FOREST,
-  };
-  const fromCat = byCat[exercise.category as WellnessToolCategory];
+  const fromId = wellnessToolsExerciseImage(exercise.id);
+  if (fromId) return fromId;
+  const fromCat = wellnessToolsCategoryFallbackImage(exercise.category);
   if (fromCat) return fromCat;
   const idx = Math.abs(
     [...exercise.id].reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % WELLNESS_TOOL_CARD_FALLBACKS.length
@@ -933,47 +907,21 @@ export function WellnessTools() {
                 transition={{ delay: 0.04 }}
                 className="relative h-[260px] overflow-hidden rounded-3xl border border-white/[0.12] shadow-[0_32px_90px_-28px_rgba(139,92,246,0.28),0_24px_64px_-32px_rgba(0,0,0,0.9)] ring-1 ring-fuchsia-500/10"
               >
+                <img
+                  src={WELLNESS_TOOLS_IMAGES.hero}
+                  alt="Wooden deck with lanterns and candles overlooking a calm lake at dusk"
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[58%_42%]"
+                  loading="eager"
+                  decoding="async"
+                  width={1600}
+                  height={520}
+                />
                 <div
-                  className="pointer-events-none absolute inset-0 z-0 scale-[1.03] bg-cover bg-[center_40%]"
-                  style={{ backgroundImage: `url(${WELLNESS_HERO_BASE})` }}
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0618]/68 via-[#0a0618]/32 to-transparent"
                   aria-hidden
                 />
                 <div
-                  className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.38] mix-blend-soft-light"
-                  style={{ backgroundImage: `url(${WELLNESS_HERO_WARM_LAYER})` }}
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 z-[2] bg-[radial-gradient(ellipse_90%_70%_at_70%_25%,rgba(251,191,36,0.14),transparent_55%),radial-gradient(ellipse_85%_60%_at_15%_80%,rgba(236,72,153,0.11),transparent_52%)]"
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 z-[3] bg-gradient-to-r from-[#0a0618]/96 via-violet-950/42 to-fuchsia-950/12"
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 z-[4] bg-gradient-to-t from-[#06040f]/92 via-transparent to-violet-300/12"
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,transparent_28%,transparent_55%,rgba(8,5,18,0.25)_100%)]"
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-y-0 right-0 z-[6] hidden w-[55%] bg-cover bg-[center_65%] opacity-[0.48] mix-blend-soft-light lg:block"
-                  style={{ backgroundImage: `url(${WELLNESS_HERO_CANDLE_WIDE})` }}
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-y-0 right-0 z-[7] hidden w-[40%] bg-gradient-to-l from-amber-100/12 via-orange-200/5 to-transparent opacity-80 mix-blend-overlay lg:block"
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 z-[8] rounded-3xl shadow-[inset_0_0_120px_rgba(0,0,0,0.5)]"
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 z-[9] bg-[radial-gradient(ellipse_at_center,transparent_0%,transparent_42%,rgba(0,0,0,0.35)_100%)] opacity-90"
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#06040f]/55 via-transparent to-transparent"
                   aria-hidden
                 />
                 <div className="relative z-10 grid h-full grid-cols-1 lg:grid-cols-[1.1fr_1fr]">
@@ -1468,30 +1416,17 @@ export function WellnessTools() {
               </div>
 
               <div className="relative h-[360px] overflow-hidden rounded-2xl border border-white/[0.12] shadow-[0_28px_100px_-40px_rgba(139,92,246,0.38),0_24px_64px_-36px_rgba(0,0,0,0.82)] ring-1 ring-fuchsia-500/10">
-                <div
-                  className="absolute inset-0 scale-[1.04] bg-cover bg-[center_45%]"
-                  style={{ backgroundImage: `url(${WELLNESS_HERO_BASE})` }}
-                  aria-hidden
+                <img
+                  src={WELLNESS_TOOLS_IMAGES.quote}
+                  alt=""
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
+                  loading="lazy"
+                  decoding="async"
+                  width={640}
+                  height={360}
                 />
                 <div
-                  className="absolute inset-0 bg-cover bg-center opacity-[0.35] mix-blend-soft-light"
-                  style={{ backgroundImage: `url(${WELLNESS_HERO_WARM_LAYER})` }}
-                  aria-hidden
-                />
-                <div
-                  className="absolute inset-0 bg-[radial-gradient(ellipse_100%_85%_at_50%_50%,rgba(8,5,18,0.2)_0%,rgba(8,5,18,0.55)_55%,rgba(8,5,18,0.82)_100%)]"
-                  aria-hidden
-                />
-                <div
-                  className="absolute inset-0 bg-[radial-gradient(ellipse_90%_80%_at_50%_88%,rgba(236,72,153,0.2),transparent_55%),radial-gradient(ellipse_70%_55%_at_50%_5%,rgba(139,92,246,0.18),transparent_52%)] mix-blend-multiply opacity-90"
-                  aria-hidden
-                />
-                <div
-                  className="absolute inset-0 bg-gradient-to-b from-violet-950/25 via-transparent to-[#080512]/90"
-                  aria-hidden
-                />
-                <div
-                  className="absolute inset-0 rounded-2xl shadow-[inset_0_0_100px_rgba(0,0,0,0.55)]"
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#0a0618]/45 via-[#0a0618]/25 to-[#080512]/72"
                   aria-hidden
                 />
                 <div className="relative z-10 flex h-full flex-col items-center justify-center gap-5 px-7 py-10 text-center sm:px-10">
