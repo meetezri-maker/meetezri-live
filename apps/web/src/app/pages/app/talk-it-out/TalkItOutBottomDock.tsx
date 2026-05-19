@@ -3,6 +3,7 @@ import { Pause, Phone, Play, Shield, SkipBack, SkipForward, Video, BookMarked } 
 import { SolacePanel } from "@/app/solace/SolacePanel";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { TALK_IT_OUT_IMAGES } from "@/lib/solace/talkItOutImages";
 
 interface TalkItOutBottomDockProps {
   getSupportSlot: ReactNode;
@@ -46,7 +47,18 @@ export function TalkItOutBottomDock({ getSupportSlot, density = "default" }: Tal
           )}
         >
           <div className={cn("min-w-0 flex-1", compact ? "space-y-4" : "space-y-6")}>
-            <div className={compact ? "space-y-2" : "space-y-3"}>
+            <div className={cn("flex gap-4", compact ? "items-start" : "items-center")}>
+              <img
+                src={TALK_IT_OUT_IMAGES.lotusDecor}
+                alt=""
+                className={cn(
+                  "shrink-0 rounded-xl object-cover ring-1 ring-white/10",
+                  compact ? "h-14 w-14" : "h-16 w-16"
+                )}
+                loading="lazy"
+                decoding="async"
+              />
+              <div className={compact ? "space-y-2" : "space-y-3"}>
               <p
                 className={cn(
                   "font-medium uppercase tracking-[0.22em] text-zinc-500",
@@ -71,6 +83,7 @@ export function TalkItOutBottomDock({ getSupportSlot, density = "default" }: Tal
               >
                 You are not alone. Talk to someone or explore resources that can help.
               </p>
+              </div>
             </div>
             <div className="flex flex-wrap gap-3">{getSupportSlot}</div>
             <div className={cn("grid grid-cols-2 sm:grid-cols-4", compact ? "gap-3 sm:gap-3" : "gap-4 sm:gap-4")}>
@@ -123,6 +136,16 @@ export function TalkItOutBottomDock({ getSupportSlot, density = "default" }: Tal
           )}
         >
           <div className={cn("flex min-w-0 flex-1 flex-wrap items-center", compact ? "min-h-[44px] gap-4" : "min-h-[48px] gap-5")}>
+            <img
+              src={TALK_IT_OUT_IMAGES.ambientThumbnail}
+              alt=""
+              className={cn(
+                "hidden shrink-0 rounded-lg object-cover ring-1 ring-white/10 sm:block",
+                compact ? "h-11 w-11" : "h-12 w-12"
+              )}
+              loading="lazy"
+              decoding="async"
+            />
             <button
               type="button"
               className={cn(

@@ -31,6 +31,7 @@ import {
   formatWellnessDuration,
   wellnessProgressTotalSeconds,
 } from "@/lib/wellnessLocalProgress";
+import { PROGRESS_IMAGES } from "@/lib/solace/progressImages";
 
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -676,21 +677,14 @@ export function Progress() {
           transition={{ delay: 0.1 }}
           className="relative overflow-hidden rounded-2xl mb-8 min-h-[220px]"
         >
-          {/* Base gradient */}
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/95 to-transparent" />
-          
-          {/* Scenic background image - mountain lake sunset */}
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 400'%3E%3Cdefs%3E%3ClinearGradient id='sky' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%230f0a1e'/%3E%3Cstop offset='30%25' stop-color='%231a0a2e'/%3E%3Cstop offset='60%25' stop-color='%23581c87'/%3E%3Cstop offset='80%25' stop-color='%23831843'/%3E%3Cstop offset='100%25' stop-color='%23f59e0b'/%3E%3C/linearGradient%3E%3ClinearGradient id='water' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23581c87' stop-opacity='0.6'/%3E%3Cstop offset='100%25' stop-color='%230f172a'/%3E%3C/linearGradient%3E%3CradialGradient id='glow' cx='70%25' cy='60%25' r='40%25'%3E%3Cstop offset='0%25' stop-color='%23fbbf24' stop-opacity='0.4'/%3E%3Cstop offset='100%25' stop-color='%23581c87' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect fill='url(%23sky)' width='800' height='400'/%3E%3Crect fill='url(%23glow)' width='800' height='400'/%3E%3C!-- Mountains --%3E%3Cpath d='M400,280 L500,180 L600,220 L700,160 L800,200 L800,280 Z' fill='%231e1b4b' opacity='0.9'/%3E%3Cpath d='M300,280 L400,200 L480,240 L550,190 L650,230 L800,180 L800,280 Z' fill='%23312e81' opacity='0.7'/%3E%3Cpath d='M500,280 L580,220 L650,250 L720,200 L800,240 L800,280 Z' fill='%23581c87' opacity='0.5'/%3E%3C!-- Water/Lake --%3E%3Crect y='280' width='800' height='120' fill='url(%23water)'/%3E%3C!-- Stars --%3E%3Ccircle cx='650' cy='80' r='1.5' fill='white' opacity='0.8'/%3E%3Ccircle cx='700' cy='120' r='1' fill='white' opacity='0.6'/%3E%3Ccircle cx='580' cy='60' r='1' fill='white' opacity='0.7'/%3E%3Ccircle cx='750' cy='90' r='1.2' fill='white' opacity='0.5'/%3E%3Ccircle cx='620' cy='140' r='0.8' fill='white' opacity='0.6'/%3E%3Ccircle cx='680' cy='50' r='1' fill='white' opacity='0.4'/%3E%3Ccircle cx='550' cy='100' r='1.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='720' cy='160' r='0.8' fill='white' opacity='0.6'/%3E%3C!-- Path/dock --%3E%3Cpath d='M800,350 Q700,340 650,360 Q600,380 550,370 L550,400 L800,400 Z' fill='%230f172a' opacity='0.6'/%3E%3C/svg%3E")`,
-              backgroundSize: "cover",
-              backgroundPosition: "right center",
-            }}
+          <img
+            src={PROGRESS_IMAGES.hero}
+            alt=""
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[right_center]"
+            loading="eager"
+            decoding="async"
           />
-          
-          {/* Left fade overlay for text readability */}
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/80 to-transparent" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/72 via-[#0a0c14]/42 to-transparent" />
           
           <div className="relative px-8 py-10 md:py-14 flex items-center min-h-[220px]">
             <div className="max-w-md">
@@ -861,11 +855,19 @@ export function Progress() {
                 </div>
 
                 {/* Quote Panel */}
-                <div className="mt-6 p-4 rounded-xl bg-slate-800/30 border border-slate-700/30">
-                  <div className="flex gap-3">
-                    <Quote className="w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-slate-300 italic">
-                      "Growth is not always loud. Sometimes it's just choosing yourself, quietly, every day."
+                <div className="relative mt-6 min-h-[120px] overflow-hidden rounded-xl border border-slate-700/30">
+                  <img
+                    src={PROGRESS_IMAGES.quoteLandscape}
+                    alt=""
+                    className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/75 via-[#0a0c14]/45 to-[#0a0c14]/25]" />
+                  <div className="relative flex gap-3 p-4">
+                    <Quote className="mt-0.5 h-5 w-5 shrink-0 text-purple-300" />
+                    <p className="text-sm italic text-slate-100 [text-shadow:0_1px_12px_rgba(0,0,0,0.5)]">
+                      &ldquo;Growth is not always loud. Sometimes it&apos;s just choosing yourself, quietly, every day.&rdquo;
                     </p>
                   </div>
                 </div>
@@ -882,14 +884,12 @@ export function Progress() {
               <div className="relative grid grid-cols-1 md:grid-cols-2">
                 {/* Visual Side - Lanterns, candle, book scene */}
                 <div className="relative min-h-[220px] md:min-h-[280px] overflow-hidden">
-                  {/* Scene background */}
-                  <div
-                    className="absolute inset-0"
-                    style={{
-                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'%3E%3Cdefs%3E%3ClinearGradient id='nightsky' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%230a0a1a'/%3E%3Cstop offset='50%25' stop-color='%231a1a3e'/%3E%3Cstop offset='100%25' stop-color='%232d1f4e'/%3E%3C/linearGradient%3E%3CradialGradient id='lanternglow1' cx='50%25' cy='50%25' r='50%25'%3E%3Cstop offset='0%25' stop-color='%23fbbf24' stop-opacity='0.6'/%3E%3Cstop offset='100%25' stop-color='%23fbbf24' stop-opacity='0'/%3E%3C/radialGradient%3E%3CradialGradient id='lanternglow2' cx='50%25' cy='50%25' r='50%25'%3E%3Cstop offset='0%25' stop-color='%23f97316' stop-opacity='0.5'/%3E%3Cstop offset='100%25' stop-color='%23f97316' stop-opacity='0'/%3E%3C/radialGradient%3E%3CradialGradient id='candleglow' cx='50%25' cy='30%25' r='60%25'%3E%3Cstop offset='0%25' stop-color='%23fef3c7' stop-opacity='0.8'/%3E%3Cstop offset='50%25' stop-color='%23fbbf24' stop-opacity='0.3'/%3E%3Cstop offset='100%25' stop-color='%23fbbf24' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect fill='url(%23nightsky)' width='400' height='300'/%3E%3C!-- Mountains silhouette --%3E%3Cpath d='M0,200 L80,140 L150,180 L200,120 L280,160 L350,100 L400,150 L400,300 L0,300 Z' fill='%230f0f2a' opacity='0.8'/%3E%3C!-- Water reflection --%3E%3Crect y='220' width='400' height='80' fill='%231a1a3e' opacity='0.6'/%3E%3C!-- Lantern 1 (left) --%3E%3Ccircle cx='80' cy='100' r='40' fill='url(%23lanternglow1)'/%3E%3Crect x='70' y='80' width='20' height='35' rx='3' fill='%23451a03' opacity='0.9'/%3E%3Crect x='73' y='85' width='14' height='25' rx='2' fill='%23fbbf24' opacity='0.7'/%3E%3Cpath d='M75,75 L80,70 L85,75' stroke='%23451a03' stroke-width='2' fill='none'/%3E%3C!-- Lantern 2 (right) --%3E%3Ccircle cx='140' cy='130' r='35' fill='url(%23lanternglow2)'/%3E%3Crect x='130' y='115' width='18' height='30' rx='3' fill='%23451a03' opacity='0.9'/%3E%3Crect x='133' y='119' width='12' height='22' rx='2' fill='%23f97316' opacity='0.6'/%3E%3C!-- Small floating lantern --%3E%3Ccircle cx='200' cy='80' r='20' fill='url(%23lanternglow1)' opacity='0.6'/%3E%3Crect x='193' y='70' width='12' height='18' rx='2' fill='%23fbbf24' opacity='0.5'/%3E%3C!-- Book/Journal --%3E%3Crect x='240' y='200' width='80' height='55' rx='3' fill='%23312e81' transform='rotate(-5 280 227)'/%3E%3Crect x='245' y='205' width='70' height='45' rx='2' fill='%23e0e7ff' transform='rotate(-5 280 227)'/%3E%3Cline x1='255' y1='218' x2='305' y2='215' stroke='%236366f1' stroke-width='1.5' opacity='0.6'/%3E%3Cline x1='256' y1='228' x2='300' y2='225' stroke='%236366f1' stroke-width='1.5' opacity='0.6'/%3E%3Cline x1='257' y1='238' x2='295' y2='235' stroke='%236366f1' stroke-width='1.5' opacity='0.6'/%3E%3C!-- Candle --%3E%3Ccircle cx='330' cy='180' r='35' fill='url(%23candleglow)'/%3E%3Crect x='320' y='190' width='20' height='40' rx='2' fill='%23fef3c7' opacity='0.9'/%3E%3Cellipse cx='330' cy='185' rx='6' ry='10' fill='%23fbbf24'/%3E%3Cellipse cx='330' cy='180' rx='3' ry='6' fill='%23fef3c7'/%3E%3C!-- Fireflies --%3E%3Ccircle cx='50' cy='150' r='2' fill='%23fef3c7' opacity='0.8'%3E%3Canimate attributeName='opacity' values='0.8;0.3;0.8' dur='2s' repeatCount='indefinite'/%3E%3C/circle%3E%3Ccircle cx='180' cy='170' r='1.5' fill='%23fef3c7' opacity='0.6'%3E%3Canimate attributeName='opacity' values='0.6;0.2;0.6' dur='2.5s' repeatCount='indefinite'/%3E%3C/circle%3E%3Ccircle cx='280' cy='140' r='1.5' fill='%23fef3c7' opacity='0.7'%3E%3Canimate attributeName='opacity' values='0.7;0.3;0.7' dur='1.8s' repeatCount='indefinite'/%3E%3C/circle%3E%3Ccircle cx='350' cy='120' r='2' fill='%23fef3c7' opacity='0.5'%3E%3Canimate attributeName='opacity' values='0.5;0.2;0.5' dur='3s' repeatCount='indefinite'/%3E%3C/circle%3E%3C/svg%3E")`,
-                      backgroundSize: "cover",
-                      backgroundPosition: "center",
-                    }}
+                  <img
+                    src={PROGRESS_IMAGES.monthlyReflection}
+                    alt=""
+                    className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
+                    loading="lazy"
+                    decoding="async"
                   />
                   {/* Right fade for seamless blend */}
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-slate-900/95" />
@@ -979,15 +979,14 @@ export function Progress() {
               transition={{ delay: 0.6 }}
               className="relative overflow-hidden rounded-2xl"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-violet-600 to-pink-600" />
-              <div
-                className="absolute inset-0 opacity-30"
-                style={{
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 200'%3E%3Cdefs%3E%3ClinearGradient id='m' x1='0%25' y1='100%25' x2='0%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%239333ea'/%3E%3Cstop offset='100%25' stop-color='%23581c87'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect fill='url(%23m)' width='800' height='200'/%3E%3Cpath d='M0,180 Q100,120 200,150 T400,130 T600,160 T800,140 L800,200 L0,200 Z' fill='%237c3aed' opacity='0.5'/%3E%3Cpath d='M0,190 Q150,150 300,170 T600,155 T800,175 L800,200 L0,200 Z' fill='%236d28d9' opacity='0.5'/%3E%3C/svg%3E")`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "bottom",
-                }}
+              <img
+                src={PROGRESS_IMAGES.celebrateBanner}
+                alt=""
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[right_center]"
+                loading="lazy"
+                decoding="async"
               />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-purple-900/55 via-violet-900/45 to-fuchsia-900/35" />
               <div className="relative px-6 py-8 md:px-8 md:py-10 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
@@ -1174,42 +1173,15 @@ export function Progress() {
                 </div>
 
                 <div className="relative flex items-end gap-4">
-                  {/* Candle jar illustration */}
-                  <div className="flex-shrink-0">
-                    <svg width="60" height="80" viewBox="0 0 60 80" className="drop-shadow-lg">
-                      {/* Glow effect */}
-                      <defs>
-                        <radialGradient id="jarGlow" cx="50%" cy="20%" r="60%">
-                          <stop offset="0%" stopColor="#fef3c7" stopOpacity="0.6" />
-                          <stop offset="40%" stopColor="#fbbf24" stopOpacity="0.3" />
-                          <stop offset="100%" stopColor="#fbbf24" stopOpacity="0" />
-                        </radialGradient>
-                        <linearGradient id="jarGlass" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="#fef3c7" stopOpacity="0.1" />
-                          <stop offset="50%" stopColor="#fef3c7" stopOpacity="0.2" />
-                          <stop offset="100%" stopColor="#fef3c7" stopOpacity="0.1" />
-                        </linearGradient>
-                      </defs>
-                      {/* Ambient glow */}
-                      <ellipse cx="30" cy="35" rx="35" ry="40" fill="url(#jarGlow)" />
-                      {/* Jar body */}
-                      <path d="M15,25 Q12,25 12,30 L12,65 Q12,72 20,72 L40,72 Q48,72 48,65 L48,30 Q48,25 45,25 Z" fill="url(#jarGlass)" stroke="#fef3c7" strokeOpacity="0.3" strokeWidth="1" />
-                      {/* Jar rim */}
-                      <rect x="18" y="22" width="24" height="5" rx="1" fill="#d4a574" opacity="0.8" />
-                      {/* Candle wax */}
-                      <rect x="22" y="45" width="16" height="22" rx="2" fill="#fef3c7" opacity="0.9" />
-                      {/* Flame */}
-                      <ellipse cx="30" cy="38" rx="5" ry="10" fill="#fbbf24" opacity="0.9">
-                        <animate attributeName="ry" values="10;8;10" dur="0.8s" repeatCount="indefinite" />
-                      </ellipse>
-                      <ellipse cx="30" cy="36" rx="2.5" ry="6" fill="#fef3c7">
-                        <animate attributeName="ry" values="6;5;6" dur="0.6s" repeatCount="indefinite" />
-                      </ellipse>
-                      {/* Wick */}
-                      <line x1="30" y1="45" x2="30" y2="40" stroke="#78716c" strokeWidth="1" />
-                    </svg>
+                  <div className="relative h-[88px] w-[60px] shrink-0 overflow-hidden rounded-lg">
+                    <img
+                      src={PROGRESS_IMAGES.personalNoteJar}
+                      alt=""
+                      className="h-full w-full object-cover object-center"
+                      loading="lazy"
+                      decoding="async"
+                    />
                   </div>
-                  
                   <p className="text-slate-300 text-sm leading-relaxed pb-2">
                     You've come so far. Be proud of your progress.
                   </p>

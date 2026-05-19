@@ -32,6 +32,7 @@ import {
   Cell,
   ResponsiveContainer,
 } from "recharts";
+import { pickSolaceCinematicImage } from "@/lib/solace/solaceCinematicPool";
 
 interface SessionData {
   id: string;
@@ -174,14 +175,6 @@ function formatSessionDuration(s: BackendSession): { label: string; minutesForSt
 
   return { label: "N/A", minutesForStats: 0 };
 }
-
-const CINEMATIC_THUMBNAILS = [
-  "linear-gradient(135deg, #1a0a2e 0%, #581c87 50%, #f97316 100%)",
-  "linear-gradient(135deg, #0f172a 0%, #7c3aed 50%, #ec4899 100%)",
-  "linear-gradient(135deg, #1e1b4b 0%, #c026d3 50%, #fb923c 100%)",
-  "linear-gradient(135deg, #020617 0%, #4f46e5 50%, #f472b6 100%)",
-  "linear-gradient(135deg, #0a0a1a 0%, #8b5cf6 50%, #fbbf24 100%)",
-];
 
 const MOOD_COLORS: Record<string, { bg: string; text: string }> = {
   Anxious: { bg: "bg-amber-500/20", text: "text-amber-400" },
@@ -385,7 +378,7 @@ export function SessionHistory() {
             type: s.type === 'instant' ? 'video' : (s.type as "video" | "chat") || 'video',
             messagesCount: s._count?.session_messages || 0,
             topicsDiscussed: [],
-            thumbnail: CINEMATIC_THUMBNAILS[s.id.charCodeAt(0) % CINEMATIC_THUMBNAILS.length],
+            thumbnail: pickSolaceCinematicImage(s.id),
             summary: formatSessionSummaryTitle(s.title, s.type),
             favorite: s.is_favorite || false,
             status: s.status === 'completed' ? 'completed' : 'upcoming',
@@ -804,10 +797,14 @@ export function SessionHistory() {
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                     <div className="relative flex items-center gap-4 p-4">
                       {/* Cinematic Thumbnail */}
-                      <div
-                        className="relative w-36 h-20 sm:w-40 sm:h-24 rounded-xl overflow-hidden flex-shrink-0"
-                        style={{ background: sessionItem.thumbnail }}
-                      >
+                      <div className="relative h-20 w-36 shrink-0 overflow-hidden rounded-xl sm:h-24 sm:w-40">
+                        <img
+                          src={sessionItem.thumbnail}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                        />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
                         <motion.button
                           whileHover={{ scale: 1.1 }}
