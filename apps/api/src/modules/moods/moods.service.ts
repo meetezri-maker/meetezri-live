@@ -1,6 +1,6 @@
 import prisma from "../../lib/prisma";
 import { CreateMoodInput } from "./moods.schema";
-import { invalidateUserProfileCache } from "../users/user.service";
+import { invalidateRecentActivityCache, invalidateUserProfileCache } from "../users/user.service";
 import { notificationsService } from "../notifications/notifications.service";
 
 const userMoodsCache = new Map<string, { data: any[]; timestamp: number }>();
@@ -36,6 +36,7 @@ export async function createMood(userId: string, input: CreateMoodInput) {
     },
   });
   invalidateUserProfileCache(userId);
+  invalidateRecentActivityCache(userId);
   clearUserMoodsCache(userId);
   clearMoodsCache();
   return created;

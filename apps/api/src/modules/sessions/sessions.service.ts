@@ -8,7 +8,7 @@ import {
   UpdateScheduledSessionInput,
   BeginScheduledSessionInput,
 } from './sessions.schema';
-import { invalidateUserProfileCache } from '../users/user.service';
+import { invalidateRecentActivityCache, invalidateUserProfileCache } from '../users/user.service';
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -331,6 +331,7 @@ export async function endSession(
   });
   invalidateSessionsCache(userId);
   invalidateUserProfileCache(userId); // credits + profile totals
+  invalidateRecentActivityCache(userId);
   return updated;
 }
 

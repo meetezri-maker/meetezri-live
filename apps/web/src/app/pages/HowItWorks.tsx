@@ -9,19 +9,18 @@ import {
   Shield,
   Zap,
   TrendingUp,
-  ArrowRight,
-  Twitter,
-  Instagram,
-  Facebook,
-  Youtube,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { PublicNav } from "../components/PublicNav";
-import { BrandLogo } from "../components/BrandLogo";
+import { PublicFooter } from "../components/PublicFooter";
 import { LandingBackground } from "../landing/LandingBackground";
 import { LandingGlowCard } from "../landing/LandingGlowCard";
 import type { LandingGlowVariant } from "../landing/LandingGlowCard";
-import { LANDING_HERO_BG } from "../landing/landingImagery";
+import {
+  HOW_IT_WORKS_STEP_IMAGES,
+  LANDING_CTA_CARD_BG,
+  LANDING_HERO_BG,
+} from "../landing/landingImagery";
 import { cn } from "@/lib/utils";
 
 type JourneyVisual = "lantern" | "orb" | "mood" | "journal";
@@ -35,6 +34,7 @@ interface JourneyStep {
   glow: LandingGlowVariant;
   iconClass: string;
   visual: JourneyVisual;
+  imageSrc?: string;
 }
 
 interface FeatureItem {
@@ -61,6 +61,7 @@ const JOURNEY_STEPS: JourneyStep[] = [
     iconClass:
       "from-pink-500/90 to-fuchsia-600/90 shadow-[0_0_24px_rgba(236,72,153,0.55)]",
     visual: "lantern",
+    imageSrc: HOW_IT_WORKS_STEP_IMAGES[1],
   },
   {
     step: 2,
@@ -77,6 +78,7 @@ const JOURNEY_STEPS: JourneyStep[] = [
     iconClass:
       "from-cyan-400/90 to-teal-500/90 shadow-[0_0_24px_rgba(34,211,238,0.5)]",
     visual: "orb",
+    imageSrc: HOW_IT_WORKS_STEP_IMAGES[2],
   },
   {
     step: 3,
@@ -101,6 +103,7 @@ const JOURNEY_STEPS: JourneyStep[] = [
     iconClass:
       "from-amber-400/90 to-orange-500/90 shadow-[0_0_24px_rgba(251,191,36,0.45)]",
     visual: "journal",
+    imageSrc: HOW_IT_WORKS_STEP_IMAGES[4],
   },
 ];
 
@@ -298,6 +301,28 @@ const VISUALS: Record<JourneyVisual, () => JSX.Element> = {
   journal: WellnessJournalVisual,
 };
 
+interface JourneyStepPhotoProps {
+  src: string;
+}
+
+function JourneyStepPhoto({ src }: JourneyStepPhotoProps) {
+  return (
+    <div className="relative h-full min-h-[200px] w-full" aria-hidden>
+      <img
+        src={src}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover object-center"
+        width={560}
+        height={360}
+        loading="lazy"
+        decoding="async"
+      />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,10,20,0.25)_0%,rgba(7,10,20,0.55)_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,transparent_35%,rgba(7,10,20,0.4)_100%)]" />
+    </div>
+  );
+}
+
 interface JourneyCardProps {
   step: JourneyStep;
   index: number;
@@ -381,12 +406,21 @@ function JourneyCard({ step, index }: JourneyCardProps) {
               hover: { scale: 1.03, opacity: 1 },
             }}
             transition={{ duration: 0.4 }}
-            className="relative w-full shrink-0 overflow-hidden rounded-2xl border border-white/[0.06] bg-[#070a14]/60 lg:w-[min(38%,280px)]"
+            className={cn(
+              "relative w-full shrink-0 self-stretch overflow-hidden rounded-2xl border border-white/[0.06] lg:w-[min(38%,280px)]",
+              step.imageSrc ? "min-h-[200px] bg-[#070a14]" : "bg-[#070a14]/60",
+            )}
           >
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,rgba(88,28,135,0.12)_0%,transparent_70%)]" />
-            <div className="relative p-4 sm:p-5">
-              <Visual />
-            </div>
+            {step.imageSrc ? (
+              <JourneyStepPhoto src={step.imageSrc} />
+            ) : (
+              <>
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,rgba(88,28,135,0.12)_0%,transparent_70%)]" />
+                <div className="relative p-4 sm:p-5">
+                  <Visual />
+                </div>
+              </>
+            )}
           </motion.div>
         </motion.div>
       </LandingGlowCard>
@@ -523,180 +557,44 @@ export function HowItWorks() {
           >
             <LandingGlowCard
               glow="pink"
-              className="relative mx-auto max-w-[720px] overflow-hidden rounded-[26px] px-6 py-10 text-center sm:px-10 sm:py-12"
+              className="landing-cta-card-image relative mx-auto max-w-[720px] text-center"
+              style={
+                {
+                  "--landing-cta-card-bg": `url("${LANDING_CTA_CARD_BG}")`,
+                } as React.CSSProperties
+              }
             >
-              <div
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_100%,rgba(88,28,135,0.22)_0%,transparent_55%),radial-gradient(ellipse_at_50%_0%,rgba(236,72,153,0.1)_0%,transparent_50%)]"
-                aria-hidden
-              />
-              <div className="relative z-[1]">
-                <h2 className="landing-serif text-2xl font-semibold text-white md:text-3xl">
-                  Ready to{" "}
-                  <span className="bg-gradient-to-r from-pink-200 via-fuchsia-200 to-violet-100 bg-clip-text text-transparent">
-                    Get Started?
-                  </span>
+              <div className="relative z-[2] px-6 py-10 sm:px-10 sm:py-12">
+                <Zap className="mx-auto mb-3 h-6 w-6 text-pink-300" />
+                <h2 className="text-2xl font-bold text-white md:text-3xl">
+                  Ready to Start Your Wellness Journey?
                 </h2>
-                <p className="mx-auto mt-3 max-w-md text-sm text-[var(--solace-ds-text-muted)] md:text-base">
-                  Try Solace for 7 days. No credit card required.
+                <p className="mx-auto mt-3 max-w-lg text-sm text-[var(--solace-ds-text-muted)] md:text-base">
+                  Join thousands who trust Solace for their mental health and wellbeing
                 </p>
-                <div className="mt-7">
+                <div
+                  className="mt-6"
+                  onClick={() => localStorage.setItem("selectedPlan", "trial")}
+                >
                   <Link to="/signup" className="inline-block w-full sm:w-auto">
                     <motion.span
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      className="landing-cta-glow inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#E91E63] to-[#9C27B0] px-10 py-3.5 text-base font-semibold text-white sm:w-auto"
+                      className="landing-cta-glow inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#E91E63] to-[#9C27B0] px-10 py-3.5 text-base font-semibold text-white sm:w-auto"
                     >
-                      Start Your Trial
-                      <ArrowRight className="h-4 w-4" />
+                      Start Trial
                     </motion.span>
                   </Link>
                 </div>
+                <p className="mt-3 text-sm text-[var(--solace-ds-text-muted)]">
+                  7-day trial • No credit card required
+                </p>
               </div>
             </LandingGlowCard>
           </motion.div>
         </section>
 
-        {/* Footer */}
-        <footer className="border-t border-white/[0.08] bg-[#04060f]/90">
-          <motion.div
-            className="pointer-events-none mx-auto h-px max-w-[1180px] bg-gradient-to-r from-transparent via-violet-500/35 to-transparent"
-            initial={{ scaleX: 0 }}
-            whileInView={{ scaleX: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          />
-          <div className="mx-auto max-w-[1180px] px-4 py-10 sm:px-6 md:py-12 lg:px-8">
-            <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
-              <motion.div
-                className="col-span-2 md:col-span-1"
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-              >
-                <BrandLogo heightClass="h-14" />
-                <p className="mt-3 text-sm text-[var(--solace-ds-text-muted)]">
-                  Your AI-powered wellness companion, available 24/7
-                </p>
-                <motion.div
-                  className="mt-4 flex gap-2.5"
-                  initial="hidden"
-                  whileInView="visible"
-                  viewport={{ once: true }}
-                  variants={{
-                    hidden: {},
-                    visible: { transition: { staggerChildren: 0.05 } },
-                  }}
-                >
-                  {[
-                    { Icon: Twitter, label: "Twitter" },
-                    { Icon: Instagram, label: "Instagram" },
-                    { Icon: Facebook, label: "Facebook" },
-                    { Icon: Youtube, label: "YouTube" },
-                  ].map(({ Icon, label }) => (
-                    <motion.span
-                      key={label}
-                      variants={{ hidden: { opacity: 0, y: 6 }, visible: { opacity: 1, y: 0 } }}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] text-white/55"
-                      aria-label={label}
-                      role="img"
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                    </motion.span>
-                  ))}
-                </motion.div>
-              </motion.div>
-
-              <div>
-                <h4 className="mb-3 text-sm font-semibold text-white">Product</h4>
-                <ul className="space-y-1.5 text-sm text-[var(--solace-ds-text-muted)]">
-                  <li>
-                    <Link to="/how-it-works" className="hover:text-white">
-                      How It Works
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/pricing" className="hover:text-white">
-                      Pricing
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/privacy" className="hover:text-white">
-                      Privacy &amp; Safety
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.05 }}
-              >
-                <h4 className="mb-3 text-sm font-semibold text-white">Legal</h4>
-                <ul className="space-y-1.5 text-sm text-[var(--solace-ds-text-muted)]">
-                  <li>
-                    <Link to="/terms" className="hover:text-white">
-                      Terms &amp; Conditions
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/privacy" className="hover:text-white">
-                      Privacy Policy
-                    </Link>
-                  </li>
-                </ul>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.1 }}
-              >
-                <h4 className="mb-3 text-sm font-semibold text-white">Get Started</h4>
-                <ul className="space-y-1.5 text-sm text-[var(--solace-ds-text-muted)]">
-                  <li>
-                    <Link to="/signup" className="hover:text-white">
-                      Sign Up
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/login" className="hover:text-white">
-                      Log In
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      to="/admin/credentials"
-                      className="font-semibold text-violet-300 hover:text-violet-200"
-                    >
-                      Admin Credentials
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/admin/login" className="text-violet-300/90 hover:text-violet-200">
-                      Admin Portal
-                    </Link>
-                  </li>
-                </ul>
-              </motion.div>
-            </div>
-
-            <motion.div
-              className="mt-8 border-t border-white/[0.06] pt-6 text-center text-xs text-[var(--solace-ds-text-muted)] sm:text-sm"
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.15 }}
-            >
-              <p>&copy; 2024 Solace. All rights reserved.</p>
-              <p className="mt-1.5">
-                This is not a replacement for professional medical or mental health services.
-              </p>
-            </motion.div>
-          </div>
-        </footer>
+        <PublicFooter />
       </div>
     </motion.div>
   );

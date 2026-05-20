@@ -8,6 +8,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queries";
 import { Area, AreaChart, ResponsiveContainer, YAxis } from "recharts";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
@@ -38,7 +40,8 @@ function matteClass(extra?: string) {
 
 export function MoodCheckIn() {
   const navigate = useNavigate();
-  const { refreshProfile, profile } = useAuth();
+  const queryClient = useQueryClient();
+  const { refreshProfile, profile, user } = useAuth();
   const [selectedMood, setSelectedMood] = useState("");
   const [intensityTier, setIntensityTier] = useState<1 | 2 | 3>(2);
   const [selectedActivities, setSelectedActivities] = useState<string[]>([]);
@@ -142,6 +145,10 @@ export function MoodCheckIn() {
         intensity: selectedIntensity,
         activities: selectedActivities,
         notes: notes.trim() || undefined,
+      });
+      api.bustRecentActivityCache();
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.activity.recentForUser(user?.id),
       });
       const optimisticMoodPayload = {
         mood: selectedMood,

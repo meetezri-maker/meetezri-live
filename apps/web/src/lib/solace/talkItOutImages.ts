@@ -1,7 +1,7 @@
 /** Static assets under `public/talk-it-out/` for the Talk It Out lobby. */
 export const TALK_IT_OUT_IMAGES = {
-  /** Hero — night lake, dock, and candle lantern */
-  heroBackground: "/talk-it-out/1.png",
+  /** Hero — sunset mountain lake (`public/wellness-tools/6.png`) */
+  heroBackground: "/wellness-tools/6.png",
   /** Warm candle glow — layered on hero lower-left */
   heroCandleAccent: "/talk-it-out/2.png",
   /** Moonlit lake — hero / environment atmosphere */
@@ -18,8 +18,6 @@ export const TALK_IT_OUT_IMAGES = {
   environmentCampfire: "/talk-it-out/7.png",
   /** “Before we begin” lotus accent */
   lotusDecor: "/talk-it-out/8.png",
-  /** Ambient player thumbnail — Night Calm */
-  ambientThumbnail: "/talk-it-out/9.png",
   /** Full-page cool texture */
   pageBackground: "/talk-it-out/10.png",
   /** Violet glow overlay */

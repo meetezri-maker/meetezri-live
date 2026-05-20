@@ -9,6 +9,7 @@ import { GOAL_CATEGORY_OPTIONS, GOAL_STATUS_OPTIONS } from '@/app/features/goals
 import { useGoals, useFilteredGoals } from '@/app/features/goals/hooks';
 import { PREDEFINED_GOALS } from '@/app/features/goals/seedGoals';
 import type { GoalFilters, GoalSeedItem } from '@/app/features/goals/types';
+import { SolaceSelect } from '@/app/solace';
 
 /** Dropdown value: empty, catalog index, or custom */
 type GoalTemplateKey = '' | `pre:${number}` | 'custom';
@@ -26,6 +27,19 @@ export function GoalsList() {
   const filteredGoals = useFilteredGoals(user?.id, filters);
 
   const hasGoals = useMemo(() => filteredGoals.length > 0, [filteredGoals.length]);
+
+  const goalTemplateGroups = useMemo(
+    () =>
+      GOAL_CATEGORY_OPTIONS.map((cat) => ({
+        label: cat.label,
+        options: PREDEFINED_GOALS.flatMap((g, i) =>
+          g.goal_category === cat.value
+            ? [{ value: `pre:${i}` as const, label: g.goal_title }]
+            : []
+        ),
+      })),
+    []
+  );
 
   const selectedSeed: GoalSeedItem | null = useMemo(() => {
     if (!templateKey || templateKey === 'custom') return null;
@@ -63,30 +77,19 @@ export function GoalsList() {
                 <label htmlFor="goal-template" className="sr-only">
                   Select goal type
                 </label>
-                <select
+                <SolaceSelect
                   id="goal-template"
                   value={templateKey}
-                  onChange={(e) => {
-                    const v = e.target.value as GoalTemplateKey;
-                    setTemplateKey(v);
+                  onValueChange={(v) => {
+                    setTemplateKey(v as GoalTemplateKey);
                     setShowCreateForm(false);
                   }}
-                  className="h-10 w-full rounded-md border border-input bg-input-background px-3 text-sm"
-                >
-                  <option value="">Select a goal…</option>
-                  {GOAL_CATEGORY_OPTIONS.map((cat) => (
-                    <optgroup key={cat.value} label={cat.label}>
-                      {PREDEFINED_GOALS.map((g, i) =>
-                        g.goal_category === cat.value ? (
-                          <option key={`${cat.value}-${i}`} value={`pre:${i}`}>
-                            {g.goal_title}
-                          </option>
-                        ) : null
-                      )}
-                    </optgroup>
-                  ))}
-                  <option value="custom">Custom goal (write your own)</option>
-                </select>
+                  ariaLabel="Select goal type"
+                  placeholder="Select a goal…"
+                  variant="default"
+                  groups={goalTemplateGroups}
+                  options={[{ value: 'custom', label: 'Custom goal (write your own)' }]}
+                />
               </div>
               <div className="flex flex-wrap gap-2 shrink-0">
                 <Button type="button" disabled={!canOpenForm} onClick={() => setShowCreateForm(true)}>
@@ -118,34 +121,40 @@ export function GoalsList() {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-            <select
+            <SolaceSelect
               value={filters.status}
-              onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value as any }))}
-              className="h-10 rounded-md border border-input bg-input-background px-3 text-sm"
-            >
-              <option value="all">All statuses</option>
-              {GOAL_STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-            <select
+              onValueChange={(status) => setFilters((f) => ({ ...f, status: status as GoalFilters['status'] }))}
+              ariaLabel="Filter by status"
+              variant="default"
+              options={[
+                { value: 'all', label: 'All statuses' },
+                ...GOAL_STATUS_OPTIONS.map((s) => ({ value: s.value, label: s.label })),
+              ]}
+            />
+            <SolaceSelect
               value={filters.category}
-              onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value as any }))}
-              className="h-10 rounded-md border border-input bg-input-background px-3 text-sm"
-            >
-              <option value="all">All categories</option>
-              {GOAL_CATEGORY_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-            <select
+              onValueChange={(category) => setFilters((f) => ({ ...f, category: category as GoalFilters['category'] }))}
+              ariaLabel="Filter by category"
+              variant="default"
+              options={[
+                { value: 'all', label: 'All categories' },
+                ...GOAL_CATEGORY_OPTIONS.map((s) => ({ value: s.value, label: s.label })),
+              ]}
+            />
+            <SolaceSelect
               value={filters.sortBy}
-              onChange={(e) => setFilters((f) => ({ ...f, sortBy: e.target.value as any }))}
-              className="h-10 rounded-md border border-input bg-input-background px-3 text-sm"
-            >
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="highest_priority">Highest priority</option>
-              <option value="nearest_target_date">Nearest target date</option>
-              <option value="most_progress">Most progress</option>
-              <option value="least_progress">Least progress</option>
-            </select>
+              onValueChange={(sortBy) => setFilters((f) => ({ ...f, sortBy: sortBy as GoalFilters['sortBy'] }))}
+              ariaLabel="Sort goals"
+              variant="default"
+              options={[
+                { value: 'newest', label: 'Newest' },
+                { value: 'oldest', label: 'Oldest' },
+                { value: 'highest_priority', label: 'Highest priority' },
+                { value: 'nearest_target_date', label: 'Nearest target date' },
+                { value: 'most_progress', label: 'Most progress' },
+                { value: 'least_progress', label: 'Least progress' },
+              ]}
+            />
           </div>
 
           {loading && <div className="p-10 text-center text-gray-500">Loading goals...</div>}

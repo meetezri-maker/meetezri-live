@@ -21,6 +21,7 @@ import {
   Tag,
   Clock,
   ChevronDown,
+  Check,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { pickSolaceCinematicImage } from "@/lib/solace/solaceCinematicPool";
@@ -34,12 +35,18 @@ import { Skeleton } from "../../components/ui/skeleton";
 import { toast } from "sonner";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { cn } from "../../components/ui/utils";
+import { moodCheckInImageForValue } from "@/lib/solace/moodCheckInImages";
+import {
+  MOOD_CHECKIN_CARDS,
+  insightLabelForMoodKey,
+} from "./mood-check-in/moodCheckInData";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
+import { SolaceSelect } from "@/app/solace";
 
 const JOURNAL_LIST_PAGE_OPTIONS = [10, 20, 50] as const;
 
@@ -58,38 +65,204 @@ interface JournalEntry {
   favorite?: boolean;
 }
 
-const JOURNAL_MOODS = [
-  { value: "happy", emoji: "😊", label: "Happy" },
-  { value: "calm", emoji: "😌", label: "Calm" },
-  { value: "anxious", emoji: "😰", label: "Anxious" },
-  { value: "sad", emoji: "😢", label: "Sad" },
-  { value: "excited", emoji: "🤩", label: "Excited" },
-  { value: "angry", emoji: "😡", label: "Angry" },
-  { value: "grateful", emoji: "🥰", label: "Grateful" },
-] as const;
+/** Legacy journal entries may store emoji strings in mood_tags */
+const LEGACY_EMOJI_TO_MOOD_VALUE: Record<string, string> = {
+  "😊": "happy",
+  "😌": "calm",
+  "😰": "anxious",
+  "😢": "sad",
+  "🤩": "excited",
+  "😡": "angry",
+  "🥰": "grateful",
+};
 
 const MOOD_TAG_STYLES: Record<string, { bg: string; text: string; border: string }> = {
-  grateful: { bg: "bg-emerald-500/20", text: "text-emerald-400", border: "border-emerald-500/30" },
-  happy: { bg: "bg-amber-500/20", text: "text-amber-400", border: "border-amber-500/30" },
   calm: { bg: "bg-sky-500/20", text: "text-sky-400", border: "border-sky-500/30" },
+  overwhelmed: { bg: "bg-orange-500/20", text: "text-orange-400", border: "border-orange-500/30" },
+  hopeful: { bg: "bg-emerald-500/20", text: "text-emerald-400", border: "border-emerald-500/30" },
+  tired: { bg: "bg-slate-500/20", text: "text-slate-400", border: "border-slate-500/30" },
+  heavy: { bg: "bg-indigo-500/20", text: "text-indigo-400", border: "border-indigo-500/30" },
+  grateful: { bg: "bg-emerald-500/20", text: "text-emerald-400", border: "border-emerald-500/30" },
   anxious: { bg: "bg-orange-500/20", text: "text-orange-400", border: "border-orange-500/30" },
-  sad: { bg: "bg-blue-500/20", text: "text-blue-400", border: "border-blue-500/30" },
+  numb: { bg: "bg-zinc-500/20", text: "text-zinc-400", border: "border-zinc-500/30" },
   excited: { bg: "bg-pink-500/20", text: "text-pink-400", border: "border-pink-500/30" },
+  energetic: { bg: "bg-amber-500/20", text: "text-amber-400", border: "border-amber-500/30" },
+  happy: { bg: "bg-amber-500/20", text: "text-amber-400", border: "border-amber-500/30" },
+  nervous: { bg: "bg-rose-500/20", text: "text-rose-400", border: "border-rose-500/30" },
+  sad: { bg: "bg-blue-500/20", text: "text-blue-400", border: "border-blue-500/30" },
   angry: { bg: "bg-red-500/20", text: "text-red-400", border: "border-red-500/30" },
 };
 
+function normalizeMoodTag(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  const lower = trimmed.toLowerCase();
+  const card = MOOD_CHECKIN_CARDS.find(
+    (c) => c.value === lower || c.label.toLowerCase() === lower,
+  );
+  if (card) return card.value;
+  if (LEGACY_EMOJI_TO_MOOD_VALUE[trimmed]) return LEGACY_EMOJI_TO_MOOD_VALUE[trimmed];
+  return lower;
+}
+
 function getMoodTagStyle(mood: string) {
-  const key = mood.toLowerCase();
+  const key = normalizeMoodTag(mood);
   return MOOD_TAG_STYLES[key] || { bg: "bg-purple-500/20", text: "text-purple-400", border: "border-purple-500/30" };
 }
 
 function getMoodLabel(moodTag: string): string {
-  const found = JOURNAL_MOODS.find(m => 
-    m.value.toLowerCase() === moodTag.toLowerCase() || 
-    m.emoji === moodTag ||
-    m.label.toLowerCase() === moodTag.toLowerCase()
+  return insightLabelForMoodKey(normalizeMoodTag(moodTag));
+}
+
+function moodTagMatchesFilter(entryTag: string, filterValue: string): boolean {
+  if (!filterValue) return true;
+  const entryNorm = normalizeMoodTag(entryTag);
+  const filterNorm = normalizeMoodTag(filterValue);
+  return entryNorm === filterNorm || entryTag === filterValue;
+}
+
+interface JournalMoodPickerGridProps {
+  selectedValue: string;
+  onSelect: (value: string) => void;
+  compact?: boolean;
+}
+
+function JournalMoodPickerGrid({ selectedValue, onSelect, compact }: JournalMoodPickerGridProps) {
+  return (
+    <div
+      className={cn(
+        "grid gap-2.5 sm:gap-3",
+        compact ? "grid-cols-3 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
+      )}
+    >
+      {MOOD_CHECKIN_CARDS.map((m) => {
+        const active = selectedValue === m.value;
+        return (
+          <button
+            key={m.value}
+            type="button"
+            onClick={() => onSelect(active ? "" : m.value)}
+            aria-pressed={active}
+            aria-label={m.label}
+            className={cn(
+              "group relative overflow-hidden rounded-[1rem] border text-left transition-[transform,box-shadow,border-color] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35",
+              compact ? "min-h-[88px] sm:min-h-[96px]" : "min-h-[108px] sm:min-h-[118px]",
+              active
+                ? "scale-[1.02] border-violet-400/45 shadow-[0_16px_40px_-18px_rgba(76,29,149,0.55),inset_0_0_0_1px_rgba(167,139,250,0.28)] ring-1 ring-violet-400/22"
+                : "border-white/[0.07] hover:border-white/[0.14] hover:shadow-[0_14px_36px_-20px_rgba(76,29,149,0.38)]",
+            )}
+          >
+            <img
+              src={m.image}
+              alt=""
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.97] transition-transform duration-500 group-hover:scale-[1.05]"
+            />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/92 via-black/50 to-black/15" />
+            <div className="relative z-[1] flex h-full flex-col justify-end p-2.5 sm:p-3">
+              {active ? (
+                <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full border border-violet-300/40 bg-black/50 text-violet-200 shadow-[0_0_16px_rgba(139,92,246,0.4)]">
+                  <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                </span>
+              ) : null}
+              <p className={cn("font-medium tracking-tight text-zinc-50", compact ? "text-[12px]" : "text-[13px]")}>
+                {m.label}
+              </p>
+            </div>
+          </button>
+        );
+      })}
+    </div>
   );
-  return found?.label || moodTag.charAt(0).toUpperCase() + moodTag.slice(1).toLowerCase();
+}
+
+interface JournalMoodAvatarProps {
+  moodTag?: string;
+  size?: number;
+  className?: string;
+}
+
+function JournalMoodAvatar({ moodTag, size = 36, className }: JournalMoodAvatarProps) {
+  if (!moodTag) {
+    return <FluentEmoji emoji="😐" size={size} className={className} />;
+  }
+  const value = normalizeMoodTag(moodTag);
+  const hasCard = MOOD_CHECKIN_CARDS.some((c) => c.value === value);
+  if (hasCard) {
+    return (
+      <img
+        src={moodCheckInImageForValue(value)}
+        alt=""
+        width={size}
+        height={size}
+        className={cn("shrink-0 rounded-xl object-cover shadow-[0_4px_16px_-6px_rgba(0,0,0,0.6)]", className)}
+      />
+    );
+  }
+  const legacyEmoji = LEGACY_EMOJI_TO_MOOD_VALUE[moodTag.trim()] ?? (moodTag.length <= 4 ? moodTag : "😐");
+  return <FluentEmoji emoji={legacyEmoji} size={size} className={className} />;
+}
+
+interface JournalEntryMoodThumbProps {
+  moodTag?: string;
+  className?: string;
+}
+
+/** Wide mood artwork for timeline entry rows */
+function JournalEntryMoodThumb({ moodTag, className }: JournalEntryMoodThumbProps) {
+  const value = moodTag ? normalizeMoodTag(moodTag) : "";
+  const hasCard = value && MOOD_CHECKIN_CARDS.some((c) => c.value === value);
+  const label = moodTag ? getMoodLabel(moodTag) : null;
+  const style = moodTag ? getMoodTagStyle(moodTag) : null;
+
+  if (!hasCard) {
+    return (
+      <div
+        className={cn(
+          "relative flex w-[88px] shrink-0 items-center justify-center self-stretch border-r border-white/[0.06] bg-gradient-to-br from-violet-950/40 via-[#0a0f1c] to-[#050814] sm:w-[108px]",
+          className,
+        )}
+      >
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.04]">
+          {moodTag ? (
+            <JournalMoodAvatar moodTag={moodTag} size={32} />
+          ) : (
+            <BookOpen className="h-7 w-7 text-violet-300/50" strokeWidth={1.5} />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "relative w-[96px] shrink-0 self-stretch overflow-hidden border-r border-white/[0.06] sm:w-[120px]",
+        className,
+      )}
+    >
+      <img
+        src={moodCheckInImageForValue(value)}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-black/10" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent to-[#0c0c14]/55" />
+      {label && style ? (
+        <div className="absolute inset-x-0 bottom-0 z-[1] p-2.5 sm:p-3">
+          <span
+            className={cn(
+              "inline-flex max-w-full items-center rounded-md border px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm sm:text-[11px]",
+              style.bg,
+              style.text,
+              style.border,
+            )}
+          >
+            <span className="truncate">{label}</span>
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function getReadingTime(content: string | null): number {
@@ -213,10 +386,18 @@ function MoodSemicircle({ positive, neutral, difficult, centerEmoji }: MoodSemic
 
 interface JournalHeroBackdropProps {
   className?: string;
+  /** When set, uses the mood check-in artwork for this entry's mood */
+  moodTag?: string;
 }
 
-/** One full-bleed landscape (locked reference). Moon / lantern warmth via light only — no inset stock photo. */
-function JournalHeroBackdrop({ className }: JournalHeroBackdropProps) {
+/** Full-bleed hero — mood image from the entry when tagged, otherwise default journal landscape. */
+function JournalHeroBackdrop({ className, moodTag }: JournalHeroBackdropProps) {
+  const moodValue = moodTag ? normalizeMoodTag(moodTag) : "";
+  const hasMoodArt = moodValue && MOOD_CHECKIN_CARDS.some((c) => c.value === moodValue);
+  const heroSrc = hasMoodArt
+    ? moodCheckInImageForValue(moodValue)
+    : pickSolaceCinematicImage("journal-hero");
+
   return (
     <div
       className={cn(
@@ -225,7 +406,8 @@ function JournalHeroBackdrop({ className }: JournalHeroBackdropProps) {
       )}
     >
       <img
-        src={pickSolaceCinematicImage("journal-hero")}
+        key={heroSrc}
+        src={heroSrc}
         alt=""
         className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[center_38%]"
       />
@@ -449,21 +631,21 @@ function JournalPagination({
           <label htmlFor={selectId} className="sr-only">
             Entries per page
           </label>
-          <select
+          <SolaceSelect
             id={selectId}
-            value={pageSize}
-            onChange={(e) => {
-              onPageSizeChange(Number(e.target.value));
+            value={String(pageSize)}
+            onValueChange={(value) => {
+              onPageSizeChange(Number(value));
               onPageChange(1);
             }}
-            className="min-h-11 w-full cursor-pointer rounded-xl border border-white/[0.1] bg-[#0B0B15]/80 px-3 py-2.5 text-sm text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus:outline-none focus:ring-2 focus:ring-violet-500/30 sm:w-auto"
-          >
-            {pageSizeOptions.map((n) => (
-              <option key={n} value={n} className="bg-[#0B0B15]">
-                {n} per page
-              </option>
-            ))}
-          </select>
+            ariaLabel="Entries per page"
+            variant="default"
+            triggerClassName="min-h-11 w-full sm:w-auto"
+            options={pageSizeOptions.map((n) => ({
+              value: String(n),
+              label: `${n} per page`,
+            }))}
+          />
         </div>
         <div className="flex items-center justify-center gap-3 sm:justify-end">
           <button
@@ -593,16 +775,25 @@ export function Journal() {
       contextMessage = "You took time to reflect, and that matters. Keep listening to what your thoughts are telling you.";
     }
 
-    if (!text.trim()) {
+    if (!text.trim() && moodEmoji) {
+      const moodKey = normalizeMoodTag(moodEmoji);
       const moodFallback: Record<string, string> = {
-        "😊": "Love that happy energy - keep it going.",
-        "😌": "Calm and steady - great space to be in.",
-        "😰": "You showed up for yourself today. That matters.",
-        "😢": "Thank you for sharing this. You are not alone.",
-        "🤩": "That excitement is powerful - lean into it.",
-        "😡": "Strong feelings are valid. Thanks for expressing them.",
+        happy: "Love that happy energy - keep it going.",
+        calm: "Calm and steady - great space to be in.",
+        anxious: "You showed up for yourself today. That matters.",
+        sad: "Thank you for sharing this. You are not alone.",
+        excited: "That excitement is powerful - lean into it.",
+        angry: "Strong feelings are valid. Thanks for expressing them.",
+        grateful: "Gratitude is a gentle anchor - hold onto it.",
+        overwhelmed: "When everything feels like a lot, one breath at a time is enough.",
+        hopeful: "Hope is a quiet strength - nurture it.",
+        tired: "Rest is part of healing, not a setback.",
+        heavy: "You named something hard - that takes courage.",
+        numb: "Even quiet days count as showing up for yourself.",
+        energetic: "That spark is worth celebrating.",
+        nervous: "It's okay to feel on edge - you're still here.",
       };
-      contextMessage = moodFallback[moodEmoji] ?? contextMessage;
+      contextMessage = moodFallback[moodKey] ?? contextMessage;
     }
 
     return `${actionPrefix} ${contextMessage}`;
@@ -619,15 +810,8 @@ export function Journal() {
       const data = await api.journal.getAll();
       
       const formattedEntries = data.map((entry: any) => {
-        let moodDisplay = '😐';
-        if (entry.mood_tags && entry.mood_tags.length > 0) {
-          const rawMood = entry.mood_tags[0];
-          const moodObj = JOURNAL_MOODS.find(m => 
-            m.emoji === rawMood || 
-            m.value.toLowerCase() === rawMood.toLowerCase()
-          );
-          moodDisplay = moodObj ? moodObj.emoji : rawMood;
-        }
+        const rawMood = entry.mood_tags?.[0] ?? "";
+        const moodValue = rawMood ? normalizeMoodTag(rawMood) : "";
 
         return {
           ...entry,
@@ -638,7 +822,7 @@ export function Journal() {
           preview: entry.content
             ? truncatePreview(htmlToPlainText(entry.content), 100)
             : "",
-          mood: moodDisplay,
+          mood: moodValue || rawMood,
           favorite: entry.is_favorite || false
         };
       });
@@ -723,15 +907,10 @@ export function Journal() {
       setNewEntryTitle(entry.title || "");
       setNewEntryContent(entry.content || "");
       
-      let moodToSelect = "";
-      if (entry.mood_tags && entry.mood_tags.length > 0) {
-        const rawMood = entry.mood_tags[0];
-        const moodObj = JOURNAL_MOODS.find(m => 
-          m.emoji === rawMood || 
-          m.value.toLowerCase() === rawMood.toLowerCase()
-        );
-        moodToSelect = moodObj ? moodObj.emoji : rawMood;
-      }
+      const moodToSelect =
+        entry.mood_tags && entry.mood_tags.length > 0
+          ? normalizeMoodTag(entry.mood_tags[0])
+          : "";
       setSelectedMood(moodToSelect);
       
       setEditingEntry(entryId);
@@ -768,16 +947,8 @@ export function Journal() {
         if (activeTab === "tagged" && (!entry.mood_tags || entry.mood_tags.length === 0)) return false;
 
         if (filterMood) {
-          const moodValue = JOURNAL_MOODS.find((m) => m.emoji === filterMood)?.value;
           const entryMood = entry.mood_tags?.[0];
-
-          if (!entryMood) return false;
-
-          const isMatch =
-            entryMood === filterMood ||
-            (moodValue && entryMood.toLowerCase() === moodValue.toLowerCase());
-
-          if (!isMatch) return false;
+          if (!entryMood || !moodTagMatchesFilter(entryMood, filterMood)) return false;
         }
 
         if (filterDateRange !== "all") {
@@ -865,11 +1036,11 @@ export function Journal() {
 
   const moodStats = useMemo(() => {
     const stats = { positive: 0, neutral: 0, difficult: 0 };
-    const positiveLabels = ["happy", "calm", "excited", "grateful"];
-    const difficultLabels = ["anxious", "sad", "angry"];
+    const positiveLabels = ["happy", "calm", "excited", "grateful", "hopeful", "energetic"];
+    const difficultLabels = ["anxious", "sad", "angry", "overwhelmed", "heavy", "tired", "nervous", "numb"];
 
     entries.forEach(entry => {
-      const mood = entry.mood_tags?.[0]?.toLowerCase();
+      const mood = entry.mood_tags?.[0] ? normalizeMoodTag(entry.mood_tags[0]) : "";
       if (!mood) {
         stats.neutral++;
       } else if (positiveLabels.some(p => mood.includes(p))) {
@@ -925,15 +1096,11 @@ export function Journal() {
     return activity;
   }, [entries]);
 
-  const featuredEntry = useMemo(() => {
+  const recentEntry = useMemo(() => {
     if (entries.length === 0) return null;
-    const favorites = entries.filter(e => e.favorite);
-    if (favorites.length > 0) {
-      return favorites.sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )[0];
-    }
-    return entries[0];
+    return [...entries].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    )[0];
   }, [entries]);
 
   const showFetchFailure = Boolean(loadError && entries.length === 0);
@@ -1032,58 +1199,61 @@ export function Journal() {
                     </div>
                   </div>
                 </div>
-              ) : featuredEntry ? (
+              ) : recentEntry ? (
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="overflow-hidden rounded-[1.35rem] border border-white/[0.08] bg-[#0a0a12]/90 shadow-[0_28px_90px_-48px_rgba(0,0,0,0.92),0_0_48px_-24px_rgba(139,92,246,0.28)] ring-1 ring-inset ring-white/[0.045]"
                 >
                   <div className="grid grid-cols-1 md:grid-cols-[minmax(0,40%)_1fr]">
-                    <JournalHeroBackdrop />
+                    <JournalHeroBackdrop moodTag={recentEntry.mood_tags?.[0]} />
 
                     <div className="flex flex-1 flex-col justify-between gap-6 p-6 sm:p-7">
                       <div className="space-y-4">
-                        {featuredEntry.mood_tags?.[0] ? (
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-violet-300/80">
+                          Recent entry
+                        </p>
+                        {recentEntry.mood_tags?.[0] ? (
                           <span
                             className={cn(
                               "inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium",
-                              getMoodTagStyle(featuredEntry.mood_tags[0]).bg,
-                              getMoodTagStyle(featuredEntry.mood_tags[0]).text,
-                              getMoodTagStyle(featuredEntry.mood_tags[0]).border
+                              getMoodTagStyle(recentEntry.mood_tags[0]).bg,
+                              getMoodTagStyle(recentEntry.mood_tags[0]).text,
+                              getMoodTagStyle(recentEntry.mood_tags[0]).border
                             )}
                           >
-                            <FluentEmoji emoji={featuredEntry.mood || "😐"} size={14} />
-                            {getMoodLabel(featuredEntry.mood_tags[0])}
+                            <JournalMoodAvatar moodTag={recentEntry.mood_tags[0]} size={14} />
+                            {getMoodLabel(recentEntry.mood_tags[0])}
                           </span>
                         ) : null}
                         <h2 className="text-balance text-xl font-semibold leading-snug tracking-tight text-zinc-50 sm:text-2xl">
-                          {featuredEntry.title || "Untitled reflection"}
+                          {recentEntry.title || "Untitled reflection"}
                         </h2>
-                        {featuredEntry.preview ? (
+                        {recentEntry.preview ? (
                           <p className="max-w-xl text-sm leading-relaxed text-zinc-400 line-clamp-3 sm:line-clamp-2">
-                            {featuredEntry.preview}
+                            {recentEntry.preview}
                           </p>
                         ) : null}
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-zinc-500">
                           <span className="inline-flex items-center gap-1.5">
                             <Calendar className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                            {new Date(featuredEntry.created_at).toLocaleDateString("en-US", {
+                            {new Date(recentEntry.created_at).toLocaleDateString("en-US", {
                               month: "short",
                               day: "numeric",
                               year: "numeric",
                             })}{" "}
-                            · {formatEntryTime(featuredEntry.created_at)}
+                            · {formatEntryTime(recentEntry.created_at)}
                           </span>
                           <span className="inline-flex items-center gap-1.5">
                             <Clock className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                            {getReadingTime(featuredEntry.content)} min read
+                            {getReadingTime(recentEntry.content)} min read
                           </span>
                         </div>
                       </div>
                       <div className="flex md:justify-end">
                         <Button
                           type="button"
-                          onClick={() => handleEditEntry(featuredEntry.id)}
+                          onClick={() => handleEditEntry(recentEntry.id)}
                           className="min-h-11 w-full border border-violet-500/35 bg-zinc-950/60 text-violet-100 shadow-[0_0_24px_rgba(139,92,246,0.18)] hover:bg-violet-950/50 md:w-auto"
                         >
                           Open
@@ -1295,45 +1465,31 @@ export function Journal() {
                                     }
                                   }}
                                   className={cn(
-                                    "group cursor-pointer rounded-[1.15rem] border border-white/[0.07] bg-[#0c0c14]/88 p-4 text-left shadow-[0_18px_50px_-38px_rgba(0,0,0,0.88)] outline-none backdrop-blur-sm transition-all duration-300 sm:p-5",
+                                    "group cursor-pointer overflow-hidden rounded-[1.15rem] border border-white/[0.07] bg-[#0c0c14]/88 text-left shadow-[0_18px_50px_-38px_rgba(0,0,0,0.88)] outline-none backdrop-blur-sm transition-all duration-300",
                                     "hover:border-violet-500/28 hover:shadow-[0_0_36px_-12px_rgba(139,92,246,0.24)] focus-visible:ring-2 focus-visible:ring-violet-400/35",
                                     entry.favorite && "border-violet-500/20 shadow-[0_0_28px_-14px_rgba(139,92,246,0.2)]"
                                   )}
                                 >
-                                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-                                    <div className="flex min-w-0 flex-1 gap-4">
-                                      <div className="shrink-0 pt-0.5">
-                                        <FluentEmoji emoji={entry.mood || "😐"} size={36} />
-                                      </div>
+                                  <div className="flex min-h-[104px] sm:min-h-[112px]">
+                                    <JournalEntryMoodThumb moodTag={entry.mood_tags?.[0]} />
+
+                                    <div className="flex min-w-0 flex-1 flex-col justify-between gap-3 p-4 sm:flex-row sm:items-stretch sm:gap-5 sm:p-5">
                                       <div className="min-w-0 flex-1">
                                         <h3 className="text-base font-medium leading-snug tracking-tight text-zinc-100 transition-colors group-hover:text-violet-100">
                                           {entry.title || "Untitled reflection"}
                                         </h3>
                                         {entry.preview ? (
-                                          <p className="mt-2 text-sm leading-relaxed text-zinc-400 line-clamp-3">
+                                          <p className="mt-2 text-sm leading-relaxed text-zinc-400 line-clamp-2 sm:line-clamp-3">
                                             {entry.preview}
                                           </p>
                                         ) : null}
                                       </div>
-                                    </div>
 
-                                    <div className="flex shrink-0 flex-row items-center justify-between gap-3 border-t border-white/[0.06] pt-3 sm:w-44 sm:flex-col sm:items-end sm:border-t-0 sm:pt-0">
-                                      <span className="text-xs tabular-nums text-slate-500">
-                                        {formatEntryTime(entry.created_at)}
-                                      </span>
-                                      {entry.mood_tags?.[0] ? (
-                                        <span
-                                          className={cn(
-                                            "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium sm:order-none",
-                                            getMoodTagStyle(entry.mood_tags[0]).bg,
-                                            getMoodTagStyle(entry.mood_tags[0]).text,
-                                            getMoodTagStyle(entry.mood_tags[0]).border
-                                          )}
-                                        >
-                                          {getMoodLabel(entry.mood_tags[0])}
+                                      <div className="flex shrink-0 flex-row items-center justify-between gap-3 border-t border-white/[0.06] pt-3 sm:w-36 sm:flex-col sm:items-end sm:justify-between sm:border-t-0 sm:pt-0">
+                                        <span className="text-xs tabular-nums text-slate-500">
+                                          {formatEntryTime(entry.created_at)}
                                         </span>
-                                      ) : null}
-                                      <div className="flex items-center gap-1">
+                                        <div className="flex items-center gap-1">
                                         <button
                                           type="button"
                                           onClick={(e) => handleToggleFavorite(entry.id, e)}
@@ -1360,7 +1516,7 @@ export function Journal() {
                                               type="button"
                                               onClick={(e) => e.stopPropagation()}
                                               onPointerDown={(e) => e.stopPropagation()}
-                                              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-zinc-400 opacity-100 transition hover:bg-white/[0.05] sm:opacity-0 sm:group-hover:opacity-100"
+                                              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-white/[0.05] hover:text-zinc-200"
                                               aria-label="Entry actions"
                                             >
                                               <MoreVertical className="h-4 w-4" />
@@ -1391,6 +1547,7 @@ export function Journal() {
                                             </DropdownMenuItem>
                                           </DropdownMenuContent>
                                         </DropdownMenu>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
@@ -1500,95 +1657,94 @@ export function Journal() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-4 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-2xl z-50"
+              className="fixed inset-3 z-50 flex items-center justify-center sm:inset-4"
             >
-              <div className="bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-semibold text-slate-100">
-                      {editingEntry ? 'Edit Entry' : 'New Entry'}
-                    </h2>
-                    <button
-                      onClick={() => setShowNewEntry(false)}
-                      className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
+              <div
+                role="dialog"
+                aria-labelledby="journal-entry-modal-title"
+                className="flex max-h-[min(92dvh,880px)] w-full max-w-2xl flex-col overflow-hidden rounded-[1.35rem] border border-white/[0.08] bg-[#0c0c14]/96 shadow-[0_28px_90px_-48px_rgba(0,0,0,0.92),0_0_48px_-24px_rgba(139,92,246,0.28)] ring-1 ring-inset ring-white/[0.045] backdrop-blur-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] px-5 py-4 sm:px-6 sm:py-5">
+                  <h2 id="journal-entry-modal-title" className="text-lg font-semibold tracking-tight text-zinc-50 sm:text-xl">
+                    {editingEntry ? "Edit Entry" : "New Entry"}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewEntry(false)}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-zinc-400 transition hover:border-violet-500/30 hover:bg-violet-500/10 hover:text-zinc-100"
+                    aria-label="Close"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:space-y-6 sm:px-6 sm:py-6">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-zinc-300">Title (Optional)</label>
+                    <input
+                      type="text"
+                      value={newEntryTitle}
+                      onChange={(e) => setNewEntryTitle(e.target.value)}
+                      placeholder="Give your entry a title..."
+                      className="w-full rounded-xl border border-white/[0.08] bg-[#0B0B15]/80 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus:border-violet-500/40 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                    />
                   </div>
 
-                  <div className="space-y-5">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">Title (Optional)</label>
-                      <input
-                        type="text"
-                        value={newEntryTitle}
-                        onChange={(e) => setNewEntryTitle(e.target.value)}
-                        placeholder="Give your entry a title..."
-                        className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">How are you feeling?</label>
-                      <div className="flex gap-2 flex-wrap">
-                        {JOURNAL_MOODS.map((mood) => (
-                          <button
-                            key={mood.value}
-                            onClick={() => setSelectedMood(mood.emoji)}
-                            className={cn(
-                              "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all",
-                              selectedMood === mood.emoji
-                                ? "bg-purple-600/20 border-purple-500/50 text-purple-300"
-                                : "bg-slate-800/30 border-slate-700/30 text-slate-400 hover:bg-slate-700/30 hover:text-slate-300"
-                            )}
-                          >
-                            <FluentEmoji emoji={mood.emoji} size={20} />
-                            <span className="text-sm">{mood.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">Write your thoughts...</label>
-                      <RichTextEditor
-                        value={newEntryContent}
-                        onChange={(e) => setNewEntryContent(e)}
-                        placeholder="Start writing... Let your thoughts flow freely."
-                        className="w-full bg-slate-800/30 border-slate-700/50 rounded-xl focus-within:border-purple-500/50"
-                        hideMoodSelector={true}
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>Your journal is private and secure</span>
-                    </div>
-
-                    <div className="flex gap-3 pt-2">
-                      <Button
-                        onClick={() => setShowNewEntry(false)}
-                        variant="outline"
-                        className="flex-1 bg-slate-800/50 border-slate-700/50 hover:bg-slate-700/50 text-slate-300"
-                      >
-                        Cancel
-                      </Button>
-                      <Button 
-                        onClick={handleSaveEntry} 
-                        className="flex-1 bg-purple-600 hover:bg-purple-700 text-white" 
-                        disabled={isSaving}
-                      >
-                        {isSaving ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          "Save Entry"
-                        )}
-                      </Button>
-                    </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-zinc-300">How are you feeling?</label>
+                    <p className="mb-3 text-[13px] leading-relaxed text-[var(--solace-muted)]">
+                      Choose the emotion that best fits you right now.
+                    </p>
+                    <JournalMoodPickerGrid
+                      selectedValue={selectedMood}
+                      onSelect={setSelectedMood}
+                      compact
+                    />
                   </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-zinc-300">Write your thoughts...</label>
+                    <RichTextEditor
+                      value={newEntryContent}
+                      onChange={(e) => setNewEntryContent(e)}
+                      placeholder="Start writing... Let your thoughts flow freely."
+                      className="w-full"
+                      hideMoodSelector={true}
+                      variant="solace"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-zinc-500">
+                    <Lock className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                    <span>Your journal is private and secure</span>
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 gap-3 border-t border-white/[0.06] px-5 py-4 sm:px-6 sm:py-5">
+                  <Button
+                    type="button"
+                    onClick={() => setShowNewEntry(false)}
+                    variant="outline"
+                    className="min-h-11 flex-1 border-white/[0.1] bg-white/[0.04] text-zinc-300 hover:border-violet-500/30 hover:bg-violet-500/10 hover:text-zinc-100"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleSaveEntry}
+                    className="min-h-11 flex-1 bg-gradient-to-r from-violet-600/95 to-fuchsia-600/90 text-white shadow-[0_0_28px_rgba(139,92,246,0.3)] hover:from-violet-500 hover:to-fuchsia-500"
+                    disabled={isSaving}
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      "Save Entry"
+                    )}
+                  </Button>
                 </div>
               </div>
             </motion.div>
@@ -1613,24 +1769,27 @@ export function Journal() {
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               className="fixed inset-4 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-md z-[70]"
             >
-              <div className="bg-slate-900 border border-purple-500/30 rounded-2xl shadow-2xl p-6">
-                <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="rounded-[1.35rem] border border-white/[0.08] bg-[#0c0c14]/96 p-6 shadow-[0_28px_90px_-48px_rgba(0,0,0,0.92),0_0_40px_-20px_rgba(139,92,246,0.25)] ring-1 ring-inset ring-violet-500/15 backdrop-blur-xl">
+                <div className="mb-4 flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                      <Sparkles className="w-4 h-4 text-purple-400" />
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-violet-500/25 bg-violet-500/15">
+                      <Sparkles className="h-4 w-4 text-violet-300" />
                     </div>
-                    <h3 className="text-lg font-semibold text-slate-100">Reflection Saved</h3>
+                    <h3 className="text-lg font-semibold text-zinc-50">Reflection Saved</h3>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setShowSaveFeedbackModal(false)}
-                    className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+                    className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-100"
+                    aria-label="Close"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
-                <p className="text-sm text-slate-400 leading-relaxed mb-5">{saveFeedbackMessage}</p>
+                <p className="mb-5 text-sm leading-relaxed text-zinc-400">{saveFeedbackMessage}</p>
                 <Button
-                  className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                  type="button"
+                  className="min-h-11 w-full bg-gradient-to-r from-violet-600/95 to-fuchsia-600/90 text-white shadow-[0_0_28px_rgba(139,92,246,0.3)] hover:from-violet-500 hover:to-fuchsia-500"
                   onClick={() => setShowSaveFeedbackModal(false)}
                 >
                   Continue
@@ -1659,53 +1818,42 @@ export function Journal() {
               onClick={(e) => e.stopPropagation()}
               className="fixed inset-4 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-full sm:max-w-md z-50"
             >
-              <div className="bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl p-6">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-6">
+              <div className="max-h-[min(90dvh,720px)] overflow-y-auto rounded-[1.35rem] border border-white/[0.08] bg-[#0c0c14]/96 p-6 shadow-[0_28px_90px_-48px_rgba(0,0,0,0.92)] ring-1 ring-inset ring-white/[0.045] backdrop-blur-xl">
+                <div className="mb-6 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Filter className="w-5 h-5 text-purple-400" />
-                    <h2 className="text-lg font-semibold text-slate-100">Filter Entries</h2>
+                    <Filter className="h-5 w-5 text-violet-300" />
+                    <h2 className="text-lg font-semibold text-zinc-50">Filter Entries</h2>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setShowFilterModal(false)}
-                    className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-zinc-400 transition hover:border-violet-500/30 hover:bg-violet-500/10 hover:text-zinc-100"
+                    aria-label="Close"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="h-5 w-5" />
                   </button>
                 </div>
 
-                {/* Filter by Mood */}
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-slate-300 mb-3">Filter by Mood</label>
-                  <div className="flex gap-2 flex-wrap">
-                    {JOURNAL_MOODS.map((mood) => (
-                      <button
-                        key={mood.value}
-                        onClick={() => setDraftMood(draftMood === mood.emoji ? "" : mood.emoji)}
-                        className={cn(
-                          "p-2.5 rounded-xl border transition-all",
-                          draftMood === mood.emoji
-                            ? "bg-purple-600/20 border-purple-500/50"
-                            : "bg-slate-800/30 border-slate-700/30 hover:bg-slate-700/30"
-                        )}
-                      >
-                        <FluentEmoji emoji={mood.emoji} size={24} />
-                      </button>
-                    ))}
-                  </div>
-                  {draftMood && (
+                  <label className="mb-3 block text-sm font-medium text-zinc-300">Filter by Mood</label>
+                  <JournalMoodPickerGrid
+                    selectedValue={draftMood}
+                    onSelect={setDraftMood}
+                    compact
+                  />
+                  {draftMood ? (
                     <button
+                      type="button"
                       onClick={() => setDraftMood("")}
-                      className="text-xs text-purple-400 mt-2 hover:text-purple-300"
+                      className="mt-2 text-xs text-violet-300 transition hover:text-violet-200"
                     >
                       Clear mood filter
                     </button>
-                  )}
+                  ) : null}
                 </div>
 
-                {/* Filter by Date Range */}
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-slate-300 mb-3">Filter by Date</label>
+                  <label className="mb-3 block text-sm font-medium text-zinc-300">Filter by Date</label>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { value: "all", label: "All Time" },
@@ -1715,12 +1863,13 @@ export function Journal() {
                     ].map((range) => (
                       <button
                         key={range.value}
+                        type="button"
                         onClick={() => setDraftDateRange(range.value as typeof draftDateRange)}
                         className={cn(
-                          "px-4 py-2.5 rounded-xl border text-sm font-medium transition-all",
+                          "rounded-xl border px-4 py-2.5 text-sm font-medium transition-all",
                           draftDateRange === range.value
-                            ? "bg-purple-600/20 border-purple-500/50 text-purple-300"
-                            : "bg-slate-800/30 border-slate-700/30 text-slate-400 hover:bg-slate-700/30"
+                            ? "border-violet-500/45 bg-violet-500/15 text-violet-100"
+                            : "border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:border-violet-500/25 hover:text-zinc-200",
                         )}
                       >
                         {range.label}
@@ -1729,56 +1878,65 @@ export function Journal() {
                   </div>
                 </div>
 
-                {/* Filter by Favorites */}
                 <div className="mb-6">
                   <button
+                    type="button"
                     onClick={() => setDraftFavorites(!draftFavorites)}
                     className={cn(
-                      "w-full px-4 py-3 rounded-xl border flex items-center justify-between transition-all",
+                      "flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all",
                       draftFavorites
-                        ? "bg-pink-600/20 border-pink-500/50"
-                        : "bg-slate-800/30 border-slate-700/30 hover:bg-slate-700/30"
+                        ? "border-fuchsia-500/45 bg-fuchsia-500/15"
+                        : "border-white/[0.08] bg-white/[0.03] hover:border-fuchsia-500/25",
                     )}
                   >
                     <div className="flex items-center gap-2">
-                      <Heart className={cn(
-                        "w-4 h-4",
-                        draftFavorites ? "text-pink-400 fill-pink-400" : "text-slate-400"
-                      )} />
-                      <span className={cn(
-                        "text-sm font-medium",
-                        draftFavorites ? "text-pink-300" : "text-slate-400"
-                      )}>
+                      <Heart
+                        className={cn(
+                          "h-4 w-4",
+                          draftFavorites ? "fill-fuchsia-400 text-fuchsia-400" : "text-zinc-400",
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          "text-sm font-medium",
+                          draftFavorites ? "text-fuchsia-200" : "text-zinc-400",
+                        )}
+                      >
                         Show Favorites Only
                       </span>
                     </div>
-                    <div className={cn(
-                      "w-10 h-5 rounded-full transition-colors relative",
-                      draftFavorites ? "bg-pink-500" : "bg-slate-600"
-                    )}>
-                      <div className={cn(
-                        "absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform",
-                        draftFavorites ? "translate-x-5" : "translate-x-0.5"
-                      )} />
+                    <div
+                      className={cn(
+                        "relative h-5 w-10 rounded-full transition-colors",
+                        draftFavorites ? "bg-fuchsia-500" : "bg-zinc-600",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
+                          draftFavorites ? "translate-x-5" : "translate-x-0.5",
+                        )}
+                      />
                     </div>
                   </button>
                 </div>
 
-                {/* Footer Buttons */}
-                <div className="flex items-center gap-3 pt-4 border-t border-slate-700/50">
+                <div className="flex items-center gap-3 border-t border-white/[0.06] pt-4">
                   <Button
+                    type="button"
                     variant="outline"
                     onClick={() => {
                       setDraftMood("");
                       setDraftDateRange("all");
                       setDraftFavorites(false);
                     }}
-                    className="flex-1 bg-slate-800/50 border-slate-700/50 hover:bg-slate-700/50 text-slate-300"
+                    className="min-h-11 flex-1 border-white/[0.1] bg-white/[0.04] text-zinc-300 hover:border-violet-500/30 hover:bg-violet-500/10 hover:text-zinc-100"
                   >
                     Clear All
                   </Button>
                   <Button
-                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                    type="button"
+                    className="min-h-11 flex-1 bg-gradient-to-r from-violet-600/95 to-fuchsia-600/90 text-white shadow-[0_0_28px_rgba(139,92,246,0.3)] hover:from-violet-500 hover:to-fuchsia-500"
                     onClick={() => {
                       setFilterMood(draftMood);
                       setFilterDateRange(draftDateRange);

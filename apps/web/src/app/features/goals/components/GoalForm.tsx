@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { z } from 'zod';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
+import { SolaceSelect } from '@/app/solace';
 import {
   GOAL_CATEGORY_OPTIONS,
   GOAL_CHECKIN_FREQUENCY_OPTIONS,
@@ -160,30 +161,78 @@ export function GoalForm({
           <Input value={values.goal_title} onChange={(e) => setValues((v) => ({ ...v, goal_title: e.target.value }))} placeholder="Goal Title" />
           {errors.goal_title && <p className="text-xs text-red-500 mt-1">{errors.goal_title}</p>}
         </div>
-        <select value={values.goal_category} onChange={(e) => setValues((v) => ({ ...v, goal_category: e.target.value as any }))} className="h-9 rounded-md border border-input bg-input-background px-3 text-sm">
-          {GOAL_CATEGORY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <SolaceSelect
+          value={values.goal_category}
+          onValueChange={(goal_category) => setValues((v) => ({ ...v, goal_category: goal_category as GoalFormValues['goal_category'] }))}
+          ariaLabel="Goal category"
+          variant="default"
+          size="sm"
+          triggerClassName="h-9"
+          options={GOAL_CATEGORY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+        />
         <Input value={values.goal_description} onChange={(e) => setValues((v) => ({ ...v, goal_description: e.target.value }))} placeholder="Goal Description" />
         <Input value={values.why_this_goal_matters} onChange={(e) => setValues((v) => ({ ...v, why_this_goal_matters: e.target.value }))} placeholder="Why This Goal Matters" />
         <Input value={values.target_outcome} onChange={(e) => setValues((v) => ({ ...v, target_outcome: e.target.value }))} placeholder="Target Outcome" />
-        <select value={values.priority_level} onChange={(e) => setValues((v) => ({ ...v, priority_level: e.target.value as any }))} className="h-9 rounded-md border border-input bg-input-background px-3 text-sm">
-          {GOAL_PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <SolaceSelect
+          value={values.priority_level}
+          onValueChange={(priority_level) => setValues((v) => ({ ...v, priority_level: priority_level as GoalFormValues['priority_level'] }))}
+          ariaLabel="Priority level"
+          variant="default"
+          size="sm"
+          triggerClassName="h-9"
+          options={GOAL_PRIORITY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+        />
         <Input type="date" value={values.start_date} onChange={(e) => setValues((v) => ({ ...v, start_date: e.target.value }))} />
         <Input type="date" value={values.target_date || ''} onChange={(e) => setValues((v) => ({ ...v, target_date: e.target.value }))} />
         <Input type="number" min={0} max={100} value={String(values.progress_percentage ?? 0)} onChange={(e) => setValues((v) => ({ ...v, progress_percentage: Number(e.target.value) }))} placeholder="Progress %" />
-        <select value={values.check_in_frequency} onChange={(e) => setValues((v) => ({ ...v, check_in_frequency: e.target.value as any }))} className="h-9 rounded-md border border-input bg-input-background px-3 text-sm">
-          {GOAL_CHECKIN_FREQUENCY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <SolaceSelect
+          value={values.check_in_frequency ?? "daily"}
+          onValueChange={(check_in_frequency) =>
+            setValues((v) => ({ ...v, check_in_frequency: check_in_frequency as GoalFormValues['check_in_frequency'] }))
+          }
+          ariaLabel="Check-in frequency"
+          variant="default"
+          size="sm"
+          triggerClassName="h-9"
+          options={GOAL_CHECKIN_FREQUENCY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+        />
         <Input value={actionStepsString} onChange={(e) => setValues((v) => ({ ...v, small_action_steps: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) }))} placeholder="Action Steps (comma separated)" />
-        <select value={values.emotion_tag || ''} onChange={(e) => setValues((v) => ({ ...v, emotion_tag: (e.target.value || undefined) as any }))} className="h-9 rounded-md border border-input bg-input-background px-3 text-sm">
-          <option value="">Emotion Tag (optional)</option>
-          {GOAL_EMOTION_TAG_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        <select value={values.support_type_needed || ''} onChange={(e) => setValues((v) => ({ ...v, support_type_needed: (e.target.value || undefined) as any }))} className="h-9 rounded-md border border-input bg-input-background px-3 text-sm">
-          <option value="">Support Type (optional)</option>
-          {GOAL_SUPPORT_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <SolaceSelect
+          value={values.emotion_tag || "__none__"}
+          onValueChange={(emotion_tag) =>
+            setValues((v) => ({
+              ...v,
+              emotion_tag: (emotion_tag === "__none__" ? undefined : emotion_tag) as GoalFormValues['emotion_tag'],
+            }))
+          }
+          ariaLabel="Emotion tag"
+          variant="default"
+          size="sm"
+          triggerClassName="h-9"
+          options={[
+            { value: "__none__", label: "Emotion Tag (optional)" },
+            ...GOAL_EMOTION_TAG_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+          ]}
+        />
+        <SolaceSelect
+          value={values.support_type_needed || "__none__"}
+          onValueChange={(support_type_needed) =>
+            setValues((v) => ({
+              ...v,
+              support_type_needed: (support_type_needed === "__none__"
+                ? undefined
+                : support_type_needed) as GoalFormValues['support_type_needed'],
+            }))
+          }
+          ariaLabel="Support type"
+          variant="default"
+          size="sm"
+          triggerClassName="h-9"
+          options={[
+            { value: "__none__", label: "Support Type (optional)" },
+            ...GOAL_SUPPORT_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+          ]}
+        />
         <Input value={values.notes || ''} onChange={(e) => setValues((v) => ({ ...v, notes: e.target.value }))} placeholder="Notes" />
         <div className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={!!values.reminder_enabled} onChange={(e) => setValues((v) => ({ ...v, reminder_enabled: e.target.checked }))} />

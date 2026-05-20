@@ -35,6 +35,7 @@ import { Textarea } from '@/app/components/ui/textarea';
 import { GOAL_CATEGORY_OPTIONS, GOAL_EMOTION_TAG_OPTIONS } from '@/app/features/goals/constants';
 import { PREDEFINED_GOALS } from '@/app/features/goals/seedGoals';
 import type { GoalCategory } from '@/app/features/goals/types';
+import { SolaceSelect } from '@/app/solace';
 
 interface Achievement {
   id: string;
@@ -305,6 +306,19 @@ export function Achievements() {
   const customStorageKey = useMemo(
     () => `ezri_custom_achievements_${profile?.id || 'guest'}`,
     [profile?.id]
+  );
+
+  const achievementGoalTemplateGroups = useMemo(
+    () =>
+      GOAL_CATEGORY_OPTIONS.map((cat) => ({
+        label: cat.label,
+        options: PREDEFINED_GOALS.flatMap((g, i) =>
+          g.goal_category === cat.value
+            ? [{ value: `pre:${i}` as const, label: g.goal_title }]
+            : []
+        ),
+      })),
+    []
   );
 
   const mapApiCustomAchievement = (item: any): Achievement => ({
@@ -1753,20 +1767,25 @@ export function Achievements() {
                             <Label htmlFor={`mood-${goal.id}`} className="text-zinc-300">
                               Emotion tag
                             </Label>
-                            <select
-                              id={`mood-${goal.id}`}
-                              value={inputState.mood}
-                              onChange={(e) => patchFields({ mood: e.target.value })}
+                            <SolaceSelect
+                              value={inputState.mood || "__none__"}
+                              onValueChange={(mood) =>
+                                patchFields({ mood: mood === "__none__" ? "" : mood })
+                              }
                               disabled={checkedToday}
-                              className="h-9 w-full rounded-md border border-white/15 bg-black/40 px-3 text-sm text-white disabled:opacity-60"
-                            >
-                              <option value="">How are you feeling? (optional)</option>
-                              {GOAL_EMOTION_TAG_OPTIONS.map((item) => (
-                                <option key={item.value} value={item.value}>
-                                  {item.label}
-                                </option>
-                              ))}
-                            </select>
+                              ariaLabel="Emotion tag"
+                              placeholder="How are you feeling? (optional)"
+                              variant="default"
+                              size="sm"
+                              triggerClassName="h-9"
+                              options={[
+                                { value: "__none__", label: "How are you feeling? (optional)" },
+                                ...GOAL_EMOTION_TAG_OPTIONS.map((item) => ({
+                                  value: item.value,
+                                  label: item.label,
+                                })),
+                              ]}
+                            />
                             {goal.moodTag ? (
                               <p className="text-xs text-zinc-500">
                                 Default on your goal: {goal.moodTag} (when left blank)
@@ -2171,26 +2190,16 @@ export function Achievements() {
                     <label htmlFor="achievement-goal-template" className="sr-only">
                       Goal template
                     </label>
-                    <select
+                    <SolaceSelect
                       id="achievement-goal-template"
                       value={goalTemplateKey}
-                      onChange={(e) => setGoalTemplateKey(e.target.value as PersonalGoalTemplateKey)}
-                      className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white text-sm"
-                    >
-                      <option value="">Select a goal…</option>
-                      {GOAL_CATEGORY_OPTIONS.map((cat) => (
-                        <optgroup key={cat.value} label={cat.label}>
-                          {PREDEFINED_GOALS.map((g, i) =>
-                            g.goal_category === cat.value ? (
-                              <option key={`${cat.value}-${i}`} value={`pre:${i}`}>
-                                {g.goal_title}
-                              </option>
-                            ) : null
-                          )}
-                        </optgroup>
-                      ))}
-                      <option value="custom">Custom goal (write your own)</option>
-                    </select>
+                      onValueChange={(v) => setGoalTemplateKey(v as PersonalGoalTemplateKey)}
+                      ariaLabel="Goal template"
+                      placeholder="Select a goal…"
+                      variant="form"
+                      groups={achievementGoalTemplateGroups}
+                      options={[{ value: "custom", label: "Custom goal (write your own)" }]}
+                    />
                     <button
                       type="button"
                       disabled={!goalTemplateKey}
@@ -2216,9 +2225,20 @@ export function Achievements() {
                   </div>
                   <div className="flex flex-col gap-1">
                     <label htmlFor="pg-category" className="text-xs font-medium text-gray-600 dark:text-slate-400">Category</label>
-                    <select id="pg-category" value={goalCategory} onChange={(e) => setGoalCategory(e.target.value as NonNullable<Achievement['goalCategory']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                      <option value="Mental">Mental</option><option value="Emotional">Emotional</option><option value="Productivity">Productivity</option><option value="Relationships">Relationships</option><option value="Wellness">Wellness</option>
-                    </select>
+                    <SolaceSelect
+                      id="pg-category"
+                      value={goalCategory}
+                      onValueChange={(v) => setGoalCategory(v as NonNullable<Achievement['goalCategory']>)}
+                      ariaLabel="Goal category"
+                      variant="form"
+                      options={[
+                        { value: "Mental", label: "Mental" },
+                        { value: "Emotional", label: "Emotional" },
+                        { value: "Productivity", label: "Productivity" },
+                        { value: "Relationships", label: "Relationships" },
+                        { value: "Wellness", label: "Wellness" },
+                      ]}
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label htmlFor="pg-description" className="text-xs font-medium text-gray-600 dark:text-slate-400">Goal Description</label>
@@ -2234,9 +2254,18 @@ export function Achievements() {
                   </div>
                   <div className="flex flex-col gap-1">
                     <label htmlFor="pg-priority" className="text-xs font-medium text-gray-600 dark:text-slate-400">Priority Level</label>
-                    <select id="pg-priority" value={goalPriority} onChange={(e) => setGoalPriority(e.target.value as NonNullable<Achievement['priority']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                      <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option>
-                    </select>
+                    <SolaceSelect
+                      id="pg-priority"
+                      value={goalPriority}
+                      onValueChange={(v) => setGoalPriority(v as NonNullable<Achievement['priority']>)}
+                      ariaLabel="Priority level"
+                      variant="form"
+                      options={[
+                        { value: "Low", label: "Low" },
+                        { value: "Medium", label: "Medium" },
+                        { value: "High", label: "High" },
+                      ]}
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label htmlFor="pg-start" className="text-xs font-medium text-gray-600 dark:text-slate-400">Start Date</label>
@@ -2252,9 +2281,20 @@ export function Achievements() {
                   </div>
                   <div className="flex flex-col gap-1">
                     <label htmlFor="pg-frequency" className="text-xs font-medium text-gray-600 dark:text-slate-400">Check-in Frequency</label>
-                    <select id="pg-frequency" value={goalCheckInFrequency} onChange={(e) => setGoalCheckInFrequency(e.target.value as NonNullable<Achievement['checkInFrequency']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                      <option value="Daily">Daily</option><option value="Weekly">Weekly</option><option value="Custom">Custom</option>
-                    </select>
+                    <SolaceSelect
+                      id="pg-frequency"
+                      value={goalCheckInFrequency}
+                      onValueChange={(v) =>
+                        setGoalCheckInFrequency(v as NonNullable<Achievement['checkInFrequency']>)
+                      }
+                      ariaLabel="Check-in frequency"
+                      variant="form"
+                      options={[
+                        { value: "Daily", label: "Daily" },
+                        { value: "Weekly", label: "Weekly" },
+                        { value: "Custom", label: "Custom" },
+                      ]}
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label htmlFor="pg-actions" className="text-xs font-medium text-gray-600 dark:text-slate-400">Small Action Steps</label>
@@ -2262,15 +2302,38 @@ export function Achievements() {
                   </div>
                   <div className="flex flex-col gap-1">
                     <label htmlFor="pg-mood" className="text-xs font-medium text-gray-600 dark:text-slate-400">Emotion Tag</label>
-                    <select id="pg-mood" value={goalMoodTag} onChange={(e) => setGoalMoodTag(e.target.value as NonNullable<Achievement['moodTag']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                      <option value="Stress">Stress</option><option value="Sadness">Sadness</option><option value="Fear">Fear</option><option value="Confidence">Confidence</option><option value="Motivation">Motivation</option>
-                    </select>
+                    <SolaceSelect
+                      id="pg-mood"
+                      value={goalMoodTag}
+                      onValueChange={(v) => setGoalMoodTag(v as NonNullable<Achievement['moodTag']>)}
+                      ariaLabel="Emotion tag"
+                      variant="form"
+                      options={[
+                        { value: "Stress", label: "Stress" },
+                        { value: "Sadness", label: "Sadness" },
+                        { value: "Fear", label: "Fear" },
+                        { value: "Confidence", label: "Confidence" },
+                        { value: "Motivation", label: "Motivation" },
+                      ]}
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label htmlFor="pg-support" className="text-xs font-medium text-gray-600 dark:text-slate-400">Support Type Needed</label>
-                    <select id="pg-support" value={goalSupportType} onChange={(e) => setGoalSupportType(e.target.value as NonNullable<Achievement['supportType']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                      <option value="Encouragement">Encouragement</option><option value="Accountability">Accountability</option><option value="Reflection">Reflection</option><option value="Coping Help">Coping Help</option>
-                    </select>
+                    <SolaceSelect
+                      id="pg-support"
+                      value={goalSupportType}
+                      onValueChange={(v) =>
+                        setGoalSupportType(v as NonNullable<Achievement['supportType']>)
+                      }
+                      ariaLabel="Support type needed"
+                      variant="form"
+                      options={[
+                        { value: "Encouragement", label: "Encouragement" },
+                        { value: "Accountability", label: "Accountability" },
+                        { value: "Reflection", label: "Reflection" },
+                        { value: "Coping Help", label: "Coping Help" },
+                      ]}
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label htmlFor="pg-notes" className="text-xs font-medium text-gray-600 dark:text-slate-400">Notes / Journal Entry</label>

@@ -1,6 +1,7 @@
 import prisma from '../../lib/prisma';
 import { CreateJournalInput, UpdateJournalInput } from './journal.schema';
 import { notificationsService } from '../notifications/notifications.service';
+import { invalidateRecentActivityCache } from '../users/user.service';
 
 const journalListCache = new Map<string, { data: any[]; timestamp: number }>();
 const journalByIdCache = new Map<string, { data: any; timestamp: number }>();
@@ -23,6 +24,7 @@ export async function createJournalEntry(userId: string, data: CreateJournalInpu
     },
   });
   invalidateJournalCache(userId);
+  invalidateRecentActivityCache(userId);
   return created;
 }
 

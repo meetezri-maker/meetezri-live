@@ -20,10 +20,6 @@ import {
   Video,
   Shield,
   BookMarked,
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
   MoreHorizontal,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
@@ -96,7 +92,8 @@ const getMoodInfo = (mood: string) => {
   const trimmedMood = mood.trim();
   const normalizedMood = trimmedMood.toLowerCase();
   const aliasToEmoji: Record<string, string> = {
-    happy: "😊", calm: "😌", excited: "🤩", anxious: "😰",
+    happy: "😊", calm: "😌", excited: "🤩", energetic: "⚡", nervous: "😬", anxious: "😰",
+    overwhelmed: "😰", hopeful: "🤩", heavy: "😢", grateful: "😊", numb: "😐",
     sad: "😢", angry: "😡", tired: "😴", neutral: "😐", "😠": "😡",
   };
   if (MOOD_MAPPING[trimmedMood]) return { ...MOOD_MAPPING[trimmedMood], emoji: trimmedMood };
@@ -620,43 +617,17 @@ export function MoodHistory() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <Link to="/app/emergency-resources" className="flex items-center gap-1.5 rounded-full border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-[10px] font-medium text-rose-300 transition-all hover:bg-rose-500/15">
-                        <Phone className="h-3 w-3" /> Crisis Helpline
+                        <Phone className="h-3 w-3" /> Emergency Resources
                       </Link>
                       <Link to="/app/session-lobby" className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[10px] font-medium text-zinc-300 transition-all hover:bg-white/[0.06]">
-                        <Video className="h-3 w-3" /> Talk to Solace
+                        <Video className="h-3 w-3" /> Talk It Out
                       </Link>
                       <Link to="/app/settings/wellness-plan" className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[10px] font-medium text-zinc-300 transition-all hover:bg-white/[0.06]">
                         <Shield className="h-3 w-3" /> Safety Plan
                       </Link>
                       <Link to="/app/settings/resources" className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[10px] font-medium text-zinc-300 transition-all hover:bg-white/[0.06]">
-                        <BookMarked className="h-3 w-3" /> Resources
+                        <BookMarked className="h-3 w-3" /> Reading Library
                       </Link>
-                    </div>
-                  </div>
-                </div>
-                <div className="border-t border-white/[0.05] bg-black/20 px-5 py-3">
-                  <div className="flex items-center gap-4">
-                    <button className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.05] text-zinc-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] transition-all hover:bg-white/[0.08]">
-                      <Play className="h-3.5 w-3.5" fill="currentColor" />
-                    </button>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-zinc-300">Night Calm Ambient</p>
-                      <p className="text-[9px] text-zinc-500">Breath with the landscape</p>
-                    </div>
-                    <div className="hidden items-center gap-4 sm:flex">
-                      <select className="rounded-lg border border-white/[0.08] bg-black/40 px-2 py-1 text-[10px] text-zinc-400 focus:outline-none">
-                        <option>Mountain Lake</option>
-                        <option>Mist Forest</option>
-                      </select>
-                      <select className="rounded-lg border border-white/[0.08] bg-black/40 px-2 py-1 text-[10px] text-zinc-400 focus:outline-none">
-                        <option>Low Rain</option>
-                        <option>Soft Ember</option>
-                      </select>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] text-zinc-500">Volume</span>
-                        <input type="range" min={0} max={100} defaultValue={20} className="w-16 accent-violet-500" />
-                        <span className="text-[9px] text-zinc-500">20%</span>
-                      </div>
                     </div>
                   </div>
                 </div>

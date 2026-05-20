@@ -52,6 +52,7 @@ import {
 } from "@/app/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { SolaceSelect } from "@/app/solace";
 import { formatSubscriptionPlanLabel } from "@/app/pages/app/profile/profileUi";
 import {
   ACCOUNT_HELP_IMG,
@@ -1927,20 +1928,20 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                           <label className={accountLabel}>
                             Security Question
                           </label>
-                          <select
+                          <SolaceSelect
                             value={knowledgeSetup.securityQuestion}
-                            onChange={(e) =>
-                              setKnowledgeSetup((prev) => ({ ...prev, securityQuestion: e.target.value }))
+                            onValueChange={(securityQuestion) =>
+                              setKnowledgeSetup((prev) => ({ ...prev, securityQuestion }))
                             }
-                            className={accountInput}
-                          >
-                            <option value="">Select a security question</option>
-                            {genericSecurityQuestions.map((question) => (
-                              <option key={question} value={question}>
-                                {question}
-                              </option>
-                            ))}
-                          </select>
+                            ariaLabel="Security question"
+                            placeholder="Select a security question"
+                            variant="form"
+                            triggerClassName={accountInput}
+                            options={genericSecurityQuestions.map((question) => ({
+                              value: question,
+                              label: question,
+                            }))}
+                          />
                         </div>
 
                         <div>

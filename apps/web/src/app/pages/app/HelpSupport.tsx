@@ -19,6 +19,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import { SolaceSelect } from "@/app/solace";
 import {
   SanctuaryPageShell,
   SupportHero,
@@ -439,19 +440,21 @@ export function HelpSupport() {
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-zinc-300">Subject</label>
-                  <select
-                    required
+                  <SolaceSelect
                     value={contactForm.subject}
-                    onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
-                    className={inputClass}
-                  >
-                    <option value="">Select a topic</option>
-                    <option value="technical">Technical Issue</option>
-                    <option value="account">Account & Billing</option>
-                    <option value="feature">Feature Request</option>
-                    <option value="feedback">General Feedback</option>
-                    <option value="other">Other</option>
-                  </select>
+                    onValueChange={(subject) => setContactForm({ ...contactForm, subject })}
+                    ariaLabel="Contact subject"
+                    placeholder="Select a topic"
+                    variant="form"
+                    triggerClassName={inputClass}
+                    options={[
+                      { value: "technical", label: "Technical Issue" },
+                      { value: "account", label: "Account & Billing" },
+                      { value: "feature", label: "Feature Request" },
+                      { value: "feedback", label: "General Feedback" },
+                      { value: "other", label: "Other" },
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-zinc-300">Message</label>

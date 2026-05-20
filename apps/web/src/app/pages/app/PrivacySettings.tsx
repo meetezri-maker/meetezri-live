@@ -26,6 +26,7 @@ import { api } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { SolaceSelect } from "@/app/solace";
 import {
   PRIVACY_BANNER_IMG,
   PRIVACY_ENCRYPTION_IMG,
@@ -55,7 +56,6 @@ import {
   privacyRow,
   privacySectionSubtitle,
   privacySectionTitle,
-  privacySelect,
   privacySessionRow,
 } from "@/app/pages/app/privacy-settings/privacySettingsUi";
 
@@ -584,15 +584,19 @@ export function PrivacySettings() {
                 title="Profile visibility"
                 description="Choose who can see your profile and activity"
                 control={
-                  <select
+                  <SolaceSelect
                     value={settings.profileVisibility}
-                    onChange={(e) => updateSettings({ ...settings, profileVisibility: e.target.value })}
-                    className={privacySelect}
-                    aria-label="Profile visibility"
-                  >
-                    <option value="public">Public</option>
-                    <option value="private">Private</option>
-                  </select>
+                    onValueChange={(profileVisibility) =>
+                      updateSettings({ ...settings, profileVisibility })
+                    }
+                    ariaLabel="Profile visibility"
+                    variant="compact"
+                    size="sm"
+                    options={[
+                      { value: "public", label: "Public" },
+                      { value: "private", label: "Private" },
+                    ]}
+                  />
                 }
               />
 

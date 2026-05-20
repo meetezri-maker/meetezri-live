@@ -90,6 +90,30 @@ export const MOOD_CHECKIN_CARDS: MoodCheckInCard[] = [
 
   {
 
+    value: "sad",
+
+    label: "Sad",
+
+    micro: "Something feels heavy or tender inside.",
+
+    image: MOOD_CHECKIN_IMAGES.sad,
+
+  },
+
+  {
+
+    value: "angry",
+
+    label: "Angry",
+
+    micro: "Frustration or heat is rising in you.",
+
+    image: MOOD_CHECKIN_IMAGES.angry,
+
+  },
+
+  {
+
     value: "grateful",
 
     label: "Grateful",
@@ -124,6 +148,54 @@ export const MOOD_CHECKIN_CARDS: MoodCheckInCard[] = [
 
   },
 
+  {
+
+    value: "excited",
+
+    label: "Excited",
+
+    micro: "Energy and anticipation are building.",
+
+    image: MOOD_CHECKIN_IMAGES.excited,
+
+  },
+
+  {
+
+    value: "energetic",
+
+    label: "Energetic",
+
+    micro: "You feel awake, charged, and ready to go.",
+
+    image: MOOD_CHECKIN_IMAGES.energetic,
+
+  },
+
+  {
+
+    value: "happy",
+
+    label: "Happy",
+
+    micro: "A warm, bright feeling is with you today.",
+
+    image: MOOD_CHECKIN_IMAGES.happy,
+
+  },
+
+  {
+
+    value: "nervous",
+
+    label: "Nervous",
+
+    micro: "Something ahead has your attention on edge.",
+
+    image: MOOD_CHECKIN_IMAGES.nervous,
+
+  },
+
 ];
 
 
@@ -148,17 +220,11 @@ export const INFLUENCE_CHIPS: InfluenceChip[] = [
 
   { value: "loneliness", label: "Loneliness" },
 
-  { value: "family", label: "Family" },
-
   { value: "health", label: "Health" },
-
-  { value: "overthinking", label: "Overthinking" },
 
   { value: "relationships", label: "Relationships" },
 
-  { value: "burnout", label: "Burnout" },
-
-  { value: "social_energy", label: "Social Energy" },
+  { value: "social_energy", label: "Social" },
 
   { value: "gratitude", label: "Gratitude" },
 
@@ -203,14 +269,6 @@ export function insightLabelForMoodKey(key: string): string {
   if (card) return card.label;
 
   const legacy: Record<string, string> = {
-
-    happy: "Happy",
-
-    sad: "Sad",
-
-    angry: "Angry",
-
-    excited: "Excited",
 
     neutral: "Neutral",
 

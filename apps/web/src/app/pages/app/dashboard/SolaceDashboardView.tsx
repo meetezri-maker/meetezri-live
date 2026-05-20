@@ -15,7 +15,7 @@ import {
   BookMarked,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { InsightActivityWheel } from "@/app/pages/app/dashboard/InsightActivityWheel";
 import { Button } from "@/app/components/ui/button";
 import { cn } from "@/lib/utils";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
@@ -26,7 +26,6 @@ import {
   SolacePanel,
   SolaceJourneyCardVisual,
   SolaceHeroAtmosphere,
-  SolaceAmbientBar,
   SolaceSupportStrip,
   type JourneyAmbiance,
 } from "@/app/solace";
@@ -85,10 +84,8 @@ interface SolaceDashboardViewProps {
   journeyCards: SolaceJourneyCard[];
   insights: SolaceInsightItem[];
   insightDistributionData: { name: string; value: number; color: string }[];
-  insightDistributionChartData: { name: string; value: number; color: string }[];
   insightDistributionTotal: number;
   recentActivities: SolaceActivityRow[];
-  quoteLines: { line: string; attribution: string };
   mindfulMinutesDisplay: string;
   sessionsCompletedDisplay: string;
   moodSparkPhrase: string;
@@ -173,48 +170,42 @@ function ReflectMetric({
 
 function RightRailContent({
   insights,
-  insightDistributionChartData,
   insightDistributionData,
   insightDistributionTotal,
   showTrialChip,
 }: {
   insights: SolaceInsightItem[];
-  insightDistributionChartData: { name: string; value: number; color: string }[];
   insightDistributionData: { name: string; value: number; color: string }[];
   insightDistributionTotal: number;
   showTrialChip: boolean;
 }) {
   return (
     <div className="space-y-6">
-      {showTrialChip && (
-        <SolacePanel glow="violet" className="p-4">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--solace-muted)]">
-            Trial plan
-          </p>
-          <p className="mt-2 text-sm text-zinc-200">
-            Space to breathe in — explore what feels kind for you.
-          </p>
-          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-            <div className="h-full w-3/5 rounded-full bg-gradient-to-r from-violet-500/70 to-fuchsia-500/50" />
-          </div>
-        </SolacePanel>
-      )}
-
-      <SolacePanel glow="cyan" soft className="relative overflow-hidden p-5">
+      <SolacePanel glow="cyan" className="relative min-h-[172px] overflow-hidden p-0">
         <img
           src={DASHBOARD_IMAGES.todayFocusDecor}
           alt=""
-          className="pointer-events-none absolute -right-4 bottom-0 top-0 w-[48%] max-w-[200px] object-cover object-center opacity-[0.22]"
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
           loading="lazy"
           decoding="async"
         />
-        <span className="relative font-serif text-4xl leading-none text-violet-400/35" aria-hidden>
-          “
-        </span>
-        <p className="relative -mt-2 font-serif text-[17px] leading-relaxed text-zinc-200">
-          Small steps taken with awareness create real change.
-        </p>
-        <p className="relative mt-3 text-xs text-[var(--solace-muted)]">— Solace</p>
+        <div
+          className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0618]/88 via-[#0a0618]/52 to-[#0a0618]/28"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050508]/40 via-transparent to-transparent"
+          aria-hidden
+        />
+        <div className="relative z-10 flex min-h-[172px] flex-col justify-center p-5 sm:p-6">
+          <span className="font-serif text-4xl leading-none text-violet-200/35" aria-hidden>
+            “
+          </span>
+          <p className="-mt-2 font-serif text-[17px] leading-relaxed text-zinc-50 [text-shadow:0_1px_14px_rgba(0,0,0,0.55)]">
+            Small steps taken with awareness create real change.
+          </p>
+          <p className="mt-3 text-xs text-zinc-300/90 [text-shadow:0_1px_10px_rgba(0,0,0,0.45)]">— Solace</p>
+        </div>
       </SolacePanel>
 
       <SolacePanel glow="none" className="p-5">
@@ -238,11 +229,16 @@ function RightRailContent({
                   : "text-sky-300/80";
             return (
               <li key={index}>
-                <div className="flex gap-3 rounded-xl border border-white/[0.04] bg-black/15 p-3 transition-colors hover:bg-white/[0.03]">
-                  <div className={cn("mt-0.5 rounded-lg border border-white/[0.06] p-2", accent)}>
-                    <Icon className="h-4 w-4" aria-hidden />
+                <div className="flex items-center gap-3 rounded-xl border border-white/[0.04] bg-black/15 p-3 transition-colors hover:bg-white/[0.03]">
+                  <div
+                    className={cn(
+                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-black/25",
+                      accent,
+                    )}
+                  >
+                    <Icon className="h-[18px] w-[18px]" aria-hidden />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-zinc-100">{insight.title}</p>
                     <p className="mt-0.5 text-xs leading-relaxed text-[var(--solace-muted)]">
                       {insight.description}
@@ -254,57 +250,8 @@ function RightRailContent({
           })}
         </ul>
 
-        <div className="mt-5 rounded-xl border border-white/[0.06] bg-black/25 p-3">
-          <div className="h-44 w-full md:h-48">
-            {insightDistributionChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <RechartsPie>
-                  <Pie
-                    data={insightDistributionChartData}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={40}
-                    outerRadius={64}
-                    paddingAngle={2}
-                    strokeWidth={0}
-                  >
-                    {insightDistributionChartData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: number, name: string) => [value, name]}
-                    contentStyle={{
-                      borderRadius: 12,
-                      borderColor: "rgba(255,255,255,0.08)",
-                      background: "rgba(12,12,18,0.95)",
-                      color: "#e4e4e7",
-                    }}
-                  />
-                </RechartsPie>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center text-center text-xs text-[var(--solace-muted)]">
-                A gentle map forms as you talk, check in, and journal.
-              </div>
-            )}
-          </div>
-          <p className="mt-2 flex items-center justify-between text-xs text-[var(--solace-muted)]">
-            <span>Total tracked</span>
-            <span className="text-zinc-300">{insightDistributionTotal}</span>
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[var(--solace-muted)]">
-            {insightDistributionData.map((item) => (
-              <span key={item.name} className="inline-flex items-center gap-1.5">
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: item.color }}
-                  aria-hidden
-                />
-                {item.name}: {item.value}
-              </span>
-            ))}
-          </div>
+        <div className="mt-5 rounded-xl border border-white/[0.06] bg-black/25 px-3 py-4 sm:px-4">
+          <InsightActivityWheel items={insightDistributionData} total={insightDistributionTotal} />
         </div>
       </SolacePanel>
 
@@ -342,6 +289,20 @@ function RightRailContent({
       </Link>
 
       <WellnessChallenges variant="solace" />
+
+      {showTrialChip && (
+        <SolacePanel glow="violet" className="p-4">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--solace-muted)]">
+            Trial plan
+          </p>
+          <p className="mt-2 text-sm text-zinc-200">
+            Space to breathe in — explore what feels kind for you.
+          </p>
+          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="h-full w-3/5 rounded-full bg-gradient-to-r from-violet-500/70 to-fuchsia-500/50" />
+          </div>
+        </SolacePanel>
+      )}
     </div>
   );
 }
@@ -368,10 +329,8 @@ export function SolaceDashboardView({
   journeyCards,
   insights,
   insightDistributionData,
-  insightDistributionChartData,
   insightDistributionTotal,
   recentActivities,
-  quoteLines,
   mindfulMinutesDisplay,
   sessionsCompletedDisplay,
   moodSparkPhrase,
@@ -393,12 +352,12 @@ export function SolaceDashboardView({
           aria-hidden
         />
 
-        <div className="relative z-[1] mx-auto max-w-[1680px] px-3 sm:px-5">
+        <div className="relative z-[1] mx-auto max-w-[1680px] px-3 pt-6 sm:px-5 sm:pt-8 lg:pt-10">
           <p className="mb-5 text-center font-serif text-[15px] text-zinc-400 lg:hidden">
             {greeting}, <span className="text-zinc-100">{firstName}</span>
           </p>
 
-          <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_min(100%,340px)] xl:items-start xl:gap-10">
+          <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_min(100%,340px)] xl:items-start xl:gap-x-10 xl:gap-y-8">
             {/* Center column */}
             <div className="min-w-0 space-y-8 lg:space-y-10">
               {/* Hero */}
@@ -409,13 +368,17 @@ export function SolaceDashboardView({
               >
                 <SolacePanel glow="violet" className="overflow-hidden p-0">
                   <div className="relative min-h-[300px] md:min-h-[380px]">
+                    <SolaceHeroAtmosphere backgroundSrc={DASHBOARD_IMAGES.heroAtmosphere} />
                     <div className="relative z-[2] grid min-h-[300px] md:min-h-[380px] md:grid-cols-[42%_1fr]">
                       <div className="relative min-h-[220px] md:min-h-0">
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#050508] via-transparent to-transparent md:bg-gradient-to-r md:from-black/75 md:via-black/20 md:to-transparent" />
+                        <div
+                          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050508]/75 via-transparent to-transparent md:bg-[radial-gradient(ellipse_90%_100%_at_35%_50%,rgba(5,5,8,0.42)_0%,transparent_72%)]"
+                          aria-hidden
+                        />
                         <img
                           src={portraitUrl}
                           alt={companionImageAlt}
-                          className="h-full w-full object-cover object-[center_12%]"
+                          className="relative z-[1] h-full w-full object-cover object-[center_12%]"
                           loading="eager"
                           onError={(event) => {
                             if (!portraitFallbackUrl) return;
@@ -424,10 +387,8 @@ export function SolaceDashboardView({
                             img.src = portraitFallbackUrl;
                           }}
                         />
-                        <div className="absolute inset-0 ring-1 ring-inset ring-white/[0.08]" />
                       </div>
                       <div className="relative z-10 flex flex-col justify-center overflow-hidden px-5 py-8 sm:px-8 sm:py-10 md:py-12">
-                        <SolaceHeroAtmosphere backgroundSrc={DASHBOARD_IMAGES.heroAtmosphere} />
                         <p className="relative mb-3 inline-flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.26em] text-violet-200/85">
                           <Sparkles className="h-3.5 w-3.5 text-violet-300/90" aria-hidden />
                           {companionTag}
@@ -608,7 +569,7 @@ export function SolaceDashboardView({
                 </div>
               </section>
 
-              {/* Recent moments — timeline */}
+              {/* Recent moments */}
               <section aria-label="Recent moments">
                 <SolacePanel glow="none" soft className="p-5 sm:p-6">
                   <div className="mb-4 flex items-center justify-between gap-3">
@@ -620,8 +581,7 @@ export function SolaceDashboardView({
                       View history
                     </Link>
                   </div>
-                  <ul className="solace-scroll relative max-h-52 space-y-0 overflow-y-auto pr-2 md:max-h-60">
-                    <li className="pointer-events-none absolute bottom-0 left-[11px] top-2 w-px bg-gradient-to-b from-violet-500/45 via-cyan-500/20 to-transparent" />
+                  <ul className="solace-scroll max-h-52 space-y-0 overflow-y-auto pr-2 md:max-h-60">
                     {recentActivities.map((activity, index) => (
                       <li key={activity.id || index} className="relative flex gap-3 pb-5 last:pb-0">
                         <span className="relative z-[1] mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full border border-violet-400/40 bg-zinc-900 shadow-[0_0_12px_rgba(139,92,246,0.4)]" />
@@ -656,34 +616,13 @@ export function SolaceDashboardView({
                 </div>
               )}
 
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <SolacePanel glow="violet" soft className="relative overflow-hidden p-5 sm:p-6">
-                  <img
-                    src={DASHBOARD_IMAGES.quoteDecor}
-                    alt=""
-                    className="pointer-events-none absolute -right-2 bottom-0 top-0 w-[38%] max-w-[180px] object-cover object-center opacity-[0.28] mix-blend-soft-light"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                  <p className="relative font-serif text-[17px] leading-relaxed text-zinc-100/95">
-                    {quoteLines.line}
-                  </p>
-                  <p className="relative mt-3 text-sm text-[var(--solace-muted)]">{quoteLines.attribution}</p>
-                </SolacePanel>
-              </motion.div>
-
               <PWAInstallPrompt />
             </div>
 
             {/* Right rail — xl+ sticky; stacks below on smaller breakpoints via grid */}
-            <aside className="min-w-0 xl:sticky xl:top-24 xl:self-start">
+            <aside className="min-w-0 xl:sticky xl:top-[calc(4rem+2.5rem)] xl:self-start">
               <RightRailContent
                 insights={insights}
-                insightDistributionChartData={insightDistributionChartData}
                 insightDistributionData={insightDistributionData}
                 insightDistributionTotal={insightDistributionTotal}
                 showTrialChip={showTrialChip}
@@ -691,10 +630,8 @@ export function SolaceDashboardView({
             </aside>
           </div>
 
-          {/* Bottom cinematic strips — full bleed of content column */}
-          <div className="mt-10 space-y-4">
+          <div className="mt-10">
             <SolaceSupportStrip getSupportSlot={supportCta} />
-            <SolaceAmbientBar thumbnailSrc={DASHBOARD_IMAGES.ambientPlayer} />
           </div>
         </div>
       </div>

@@ -20,8 +20,6 @@ export const DASHBOARD_IMAGES = {
   brainHealth: "/dashboard-images/3.png",
   /** Brain health card — neural network accent layer */
   brainHealthAccent: "/dashboard-images/9.png",
-  /** Night Calm player thumbnail */
-  ambientPlayer: "/dashboard-images/ambient-thumb.png",
   /** Quote card — warm candle glow accent */
   quoteDecor: "/dashboard-images/2.png",
   /** Today's focus rail — misty river forest atmosphere */

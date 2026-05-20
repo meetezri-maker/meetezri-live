@@ -23,7 +23,7 @@ import {
   Activity,
   HeartPulse,
 } from 'lucide-react';
-import { SolaceGlassCard } from '@/app/solace/SolaceGlassCard';
+import { SolaceGlassCard, SolaceSelect } from '@/app/solace';
 import { cn } from '@/lib/utils';
 import {
   wellnessPlanPageAtmosphere,
@@ -529,26 +529,22 @@ export function ResourceAnalyticsPage() {
                     </label>
                     <div className="flex min-h-[44px] items-center gap-2 rounded-full border border-white/[0.1] bg-black/35 px-3 backdrop-blur-md">
                       <Calendar className="h-4 w-4 shrink-0 text-[rgba(255,255,255,0.45)]" aria-hidden />
-                      <select
+                      <SolaceSelect
                         id="ra-time-filter"
                         value={timeFilter}
-                        onChange={(e) => setTimeFilter(e.target.value as typeof timeFilter)}
-                        className="min-h-[44px] cursor-pointer bg-transparent text-sm text-[rgba(255,255,255,0.88)] outline-none"
+                        onValueChange={(v) => setTimeFilter(v as typeof timeFilter)}
+                        ariaLabel="Date range"
+                        variant="compact"
+                        size="sm"
                         disabled={isLoading}
-                      >
-                        <option value="7d" className="bg-[#0a0b18]">
-                          Last 7 days
-                        </option>
-                        <option value="30d" className="bg-[#0a0b18]">
-                          Last 30 days
-                        </option>
-                        <option value="90d" className="bg-[#0a0b18]">
-                          Last 90 days
-                        </option>
-                        <option value="all" className="bg-[#0a0b18]">
-                          All time
-                        </option>
-                      </select>
+                        triggerClassName="min-h-[44px] border-0 bg-transparent px-0 py-0 text-sm text-[rgba(255,255,255,0.88)] shadow-none hover:bg-transparent"
+                        options={[
+                          { value: '7d', label: 'Last 7 days' },
+                          { value: '30d', label: 'Last 30 days' },
+                          { value: '90d', label: 'Last 90 days' },
+                          { value: 'all', label: 'All time' },
+                        ]}
+                      />
                     </div>
                     <button
                       type="button"
@@ -689,19 +685,18 @@ export function ResourceAnalyticsPage() {
                     <label className="sr-only" htmlFor="ra-chart-interval">
                       Chart interval
                     </label>
-                    <select
+                    <SolaceSelect
                       id="ra-chart-interval"
                       value={chartInterval}
-                      onChange={(e) => setChartInterval(e.target.value as ChartInterval)}
-                      className="min-h-[44px] rounded-full border border-white/[0.1] bg-white/[0.04] px-4 text-sm text-[rgba(255,255,255,0.82)] outline-none"
-                    >
-                      <option value="daily" className="bg-[#0a0b18]">
-                        Daily
-                      </option>
-                      <option value="weekly" className="bg-[#0a0b18]">
-                        Weekly
-                      </option>
-                    </select>
+                      onValueChange={(v) => setChartInterval(v as ChartInterval)}
+                      ariaLabel="Chart interval"
+                      variant="compact"
+                      triggerClassName="min-h-[44px] rounded-full"
+                      options={[
+                        { value: 'daily', label: 'Daily' },
+                        { value: 'weekly', label: 'Weekly' },
+                      ]}
+                    />
                   </div>
 
                   <SupportActivityTimeline

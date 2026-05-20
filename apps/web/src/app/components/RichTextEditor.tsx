@@ -28,6 +28,8 @@ interface RichTextEditorProps {
   placeholder?: string;
   className?: string;
   hideMoodSelector?: boolean;
+  /** Solace dark theme for journal and other night-surface modals */
+  variant?: "default" | "solace";
 }
 
 const MOODS = [
@@ -74,7 +76,9 @@ export const RichTextEditor = memo(function RichTextEditor({
   placeholder = "Start writing...",
   className,
   hideMoodSelector = false,
+  variant = "default",
 }: RichTextEditorProps) {
+  const isSolace = variant === "solace";
   const [selectedMood, setSelectedMood] = useState<string>("");
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -175,13 +179,36 @@ export const RichTextEditor = memo(function RichTextEditor({
   );
 
   return (
-    <div className={cn("border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800", className)}>
+    <div
+      className={cn(
+        "overflow-hidden rounded-xl border",
+        isSolace
+          ? "border-white/[0.08] bg-[#0B0B15]/80"
+          : "border-gray-300 bg-white dark:border-gray-700 dark:bg-gray-800",
+        className,
+      )}
+    >
       {/* Toolbar */}
-      <div className="bg-gray-50 dark:bg-gray-900 border-b border-gray-300 dark:border-gray-700 p-2">
+      <div
+        className={cn(
+          "border-b p-2",
+          isSolace
+            ? "border-white/[0.06] bg-[#0c0c14]/90"
+            : "border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900",
+        )}
+      >
         <div className="flex flex-wrap items-center gap-1 w-full">
           {TOOLBAR_BUTTONS.map((button, index) => {
             if (button.label === "divider") {
-              return <div key={index} className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-1 flex-shrink-0" />;
+              return (
+                <div
+                  key={index}
+                  className={cn(
+                    "mx-1 h-6 w-px flex-shrink-0",
+                    isSolace ? "bg-white/[0.1]" : "bg-gray-300 dark:bg-gray-700",
+                  )}
+                />
+              );
             }
 
             const Icon = button.icon!;
@@ -192,15 +219,30 @@ export const RichTextEditor = memo(function RichTextEditor({
                 whileTap={{ scale: 0.95 }}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleFormat(button.action!, button.value)}
-                className="p-1.5 sm:p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+                className={cn(
+                  "flex-shrink-0 rounded p-1.5 transition-colors sm:p-2",
+                  isSolace
+                    ? "hover:bg-white/[0.08] text-zinc-300"
+                    : "hover:bg-gray-200 dark:hover:bg-gray-700",
+                )}
                 title={button.label}
               >
-                <Icon className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+                <Icon
+                  className={cn(
+                    "h-4 w-4",
+                    isSolace ? "text-zinc-300" : "text-gray-700 dark:text-gray-300",
+                  )}
+                />
               </motion.button>
             );
           })}
 
-          <div className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-1 flex-shrink-0" />
+          <div
+            className={cn(
+              "mx-1 h-6 w-px flex-shrink-0",
+              isSolace ? "bg-white/[0.1]" : "bg-gray-300 dark:bg-gray-700",
+            )}
+          />
 
           {/* Undo/Redo */}
           <motion.button
@@ -208,23 +250,34 @@ export const RichTextEditor = memo(function RichTextEditor({
             whileTap={{ scale: 0.95 }}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleFormat("undo")}
-            className="p-1.5 sm:p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+            className={cn(
+              "flex-shrink-0 rounded p-1.5 transition-colors sm:p-2",
+              isSolace ? "hover:bg-white/[0.08]" : "hover:bg-gray-200 dark:hover:bg-gray-700",
+            )}
             title="Undo"
           >
-            <Undo className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+            <Undo className={cn("h-4 w-4", isSolace ? "text-zinc-300" : "text-gray-700 dark:text-gray-300")} />
           </motion.button>
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleFormat("redo")}
-            className="p-1.5 sm:p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+            className={cn(
+              "flex-shrink-0 rounded p-1.5 transition-colors sm:p-2",
+              isSolace ? "hover:bg-white/[0.08]" : "hover:bg-gray-200 dark:hover:bg-gray-700",
+            )}
             title="Redo"
           >
-            <Redo className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+            <Redo className={cn("h-4 w-4", isSolace ? "text-zinc-300" : "text-gray-700 dark:text-gray-300")} />
           </motion.button>
 
-          <div className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-1 flex-shrink-0" />
+          <div
+            className={cn(
+              "mx-1 h-6 w-px flex-shrink-0",
+              isSolace ? "bg-white/[0.1]" : "bg-gray-300 dark:bg-gray-700",
+            )}
+          />
 
           {/* Media Buttons */}
           <motion.button
@@ -232,10 +285,13 @@ export const RichTextEditor = memo(function RichTextEditor({
             whileTap={{ scale: 0.95 }}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => imageInputRef.current?.click()}
-            className="p-1.5 sm:p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+            className={cn(
+              "flex-shrink-0 rounded p-1.5 transition-colors sm:p-2",
+              isSolace ? "hover:bg-white/[0.08]" : "hover:bg-gray-200 dark:hover:bg-gray-700",
+            )}
             title="Insert Image"
           >
-            <Image className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+            <Image className={cn("h-4 w-4", isSolace ? "text-zinc-300" : "text-gray-700 dark:text-gray-300")} />
           </motion.button>
           <Popover
             open={emojiPickerOpen}
@@ -253,7 +309,10 @@ export const RichTextEditor = memo(function RichTextEditor({
                   e.preventDefault();
                   saveSelection();
                 }}
-                className="p-1.5 sm:p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+                className={cn(
+                  "flex-shrink-0 rounded p-1.5 transition-colors sm:p-2",
+                  isSolace ? "hover:bg-white/[0.08]" : "hover:bg-gray-200 dark:hover:bg-gray-700",
+                )}
                 title="Emoji keyboard"
                 aria-label="Open emoji keyboard"
               >
@@ -295,10 +354,13 @@ export const RichTextEditor = memo(function RichTextEditor({
             whileTap={{ scale: 0.95 }}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => fileInputRef.current?.click()}
-            className="p-1.5 sm:p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+            className={cn(
+              "flex-shrink-0 rounded p-1.5 transition-colors sm:p-2",
+              isSolace ? "hover:bg-white/[0.08]" : "hover:bg-gray-200 dark:hover:bg-gray-700",
+            )}
             title="Attach File"
           >
-            <Paperclip className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+            <Paperclip className={cn("h-4 w-4", isSolace ? "text-zinc-300" : "text-gray-700 dark:text-gray-300")} />
           </motion.button>
         </div>
       </div>
@@ -343,7 +405,12 @@ export const RichTextEditor = memo(function RichTextEditor({
         onKeyUp={saveSelection}
         onMouseUp={saveSelection}
         onFocus={saveSelection}
-        className="min-h-[300px] p-4 focus:outline-none text-gray-900 dark:text-gray-100 empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 dark:empty:before:text-gray-500 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6 [&_li]:my-1 [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 dark:[&_blockquote]:border-gray-600 [&_blockquote]:pl-3 [&_blockquote]:italic"
+        className={cn(
+          "min-h-[300px] p-4 focus:outline-none empty:before:content-[attr(data-placeholder)] [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6 [&_li]:my-1 [&_blockquote]:border-l-4 [&_blockquote]:pl-3 [&_blockquote]:italic",
+          isSolace
+            ? "text-zinc-100 empty:before:text-zinc-500 [&_blockquote]:border-white/20"
+            : "text-gray-900 empty:before:text-gray-400 dark:text-gray-100 dark:empty:before:text-gray-500 [&_blockquote]:border-gray-300 dark:[&_blockquote]:border-gray-600",
+        )}
         data-placeholder={placeholder}
       />
 
@@ -370,7 +437,14 @@ export const RichTextEditor = memo(function RichTextEditor({
       />
 
       {/* Footer Stats */}
-      <div className="bg-gray-50 dark:bg-gray-900 border-t border-gray-300 dark:border-gray-700 px-4 py-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+      <div
+        className={cn(
+          "flex items-center justify-between border-t px-4 py-2 text-xs",
+          isSolace
+            ? "border-white/[0.06] bg-[#0c0c14]/90 text-zinc-500"
+            : "border-gray-300 bg-gray-50 text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400",
+        )}
+      >
         <div className="flex items-center gap-4">
           <span>
             {stats.wordCount} words
