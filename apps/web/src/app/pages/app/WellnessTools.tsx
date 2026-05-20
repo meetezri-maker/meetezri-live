@@ -32,6 +32,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
 import { Skeleton } from "../../components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { SolaceSelect } from "@/app/solace";
 import { TalkItOutBottomDock } from "@/app/pages/app/talk-it-out/TalkItOutBottomDock";
 import {
   WELLNESS_TOOLS_IMAGES,
@@ -1095,22 +1096,22 @@ export function WellnessTools() {
                     </h2>
                     <p className="mt-1 text-sm text-zinc-400">Handpicked experiences to support your wellbeing.</p>
                   </div>
-                  <label className="relative flex w-full shrink-0 items-center sm:w-auto">
-                    <span className="sr-only">Sort tools</span>
-                    <select
-                      value={sortOption}
-                      onChange={(e) =>
-                        setSortOption(e.target.value as "recommended" | "shortest" | "longest" | "az")
-                      }
-                      className="solace-scroll w-full cursor-pointer appearance-none rounded-xl border border-white/[0.1] bg-black/40 py-2 pl-3 pr-9 text-[13px] font-medium text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35 sm:w-auto"
-                    >
-                      <option value="recommended">Recommended</option>
-                      <option value="shortest">Shortest first</option>
-                      <option value="longest">Longest first</option>
-                      <option value="az">A–Z</option>
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500 sm:right-3" aria-hidden />
-                  </label>
+                  <SolaceSelect
+                    value={sortOption}
+                    onValueChange={(v) =>
+                      setSortOption(v as "recommended" | "shortest" | "longest" | "az")
+                    }
+                    ariaLabel="Sort tools"
+                    variant="default"
+                    size="sm"
+                    triggerClassName="w-full sm:w-auto"
+                    options={[
+                      { value: "recommended", label: "Recommended" },
+                      { value: "shortest", label: "Shortest first" },
+                      { value: "longest", label: "Longest first" },
+                      { value: "az", label: "A–Z" },
+                    ]}
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -1280,13 +1281,16 @@ export function WellnessTools() {
                   <label className="sr-only" htmlFor="wellness-journey-period">
                     Time period
                   </label>
-                  <select
+                  <SolaceSelect
                     id="wellness-journey-period"
-                    defaultValue="week"
-                    className="solace-scroll max-w-[7.5rem] cursor-pointer appearance-none rounded-lg border border-white/[0.08] bg-black/35 py-1 pl-2 pr-6 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/30"
-                  >
-                    <option value="week">This Week</option>
-                  </select>
+                    value="week"
+                    onValueChange={() => undefined}
+                    ariaLabel="Time period"
+                    variant="compact"
+                    size="sm"
+                    triggerClassName="max-w-[7.5rem] uppercase tracking-wider text-[10px] text-zinc-400"
+                    options={[{ value: "week", label: "This Week" }]}
+                  />
                 </div>
                 <div className="mt-4 flex flex-col items-center gap-3 text-center">
                   <div className="relative flex h-[120px] w-[120px] shrink-0 items-center justify-center">
@@ -1347,13 +1351,15 @@ export function WellnessTools() {
               <div className="rounded-2xl border border-white/[0.12] bg-[color-mix(in_oklab,var(--solace-panel)_86%,transparent)] p-5 shadow-[0_18px_48px_-22px_rgba(0,0,0,0.62),0_0_44px_-12px_rgba(236,72,153,0.14),inset_0_1px_0_rgba(255,255,255,0.09)] ring-1 ring-fuchsia-500/10 backdrop-blur-xl">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="text-base font-semibold tracking-tight text-white">Mood After Exercises</h3>
-                  <select
-                    aria-label="Mood period"
-                    defaultValue="week"
-                    className="solace-scroll max-w-[7.5rem] cursor-pointer appearance-none rounded-lg border border-white/[0.08] bg-black/35 py-1 pl-2 pr-6 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/30"
-                  >
-                    <option value="week">This Week</option>
-                  </select>
+                  <SolaceSelect
+                    value="week"
+                    onValueChange={() => undefined}
+                    ariaLabel="Mood period"
+                    variant="compact"
+                    size="sm"
+                    triggerClassName="max-w-[7.5rem] uppercase tracking-wider text-[10px] text-zinc-400"
+                    options={[{ value: "week", label: "This Week" }]}
+                  />
                 </div>
                 <p className="sr-only">Illustrative reflection snapshot for your week.</p>
                 <div className="mt-4 grid grid-cols-4 gap-2">

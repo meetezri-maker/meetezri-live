@@ -161,8 +161,8 @@ let getMeInFlight: Promise<any> | null = null;
 let getCreditsInFlight: Promise<any> | null = null;
 /** Merge overlapping GET /journal list calls (auth/session churn on load). */
 let getJournalListInFlight: Promise<any> | null = null;
-/** Merge overlapping GET /users/activity calls (dashboard widgets). */
-let getRecentActivityInFlight: Promise<any> | null = null;
+/** Merge overlapping GET /users/activity calls per limit (dashboard vs history). */
+const getRecentActivityInFlight = new Map<string, Promise<any>>();
 /** Merge overlapping GET /notifications calls (header + page). */
 const getNotificationsInFlight = new Map<string, Promise<any>>();
 /** Merge overlapping GET /notifications/unread-count calls (header + page). */
@@ -641,26 +641,42 @@ export const api = {
     return getCreditsInFlight;
   },
 
-  async getRecentActivity(limit = 25) {
+  bustRecentActivityCache() {
+    const prefix = 'GET:/users/activity';
+    for (const key of shortGetCache.keys()) {
+      if (key.startsWith(prefix)) shortGetCache.delete(key);
+    }
+    getRecentActivityInFlight.clear();
+  },
+
+  async getRecentActivity(limit = 25, options?: { bustCache?: boolean }) {
     const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), 100);
     const cacheKey = `GET:/users/activity?limit=${safeLimit}`;
-    if (!getRecentActivityInFlight) {
-      const cached = getCached<any>(cacheKey, 5_000);
-      if (cached !== null) return cached;
-      getRecentActivityInFlight = (async () => {
-        const headers = await getHeaders();
-        return await getJsonCached<any>(
-          cacheKey,
-          `${API_URL}/users/activity?${new URLSearchParams({ limit: String(safeLimit) })}`,
-          headers,
-          'Failed to fetch recent activity',
-          5_000
-        );
-      })().finally(() => {
-        getRecentActivityInFlight = null;
-      });
+    if (options?.bustCache) {
+      shortGetCache.delete(cacheKey);
+      getRecentActivityInFlight.delete(cacheKey);
     }
-    return getRecentActivityInFlight;
+    const cached = getCached<any>(cacheKey, 5_000);
+    if (cached !== null) return cached;
+
+    const inFlight = getRecentActivityInFlight.get(cacheKey);
+    if (inFlight) return inFlight;
+
+    const run = (async () => {
+      const headers = await getHeaders();
+      return await getJsonCached<any>(
+        cacheKey,
+        `${API_URL}/users/activity?${new URLSearchParams({ limit: String(safeLimit) })}`,
+        headers,
+        'Failed to fetch recent activity',
+        5_000
+      );
+    })().finally(() => {
+      getRecentActivityInFlight.delete(cacheKey);
+    });
+
+    getRecentActivityInFlight.set(cacheKey, run);
+    return run;
   },
 
   async reportCrisisEvent(data: {

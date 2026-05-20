@@ -34,6 +34,7 @@ import {
 import { SUBSCRIPTION_PLANS } from "../../utils/subscriptionPlans";
 import type { PlanTier, UserSubscription, UsageRecord } from "../../utils/subscriptionPlans";
 import { cn } from "@/lib/utils";
+import { SolaceSelect } from "@/app/solace";
 
 const PAYG_CAPSULES = [25, 50, 100, 200] as const;
 
@@ -948,21 +949,21 @@ export function Billing() {
                             <label htmlFor="billing-invoice-page-size" className="sr-only">
                               Rows per page
                             </label>
-                            <select
+                            <SolaceSelect
                               id="billing-invoice-page-size"
-                              value={invoicePageSize}
-                              onChange={(e) => {
-                                setInvoicePageSize(Number(e.target.value));
+                              value={String(invoicePageSize)}
+                              onValueChange={(value) => {
+                                setInvoicePageSize(Number(value));
                                 setInvoicePage(1);
                               }}
-                              className="min-h-[44px] cursor-pointer rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-zinc-200 outline-none ring-violet-500/30 transition hover:border-white/15 focus:ring-2"
-                            >
-                              {INVOICE_PAGE_SIZE_OPTIONS.map((n) => (
-                                <option key={n} value={n}>
-                                  {n} per page
-                                </option>
-                              ))}
-                            </select>
+                              ariaLabel="Rows per page"
+                              variant="default"
+                              triggerClassName="min-h-[44px] rounded-full"
+                              options={INVOICE_PAGE_SIZE_OPTIONS.map((n) => ({
+                                value: String(n),
+                                label: `${n} per page`,
+                              }))}
+                            />
                           </div>
                           <div className="flex items-center justify-center gap-2 sm:justify-end">
                             <button

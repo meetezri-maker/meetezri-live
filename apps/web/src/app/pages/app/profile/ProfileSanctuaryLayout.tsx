@@ -33,7 +33,7 @@ import {
   MessageCircle,
   FileText,
 } from "lucide-react";
-import { SolaceHeroEnvironment } from "@/app/solace";
+import { SolaceHeroEnvironment, SolaceSelect } from "@/app/solace";
 import { Switch } from "@/app/components/ui/switch";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import {
@@ -589,27 +589,32 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                               {isEditing ? (
                                 f.name === "pronouns" ? (
                                   <motion.div className="space-y-2">
-                                    <select
-                                      value={pronounsOptions.includes((field.value || "").toLowerCase()) ? (field.value || "").toLowerCase() : "__custom__"}
-                                      disabled={isSaving}
-                                      onChange={(e) => {
-                                        const v = e.target.value;
+                                    <SolaceSelect
+                                      value={
+                                        pronounsOptions.includes((field.value || "").toLowerCase())
+                                          ? (field.value || "").toLowerCase()
+                                          : "__custom__"
+                                      }
+                                      onValueChange={(v) => {
                                         if (v === "__custom__") {
                                           field.onChange("");
                                           return;
                                         }
                                         field.onChange(v);
                                       }}
-                                      className="w-full bg-transparent text-sm font-medium text-zinc-100 outline-none disabled:opacity-60"
-                                    >
-                                      <option value="">Select pronouns</option>
-                                      {pronounsOptions.map((option) => (
-                                        <option key={option} value={option}>
-                                          {option}
-                                        </option>
-                                      ))}
-                                      <option value="__custom__">Other (custom)</option>
-                                    </select>
+                                      disabled={isSaving}
+                                      ariaLabel="Pronouns"
+                                      placeholder="Select pronouns"
+                                      variant="default"
+                                      triggerClassName="h-auto w-full border-0 bg-transparent px-0 py-0 text-sm font-medium text-zinc-100 shadow-none"
+                                      options={[
+                                        ...pronounsOptions.map((option) => ({
+                                          value: option,
+                                          label: option,
+                                        })),
+                                        { value: "__custom__", label: "Other (custom)" },
+                                      ]}
+                                    />
                                     {!pronounsOptions.includes((field.value || "").toLowerCase()) && (
                                       <input
                                         value={field.value || ""}
@@ -752,16 +757,19 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                           </div>
                           <FormControl>
                             {isEditing ? (
-                              <select
-                                {...field}
+                              <SolaceSelect
+                                value={field.value || "__unset__"}
+                                onValueChange={(v) => field.onChange(v === "__unset__" ? "" : v)}
                                 disabled={isSaving}
-                                className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-zinc-100 outline-none focus:ring-2 focus:ring-violet-400/30"
-                              >
-                                <option value="">Select…</option>
-                                <option>Yes</option>
-                                <option>No</option>
-                                <option>Prefer not to say</option>
-                              </select>
+                                ariaLabel="Therapist"
+                                placeholder="Select…"
+                                variant="form"
+                                options={[
+                                  { value: "Yes", label: "Yes" },
+                                  { value: "No", label: "No" },
+                                  { value: "Prefer not to say", label: "Prefer not to say" },
+                                ]}
+                              />
                             ) : (
                               <span className={`${PILL} border-violet-400/25 bg-violet-500/15 text-violet-200`}>
                                 {field.value || "Not specified"}

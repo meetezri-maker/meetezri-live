@@ -437,16 +437,9 @@ export function Notifications() {
             </section>
 
             {total > 0 ? (
-              <div
-                className={cn(
-                  notificationsGlassCard,
-                  "overflow-hidden p-0",
-                  "[&_button]:border-white/10 [&_button]:bg-[rgba(12,14,30,0.9)] [&_button]:text-white/80",
-                  "[&_select]:border-white/10 [&_select]:bg-[rgba(12,14,30,0.9)] [&_select]:text-violet-200",
-                  "[&_span]:text-[rgba(255,255,255,0.55)]"
-                )}
-              >
+              <div className={cn(notificationsGlassCard, "overflow-hidden p-0")}>
                 <AdminPaginationBar
+                  variant="solace"
                   total={total}
                   page={safePage}
                   pageSize={pageSize}

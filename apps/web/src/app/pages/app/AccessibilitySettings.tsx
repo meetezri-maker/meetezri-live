@@ -33,6 +33,7 @@ import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { SolaceSelect } from "@/app/solace";
 import {
   ACCESSIBILITY_HEART_IMG,
   ACCESSIBILITY_HERO_IMG,
@@ -781,21 +782,20 @@ export function AccessibilitySettings() {
                   <p className="mt-1 text-[11px] text-[rgba(255,255,255,0.42)]">
                     Adjust colors for better clarity
                   </p>
-                  <div className="relative mt-3">
-                    <select
+                  <div className="mt-3">
+                    <SolaceSelect
                       value={colorFilter}
-                      onChange={(e) => setColorFilter(e.target.value)}
-                      aria-label="Color filter"
-                      className="w-full appearance-none rounded-full border border-white/[0.1] bg-black/30 py-2 pr-9 pl-4 text-xs font-medium text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/35"
-                    >
-                      <option value="off">Off</option>
-                      <option value="protanopia">Protanopia</option>
-                      <option value="deuteranopia">Deuteranopia</option>
-                      <option value="tritanopia">Tritanopia</option>
-                    </select>
-                    <ChevronDown
-                      className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-white/40"
-                      aria-hidden
+                      onValueChange={setColorFilter}
+                      ariaLabel="Color filter"
+                      variant="compact"
+                      size="sm"
+                      triggerClassName="h-9 w-full rounded-full border-white/[0.1] bg-black/30 text-xs font-medium text-white focus-visible:ring-emerald-400/35"
+                      options={[
+                        { value: "off", label: "Off" },
+                        { value: "protanopia", label: "Protanopia" },
+                        { value: "deuteranopia", label: "Deuteranopia" },
+                        { value: "tritanopia", label: "Tritanopia" },
+                      ]}
                     />
                   </div>
                 </motion.div>

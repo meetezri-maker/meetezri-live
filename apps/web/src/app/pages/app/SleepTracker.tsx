@@ -21,14 +21,10 @@ import {
   ChevronRight,
   Heart,
   Flower2,
-  Volume2,
-  Lightbulb,
-  Eye,
   ArrowLeft,
   Star,
   BarChart3,
   Cloud,
-  Thermometer,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -207,6 +203,14 @@ function calmNightsCount(entries: SleepEntry[]): number {
   }).length;
 }
 
+function interruptedNightsCount(entries: SleepEntry[]): number {
+  return entries.filter((e) => {
+    const h = durationHours(e);
+    const q = e.quality_rating ?? 0;
+    return h < 5 || q < 45;
+  }).length;
+}
+
 function journeyStageIndex(entryCount: number): number {
   if (entryCount <= 0) return 0;
   if (entryCount <= 2) return 1;
@@ -255,72 +259,261 @@ function formatQualityTrend(delta: number | null): string {
   return `${delta > 0 ? "↑" : "↓"} ${pct}% vs prior week`;
 }
 
+type SleepInsightRow = { headline: string; detail: string; Icon: LucideIcon };
+
+type SleepInsightCandidate = SleepInsightRow & { priority: number };
+
 function buildSleepInsightRows(params: {
   entryCount: number;
   avgQuality: number;
   avgHours: number;
   calmNights: number;
   consistency: number;
-}): Array<{ headline: string; detail: string; Icon: LucideIcon }> {
-  const rows: Array<{ headline: string; detail: string; Icon: LucideIcon }> = [];
-  const { entryCount, avgQuality, avgHours, calmNights, consistency } = params;
+  streak: number;
+  avgSleepHoursDelta: number | null;
+  avgQualityDelta: number | null;
+  interruptedNights: number;
+}): SleepInsightRow[] {
+  const {
+    entryCount,
+    avgQuality,
+    avgHours,
+    calmNights,
+    consistency,
+    streak,
+    avgSleepHoursDelta,
+    avgQualityDelta,
+    interruptedNights,
+  } = params;
+
   if (entryCount === 0) {
-    rows.push({
-      headline: "Your sleep insights will gather here",
-      detail: "Log a night when it feels right—Solace will reflect patterns back to you gently.",
-      Icon: Moon,
-    });
-    return rows;
+    return [
+      {
+        headline: "Your sleep insights will gather here",
+        detail: "Log a night when it feels right—Solace will reflect patterns back to you gently.",
+        Icon: Moon,
+      },
+      {
+        headline: "Start with one honest night",
+        detail: "A single log is enough for us to begin noticing what helps you rest.",
+        Icon: Bed,
+      },
+      {
+        headline: "No score, just patterns",
+        detail: "We will surface gentle observations—not judgments—as you check in.",
+        Icon: Sparkles,
+      },
+    ];
   }
+
+  const candidates: SleepInsightCandidate[] = [];
+
+  const push = (row: SleepInsightRow, priority: number) => {
+    candidates.push({ ...row, priority });
+  };
+
   if (calmNights >= 3) {
-    rows.push({
-      headline: "Calm nights are adding up",
-      detail: "Longer, kinder nights are showing up in how steady your recovery feels.",
-      Icon: Sparkles,
-    });
+    push(
+      {
+        headline: "Calm nights are adding up",
+        detail: `${calmNights} of your logged nights crossed the calm-rest threshold—recovery is finding rhythm.`,
+        Icon: Sparkles,
+      },
+      90
+    );
+  } else if (calmNights === 0 && entryCount >= 3) {
+    push(
+      {
+        headline: "Restful nights are still rare",
+        detail: "Most recent logs show lighter or shorter sleep—tiny wind-down shifts can still help.",
+        Icon: Moon,
+      },
+      72
+    );
   }
+
   if (consistency >= 70) {
-    rows.push({
-      headline: "Rhythm is doing quiet work",
-      detail: "Consistency gives your nervous system a predictable place to land.",
-      Icon: Activity,
-    });
+    push(
+      {
+        headline: "Rhythm is doing quiet work",
+        detail: `Your duration consistency score is ${consistency}%—predictable bedtimes give your nervous system a landing place.`,
+        Icon: Activity,
+      },
+      88
+    );
+  } else if (consistency < 45 && entryCount >= 3) {
+    push(
+      {
+        headline: "Bedtime varies quite a bit",
+        detail: `With a ${consistency}% consistency score, anchoring one small pre-sleep ritual may steady the week.`,
+        Icon: Activity,
+      },
+      75
+    );
   }
+
+  if (streak >= 3) {
+    push(
+      {
+        headline: "You are building a sleep streak",
+        detail: `${streak} consecutive logged nights—showing up matters more than perfect hours.`,
+        Icon: Zap,
+      },
+      86
+    );
+  }
+
+  if (avgSleepHoursDelta != null && avgSleepHoursDelta >= 0.35) {
+    const mins = Math.round(avgSleepHoursDelta * 60);
+    push(
+      {
+        headline: "You are sleeping longer lately",
+        detail: `This week averages about ${mins} minutes more per night than the prior week.`,
+        Icon: Bed,
+      },
+      84
+    );
+  } else if (avgSleepHoursDelta != null && avgSleepHoursDelta <= -0.35) {
+    const mins = Math.round(Math.abs(avgSleepHoursDelta) * 60);
+    push(
+      {
+        headline: "Recent nights have been shorter",
+        detail: `This week runs about ${mins} minutes shorter per night than the week before—be gentle with caffeine and screens.`,
+        Icon: Moon,
+      },
+      83
+    );
+  }
+
+  if (avgQualityDelta != null && avgQualityDelta >= 6) {
+    push(
+      {
+        headline: "Sleep quality is trending up",
+        detail: `Quality moved up roughly ${Math.round(avgQualityDelta)}% compared with your prior week.`,
+        Icon: Heart,
+      },
+      82
+    );
+  } else if (avgQualityDelta != null && avgQualityDelta <= -6) {
+    push(
+      {
+        headline: "Quality dipped this week",
+        detail: `Ratings are about ${Math.round(Math.abs(avgQualityDelta))}% lower than last week—protect what still feels safe at night.`,
+        Icon: Heart,
+      },
+      81
+    );
+  }
+
   if (avgHours < 6.5 && avgQuality < 70) {
-    rows.push({
-      headline: "Time and quality are both asking for softness",
-      detail: "Small wind-down shifts often help before chasing longer hours.",
-      Icon: Moon,
-    });
+    push(
+      {
+        headline: "Time and quality are both asking for softness",
+        detail: `You are averaging ${avgHours.toFixed(1)}h at ${avgQuality}% quality—small wind-down shifts often help before chasing longer hours.`,
+        Icon: Moon,
+      },
+      80
+    );
   } else if (avgHours < 6.5) {
-    rows.push({
-      headline: "A little more time in bed can help",
-      detail: "Your body may need more runway to finish its deeper passes of rest.",
-      Icon: Bed,
-    });
+    push(
+      {
+        headline: "A little more time in bed can help",
+        detail: `Your recent average is ${avgHours.toFixed(1)} hours—your body may need more runway for deeper rest.`,
+        Icon: Bed,
+      },
+      79
+    );
+  } else if (avgHours >= 7.5) {
+    push(
+      {
+        headline: "You are getting solid duration",
+        detail: `${avgHours.toFixed(1)} hours on average lately—protect the habits that got you here.`,
+        Icon: Bed,
+      },
+      70
+    );
   }
+
   if (avgQuality >= 78) {
-    rows.push({
-      headline: "Quality is holding steady",
-      detail: "Protect the rituals that make sleep feel safe—not perfect, just yours.",
-      Icon: Heart,
-    });
+    push(
+      {
+        headline: "Quality is holding steady",
+        detail: `${avgQuality}% average quality—protect the rituals that make sleep feel safe, not perfect.`,
+        Icon: Heart,
+      },
+      78
+    );
+  } else if (avgQuality < 55 && entryCount >= 2) {
+    push(
+      {
+        headline: "Quality has room to grow",
+        detail: `${avgQuality}% average quality across ${entryCount} nights—one softer evening ritual can be enough to start.`,
+        Icon: Heart,
+      },
+      77
+    );
   }
-  if (rows.length < 2 && entryCount >= 4) {
-    rows.push({
+
+  if (interruptedNights >= 2 && entryCount >= 3) {
+    push(
+      {
+        headline: "Interrupted nights are showing up",
+        detail: `${interruptedNights} recent logs look fragmented—longer exhales and dim light may help your body settle.`,
+        Icon: Zap,
+      },
+      76
+    );
+  }
+
+  if (entryCount >= 7) {
+    push(
+      {
+        headline: "A week of data is taking shape",
+        detail: `${entryCount} nights logged—patterns are real enough to guide small, kind experiments.`,
+        Icon: BarChart3,
+      },
+      55
+    );
+  } else if (entryCount <= 3) {
+    push(
+      {
+        headline: "Early days of tracking",
+        detail: `${entryCount} ${entryCount === 1 ? "night" : "nights"} so far—each log makes the next insight more personal.`,
+        Icon: BarChart3,
+      },
+      50
+    );
+  }
+
+  push(
+    {
       headline: "Patterns are forming",
       detail: "You do not have to chase perfection to feel better mornings.",
       Icon: BarChart3,
-    });
-  }
-  if (rows.length < 2) {
-    rows.push({
+    },
+    20
+  );
+  push(
+    {
       headline: "Rest is permission, not a score",
       detail: "Move at the pace that feels honest tonight.",
       Icon: Sparkles,
-    });
-  }
-  return rows.slice(0, 3);
+    },
+    10
+  );
+
+  const seen = new Set<string>();
+  const ranked = candidates
+    .sort((a, b) => b.priority - a.priority)
+    .filter((row) => {
+      if (seen.has(row.headline)) return false;
+      seen.add(row.headline);
+      return true;
+    })
+    .slice(0, 3)
+    .map(({ headline, detail, Icon }) => ({ headline, detail, Icon }));
+
+  return ranked;
 }
 
 interface ChartTooltipProps {
@@ -582,8 +775,21 @@ export function SleepTracker() {
         avgHours: stats.avgHoursNum,
         calmNights: stats.calmNights,
         consistency: stats.consistency,
+        streak: stats.streak,
+        avgSleepHoursDelta: weekTrends.avgSleepHoursDelta,
+        avgQualityDelta: weekTrends.avgQualityDelta,
+        interruptedNights: interruptedNightsCount(sleepEntries.slice(0, 14)),
       }),
-    [sleepEntries.length, stats.avgQuality, stats.avgHoursNum, stats.calmNights, stats.consistency]
+    [
+      sleepEntries,
+      stats.avgQuality,
+      stats.avgHoursNum,
+      stats.calmNights,
+      stats.consistency,
+      stats.streak,
+      weekTrends.avgSleepHoursDelta,
+      weekTrends.avgQualityDelta,
+    ]
   );
 
   const journeyIdx = journeyStageIndex(sleepEntries.length);
@@ -998,8 +1204,9 @@ export function SleepTracker() {
                     </motion.div>
                   ) : null}
                   {sleepEntries.length > 0 ? (
-                    <div className="border-t border-white/[0.06] px-4 py-4 sm:px-5">
+                    <div className="border-t border-white/[0.06]">
                       <AdminPaginationBar
+                        variant="solace"
                         total={sleepEntries.length}
                         page={sleepHistoryPage}
                         pageSize={sleepHistoryPageSize}
@@ -1086,55 +1293,69 @@ export function SleepTracker() {
                   <h3 className="font-serif text-xl font-light text-zinc-50 sm:text-2xl">Your Sleep Journey</h3>
                   <p className="mt-1 text-sm text-zinc-500">Small steps create better nights.</p>
                 </div>
-                <div className="relative overflow-hidden rounded-[28px] border border-white/[0.08] bg-[color-mix(in_oklab,var(--solace-ds-surface)_88%,transparent)] shadow-[0_0_56px_-28px_rgba(88,28,135,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl">
+                <div className="relative min-h-[220px] overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#0a0614] shadow-[0_0_56px_-28px_rgba(88,28,135,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl sm:min-h-[240px]">
                   <img
                     src={SLEEP_TRACKER_IMAGES.starfieldAccent}
                     alt=""
-                    className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.28]"
+                    className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center opacity-[0.38]"
                     loading="lazy"
                     decoding="async"
                   />
                   <div
-                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_80%_at_50%_100%,rgba(30,58,138,0.35),transparent_55%),radial-gradient(ellipse_70%_50%_at_80%_0%,rgba(168,85,247,0.18),transparent_50%)]"
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#0a0614]/75 via-[#0a0614]/35 to-[#0a0614]/80"
                     aria-hidden
                   />
-                  <div className="relative overflow-x-auto px-4 py-8 sm:px-8 sm:py-10 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    <div className="relative mx-auto min-w-[min(100%,720px)] max-w-5xl">
-                      <div
-                        className="absolute left-[8%] right-[8%] top-[40px] h-[2px] bg-gradient-to-r from-transparent via-violet-400/70 to-transparent shadow-[0_0_24px_rgba(168,85,247,0.65)] sm:top-[44px]"
-                        aria-hidden
-                      />
-                      <div className="relative flex justify-between gap-2 sm:gap-4">
-                        {JOURNEY_STAGES.map((stage, idx) => {
-                          const active = idx === journeyIdx;
-                          const StageIcon = stage.Icon;
-                          return (
-                            <div key={stage.id} className="flex w-[20%] max-w-[140px] flex-col items-center text-center">
-                              <motion.div
+                  <div
+                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_50%,rgba(6,4,14,0.45),transparent_65%)]"
+                    aria-hidden
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_100%_55%_at_50%_100%,rgba(88,28,135,0.28),transparent_55%)]"
+                    aria-hidden
+                  />
+                  <div className="relative z-10 w-full overflow-x-auto px-4 py-8 sm:px-8 sm:py-10 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="relative grid w-full min-w-[640px] grid-cols-5">
+                      {JOURNEY_STAGES.map((stage, idx) => {
+                        const active = idx === journeyIdx;
+                        const StageIcon = stage.Icon;
+                        const segmentLit = idx < journeyIdx;
+                        return (
+                          <div key={stage.id} className="relative flex flex-col items-center text-center">
+                            {idx < JOURNEY_STAGES.length - 1 ? (
+                              <div
                                 className={cn(
-                                  "relative flex h-[52px] w-[52px] items-center justify-center rounded-full border bg-black/50 sm:h-14 sm:w-14",
-                                  active
-                                    ? "border-violet-400/70 text-violet-100 shadow-[0_0_40px_rgba(168,85,247,0.65),0_0_60px_-10px_rgba(236,72,153,0.35)]"
-                                    : "border-white/10 text-zinc-500"
+                                  "absolute left-1/2 top-[26px] z-0 h-[2px] w-full shadow-[0_0_16px_rgba(168,85,247,0.4)] sm:top-[28px]",
+                                  segmentLit
+                                    ? "bg-gradient-to-r from-violet-500/85 via-fuchsia-400/75 to-violet-400/85"
+                                    : "bg-white/12"
                                 )}
-                                animate={active ? { scale: [1, 1.05, 1] } : {}}
-                                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                              >
-                                <StageIcon className={cn("size-6 sm:size-7", active ? "text-violet-100" : "text-zinc-500")} aria-hidden />
-                              </motion.div>
-                              <p
-                                className={cn(
-                                  "mt-4 text-[10px] font-semibold uppercase tracking-wider sm:text-xs",
-                                  active ? "text-violet-200" : "text-zinc-500"
-                                )}
-                              >
-                                {stage.label}
-                              </p>
-                              <p className="mt-2 text-[10px] leading-snug text-zinc-500 sm:text-[11px]">{stage.sub}</p>
-                            </div>
-                          );
-                        })}
-                      </div>
+                                aria-hidden
+                              />
+                            ) : null}
+                            <motion.div
+                              className={cn(
+                                "relative z-[1] flex h-[52px] w-[52px] items-center justify-center rounded-full border backdrop-blur-sm sm:h-14 sm:w-14",
+                                active
+                                  ? "border-violet-400/70 bg-black/75 text-violet-100 shadow-[0_0_40px_rgba(168,85,247,0.65),0_0_60px_-10px_rgba(236,72,153,0.35)]"
+                                  : "border-white/10 bg-black/60 text-zinc-500"
+                              )}
+                              animate={active ? { scale: [1, 1.05, 1] } : {}}
+                              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                            >
+                              <StageIcon className={cn("size-6 sm:size-7", active ? "text-violet-100" : "text-zinc-500")} aria-hidden />
+                            </motion.div>
+                            <p
+                              className={cn(
+                                "mt-4 text-[10px] font-semibold uppercase tracking-wider sm:text-xs",
+                                active ? "text-violet-200" : "text-zinc-500"
+                              )}
+                            >
+                              {stage.label}
+                            </p>
+                            <p className="mt-2 text-[10px] leading-snug text-zinc-500 sm:text-[11px]">{stage.sub}</p>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -1216,47 +1437,6 @@ export function SleepTracker() {
                     Log a few nights and a gentle bedtime rhythm will appear here—no pressure to be perfect.
                   </p>
                 )}
-              </SolaceRightRailCard>
-
-              <SolaceRightRailCard className="p-6">
-                <h2 className="font-serif text-lg font-light text-white">Sleep Environment</h2>
-                <p className="mt-1 text-xs text-zinc-500">Not logged in the app yet—neutral placeholders.</p>
-                <ul className="mt-5 space-y-3.5 text-sm">
-                  <li className="flex items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
-                    <span className="flex items-center gap-2 text-zinc-400">
-                      <Thermometer className="size-4 text-amber-300/80" aria-hidden />
-                      Room temperature
-                    </span>
-                    <span className="text-emerald-300/90">—</span>
-                  </li>
-                  <li className="flex items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
-                    <span className="flex items-center gap-2 text-zinc-400">
-                      <Volume2 className="size-4 text-cyan-300/80" aria-hidden />
-                      Ambient noise
-                    </span>
-                    <span className="text-amber-200/90">—</span>
-                  </li>
-                  <li className="flex items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
-                    <span className="flex items-center gap-2 text-zinc-400">
-                      <Lightbulb className="size-4 text-violet-300/80" aria-hidden />
-                      Lighting
-                    </span>
-                    <span className="text-zinc-500">—</span>
-                  </li>
-                  <li className="flex items-center justify-between gap-3">
-                    <span className="flex items-center gap-2 text-zinc-400">
-                      <Eye className="size-4 text-fuchsia-300/80" aria-hidden />
-                      Distractions
-                    </span>
-                    <span className="text-zinc-500">—</span>
-                  </li>
-                </ul>
-                <Button
-                  asChild
-                  className="mt-6 min-h-[44px] w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-[0_0_20px_rgba(168,85,247,0.35)] hover:from-violet-500 hover:to-fuchsia-500"
-                >
-                  <Link to="/app/wellness-tools">Optimize Environment</Link>
-                </Button>
               </SolaceRightRailCard>
 
               <SolaceRightRailCard className="p-6">

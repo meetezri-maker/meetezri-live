@@ -170,7 +170,7 @@ export function getSafetyResources(region?: Region): SafetyResource[] {
       {
         id: 'ca_988',
         type: 'crisis_line',
-        name: '988 Suicide Crisis Helpline',
+        name: '988 Suicide & Emergency Lifeline',
         description: '24/7 suicide prevention and crisis support',
         phone: '988',
         url: 'https://988.ca',
@@ -180,7 +180,7 @@ export function getSafetyResources(region?: Region): SafetyResource[] {
       {
         id: 'ca_crisis_text',
         type: 'text_line',
-        name: 'Crisis Text Line (Canada)',
+        name: 'Crisis Text Line',
         description: 'Text CONNECT to 686868',
         phone: '686868',
         url: 'https://www.crisistextline.ca',

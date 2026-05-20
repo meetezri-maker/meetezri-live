@@ -169,10 +169,12 @@ const MOOD_SLUG_TO_PRESET: Record<string, SessionBackdropPresetKey> = {
   happy: "happy",
   calm: "calm",
   anxious: "anxious",
+  nervous: "anxious",
   sad: "sad",
   angry: "angry",
   tired: "tired",
   excited: "excited",
+  energetic: "excited",
   neutral: "solace",
 };
 

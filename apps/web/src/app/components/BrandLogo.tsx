@@ -20,13 +20,18 @@ function readCustomLogoUrl(): string {
   }
 }
 
+interface BrandLogoProps {
+  heightClass?: string;
+  className?: string;
+  /** `light` = white mark for dark backgrounds; `dark` = default black mark */
+  variant?: "light" | "dark";
+}
+
 export function BrandLogo({
   heightClass = "h-24",
   className = "",
-}: {
-  heightClass?: string;
-  className?: string;
-}) {
+  variant = "dark",
+}: BrandLogoProps) {
   const [customLogoUrl, setCustomLogoUrl] = useState<string>("");
 
   useEffect(() => {
@@ -45,30 +50,18 @@ export function BrandLogo({
     };
   }, []);
 
-  if (customLogoUrl) {
-    return (
-      <span
-        role="img"
-        aria-label="App Logo"
-        className={`inline-flex shrink-0 items-center justify-center overflow-visible ${heightClass} ${className}`}
-      >
-        <img
-          src={customLogoUrl}
-          alt=""
-          className="h-[130%] w-auto max-h-none object-contain object-center"
-        />
-      </span>
-    );
-  }
+  const defaultSrc =
+    variant === "light" ? "/logos/logo white.png" : DEFAULT_LOGO_SRC;
+  const logoSrc = customLogoUrl || defaultSrc;
 
   return (
     <span
       role="img"
-      aria-label="MeetEzri"
+      aria-label={customLogoUrl ? "App Logo" : "MeetEzri"}
       className={`inline-flex shrink-0 items-center justify-center overflow-visible ${heightClass} ${className}`}
     >
       <img
-        src={DEFAULT_LOGO_SRC}
+        src={logoSrc}
         alt=""
         className="h-[130%] w-auto max-h-none object-contain object-center"
       />

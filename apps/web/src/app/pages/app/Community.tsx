@@ -45,6 +45,7 @@ import { toast } from "sonner";
 import { Switch } from "@/app/components/ui/switch";
 import { Label } from "@/app/components/ui/label";
 import { cn } from "@/lib/utils";
+import { SolaceSelect } from "@/app/solace";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { EmojiText } from "@/components/ui/EmojiText";
@@ -2029,18 +2030,21 @@ export function Community() {
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
                 <label className="shrink-0 font-medium text-violet-100/80">Category:</label>
-                <select
+                <SolaceSelect
                   value={newPostCategory}
-                  onChange={(e) => setNewPostCategory(e.target.value)}
-                  className="flex-1 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white backdrop-blur-sm focus:border-fuchsia-400/40 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/20 disabled:opacity-50"
+                  onValueChange={setNewPostCategory}
+                  ariaLabel="Post category"
+                  variant="form"
                   disabled={posting}
-                >
-                  <option value="General Discussion">General Discussion</option>
-                  <option value="Wins & Progress">Wins & Progress</option>
-                  <option value="Support & Advice">Support & Advice</option>
-                  <option value="Professional Insights">Professional Insights</option>
-                  <option value="Community Events">Community Events</option>
-                </select>
+                  triggerClassName="flex-1"
+                  options={[
+                    { value: "General Discussion", label: "General Discussion" },
+                    { value: "Wins & Progress", label: "Wins & Progress" },
+                    { value: "Support & Advice", label: "Support & Advice" },
+                    { value: "Professional Insights", label: "Professional Insights" },
+                    { value: "Community Events", label: "Community Events" },
+                  ]}
+                />
               </div>
 
               {/* Group selection removed: admins create/manage groups. */}

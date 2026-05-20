@@ -5,8 +5,6 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   Loader2,
   Lock,
-  Menu,
-  X,
   Mail,
   Heart,
   Shield,
@@ -14,7 +12,6 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
-  Sparkles,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -39,6 +36,7 @@ import {
 } from "../components/ui/form";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "../components/BrandLogo";
+import { PublicNav } from "../components/PublicNav";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -49,8 +47,6 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 /** Scene-only twilight lake — no baked UI (login page only). */
 const LOGIN_HERO_BG = "/solace/emotional-focus-twilight-sanctuary.jpg";
-
-const LOGIN_NAV_H = "76px";
 
 const MAIN_TRUST = [
   {
@@ -79,143 +75,14 @@ const MAIN_TRUST = [
   },
 ] as const;
 
-interface SolaceLoginNavProps {
+interface LoginBrandEmblemProps {
   className?: string;
 }
 
-function SolaceLoginNav({ className }: SolaceLoginNavProps) {
-  const [open, setOpen] = useState(false);
-
+function LoginBrandEmblem({ className }: LoginBrandEmblemProps) {
   return (
-    <header
-      className={cn(
-        "sticky top-0 z-50 shrink-0 border-b border-white/[0.06] bg-[#070815]/35 backdrop-blur-xl",
-        "supports-[backdrop-filter]:bg-[#070815]/22]",
-        className,
-      )}
-      style={{ height: LOGIN_NAV_H }}
-    >
-      <div className="relative flex h-full w-full items-center justify-between gap-4 px-5 sm:px-8 lg:px-10">
-        <Link to="/" className="relative z-10 flex shrink-0 items-center">
-          <BrandLogo heightClass="h-10" />
-        </Link>
-
-        <nav
-          className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 text-[14px] font-normal tracking-wide text-violet-100/78 md:flex"
-          aria-label="Primary"
-        >
-          <Link
-            to="/how-it-works"
-            className="transition-colors hover:text-white/95"
-          >
-            How It Works
-          </Link>
-          <Link to="/pricing" className="transition-colors hover:text-white/95">
-            Pricing
-          </Link>
-          <Link to="/privacy" className="transition-colors hover:text-white/95">
-            Privacy &amp; Safety
-          </Link>
-        </nav>
-
-        <div className="relative z-10 hidden items-center gap-5 sm:flex">
-          <Link
-            to="/login"
-            className="text-[14px] text-violet-100/78 transition-colors hover:text-white"
-          >
-            Log In
-          </Link>
-          <Link
-            to="/pricing"
-            className="rounded-full bg-gradient-to-r from-[#E91E63] to-[#9C27B0] px-6 py-2.5 text-[13px] font-medium text-white shadow-[0_0_28px_-4px_rgba(233,30,99,0.55)] transition-[box-shadow,transform] duration-300 hover:shadow-[0_0_40px_-2px_rgba(168,85,247,0.42)] active:scale-[0.98]"
-          >
-            Get Started
-          </Link>
-        </div>
-
-        <button
-          type="button"
-          className="relative z-10 flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-white/90 sm:hidden"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-controls="solace-login-mobile-nav"
-          aria-label={open ? "Close menu" : "Open menu"}
-        >
-          {open ? <X size={18} /> : <Menu size={18} />}
-        </button>
-      </div>
-
-      {open ? (
-        <div
-          id="solace-login-mobile-nav"
-          className="border-t border-white/[0.06] bg-[#070812]/85 px-4 py-4 backdrop-blur-xl sm:hidden"
-        >
-          <nav className="flex flex-col gap-3 text-sm text-violet-100/85">
-            <Link to="/how-it-works" onClick={() => setOpen(false)}>
-              How It Works
-            </Link>
-            <Link to="/pricing" onClick={() => setOpen(false)}>
-              Pricing
-            </Link>
-            <Link to="/privacy" onClick={() => setOpen(false)}>
-              Privacy &amp; Safety
-            </Link>
-            <Link to="/login" onClick={() => setOpen(false)}>
-              Log In
-            </Link>
-            <Link
-              to="/pricing"
-              onClick={() => setOpen(false)}
-              className="mt-1 inline-flex w-fit rounded-full bg-gradient-to-r from-[#E91E63] to-[#9C27B0] px-5 py-2 text-sm font-medium text-white shadow-[0_0_22px_-4px_rgba(233,30,99,0.5)]"
-            >
-              Get Started
-            </Link>
-          </nav>
-        </div>
-      ) : null}
-    </header>
-  );
-}
-
-interface LotusEmblemProps {
-  className?: string;
-}
-
-function LotusEmblem({ className }: LotusEmblemProps) {
-  return (
-    <div className={cn("relative flex flex-col items-center", className)}>
-      <Sparkles
-        size={12}
-        className="absolute -right-0.5 top-3 text-pink-200/55"
-        aria-hidden
-      />
-      <Sparkles
-        size={10}
-        className="absolute -left-1.5 top-7 text-violet-200/45"
-        aria-hidden
-      />
-      <div
-        className="relative flex h-[84px] w-[84px] items-center justify-center rounded-full border border-[#E91E63]/24 bg-gradient-to-b from-[#E91E63]/14 to-[#9C27B0]/12 shadow-[0_0_32px_-10px_rgba(233,30,99,0.38),inset_0_0_18px_rgba(168,85,247,0.1)]"
-        aria-hidden
-      >
-        <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_38%,rgba(233,30,99,0.32),transparent_68%)]" />
-        <svg
-          viewBox="0 0 64 64"
-          className="relative h-10 w-10 text-[#f9a8d4] drop-shadow-[0_0_14px_rgba(233,30,99,0.35)]"
-          fill="currentColor"
-          aria-hidden
-        >
-          <path d="M32 8c-4 8-12 14-12 24 0 8 6 14 12 18 6-4 12-10 12-18 0-10-8-16-12-24z" />
-          <path
-            opacity="0.88"
-            d="M16 28c6 2 10 8 10 16 0 6-2 10-6 14-5-4-8-10-8-16 0-6 2-12 4-14z"
-          />
-          <path
-            opacity="0.88"
-            d="M48 28c-2 2-4 8-4 14 0 6 3 12 8 16 4-4 6-8 6-14 0-8-4-14-10-16z"
-          />
-        </svg>
-      </div>
+    <div className={cn("flex justify-center", className)}>
+      <BrandLogo heightClass="h-10" />
     </div>
   );
 }
@@ -228,7 +95,7 @@ interface TrustStackProps {
 function TrustStack({ className, compact }: TrustStackProps) {
   return (
     <ul
-      className={cn("flex flex-col gap-5", compact && "gap-3.5", className)}
+      className={cn("flex flex-col gap-4", compact && "gap-3", className)}
       aria-label="How we care for you"
     >
       {MAIN_TRUST.map(({ title, description, Icon, glowClass, ringClass }) => (
@@ -279,7 +146,7 @@ function WelcomeBlock({ className }: WelcomeBlockProps) {
       <p className="solace-login-serif mt-1.5 text-[clamp(1.35rem,2.2vw,1.85rem)] font-medium italic tracking-wide text-[#f472b8] drop-shadow-[0_0_18px_rgba(233,30,99,0.25)]">
         You&apos;re safe here. <span aria-hidden>♡</span>
       </p>
-      <p className="mt-3 max-w-md text-[14px] leading-relaxed text-[#bdb7d6]/90 sm:text-[15px]">
+      <p className="mt-2 max-w-md text-[14px] leading-relaxed text-[#bdb7d6]/90 sm:text-[15px]">
         Log in to continue your wellness journey
       </p>
     </div>
@@ -294,7 +161,7 @@ function EmotionalQuoteCard({ className }: EmotionalQuoteCardProps) {
   return (
     <aside
       className={cn(
-        "relative max-w-[min(100%,22rem)] rounded-[24px] border border-[#f472b8]/28 bg-black/35 px-5 py-4 pr-10 backdrop-blur-md",
+        "relative max-w-[min(100%,22rem)] rounded-[20px] border border-[#f472b8]/28 bg-black/35 px-4 py-3 pr-9 backdrop-blur-md sm:rounded-[22px]",
         "shadow-[0_0_0_1px_rgba(236,72,153,0.1),0_0_28px_-14px_rgba(236,72,153,0.18),0_20px_56px_-28px_rgba(0,0,0,0.85)]",
         className,
       )}
@@ -320,7 +187,7 @@ function LoginSceneBackdrop() {
       <img
         src={LOGIN_HERO_BG}
         alt=""
-        className="absolute inset-0 h-full w-full object-cover object-center brightness-[0.55] contrast-[1.04] saturate-[1.06]"
+        className="absolute inset-0 h-full w-full object-cover object-[center_35%] brightness-[0.55] contrast-[1.04] saturate-[1.06] sm:object-center"
       />
       <div
         className="absolute inset-0"
@@ -343,9 +210,9 @@ const otpSlotClass =
 
 
 const LOGIN_PANEL_SHELL = cn(
-  "relative w-full overflow-visible rounded-[34px] border border-[#e879a9]/22",
-  "bg-[rgba(12,10,24,0.72)] p-8 backdrop-blur-[24px] sm:p-10 lg:p-14",
-  "shadow-[0_0_0_1px_rgba(236,72,153,0.1),0_0_40px_-18px_rgba(168,85,247,0.22),0_24px_64px_-32px_rgba(0,0,0,0.82)]",
+  "relative w-full overflow-visible rounded-[20px] border border-[#e879a9]/20 sm:rounded-[22px] lg:rounded-[24px]",
+  "bg-[rgba(12,10,24,0.72)] p-4 backdrop-blur-[20px] sm:p-5 lg:p-5",
+  "shadow-[0_0_0_1px_rgba(236,72,153,0.08),0_0_24px_-18px_rgba(168,85,247,0.16),0_16px_40px_-28px_rgba(0,0,0,0.82)]",
   "supports-[backdrop-filter]:bg-[rgba(12,10,24,0.68)]",
 );
 
@@ -418,12 +285,12 @@ function LoginAuthPanel({
 
   return (
     <>
-      <LotusEmblem className="mb-5" />
-                        <div className="mb-6 text-center">
-                        <h2 className="solace-login-serif text-[clamp(1.75rem,2.5vw,2.5rem)] font-medium leading-tight text-[#faf8fc] sm:text-[2rem]">
+      <LoginBrandEmblem className="mb-2" />
+                        <div className="mb-3 text-center">
+                        <h2 className="solace-login-serif text-[clamp(1.2rem,2vw,1.5rem)] font-medium leading-tight text-[#faf8fc]">
                         Log In to Solace
                         </h2>
-                        <p className="mt-2 text-[14px] leading-relaxed text-violet-200/75 sm:text-[15px]">
+                        <p className="mt-1 text-[12px] leading-snug text-violet-200/75 sm:text-[13px]">
                         One step at a time.{" "}
                         <span className="font-medium text-[#f472b8]">We&apos;re here for you.</span>
                         </p>
@@ -434,9 +301,9 @@ function LoginAuthPanel({
                         <button
                         type="button"
                         onClick={handleGoogleLogin}
-                        className="flex h-[52px] w-full items-center justify-center gap-3 rounded-2xl border border-white/12 bg-white/[0.045] text-[15px] font-medium text-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_24px_-12px_rgba(233,30,99,0.25)] transition-[box-shadow,background-color,border-color] hover:border-[#E91E63]/28 hover:bg-white/[0.08] hover:shadow-[0_0_40px_-12px_rgba(168,85,247,0.28)]"
+                        className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.045] text-[13px] font-medium text-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-[box-shadow,background-color,border-color] hover:border-[#E91E63]/28 hover:bg-white/[0.08] sm:text-[14px]"
                         >
-                        <svg className="h-[22px] w-[22px]" viewBox="0 0 24 24" aria-hidden>
+                        <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden>
                         <path
                         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                         fill="#e8e8f0"
@@ -457,7 +324,7 @@ function LoginAuthPanel({
                         Continue with Google
                         </button>
                         
-                        <div className="my-4 flex items-center gap-4">
+                        <div className="my-2.5 flex items-center gap-2.5">
                         <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/[0.08] to-white/[0.22]" />
                         <span className="text-[11px] uppercase tracking-[0.22em] text-violet-200/42">
                         OR
@@ -466,13 +333,13 @@ function LoginAuthPanel({
                         </div>
                         
                         <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2.5">
                         <FormField
                         control={form.control}
                         name="email"
                         render={({ field }) => (
                         <FormItem>
-                        <FormLabel className="text-[13px] font-medium text-violet-200/75">
+                        <FormLabel className="text-[12px] font-medium text-violet-200/75">
                         Email Address
                         </FormLabel>
                         <FormControl>
@@ -501,7 +368,7 @@ function LoginAuthPanel({
                         render={({ field }) => (
                         <FormItem>
                         <div className="flex items-end justify-between gap-3">
-                        <FormLabel className="text-[13px] font-medium text-violet-200/75">
+                        <FormLabel className="text-[12px] font-medium text-violet-200/75">
                         Password
                         </FormLabel>
                         <Link
@@ -542,7 +409,7 @@ function LoginAuthPanel({
                         <button
                         type="submit"
                         disabled={isLoading}
-                        className="group relative mt-1 flex h-[54px] w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-[#E91E63] via-[#c026d3] to-[#9C27B0] py-3.5 text-[15px] font-semibold text-white shadow-[0_0_42px_-8px_rgba(233,30,99,0.55),inset_0_1px_0_rgba(255,255,255,0.18)] transition-[transform,box-shadow] duration-300 hover:shadow-[0_0_56px_-4px_rgba(168,85,247,0.45)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-55"
+                        className="group relative mt-0.5 flex h-10 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-[#E91E63] via-[#c026d3] to-[#9C27B0] text-[13px] font-semibold text-white shadow-[0_0_28px_-10px_rgba(233,30,99,0.45),inset_0_1px_0_rgba(255,255,255,0.18)] transition-[transform,box-shadow] duration-300 hover:shadow-[0_0_40px_-6px_rgba(168,85,247,0.38)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-55 sm:text-[14px]"
                         >
                         <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_0%,rgba(255,255,255,0.28),transparent_55%)] opacity-60 mix-blend-screen" />
                         <span className="relative z-[1] flex items-center gap-2">
@@ -800,7 +667,7 @@ function LoginAuthPanel({
                         ) : null}
                         
                         {loginStep === "credentials" && (
-                        <p className="mt-4 text-center text-[14px] text-violet-200/65">
+                        <p className="mt-2 text-center text-[12px] text-violet-200/65 sm:text-[13px]">
                         Don&apos;t have an account?{" "}
                         <Link
                         to="/signup"
@@ -811,12 +678,24 @@ function LoginAuthPanel({
                         </p>
                         )}
                         
-      <p className="mt-5 flex items-start justify-center gap-2 text-center text-[10px] leading-relaxed text-violet-200/42">
-        <Shield size={12} strokeWidth={1.75} className="mt-0.5 shrink-0 text-[#f472b8]/65" aria-hidden />
-        <span>
-          By logging in, you agree to our{" "}
-          <Link to="/terms" className="text-[#f472b8]/95 hover:text-[#fbcfe8]">Terms &amp; Conditions</Link> and{" "}
-          <Link to="/privacy" className="text-[#f472b8]/95 hover:text-[#fbcfe8]">Privacy Policy</Link>
+      <p className="mt-2.5 text-center text-[9px] leading-snug text-violet-200/42 sm:text-[10px]">
+        <span className="inline-flex items-start gap-1 text-left">
+          <Shield
+            size={11}
+            strokeWidth={1.75}
+            className="mt-px shrink-0 text-[#f472b8]/65"
+            aria-hidden
+          />
+          <span>
+            By logging in, you agree to our{" "}
+            <Link to="/terms" className="text-[#f472b8]/95 hover:text-[#fbcfe8]">
+              Terms &amp; Conditions
+            </Link>{" "}
+            and{" "}
+            <Link to="/privacy" className="text-[#f472b8]/95 hover:text-[#fbcfe8]">
+              Privacy Policy
+            </Link>
+          </span>
         </span>
       </p>
     </>
@@ -1125,27 +1004,27 @@ export function Login() {
   };
 
   const glassInput =
-    "h-[54px] w-full rounded-[14px] border border-white/12 bg-white/[0.045] pl-11 pr-3 text-[15px] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none transition-[box-shadow,border-color] placeholder:text-violet-200/35 focus:border-[#E91E63]/45 focus:ring-2 focus:ring-[#E91E63]/28";
+    "h-10 w-full rounded-xl border border-white/12 bg-white/[0.045] pl-9 pr-3 text-[13px] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none transition-[box-shadow,border-color] placeholder:text-violet-200/35 focus:border-[#E91E63]/45 focus:ring-2 focus:ring-[#E91E63]/28 sm:pl-10 sm:text-[14px]";
 
   return (
-    <div className="solace-login-page relative min-h-screen overflow-x-hidden bg-[#050612] text-[#f4f4f8]">
+    <div className="solace-login-page relative flex min-h-screen flex-col overflow-x-hidden bg-[#050612] text-[#f4f4f8] lg:h-dvh lg:max-h-dvh lg:overflow-hidden">
       <LoginSceneBackdrop />
 
-      <SolaceLoginNav />
+      <PublicNav variant="cinematic" />
 
-      <main className="relative z-10">
-        <div className="grid grid-cols-1 items-center gap-6 px-5 py-6 sm:py-8 lg:grid-cols-2 lg:gap-10 lg:px-[clamp(32px,4.5vw,72px)] lg:py-10 lg:pb-14">
-            <section className="hidden flex-col justify-center py-2 lg:flex">
+      <main className="relative z-10 flex w-full flex-1 flex-col justify-center py-4 sm:py-5 lg:min-h-0 lg:items-center lg:overflow-hidden lg:py-3">
+        <div className="mx-auto flex w-full max-w-[900px] flex-col items-stretch gap-6 px-4 sm:px-5 lg:flex-row lg:items-center lg:justify-center lg:gap-5 lg:px-6 xl:max-w-[940px] xl:gap-6">
+            <section className="hidden min-w-0 flex-col gap-2.5 lg:flex lg:w-full lg:max-w-[400px] lg:justify-center">
               <WelcomeBlock />
-              <TrustStack className="mt-7 max-w-lg" />
-              <EmotionalQuoteCard className="mt-auto pt-8" />
+              <TrustStack className="max-w-md" compact />
+              <EmotionalQuoteCard className="mt-0.5" />
             </section>
 
-            <section className="order-first flex items-center justify-center lg:order-none lg:justify-end">
-              <div className="w-full max-w-[min(100%,560px)]">
+            <section className="order-first flex w-full shrink-0 justify-center lg:order-none lg:max-w-[380px] lg:flex-initial lg:justify-end xl:max-w-[400px]">
+              <div className="mx-auto w-full max-w-[360px] sm:max-w-[380px] lg:mx-0">
                 <div className={LOGIN_PANEL_SHELL}>
-                  <div className="pointer-events-none absolute -left-12 -top-12 h-36 w-36 rounded-full bg-[radial-gradient(circle,rgba(236,72,153,0.28),transparent_70%)]" />
-                  <div className="pointer-events-none absolute inset-0 rounded-[34px] bg-gradient-to-br from-[#E91E63]/[0.06] via-transparent to-[#9C27B0]/[0.05]" />
+                  <div className="pointer-events-none absolute -left-8 -top-8 h-20 w-20 rounded-full bg-[radial-gradient(circle,rgba(236,72,153,0.22),transparent_70%)]" />
+                  <div className="pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br from-[#E91E63]/[0.06] via-transparent to-[#9C27B0]/[0.05]" />
                   <div className="relative">
                     <LoginAuthPanel
                       loginStep={loginStep}
@@ -1191,10 +1070,10 @@ export function Login() {
               </div>
             </section>
 
-            <section className="shrink-0 pb-6 lg:hidden">
+            <section className="w-full shrink-0 pb-4 pt-2 lg:hidden">
               <WelcomeBlock />
-              <TrustStack className="mt-5" compact />
-              <EmotionalQuoteCard className="mx-auto mt-4 max-w-md" />
+              <TrustStack className="mt-3" compact />
+              <EmotionalQuoteCard className="mx-auto mt-3 max-w-md" />
             </section>
         </div>
       </main>

@@ -1,21 +1,48 @@
-import { Card } from "@/app/components/ui/card";
-import { Button } from "@/app/components/ui/button";
 import { Skeleton } from "@/app/components/ui/skeleton";
-import { Input } from "@/app/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/app/components/ui/select";
+import { AdminPaginationBar } from "@/app/components/admin/AdminPaginationBar";
+import { useAuth } from "@/app/contexts/AuthContext";
 import { motion } from "motion/react";
-import { ArrowLeft, Activity, RefreshCw } from "lucide-react";
+import {
+  ArrowLeft,
+  Activity,
+  RefreshCw,
+  BookOpen,
+  Video,
+  Zap,
+  TrendingUp,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { api } from "@/lib/api";
+import { queryKeys } from "@/lib/queries";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
+import { MOOD_CHECKIN_IMAGES } from "@/lib/solace/moodCheckInImages";
+import { cn } from "@/lib/utils";
+import {
+  notificationsBackLink,
+  notificationsBtnGhost,
+  notificationsGlassCard,
+  notificationsHeroAccent,
+  notificationsHeroCard,
+  notificationsHeroImage,
+  notificationsHeroOverlayLeft,
+  notificationsHeroOverlayPurple,
+  notificationsHeroOverlayWarmth,
+  notificationsHeroTitle,
+  notificationsIconChip,
+  notificationsPageAtmosphere,
+  notificationsPageFogMid,
+  notificationsPageGlowTop,
+  notificationsPageVignette,
+  notificationsTimelinePanel,
+  notificationsTimelineRow,
+} from "@/app/pages/app/notifications-settings/notificationsSettingsUi";
+
+const ACTIVITY_HISTORY_LIMIT = 100;
+const DEFAULT_PAGE_SIZE = 10;
 
 interface RecentActivityItem {
   id: string;
@@ -29,10 +56,26 @@ const MOOD_EMOJIS: Record<string, string> = {
   happy: "😊",
   calm: "😌",
   excited: "🤩",
+  energetic: "⚡",
+  nervous: "😬",
   anxious: "😰",
   sad: "😢",
   angry: "😡",
+  overwhelmed: "😰",
+  hopeful: "🤩",
+  tired: "😌",
+  heavy: "😢",
+  grateful: "😊",
+  numb: "😐",
 };
+
+function normalizeActivityRows(raw: unknown): RecentActivityItem[] {
+  if (Array.isArray(raw)) return raw as RecentActivityItem[];
+  if (raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown }).items)) {
+    return (raw as { items: RecentActivityItem[] }).items;
+  }
+  return [];
+}
 
 function getEmoji(type: string, mood?: string) {
   if (type === "mood" && mood) {
@@ -45,35 +88,39 @@ function getEmoji(type: string, mood?: string) {
   return "📝";
 }
 
+function activityVisual(type: string): {
+  icon: LucideIcon;
+  tone: "pink" | "cyan" | "violet" | "amber";
+  useEmoji?: boolean;
+} {
+  if (type === "mood") return { icon: TrendingUp, tone: "pink", useEmoji: true };
+  if (type === "journal") return { icon: BookOpen, tone: "violet" };
+  if (type === "session") return { icon: Video, tone: "cyan" };
+  if (type === "event") return { icon: Zap, tone: "amber" };
+  return { icon: Activity, tone: "violet" };
+}
+
 export function RecentActivityHistory() {
-  const DEFAULT_PAGE_SIZE = 10;
-  const navigate = useNavigate();
-  const [items, setItems] = useState<RecentActivityItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSizeOption, setPageSizeOption] = useState("10");
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [customPageSizeInput, setCustomPageSizeInput] = useState("10");
 
-  const loadActivity = async (isManualRefresh = false) => {
-    if (isManualRefresh) setIsRefreshing(true);
-    try {
-      const rows = (await api.getRecentActivity(100)) as RecentActivityItem[];
-      setItems(rows);
-      setCurrentPage(1);
-    } catch (error) {
-      console.error("Failed to load recent activity history", error);
-      setItems([]);
-    } finally {
-      setIsLoading(false);
-      if (isManualRefresh) setIsRefreshing(false);
-    }
-  };
+  const {
+    data: activityRaw,
+    isLoading,
+    isFetching,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.activity.recent(user?.id, ACTIVITY_HISTORY_LIMIT),
+    queryFn: () => api.getRecentActivity(ACTIVITY_HISTORY_LIMIT),
+    enabled: !!user?.id,
+    staleTime: 30_000,
+    refetchOnMount: "always",
+  });
 
-  useEffect(() => {
-    void loadActivity();
-  }, []);
+  const items = useMemo(() => normalizeActivityRows(activityRaw), [activityRaw]);
 
   const mapped = useMemo(
     () =>
@@ -85,179 +132,173 @@ export function RecentActivityHistory() {
     [items]
   );
 
-  useEffect(() => {
-    const maxPage = Math.max(1, Math.ceil(mapped.length / pageSize));
-    if (currentPage > maxPage) {
-      setCurrentPage(maxPage);
-    }
-  }, [mapped.length, pageSize, currentPage]);
-
-  const handlePageSizeOptionChange = (value: string) => {
-    setPageSizeOption(value);
-    if (value === "custom") return;
-    const nextSize = Number(value);
-    if (Number.isFinite(nextSize) && nextSize > 0) {
-      setPageSize(nextSize);
-      setCurrentPage(1);
-      setCustomPageSizeInput(String(nextSize));
-    }
-  };
-
-  const handleApplyCustomPageSize = () => {
-    const parsed = Number(customPageSizeInput);
-    if (!Number.isFinite(parsed) || parsed < 1) return;
-    const normalized = Math.min(200, Math.floor(parsed));
-    setPageSize(normalized);
-    setCurrentPage(1);
-  };
-
   const totalPages = Math.max(1, Math.ceil(mapped.length / pageSize));
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, mapped.length);
-  const currentPageItems = mapped.slice(startIndex, endIndex);
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const atHistoryCap = mapped.length >= ACTIVITY_HISTORY_LIMIT;
+
+  useEffect(() => {
+    if (currentPage !== safePage) setCurrentPage(safePage);
+  }, [currentPage, safePage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [pageSize]);
+
+  const startIndex = (safePage - 1) * pageSize;
+  const currentPageItems = mapped.slice(startIndex, startIndex + pageSize);
+
+  const handleRefresh = () => {
+    api.bustRecentActivityCache();
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.activity.recentForUser(user?.id),
+    });
+    void refetch();
+  };
+
+  if (isLoading) {
+    return (
+      <div className={notificationsPageAtmosphere}>
+        <div className={notificationsPageGlowTop} aria-hidden />
+        <div className={notificationsPageVignette} aria-hidden />
+        <div className="relative z-10 mx-auto w-full max-w-[1100px] px-4 py-7 sm:px-7 sm:py-9">
+          <Skeleton className="h-[260px] w-full rounded-[2rem] bg-white/5" />
+          <div className="mt-6 space-y-3">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-[72px] w-full rounded-3xl bg-white/5" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6"
-        >
-          <button
-            onClick={() => navigate("/app/dashboard")}
-            className="flex items-center gap-2 text-muted-foreground hover:text-primary mb-4 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Dashboard
-          </button>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Activity className="w-7 h-7 text-primary" />
-                <h1 className="text-3xl font-bold">Recent Activity History</h1>
-              </div>
-              <p className="text-muted-foreground">
+    <motion.div
+      className={notificationsPageAtmosphere}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35 }}
+    >
+      <div className={notificationsPageGlowTop} aria-hidden />
+      <motion.div className={notificationsPageFogMid} aria-hidden />
+      <motion.div className={notificationsPageVignette} aria-hidden />
+
+      <div className="relative z-10 mx-auto w-full max-w-[1100px] px-4 py-7 sm:px-7 sm:py-9">
+        <section className={notificationsHeroCard}>
+          <img
+            src={MOOD_CHECKIN_IMAGES.heroBanner}
+            alt=""
+            className={notificationsHeroImage}
+            loading="eager"
+            decoding="async"
+          />
+          <div className={notificationsHeroOverlayLeft} aria-hidden />
+          <div className={notificationsHeroOverlayPurple} aria-hidden />
+          <div className={notificationsHeroOverlayWarmth} aria-hidden />
+
+          <div className="relative flex min-h-[240px] flex-col justify-between p-6 sm:min-h-[260px] sm:p-8 lg:flex-row lg:items-end lg:gap-6">
+            <div className="max-w-xl flex-1">
+              <Link to="/app/dashboard" className={notificationsBackLink}>
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                Back to Dashboard
+              </Link>
+              <h1 className={cn(notificationsHeroTitle, "mt-5")}>
+                <span className={notificationsHeroAccent}>Recent Activity</span> History
+              </h1>
+              <p className="mt-3 max-w-lg text-sm leading-relaxed text-[rgba(255,255,255,0.62)] sm:text-[15px]">
                 Full timeline of your latest check-ins, journals, sessions, and app activity.
               </p>
             </div>
-            <Button
-              variant="outline"
-              onClick={() => void loadActivity(true)}
-              disabled={isRefreshing}
-              className="gap-2"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-          </div>
-        </motion.div>
 
-        <Card className="p-5 shadow-lg">
-          {isLoading ? (
-            <div className="space-y-3">
-              {[0, 1, 2, 3, 4].map((index) => (
-                <div key={index} className="flex items-center gap-3 p-2">
-                  <Skeleton className="w-9 h-9 rounded-full" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-2/3" />
-                    <Skeleton className="h-3 w-1/4" />
-                  </div>
+            <div className="mt-6 flex shrink-0 flex-wrap items-center gap-3 lg:mt-0 lg:justify-end">
+              <div className="flex items-center gap-3 rounded-2xl border border-white/[0.08] bg-black/35 px-4 py-3 backdrop-blur-md">
+                <div className={notificationsIconChip("violet")}>
+                  <Activity className="h-4 w-4" aria-hidden />
                 </div>
-              ))}
+                <div>
+                  <p className="text-2xl font-semibold tabular-nums text-white">{mapped.length}</p>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-violet-200/70">
+                    {atHistoryCap ? "Latest loaded" : "Activities shown"}
+                  </p>
+                  {atHistoryCap ? (
+                    <p className="mt-0.5 text-[10px] text-[rgba(255,255,255,0.42)]">Up to {ACTIVITY_HISTORY_LIMIT} most recent</p>
+                  ) : null}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={isFetching}
+                className={notificationsBtnGhost}
+              >
+                <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} aria-hidden />
+                Refresh
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-6">
+          {isError ? (
+            <div className={cn(notificationsGlassCard, "px-6 py-14 text-center")}>
+              <p className="text-sm text-[rgba(255,255,255,0.55)]">Could not load activity history.</p>
+              <button type="button" onClick={handleRefresh} className={cn(notificationsBtnGhost, "mt-4")}>
+                Try again
+              </button>
             </div>
           ) : mapped.length === 0 ? (
-            <div className="text-center py-12">
-              <Activity className="w-14 h-14 text-muted-foreground/40 mx-auto mb-3" />
-              <h2 className="text-lg font-semibold mb-1">No activity yet</h2>
-              <p className="text-muted-foreground text-sm">
+            <div className={cn(notificationsGlassCard, "px-6 py-14 text-center")}>
+              <Activity className="mx-auto h-12 w-12 text-violet-300/30" aria-hidden />
+              <h2 className="mt-4 font-serif text-xl text-white">No activity yet</h2>
+              <p className="mt-2 text-sm text-[rgba(255,255,255,0.45)]">
                 Start a mood check-in, journal entry, or session to see your activity history here.
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {currentPageItems.map((entry, index) => (
-                <motion.div
-                  key={entry.id}
-                  initial={{ opacity: 0, x: 12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: Math.min(index * 0.02, 0.25) }}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-transparent hover:border-border hover:bg-muted/40 transition-colors"
-                >
-                  <FluentEmoji emoji={entry.emoji} size={28} className="shrink-0" />
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{entry.text}</p>
-                    <p className="text-xs text-muted-foreground">{entry.relativeTime}</p>
-                  </div>
-                </motion.div>
-              ))}
-
-              {mapped.length > 0 && (
-                <div className="flex flex-col gap-3 pt-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs text-muted-foreground whitespace-nowrap">Items per page</p>
-                      <Select value={pageSizeOption} onValueChange={handlePageSizeOptionChange}>
-                        <SelectTrigger className="w-28 h-8">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="10">10</SelectItem>
-                          <SelectItem value="25">25</SelectItem>
-                          <SelectItem value="50">50</SelectItem>
-                          <SelectItem value="custom">Custom</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {pageSizeOption === "custom" && (
-                        <>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={200}
-                            value={customPageSizeInput}
-                            onChange={(e) => setCustomPageSizeInput(e.target.value)}
-                            className="w-20 h-8"
-                          />
-                          <Button variant="outline" size="sm" onClick={handleApplyCustomPageSize}>
-                            Apply
-                          </Button>
-                        </>
+            <>
+              <div className={notificationsTimelinePanel}>
+                {currentPageItems.map((entry) => {
+                  const visual = activityVisual(entry.type);
+                  const Icon = visual.icon;
+                  return (
+                    <div key={entry.id} className={notificationsTimelineRow}>
+                      {visual.useEmoji ? (
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 shadow-[0_0_18px_-6px_rgba(236,72,153,0.45)]">
+                          <FluentEmoji emoji={entry.emoji} size={22} />
+                        </div>
+                      ) : (
+                        <div className={notificationsIconChip(visual.tone)}>
+                          <Icon className="h-4 w-4" aria-hidden />
+                        </div>
                       )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-white">{entry.text}</p>
+                        <p className="mt-0.5 text-[10px] text-[rgba(255,255,255,0.38)]">{entry.relativeTime}</p>
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Page size: {pageSize}
-                    </p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <p className="text-xs text-muted-foreground">
-                    Showing {startIndex + 1}-{endIndex} of {mapped.length}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                        disabled={currentPage === 1}
-                      >
-                        Previous
-                      </Button>
-                      <span className="text-sm text-muted-foreground">
-                        Page {currentPage} of {totalPages}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                        disabled={currentPage === totalPages}
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+                  );
+                })}
+              </div>
+
+              <div className={cn(notificationsGlassCard, "mt-4 overflow-hidden p-0")}>
+                <AdminPaginationBar
+                  variant="solace"
+                  total={mapped.length}
+                  page={safePage}
+                  pageSize={pageSize}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size);
+                    setCurrentPage(1);
+                  }}
+                  selectId="recent-activity-page-size"
+                  pageSizeOptions={[10, 25, 50, 100]}
+                />
+              </div>
+            </>
           )}
-        </Card>
+        </section>
       </div>
+    </motion.div>
   );
 }

@@ -30,6 +30,7 @@ import { PhoneInput } from "../../components/ui/phone-input";
 import { Input } from "../../components/ui/input";
 import { normalizeStoredPhoneForInput } from "@/lib/normalizeStoredPhone";
 import { cn } from "@/lib/utils";
+import { SolaceSelect } from "@/app/solace";
 
 const PROFILE_SETUP_BG = "/solace/profile-setup-twilight-valley.jpg";
 const SOLACE_LOGO_SRC = "/logos/logo white.png";
@@ -704,20 +705,17 @@ export function OnboardingProfileSetup() {
                       <FormItem>
                         <FormLabel className={onboardingLabelClass}>Timezone</FormLabel>
                         <FormControl>
-                          <select
-                            className={cn(onboardingInputClass, "cursor-pointer appearance-none")}
-                            {...field}
-                          >
-                            {availableTimezones.map((tz) => (
-                              <option
-                                key={tz}
-                                value={tz}
-                                className="bg-[#0A0B1E] text-white"
-                              >
-                                {tz.replace(/_/g, " ")}
-                              </option>
-                            ))}
-                          </select>
+                          <SolaceSelect
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            ariaLabel="Timezone"
+                            variant="form"
+                            triggerClassName={onboardingInputClass}
+                            options={availableTimezones.map((tz) => ({
+                              value: tz,
+                              label: tz.replace(/_/g, " "),
+                            }))}
+                          />
                         </FormControl>
                         <FormMessage className="text-[13px] text-[#ff8ab8]" />
                       </FormItem>

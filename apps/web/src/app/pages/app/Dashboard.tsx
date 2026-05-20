@@ -163,7 +163,7 @@ export function Dashboard() {
     liveCreditsTotalSeconds !== null ? Math.ceil(liveCreditsTotalSeconds / 60) : null;
 
   const { data: activityRaw } = useQuery({
-    queryKey: queryKeys.activity.recent(user?.id),
+    queryKey: queryKeys.activity.recent(user?.id, 20),
     queryFn: () => api.getRecentActivity(20) as Promise<unknown>,
     enabled: !!user?.id,
     staleTime: 60_000,
@@ -325,7 +325,6 @@ export function Dashboard() {
       color: "#f59e0b",
     },
   ];
-  const insightDistributionChartData = insightDistributionData.filter((item) => item.value > 0);
   const insightDistributionTotal = insightDistributionData.reduce((sum, item) => sum + item.value, 0);
 
   const journeyCards: SolaceJourneyCard[] = useMemo(
@@ -561,13 +560,8 @@ export function Dashboard() {
         journeyCards={journeyCards}
         insights={insights}
         insightDistributionData={insightDistributionData}
-        insightDistributionChartData={insightDistributionChartData}
         insightDistributionTotal={insightDistributionTotal}
         recentActivities={recentActivities}
-        quoteLines={{
-          line: "The greatest glory in living lies not in never falling, but in rising every time we fall.",
-          attribution: "— Nelson Mandela",
-        }}
         mindfulMinutesDisplay={mindfulMinutesDisplay}
         sessionsCompletedDisplay={sessionsCompletedDisplay}
         moodSparkPhrase={moodSparkPhrase}

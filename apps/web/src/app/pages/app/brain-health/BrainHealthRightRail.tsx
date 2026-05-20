@@ -1,6 +1,7 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Battery, Clock, Sparkles, Video } from "lucide-react";
+import { Area, AreaChart, ResponsiveContainer, XAxis } from "recharts";
+import { ClarityCircularRing } from "./ClarityCircularRing";
 import { SolacePanel } from "@/app/solace";
 import {
   Select,
@@ -9,14 +10,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
+import {
+  solaceSelectContentClass,
+  solaceSelectItemCompactClass,
+  solaceSelectTriggerCompact,
+} from "@/app/solace";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 
-export type BrainHealthRailTimeFilter = "today" | "last_week" | "calendar";
+export type BrainHealthRailTimeFilter = "today" | "last_week" | "last_month";
+export type BrainHealthClarityRange = "week" | "today" | "last_week" | "last_month";
 
 interface BrainHealthRightRailProps {
   railTimeFilter: BrainHealthRailTimeFilter;
   onRailTimeFilterChange: (value: BrainHealthRailTimeFilter) => void;
+  clarityRange: BrainHealthClarityRange;
+  onClarityRangeChange: (value: BrainHealthClarityRange) => void;
   /** When false, clarity card shows empty-state copy only. */
   hasReflectionSignal: boolean;
   clarityPercent: number;
@@ -26,23 +35,19 @@ interface BrainHealthRightRailProps {
   mentalRecoveryHint: string;
   focusWindowTimeLabel: string;
   focusWindowSupportingLine: string;
-  overwhelmRows: Array<{
-    key: string;
-    label: string;
-    status: string;
-    dotClass: string;
-  }>;
+  focusSparklinePoints: number[];
+  clarityChartSeries: Array<{ label: string; clarity: number }>;
   insightRows: Array<{ key: string; text: string; date: string; Icon: LucideIcon; iconWrap: string }>;
 }
 
-function MiniSparkline({ className, seed }: { className?: string; seed: number }) {
+function MiniSparkline({ className, points }: { className?: string; points: number[] }) {
   const w = 140;
   const h = 32;
-  const pts = [0.25, 0.42, 0.38, 0.55, 0.48, 0.62, 0.58, 0.72].map((base, i) => {
-    const jitter = ((seed + i * 11) % 10) / 35 - 0.14;
-    const y = Math.min(0.92, Math.max(0.12, base + jitter));
-    const x = (i / 7) * w;
-    return `${x},${h - y * h}`;
+  const series = points.length >= 2 ? points : [0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12];
+  const pts = series.map((y, i) => {
+    const norm = Math.min(0.92, Math.max(0.08, y));
+    const x = (i / (series.length - 1)) * w;
+    return `${x},${h - norm * h}`;
   });
   return (
     <svg className={cn("w-full max-w-[140px]", className)} viewBox={`0 0 ${w} ${h}`} fill="none" aria-hidden>
@@ -58,55 +63,24 @@ function MiniSparkline({ className, seed }: { className?: string; seed: number }
   );
 }
 
-function WeekDots() {
-  const days = ["M", "T", "W", "T", "F", "S", "S"];
-  return (
-    <div className="mt-2 flex justify-between text-[10px] font-medium tracking-tight text-zinc-600" aria-hidden>
-      {days.map((d, i) => (
-        <span key={`${d}-${i}`} className="w-4 text-center">
-          {d}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 const FILTER_OPTIONS: Array<{ value: BrainHealthRailTimeFilter; label: string }> = [
   { value: "today", label: "Today" },
   { value: "last_week", label: "Last week" },
-  { value: "calendar", label: "Calendar" },
+  { value: "last_month", label: "Last month" },
 ];
 
-const CLARITY_RANGE_OPTIONS: Array<{ value: "week" | "today" | "last_week"; label: string }> = [
+const CLARITY_RANGE_OPTIONS: Array<{ value: BrainHealthClarityRange; label: string }> = [
   { value: "week", label: "This week" },
   { value: "today", label: "Today" },
   { value: "last_week", label: "Last week" },
+  { value: "last_month", label: "Last month" },
 ];
-
-const solaceSelectTriggerClass = cn(
-  "h-8 w-fit min-w-[5.5rem] shrink-0 gap-1 rounded-full border border-white/[0.1] bg-black/50 py-1 pl-3 pr-1.5 text-[11px] font-medium tracking-wide text-zinc-200 shadow-none outline-none transition-[border-color,box-shadow,background-color]",
-  "hover:border-violet-400/35 hover:bg-black/65",
-  "focus-visible:border-violet-400/45 focus-visible:ring-2 focus-visible:ring-violet-400/30",
-  "data-[state=open]:border-violet-400/45 data-[state=open]:bg-black/60 data-[state=open]:shadow-[0_0_22px_rgba(139,92,246,0.18)]",
-  "dark:border-white/10 dark:bg-black/50 dark:hover:bg-black/60",
-  "[&>svg:last-child]:size-3 [&>svg:last-child]:text-violet-300/85"
-);
-
-const solaceSelectContentClass = cn(
-  "z-[100] max-h-[min(240px,var(--radix-select-content-available-height))] overflow-hidden rounded-xl border border-white/[0.1]",
-  "bg-[#090b12]/[0.97] p-1 text-zinc-200 shadow-[0_24px_56px_-8px_rgba(0,0,0,0.88),0_0_36px_rgba(139,92,246,0.14)] backdrop-blur-xl"
-);
-
-const solaceSelectItemClass = cn(
-  "relative cursor-pointer rounded-lg py-2 pl-3 pr-8 text-[11px] text-zinc-200 outline-none select-none",
-  "data-[highlighted]:bg-violet-500/18 data-[highlighted]:text-zinc-50",
-  "data-[state=checked]:bg-violet-500/22 data-[state=checked]:text-zinc-50",
-  "[&_svg]:text-violet-300/90"
-);
 
 export function BrainHealthRightRail({
   railTimeFilter,
   onRailTimeFilterChange,
+  clarityRange,
+  onClarityRangeChange,
   hasReflectionSignal,
   clarityPercent,
   cognitiveEnergyLabel,
@@ -115,10 +89,10 @@ export function BrainHealthRightRail({
   mentalRecoveryHint,
   focusWindowTimeLabel,
   focusWindowSupportingLine,
-  overwhelmRows,
+  focusSparklinePoints,
+  clarityChartSeries,
   insightRows,
 }: BrainHealthRightRailProps) {
-  const [clarityRange, setClarityRange] = useState<"week" | "today" | "last_week">("week");
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -134,13 +108,13 @@ export function BrainHealthRightRail({
             <SelectTrigger
               size="sm"
               aria-label="Time range for rhythm"
-              className={solaceSelectTriggerClass}
+              className={solaceSelectTriggerCompact}
             >
               <SelectValue placeholder="Today" />
             </SelectTrigger>
             <SelectContent position="popper" sideOffset={6} className={solaceSelectContentClass}>
               {FILTER_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value} className={solaceSelectItemClass}>
+                <SelectItem key={o.value} value={o.value} className={solaceSelectItemCompactClass}>
                   {o.label}
                 </SelectItem>
               ))}
@@ -161,7 +135,7 @@ export function BrainHealthRightRail({
               </p>
               <p className="mt-1 text-[11px] leading-snug text-zinc-500">{focusWindowSupportingLine}</p>
               <div className="mt-2.5 text-cyan-400/75">
-                <MiniSparkline seed={railTimeFilter === "today" ? 2 : railTimeFilter === "last_week" ? 5 : 8} />
+                <MiniSparkline points={focusSparklinePoints} />
               </div>
             </div>
           </div>
@@ -195,13 +169,13 @@ export function BrainHealthRightRail({
       <SolacePanel glow="violet" soft className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-2">
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--solace-muted)]">Clarity trend</p>
-          <Select value={clarityRange} onValueChange={(v) => setClarityRange(v as "week" | "today" | "last_week")}>
-            <SelectTrigger size="sm" aria-label="Clarity trend range" className={solaceSelectTriggerClass}>
+          <Select value={clarityRange} onValueChange={(v) => onClarityRangeChange(v as BrainHealthClarityRange)}>
+            <SelectTrigger size="sm" aria-label="Clarity trend range" className={solaceSelectTriggerCompact}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent position="popper" sideOffset={6} className={solaceSelectContentClass}>
               {CLARITY_RANGE_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value} className={solaceSelectItemClass}>
+                <SelectItem key={o.value} value={o.value} className={solaceSelectItemCompactClass}>
                   {o.label}
                 </SelectItem>
               ))}
@@ -209,51 +183,55 @@ export function BrainHealthRightRail({
           </Select>
         </div>
         {hasReflectionSignal ? (
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <div className="relative mt-4 flex flex-col items-center">
             <div
-              className="relative mx-auto grid h-[88px] w-[88px] shrink-0 place-items-center rounded-full border border-violet-500/25 bg-gradient-to-br from-violet-950/80 to-slate-950/90 shadow-[0_0_32px_rgba(139,92,246,0.22)] sm:mx-0"
               role="img"
-              aria-label={`Clarity about ${clarityPercent} percent`}
+              aria-label={`Clarity about ${Math.round(clarityPercent)} percent`}
             >
-              <div
-                className="absolute inset-1 rounded-full border border-white/[0.04]"
-                style={{
-                  background: `conic-gradient(from 210deg, rgba(167,139,250,0.55) ${clarityPercent * 3.6}deg, rgba(255,255,255,0.04) 0deg)`,
-                }}
+              <ClarityCircularRing
+                value={clarityPercent}
+                size={140}
+                strokeWidth={10}
+                centerSublabel="Clarity"
               />
-              <div className="relative z-[1] flex h-[72px] w-[72px] flex-col items-center justify-center rounded-full bg-[#0a0a12]/95">
-                <span className="text-lg font-semibold tracking-tight text-zinc-50">{Math.round(clarityPercent)}%</span>
-                <span className="text-[9px] uppercase tracking-wider text-zinc-500">Average clarity</span>
-              </div>
             </div>
-            <div className="min-w-0 flex-1 text-center sm:text-left">
-              <p className="text-xs text-zinc-400">Snapshot from your reflections — not a diagnosis.</p>
-              <div className="mt-2 flex justify-center text-violet-400/70 sm:justify-start">
-                <MiniSparkline seed={clarityPercent + (clarityRange === "today" ? 3 : clarityRange === "last_week" ? 7 : 0)} />
-              </div>
-              <WeekDots />
+            <p className="mt-3 text-center text-xs text-zinc-400">
+              From your moods and reflections — not a diagnosis.
+            </p>
+            <div className="mt-4 h-[100px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={clarityChartSeries} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="bhClarityArea" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#a855f7" stopOpacity={0.45} />
+                      <stop offset="100%" stopColor="#a855f7" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis
+                    dataKey="label"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "#71717a", fontSize: 10 }}
+                    interval={clarityChartSeries.length > 14 ? 4 : 0}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="clarity"
+                    stroke="#c084fc"
+                    strokeWidth={2}
+                    fill="url(#bhClarityArea)"
+                    dot={false}
+                    activeDot={{ r: 3, fill: "#e9d5ff", stroke: "#a855f7" }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
         ) : (
           <p className="mt-4 text-sm leading-relaxed text-zinc-400">
-            Clarity trend will appear as you complete reflections.
+            Log a mood check-in, sleep entry, or guided reflection to see your clarity trend.
           </p>
         )}
-      </SolacePanel>
-
-      <SolacePanel glow="rose" soft className="p-4 sm:p-5">
-        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--solace-muted)]">Overwhelm signals</p>
-        <ul className="mt-4 space-y-3">
-          {overwhelmRows.map((row) => (
-            <li key={row.key} className="flex items-center justify-between gap-2 text-sm">
-              <span className="flex min-w-0 items-center gap-2 text-zinc-200">
-                <span className={cn("h-2 w-2 shrink-0 rounded-full", row.dotClass)} aria-hidden />
-                <span className="truncate">{row.label}</span>
-              </span>
-              <span className="shrink-0 text-xs font-medium text-zinc-400">{row.status}</span>
-            </li>
-          ))}
-        </ul>
       </SolacePanel>
 
       <SolacePanel glow="amber" soft className="p-4 sm:p-5">

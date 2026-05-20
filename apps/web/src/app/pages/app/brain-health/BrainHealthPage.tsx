@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
 import { AnimatePresence, motion } from "motion/react";
 import { Link } from "react-router-dom";
 import {
@@ -40,7 +42,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
-import { SolaceAmbientBar, SolaceSupportStrip } from "@/app/solace";
+import { queryKeys } from "@/lib/queries";
+import { SolaceSupportStrip } from "@/app/solace";
 import type { HelpPath, LoadItem, MentalClimate } from "./brainHealthPersistedTypes";
 import {
   CHOICES_BY_STEP,
@@ -50,7 +53,27 @@ import {
   type ReflectionChoice,
   type ReflectionIconKey,
 } from "./reflectionFlowConfig";
-import { BrainHealthRightRail, type BrainHealthRailTimeFilter } from "./BrainHealthRightRail";
+import {
+  BrainHealthRightRail,
+  type BrainHealthClarityRange,
+  type BrainHealthRailTimeFilter,
+} from "./BrainHealthRightRail";
+import {
+  computeClarityPercent,
+  computeCognitiveEnergy,
+  computeFocusWindow,
+  computeMentalRecovery,
+  buildClarityChartSeries,
+  dailySparklinePoints,
+  hasBrainHealthReflectionSignal,
+  parseMoodEntries,
+  parseSessions,
+  parseSleepEntries,
+  railFilterDayCount,
+  rangeStartForClarity,
+  rangeStartForFilter,
+  sessionCountSparkline,
+} from "./brainHealthRailMetrics";
 import { usePrefersReducedMotion } from "./usePrefersReducedMotion";
 import { BRAIN_HEALTH_IMAGES } from "@/lib/solace/brainHealthImages";
 
@@ -61,6 +84,8 @@ type BrainHealthSettingsPayload = {
   mentalClimate: MentalClimate;
   selectedLoads: LoadItem[];
   selectedPath: ExcludeHelpNull | null;
+  reflectionChoices?: Record<number, string>;
+  reflectionFlowComplete?: boolean;
   usagePattern?: Record<string, unknown>;
   updatedAt: string;
 };
@@ -209,35 +234,7 @@ function buildInsight(loads: LoadItem[]): string {
   return "Your mind is asking for a lighter load right now.";
 }
 
-function statusFromValue(v: number): { label: string; dot: string } {
-  if (v >= 72) return { label: "High", dot: "bg-rose-400/90" };
-  if (v >= 48) return { label: "Elevated", dot: "bg-amber-400/85" };
-  if (v >= 32) return { label: "Moderate", dot: "bg-amber-300/55" };
-  return { label: "Low", dot: "bg-emerald-400/70" };
-}
-
-function focusWindowFromFilter(filter: BrainHealthRailTimeFilter): { time: string; line: string } {
-  if (filter === "calendar") {
-    return {
-      time: "Date range",
-      line: "Choose a span to mirror how your rhythm shifted — a gentle lens, not a clinical log.",
-    };
-  }
-  if (filter === "last_week") {
-    return {
-      time: "Last 7 days",
-      line: "A softer look at when focus tended to hold — illustrative patterns only.",
-    };
-  }
-  const h = new Date().getHours();
-  if (h >= 5 && h < 11) return { time: "9 AM – 12 PM", line: "Morning often carries the clearest band — protect it when you can." };
-  if (h >= 11 && h < 14) return { time: "10 AM – 1 PM", line: "Midday can be a strong window for depth — pace breaks around it." };
-  if (h >= 14 && h < 18) return { time: "2 PM – 5 PM", line: "Afternoon blocks can still work — keep inputs lighter if energy dips." };
-  if (h >= 18 && h < 22) return { time: "6 PM – 9 PM", line: "Evening is for winding focus down — smaller tasks, gentler load." };
-  return { time: "Rest window", line: "Night hours are for recovery — let cognition soften." };
-}
-
-/** Local-only boosts from wizard choice ids for overwhelm rows. */
+/** Local-only boosts from wizard choice ids for live mental state. */
 function wizardChoiceBoosts(choices: Record<number, string>): { loops: number; fatigue: number; info: number; emotional: number } {
   const b = { loops: 0, fatigue: 0, info: 0, emotional: 0 };
   const v = Object.values(choices);
@@ -285,11 +282,43 @@ export function BrainHealthPage() {
   const [maxAccessibleStep, setMaxAccessibleStep] = useState(0);
   const [reflectionFlowComplete, setReflectionFlowComplete] = useState(false);
   const [railTimeFilter, setRailTimeFilter] = useState<BrainHealthRailTimeFilter>("today");
+  const [clarityRange, setClarityRange] = useState<BrainHealthClarityRange>("week");
   const [localChoiceByStep, setLocalChoiceByStep] = useState<Record<number, string>>({});
   const [howItWorksOpen, setHowItWorksOpen] = useState(false);
 
+  const { data: moodsRaw } = useQuery({
+    queryKey: ["moods", "me", user?.id],
+    queryFn: () => api.moods.getMyMoods(),
+    enabled: Boolean(user?.id),
+    staleTime: 60_000,
+  });
+
+  const { data: sleepRaw } = useQuery({
+    queryKey: ["sleep", "entries", user?.id],
+    queryFn: () => api.sleep.getEntries(),
+    enabled: Boolean(user?.id),
+    staleTime: 60_000,
+  });
+
+  const { data: sessionsRaw } = useQuery({
+    queryKey: queryKeys.sessions.list({ status: "completed", limit: 50 }),
+    queryFn: () => api.sessions.list({ status: "completed", limit: 50 }),
+    enabled: Boolean(user?.id),
+    staleTime: 60_000,
+  });
+
+  const moodEntries = useMemo(() => {
+    const rows = parseMoodEntries(moodsRaw);
+    return [...rows].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [moodsRaw]);
+  const sleepEntries = useMemo(() => parseSleepEntries(sleepRaw), [sleepRaw]);
+  const sessionEntries = useMemo(() => parseSessions(sessionsRaw), [sessionsRaw]);
+
   const returnLineTimer = useRef<number | null>(null);
   const responseRef = useRef<HTMLDivElement>(null);
+  const liveMentalStateRef = useRef<HTMLElement | null>(null);
   const saveTimer = useRef<number | null>(null);
   const advanceTimerRef = useRef<number | null>(null);
 
@@ -317,12 +346,52 @@ export function BrainHealthPage() {
     return { noise, pressure, clarity };
   }, [mentalClimate, selectedLoads]);
 
-  const hasReflectionSignal =
-    selectedLoads.length > 0 || Object.keys(localChoiceByStep).length > 0 || Boolean(selectedPath);
-
   const wizardBoosts = useMemo(() => wizardChoiceBoosts(localChoiceByStep), [localChoiceByStep]);
 
-  const focusWindowLines = useMemo(() => focusWindowFromFilter(railTimeFilter), [railTimeFilter]);
+  const hasReflectionSignal = useMemo(
+    () =>
+      hasBrainHealthReflectionSignal({
+        selectedLoadsCount: selectedLoads.length,
+        reflectionChoicesCount: Object.keys(localChoiceByStep).length,
+        reflectionFlowComplete,
+        selectedPath: Boolean(selectedPath),
+        moodsInPeriod: moodEntries.filter((m) => {
+          const d = new Date(m.created_at);
+          return !Number.isNaN(d.getTime()) && d >= rangeStartForFilter("last_week");
+        }).length,
+        sleepLogsInPeriod: sleepEntries.filter((e) => {
+          const d = new Date(e.wake_time);
+          return !Number.isNaN(d.getTime()) && d >= rangeStartForFilter("last_week");
+        }).length,
+      }),
+    [
+      selectedLoads.length,
+      localChoiceByStep,
+      reflectionFlowComplete,
+      selectedPath,
+      moodEntries,
+      sleepEntries,
+    ]
+  );
+
+  const focusWindowLines = useMemo(
+    () => computeFocusWindow(sessionEntries, moodEntries, railTimeFilter),
+    [sessionEntries, moodEntries, railTimeFilter]
+  );
+
+  const focusSparklinePoints = useMemo(() => {
+    const start = rangeStartForFilter(railTimeFilter);
+    const days = railFilterDayCount(railTimeFilter);
+    const sessionLine = sessionCountSparkline(sessionEntries, start, days);
+    const hasSessions = sessionLine.some((p) => p > 0.15);
+    if (hasSessions) return sessionLine;
+    return dailySparklinePoints(moodEntries, start, days);
+  }, [moodEntries, railTimeFilter, sessionEntries]);
+
+  const clarityChartSeries = useMemo(
+    () => buildClarityChartSeries(moodEntries, clarityRange),
+    [clarityRange, moodEntries]
+  );
 
   const liveMental = useMemo(() => {
     const { noise, clarity } = brainLoad;
@@ -366,47 +435,20 @@ export function BrainHealthPage() {
     return res;
   }, [activeClimate, brainLoad, mentalClimate, reflectionFlowComplete, wizardBoosts]);
 
-  const overwhelmRows = useMemo(() => {
-    const wb = wizardBoosts;
-    const openLoops = (selectedLoads.includes("Too many open loops") ? brainLoad.noise + 12 : brainLoad.noise * 0.72) + wb.loops;
-    const fatigue = brainLoad.pressure + wb.fatigue;
-    const infoLoad = (brainLoad.noise + brainLoad.pressure) / 2 + wb.info;
-    const emotional =
-      (selectedLoads.includes("Emotional carryover") ? brainLoad.pressure + 10 : brainLoad.pressure * 0.65) + wb.emotional;
-    const rows = [
-      { key: "ol", label: "Open loops", value: Math.min(100, openLoops) },
-      { key: "mf", label: "Mental fatigue", value: Math.min(100, fatigue) },
-      { key: "il", label: "Information load", value: Math.min(100, infoLoad) },
-      { key: "es", label: "Emotional strain", value: Math.min(100, emotional) },
-    ];
-    return rows.map((r) => {
-      const s = statusFromValue(r.value);
-      return { key: r.key, label: r.label, status: s.label, dotClass: s.dot };
-    });
-  }, [brainLoad.noise, brainLoad.pressure, selectedLoads, wizardBoosts]);
+  const cognitiveEnergy = useMemo(
+    () => computeCognitiveEnergy(moodEntries, mentalClimate, railTimeFilter),
+    [mentalClimate, moodEntries, railTimeFilter]
+  );
 
-  const cognitiveEnergy = useMemo(() => {
-    if (mentalClimate === "clear" || mentalClimate === "steady") {
-      return { label: "Medium — receptive", hint: "Peak attention comes in softer waves today." };
-    }
-    if (mentalClimate === "heavy" || mentalClimate === "foggy") {
-      return { label: "Low — tender", hint: "Protect bandwidth like you would for someone you care about." };
-    }
-    if (mentalClimate === "overfull" || mentalClimate === "scattered" || mentalClimate === "restless") {
-      return { label: "High — scattered", hint: "Energy is present but not settled — breaks help it land." };
-    }
-    return { label: "Medium", hint: "Notice what restores you between tasks." };
-  }, [mentalClimate]);
+  const mentalRecovery = useMemo(
+    () => computeMentalRecovery(sleepEntries, brainLoad.clarity, railTimeFilter),
+    [brainLoad.clarity, railTimeFilter, sleepEntries]
+  );
 
-  const mentalRecovery = useMemo(() => {
-    if (brainLoad.clarity < 48) {
-      return { label: "Needs attention", hint: "Plan breaks and lighter loads when you can." };
-    }
-    if (brainLoad.clarity < 62) {
-      return { label: "Recovering", hint: "Small pauses still matter." };
-    }
-    return { label: "Supported", hint: "Keep gentle rhythms that have been working." };
-  }, [brainLoad.clarity]);
+  const clarityPercent = useMemo(
+    () => computeClarityPercent(brainLoad, moodEntries, clarityRange),
+    [brainLoad, clarityRange, moodEntries]
+  );
 
   const insightRows = useMemo(() => {
     const rows: Array<{
@@ -443,8 +485,21 @@ export function BrainHealthPage() {
         iconWrap: "bg-cyan-500/12 text-cyan-100",
       });
     }
+    const latestMood = moodEntries[0];
+    if (latestMood) {
+      const d = new Date(latestMood.created_at);
+      if (!Number.isNaN(d.getTime())) {
+        rows.push({
+          key: "ins-mood",
+          text: `Latest check-in intensity ${typeof latestMood.intensity === "number" ? latestMood.intensity : "—"}/10.`,
+          date: format(d, "MMM d"),
+          Icon: Heart,
+          iconWrap: "bg-fuchsia-500/12 text-fuchsia-100",
+        });
+      }
+    }
     return rows.slice(0, 3);
-  }, [activeClimate, derivedInsight, selectedLoads.length, selectedPath]);
+  }, [activeClimate, derivedInsight, moodEntries, selectedLoads.length, selectedPath]);
 
   useEffect(() => {
     const profileSettings = (profile?.brain_health_settings ?? null) as Partial<BrainHealthSettingsPayload> | null;
@@ -478,6 +533,20 @@ export function BrainHealthPage() {
       setSelectedPath(profileSettings.selectedPath);
     } else if (savedPath && HELP_PATHS.some((p) => p.id === savedPath)) {
       setSelectedPath(savedPath);
+    }
+
+    if (useRemote && profileSettings?.reflectionChoices && typeof profileSettings.reflectionChoices === "object") {
+      const choices = profileSettings.reflectionChoices as Record<string, string>;
+      const next: Record<number, string> = {};
+      for (const [k, v] of Object.entries(choices)) {
+        const idx = Number(k);
+        if (Number.isInteger(idx) && typeof v === "string") next[idx] = v;
+      }
+      if (Object.keys(next).length > 0) setLocalChoiceByStep(next);
+    }
+
+    if (useRemote && profileSettings?.reflectionFlowComplete === true) {
+      setReflectionFlowComplete(true);
     }
 
     setHydrated(true);
@@ -528,6 +597,8 @@ export function BrainHealthPage() {
         mentalClimate,
         selectedLoads,
         selectedPath,
+        reflectionChoices: localChoiceByStep,
+        reflectionFlowComplete,
         usagePattern: usage,
         updatedAt: new Date().toISOString(),
       };
@@ -542,7 +613,7 @@ export function BrainHealthPage() {
           saveTimer.current = null;
         });
     }, 700);
-  }, [hydrated, user?.id, mentalClimate, selectedLoads, selectedPath]);
+  }, [hydrated, user?.id, mentalClimate, selectedLoads, selectedPath, localChoiceByStep, reflectionFlowComplete]);
 
   useEffect(() => {
     return () => {
@@ -612,6 +683,12 @@ export function BrainHealthPage() {
     setReflectionStep((s) => Math.max(0, s - 1));
   }, [reflectionStep]);
 
+  const scrollToLiveMentalState = useCallback(() => {
+    const el = liveMentalStateRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+  }, [reducedMotion]);
+
   const handleWizardNext = useCallback(() => {
     if (!localChoiceByStep[reflectionStep]) return;
     if (advanceTimerRef.current) {
@@ -620,11 +697,12 @@ export function BrainHealthPage() {
     }
     if (reflectionStep >= GUIDED_STEP_COUNT - 1) {
       setReflectionFlowComplete(true);
+      window.requestAnimationFrame(() => scrollToLiveMentalState());
       return;
     }
     setReflectionStep((s) => s + 1);
     setMaxAccessibleStep((m) => Math.max(m, reflectionStep + 1));
-  }, [localChoiceByStep, reflectionStep]);
+  }, [localChoiceByStep, reflectionStep, scrollToLiveMentalState]);
 
   const handleWizardDotClick = useCallback(
     (idx: number) => {
@@ -661,8 +739,8 @@ export function BrainHealthPage() {
   const progressFraction = reflectionFlowComplete ? 1 : (reflectionStep + 1) / GUIDED_STEP_COUNT;
   const progressLabelCurrent = reflectionFlowComplete ? GUIDED_STEP_COUNT : reflectionStep + 1;
   const currentStepHasAnswer = Boolean(localChoiceByStep[reflectionStep]);
-  const nextBubbleDisabled =
-    !currentStepHasAnswer || (reflectionStep >= GUIDED_STEP_COUNT - 1 && reflectionFlowComplete);
+  const isLastReflectionStep = reflectionStep >= GUIDED_STEP_COUNT - 1;
+  const nextBubbleDisabled = !currentStepHasAnswer;
 
   const helpTools: Array<{
     id: string;
@@ -772,23 +850,23 @@ export function BrainHealthPage() {
           <div className="min-w-0 space-y-8 xl:space-y-10">
             {/* Guided hero */}
             <section
-              className="relative overflow-hidden rounded-[1.35rem] border border-violet-500/15 bg-[#060814]/90 shadow-[0_32px_90px_-40px_rgba(0,0,0,0.85),0_0_48px_-12px_rgba(139,92,246,0.15)] sm:rounded-[1.5rem]"
+              className="relative overflow-hidden rounded-[1.35rem] border border-violet-500/15 bg-[#0c1020]/55 shadow-[0_32px_90px_-40px_rgba(0,0,0,0.85),0_0_48px_-12px_rgba(139,92,246,0.15)] sm:rounded-[1.5rem]"
               aria-labelledby="guided-hero-heading"
             >
               <img
                 src={BRAIN_HEALTH_IMAGES.hero}
                 alt=""
-                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[62%_42%]"
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[62%_42%] brightness-[1.18] saturate-[1.08] contrast-[1.02]"
                 loading="eager"
                 decoding="async"
               />
               <div
-                className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/58 via-[#0a0c14]/22 to-transparent"
+                className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/32 via-[#0a0c14]/10 to-transparent"
                 aria-hidden
               />
 
-              <div className="relative z-[1] grid gap-8 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_min(38%,280px)] lg:items-center lg:gap-6 lg:p-8">
-                <div className="min-w-0">
+              <div className="relative z-[1] p-5 sm:p-7 lg:min-h-[220px] lg:p-8 lg:pr-[min(13rem,22vw)]">
+                <div className="min-w-0 max-w-2xl">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-300/80">Guided reflection</p>
                   <AnimatePresence mode="wait">
                     <motion.div
@@ -831,7 +909,10 @@ export function BrainHealthPage() {
                   </div>
                 </div>
 
-                <div className="relative mx-auto flex h-[180px] w-[180px] items-center justify-center sm:h-[200px] sm:w-[200px] lg:mx-0 lg:mr-2" aria-hidden>
+                <div
+                  className="relative mx-auto mt-8 flex h-[160px] w-[160px] shrink-0 items-center justify-center sm:mt-0 sm:h-[180px] sm:w-[180px] lg:absolute lg:right-6 lg:top-1/2 lg:mt-0 lg:h-[200px] lg:w-[200px] lg:-translate-y-1/2 xl:right-8"
+                  aria-hidden
+                >
                   <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_40%_35%,rgba(253,186,116,0.35),rgba(244,63,94,0.12)_40%,transparent_68%)] blur-md" />
                   <div className="relative h-[150px] w-[150px] overflow-hidden rounded-full border border-violet-400/20 bg-black/40 shadow-[0_0_40px_rgba(167,139,250,0.25)]">
                     <img
@@ -995,13 +1076,18 @@ export function BrainHealthPage() {
                     type="button"
                     onClick={handleWizardNext}
                     disabled={nextBubbleDisabled}
+                    aria-label={isLastReflectionStep ? "View your live mental state result" : "Go to next reflection step"}
                     className={cn(
                       "inline-flex min-h-11 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-full border px-4 py-2.5 text-sm font-medium transition-all",
-                      "border-white/[0.08] bg-black/35 text-zinc-200 hover:border-violet-400/35 hover:bg-violet-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
+                      isLastReflectionStep &&
+                        "border-violet-400/35 bg-gradient-to-r from-violet-950/40 to-indigo-950/30 text-violet-100 hover:border-violet-400/50 hover:shadow-[0_0_22px_rgba(139,92,246,0.2)]",
+                      !isLastReflectionStep &&
+                        "border-white/[0.08] bg-black/35 text-zinc-200 hover:border-violet-400/35 hover:bg-violet-950/30",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
                       nextBubbleDisabled && "pointer-events-none opacity-35"
                     )}
                   >
-                    Next
+                    {isLastReflectionStep ? "Result" : "Next"}
                     <ArrowRight className="h-4 w-4 text-violet-300/90" aria-hidden />
                   </button>
                 </div>
@@ -1055,7 +1141,9 @@ export function BrainHealthPage() {
 
             {/* Live mental state */}
             <section
-              className="relative overflow-hidden rounded-[1.35rem] border border-white/[0.07] bg-gradient-to-br from-[#070916] via-[#05060d] to-[#0c0612] p-5 shadow-[0_28px_80px_-48px_rgba(0,0,0,0.9)] sm:rounded-[1.5rem] sm:p-7"
+              ref={liveMentalStateRef}
+              id="live-mental-state"
+              className="relative scroll-mt-24 overflow-hidden rounded-[1.35rem] border border-white/[0.07] bg-gradient-to-br from-[#070916] via-[#05060d] to-[#0c0612] p-5 shadow-[0_28px_80px_-48px_rgba(0,0,0,0.9)] sm:rounded-[1.5rem] sm:p-7"
               aria-labelledby="live-state-heading"
             >
               <img
@@ -1227,15 +1315,18 @@ export function BrainHealthPage() {
             <BrainHealthRightRail
               railTimeFilter={railTimeFilter}
               onRailTimeFilterChange={setRailTimeFilter}
+              clarityRange={clarityRange}
+              onClarityRangeChange={setClarityRange}
               hasReflectionSignal={hasReflectionSignal}
-              clarityPercent={brainLoad.clarity}
+              clarityPercent={clarityPercent}
               cognitiveEnergyLabel={cognitiveEnergy.label}
               cognitiveEnergyHint={cognitiveEnergy.hint}
               mentalRecoveryLabel={mentalRecovery.label}
               mentalRecoveryHint={mentalRecovery.hint}
               focusWindowTimeLabel={focusWindowLines.time}
               focusWindowSupportingLine={focusWindowLines.line}
-              overwhelmRows={overwhelmRows}
+              focusSparklinePoints={focusSparklinePoints}
+              clarityChartSeries={clarityChartSeries}
               insightRows={insightRows}
             />
           </aside>
@@ -1254,7 +1345,6 @@ export function BrainHealthPage() {
               </Link>
             }
           />
-          <SolaceAmbientBar />
         </div>
       </div>
 

@@ -1,4 +1,11 @@
 import { Button } from "../../components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
 import { Skeleton } from "../../components/ui/skeleton";
 import { motion, AnimatePresence } from "motion/react";
 import { Link } from "react-router-dom";
@@ -20,18 +27,23 @@ import {
   CircleDot,
 } from "lucide-react";
 import type { CSSProperties } from "react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useId } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../../lib/api";
 import { toast } from "sonner";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { format, isSameDay, subDays, startOfWeek, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
-import { SolacePanel, SolaceHeroAtmosphere } from "@/app/solace";
+import {
+  SolacePanel,
+  solaceSelectContentClass,
+  solaceSelectItemClass,
+  solaceSelectTriggerForm,
+  solaceSelectTriggerPagination,
+} from "@/app/solace";
 import { HABIT_TRACKER_IMAGES } from "@/lib/solace/habitTrackerImages";
-import { lobbyAvatarByName } from "@/lib/avatar/lobbyAvatars";
 import { TalkItOutBottomDock } from "./talk-it-out/TalkItOutBottomDock";
-import { Bar, BarChart, Cell, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
 
 interface HabitLog {
   completed_at: string;
@@ -89,6 +101,11 @@ const HABIT_LIST_PAGE_OPTIONS = [10, 20, 50] as const;
 
 const WEEKDAY_RING_LABELS = ["M", "T", "W", "T", "F", "S", "S"] as const;
 
+const habitModalInputClass =
+  "min-h-[48px] w-full rounded-xl border border-white/[0.088] bg-black/40 px-4 py-3 text-[15px] text-zinc-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.045)] placeholder:text-zinc-600 transition-[border-color,box-shadow,background-color] focus-visible:border-violet-400/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/25";
+
+const habitModalLabelClass = "mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500";
+
 function matteFloat(extra?: string) {
   return cn(
     "rounded-[1.55rem] border border-white/[0.048] bg-gradient-to-br from-black/[0.28] via-black/[0.2] to-black/[0.32] shadow-[0_52px_120px_-54px_rgba(0,0,0,0.88),inset_0_1px_0_rgba(255,255,255,0.055),0_0_0_1px_rgba(139,92,246,0.04)] backdrop-blur-xl transition-[transform,box-shadow] duration-500",
@@ -128,59 +145,92 @@ interface HeroProgressRingProps {
   total: number;
 }
 
-function HeroProgressRing({ completed, total, compact }: HeroProgressRingProps & { compact?: boolean }) {
+function HeroProgressRing({ completed, total }: HeroProgressRingProps) {
+  const gradId = useId().replace(/:/g, "");
+  const glowId = `habit-ring-glow-${gradId}`;
   const pct = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
-  const r = compact ? 58 : 64;
+  const isComplete = total > 0 && completed >= total;
+  const r = 72;
+  const strokeWidth = 10;
   const circ = 2 * Math.PI * r;
   const dash = circ * (1 - pct / 100);
-  const box = compact ? "h-[194px] w-[194px] sm:h-[214px] sm:w-[214px]" : "h-[218px] w-[218px] sm:h-[246px] sm:w-[246px]";
 
   return (
-    <div className={cn("relative flex shrink-0 items-center justify-center", box)}>
+    <div
+      className="relative flex h-[240px] w-[240px] shrink-0 items-center justify-center sm:h-[268px] sm:w-[268px]"
+      role="img"
+      aria-label={`Today's progress: ${completed} of ${Math.max(total, 1)} habits completed, ${pct} percent`}
+    >
       <div
-        className="pointer-events-none absolute inset-[-18%] rounded-full bg-[radial-gradient(circle_at_42%_35%,rgba(167,139,250,0.22)_0%,rgba(34,211,238,0.08)_42%,transparent_72%)] blur-[28px]"
+        className={cn(
+          "pointer-events-none absolute inset-[-22%] rounded-full bg-[radial-gradient(circle_at_40%_32%,rgba(167,139,250,0.28)_0%,rgba(34,211,238,0.1)_45%,transparent_72%)] blur-[32px] transition-opacity duration-700",
+          isComplete && "opacity-110"
+        )}
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-[4%] rounded-full border border-white/[0.07] shadow-[inset_0_0_48px_rgba(139,92,246,0.12)]"
+        className="pointer-events-none absolute inset-[6%] rounded-full border border-white/[0.09] bg-[radial-gradient(circle_at_50%_38%,rgba(139,92,246,0.14)_0%,rgba(8,12,24,0.55)_55%,rgba(3,5,12,0.72)_100%)] shadow-[inset_0_0_56px_rgba(139,92,246,0.16),0_0_0_1px_rgba(255,255,255,0.04)] backdrop-blur-[2px]"
         aria-hidden
       />
-      <svg className="relative z-[2] h-full w-full -rotate-90" viewBox="0 0 160 160" aria-hidden>
+      <svg className="relative z-[2] h-full w-full -rotate-90" viewBox="0 0 180 180" aria-hidden>
         <defs>
-          <linearGradient id="solace-habit-ring" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="rgb(196 181 253)" stopOpacity={0.98} />
-            <stop offset="55%" stopColor="rgb(139 92 246)" stopOpacity={0.92} />
-            <stop offset="100%" stopColor="rgb(34 211 238)" stopOpacity={0.88} />
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="rgb(221 214 254)" stopOpacity={1} />
+            <stop offset="45%" stopColor="rgb(167 139 250)" stopOpacity={0.98} />
+            <stop offset="78%" stopColor="rgb(139 92 246)" stopOpacity={0.95} />
+            <stop offset="100%" stopColor="rgb(34 211 238)" stopOpacity={0.92} />
           </linearGradient>
-          <filter id="solace-habit-ring-glow" x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="5" result="b" />
+          <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="6" result="blur" />
             <feMerge>
-              <feMergeNode in="b" />
+              <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
         </defs>
-        <circle cx="80" cy="80" r={r} fill="none" className="stroke-white/[0.06]" strokeWidth="6" opacity={0.9} />
         <circle
-          cx="80"
-          cy="80"
+          cx="90"
+          cy="90"
           r={r}
           fill="none"
-          stroke="url(#solace-habit-ring)"
-          strokeWidth="6"
+          stroke="rgba(255,255,255,0.07)"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+        <circle
+          cx="90"
+          cy="90"
+          r={r}
+          fill="none"
+          stroke={`url(#${gradId})`}
+          strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeDasharray={circ}
           strokeDashoffset={dash}
-          filter="url(#solace-habit-ring-glow)"
-          className="transition-[stroke-dashoffset] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+          filter={`url(#${glowId})`}
+          className="transition-[stroke-dashoffset] duration-[1000ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
         />
       </svg>
-      <div className="pointer-events-none absolute inset-0 z-[3] flex flex-col items-center justify-center text-center">
-        <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-violet-200/75">Today&apos;s progress</p>
-        <p className="mt-3 font-serif text-[2.1rem] font-normal tabular-nums tracking-[-0.03em] text-zinc-50 sm:text-[2.25rem]">
-          {completed} / {Math.max(total, 1)}
+      <div className="pointer-events-none absolute inset-[14%] z-[3] flex flex-col items-center justify-center px-2 text-center">
+        <p className="text-[8px] font-semibold uppercase leading-tight tracking-[0.18em] text-violet-200/80 sm:text-[9px]">
+          Today&apos;s progress
         </p>
-        <p className="mt-2 max-w-[9.25rem] text-[12px] leading-snug text-zinc-400/95">habits completed</p>
+        <p className="mt-1.5 font-serif text-[1.45rem] font-normal tabular-nums leading-none tracking-[-0.03em] text-zinc-50 sm:text-[1.6rem]">
+          <span className="text-zinc-50">{completed}</span>
+          <span className="mx-1 text-zinc-500/90">/</span>
+          <span className="text-zinc-300/95">{Math.max(total, 1)}</span>
+        </p>
+        <p className="mt-1 max-w-[6.5rem] text-[9px] leading-tight text-zinc-400/95 sm:text-[10px]">habits completed</p>
+        <p
+          className={cn(
+            "mt-1.5 rounded-full border px-2 py-0.5 text-[8.5px] font-medium tabular-nums leading-tight tracking-wide transition-colors duration-500 sm:text-[9px]",
+            isComplete
+              ? "border-emerald-400/35 bg-emerald-500/10 text-emerald-200/95"
+              : "border-violet-400/25 bg-violet-500/[0.08] text-violet-200/90"
+          )}
+        >
+          {pct}% complete
+        </p>
       </div>
     </div>
   );
@@ -328,14 +378,17 @@ function HabitRailCard({ habit, onToggleToday, onDotPress, onEdit, onDelete, isD
                 Tap a day to softly log this habit—instantly, tactilely yours.
               </p>
               <div className="relative mt-6" aria-label="Weekly rhythm">
-                <div className="pointer-events-none absolute left-[6%] right-[6%] top-[calc(50%-18px)] h-[2px] rounded-full bg-gradient-to-r from-transparent via-white/[0.09] to-transparent sm:left-[5%] sm:right-[5%]" aria-hidden />
-                <div className="relative flex flex-wrap items-end justify-between gap-x-4 gap-y-6 sm:flex-nowrap sm:justify-between sm:gap-x-6 md:gap-x-10">
+                <div
+                  className="pointer-events-none absolute top-[28px] right-[28px] left-[28px] z-0 h-[2px] rounded-full bg-white/[0.12] sm:top-[30px] sm:right-[30px] sm:left-[30px]"
+                  aria-hidden
+                />
+                <div className="relative flex items-end justify-between">
                 {habit.weekProgress.map((completed, i) => {
                   const ringDate = new Date(startOfCurrentWeek);
                   ringDate.setDate(ringDate.getDate() + i);
                   const isFuture = ringDate > today;
                   return (
-                    <div key={`${habit.id}-d-${i}`} className="relative z-[1] flex flex-col items-center gap-3">
+                    <div key={`${habit.id}-d-${i}`} className="relative z-[1] flex shrink-0 flex-col items-center gap-3">
                       <motion.button
                         type="button"
                         disabled={isFuture}
@@ -413,19 +466,18 @@ function RightRailBlocks({ weeklyBarData, habitsCompletedWeek, habitsPotentialWe
 
       <div className="relative divide-y divide-white/[0.017] rounded-[calc(1.45rem-1px)] bg-black/[0.12] backdrop-blur-lg">
         {/* Reflection */}
-        <section className="relative px-6 py-7 sm:px-7">
+        <section className="relative overflow-hidden px-6 py-7 sm:px-7">
+          <img
+            src={HABIT_TRACKER_IMAGES.candleAccent}
+            alt=""
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
+            loading="lazy"
+            decoding="async"
+          />
           <div
-            className="pointer-events-none absolute -bottom-14 -right-12 h-[11.5rem] w-[11.5rem] rounded-full opacity-[0.2]"
+            className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#05060e]/94 via-[#05060e]/78 to-[#05060e]/42"
             aria-hidden
-          >
-            <img
-              src={HABIT_TRACKER_IMAGES.candleAccent}
-              alt=""
-              className="h-full w-full rounded-full object-cover blur-[2px]"
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
+          />
           <div className="relative z-[2]">
             <p className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-200/82">
               <Quote className="h-4 w-4 shrink-0 text-violet-300/88" aria-hidden />
@@ -445,20 +497,27 @@ function RightRailBlocks({ weeklyBarData, habitsCompletedWeek, habitsPotentialWe
           <h2 className="font-serif text-[1.15rem] font-normal tracking-tight text-zinc-50">Weekly overview</h2>
           <div className="mt-6 h-[10.75rem] w-full rounded-xl border border-white/[0.03] bg-black/10 px-1 pb-2 pt-1 shadow-[inset_0_10px_28px_-26px_rgba(139,92,246,0.12)]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyBarData} margin={{ top: 14, right: 8, left: -20, bottom: 0 }}>
+              <BarChart
+                data={weeklyBarData}
+                margin={{ top: 14, right: 4, left: 4, bottom: 0 }}
+                barCategoryGap="18%"
+              >
                 <defs>
                   <linearGradient id="solaceHabitBars" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="rgb(196 181 253)" stopOpacity={0.7} />
                     <stop offset="100%" stopColor="rgb(49 46 129)" stopOpacity={0.12} />
                   </linearGradient>
                 </defs>
+                <CartesianGrid vertical={false} horizontal stroke="rgba(255,255,255,0.06)" strokeDasharray="0" />
                 <XAxis
                   dataKey="label"
                   tick={{ fill: "#a1a1aa", fontSize: 11 }}
-                  axisLine={{ stroke: "rgba(255,255,255,0.07)" }}
+                  axisLine={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 1 }}
                   tickLine={false}
+                  padding={{ left: 0, right: 0 }}
                 />
                 <YAxis hide domain={[0, "dataMax + 1"]} />
+                <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeWidth={1} ifOverflow="visible" />
                 <Bar dataKey="count" radius={[10, 10, 4, 4]} maxBarSize={32}>
                   {weeklyBarData.map((entry, i) => (
                     <Cell key={`${entry.label}-${i}`} fill="url(#solaceHabitBars)" opacity={entry.pct >= 75 ? 1 : entry.pct >= 40 ? 0.86 : 0.58 + i * 0.02} />
@@ -544,11 +603,7 @@ function MobileContinuation(props: MobileContinuationProps) {
 }
 
 export function HabitTracker() {
-  const { session, profile } = useAuth();
-  const companionPreview = useMemo(
-    () => lobbyAvatarByName(profile?.selected_avatar ?? "Jordan Taylor"),
-    [profile?.selected_avatar]
-  );
+  const { session } = useAuth();
 
   const [habits, setHabits] = useState<Habit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -951,46 +1006,30 @@ export function HabitTracker() {
                     <img
                       src={HABIT_TRACKER_IMAGES.hero}
                       alt=""
-                      className="pointer-events-none absolute inset-0 h-full w-full scale-[1.05] object-cover object-[center_42%]"
+                      className="pointer-events-none absolute inset-0 h-full w-full scale-[1.03] object-cover object-[center_38%] brightness-[1.1] contrast-[1.05] saturate-[1.15]"
                       loading="eager"
                       decoding="async"
                     />
-                    <SolaceHeroAtmosphere className="rounded-none" />
 
                     <div
-                      className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_95%_75%_at_72%_22%,rgba(167,139,250,0.16),transparent_55%),radial-gradient(ellipse_50%_48%_at_22%_78%,rgba(34,211,238,0.09),transparent_50%),radial-gradient(ellipse_80%_50%_at_48%_100%,rgba(8,15,28,0.55),transparent_60%)]"
+                      className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_65%_at_78%_18%,rgba(248,250,252,0.12)_0%,transparent_55%),radial-gradient(ellipse_70%_55%_at_72%_22%,rgba(167,139,250,0.14),transparent_58%),radial-gradient(ellipse_50%_48%_at_18%_78%,rgba(34,211,238,0.07),transparent_52%)]"
                       aria-hidden
                     />
                     <div
-                      className="pointer-events-none absolute right-[12%] top-[14%] h-[min(32vw,170px)] w-[min(32vw,170px)] rounded-full bg-violet-200/[0.06] blur-[60px]"
+                      className="pointer-events-none absolute right-[10%] top-[10%] h-[min(36vw,200px)] w-[min(36vw,200px)] rounded-full bg-violet-100/[0.1] blur-[56px]"
                       aria-hidden
                     />
                     <div
-                      className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#03040a]/92 via-[#050810]/68 to-transparent to-[72%]"
+                      className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#03040a]/62 via-[#050810]/22 to-transparent"
                       aria-hidden
                     />
                     <div
-                      className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#020308]/93 via-transparent via-45% to-[#070512]/52"
+                      className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#020308]/90 via-[#020308]/20 via-32% to-transparent"
                       aria-hidden
                     />
 
-                    <div
-                      className="pointer-events-none absolute bottom-8 right-6 z-[6] hidden md:block lg:bottom-[22%] lg:right-[8%]"
-                      aria-hidden
-                    >
-                      <div className="relative h-[118px] w-[118px] overflow-hidden rounded-[1.08rem] border border-white/[0.09] bg-black/45 shadow-[0_0_44px_-8px_rgba(139,92,246,0.42),inset_0_0_28px_rgba(251,191,36,0.05)] lg:h-[126px] lg:w-[126px]">
-                        <img
-                          src={HABIT_TRACKER_IMAGES.candleAccent}
-                          alt=""
-                          className="h-full w-full object-cover opacity-[0.82]"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="relative z-10 grid min-h-[400px] grid-cols-1 md:min-h-[440px] lg:grid-cols-12 lg:gap-8">
-                      <div className="flex flex-col justify-center px-7 py-10 sm:px-10 sm:py-11 lg:col-span-5 lg:pr-2">
+                    <div className="relative z-10 min-h-[400px] md:min-h-[440px]">
+                      <div className="flex min-h-[400px] flex-col justify-center px-7 py-10 pr-[16.5rem] sm:px-10 sm:py-11 sm:pr-[18.5rem] md:min-h-[440px] lg:max-w-[56%] lg:pr-10">
                         <p className="text-[13px] font-medium tracking-[0.02em] text-violet-200/90">
                           Your habits, your rhythm.
                         </p>
@@ -1002,55 +1041,12 @@ export function HabitTracker() {
                         </p>
                       </div>
 
-                      {/* Single cinematic cluster: ring anchored with companion — reduces empty vertical middle */}
-                      <div className="relative flex min-h-[300px] items-center justify-center px-6 pb-8 pt-2 sm:min-h-[320px] lg:col-span-7 lg:min-h-[400px] lg:px-4 lg:pb-14 lg:pt-12">
+                      <div className="absolute right-4 top-6 z-[12] sm:right-6 sm:top-8 md:right-8 md:top-9 lg:right-10 lg:top-10">
                         <div
-                          className="pointer-events-none absolute left-[8%] top-[26%] h-[240px] w-[240px] rounded-full bg-[radial-gradient(circle_at_center,rgba(167,139,250,0.11)_0%,transparent_68%)] blur-sm sm:left-[12%]"
+                          className="pointer-events-none absolute left-1/2 top-1/2 h-[min(68vw,280px)] w-[min(68vw,280px)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(167,139,250,0.16)_0%,rgba(34,211,238,0.07)_42%,transparent_68%)] blur-md"
                           aria-hidden
                         />
-                        <div
-                          className="pointer-events-none absolute right-[14%] bottom-[18%] h-[180px] w-[200px] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.07)_0%,transparent_70%)] blur-md"
-                          aria-hidden
-                        />
-                        <div
-                          className="pointer-events-none absolute inset-x-[12%] top-[42%] h-px bg-gradient-to-r from-transparent via-white/[0.08] to-transparent opacity-70"
-                          aria-hidden
-                        />
-
-                        <div className="relative z-[12] flex w-full max-w-[min(100%,540px)] flex-col items-center sm:flex-row sm:items-center sm:justify-center sm:gap-2 md:gap-6">
-                          <div className="relative flex-shrink-0 sm:-translate-x-1 sm:translate-y-1 md:-translate-x-2">
-                            <HeroProgressRing completed={completedTodayCount} total={totalHabits} compact />
-                          </div>
-
-                          <div className="relative mt-10 flex flex-col items-center sm:mt-0 sm:max-w-[200px] sm:items-start sm:pb-6 sm:pl-2 md:pl-4 md:pb-10">
-                            <div
-                              className="pointer-events-none absolute left-1/2 top-[42%] hidden h-[120%] w-px -translate-x-1/2 bg-gradient-to-b from-violet-400/14 via-transparent to-transparent sm:block"
-                              aria-hidden
-                            />
-                            <div className="relative">
-                              <div className="absolute -inset-5 rounded-full bg-gradient-to-br from-violet-500/25 via-transparent to-cyan-500/10 blur-2xl" aria-hidden />
-                              <div className="relative h-[118px] w-[118px] overflow-hidden rounded-full border-2 border-white/[0.12] bg-black/50 shadow-[0_0_48px_-6px_rgba(139,92,246,0.42)] ring-[6px] ring-violet-500/12 backdrop-blur-[2px] sm:h-[132px] sm:w-[132px]">
-                                <img
-                                  src={companionPreview.cardImage ?? HABIT_TRACKER_IMAGES.companionMascot}
-                                  alt={companionPreview.name}
-                                  className="h-full w-full object-cover object-top"
-                                  onError={(event) => {
-                                    const img = event.currentTarget;
-                                    if (img.src.endsWith(HABIT_TRACKER_IMAGES.companionMascot)) return;
-                                    img.src = HABIT_TRACKER_IMAGES.companionMascot;
-                                  }}
-                                />
-                              </div>
-                              <div
-                                className="pointer-events-none absolute -bottom-5 left-1/2 h-5 w-[85%] -translate-x-1/2 rounded-full bg-black/55 blur-xl"
-                                aria-hidden
-                              />
-                            </div>
-                            <p className="relative z-[2] mt-5 max-w-[14rem] text-center text-[12.25px] leading-relaxed text-zinc-400/95 sm:mt-5 sm:text-left">
-                              Walking this rhythm with you—quiet water, steady steps.
-                            </p>
-                          </div>
-                        </div>
+                        <HeroProgressRing completed={completedTodayCount} total={totalHabits} />
                       </div>
                     </div>
 
@@ -1174,23 +1170,39 @@ export function HabitTracker() {
                           <span className="tabular-nums text-zinc-400">{habits.length}</span> habits
                         </p>
                         <div className="flex flex-wrap items-center gap-3">
-                          <label className="flex items-center gap-2 text-[11px] uppercase tracking-wider">
-                            Per page
-                            <select
-                              value={habitListPageSize}
-                              onChange={(e) => {
-                                setHabitListPageSize(Number(e.target.value));
+                          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-zinc-500">
+                            <span id="habit-per-page-label">Per page</span>
+                            <Select
+                              value={String(habitListPageSize)}
+                              onValueChange={(v) => {
+                                setHabitListPageSize(Number(v));
                                 setHabitListPage(1);
                               }}
-                              className="solace-scroll rounded-lg border border-white/[0.08] bg-black/30 py-2 pl-2 pr-8 text-[12px] normal-case text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
                             >
-                              {[...HABIT_LIST_PAGE_OPTIONS].map((n) => (
-                                <option key={n} value={n}>
-                                  {n}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
+                              <SelectTrigger
+                                aria-labelledby="habit-per-page-label"
+                                className={solaceSelectTriggerPagination}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent
+                                position="popper"
+                                sideOffset={6}
+                                className={solaceSelectContentClass}
+                              >
+                                {HABIT_LIST_PAGE_OPTIONS.map((n) => (
+                                  <SelectItem
+                                    key={n}
+                                    value={String(n)}
+                                    textValue={String(n)}
+                                    className={solaceSelectItemClass}
+                                  >
+                                    {n}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
@@ -1272,109 +1284,137 @@ export function HabitTracker() {
                 transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
                 className="solace-scroll fixed inset-4 z-[51] mx-auto overflow-y-auto sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-auto sm:max-h-[calc(100dvh-6rem)] sm:w-full sm:max-w-xl sm:-translate-x-1/2 sm:-translate-y-1/2"
               >
-                <SolacePanel glow="violet" className="p-7 sm:p-8">
-                  <div className="mb-6 flex items-center justify-between gap-4">
-                    <h3 id="habit-modal-title" className="font-serif text-[1.4rem] font-normal text-zinc-50">
-                      {editingHabit ? "Edit habit" : "New habit"}
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowNewHabit(false);
-                        resetForm();
-                      }}
-                      aria-label="Close"
-                      className="min-h-[44px] rounded-xl p-2 text-zinc-500 transition-colors hover:bg-white/[0.05] hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
-                    >
-                      <X className="h-5 w-5" aria-hidden />
-                    </button>
+                <SolacePanel
+                  glow="violet"
+                  className="overflow-hidden rounded-[1.65rem] p-0 ring-1 ring-inset ring-white/[0.09] shadow-[0_48px_120px_-40px_rgba(0,0,0,0.95)]"
+                >
+                  <div
+                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_55%_at_100%_0%,rgba(139,92,246,0.1),transparent_55%),radial-gradient(ellipse_60%_40%_at_0%_100%,rgba(34,211,238,0.05),transparent_50%)]"
+                    aria-hidden
+                  />
+                  <div className="relative border-b border-white/[0.06] px-7 py-6 sm:px-8">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-200/75">
+                          Rhythm
+                        </p>
+                        <h3 id="habit-modal-title" className="mt-2 font-serif text-[1.4rem] font-normal tracking-tight text-zinc-50">
+                          {editingHabit ? "Edit habit" : "New habit"}
+                        </h3>
+                        <p className="mt-2 max-w-sm text-[13.5px] leading-relaxed text-zinc-500">
+                          Something small you&apos;d like to return to, gently.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowNewHabit(false);
+                          resetForm();
+                        }}
+                        aria-label="Close"
+                        className="min-h-[44px] shrink-0 rounded-xl border border-white/[0.06] bg-black/30 p-2 text-zinc-500 transition-colors hover:border-white/[0.1] hover:bg-white/[0.05] hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
+                      >
+                        <X className="h-5 w-5" aria-hidden />
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="space-y-5">
+                  <div className="relative space-y-5 px-7 py-6 sm:px-8 sm:py-7">
                     <div>
-                      <label className="mb-2 block text-[12px] font-medium uppercase tracking-wider text-zinc-500">
+                      <label htmlFor="habit-name" className={habitModalLabelClass}>
                         Name
                       </label>
                       <input
+                        id="habit-name"
                         type="text"
                         value={habitFormData.name}
                         onChange={(e) => setHabitFormData({ ...habitFormData, name: e.target.value })}
                         placeholder="What would feel kind to nurture?"
-                        className="min-h-[48px] w-full rounded-xl border border-white/[0.08] bg-black/35 px-4 py-3 text-[15px] text-zinc-100 placeholder:text-zinc-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus-visible:border-violet-400/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/25"
+                        className={habitModalInputClass}
                       />
                     </div>
 
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
-                        <label className="mb-2 block text-[12px] font-medium uppercase tracking-wider text-zinc-500">
-                          Icon
-                        </label>
-                        <select
+                        <label className={habitModalLabelClass}>Icon</label>
+                        <Select
                           value={habitFormData.icon}
-                          onChange={(e) => setHabitFormData({ ...habitFormData, icon: e.target.value })}
-                          className="solace-scroll min-h-[48px] w-full rounded-xl border border-white/[0.08] bg-black/35 px-4 py-3 text-[15px] text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/25"
+                          onValueChange={(icon) => setHabitFormData({ ...habitFormData, icon })}
                         >
-                          {habitEmojiOptions.map((emoji) => (
-                            <option key={emoji} value={emoji}>
-                              {emoji}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger aria-label="Habit icon" className={solaceSelectTriggerForm}>
+                            <SelectValue placeholder="Pick an icon" />
+                          </SelectTrigger>
+                          <SelectContent position="popper" sideOffset={6} className={solaceSelectContentClass}>
+                            {habitEmojiOptions.map((emoji) => (
+                              <SelectItem
+                                key={emoji}
+                                value={emoji}
+                                textValue={emoji}
+                                className={solaceSelectItemClass}
+                              >
+                                <FluentEmoji emoji={emoji} size={22} className="shrink-0" />
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div>
-                        <label className="mb-2 block text-[12px] font-medium uppercase tracking-wider text-zinc-500">
-                          Frequency
-                        </label>
-                        <select
+                        <label className={habitModalLabelClass}>Frequency</label>
+                        <Select
                           value={habitFormData.frequency}
-                          onChange={(e) =>
+                          onValueChange={(frequency) =>
                             setHabitFormData({
                               ...habitFormData,
-                              frequency: e.target.value as "daily" | "weekly",
+                              frequency: frequency as "daily" | "weekly",
                             })
                           }
-                          className="solace-scroll min-h-[48px] w-full rounded-xl border border-white/[0.08] bg-black/35 px-4 py-3 text-[15px] text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/25"
                         >
-                          <option value="daily">Daily</option>
-                          <option value="weekly">Weekly</option>
-                        </select>
+                          <SelectTrigger aria-label="Habit frequency" className={solaceSelectTriggerForm}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent position="popper" sideOffset={6} className={solaceSelectContentClass}>
+                            <SelectItem value="daily" className={solaceSelectItemClass}>
+                              Daily
+                            </SelectItem>
+                            <SelectItem value="weekly" className={solaceSelectItemClass}>
+                              Weekly
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
 
                     <div>
-                      <label className="mb-2 block text-[12px] font-medium uppercase tracking-wider text-zinc-500">
-                        Category
-                      </label>
-                      <select
-                        value={habitFormData.category}
-                        onChange={(e) => setHabitFormData({ ...habitFormData, category: e.target.value })}
-                        className="solace-scroll min-h-[48px] w-full rounded-xl border border-white/[0.08] bg-black/35 px-4 py-3 text-[15px] text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/25"
+                      <label className={habitModalLabelClass}>Category</label>
+                      <Select
+                        value={habitFormData.category || undefined}
+                        onValueChange={(category) => setHabitFormData({ ...habitFormData, category })}
                       >
-                        <option value="" disabled>
-                          Choose a category
-                        </option>
-                        {habitCategories.map((category) => (
-                          <option key={category} value={category}>
-                            {category}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger aria-label="Habit category" className={solaceSelectTriggerForm}>
+                          <SelectValue placeholder="Choose a category" />
+                        </SelectTrigger>
+                        <SelectContent position="popper" sideOffset={6} className={solaceSelectContentClass}>
+                          {habitCategories.map((category) => (
+                            <SelectItem key={category} value={category} className={solaceSelectItemClass}>
+                              {category}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       {habitFormData.category === "+ Custom" && (
                         <input
                           type="text"
                           value={customCategory}
                           onChange={(e) => setCustomCategory(e.target.value)}
                           placeholder="Name your category"
-                          className="mt-3 min-h-[48px] w-full rounded-xl border border-white/[0.08] bg-black/35 px-4 py-3 text-[15px] text-zinc-100 placeholder:text-zinc-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/25"
+                          className={cn(habitModalInputClass, "mt-3")}
                         />
                       )}
                     </div>
 
-                    <div>
-                      <label className="mb-3 block text-[12px] font-medium uppercase tracking-wider text-zinc-500">
-                        Accent
-                      </label>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <div className="border-t border-white/[0.06] pt-5">
+                      <label className={habitModalLabelClass}>Accent</label>
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {[
                           { label: "Sky", value: "from-blue-400 to-cyan-500" },
                           { label: "Violet", value: "from-purple-400 to-indigo-500" },
@@ -1388,10 +1428,10 @@ export function HabitTracker() {
                             type="button"
                             onClick={() => setHabitFormData({ ...habitFormData, color: color.value })}
                             className={cn(
-                              "min-h-[44px] rounded-xl border px-3 py-2.5 text-xs font-medium text-white transition-[box-shadow] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35",
+                              "min-h-[44px] rounded-xl border px-3 py-2.5 text-xs font-medium text-white transition-[border-color,box-shadow,transform] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35 active:scale-[0.98]",
                               habitFormData.color === color.value
-                                ? "border-white/25 shadow-[0_0_26px_rgba(139,92,246,0.28)] ring-2 ring-violet-400/35"
-                                : "border-transparent hover:border-white/[0.12]",
+                                ? "border-white/30 shadow-[0_0_28px_rgba(139,92,246,0.32)] ring-2 ring-violet-400/40"
+                                : "border-white/[0.08] opacity-90 hover:border-white/20 hover:opacity-100",
                               `bg-gradient-to-br ${color.value}`
                             )}
                           >
@@ -1401,7 +1441,7 @@ export function HabitTracker() {
                       </div>
                     </div>
 
-                    <div className="flex flex-col-reverse gap-3 pt-6 sm:flex-row">
+                    <div className="flex flex-col-reverse gap-3 border-t border-white/[0.06] pt-6 sm:flex-row">
                       <Button
                         variant="outline"
                         type="button"
@@ -1409,7 +1449,7 @@ export function HabitTracker() {
                           setShowNewHabit(false);
                           resetForm();
                         }}
-                        className="min-h-[48px] flex-1 rounded-xl border-white/[0.12] bg-transparent text-zinc-200 hover:bg-white/[0.04]"
+                        className="min-h-[48px] flex-1 rounded-xl border-white/[0.12] bg-black/25 text-zinc-200 hover:border-violet-400/25 hover:bg-white/[0.04]"
                         disabled={isSaving}
                       >
                         Cancel

@@ -1,4 +1,3 @@
-import { Link } from "react-router";
 import { motion } from "motion/react";
 import {
   Shield,
@@ -6,14 +5,10 @@ import {
   Heart,
   Accessibility,
   Info,
-  Twitter,
-  Instagram,
-  Facebook,
-  Youtube,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { PublicNav } from "../components/PublicNav";
-import { BrandLogo } from "../components/BrandLogo";
+import { PublicFooter } from "../components/PublicFooter";
 import { LandingBackground } from "../landing/LandingBackground";
 import { LANDING_HERO_BG } from "../landing/landingImagery";
 import {
@@ -146,10 +141,10 @@ function HologramArt({
 
   return (
     <div
-      className="relative flex min-h-[240px] w-full items-center justify-center md:min-h-[300px] lg:min-h-[320px]"
+      className="relative flex min-h-[140px] w-full items-center justify-center sm:min-h-[160px] lg:min-h-[180px]"
     >
       <div
-        className="pointer-events-none absolute inset-0 rounded-2xl"
+        className="pointer-events-none absolute inset-0 rounded-xl"
         style={{
           background: `radial-gradient(ellipse 75% 70% at 50% 50%, ${t.hologramWash} 0%, transparent 72%)`,
         }}
@@ -158,9 +153,9 @@ function HologramArt({
       <motion.img
         src={src}
         alt={alt}
-        width={640}
-        height={640}
-        className="relative z-[1] h-auto w-full max-w-[min(440px,100%)] object-contain object-center"
+        width={480}
+        height={480}
+        className="relative z-[1] h-auto w-full max-w-[min(240px,88%)] object-contain object-center sm:max-w-[min(260px,90%)] lg:max-w-[min(220px,100%)]"
         loading="lazy"
         decoding="async"
         animate={{ y: [0, -5, 0] }}
@@ -186,7 +181,7 @@ function PrivacySectionCard({ section, index }: PrivacySectionCardProps) {
       viewport={{ once: true, margin: "-48px" }}
       transition={{ delay: index * 0.06, duration: 0.45 }}
       className={cn(
-        "group relative min-h-[320px] overflow-hidden rounded-[32px] border bg-[rgba(8,10,26,0.48)] backdrop-blur-[16px] transition-[transform,box-shadow,border-color] duration-400 ease-out md:min-h-[360px]",
+        "group relative overflow-hidden rounded-[24px] border bg-[rgba(8,10,26,0.48)] backdrop-blur-[16px] transition-[transform,box-shadow,border-color] duration-400 ease-out",
         tone.border,
         tone.borderHover,
         "hover:-translate-y-0.5",
@@ -213,26 +208,27 @@ function PrivacySectionCard({ section, index }: PrivacySectionCardProps) {
         aria-hidden
       />
 
-      <motion.div className="relative z-[1] flex flex-col gap-10 p-10 sm:p-12 md:gap-12 md:p-14 lg:flex-row lg:items-stretch lg:gap-14 lg:p-16">
-        <div className="flex min-w-0 flex-[1.5] flex-col">
-          <div
-            className={cn(
-              "mb-7 flex h-[52px] w-[52px] items-center justify-center rounded-xl border bg-[rgba(6,8,22,0.55)] backdrop-blur-sm",
-              tone.iconBorder,
-              tone.iconGlow,
-            )}
-          >
-            <Icon className={cn("h-6 w-6", tone.iconColor)} strokeWidth={1.65} />
+      <motion.div className="relative z-[1] flex flex-col gap-6 p-6 sm:p-8 md:gap-7 lg:flex-row lg:items-center lg:gap-8 lg:p-9">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="mb-4 flex items-center gap-4">
+            <div
+              className={cn(
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border bg-[rgba(6,8,22,0.55)] backdrop-blur-sm",
+                tone.iconBorder,
+                tone.iconGlow,
+              )}
+            >
+              <Icon className={cn("h-5 w-5", tone.iconColor)} strokeWidth={1.65} />
+            </div>
+            <h2 className="landing-serif min-w-0 text-xl font-semibold leading-snug text-white sm:text-[1.5rem] md:text-[1.65rem]">
+              {section.title}
+            </h2>
           </div>
-
-          <h2 className="landing-serif mb-4 text-[1.65rem] font-semibold leading-snug text-white sm:text-[1.85rem] md:text-[2rem]">
-            {section.title}
-          </h2>
-          <p className="mb-7 max-w-xl text-[0.9375rem] leading-[1.75] text-white/62 sm:text-base">
+          <p className="mb-5 max-w-xl text-sm leading-[1.7] text-white/62 sm:text-[0.9375rem]">
             {section.description}
           </p>
 
-          <ul className="space-y-3.5 text-[0.9375rem] leading-relaxed text-white/72 sm:text-[15px]">
+          <ul className="space-y-2.5 text-sm leading-relaxed text-white/72 sm:text-[0.9375rem]">
             {section.bullets.map((bullet) => (
               <li key={bullet} className="flex items-start gap-3.5">
                 <span
@@ -244,7 +240,7 @@ function PrivacySectionCard({ section, index }: PrivacySectionCardProps) {
           </ul>
 
           {section.importantNote ? (
-            <div className="mt-8 flex gap-3.5 rounded-xl border border-cyan-400/22 bg-[rgba(6,14,22,0.62)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_28px_-8px_rgba(34,211,238,0.22)]">
+            <div className="mt-5 flex gap-3 rounded-lg border border-cyan-400/22 bg-[rgba(6,14,22,0.62)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_28px_-8px_rgba(34,211,238,0.22)]">
               <Info
                 className="mt-0.5 h-5 w-5 shrink-0 text-cyan-200/85"
                 strokeWidth={1.65}
@@ -255,7 +251,7 @@ function PrivacySectionCard({ section, index }: PrivacySectionCardProps) {
           ) : null}
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center justify-center lg:max-w-[42%]">
+        <div className="flex min-w-0 shrink-0 items-center justify-center lg:w-[min(34%,260px)] lg:max-w-[260px]">
           <HologramArt src={section.hologramSrc} alt={section.hologramAlt} tone={section.tone} />
         </div>
       </motion.div>
@@ -304,8 +300,8 @@ export function Privacy() {
       <div className="relative z-10">
         <PublicNav variant="cinematic" />
 
-        <main className="mx-auto w-full max-w-[1380px] px-5 pb-20 pt-14 sm:px-8 sm:pt-16 lg:px-10 lg:pb-24">
-          <section className="relative mx-auto mb-14 max-w-3xl text-center sm:mb-16 md:mb-[4.5rem]">
+        <main className="mx-auto w-full max-w-[1080px] px-5 pb-20 pt-14 sm:px-8 sm:pt-16 lg:px-10 lg:pb-24">
+          <section className="relative mx-auto mb-10 max-w-2xl text-center sm:mb-12 md:mb-14">
             <div
               className="pointer-events-none absolute left-1/2 top-2 h-44 w-[min(100%,28rem)] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(34,211,238,0.1)_0%,transparent_72%)] blur-3xl"
               aria-hidden
@@ -316,10 +312,10 @@ export function Privacy() {
               transition={{ duration: 0.45 }}
               className="relative"
             >
-              <div className="mx-auto mb-7 flex h-14 w-14 items-center justify-center rounded-xl border border-cyan-400/22 bg-[rgba(8,12,24,0.5)] shadow-[0_0_20px_rgba(34,211,238,0.14)] backdrop-blur-md sm:h-[3.75rem] sm:w-[3.75rem]">
-                <Shield className="h-7 w-7 text-cyan-200/90" strokeWidth={1.55} />
+              <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-xl border border-cyan-400/22 bg-[rgba(8,12,24,0.5)] shadow-[0_0_20px_rgba(34,211,238,0.14)] backdrop-blur-md">
+                <Shield className="h-6 w-6 text-cyan-200/90" strokeWidth={1.55} />
               </div>
-              <h1 className="landing-serif mb-5 text-[2.35rem] font-semibold leading-[1.12] tracking-tight text-white sm:text-[2.85rem] md:text-[3.25rem]">
+              <h1 className="landing-serif mb-4 text-[2rem] font-semibold leading-[1.12] tracking-tight text-white sm:text-[2.5rem] md:text-[2.85rem]">
                 Privacy,{" "}
                 <span className="text-[#f4a4c8] drop-shadow-[0_0_20px_rgba(244,164,200,0.18)]">
                   Safety &amp; Accessibility
@@ -332,7 +328,7 @@ export function Privacy() {
           </section>
 
           <motion.div
-            className="flex flex-col gap-10 sm:gap-11"
+            className="flex flex-col gap-7 sm:gap-8"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.45, delay: 0.08 }}
@@ -343,120 +339,7 @@ export function Privacy() {
           </motion.div>
         </main>
 
-        <footer className="relative border-t border-white/[0.06]">
-          <div className="pointer-events-none mx-auto h-px max-w-[1380px] bg-gradient-to-r from-transparent via-violet-500/22 to-transparent" />
-          <div className="mx-auto max-w-[1380px] px-5 py-12 sm:px-8 md:py-14 lg:px-10">
-            <motion.div className="grid grid-cols-2 gap-10 md:grid-cols-4 md:gap-8">
-              <div className="col-span-2 md:col-span-1">
-                <BrandLogo heightClass="h-14" />
-                <p className="mt-3 text-sm leading-relaxed text-white/52">
-                  Your AI-powered wellness companion, available 24/7
-                </p>
-                <div className="mt-5 flex gap-2.5">
-                  {[
-                    { Icon: Twitter, label: "Twitter" },
-                    { Icon: Instagram, label: "Instagram" },
-                    { Icon: Facebook, label: "Facebook" },
-                    { Icon: Youtube, label: "YouTube" },
-                  ].map(({ Icon, label }) => (
-                    <span
-                      key={label}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.07] bg-white/[0.03] text-white/48 transition-colors hover:border-white/14 hover:text-white/80"
-                      aria-label={label}
-                      role="img"
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <h4 className="mb-3 text-sm font-semibold text-white/92">Product</h4>
-                <ul className="space-y-2 text-sm text-white/52">
-                  <li>
-                    <Link to="/how-it-works" className="transition-colors hover:text-white/88">
-                      How It Works
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/pricing" className="transition-colors hover:text-white/88">
-                      Pricing
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      to="/privacy"
-                      className="font-medium text-[#f4a4c8] transition-colors hover:text-[#f8bdd6]"
-                    >
-                      Privacy &amp; Safety
-                    </Link>
-                  </li>
-                  {/* <li>
-                    <Link to="/accessibility" className="transition-colors hover:text-white/88">
-                      Accessibility
-                    </Link>
-                  </li> */}
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="mb-3 text-sm font-semibold text-white/92">Legal</h4>
-                <ul className="space-y-2 text-sm text-white/52">
-                  <li>
-                    <Link to="/terms" className="transition-colors hover:text-white/88">
-                      Terms &amp; Conditions
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/privacy" className="transition-colors hover:text-white/88">
-                      Privacy Policy
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="mb-3 text-sm font-semibold text-white/92">Get Started</h4>
-                <ul className="space-y-2 text-sm text-white/52">
-                  <li>
-                    <Link to="/signup" className="transition-colors hover:text-white/88">
-                      Sign Up
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/login" className="transition-colors hover:text-white/88">
-                      Log In
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      to="/admin/credentials"
-                      className="font-medium text-violet-300/90 transition-colors hover:text-violet-200"
-                    >
-                      Admin Credentials
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      to="/admin/login"
-                      className="text-violet-300/80 transition-colors hover:text-violet-200"
-                    >
-                      Admin Portal
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-            </motion.div>
-
-            <div className="mt-10 border-t border-white/[0.05] pt-7 text-center text-xs text-white/45 sm:text-sm">
-              <p>&copy; 2024 Solace. All rights reserved.</p>
-              <p className="mt-2 leading-relaxed">
-                This is not a replacement for professional medical or mental health services.
-              </p>
-            </div>
-          </div>
-        </footer>
+        <PublicFooter />
       </div>
     </motion.div>
   );
