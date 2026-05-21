@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { pickSolaceCinematicImage } from "@/lib/solace/solaceCinematicPool";
+import {
+  COMMUNITY_CIRCLE_CARD_IMAGES,
+  COMMUNITY_IMAGES,
+  communityPostSceneForId,
+} from "@/lib/solace/communityImages";
 import { motion } from "motion/react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import {
@@ -33,6 +37,7 @@ import {
   Bookmark,
   Filter,
   Check,
+  Eye,
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -42,9 +47,17 @@ import { toast } from "sonner";
 import { Switch } from "@/app/components/ui/switch";
 import { Label } from "@/app/components/ui/label";
 import { cn } from "@/lib/utils";
+import { SolaceSelect } from "@/app/solace";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { EmojiText } from "@/components/ui/EmojiText";
+import { Skeleton } from "@/app/components/ui/skeleton";
+import {
+  computeCommunityPulsePercent,
+  communityPulseDetailFromSignals,
+  communityPulseHeadlineFromPercent,
+  sentimentSignalsFromTexts,
+} from "@/lib/communityPulse";
 
 type FeedPost = {
   id: string;
@@ -71,11 +84,27 @@ function normalizeCommunityTopicLabel(value: string): string {
     .replace(/\s+/g, " ");
 }
 
-/** Tags shown under a post as hashtags — excludes any tag that duplicates the category line. */
-function feedHashtagsExcludingDisplayedCategory(post: FeedPost): string[] {
+const COMMUNITY_POST_CATEGORIES = [
+  "General Discussion",
+  "Wins & Progress",
+  "Support & Advice",
+  "Professional Insights",
+  "Community Events",
+] as const;
+
+/** Hashtags the member typed — excludes category and preset category values stored in `tags`. */
+function userEnteredHashtags(post: FeedPost): string[] {
   const catKey = normalizeCommunityTopicLabel(post.category ?? "");
-  if (!catKey) return post.tags;
-  return post.tags.filter((tag) => normalizeCommunityTopicLabel(tag) !== catKey);
+  const presetCategoryKeys = new Set(
+    COMMUNITY_POST_CATEGORIES.map((c) => normalizeCommunityTopicLabel(c)),
+  );
+  return (post.tags ?? []).filter((tag) => {
+    const key = normalizeCommunityTopicLabel(tag);
+    if (!key) return false;
+    if (catKey && key === catKey) return false;
+    if (presetCategoryKeys.has(key)) return false;
+    return true;
+  });
 }
 
 type FeedGroup = {
@@ -121,6 +150,12 @@ type Overview = {
   groups: number;
   comments: number;
   activeNow: number;
+  totalLikes?: number;
+  recentPosts7d?: number;
+  pulsePercent?: number | null;
+  pulsePositive?: number;
+  pulseNegative?: number;
+  pulseNeutral?: number;
   trendingTags: { tag: string; posts: number }[];
 };
 
@@ -135,6 +170,7 @@ const SUPPORT_SPACES: ReadonlyArray<{
   Icon: LucideIcon;
   glow: string;
   iconWrap: string;
+  image: string;
 }> = [
   {
     title: "Anxiousness Support",
@@ -142,6 +178,7 @@ const SUPPORT_SPACES: ReadonlyArray<{
     Icon: Cloud,
     glow: "from-sky-500/25 via-indigo-500/10 to-transparent",
     iconWrap: "bg-sky-400/20 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.35)]",
+    image: COMMUNITY_CIRCLE_CARD_IMAGES[0]!,
   },
   {
     title: "Late Night Thoughts",
@@ -149,6 +186,7 @@ const SUPPORT_SPACES: ReadonlyArray<{
     Icon: Moon,
     glow: "from-indigo-500/30 via-violet-900/20 to-transparent",
     iconWrap: "bg-indigo-400/20 text-indigo-100 shadow-[0_0_24px_rgba(129,140,248,0.4)]",
+    image: COMMUNITY_CIRCLE_CARD_IMAGES[1]!,
   },
   {
     title: "Quiet Wins",
@@ -156,6 +194,7 @@ const SUPPORT_SPACES: ReadonlyArray<{
     Icon: Star,
     glow: "from-amber-400/20 via-fuchsia-500/15 to-transparent",
     iconWrap: "bg-amber-300/20 text-amber-100 shadow-[0_0_22px_rgba(251,191,36,0.35)]",
+    image: COMMUNITY_CIRCLE_CARD_IMAGES[2]!,
   },
   {
     title: "Sleep Circle",
@@ -163,6 +202,7 @@ const SUPPORT_SPACES: ReadonlyArray<{
     Icon: Sparkles,
     glow: "from-violet-500/25 via-slate-500/10 to-transparent",
     iconWrap: "bg-violet-400/20 text-violet-100 shadow-[0_0_24px_rgba(167,139,250,0.4)]",
+    image: COMMUNITY_CIRCLE_CARD_IMAGES[3]!,
   },
   {
     title: "Burnout Recovery",
@@ -170,6 +210,7 @@ const SUPPORT_SPACES: ReadonlyArray<{
     Icon: Flame,
     glow: "from-orange-400/20 via-rose-500/15 to-transparent",
     iconWrap: "bg-orange-300/20 text-orange-100 shadow-[0_0_22px_rgba(251,146,60,0.35)]",
+    image: COMMUNITY_CIRCLE_CARD_IMAGES[4]!,
   },
   {
     title: "Healing Journey",
@@ -177,31 +218,14 @@ const SUPPORT_SPACES: ReadonlyArray<{
     Icon: Flower2,
     glow: "from-emerald-400/15 via-fuchsia-500/20 to-transparent",
     iconWrap: "bg-emerald-400/15 text-emerald-100 shadow-[0_0_22px_rgba(52,211,153,0.3)]",
+    image: COMMUNITY_CIRCLE_CARD_IMAGES[5]!,
   },
 ];
 
 const FEED_PAGE_SIZE = 10;
-
-/** Cinematic hero — warm gathering scene (static asset, not post data). */
-const COMMUNITY_HERO_IMAGE = pickSolaceCinematicImage("community-hero");
-
-const DAILY_REMINDER_IMAGE = pickSolaceCinematicImage("community-daily-reminder");
-
-/** Faded atmospheric layers inside post cards (same box, low opacity). */
-const POST_CARD_ATMOSPHERES = [
-  "bg-[radial-gradient(ellipse_at_80%_20%,rgba(251,191,36,0.35)_0%,transparent_50%),radial-gradient(ellipse_at_20%_80%,rgba(99,102,241,0.3)_0%,transparent_55%),linear-gradient(165deg,#1e1b4b_0%,#0f172a_55%,#164e63_100%)]",
-  "bg-[radial-gradient(ellipse_at_30%_30%,rgba(236,72,153,0.22)_0%,transparent_50%),radial-gradient(ellipse_at_90%_70%,rgba(34,211,238,0.15)_0%,transparent_50%),linear-gradient(200deg,#0f172a_0%,#312e81_45%,#0c4a6e_100%)]",
-  "bg-[radial-gradient(ellipse_at_50%_0%,rgba(167,139,250,0.3)_0%,transparent_48%),radial-gradient(ellipse_at_100%_100%,rgba(52,211,153,0.12)_0%,transparent_50%),linear-gradient(180deg,#020617_0%,#1e1b4b_50%,#0f172a_100%)]",
-  "bg-[radial-gradient(ellipse_at_70%_60%,rgba(251,191,36,0.2)_0%,transparent_50%),radial-gradient(ellipse_at_0%_0%,rgba(192,132,252,0.28)_0%,transparent_48%),linear-gradient(175deg,#0a0a12_0%,#1e1b4b_40%,#0f172a_100%)]",
-  "bg-[radial-gradient(ellipse_at_20%_20%,rgba(14,165,233,0.18)_0%,transparent_45%),radial-gradient(ellipse_at_80%_90%,rgba(244,114,182,0.18)_0%,transparent_50%),linear-gradient(190deg,#0f172a_0%,#4c1d95_35%,#0c4a6e_100%)]",
-  "bg-[radial-gradient(ellipse_at_60%_80%,rgba(251,191,36,0.25)_0%,transparent_52%),radial-gradient(ellipse_at_40%_0%,rgba(129,140,248,0.22)_0%,transparent_50%),linear-gradient(185deg,#050816_0%,#1e1b4b_50%,#0f172a_100%)]",
-] as const;
-
-function atmosphereIndexForPost(postId: string): number {
-  let h = 0;
-  for (let i = 0; i < postId.length; i++) h = (h * 31 + postId.charCodeAt(i)) >>> 0;
-  return h % POST_CARD_ATMOSPHERES.length;
-}
+const PULSE_GAUGE_RADIUS = 48;
+const PULSE_GAUGE_ARC_LENGTH = Math.PI * PULSE_GAUGE_RADIUS;
+const PULSE_RECENT_MS = 7 * 24 * 60 * 60 * 1000;
 
 function findGroupForCircleTitle(title: string, groups: FeedGroup[]): FeedGroup | undefined {
   const t = title.toLowerCase();
@@ -234,25 +258,97 @@ function pickGroupCircleIcon(group: FeedGroup): LucideIcon {
 }
 
 function primaryEmotionalTag(post: FeedPost): string | null {
-  const extra = feedHashtagsExcludingDisplayedCategory(post);
-  const raw = extra[0] ?? post.tags?.[0] ?? null;
+  const raw = userEnteredHashtags(post)[0] ?? null;
   if (!raw) return null;
   return raw.replace(/^#/, "").trim() || null;
 }
 
 const BOOKMARKS_STORAGE_KEY = "meetezri_community_bookmarks";
 
-function vibePercentFromOverview(overview: Overview | null): number | null {
-  if (!overview) return null;
-  const hasSignal = overview.posts > 0 || overview.activeNow > 0 || overview.comments > 0;
-  if (!hasSignal) return null;
-  const engagement =
-    overview.posts > 0 ? Math.min(1, overview.comments / Math.max(overview.posts * 2.5, 1)) : 0;
-  const presence =
-    overview.members > 0 ? Math.min(1, overview.activeNow / Math.max(overview.members * 0.05, 8)) : 0;
-  const blended =
-    overview.posts > 0 ? engagement * 0.55 + presence * 0.45 : presence > 0 ? presence : engagement;
-  return Math.round(Math.min(94, Math.max(52, 58 + blended * 36)));
+type CommunityPulse = {
+  percent: number | null;
+  headline: string;
+  detail: string;
+};
+
+function isRecentCommunityPost(createdAt: string, nowMs: number): boolean {
+  try {
+    return nowMs - parseISO(createdAt).getTime() < PULSE_RECENT_MS;
+  } catch {
+    return false;
+  }
+}
+
+function buildPulseSignalsFromFeed(
+  posts: FeedPost[],
+  commentsByPostId: Record<string, PostComment[]>,
+): ReturnType<typeof sentimentSignalsFromTexts> {
+  const texts: string[] = [];
+  const nowMs = Date.now();
+  for (const post of posts) {
+    if (!isRecentCommunityPost(post.createdAt, nowMs)) continue;
+    texts.push(post.content);
+    for (const comment of commentsByPostId[post.id] ?? []) {
+      texts.push(comment.content);
+    }
+  }
+  return sentimentSignalsFromTexts(texts);
+}
+
+function computeCommunityPulse(
+  overview: Overview | null,
+  posts: FeedPost[],
+  commentsByPostId: Record<string, PostComment[]>,
+): CommunityPulse {
+  const postCount = Math.max(overview?.posts ?? 0, posts.length);
+  if (postCount <= 0 && posts.length === 0) {
+    return {
+      percent: null,
+      headline: "",
+      detail: "We'll show a gentle pulse once there's a little more conversation to reflect on.",
+    };
+  }
+
+  const fallbackPulse = computeCommunityPulsePercent({
+    signals: buildPulseSignalsFromFeed(posts, commentsByPostId),
+    totalPosts: postCount,
+  });
+
+  const scoredSignals =
+    fallbackPulse.positive + fallbackPulse.negative + fallbackPulse.neutral;
+  /** Prefer live feed text so edits/deletes update the gauge immediately. */
+  const useFeedPulse = posts.length > 0 && scoredSignals > 0;
+
+  const positive = useFeedPulse
+    ? fallbackPulse.positive
+    : (overview?.pulsePositive ?? fallbackPulse.positive);
+  const negative = useFeedPulse
+    ? fallbackPulse.negative
+    : (overview?.pulseNegative ?? fallbackPulse.negative);
+  const neutral = useFeedPulse
+    ? fallbackPulse.neutral
+    : (overview?.pulseNeutral ?? fallbackPulse.neutral);
+  const overviewPercent =
+    overview?.pulsePercent != null ? Number(overview.pulsePercent) : null;
+  const percent = useFeedPulse
+    ? fallbackPulse.percent
+    : overviewPercent != null && Number.isFinite(overviewPercent)
+      ? overviewPercent
+      : fallbackPulse.percent;
+
+  if (percent == null) {
+    return {
+      percent: null,
+      headline: "",
+      detail: "We'll show a gentle pulse once there's a little more conversation to reflect on.",
+    };
+  }
+
+  return {
+    percent,
+    headline: communityPulseHeadlineFromPercent(percent),
+    detail: communityPulseDetailFromSignals({ positive, negative, neutral }),
+  };
 }
 
 function emotionalSocialProofLine(post: FeedPost): string | null {
@@ -282,10 +378,89 @@ function CinematicEnter({ children, delay = 0, className }: CinematicEnterProps)
   );
 }
 
+function CommunityLoadingSkeleton() {
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-[#06060f] text-slate-100">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(109,40,217,0.35)_0%,transparent_50%),radial-gradient(ellipse_at_100%_0%,rgba(236,72,153,0.12)_0%,transparent_45%),radial-gradient(ellipse_at_0%_100%,rgba(56,189,248,0.08)_0%,transparent_40%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.4)_0%,transparent_35%,rgba(2,6,23,0.85)_100%)]" />
+
+      <div className="relative z-10 mx-auto max-w-[1720px] px-4 pb-24 pt-8 sm:px-6 sm:pt-10 lg:px-10">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <Skeleton className="h-11 w-11 shrink-0 rounded-2xl bg-white/[0.06]" />
+            <div className="space-y-2">
+              <Skeleton className="h-9 w-40 rounded-lg bg-white/[0.07]" />
+              <Skeleton className="h-4 w-64 max-w-full rounded-md bg-white/[0.05]" />
+            </div>
+          </div>
+          <Skeleton className="h-11 w-32 shrink-0 rounded-full bg-white/[0.06]" />
+        </div>
+
+        <Skeleton className="mb-8 h-14 w-full rounded-[24px] bg-white/[0.04]" />
+
+        <Skeleton className="mb-10 min-h-[280px] w-full rounded-[28px] bg-white/[0.06] lg:min-h-[300px]" />
+
+        <div className="mb-10">
+          <div className="mb-4 space-y-2">
+            <Skeleton className="h-6 w-36 rounded-md bg-white/[0.07]" />
+            <Skeleton className="h-4 w-72 max-w-full rounded-md bg-white/[0.05]" />
+          </div>
+          <div className="flex gap-3 overflow-hidden pb-2">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-[168px] w-[148px] shrink-0 rounded-2xl bg-white/[0.06] sm:w-[158px]" />
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+          <div className="flex gap-2">
+            <Skeleton className="h-11 w-24 rounded-full bg-white/[0.06]" />
+            <Skeleton className="h-11 w-28 rounded-full bg-white/[0.06]" />
+            <Skeleton className="h-11 w-28 rounded-full bg-white/[0.06]" />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+            <Skeleton className="h-11 min-h-[44px] flex-1 rounded-full bg-white/[0.06]" />
+            <Skeleton className="h-11 w-24 shrink-0 rounded-full bg-white/[0.06]" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,2.15fr)_minmax(280px,1fr)] lg:items-start lg:gap-10">
+          <div className="min-w-0 space-y-5">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-[220px] w-full rounded-3xl bg-white/[0.06]" />
+            ))}
+            <Skeleton className="h-32 w-full rounded-[26px] bg-white/[0.05]" />
+          </div>
+          <div className="space-y-6">
+            <Skeleton className="h-56 w-full rounded-[26px] bg-white/[0.06]" />
+            <Skeleton className="h-40 w-full rounded-[26px] bg-white/[0.06]" />
+            <Skeleton className="h-48 w-full rounded-[26px] bg-white/[0.06]" />
+          </div>
+        </div>
+      </div>
+      <span className="sr-only">Loading community</span>
+    </div>
+  );
+}
+
+function CommunityFeedPostsSkeleton() {
+  return (
+    <div className="space-y-5" aria-busy="true" aria-label="Loading posts">
+      {[0, 1, 2].map((i) => (
+        <Skeleton key={i} className="h-[220px] w-full rounded-3xl bg-white/[0.06]" />
+      ))}
+    </div>
+  );
+}
+
 export function Community() {
   const { profile, refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<"feed" | "groups" | "trending">("feed");
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterMyPostsOnly, setFilterMyPostsOnly] = useState(false);
+  const [filterBookmarkedOnly, setFilterBookmarkedOnly] = useState(false);
   const [showNewPostModal, setShowNewPostModal] = useState(false);
   const [newPostContent, setNewPostContent] = useState("");
   const [newPostCategory, setNewPostCategory] = useState("General Discussion");
@@ -435,17 +610,31 @@ export function Community() {
     });
   };
 
+  const hasActiveFeedFilters = filterCategory !== "" || filterMyPostsOnly || filterBookmarkedOnly;
+
   const filteredPosts = useMemo(() => {
+    let list = postsData;
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return postsData;
-    return postsData.filter(
-      (p) =>
-        p.content.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q) ||
-        p.author.name.toLowerCase().includes(q) ||
-        p.tags.some((t) => t.toLowerCase().includes(q))
-    );
-  }, [postsData, searchQuery]);
+    if (q) {
+      list = list.filter(
+        (p) =>
+          p.content.toLowerCase().includes(q) ||
+          p.category.toLowerCase().includes(q) ||
+          p.author.name.toLowerCase().includes(q) ||
+          p.tags.some((t) => t.toLowerCase().includes(q)),
+      );
+    }
+    if (filterCategory) {
+      list = list.filter((p) => p.category === filterCategory);
+    }
+    if (filterMyPostsOnly) {
+      list = list.filter((p) => p.isByCurrentUser);
+    }
+    if (filterBookmarkedOnly) {
+      list = list.filter((p) => bookmarkedPostIds.has(p.id));
+    }
+    return list;
+  }, [postsData, searchQuery, filterCategory, filterMyPostsOnly, filterBookmarkedOnly, bookmarkedPostIds]);
 
   const [feedPage, setFeedPage] = useState(1);
   const feedTotalPages = Math.max(1, Math.ceil(filteredPosts.length / FEED_PAGE_SIZE));
@@ -458,7 +647,17 @@ export function Community() {
 
   useEffect(() => {
     setFeedPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, filterCategory, filterMyPostsOnly, filterBookmarkedOnly]);
+
+  const clearFeedFilters = () => {
+    setFilterCategory("");
+    setFilterMyPostsOnly(false);
+    setFilterBookmarkedOnly(false);
+  };
+
+  const applyFeedFilterChange = () => {
+    if (activeTab !== "feed") setActiveTab("feed");
+  };
 
   useEffect(() => {
     setFeedPage((p) => Math.min(Math.max(1, p), feedTotalPages));
@@ -519,6 +718,7 @@ export function Community() {
           p.id === postId ? { ...p, likes: res.likes, likedByMe: res.likedByMe } : p
         )
       );
+      void loadMeta();
     } catch {
       toast.error("Could not update like");
     }
@@ -552,6 +752,8 @@ export function Community() {
       const latest = (await api.getCommunityPostComments(postId)) as PostComment[];
       setCommentsByPostId((m) => ({ ...m, [postId]: Array.isArray(latest) ? latest : [] }));
       setPostsData((prev) => prev.map((p) => (p.id === postId ? { ...p, comments: res.comments } : p)));
+      setOverview((prev) => (prev ? { ...prev, comments: prev.comments + 1 } : prev));
+      void loadMeta();
     } catch {
       toast.error("Could not post comment");
     } finally {
@@ -580,6 +782,7 @@ export function Community() {
       setCommentsByPostId((m) => ({ ...m, [postId]: Array.isArray(latest) ? latest : [] }));
       cancelEditComment(postId);
       toast.success("Comment updated");
+      void loadMeta();
     } catch {
       toast.error("Could not update comment");
     } finally {
@@ -608,6 +811,7 @@ export function Community() {
       await api.deleteCommunityPost(post.id);
       setPostsData((prev) => prev.filter((p) => p.id !== post.id));
       toast.success("Post deleted");
+      void loadMeta();
     } catch {
       toast.error("Could not delete post");
     }
@@ -616,16 +820,20 @@ export function Community() {
   const startEditPost = (post: FeedPost) => {
     setEditingPostId(post.id);
     setEditDraft(post.content);
-    setEditTagsDraft(post.tags.join(", "));
+    setEditTagsDraft(userEnteredHashtags(post).join(", "));
   };
 
   const saveEditPost = async (postId: string) => {
     if (!editDraft.trim()) return;
-    const nextTags = editTagsDraft
+    const userTags = editTagsDraft
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean)
-      .slice(0, 20);
+      .slice(0, 19);
+    const post = postsData.find((p) => p.id === postId);
+    const nextTags = post
+      ? [post.category, ...userTags].map((t) => t.trim()).filter(Boolean).slice(0, 20)
+      : userTags;
     setEditSaving(true);
     try {
       await api.updateCommunityPost(postId, editDraft.trim(), nextTags);
@@ -638,6 +846,7 @@ export function Community() {
       setEditDraft("");
       setEditTagsDraft("");
       toast.success("Post updated");
+      void loadMeta();
     } catch {
       toast.error("Could not update post");
     } finally {
@@ -729,6 +938,7 @@ export function Community() {
         try {
           const posts = (await api.getCommunityPosts(40)) as FeedPost[];
           if (Array.isArray(posts)) setPostsData(posts);
+          await loadMeta();
         } catch {
           // ignore; optimistic UI already updated
         }
@@ -768,26 +978,17 @@ export function Community() {
       }
     : { members: 0, posts: 0, groups: 0, activeNow: 0 };
 
-  const vibePct = vibePercentFromOverview(overview);
-  const vibeGauge = useMemo(() => {
-    const pct = vibePct ?? 0;
-    const endAngle = Math.PI * (1 - pct / 100);
-    return {
-      x2: 60 + 48 * Math.cos(endAngle),
-      y2: 60 - 48 * Math.sin(endAngle),
-      largeArc: pct > 50 ? 1 : 0,
-    };
-  }, [vibePct]);
+  const communityPulse = useMemo(
+    () => computeCommunityPulse(overview, postsData, commentsByPostId),
+    [overview, postsData, commentsByPostId],
+  );
+  const pulseArcFilled =
+    communityPulse.percent != null
+      ? (communityPulse.percent / 100) * PULSE_GAUGE_ARC_LENGTH
+      : 0;
 
   if (loadingPosts && postsData.length === 0) {
-    return (
-      <div className="relative flex min-h-[50vh] items-center justify-center overflow-hidden bg-[#06060f]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_20%,rgba(139,92,246,0.25)_0%,transparent_55%),radial-gradient(ellipse_at_80%_80%,rgba(236,72,153,0.12)_0%,transparent_50%)]" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.03)_0%,transparent_70%)]" />
-        <Loader2 className="relative h-10 w-10 animate-spin text-violet-300 drop-shadow-[0_0_20px_rgba(167,139,250,0.6)]" aria-hidden />
-        <span className="sr-only">Loading community</span>
-      </div>
-    );
+    return <CommunityLoadingSkeleton />;
   }
 
   return (
@@ -864,55 +1065,58 @@ export function Community() {
           </details>
 
           <CinematicEnter className="mb-10">
-            <div className="relative overflow-hidden rounded-[28px] border border-[color:rgba(168,85,247,0.25)] bg-[#0B1020] shadow-[0_0_80px_-24px_rgba(88,28,135,0.45),inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_70%_100%,rgba(251,191,36,0.15)_0%,transparent_50%)]" aria-hidden />
-              <div className="grid min-h-[280px] grid-cols-1 lg:min-h-[300px] lg:grid-cols-[minmax(0,1.05fr)_minmax(260px,0.95fr)]">
-                <div className="relative z-10 flex flex-col justify-center space-y-5 px-6 py-8 sm:px-8 lg:pr-6">
-                  <h2 className="text-balance font-serif text-3xl font-normal leading-[1.12] tracking-tight text-white sm:text-[2.25rem] lg:text-[2.5rem]">
-                    A safe place to{" "}
-                    <span className="bg-gradient-to-r from-violet-200 via-fuchsia-200 to-pink-300 bg-clip-text text-transparent">
-                      be you.
-                    </span>
-                  </h2>
-                  <p className="max-w-md text-[15px] leading-relaxed text-[#A7A1B8]">
-                    Share your thoughts, listen with kindness and grow together.
-                  </p>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex -space-x-2">
-                      {postsData.slice(0, 5).map((p) => (
-                        <div
-                          key={p.id}
-                          className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-[#050816]"
-                        >
-                          {p.author.avatarUrl ? (
-                            <img src={p.author.avatarUrl} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-600/85 to-indigo-900 text-[11px] font-semibold text-white">
-                              {initials(p.author.name)}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-violet-100/85">
-                      {stats.members > 0
-                        ? `${stats.members.toLocaleString()} people here for you today.`
-                        : "People are here for you today."}
-                    </span>
+            <div className="relative min-h-[280px] overflow-hidden rounded-[28px] border border-[color:rgba(168,85,247,0.25)] bg-[#0B1020] shadow-[0_0_80px_-24px_rgba(88,28,135,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] lg:min-h-[300px]">
+              <img
+                src={COMMUNITY_IMAGES.hero}
+                alt=""
+                width={1200}
+                height={800}
+                loading="eager"
+                decoding="async"
+                aria-hidden
+                className="absolute inset-0 h-full w-full object-cover object-[62%_45%]"
+              />
+              <div
+                className="absolute inset-0 bg-gradient-to-r from-[#050816]/90 via-[#050816]/55 to-[#050816]/20"
+                aria-hidden
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#050816]/55 via-transparent to-[#050816]/25" aria-hidden />
+              <div
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_70%_100%,rgba(251,191,36,0.15)_0%,transparent_50%)]"
+                aria-hidden
+              />
+              <div className="relative z-10 flex min-h-[280px] flex-col justify-center space-y-5 px-6 py-8 sm:px-8 lg:min-h-[300px] lg:px-10">
+                <h2 className="text-balance font-serif text-3xl font-normal leading-[1.12] tracking-tight text-white sm:text-[2.25rem] lg:text-[2.5rem]">
+                  A safe place to{" "}
+                  <span className="bg-gradient-to-r from-violet-200 via-fuchsia-200 to-pink-300 bg-clip-text text-transparent">
+                    be you.
+                  </span>
+                </h2>
+                <p className="max-w-md text-[15px] leading-relaxed text-[#A7A1B8]">
+                  Share your thoughts, listen with kindness and grow together.
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex -space-x-2">
+                    {postsData.slice(0, 5).map((p) => (
+                      <div
+                        key={p.id}
+                        className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-[#050816]"
+                      >
+                        {p.author.avatarUrl ? (
+                          <img src={p.author.avatarUrl} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-600/85 to-indigo-900 text-[11px] font-semibold text-white">
+                            {initials(p.author.name)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                </div>
-                <div className="relative min-h-[200px] border-t border-white/10 lg:min-h-0 lg:border-l lg:border-t-0">
-                  <img
-                    src={COMMUNITY_HERO_IMAGE}
-                    alt=""
-                    width={1200}
-                    height={800}
-                    className="absolute inset-0 h-full w-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#050816]/95 via-[#070a14]/55 to-transparent lg:from-[#050816]/88 lg:via-transparent" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#050816]/90 via-transparent to-violet-950/35" />
-                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_85%,rgba(251,191,36,0.35)_0%,transparent_55%)]" />
-                  <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_80px_rgba(0,0,0,0.45)]" />
+                  <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-violet-100/85">
+                    {stats.members > 0
+                      ? `${stats.members.toLocaleString()} people here for you today.`
+                      : "People are here for you today."}
+                  </span>
                 </div>
               </div>
             </div>
@@ -926,13 +1130,14 @@ export function Community() {
               </div>
               <button
                 type="button"
-                className="min-h-[44px] text-sm font-medium text-fuchsia-200/90 underline-offset-4 transition-colors hover:text-fuchsia-100 hover:underline"
+                className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-medium text-violet-100/85 backdrop-blur-md transition-all hover:border-fuchsia-400/30 hover:bg-white/[0.08] hover:text-white"
                 onClick={() => {
                   setActiveTab("groups");
                   if (groupsData.length === 0) void loadMeta({ includeGroups: true });
                 }}
               >
                 View all circles
+                <ChevronRight className="h-4 w-4 opacity-70" aria-hidden />
               </button>
             </div>
             <div className="flex gap-3 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -947,17 +1152,27 @@ export function Community() {
                         setActiveTab("groups");
                         if (groupsData.length === 0) void loadMeta({ includeGroups: true });
                       }}
-                      className="group relative flex h-full min-h-[168px] w-full flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-white/[0.04] p-3.5 text-left shadow-[0_20px_50px_-40px_rgba(0,0,0,0.85)] transition-all duration-300 hover:border-violet-400/35 hover:shadow-[0_0_32px_-8px_rgba(168,85,247,0.35)]"
+                      className="group relative flex h-full min-h-[168px] w-full flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-[#050816] p-3.5 text-left shadow-[0_20px_50px_-40px_rgba(0,0,0,0.85)] transition-all duration-300 hover:border-violet-400/35 hover:shadow-[0_0_32px_-8px_rgba(168,85,247,0.35)]"
                     >
+                      <img
+                        src={space.image}
+                        alt=""
+                        width={316}
+                        height={336}
+                        loading="lazy"
+                        decoding="async"
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
                       <div
                         className={cn(
-                          "pointer-events-none absolute inset-0 opacity-55 transition-opacity duration-300 group-hover:opacity-80",
+                          "pointer-events-none absolute inset-0 opacity-45 transition-opacity duration-300 group-hover:opacity-60",
                           "bg-gradient-to-br",
                           space.glow,
                         )}
                       />
-                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050816]/90 via-[#050816]/35 to-transparent" />
-                      <div className="relative flex flex-1 flex-col">
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050816]/95 via-[#050816]/55 to-[#050816]/25" />
+                      <div className="relative z-10 flex flex-1 flex-col">
                         <div className={cn("mb-2 inline-flex h-9 w-9 items-center justify-center rounded-lg", space.iconWrap)}>
                           <Icon className="h-4 w-4" strokeWidth={1.5} />
                         </div>
@@ -1022,13 +1237,132 @@ export function Community() {
                   className="min-h-[44px] w-full rounded-full border border-white/10 bg-black/30 py-2.5 pl-10 pr-4 text-sm text-[#F7F3FF] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md placeholder:text-violet-300/35 focus:border-violet-400/35 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
                 />
               </div>
-              <button
-                type="button"
-                className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center self-end rounded-full border border-white/10 bg-white/[0.05] text-violet-200/80 backdrop-blur-md transition-colors hover:border-fuchsia-400/30 hover:bg-white/[0.08] sm:self-center"
-                aria-label="Filter"
-              >
-                <Filter className="h-5 w-5" />
-              </button>
+              <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-medium backdrop-blur-md transition-all",
+                      hasActiveFeedFilters
+                        ? "border-violet-400/35 bg-violet-500/15 text-violet-100 shadow-[0_0_24px_rgba(124,58,237,0.25)]"
+                        : "border-white/10 bg-white/[0.05] text-violet-100/80 hover:border-fuchsia-400/30 hover:bg-white/[0.08] hover:text-white",
+                    )}
+                    aria-label="Filter posts"
+                  >
+                    <Filter className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                    Filter
+                    <ChevronDown
+                      className={cn("h-3.5 w-3.5 shrink-0 opacity-60 transition-transform", filterOpen && "rotate-180")}
+                      aria-hidden
+                    />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="end"
+                  sideOffset={8}
+                  className="w-[min(100vw-2rem,20rem)] rounded-2xl border border-white/10 bg-[#0e0e18]/98 p-4 shadow-[0_0_48px_-12px_rgba(139,92,246,0.45)] backdrop-blur-xl"
+                >
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-violet-300/70">Category</p>
+                  <div className="mb-4 flex max-h-32 flex-wrap gap-2 overflow-y-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterCategory("");
+                        applyFeedFilterChange();
+                      }}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-xs font-medium transition-all",
+                        filterCategory === ""
+                          ? "border-violet-400/40 bg-violet-500/15 text-violet-100"
+                          : "border-white/10 bg-white/[0.04] text-violet-200/60 hover:border-violet-400/25 hover:text-violet-100",
+                      )}
+                    >
+                      All
+                    </button>
+                    {COMMUNITY_POST_CATEGORIES.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => {
+                          setFilterCategory(cat);
+                          applyFeedFilterChange();
+                        }}
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-xs font-medium transition-all",
+                          filterCategory === cat
+                            ? "border-violet-400/40 bg-violet-500/15 text-violet-100"
+                            : "border-white/10 bg-white/[0.04] text-violet-200/60 hover:border-violet-400/25 hover:text-violet-100",
+                        )}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mb-3 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterMyPostsOnly((v) => !v);
+                        applyFeedFilterChange();
+                      }}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition-all",
+                        filterMyPostsOnly
+                          ? "border-violet-400/35 bg-violet-500/10"
+                          : "border-white/10 bg-white/[0.03] hover:border-violet-400/25",
+                      )}
+                    >
+                      <span className="text-sm font-medium text-violet-50/90">My posts only</span>
+                      <span
+                        className={cn(
+                          "text-[10px] font-semibold uppercase tracking-wider",
+                          filterMyPostsOnly ? "text-fuchsia-200" : "text-violet-300/45",
+                        )}
+                      >
+                        {filterMyPostsOnly ? "On" : "Off"}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterBookmarkedOnly((v) => !v);
+                        applyFeedFilterChange();
+                      }}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition-all",
+                        filterBookmarkedOnly
+                          ? "border-fuchsia-400/35 bg-fuchsia-500/10"
+                          : "border-white/10 bg-white/[0.03] hover:border-fuchsia-400/25",
+                      )}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-medium text-violet-50/90">
+                        <Bookmark className="h-3.5 w-3.5 text-fuchsia-300/80" aria-hidden />
+                        Saved posts only
+                      </span>
+                      <span
+                        className={cn(
+                          "text-[10px] font-semibold uppercase tracking-wider",
+                          filterBookmarkedOnly ? "text-fuchsia-200" : "text-violet-300/45",
+                        )}
+                      >
+                        {filterBookmarkedOnly ? "On" : "Off"}
+                      </span>
+                    </button>
+                  </div>
+                  {hasActiveFeedFilters ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearFeedFilters();
+                        applyFeedFilterChange();
+                      }}
+                      className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 text-xs font-medium text-violet-100/80 transition-colors hover:border-violet-400/30 hover:bg-white/[0.08]"
+                    >
+                      Clear all filters
+                    </button>
+                  ) : null}
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 
@@ -1036,19 +1370,17 @@ export function Community() {
             <div className="min-w-0 space-y-5">
               {activeTab === "feed" &&
                 (loadingPosts ? (
-                  <div className="flex justify-center py-20">
-                    <Loader2 className="h-9 w-9 animate-spin text-fuchsia-300/80 drop-shadow-[0_0_20px_rgba(217,70,239,0.45)]" />
-                  </div>
+                  <CommunityFeedPostsSkeleton />
                 ) : filteredPosts.length === 0 ? (
                   <div className="rounded-3xl border border-dashed border-white/15 bg-white/[0.03] py-20 text-center text-violet-200/55 backdrop-blur-md">
                     No posts yet. Be the first to share—or check back soon.
                   </div>
                 ) : (
                   pagedFeedPosts.map((post, index) => {
-                    const hashtagsForDisplay = feedHashtagsExcludingDisplayedCategory(post);
+                    const userTags = userEnteredHashtags(post);
                     const proofLine = emotionalSocialProofLine(post);
                     const moodTag = primaryEmotionalTag(post);
-                    const bgIdx = atmosphereIndexForPost(post.id);
+                    const postSceneSrc = communityPostSceneForId(post.id);
                     const timeLabel = (() => {
                       try {
                         return formatDistanceToNow(parseISO(post.createdAt), { addSuffix: true });
@@ -1057,9 +1389,11 @@ export function Community() {
                       }
                     })();
                     const extraTags =
-                      moodTag && hashtagsForDisplay.length
-                        ? hashtagsForDisplay.filter((t) => normalizeCommunityTopicLabel(t) !== normalizeCommunityTopicLabel(moodTag))
-                        : hashtagsForDisplay;
+                      moodTag && userTags.length > 1
+                        ? userTags.filter((t) => normalizeCommunityTopicLabel(t) !== normalizeCommunityTopicLabel(moodTag))
+                        : moodTag
+                          ? []
+                          : userTags;
 
                     const headerLeft = (
                       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -1109,12 +1443,24 @@ export function Community() {
                             className="relative overflow-hidden rounded-2xl border border-white/[0.08] shadow-[0_20px_55px_-38px_rgba(0,0,0,0.8)] transition-colors duration-300 hover:border-violet-400/25"
                           >
                             <div
-                              className={cn("pointer-events-none absolute inset-0 opacity-[0.18]", POST_CARD_ATMOSPHERES[bgIdx])}
+                              className="pointer-events-none absolute inset-y-0 right-0 hidden w-[min(44%,240px)] sm:block"
                               aria-hidden
-                            />
-                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#070a14]/93 via-[#050816]/90 to-[#050816]/96" aria-hidden />
+                            >
+                              <img
+                                src={postSceneSrc}
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                                width={480}
+                                height={320}
+                                className="h-full w-full object-cover object-center"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-l from-[#050816] via-[#050816]/82 to-transparent" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-[#050816]/40 via-transparent to-transparent" />
+                            </div>
+                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#070a14]/88 via-[#050816]/82 to-[#050816]/94 sm:bg-gradient-to-r sm:from-[#050816]/92 sm:via-[#050816]/88 sm:to-[#050816]/55" aria-hidden />
 
-                            <div className="relative z-10 px-4 pb-3 pt-3.5 sm:px-4">
+                            <div className="relative z-10 px-4 pb-3 pt-3.5 sm:pr-[min(46%,252px)] sm:px-4">
                               <div className="flex items-start justify-between gap-2">
                                 {post.authorUserId ? (
                                   <Link
@@ -1172,7 +1518,7 @@ export function Community() {
                                       value={editTagsDraft}
                                       onChange={(e) => setEditTagsDraft(e.target.value)}
                                       className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white backdrop-blur-sm focus:border-fuchsia-400/40 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/20"
-                                      placeholder="e.g. General Discussion, anxiety, support"
+                                      placeholder="e.g. anxiety, support, gratitude"
                                     />
                                   </div>
                                   <div className="flex justify-end gap-2">
@@ -1245,22 +1591,7 @@ export function Community() {
 
                                 {proofLine ? (
                                   <div className="hidden min-w-0 flex-1 items-center justify-center gap-2 px-2 sm:flex">
-                                    <div className="flex -space-x-1.5">
-                                      {postsData.slice(0, 4).map((p) => (
-                                        <div
-                                          key={`pf-${post.id}-${p.id}`}
-                                          className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full ring-2 ring-[#050816]"
-                                        >
-                                          {p.author.avatarUrl ? (
-                                            <img src={p.author.avatarUrl} alt="" className="h-full w-full object-cover" />
-                                          ) : (
-                                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/90 to-indigo-900 text-[8px] font-bold text-white">
-                                              {initials(p.author.name)}
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
+                                    <Eye className="h-4 w-4 shrink-0 text-fuchsia-300/70" aria-hidden />
                                     <p className="truncate text-center text-[11px] font-medium text-fuchsia-200/75">{proofLine}</p>
                                   </div>
                                 ) : (
@@ -1292,22 +1623,7 @@ export function Community() {
 
                               {proofLine ? (
                                 <div className="mt-2 flex items-center gap-2 border-t border-transparent pt-0 sm:hidden">
-                                  <div className="flex -space-x-1.5">
-                                    {postsData.slice(0, 3).map((p) => (
-                                      <div
-                                        key={`pm-${post.id}-${p.id}`}
-                                        className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full ring-2 ring-[#050816]"
-                                      >
-                                        {p.author.avatarUrl ? (
-                                          <img src={p.author.avatarUrl} alt="" className="h-full w-full object-cover" />
-                                        ) : (
-                                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/90 to-indigo-900 text-[8px] font-bold text-white">
-                                            {initials(p.author.name)}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
+                                  <Eye className="h-4 w-4 shrink-0 text-fuchsia-300/70" aria-hidden />
                                   <p className="text-[11px] font-medium text-fuchsia-200/75">{proofLine}</p>
                                 </div>
                               ) : null}
@@ -1716,15 +2032,32 @@ export function Community() {
               )}
 
               <CinematicEnter delay={0.15} className="mt-10">
-                <div className="relative overflow-hidden rounded-[26px] border border-fuchsia-400/20 bg-gradient-to-br from-violet-950/50 to-[#0c0c16] p-6 shadow-[0_0_48px_-12px_rgba(192,38,211,0.35)]">
-                  <div className="pointer-events-none absolute -right-8 top-0 h-32 w-32 rounded-full bg-fuchsia-500/20 blur-3xl" />
-                  <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center">
-                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/30 text-fuchsia-200/90 shadow-[inset_0_0_24px_rgba(244,114,182,0.12)]">
+                <div className="relative overflow-hidden rounded-[26px] border border-fuchsia-400/20 shadow-[0_0_48px_-12px_rgba(192,38,211,0.35)]">
+                  <img
+                    src={COMMUNITY_IMAGES.togetherness}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    width={960}
+                    height={400}
+                    className="absolute inset-0 h-full w-full object-cover object-center"
+                    aria-hidden
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#050816]/92 via-[#050816]/72 to-[#050816]/40"
+                    aria-hidden
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050816]/55 via-transparent to-[#1e1b4b]/30"
+                    aria-hidden
+                  />
+                  <div className="relative z-10 flex flex-col gap-4 p-6 sm:flex-row sm:items-center">
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/40 text-fuchsia-200/90 shadow-[inset_0_0_24px_rgba(244,114,182,0.12)] backdrop-blur-sm">
                       <Heart className="h-9 w-9" strokeWidth={1.25} />
                     </div>
                     <div className="min-w-0 flex-1 space-y-2">
                       <p className="text-[11px] font-medium uppercase tracking-[0.25em] text-fuchsia-200/60">You matter here</p>
-                      <p className="text-lg font-medium leading-snug text-white">Your voice is a lantern — someone needs that light.</p>
+                      <p className="text-lg font-medium leading-snug text-white">Your voice might be the reason someone smiles today.</p>
                       <p className="text-sm text-violet-200/50">There is no wrong way to show up gently.</p>
                     </div>
                     <motion.button
@@ -1744,82 +2077,85 @@ export function Community() {
             <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
               <CinematicEnter delay={0.05}>
                 <div className="rounded-[26px] border border-fuchsia-500/20 bg-[rgba(15,18,32,0.82)] p-6 shadow-[0_24px_80px_-40px_rgba(0,0,0,0.75)] backdrop-blur-xl">
-                  <div className="mb-4 flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-violet-200/70">Community Pulse</h3>
-                    <Heart className="h-4 w-4 text-fuchsia-300/80" aria-hidden />
-                  </div>
-                  <p className="mb-4 text-center text-sm font-medium leading-snug text-[#F7F3FF]/90">
-                    Positive energy is growing today.
-                  </p>
-                  <div className="relative flex flex-col items-center">
-                    <div className="pointer-events-none absolute inset-x-0 top-6 mx-auto h-28 w-28 rounded-full bg-fuchsia-500/20 blur-2xl" />
-                    <div className="pointer-events-none absolute inset-x-0 top-10 mx-auto h-20 w-20 rounded-full bg-violet-500/15 blur-xl" />
-                    <svg viewBox="0 0 120 72" className="relative w-full max-w-[200px] drop-shadow-[0_0_20px_rgba(192,132,252,0.35)]">
-                      <defs>
-                        <linearGradient id="vibeArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="#c084fc" />
-                          <stop offset="100%" stopColor="#f472b6" />
-                        </linearGradient>
-                      </defs>
-                      <path
-                        d="M 12 60 A 48 48 0 0 1 108 60"
-                        fill="none"
-                        stroke="rgba(255,255,255,0.08)"
-                        strokeWidth="10"
-                        strokeLinecap="round"
-                      />
-                      {vibePct != null ? (
-                        <path
-                          d={`M 12 60 A 48 48 0 ${vibeGauge.largeArc} 1 ${vibeGauge.x2.toFixed(2)} ${vibeGauge.y2.toFixed(2)}`}
-                          fill="none"
-                          stroke="url(#vibeArcGrad)"
-                          strokeWidth="10"
-                          strokeLinecap="round"
-                        />
-                      ) : null}
-                    </svg>
-                    {vibePct != null ? (
-                      <>
-                        <p className="-mt-2 text-center text-3xl font-semibold tabular-nums text-white">{vibePct}%</p>
-                        <p className="mt-1 max-w-[14rem] text-center text-xs font-medium leading-relaxed text-fuchsia-200/70">
-                          Shaped by recent replies and people showing up gently.
+                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-200/70">Community Pulse</h3>
+                  {loadingMeta && overview == null ? (
+                    <div className="mb-4 flex justify-center py-6">
+                      <Loader2 className="h-6 w-6 animate-spin text-fuchsia-300/70" aria-hidden />
+                      <span className="sr-only">Loading community pulse</span>
+                    </div>
+                  ) : (
+                    <>
+                      {communityPulse.percent != null ? (
+                        <p className="mb-4 text-center text-sm font-medium leading-snug text-[#F7F3FF]/90">
+                          {communityPulse.headline}
                         </p>
-                      </>
-                    ) : (
-                      <p className="-mt-1 max-w-[15rem] text-center text-xs leading-relaxed text-[#A7A1B8]">
-                        We&apos;ll show a gentle pulse once there&apos;s a little more activity to reflect on.
-                      </p>
-                    )}
-                  </div>
+                      ) : null}
+                      <div className="relative flex flex-col items-center">
+                        <div className="pointer-events-none absolute inset-x-0 top-6 mx-auto h-28 w-28 rounded-full bg-fuchsia-500/20 blur-2xl" />
+                        <div className="pointer-events-none absolute inset-x-0 top-10 mx-auto h-20 w-20 rounded-full bg-violet-500/15 blur-xl" />
+                        <svg
+                          viewBox="0 0 120 72"
+                          className="relative w-full max-w-[200px] drop-shadow-[0_0_20px_rgba(192,132,252,0.35)]"
+                          role="img"
+                          aria-label={
+                            communityPulse.percent != null
+                              ? `Community pulse at ${communityPulse.percent} percent`
+                              : "Community pulse unavailable"
+                          }
+                        >
+                          <defs>
+                            <linearGradient id="communityPulseArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                              <stop offset="0%" stopColor="#c084fc" />
+                              <stop offset="100%" stopColor="#f472b6" />
+                            </linearGradient>
+                          </defs>
+                          <path
+                            d="M 12 60 A 48 48 0 0 1 108 60"
+                            fill="none"
+                            stroke="rgba(255,255,255,0.08)"
+                            strokeWidth="10"
+                            strokeLinecap="round"
+                          />
+                          {communityPulse.percent != null ? (
+                            <path
+                              d="M 12 60 A 48 48 0 0 1 108 60"
+                              fill="none"
+                              stroke="url(#communityPulseArcGrad)"
+                              strokeWidth="10"
+                              strokeLinecap="round"
+                              strokeDasharray={`${pulseArcFilled} ${PULSE_GAUGE_ARC_LENGTH}`}
+                              style={{ transition: "stroke-dasharray 0.7s ease-out" }}
+                            />
+                          ) : null}
+                        </svg>
+                        {communityPulse.percent != null ? (
+                          <>
+                            <p className="-mt-2 text-center text-3xl font-semibold tabular-nums text-white">
+                              {communityPulse.percent}%
+                            </p>
+                            <p className="mt-1 max-w-[14rem] text-center text-xs font-medium leading-relaxed text-fuchsia-200/70">
+                              {communityPulse.detail}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="-mt-1 max-w-[15rem] text-center text-xs leading-relaxed text-[#A7A1B8]">
+                            {communityPulse.detail}
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               </CinematicEnter>
 
               <CinematicEnter delay={0.1}>
                 <div className="rounded-[26px] border border-white/10 bg-[rgba(15,18,32,0.82)] p-6 backdrop-blur-xl">
                   <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-violet-200/70">Active Now</h3>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex -space-x-2">
-                      {postsData.slice(0, 6).map((p) => (
-                        <div
-                          key={`active-${p.id}`}
-                          className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-[#0b0b14]"
-                        >
-                          {p.author.avatarUrl ? (
-                            <img src={p.author.avatarUrl} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/90 to-indigo-900 text-[10px] font-bold text-white">
-                              {initials(p.author.name)}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    {stats.activeNow > 0 ? (
-                      <span className="rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-xs font-medium text-violet-100/85">
-                        {stats.activeNow.toLocaleString()} online
-                      </span>
-                    ) : null}
-                  </div>
+                  {stats.activeNow > 0 ? (
+                    <span className="inline-flex rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-xs font-medium text-violet-100/85">
+                      {stats.activeNow.toLocaleString()} online
+                    </span>
+                  ) : null}
                   <p className="mt-3 text-sm leading-relaxed text-[#A7A1B8]">
                     {stats.activeNow > 0
                       ? "People supporting each other right now."
@@ -1939,11 +2275,15 @@ export function Community() {
               <CinematicEnter delay={0.15}>
                 <div className="relative overflow-hidden rounded-[26px] border border-fuchsia-500/15 shadow-[0_28px_70px_-40px_rgba(0,0,0,0.8)]">
                   <img
-                    src={DAILY_REMINDER_IMAGE}
+                    src={COMMUNITY_IMAGES.dailyReminder}
                     alt=""
-                    className="absolute inset-0 h-full w-full object-cover opacity-40"
+                    loading="lazy"
+                    decoding="async"
+                    width={640}
+                    height={360}
+                    className="absolute inset-0 h-full w-full object-cover object-center"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#050816] via-[#050816]/88 to-[#1e1b4b]/70" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#050816]/92 via-[#050816]/55 to-[#1e1b4b]/35" />
                   <div className="relative space-y-3 p-6">
                     <div className="flex items-center gap-2">
                       <Heart className="h-4 w-4 text-fuchsia-300/90" aria-hidden />
@@ -2027,18 +2367,15 @@ export function Community() {
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
                 <label className="shrink-0 font-medium text-violet-100/80">Category:</label>
-                <select
+                <SolaceSelect
                   value={newPostCategory}
-                  onChange={(e) => setNewPostCategory(e.target.value)}
-                  className="flex-1 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white backdrop-blur-sm focus:border-fuchsia-400/40 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/20 disabled:opacity-50"
+                  onValueChange={setNewPostCategory}
+                  ariaLabel="Post category"
+                  variant="form"
                   disabled={posting}
-                >
-                  <option value="General Discussion">General Discussion</option>
-                  <option value="Wins & Progress">Wins & Progress</option>
-                  <option value="Support & Advice">Support & Advice</option>
-                  <option value="Professional Insights">Professional Insights</option>
-                  <option value="Community Events">Community Events</option>
-                </select>
+                  triggerClassName="flex-1"
+                  options={COMMUNITY_POST_CATEGORIES.map((c) => ({ value: c, label: c }))}
+                />
               </div>
 
               {/* Group selection removed: admins create/manage groups. */}

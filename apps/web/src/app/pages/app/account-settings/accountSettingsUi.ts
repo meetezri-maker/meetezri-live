@@ -6,7 +6,7 @@ export const ACCOUNT_HELP_IMG = "/community/scene-bedroom.jpg";
 
 /** Matte navy sanctuary base — not flat black */
 export const accountPageAtmosphere = cn(
-  "relative min-h-full overflow-x-hidden pb-12",
+  "relative overflow-hidden pb-6",
   "bg-[linear-gradient(165deg,#0b0d1c_0%,#090a16_38%,#0c0a18_72%,#080910_100%)]"
 );
 
@@ -101,8 +101,9 @@ export const accountPhoneInput = accountInput;
 
 export const accountHeroCard = cn(
   accountCinematicSurface,
-  "rounded-[2rem] border-violet-400/12",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.09),0_0_64px_-16px_rgba(139,92,246,0.28),0_32px_80px_-40px_rgba(0,0,0,0.82)]"
+  "rounded-[2rem] border-violet-400/12 bg-transparent",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.09),0_0_64px_-16px_rgba(139,92,246,0.28),0_32px_80px_-40px_rgba(0,0,0,0.82)]",
+  "before:opacity-40 after:opacity-90"
 );
 
 export const accountHeroImage = cn(
@@ -112,7 +113,12 @@ export const accountHeroImage = cn(
 
 export const accountHeroOverlayLeft = cn(
   "absolute inset-0",
-  "bg-gradient-to-r from-[#0a0b18] via-[#0a0b18]/72 to-[#0a0b18]/15 lg:from-[#0a0b18]/98 lg:via-[#0a0b18]/45 lg:to-transparent"
+  "bg-gradient-to-r from-[#0a0b18]/96 via-[#0a0b18]/78 to-[#0a0b18]/40 lg:via-[#0a0b18]/55 lg:to-[#0a0b18]/18"
+);
+
+export const accountHeroOverlayTop = cn(
+  "absolute inset-0",
+  "bg-gradient-to-t from-[#0a0b18]/85 via-transparent to-[#1a1030]/20"
 );
 
 export const accountHeroOverlayPurple = cn(
@@ -245,13 +251,14 @@ export const accountRailProfileGlow = cn(
 );
 
 export const accountHelpImage = cn(
-  "h-full w-full object-cover brightness-[0.45] contrast-[0.95] saturate-[1.05]"
+  "absolute inset-0 size-full object-cover object-center",
+  "brightness-[0.5] contrast-[0.95] saturate-[1.08]"
 );
 
 export const accountHelpOverlay = cn(
-  "absolute inset-0",
-  "bg-gradient-to-t from-[#0a0b18] via-[#0a0b18]/75 to-[#0a0b18]/25]",
-  "bg-[radial-gradient(ellipse_80%_60%_at_50%_100%,rgba(251,146,60,0.1)_0%,transparent_55%)]"
+  "pointer-events-none absolute inset-0",
+  "bg-gradient-to-t from-[#0a0b18]/96 via-[#0a0b18]/72 to-[#0a0b18]/35]",
+  "bg-[radial-gradient(ellipse_90%_70%_at_50%_100%,rgba(139,92,246,0.12)_0%,transparent_55%)]"
 );
 
 export const accountSafeCard = cn(

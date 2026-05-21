@@ -3,7 +3,6 @@ export { SolaceSidebar } from "./SolaceSidebar";
 export { SolaceJourneyCardVisual } from "./SolaceJourneyCardVisual";
 export type { JourneyAmbiance } from "./SolaceJourneyCardVisual";
 export { SolaceHeroAtmosphere } from "./SolaceHeroAtmosphere";
-export { SolaceAmbientBar } from "./SolaceAmbientBar";
 export { SolaceSupportStrip } from "./SolaceSupportStrip";
 
 /** @alias Semantic alias for glowing panels */
@@ -28,3 +27,19 @@ export { SolaceDataRow } from "./SolaceDataRow";
 export type { SolaceDataRowProps, SolaceDataRowButtonProps, SolaceDataRowDivProps } from "./SolaceDataRow";
 export { SolacePlanCard } from "./SolacePlanCard";
 export type { SolacePlanCardProps } from "./SolacePlanCard";
+export {
+  SolaceSelect,
+  solaceSelectContentClass,
+  solaceSelectItemClass,
+  solaceSelectItemCompactClass,
+  solaceSelectTriggerCompact,
+  solaceSelectTriggerDefault,
+  solaceSelectTriggerForm,
+  solaceSelectTriggerPagination,
+} from "./SolaceSelect";
+export type {
+  SolaceSelectOption,
+  SolaceSelectOptionGroup,
+  SolaceSelectProps,
+  SolaceSelectVariant,
+} from "./SolaceSelect";

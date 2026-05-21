@@ -8,6 +8,6 @@ export const PROGRESS_IMAGES = {
   monthlyReflection: "/progress/3.png",
   /** Personal note — fairy-light jar */
   personalNoteJar: "/progress/4.png",
-  /** Celebrate banner — scenic hills */
-  celebrateBanner: "/progress/5.png",
+  /** Celebrate banner — warm candle glow (dashboard-images) */
+  celebrateBanner: "/dashboard-images/2.png",
 } as const;

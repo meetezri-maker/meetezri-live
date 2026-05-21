@@ -13,6 +13,7 @@ import { Skeleton } from "@/app/components/ui/skeleton";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useNotifications } from "@/app/contexts/NotificationsContext";
 import { cn } from "@/lib/utils";
+import { SolaceSelect } from "@/app/solace";
 import {
   NOTIFICATIONS_HERO_IMG,
   emergencyBackLink,
@@ -34,7 +35,6 @@ import {
   emergencyPageFogMid,
   emergencyPageGlowTop,
   emergencyPageVignette,
-  emergencySortSelect,
   emergencyStatusDot,
 } from "@/app/pages/app/emergency-notifications/emergencyNotificationsUi";
 import {
@@ -280,17 +280,17 @@ export function NotificationHistory() {
                     </button>
                   ))}
                 </div>
-                <label className="relative shrink-0">
-                  <span className="sr-only">Sort notifications</span>
-                  <select
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value as EmergencySort)}
-                    className={emergencySortSelect}
-                  >
-                    <option value="recent">Most Recent</option>
-                    <option value="oldest">Oldest First</option>
-                  </select>
-                </label>
+                <SolaceSelect
+                  value={sort}
+                  onValueChange={(v) => setSort(v as EmergencySort)}
+                  ariaLabel="Sort notifications"
+                  variant="compact"
+                  size="sm"
+                  options={[
+                    { value: "recent", label: "Most Recent" },
+                    { value: "oldest", label: "Oldest First" },
+                  ]}
+                />
               </div>
 
               <div className="space-y-4">

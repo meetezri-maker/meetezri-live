@@ -47,6 +47,7 @@ import { Button } from "../../components/ui/button";
 import { normalizeStoredPhoneForInput } from "@/lib/normalizeStoredPhone";
 import { ONBOARDING_EMERGENCY_CONTACT_BG } from "@/lib/solace/referenceImagery";
 import { cn } from "@/lib/utils";
+import { SolaceSelect } from "@/app/solace";
 const SOLACE_LOGO_SRC = "/logos/logo white.png";
 const ONBOARDING_NAV_H = "4.5rem";
 const CURRENT_STEP = 7;
@@ -632,19 +633,23 @@ export function OnboardingEmergencyContact() {
                                 className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-300/55"
                                 aria-hidden
                               />
-                              <select
+                              <SolaceSelect
                                 id="emergencyRelationship"
-                                className={onboardingSelectClass}
-                                {...field}
-                              >
-                                <option value="">Select relationship</option>
-                                <option value="parent">Parent</option>
-                                <option value="partner">Partner/Spouse</option>
-                                <option value="sibling">Sibling</option>
-                                <option value="friend">Friend</option>
-                                <option value="other-family">Other Family</option>
-                                <option value="other">Other</option>
-                              </select>
+                                value={field.value}
+                                onValueChange={field.onChange}
+                                ariaLabel="Relationship"
+                                placeholder="Select relationship"
+                                variant="form"
+                                triggerClassName={cn(onboardingSelectClass, "pl-10")}
+                                options={[
+                                  { value: "parent", label: "Parent" },
+                                  { value: "partner", label: "Partner/Spouse" },
+                                  { value: "sibling", label: "Sibling" },
+                                  { value: "friend", label: "Friend" },
+                                  { value: "other-family", label: "Other Family" },
+                                  { value: "other", label: "Other" },
+                                ]}
+                              />
                             </motion.div>
                           </FormControl>
                           <FormMessage className="text-[13px] text-[#ff8ab8]" />

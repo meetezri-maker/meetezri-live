@@ -72,7 +72,7 @@ export function EmergencyContactConsentModal({
           onEscapeKeyDown={(e) => e.preventDefault()}
           onPointerDownOutside={(e) => e.preventDefault()}
           className={cn(
-            "fixed top-[50%] left-[50%] z-[201] w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%]",
+            "fixed inset-0 z-[201] flex items-center justify-center p-4 sm:p-6",
             "duration-200 outline-none",
             "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
             "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",

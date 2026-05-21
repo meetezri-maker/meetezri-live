@@ -14,8 +14,10 @@ export const queryKeys = {
   },
   activity: {
     all: () => ["activity"] as const,
-    recent: (userId: string | undefined) =>
-      ["activity", "recent", userId] as const,
+    /** Prefix — invalidates every cached limit for this user. */
+    recentForUser: (userId: string | undefined) => ["activity", "recent", userId] as const,
+    recent: (userId: string | undefined, limit = 25) =>
+      ["activity", "recent", userId, limit] as const,
   },
   notifications: {
     all: () => ["notifications"] as const,

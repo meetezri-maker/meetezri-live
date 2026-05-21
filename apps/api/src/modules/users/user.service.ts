@@ -858,10 +858,13 @@ export function invalidateRecentActivityCache(userId: string) {
   for (const key of recentActivityCache.keys()) {
     if (key.startsWith(prefix)) recentActivityCache.delete(key);
   }
-  // Common limits used by UI (dashboard + lists).
-  void sharedDel(`users:activity:${userId}:10`);
-  void sharedDel(`users:activity:${userId}:25`);
-  void sharedDel(`users:activity:${userId}:50`);
+  recentActivityInFlight.forEach((_, key) => {
+    if (key.startsWith(prefix)) recentActivityInFlight.delete(key);
+  });
+  // Limits used by dashboard (20), history (100), and legacy callers.
+  for (const limit of [10, 20, 25, 50, 100]) {
+    void sharedDel(`users:activity:${userId}:${limit}`);
+  }
 }
 
 export async function getProfile(userId: string) {
@@ -1232,6 +1235,46 @@ export async function getCredits(userId: string) {
   return await run;
 }
 
+function formatRecentActivitySessionDuration(session: {
+  duration_minutes: number | null;
+  billed_seconds: number | null;
+  started_at: Date | null;
+  ended_at: Date | null;
+}): string | null {
+  const billedSec =
+    typeof session.billed_seconds === 'number' &&
+    Number.isFinite(session.billed_seconds) &&
+    session.billed_seconds > 0
+      ? session.billed_seconds
+      : null;
+
+  const spanMs =
+    session.started_at && session.ended_at
+      ? Math.max(0, session.ended_at.getTime() - session.started_at.getTime())
+      : null;
+  const spanMinutes = spanMs != null ? spanMs / 60000 : null;
+
+  const storedMin =
+    typeof session.duration_minutes === 'number' && !Number.isNaN(session.duration_minutes)
+      ? session.duration_minutes
+      : null;
+
+  if (spanMinutes != null && spanMinutes > 0) {
+    if (spanMinutes >= 1) return `${Math.floor(spanMinutes)} min`;
+    return '< 1 min';
+  }
+
+  if (storedMin != null && storedMin > 0) return `${storedMin} min`;
+  if (storedMin === 0) return '0 min';
+
+  if (billedSec != null) {
+    const minutes = billedSec / 60;
+    return minutes < 1 ? '< 1 min' : `${Math.floor(minutes)} min`;
+  }
+
+  return null;
+}
+
 export async function getRecentActivity(userId: string, limit: number = 25) {
   const safeLimit = Math.min(Math.max(limit, 1), 100);
   const cacheKey = recentActivityCacheKey(userId, safeLimit);
@@ -1300,6 +1343,9 @@ export async function getRecentActivity(userId: string, limit: number = 25) {
           status: true,
           type: true,
           duration_minutes: true,
+          billed_seconds: true,
+          started_at: true,
+          ended_at: true,
           created_at: true,
         },
       }),
@@ -1336,7 +1382,8 @@ export async function getRecentActivity(userId: string, limit: number = 25) {
       text: (() => {
         const typeLabel = normalizeSessionTypeLabel(session.type);
         if (session.status === 'completed') {
-          return `Completed ${typeLabel} session${session.duration_minutes ? ` (${session.duration_minutes} min)` : ''}`;
+          const durationLabel = formatRecentActivitySessionDuration(session);
+          return `Completed ${typeLabel} session${durationLabel ? ` (${durationLabel})` : ''}`;
         }
         if (session.status === 'scheduled') {
           return typeLabel === 'scheduled'

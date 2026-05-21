@@ -52,6 +52,7 @@ import {
 } from "@/app/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { SolaceSelect } from "@/app/solace";
 import { formatSubscriptionPlanLabel } from "@/app/pages/app/profile/profileUi";
 import {
   ACCOUNT_HELP_IMG,
@@ -73,6 +74,7 @@ import {
   accountHeroCard,
   accountHeroImage,
   accountHeroOverlayLeft,
+  accountHeroOverlayTop,
   accountHeroOverlayMoon,
   accountHeroOverlayPurple,
   accountHeroOverlayWarmth,
@@ -1071,10 +1073,6 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
     user?.email?.split("@")[0] ||
     "Member";
 
-  const premiumish =
-    ["pro", "core", "active"].includes(String(authProfile?.subscription_plan || "").toLowerCase()) ||
-    String(authProfile?.subscription_status || "").toLowerCase() === "active";
-
   const planLabel = formatSubscriptionPlanLabel(
     typeof authProfile?.subscription_plan === "string" ? authProfile.subscription_plan : undefined
   );
@@ -1094,17 +1092,19 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
       animate={{ opacity: 1 }}
       transition={{ duration: 0.35 }}
     >
-      <motion.div className={accountPageGlowTop} aria-hidden />
-      <motion.div className={accountPageFogMid} aria-hidden />
-      <motion.div className={accountPageGlowBottom} aria-hidden />
-      <motion.div className={accountPageVignette} aria-hidden />
-      <motion.div className={accountPageNoise} aria-hidden />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <motion.div className={accountPageGlowTop} />
+        <motion.div className={accountPageFogMid} />
+        <motion.div className={accountPageGlowBottom} />
+        <motion.div className={accountPageVignette} />
+        <motion.div className={accountPageNoise} />
+      </div>
 
       <div className="relative z-10 mx-auto w-full max-w-[1600px] px-1 sm:px-2">
         <motion.div
           initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6 px-1 sm:px-2"
+          className="mb-5 px-1 sm:px-2"
         >
           <Link to="/app/settings" className={accountBackLink}>
             <ArrowLeft className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -1128,9 +1128,9 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
           </motion.div>
         ) : null}
 
-        <div className="flex flex-col gap-8 xl:flex-row xl:items-start">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
           <motion.div
-            className="min-w-0 flex-[7] space-y-8 px-1 sm:px-2"
+            className="min-w-0 flex-[7] space-y-6 px-1 sm:px-2"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
@@ -1142,8 +1142,17 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
               transition={{ delay: 0.08 }}
               className={accountHeroCard}
             >
-              <div className="flex flex-col lg:flex-row lg:min-h-[300px]">
-                <div className="relative z-[1] flex flex-1 flex-col justify-center gap-6 p-7 sm:p-9 lg:max-w-[52%]">
+              <div className="pointer-events-none absolute inset-0 z-0" aria-hidden>
+                <img src={ACCOUNT_HERO_IMG} alt="" className={accountHeroImage} width={1600} height={900} loading="eager" decoding="async" />
+                <div className={accountHeroOverlayLeft} />
+                <div className={accountHeroOverlayTop} />
+                <div className={accountHeroOverlayPurple} />
+                <div className={accountHeroOverlayWarmth} />
+                <div className={accountHeroOverlayMoon} />
+                <div className="absolute inset-0 shadow-[inset_0_0_80px_rgba(0,0,0,0.32)]" />
+              </div>
+              <div className="relative z-10 flex min-h-[260px] flex-col justify-center lg:min-h-[280px]">
+                <div className="flex flex-1 flex-col justify-center gap-6 p-7 sm:p-9 lg:max-w-[58%]">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300/55">
                     Profile picture
                   </p>
@@ -1218,13 +1227,6 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                     </div>
                   </motion.div>
                 </div>
-                <div className="relative min-h-[220px] flex-1 overflow-hidden lg:min-h-0">
-                  <img src={ACCOUNT_HERO_IMG} alt="" className={accountHeroImage} />
-                  <div className={accountHeroOverlayLeft} aria-hidden />
-                  <div className={accountHeroOverlayPurple} aria-hidden />
-                  <div className={accountHeroOverlayWarmth} aria-hidden />
-                  <div className={accountHeroOverlayMoon} aria-hidden />
-                </div>
               </div>
             </motion.section>
 
@@ -1233,8 +1235,8 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
               <div className="w-full max-w-2xl rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl">
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Adjust profile photo</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Crop and zoom your image before saving.</p>
+                    <h3 className="text-xl font-bold text-zinc-100">Adjust profile photo</h3>
+                    <p className="text-sm text-zinc-400">Crop and zoom your image before saving.</p>
                   </div>
                   <button
                     type="button"
@@ -1610,7 +1612,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                 <span>Made with care for your wellbeing</span>
               </div>
               <p className="text-xs text-[rgba(255,255,255,0.32)]">
-                Solace v1.0.0 • © 2024 •{" "}
+                Solace v1.0.0 • © 2026 •{" "}
                 <Link to="/privacy" className="underline-offset-2 hover:text-violet-300/80 hover:underline">
                   Privacy
                 </Link>{" "}
@@ -1642,14 +1644,11 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   )}
                 </div>
                 <p className="mt-3 text-lg font-semibold text-white">{displayName}</p>
-                {premiumish ? (
-                  <span className="mt-1.5 inline-flex rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-200/90">
-                    Premium member
-                  </span>
-                ) : null}
-                <p className="mt-3 text-sm text-[rgba(255,255,255,0.5)]">{planLabel}</p>
+                <span className="mt-1.5 inline-flex rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-0.5 text-[10px] font-semibold tracking-wide text-violet-200/90">
+                  {planLabel}
+                </span>
                 <Link to="/app/billing" className={cn(accountBtnPrimary, "mt-4 w-full")}>
-                  Manage plan
+                  Manage Plan
                 </Link>
               </div>
             </div>
@@ -1678,15 +1677,21 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
               </ul>
             </div>
 
-            <div className={cn(accountRailCard, "relative overflow-hidden p-0")}>
-              <div className="relative h-32 overflow-hidden">
-                <img src={ACCOUNT_HELP_IMG} alt="" className={accountHelpImage} />
-                <div className={accountHelpOverlay} aria-hidden />
-              </div>
-              <div className="relative p-6 pt-0">
+            <div className={cn(accountRailCard, "relative min-h-[200px] overflow-hidden bg-transparent p-6 before:opacity-35")}>
+              <img
+                src={ACCOUNT_HELP_IMG}
+                alt=""
+                className={accountHelpImage}
+                width={400}
+                height={320}
+                loading="lazy"
+                decoding="async"
+              />
+              <div className={accountHelpOverlay} aria-hidden />
+              <div className="relative z-10 flex min-h-[152px] flex-col justify-end">
                 <h2 className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">Need help?</h2>
                 <p className="mt-1.5 text-sm text-[rgba(255,255,255,0.55)]">We&apos;re here for you</p>
-                <Link to="/app/settings/help-support" className={cn(accountBtnPrimary, "mt-4 w-full")}>
+                <Link to="/app/settings/help-support" className={cn(accountBtnPrimary, "relative mt-4 w-full")}>
                   Contact support
                 </Link>
               </div>
@@ -1721,21 +1726,21 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
               onClick={() => setShowDeleteModal(false)}
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full shadow-2xl transition-colors duration-300"
+                className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d14] p-6 shadow-2xl transition-colors duration-300"
               >
                 <div className="text-center mb-6">
                   <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
                     <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-500" />
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Delete Account?</h3>
-                  <p className="text-gray-600 dark:text-gray-400 mb-4">
+                  <h3 className="text-xl font-bold text-zinc-100 mb-2">Delete Account?</h3>
+                  <p className="text-zinc-400 mb-4">
                     This action cannot be undone. All your data, including sessions, journals, and progress will be permanently deleted.
                   </p>
                   <input
@@ -1743,7 +1748,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                     value={deleteConfirmation}
                     onChange={(e) => setDeleteConfirmation(e.target.value)}
                     placeholder='Type "DELETE" to confirm'
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 outline-none transition-colors"
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-zinc-100 focus:ring-2 focus:ring-red-500 outline-none transition-colors"
                   />
                 </div>
 
@@ -1777,7 +1782,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
                   onClick={() => {
                     setShowMfaModal(false);
                     setMfaStep('method');
@@ -1787,9 +1792,9 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full shadow-2xl transition-colors duration-300"
+                className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d14] p-6 shadow-2xl transition-colors duration-300"
               >
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
+                <h3 className="text-xl font-bold text-zinc-100 mb-6">
                   {mfaStep === 'method'
                     ? 'Choose 2FA Method'
                     : mfaStep === 'knowledgeSetup'
@@ -1810,8 +1815,8 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                           : 'border-gray-200 dark:border-slate-700'
                       }`}
                     >
-                      <p className="font-medium text-gray-900 dark:text-white">Authenticator app</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                      <p className="font-medium text-zinc-100">Authenticator app</p>
+                      <p className="text-sm text-zinc-400">
                         Google Authenticator, Authy, Microsoft Authenticator
                       </p>
                     </button>
@@ -1825,10 +1830,10 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                           : 'border-gray-200 dark:border-slate-700'
                       }`}
                     >
-                      <p className="font-medium text-gray-900 dark:text-white">
+                      <p className="font-medium text-zinc-100">
                         PIN (with security answer)
                       </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                      <p className="text-sm text-zinc-400">
                         Knowledge-based second factor
                       </p>
                     </button>
@@ -1842,10 +1847,10 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                           : 'border-gray-200 dark:border-slate-700'
                       }`}
                     >
-                      <p className="font-medium text-gray-900 dark:text-white">
+                      <p className="font-medium text-zinc-100">
                         Email authentication code
                       </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                      <p className="text-sm text-zinc-400">
                         Use an email 6-digit code at login (no PIN required)
                       </p>
                     </button>
@@ -1891,7 +1896,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                         <button
                           type="button"
                           onClick={() => setMfaStep('method')}
-                          className="w-full py-2 text-sm text-gray-600 dark:text-gray-400 hover:underline"
+                          className="w-full py-2 text-sm text-zinc-400 hover:underline"
                         >
                           Back
                         </button>
@@ -1927,20 +1932,20 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                           <label className={accountLabel}>
                             Security Question
                           </label>
-                          <select
+                          <SolaceSelect
                             value={knowledgeSetup.securityQuestion}
-                            onChange={(e) =>
-                              setKnowledgeSetup((prev) => ({ ...prev, securityQuestion: e.target.value }))
+                            onValueChange={(securityQuestion) =>
+                              setKnowledgeSetup((prev) => ({ ...prev, securityQuestion }))
                             }
-                            className={accountInput}
-                          >
-                            <option value="">Select a security question</option>
-                            {genericSecurityQuestions.map((question) => (
-                              <option key={question} value={question}>
-                                {question}
-                              </option>
-                            ))}
-                          </select>
+                            ariaLabel="Security question"
+                            placeholder="Select a security question"
+                            variant="form"
+                            triggerClassName={accountInput}
+                            options={genericSecurityQuestions.map((question) => ({
+                              value: question,
+                              label: question,
+                            }))}
+                          />
                         </div>
 
                         <div>
@@ -1972,7 +1977,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                         <button
                           type="button"
                           onClick={() => setMfaStep('method')}
-                          className="w-full py-2 text-sm text-gray-600 dark:text-gray-400 hover:underline"
+                          className="w-full py-2 text-sm text-zinc-400 hover:underline"
                         >
                           Back
                         </button>
@@ -1984,7 +1989,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                 {mfaStep === 'enroll' && mfaData ? (
                   <div className="space-y-6">
                     <div className="text-center">
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                      <p className="text-sm text-zinc-400 mb-4">
                         Scan this QR code with your authenticator app (like Google Authenticator or Authy)
                       </p>
                       <div className="flex justify-center mb-4">
@@ -2027,7 +2032,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                         value={mfaCode}
                         onChange={(e) => setMfaCode(e.target.value)}
                         placeholder="000000"
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none text-center text-2xl tracking-widest transition-colors"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-zinc-100 focus:ring-2 focus:ring-blue-500 outline-none text-center text-2xl tracking-widest transition-colors"
                         maxLength={6}
                       />
                     </div>
@@ -2052,19 +2057,19 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
               onClick={() => setShowDisableAuthenticatorModal(false)}
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full shadow-2xl transition-colors duration-300"
+                className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d14] p-6 shadow-2xl transition-colors duration-300"
               >
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                <h3 className="text-xl font-bold text-zinc-100 mb-2">
                   Disable Authenticator
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <p className="text-sm text-zinc-400 mb-4">
                   Enter your current 6-digit authenticator code to disable authenticator-based 2FA.
                 </p>
                 <input
@@ -2072,7 +2077,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   value={disableAuthenticatorCode}
                   onChange={(e) => setDisableAuthenticatorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="000000"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none text-center text-2xl tracking-widest transition-colors"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-zinc-100 focus:ring-2 focus:ring-blue-500 outline-none text-center text-2xl tracking-widest transition-colors"
                   maxLength={6}
                 />
                 <div className="mt-4 flex gap-3">
@@ -2102,19 +2107,19 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
               onClick={() => setShowDisableKnowledgeModal(false)}
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full shadow-2xl transition-colors duration-300"
+                className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d14] p-6 shadow-2xl transition-colors duration-300"
               >
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                <h3 className="text-xl font-bold text-zinc-100 mb-2">
                   Disable Knowledge 2FA
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <p className="text-sm text-zinc-400 mb-4">
                   Disable using PIN/security answer, or use an email authentication code instead.
                 </p>
 
@@ -2292,16 +2297,16 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
               onClick={() => setShowPasswordModal(false)}
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-md w-full shadow-2xl transition-colors duration-300"
+                className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d14] p-6 shadow-2xl transition-colors duration-300"
               >
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Change Password</h3>
+                <h3 className="text-xl font-bold text-zinc-100 mb-6">Change Password</h3>
 
                 <div className="space-y-4 mb-6">
                   <div>
@@ -2309,7 +2314,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                     <PasswordInput
                       value={passwordState.currentPassword}
                       onChange={(e) => setPasswordState({...passwordState, currentPassword: e.target.value})}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-zinc-100 focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
                     />
                   </div>
 
@@ -2318,7 +2323,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                     <PasswordInput
                       value={passwordState.newPassword}
                       onChange={(e) => setPasswordState({...passwordState, newPassword: e.target.value})}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-zinc-100 focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
                     />
                     <PasswordStrengthMeter password={passwordState.newPassword} />
                   </div>
@@ -2328,7 +2333,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                     <PasswordInput
                       value={passwordState.confirmPassword}
                       onChange={(e) => setPasswordState({...passwordState, confirmPassword: e.target.value})}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-zinc-100 focus:ring-2 focus:ring-blue-500 outline-none transition-colors"
                     />
                   </div>
 
@@ -2348,7 +2353,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                           )
                         }
                         placeholder={mfaFactors.length > 0 ? '000000' : 'Enter PIN or answer'}
-                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none text-center text-xl tracking-widest transition-colors"
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-zinc-100 focus:ring-2 focus:ring-blue-500 outline-none text-center text-xl tracking-widest transition-colors"
                         maxLength={mfaFactors.length > 0 ? 6 : 120}
                       />
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">

@@ -100,24 +100,24 @@ export function JournalExportModal({ isOpen, onClose, entries }: JournalExportMo
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white rounded-3xl shadow-2xl max-w-lg w-full pointer-events-auto overflow-hidden"
+              className="w-full max-w-lg pointer-events-auto overflow-hidden rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl"
             >
               {/* Header */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-b-2 border-blue-200 p-6 relative">
+              <div className="relative border-b border-white/10 bg-gradient-to-br from-violet-950/70 via-[#0b0d14] to-indigo-950/50 p-6">
                 <button
                   onClick={onClose}
-                  className="absolute top-4 right-4 p-2 rounded-full bg-white/80 hover:bg-white transition-colors"
+                  className="absolute top-4 right-4 rounded-lg p-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-100"
                 >
-                  <X className="w-5 h-5 text-gray-600" />
+                  <X className="size-5" />
                 </button>
 
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-lg">
-                    <Download className="w-6 h-6 text-white" />
+                <div className="mb-2 flex items-center gap-3">
+                  <div className="rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 p-3 shadow-lg shadow-violet-900/40">
+                    <Download className="size-6 text-white" />
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-900">Export Journal</h2>
+                  <h2 className="font-serif text-2xl font-semibold text-zinc-50">Export Journal</h2>
                 </div>
-                <p className="text-sm text-gray-600">Download your journal entries</p>
+                <p className="text-sm text-zinc-400">Download your journal entries</p>
               </div>
 
               {/* Content */}

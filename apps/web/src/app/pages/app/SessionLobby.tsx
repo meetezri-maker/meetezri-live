@@ -23,10 +23,12 @@ import { preloadAvatarModel } from "@/lib/avatar/preloadAvatarModel";
 import {
   companionSessionUses3dModel,
   resolveCompanionModelUrl,
+  resolveCompanionPortraitUrl,
 } from "@/lib/avatar/companionModelUrl";
 import { LOBBY_AVATARS, lobbyAvatarByName, lobbyAvatarsFromApiRows } from "@/lib/avatar/lobbyAvatars";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { TalkItOutLobbyLayout } from "./talk-it-out/TalkItOutLobbyLayout";
+import { cn } from "@/lib/utils";
 
 interface BackendSession {
   id: string;
@@ -102,7 +104,7 @@ export function SessionLobby() {
   const [editingScheduledSessionId, setEditingScheduledSessionId] = useState<string | null>(null);
   const [isCancelingScheduled, setIsCancelingScheduled] = useState(false);
   const [sessionLengthKind, setSessionLengthKind] = useState<"fixed" | "free">("fixed");
-  const [connectMode, setConnectMode] = useState<"voice" | "text" | "deep" | "quick">("voice");
+  const [connectMode, setConnectMode] = useState<"voice" | "video" | "deep" | "quick">("voice");
   const [conversationEnergy, setConversationEnergy] = useState<
     "gentle" | "reflective" | "grounding" | "open"
   >("gentle");
@@ -700,10 +702,14 @@ export function SessionLobby() {
 
   const avatars = sessionAvatarList;
 
-  const selectedCompanionPreview = useMemo(
-    () => lobbyAvatarByName(selectedAvatar),
-    [selectedAvatar]
-  );
+  const selectedCompanionPreview = useMemo(() => {
+    const name = showCustomizeModal ? tempSelectedAvatar : selectedAvatar;
+    const preview = lobbyAvatarByName(name);
+    return {
+      ...preview,
+      portraitUrl: preview.cardImage ?? resolveCompanionPortraitUrl(name),
+    };
+  }, [showCustomizeModal, tempSelectedAvatar, selectedAvatar]);
 
   const [checklistItems, setChecklistItems] = useState([
     { label: "Find a quiet, private space", checked: true },
@@ -764,9 +770,9 @@ export function SessionLobby() {
 
   if (isLoadingSessions) {
     return (
-      <div className="solace-canvas-bg relative min-h-[calc(100dvh-5rem)] pb-28 text-[var(--solace-text)] lg:pb-12">
-          <div className="relative z-[1] mx-auto max-w-[1680px] px-4 sm:px-5 lg:px-8">
-            <div className="mb-8 flex flex-col gap-2 border-b border-white/[0.05] pb-8 pt-6">
+      <div className="relative min-h-[calc(100dvh-5rem)] pb-28 text-[var(--solace-text)] lg:pb-12">
+          <div className="relative z-[1] mx-auto max-w-[1680px] px-4 pt-6 sm:px-5 sm:pt-8 lg:px-8 lg:pt-10">
+            <div className="mb-8 flex flex-col gap-2 border-b border-white/[0.05] pb-8">
               <Skeleton className="h-10 w-[14rem] rounded-lg bg-white/[0.06]" />
               <Skeleton className="h-4 w-[20rem] max-w-full rounded-md bg-white/[0.05]" />
             </div>
@@ -795,9 +801,9 @@ export function SessionLobby() {
   return (
     <>
       <TalkItOutLobbyLayout
-        companionPill={`Your companion, ${selectedCompanionPreview.name}`}
-        companionPortraitUrl={selectedCompanionPreview.cardImage}
-        companionAlt=""
+        companionPill={`Your Solace Avatar, ${selectedCompanionPreview.name}`}
+        companionPortraitUrl={selectedCompanionPreview.portraitUrl}
+        companionAlt={selectedCompanionPreview.name}
         companionDisplayName={selectedCompanionPreview.name}
         companionTraitsLine={companionTraitsLine}
         heroMessageLine1="I'm here to listen"
@@ -1047,7 +1053,7 @@ export function SessionLobby() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setShowCustomizeModal(false)}
-                className="fixed left-0 top-0 w-screen h-[100dvh] bg-black/50 z-50 flex items-center justify-center p-4"
+                className="fixed left-0 top-0 z-50 flex h-[100dvh] w-screen items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
               >
                 {/* Modal */}
                 <motion.div
@@ -1055,14 +1061,16 @@ export function SessionLobby() {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
                   onClick={(e) => e.stopPropagation()}
-                  className="w-full max-w-2xl flex flex-col max-h-[85vh]"
+                  className="flex max-h-[85vh] w-full max-w-2xl flex-col"
                 >
-                  <Card className="flex flex-col shadow-2xl bg-white dark:bg-gray-900 overflow-hidden">
+                  <Card className="flex max-h-[85vh] flex-col overflow-hidden rounded-[1.25rem] border border-white/[0.08] bg-zinc-950/95 text-zinc-100 shadow-2xl">
                     {/* Header - Fixed */}
-                    <div className="flex items-center justify-between p-6 border-b shrink-0">
+                    <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] bg-black/35 px-6 py-5">
                       <div>
-                        <h2 className="text-2xl font-bold">Customize Voice & Avatar</h2>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <h2 className="font-serif text-[1.35rem] font-normal tracking-tight text-zinc-50">
+                          Customize Voice & Avatar
+                        </h2>
+                        <p className="mt-1 text-sm text-[var(--solace-muted)]">
                           Personalize your talking experience
                         </p>
                       </div>
@@ -1071,24 +1079,26 @@ export function SessionLobby() {
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => setShowCustomizeModal(false)}
-                        className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        className="rounded-full p-2 text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-200"
+                        aria-label="Close"
                       >
-                        <X className="w-5 h-5" />
+                        <X className="h-5 w-5" />
                       </motion.button>
                     </div>
 
                     {/* Scrollable Content */}
-                    <div className="p-6 overflow-y-auto">
+                    <div className="solace-scroll overflow-y-auto p-6">
                       {/* Voice Selection */}
-                      <div ref={voiceSectionRef} className="mb-6 scroll-mt-4">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Volume2 className="w-5 h-5 text-primary" />
-                          <h3 className="font-bold text-lg">Voice Selection</h3>
+                      <div ref={voiceSectionRef} className="mb-8 scroll-mt-4">
+                        <div className="mb-4 flex items-center gap-2">
+                          <Volume2 className="h-5 w-5 text-violet-300" aria-hidden />
+                          <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">Voice Selection</h3>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                           {voices.map((voice, index) => (
                             (() => {
                               const isDisabled = isVoiceDisabledForAvatar(voice.gender);
+                              const isSelected = tempSelectedVoice === voice.name;
                               return (
                             <motion.button
                               key={voice.id}
@@ -1096,36 +1106,37 @@ export function SessionLobby() {
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.1 + index * 0.05 }}
-                              whileHover={isDisabled ? undefined : { scale: 1.02 }}
-                              whileTap={isDisabled ? undefined : { scale: 0.98 }}
+                              whileHover={isDisabled ? undefined : { scale: 1.01 }}
+                              whileTap={isDisabled ? undefined : { scale: 0.99 }}
                               onClick={() => void handleVoiceSelect(voice.name, voice.gender, voice.demoFile)}
                               disabled={isDisabled}
-                              className={`p-4 rounded-xl border-2 transition-all text-left relative ${
+                              className={cn(
+                                "relative rounded-[1.1rem] border p-4 text-left transition-all",
                                 isDisabled
-                                  ? "border-border bg-muted/40 text-muted-foreground opacity-60 cursor-not-allowed"
-                                  : tempSelectedVoice === voice.name
-                                  ? "border-primary bg-primary/10 dark:bg-primary/20 shadow-lg"
-                                  : "border-border hover:border-primary/50"
-                              }`}
+                                  ? "cursor-not-allowed border-white/[0.05] bg-black/20 opacity-45"
+                                  : isSelected
+                                    ? "border-violet-400/45 bg-violet-500/[0.12] shadow-[0_0_28px_rgba(139,92,246,0.22)]"
+                                    : "border-white/[0.08] bg-black/28 hover:border-violet-400/28"
+                              )}
                             >
-                              {tempSelectedVoice === voice.name && (
+                              {isSelected && (
                                 <motion.div
                                   initial={{ scale: 0 }}
                                   animate={{ scale: 1 }}
-                                  className="absolute top-2 right-2 bg-primary rounded-full p-1"
+                                  className="absolute right-2.5 top-2.5 rounded-full bg-violet-500 p-1 shadow-[0_0_12px_rgba(139,92,246,0.45)]"
                                 >
-                                  <Check className="w-3 h-3 text-white" />
+                                  <Check className="h-3 w-3 text-white" aria-hidden />
                                 </motion.div>
                               )}
-                              <div className="font-bold mb-1">{voice.name}</div>
-                              <div className="text-sm text-muted-foreground mb-2">
+                              <div className="font-medium text-zinc-100">{voice.name}</div>
+                              <div className="mb-2 mt-1 text-sm text-[var(--solace-muted)]">
                                 {voice.description}
                               </div>
-                              <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                <span className="inline-block w-2 h-2 rounded-full bg-primary"></span>
+                              <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+                                <span className="inline-block h-2 w-2 rounded-full bg-violet-400/80" />
                                 {voice.gender}
                               </div>
-                              <div className="mt-2 text-xs text-muted-foreground">
+                              <div className="mt-2 text-xs text-zinc-500">
                                 {isDisabled
                                   ? "Disabled for selected avatar"
                                   : playingVoiceName === voice.name
@@ -1140,70 +1151,85 @@ export function SessionLobby() {
                       </div>
 
                       {/* Avatar Selection */}
-                      <div ref={avatarSectionRef} className="mb-6 scroll-mt-4">
-                        <div className="flex items-center gap-2 mb-4">
-                          <User className="w-5 h-5 text-primary" />
-                          <h3 className="font-bold text-lg">Avatar Selection</h3>
+                      <div ref={avatarSectionRef} className="mb-8 scroll-mt-4">
+                        <div className="mb-4 flex items-center gap-2">
+                          <User className="h-5 w-5 text-violet-300" aria-hidden />
+                          <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">Avatar Selection</h3>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          {avatars.map((avatar, index) => (
+                        <div className="grid grid-cols-2 items-stretch gap-3">
+                          {avatars.map((avatar, index) => {
+                            const isSelected = tempSelectedAvatar === avatar.name;
+                            const traits =
+                              avatar.personality?.trim() ||
+                              avatar.description?.trim() ||
+                              "Supportive companion";
+                            return (
                             <motion.button
                               key={avatar.id}
                               type="button"
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.3 + index * 0.05 }}
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
+                              whileHover={{ scale: 1.01 }}
+                              whileTap={{ scale: 0.99 }}
                               onClick={() => setTempSelectedAvatar(avatar.name)}
-                              className={`p-4 rounded-xl border-2 transition-all text-center relative ${
-                                tempSelectedAvatar === avatar.name
-                                  ? "border-primary bg-primary/10 dark:bg-primary/20 shadow-lg"
-                                  : "border-border hover:border-primary/50"
-                              }`}
+                              aria-pressed={isSelected}
+                              className={cn(
+                                "group relative flex h-full w-full flex-col overflow-hidden rounded-[1rem] border p-0 text-left transition-[border-color,box-shadow,transform] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
+                                isSelected
+                                  ? "border-violet-400/55 shadow-[0_0_28px_rgba(139,92,246,0.28)] ring-1 ring-violet-400/25"
+                                  : "border-white/[0.08] bg-black/22 hover:border-violet-400/28"
+                              )}
                             >
-                              {tempSelectedAvatar === avatar.name && (
-                                <motion.div
-                                  initial={{ scale: 0 }}
-                                  animate={{ scale: 1 }}
-                                  className="absolute top-2 right-2 bg-primary rounded-full p-1"
-                                >
-                                  <Check className="w-3 h-3 text-white" />
-                                </motion.div>
-                              )}
-                              {avatar.cardImage ? (
-                                <img
-                                  src={avatar.cardImage}
-                                  alt=""
-                                  className="mx-auto mb-2 h-16 w-16 rounded-full object-cover"
-                                />
-                              ) : (
-                                <div className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                                  <User className="h-8 w-8 text-muted-foreground" aria-hidden />
-                                </div>
-                              )}
-                              <div className="font-bold mb-1">{avatar.name}</div>
-                              <div className="text-xs text-muted-foreground line-clamp-3">
-                                {avatar.personality?.trim() ||
-                                  avatar.description?.trim() ||
-                                  "No personality description available"}
-                              </div>
+                              <span className="relative h-28 w-full shrink-0 overflow-hidden bg-black/40 sm:h-[7.5rem]">
+                                {avatar.cardImage ? (
+                                  <img
+                                    src={avatar.cardImage}
+                                    alt=""
+                                    className="h-full w-full object-cover object-top"
+                                    loading="lazy"
+                                    decoding="async"
+                                  />
+                                ) : (
+                                  <span className="flex h-full w-full items-center justify-center">
+                                    <User className="h-10 w-10 text-zinc-600" aria-hidden />
+                                  </span>
+                                )}
+                                {isSelected ? (
+                                  <motion.span
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 shadow-[0_0_12px_rgba(139,92,246,0.5)]"
+                                  >
+                                    <Check className="h-3 w-3 text-white" strokeWidth={2.5} aria-hidden />
+                                  </motion.span>
+                                ) : null}
+                              </span>
+                              <span className="flex min-h-[4.5rem] flex-col justify-center border-t border-white/[0.06] bg-black/40 px-3 py-2.5">
+                                <p className="text-[13px] font-medium leading-tight text-zinc-50">{avatar.name}</p>
+                                <p className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-zinc-400/95">
+                                  {traits}
+                                </p>
+                              </span>
                             </motion.button>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
 
                       {/* Session background (environment) */}
                       <div ref={environmentSectionRef} className="mb-2 scroll-mt-4">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Palette className="w-5 h-5 text-primary" />
-                          <h3 className="font-bold text-lg">Talking Background</h3>
+                        <div className="mb-4 flex items-center gap-2">
+                          <Palette className="h-5 w-5 text-violet-300" aria-hidden />
+                          <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">Talking Background</h3>
                         </div>
-                        <p className="text-sm text-muted-foreground mb-4">
+                        <p className="mb-4 text-sm text-[var(--solace-muted)]">
                           Choose a calming background for your video sessions
                         </p>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          {SESSION_ENVIRONMENTS.map((env, index) => (
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                          {SESSION_ENVIRONMENTS.map((env, index) => {
+                            const isSelected = tempSelectedEnvironment === env.value;
+                            return (
                             <motion.button
                               key={env.value}
                               type="button"
@@ -1213,35 +1239,42 @@ export function SessionLobby() {
                               whileHover={{ scale: 1.02 }}
                               whileTap={{ scale: 0.98 }}
                               onClick={() => setTempSelectedEnvironment(env.value)}
-                              className={`rounded-lg border-2 overflow-hidden transition-all text-left ${
-                                tempSelectedEnvironment === env.value
-                                  ? "border-primary shadow-lg"
-                                  : "border-border hover:border-primary/50"
-                              }`}
+                              aria-pressed={isSelected}
+                              className={cn(
+                                "overflow-hidden rounded-xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
+                                isSelected
+                                  ? "border-violet-400/55 ring-1 ring-violet-400/25"
+                                  : "border-white/[0.08] hover:border-violet-400/30"
+                              )}
                             >
                               <div
-                                className={`h-20 bg-gradient-to-br ${env.gradient} flex items-center justify-center dark:opacity-95`}
+                                className={cn(
+                                  "flex h-20 items-center justify-center bg-gradient-to-br",
+                                  env.gradient
+                                )}
                               >
-                                <span className="text-3xl leading-none flex items-center justify-center">
+                                <span className="flex items-center justify-center text-3xl leading-none">
                                   <FluentEmoji emoji={env.emoji} size={36} />
                                 </span>
                               </div>
-                              <div className="p-2 bg-white dark:bg-gray-950">
-                                <p className="text-sm font-medium">{env.label}</p>
+                              <div className="border-t border-white/[0.06] bg-black/35 px-2.5 py-2">
+                                <p className="text-sm font-medium text-zinc-200">{env.label}</p>
                               </div>
                             </motion.button>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
 
                     {/* Footer Buttons - Fixed */}
-                    <div className="flex items-center justify-end gap-3 p-6 border-t shrink-0 bg-gray-50/50 dark:bg-gray-800/50">
+                    <div className="flex shrink-0 items-center justify-end gap-3 border-t border-white/[0.06] bg-black/35 p-6">
                       <Button
                         type="button"
                         variant="outline"
                         disabled={isSavingCustomize}
                         onClick={() => setShowCustomizeModal(false)}
+                        className="border-white/[0.1] bg-transparent text-zinc-100 hover:bg-white/[0.04]"
                       >
                         Cancel
                       </Button>
@@ -1249,7 +1282,7 @@ export function SessionLobby() {
                         type="button"
                         disabled={isSavingCustomize}
                         aria-busy={isSavingCustomize}
-                        className="bg-gradient-to-r from-blue-600 to-purple-600 text-white min-w-[148px]"
+                        className="min-w-[148px] bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 text-white shadow-[0_0_32px_rgba(139,92,246,0.35)] hover:opacity-95"
                         onClick={() => void handleSaveCustomize()}
                       >
                         {isSavingCustomize ? (
@@ -1279,30 +1312,27 @@ export function SessionLobby() {
         <AnimatePresence>
           {showScheduleModal && (
             <>
-              {/* Backdrop */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={closeScheduleModal}
-                className="fixed left-0 top-0 w-screen h-[100dvh] bg-black/50 z-50 flex items-center justify-center p-4"
+                className="fixed left-0 top-0 z-50 flex h-[100dvh] w-screen items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
               >
-                {/* Modal */}
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
                   onClick={(e) => e.stopPropagation()}
-                  className="w-full max-w-2xl flex flex-col max-h-[85vh]"
+                  className="flex max-h-[85vh] w-full max-w-2xl flex-col"
                 >
-                  <Card className="flex flex-col shadow-2xl bg-white dark:bg-gray-900 overflow-hidden">
-                    {/* Header - Fixed */}
-                    <div className="flex items-center justify-between p-6 border-b shrink-0">
+                  <Card className="flex max-h-[85vh] flex-col overflow-hidden rounded-[1.25rem] border border-white/[0.08] bg-zinc-950/95 text-zinc-100 shadow-2xl">
+                    <div className="flex shrink-0 items-center justify-between border-b border-white/[0.06] bg-black/35 px-6 py-5">
                       <div>
-                        <h2 className="text-2xl font-bold">
+                        <h2 className="font-serif text-[1.35rem] font-normal tracking-tight text-zinc-50">
                           {editingScheduledSessionId ? "Edit Scheduled Talk" : "Schedule a Talk"}
                         </h2>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="mt-1 text-sm text-[var(--solace-muted)]">
                           Pick a date and time for your next talk
                         </p>
                       </div>
@@ -1311,26 +1341,27 @@ export function SessionLobby() {
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={closeScheduleModal}
-                        className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        className="rounded-full p-2 text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-200"
+                        aria-label="Close"
                       >
-                        <X className="w-5 h-5" />
+                        <X className="h-5 w-5" />
                       </motion.button>
                     </div>
 
-                    {/* Scrollable Content */}
-                    <div className="p-6 overflow-y-auto">
-                      {/* Duration Selection */}
-                      <div className="mb-6">
-                        <div className="flex items-center justify-between gap-2 mb-4">
+                    <div className="solace-scroll overflow-y-auto p-6">
+                      <div className="mb-8">
+                        <div className="mb-4 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <Clock className="w-5 h-5 text-primary" />
-                            <h3 className="font-bold text-lg">Talking Minutes</h3>
+                            <Clock className="h-5 w-5 text-violet-300" aria-hidden />
+                            <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">
+                              Talking Minutes
+                            </h3>
                           </div>
-                          <span className="text-xs text-muted-foreground">
-                            Selected: {selectedDuration} min
+                          <span className="text-xs text-zinc-500">
+                            Selected: <span className="text-zinc-300">{selectedDuration} min</span>
                           </span>
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                           {durations.map((duration) => {
                             const isDisabled = !!durationDisabled.get(duration);
                             const isSelected = selectedDuration === duration;
@@ -1343,93 +1374,100 @@ export function SessionLobby() {
                                   if (isDisabled) return;
                                   setSelectedDuration(duration);
                                 }}
-                                className={`rounded-xl border p-3 text-center transition-all ${
+                                className={cn(
+                                  "rounded-[1.1rem] border p-3 text-center transition-all",
                                   isDisabled
-                                    ? "opacity-40 cursor-not-allowed"
+                                    ? "cursor-not-allowed border-white/[0.05] bg-black/20 opacity-40"
                                     : isSelected
-                                    ? "border-primary bg-primary/10"
-                                    : "hover:border-primary/40"
-                                }`}
+                                      ? "border-violet-400/45 bg-violet-500/[0.12] shadow-[0_0_24px_rgba(139,92,246,0.2)]"
+                                      : "border-white/[0.08] bg-black/28 text-zinc-100 hover:border-violet-400/28"
+                                )}
                               >
-                                <div className="text-lg font-bold">{duration}</div>
-                                <div className="text-[10px] text-muted-foreground">min</div>
+                                <div className="text-lg font-semibold">{duration}</div>
+                                <div className="text-[10px] text-zinc-500">min</div>
                               </button>
                             );
                           })}
                         </div>
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          Minutes available: {minutesAvailable}
+                        <p className="mt-2 text-xs text-[var(--solace-muted)]">
+                          Minutes available:{" "}
+                          <span className="font-medium text-zinc-300">{minutesAvailable}</span>
                         </p>
                       </div>
 
-                      {/* Date and Time Selection */}
-                      <div className="mb-6">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Calendar className="w-5 h-5 text-primary" />
-                          <h3 className="font-bold text-lg">Date & Time</h3>
+                      <div className="mb-8">
+                        <div className="mb-4 flex items-center gap-2">
+                          <Calendar className="h-5 w-5 text-violet-300" aria-hidden />
+                          <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">Date & Time</h3>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="p-4 rounded-xl border-2 dark:border-gray-700 transition-all text-left relative bg-gray-50 dark:bg-gray-800/50">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <label className="block rounded-[1.1rem] border border-white/[0.08] bg-black/28 px-4 py-3">
+                            <span className="mb-2 block text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-500">
+                              Date
+                            </span>
                             <input
                               type="date"
                               value={scheduleDate}
                               onChange={(e) => setScheduleDate(e.target.value)}
-                              className="w-full p-2 border-none outline-none bg-transparent dark:text-white"
+                              className="w-full border-none bg-transparent p-0 text-sm text-zinc-100 outline-none [color-scheme:dark]"
                             />
-                          </div>
-                          <div className="p-4 rounded-xl border-2 dark:border-gray-700 transition-all text-left relative bg-gray-50 dark:bg-gray-800/50">
+                          </label>
+                          <label className="block rounded-[1.1rem] border border-white/[0.08] bg-black/28 px-4 py-3">
+                            <span className="mb-2 block text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-500">
+                              Time
+                            </span>
                             <input
                               type="time"
                               value={scheduleTime}
                               onChange={(e) => setScheduleTime(e.target.value)}
-                              className="w-full p-2 border-none outline-none bg-transparent dark:text-white"
+                              className="w-full border-none bg-transparent p-0 text-sm text-zinc-100 outline-none [color-scheme:dark]"
                             />
-                          </div>
+                          </label>
                         </div>
                       </div>
 
-                      {/* Comment & Icon */}
                       <div className="mb-2">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Sparkles className="w-5 h-5 text-primary" />
-                          <h3 className="font-bold text-lg">Add a note</h3>
+                        <div className="mb-4 flex items-center gap-2">
+                          <Sparkles className="h-5 w-5 text-violet-300" aria-hidden />
+                          <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">Add a note</h3>
                         </div>
-
-                        <div className=" ">
-                    
-
-                          <div className="sm:col-span-4 p-4 rounded-xl border-2 dark:border-gray-700 transition-all text-left relative bg-gray-50 dark:bg-gray-800/50">
-                            <label className="block text-xs text-muted-foreground mb-2">Comment</label>
-                            <textarea
-                              value={scheduleComment}
-                              onChange={(e) => setScheduleComment(e.target.value)}
-                              rows={3}
-                              placeholder="Optional: what would you like to focus on next time?"
-                              className="w-full resize-none p-2 border-none outline-none bg-transparent dark:text-white"
-                            />
-                          </div>
-                        </div>
+                        <label className="block rounded-[1.1rem] border border-white/[0.08] bg-black/28 px-4 py-3">
+                          <span className="mb-2 block text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-500">
+                            Comment
+                          </span>
+                          <textarea
+                            value={scheduleComment}
+                            onChange={(e) => setScheduleComment(e.target.value)}
+                            rows={3}
+                            placeholder="Optional: what would you like to focus on next time?"
+                            className="w-full resize-none border-none bg-transparent p-0 text-sm leading-relaxed text-zinc-100 outline-none placeholder:text-zinc-600"
+                          />
+                        </label>
                       </div>
                     </div>
 
-                    {/* Footer Buttons - Fixed */}
-                    <div className="flex items-center justify-end gap-3 p-6 border-t shrink-0 bg-gray-50/50 dark:bg-gray-800/50 dark:border-gray-800">
+                    <div className="flex shrink-0 items-center justify-end gap-3 border-t border-white/[0.06] bg-black/35 p-6">
                       <Button
                         type="button"
                         variant="outline"
                         onClick={closeScheduleModal}
                         disabled={isScheduling}
+                        className="border-white/[0.1] bg-transparent text-zinc-100 hover:bg-white/[0.04]"
                       >
                         Cancel
                       </Button>
                       <Button
                         type="button"
-                        className="bg-gradient-to-r from-blue-600 to-purple-600 text-white"
+                        className="min-w-[132px] bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-700 text-white shadow-[0_0_32px_rgba(139,92,246,0.35)] hover:opacity-95"
                         onClick={handleScheduleSession}
                         isLoading={isScheduling}
-                        disabled={isScheduling || selectedDuration > minutesAvailable || selectedDuration < 1}
+                        disabled={
+                          isScheduling ||
+                          selectedDuration > minutesAvailable ||
+                          selectedDuration < 1
+                        }
                       >
-                        <Check className="w-4 h-4 mr-2" />
+                        <Check className="mr-2 h-4 w-4 shrink-0" aria-hidden />
                         {editingScheduledSessionId ? "Update" : "Schedule"}
                       </Button>
                     </div>

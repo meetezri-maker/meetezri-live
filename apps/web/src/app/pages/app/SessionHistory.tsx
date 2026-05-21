@@ -11,7 +11,6 @@ import {
   Star,
   Lock,
   MoreVertical,
-  ChevronDown,
   Flame,
   Plus,
 } from "lucide-react";
@@ -33,6 +32,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { pickSolaceCinematicImage } from "@/lib/solace/solaceCinematicPool";
+import { SolaceSelect } from "@/app/solace";
 
 interface SessionData {
   id: string;
@@ -54,6 +54,8 @@ interface SessionData {
   environmentLabel?: string;
   sessionType?: string;
   mood?: string;
+  /** ISO timestamp for filters and insight cards */
+  occurredAt: string;
 }
 
 interface BackendSession {
@@ -176,6 +178,8 @@ function formatSessionDuration(s: BackendSession): { label: string; minutesForSt
   return { label: "N/A", minutesForStats: 0 };
 }
 
+const SESSION_HISTORY_HERO_IMG = "/community/2.png";
+
 const MOOD_COLORS: Record<string, { bg: string; text: string }> = {
   Anxious: { bg: "bg-amber-500/20", text: "text-amber-400" },
   Hopeful: { bg: "bg-emerald-500/20", text: "text-emerald-400" },
@@ -248,6 +252,59 @@ function CircularProgress({ value, size = 140, strokeWidth = 10, className, chil
 }
 
 type FilterTab = "all" | "instant" | "scheduled" | "favorites";
+type TimePeriod = "all" | "week" | "month" | "year";
+
+const TIME_PERIOD_OPTIONS: { value: TimePeriod; label: string }[] = [
+  { value: "all", label: "All Time" },
+  { value: "week", label: "This Week" },
+  { value: "month", label: "This Month" },
+  { value: "year", label: "This Year" },
+];
+
+function sessionWithinPeriod(occurredAt: string, period: TimePeriod): boolean {
+  if (period === "all") return true;
+  const sessionMs = new Date(occurredAt).getTime();
+  if (!Number.isFinite(sessionMs)) return true;
+  const diffDays = Math.floor((Date.now() - sessionMs) / (1000 * 60 * 60 * 24));
+  if (period === "week") return diffDays <= 7;
+  if (period === "month") return diffDays <= 30;
+  if (period === "year") return diffDays <= 365;
+  return true;
+}
+
+function periodTalkSuffix(period: TimePeriod): string {
+  if (period === "week") return "talks this week";
+  if (period === "month") return "talks this month";
+  if (period === "year") return "talks this year";
+  return "talks total";
+}
+
+interface SessionHistoryPeriodSelectProps {
+  value: TimePeriod;
+  onValueChange: (value: TimePeriod) => void;
+  id: string;
+  ariaLabel: string;
+}
+
+function SessionHistoryPeriodSelect({
+  value,
+  onValueChange,
+  id,
+  ariaLabel,
+}: SessionHistoryPeriodSelectProps) {
+  return (
+    <SolaceSelect
+      id={id}
+      value={value}
+      onValueChange={(v) => onValueChange(v as TimePeriod)}
+      ariaLabel={ariaLabel}
+      variant="compact"
+      triggerClassName="min-w-[6.75rem] shrink-0"
+      contentClassName="z-[400]"
+      options={TIME_PERIOD_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+    />
+  );
+}
 
 export function SessionHistory() {
   const navigate = useNavigate();
@@ -287,7 +344,7 @@ export function SessionHistory() {
   const [selectedSession, setSelectedSession] = useState<SessionData | null>(null);
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [timeFilter, setTimeFilter] = useState<"all" | "week" | "month" | "year">("all");
+  const [timeFilter, setTimeFilter] = useState<TimePeriod>("year");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   
@@ -389,6 +446,7 @@ export function SessionHistory() {
             environmentLabel: formatEnvironmentLabel(s.config?.environment ?? profile?.selected_environment),
             sessionType: s.type,
             mood: randomMood,
+            occurredAt: baseDate.toISOString(),
           };
         };
 
@@ -481,15 +539,7 @@ export function SessionHistory() {
     }
 
     if (timeFilter !== "all") {
-      const now = new Date();
-      sessions = sessions.filter(s => {
-        const sessionDate = new Date(s.date);
-        const diffDays = Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60 * 24));
-        if (timeFilter === "week") return diffDays <= 7;
-        if (timeFilter === "month") return diffDays <= 30;
-        if (timeFilter === "year") return diffDays <= 365;
-        return true;
-      });
+      sessions = sessions.filter((s) => sessionWithinPeriod(s.occurredAt, timeFilter));
     }
 
     return sessions;
@@ -517,25 +567,29 @@ export function SessionHistory() {
   const totalHours = (totalDurationMinutes / 60).toFixed(1);
   const totalMessages = completedSessions.reduce((acc, s) => acc + s.messagesCount, 0);
 
+  const sessionsInPeriod = useMemo(
+    () => completedSessions.filter((s) => sessionWithinPeriod(s.occurredAt, timeFilter)),
+    [completedSessions, timeFilter],
+  );
+
   const moodDistribution = useMemo(() => {
     const moodCounts: Record<string, number> = {};
-    completedSessions.forEach(s => {
+    sessionsInPeriod.forEach((s) => {
       const mood = s.mood || "Calm";
       moodCounts[mood] = (moodCounts[mood] || 0) + 1;
     });
-    
-    const total = completedSessions.length || 1;
+
+    const total = sessionsInPeriod.length || 1;
     return [
       { name: "Positive", value: Math.round(((moodCounts["Happy"] || 0) + (moodCounts["Hopeful"] || 0) + (moodCounts["Grateful"] || 0)) / total * 100), color: "#4ade80" },
       { name: "Neutral", value: Math.round(((moodCounts["Calm"] || 0)) / total * 100), color: "#a78bfa" },
       { name: "Anxious", value: Math.round(((moodCounts["Anxious"] || 0)) / total * 100), color: "#fbbf24" },
       { name: "Sad", value: Math.round(((moodCounts["Sad"] || 0) + (moodCounts["Angry"] || 0) + (moodCounts["Emotional"] || 0)) / total * 100), color: "#f472b6" },
     ];
-  }, [completedSessions]);
+  }, [sessionsInPeriod]);
 
   const longestStreak = profile?.streak_days || 14;
-  const currentYear = new Date().getFullYear();
-  const journeyProgress = Math.min(100, Math.round((completedSessions.length / 200) * 100));
+  const journeyProgress = Math.min(100, Math.round((sessionsInPeriod.length / 200) * 100));
 
   if (isLoading) {
     return (
@@ -615,18 +669,21 @@ export function SessionHistory() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="relative overflow-hidden rounded-3xl min-h-[200px]"
+              className="relative overflow-hidden rounded-3xl min-h-[200px] border border-slate-800/50"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/95 to-transparent z-10" />
-              <div
-                className="absolute inset-0"
-                style={{
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 400'%3E%3Cdefs%3E%3ClinearGradient id='sky' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%230f0a1e'/%3E%3Cstop offset='30%25' stop-color='%231a0a2e'/%3E%3Cstop offset='60%25' stop-color='%23581c87'/%3E%3Cstop offset='80%25' stop-color='%23831843'/%3E%3Cstop offset='100%25' stop-color='%23f59e0b'/%3E%3C/linearGradient%3E%3ClinearGradient id='water' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23581c87' stop-opacity='0.6'/%3E%3Cstop offset='100%25' stop-color='%230f172a'/%3E%3C/linearGradient%3E%3CradialGradient id='glow' cx='70%25' cy='60%25' r='40%25'%3E%3Cstop offset='0%25' stop-color='%23fbbf24' stop-opacity='0.4'/%3E%3Cstop offset='100%25' stop-color='%23581c87' stop-opacity='0'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect fill='url(%23sky)' width='800' height='400'/%3E%3Crect fill='url(%23glow)' width='800' height='400'/%3E%3Cpath d='M400,280 L500,180 L600,220 L700,160 L800,200 L800,280 Z' fill='%231e1b4b' opacity='0.9'/%3E%3Cpath d='M300,280 L400,200 L480,240 L550,190 L650,230 L800,180 L800,280 Z' fill='%23312e81' opacity='0.7'/%3E%3Cpath d='M500,280 L580,220 L650,250 L720,200 L800,240 L800,280 Z' fill='%23581c87' opacity='0.5'/%3E%3Crect y='280' width='800' height='120' fill='url(%23water)'/%3E%3Ccircle cx='650' cy='80' r='1.5' fill='white' opacity='0.8'/%3E%3Ccircle cx='700' cy='120' r='1' fill='white' opacity='0.6'/%3E%3Ccircle cx='580' cy='60' r='1' fill='white' opacity='0.7'/%3E%3Ccircle cx='750' cy='90' r='1.2' fill='white' opacity='0.5'/%3E%3Ccircle cx='620' cy='140' r='0.8' fill='white' opacity='0.6'/%3E%3C/svg%3E")`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "right center",
-                }}
-              />
-              <div className="relative z-20 px-8 py-10 flex items-center min-h-[200px]">
+              <div className="absolute inset-0" aria-hidden>
+                <img
+                  src={SESSION_HISTORY_HERO_IMG}
+                  alt=""
+                  className="h-full w-full object-cover object-center"
+                  loading="eager"
+                  decoding="async"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-900/80 to-slate-900/30" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-purple-950/25" />
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(168,85,247,0.12),transparent_55%)]" />
+              </div>
+              <div className="relative z-10 px-8 py-10 flex items-center min-h-[200px]">
                 <div className="max-w-md">
                   <h2 className="text-2xl md:text-3xl font-bold text-white mb-3 leading-tight">
                     Conversations you've carried through.{" "}
@@ -735,15 +792,12 @@ export function SessionHistory() {
               </div>
 
               <div className="flex items-center gap-3 w-full sm:w-auto">
-                <div className="relative">
-                  <button
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800/50 border border-slate-700/50 text-sm text-slate-300 hover:bg-slate-700/50 transition-all"
-                  >
-                    <Calendar className="w-4 h-4 text-slate-400" />
-                    <span>{timeFilter === "all" ? "All Time" : timeFilter === "week" ? "This Week" : timeFilter === "month" ? "This Month" : "This Year"}</span>
-                    <ChevronDown className="w-4 h-4 text-slate-400" />
-                  </button>
-                </div>
+                <SessionHistoryPeriodSelect
+                  id="session-history-list-period"
+                  value={timeFilter}
+                  onValueChange={setTimeFilter}
+                  ariaLabel="Filter talks by time period"
+                />
 
                 <div className="relative flex-1 sm:w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -902,9 +956,10 @@ export function SessionHistory() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.4 }}
-                className="overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/50"
+                className="rounded-xl border border-slate-800/50 bg-slate-900/50"
               >
                 <AdminPaginationBar
+                  variant="solace"
                   total={filteredSessions.length}
                   page={currentPage}
                   pageSize={pageSize}
@@ -927,16 +982,22 @@ export function SessionHistory() {
               className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm"
             >
               <div
-                className="absolute inset-0 opacity-30"
+                className="pointer-events-none absolute inset-0 opacity-30"
+                aria-hidden
                 style={{
                   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%230a0a1a'/%3E%3Cstop offset='100%25' stop-color='%231a0a2e'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect fill='url(%23bg)' width='400' height='300'/%3E%3Ccircle cx='350' cy='50' r='3' fill='white' opacity='0.3'/%3E%3Ccircle cx='320' cy='80' r='2' fill='white' opacity='0.2'/%3E%3Ccircle cx='370' cy='100' r='1.5' fill='white' opacity='0.4'/%3E%3C/svg%3E")`,
                   backgroundSize: "cover",
                 }}
               />
-              <div className="relative p-6">
-                <div className="flex items-center justify-between mb-6">
+              <div className="relative z-10 p-6">
+                <div className="mb-6 flex items-center justify-between gap-3">
                   <h3 className="font-semibold text-white">Your Journey So Far</h3>
-                  <span className="text-xs text-slate-400">This Year</span>
+                  <SessionHistoryPeriodSelect
+                    id="session-history-journey-period"
+                    value={timeFilter}
+                    onValueChange={setTimeFilter}
+                    ariaLabel="Journey time period"
+                  />
                 </div>
 
                 <div className="flex flex-col items-center">
@@ -947,8 +1008,8 @@ export function SessionHistory() {
                   </CircularProgress>
                   <div className="text-center mt-4">
                     <p className="text-sm text-slate-400">You've had</p>
-                    <p className="text-3xl font-bold text-white">{completedSessions.length}</p>
-                    <p className="text-sm text-slate-300">talks this year</p>
+                    <p className="text-3xl font-bold text-white">{sessionsInPeriod.length}</p>
+                    <p className="text-sm text-slate-300">{periodTalkSuffix(timeFilter)}</p>
                   </div>
                   <p className="text-xs text-slate-500 mt-3 text-center">
                     Keep going! You're doing amazing.
@@ -964,11 +1025,19 @@ export function SessionHistory() {
               transition={{ delay: 0.4 }}
               className="relative overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-6"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-pink-500/5" />
-              <div className="relative">
-                <div className="flex items-center justify-between mb-4">
+              <div
+                className="pointer-events-none absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-pink-500/5"
+                aria-hidden
+              />
+              <div className="relative z-10">
+                <div className="mb-4 flex items-center justify-between gap-3">
                   <h3 className="font-semibold text-white">Mood Distribution</h3>
-                  <span className="text-xs text-slate-400">This Year</span>
+                  <SessionHistoryPeriodSelect
+                    id="session-history-mood-period"
+                    value={timeFilter}
+                    onValueChange={setTimeFilter}
+                    ariaLabel="Mood distribution time period"
+                  />
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -1021,11 +1090,22 @@ export function SessionHistory() {
               transition={{ delay: 0.5 }}
               className="relative overflow-hidden rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-900/20 via-slate-900/80 to-slate-900/90 backdrop-blur-sm p-6"
             >
-              <div className="absolute top-0 left-0 w-24 h-24 bg-gradient-radial from-orange-500/20 via-orange-500/5 to-transparent rounded-full blur-xl" />
-              <div className="relative">
-                <div className="flex items-center gap-2 mb-4">
-                  <Flame className="w-5 h-5 text-orange-400" />
-                  <h3 className="font-semibold text-white">Longest Streak</h3>
+              <div
+                className="pointer-events-none absolute top-0 left-0 h-24 w-24 rounded-full bg-gradient-radial from-orange-500/20 via-orange-500/5 to-transparent blur-xl"
+                aria-hidden
+              />
+              <div className="relative z-10">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Flame className="w-5 h-5 text-orange-400" />
+                    <h3 className="font-semibold text-white">Longest Streak</h3>
+                  </div>
+                  <SessionHistoryPeriodSelect
+                    id="session-history-streak-period"
+                    value={timeFilter}
+                    onValueChange={setTimeFilter}
+                    ariaLabel="Streak time period"
+                  />
                 </div>
 
                 <div className="mb-4">

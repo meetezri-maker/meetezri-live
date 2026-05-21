@@ -32,12 +32,14 @@ import { useAuth } from "../../contexts/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
 import { Skeleton } from "../../components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { SolaceSelect } from "@/app/solace";
 import { TalkItOutBottomDock } from "@/app/pages/app/talk-it-out/TalkItOutBottomDock";
-import { TALK_ENV_LAKE, TALK_ENV_FOREST, TALK_ENV_CANDLE } from "@/lib/solace/referenceImagery";
 import {
-  pickSolaceCinematicImage,
-  SOLACE_CINEMATIC_POOL,
-} from "@/lib/solace/solaceCinematicPool";
+  WELLNESS_TOOLS_IMAGES,
+  WELLNESS_TOOLS_IMAGE_POOL,
+  wellnessToolsCategoryFallbackImage,
+  wellnessToolsExerciseImage,
+} from "@/lib/solace/wellnessToolsImages";
 import {
   WELLNESS_TOOL_CATEGORIES,
   WELLNESS_CATEGORY_GRADIENT,
@@ -47,9 +49,11 @@ import {
   mergeWellnessProgressWithLocal,
   loadLocalProgress,
   recordBuiltinSession,
+  filterLocalProgressByPeriod,
   BUILTIN_MIN_SECONDS,
   formatWellnessDuration,
   wellnessProgressTotalSeconds,
+  type WellnessInsightsPeriod,
   type WellnessProgressRow,
 } from "../../../lib/wellnessLocalProgress";
 import { getWellnessCategoryIcon } from "../../../lib/wellnessCategoryIcons";
@@ -65,6 +69,25 @@ import {
 } from "../../../lib/wellnessCategoryDurations";
 
 const BUILTIN_FAVORITES_KEY = "wellness-builtin-favorites";
+
+interface WellnessMoodBreakdown {
+  positive: number;
+  neutral: number;
+  anxious: number;
+  sad: number;
+  total: number;
+}
+
+interface WellnessInsightsData {
+  progress: WellnessProgressRow[];
+  moodAfterExercises: WellnessMoodBreakdown;
+}
+
+const WELLNESS_INSIGHTS_PERIOD_OPTIONS: { value: WellnessInsightsPeriod; label: string }[] = [
+  { value: "today", label: "Today" },
+  { value: "week", label: "This Week" },
+  { value: "month", label: "This Month" },
+];
 
 function loadBuiltinFavoriteMap(): Record<string, boolean> {
   try {
@@ -275,7 +298,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   mind: {
     title: "Mind",
     subtitle: "Clear thoughts & focus",
-    image: pickSolaceCinematicImage("wellness-explore-mind"),
+    image: WELLNESS_TOOLS_IMAGES.explore.mind,
     icon: Brain,
     iconTint: "text-violet-200 shadow-[0_0_28px_rgba(167,139,250,0.55)]",
     ambientOverlay:
@@ -284,7 +307,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   body: {
     title: "Body",
     subtitle: "Move, breathe & energize",
-    image: pickSolaceCinematicImage("wellness-explore-body"),
+    image: WELLNESS_TOOLS_IMAGES.explore.body,
     icon: Heart,
     iconTint: "text-emerald-200 shadow-[0_0_28px_rgba(52,211,153,0.45)]",
     ambientOverlay:
@@ -293,7 +316,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   emotions: {
     title: "Emotions",
     subtitle: "Understand & manage feelings",
-    image: pickSolaceCinematicImage("wellness-explore-emotions"),
+    image: WELLNESS_TOOLS_IMAGES.explore.emotions,
     icon: Sparkles,
     iconTint: "text-fuchsia-200 shadow-[0_0_28px_rgba(244,114,182,0.45)]",
     ambientOverlay:
@@ -302,7 +325,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   relax: {
     title: "Relax",
     subtitle: "Rest, breathe & unwind",
-    image: pickSolaceCinematicImage("wellness-explore-relax"),
+    image: WELLNESS_TOOLS_IMAGES.explore.relax,
     icon: Droplets,
     iconTint: "text-sky-200 shadow-[0_0_28px_rgba(56,189,248,0.45)]",
     ambientOverlay:
@@ -311,7 +334,7 @@ const EXPLORE_CARD_META: Record<ExploreGroup, ExploreCardMeta> = {
   sleep: {
     title: "Sleep",
     subtitle: "Better sleep, better you",
-    image: pickSolaceCinematicImage("wellness-explore-sleep"),
+    image: WELLNESS_TOOLS_IMAGES.explore.sleep,
     icon: Moon,
     iconTint: "text-indigo-200 shadow-[0_0_28px_rgba(129,140,248,0.5)]",
     ambientOverlay:
@@ -323,49 +346,59 @@ const SUPPORT_PILLS: {
   label: string;
   category: WellnessToolCategory;
   icon: LucideIcon;
+  image: string;
   glow: string;
 }[] = [
-  { label: "Calm Anxiety", category: "Anxiousness", icon: Brain, glow: "shadow-[0_0_32px_rgba(167,139,250,0.35)]" },
-  { label: "Sleep Better", category: "Sleep Health", icon: Moon, glow: "shadow-[0_0_28px_rgba(56,189,248,0.32)]" },
-  { label: "Boost Focus", category: "Mindfulness", icon: Crosshair, glow: "shadow-[0_0_28px_rgba(34,211,238,0.32)]" },
-  { label: "Manage Stress", category: "Stress Management", icon: Flame, glow: "shadow-[0_0_28px_rgba(251,146,60,0.32)]" },
-  { label: "Lift Your Mood", category: "Self-Care", icon: Heart, glow: "shadow-[0_0_28px_rgba(244,114,182,0.35)]" },
-  { label: "Build Confidence", category: "Low morale support", icon: Shield, glow: "shadow-[0_0_28px_rgba(192,132,252,0.32)]" },
+  {
+    label: "Calm Anxiety",
+    category: "Anxiousness",
+    icon: Brain,
+    image: WELLNESS_TOOLS_IMAGES.support.calmAnxiety,
+    glow: "shadow-[0_0_32px_rgba(167,139,250,0.35)]",
+  },
+  {
+    label: "Sleep Better",
+    category: "Sleep Health",
+    icon: Moon,
+    image: WELLNESS_TOOLS_IMAGES.support.sleepBetter,
+    glow: "shadow-[0_0_28px_rgba(56,189,248,0.32)]",
+  },
+  {
+    label: "Boost Focus",
+    category: "Mindfulness",
+    icon: Crosshair,
+    image: WELLNESS_TOOLS_IMAGES.support.boostFocus,
+    glow: "shadow-[0_0_28px_rgba(34,211,238,0.32)]",
+  },
+  {
+    label: "Manage Stress",
+    category: "Stress Management",
+    icon: Flame,
+    image: WELLNESS_TOOLS_IMAGES.support.manageStress,
+    glow: "shadow-[0_0_28px_rgba(251,146,60,0.32)]",
+  },
+  {
+    label: "Lift Your Mood",
+    category: "Self-Care",
+    icon: Heart,
+    image: WELLNESS_TOOLS_IMAGES.support.liftMood,
+    glow: "shadow-[0_0_28px_rgba(244,114,182,0.35)]",
+  },
+  {
+    label: "Build Confidence",
+    category: "Low morale support",
+    icon: Shield,
+    image: WELLNESS_TOOLS_IMAGES.support.buildConfidence,
+    glow: "shadow-[0_0_28px_rgba(192,132,252,0.32)]",
+  },
 ];
 
-const WELLNESS_HERO_BASE = pickSolaceCinematicImage("wellness-hero-base");
-const WELLNESS_HERO_WARM_LAYER = pickSolaceCinematicImage("wellness-hero-warm");
-const WELLNESS_HERO_BASE_NARROW = WELLNESS_HERO_BASE;
-const WELLNESS_HERO_CANDLE_WIDE = TALK_ENV_CANDLE;
-
-const WELLNESS_TOOL_CARD_FALLBACKS: string[] = [...SOLACE_CINEMATIC_POOL];
+const WELLNESS_TOOL_CARD_FALLBACKS: readonly string[] = WELLNESS_TOOLS_IMAGE_POOL;
 
 function exerciseCardBackdropSrc(exercise: WellnessExerciseItem): string {
-  const byId: Record<string, string> = {
-    "grounding-54321": pickSolaceCinematicImage("exercise-grounding"),
-    "stress-release-waves": pickSolaceCinematicImage("exercise-stress"),
-    "body-scan": pickSolaceCinematicImage("exercise-body-scan"),
-    "sleep-meditation": pickSolaceCinematicImage("exercise-sleep"),
-    "gentle-movement": pickSolaceCinematicImage("exercise-movement"),
-    gratitude: pickSolaceCinematicImage("exercise-gratitude"),
-    "box-breathing": pickSolaceCinematicImage("exercise-breathing"),
-    "compassion-pause": TALK_ENV_CANDLE,
-    "mindful-anchor": TALK_ENV_FOREST,
-    "rain-sounds": pickSolaceCinematicImage("exercise-rain"),
-  };
-  if (byId[exercise.id]) return byId[exercise.id]!;
-  const byCat: Partial<Record<WellnessToolCategory, string>> = {
-    Anxiousness: byId["grounding-54321"]!,
-    "Stress Management": byId["stress-release-waves"]!,
-    Meditation: byId["body-scan"]!,
-    "Sleep Health": byId["sleep-meditation"]!,
-    Exercise: byId["gentle-movement"]!,
-    "Self-Care": byId["gratitude"]!,
-    Relaxation: byId["rain-sounds"]!,
-    "Low morale support": TALK_ENV_CANDLE,
-    Mindfulness: TALK_ENV_FOREST,
-  };
-  const fromCat = byCat[exercise.category as WellnessToolCategory];
+  const fromId = wellnessToolsExerciseImage(exercise.id);
+  if (fromId) return fromId;
+  const fromCat = wellnessToolsCategoryFallbackImage(exercise.category);
   if (fromCat) return fromCat;
   const idx = Math.abs(
     [...exercise.id].reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % WELLNESS_TOOL_CARD_FALLBACKS.length
@@ -437,6 +470,8 @@ export function WellnessTools() {
   const [selectedCategoryTab, setSelectedCategoryTab] = useState<WellnessToolCategory | "all">("all");
   const [exploreGroup, setExploreGroup] = useState<ExploreGroup | null>(null);
   const [sortOption, setSortOption] = useState<"recommended" | "shortest" | "longest" | "az">("recommended");
+  const [insightsPeriod, setInsightsPeriod] = useState<WellnessInsightsPeriod>("week");
+  const [insights, setInsights] = useState<WellnessInsightsData | null>(null);
   const [exercises, setExercises] = useState<WellnessExerciseItem[]>([]);
   const [progress, setProgress] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -508,15 +543,94 @@ export function WellnessTools() {
     fetchData();
   }, [user?.id]);
 
-  const totalTimeSeconds = progress.reduce(
+  const refreshInsights = useCallback(
+    async (period: WellnessInsightsPeriod = insightsPeriod) => {
+      if (!user?.id) {
+        setInsights(null);
+        return;
+      }
+      try {
+        const data = (await api.wellness.getInsights(period)) as WellnessInsightsData;
+        setInsights(data);
+      } catch (error) {
+        console.error("Failed to fetch wellness insights:", error);
+      }
+    },
+    [user?.id, insightsPeriod]
+  );
+
+  useEffect(() => {
+    void refreshInsights();
+  }, [refreshInsights]);
+
+  const refreshProgressSnapshot = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const [apiProg, insightsRes] = await Promise.all([
+        api.wellness.getProgress(),
+        api.wellness.getInsights(insightsPeriod),
+      ]);
+      const arr = Array.isArray(apiProg) ? apiProg : [];
+      setProgress(mergeWellnessProgressWithLocal(arr as WellnessProgressRow[], loadLocalProgress(user.id)));
+      setInsights(insightsRes as WellnessInsightsData);
+    } catch (error) {
+      console.error("Failed to refresh wellness progress:", error);
+    }
+  }, [user?.id, insightsPeriod]);
+
+  const periodProgress = useMemo(() => {
+    const apiRows = insights?.progress ?? [];
+    if (!user?.id) return apiRows;
+    const localRows = filterLocalProgressByPeriod(loadLocalProgress(user.id), insightsPeriod);
+    return mergeWellnessProgressWithLocal(apiRows, localRows);
+  }, [insights, user?.id, insightsPeriod]);
+
+  const totalTimeSeconds = periodProgress.reduce(
     (acc, curr) => acc + wellnessProgressTotalSeconds(curr),
     0
   );
 
   const completedSessionsTotal = useMemo(
-    () => progress.reduce((acc, curr) => acc + (curr.sessionsCompleted ?? 0), 0),
-    [progress]
+    () => periodProgress.reduce((acc, curr) => acc + (curr.sessionsCompleted ?? 0), 0),
+    [periodProgress]
   );
+
+  const moodAfterDisplay = useMemo(() => {
+    const m = insights?.moodAfterExercises;
+    const buckets = [
+      {
+        key: "positive" as const,
+        label: "Positive",
+        icon: Smile,
+        tone: "text-emerald-300 shadow-[0_0_22px_rgba(52,211,153,0.35)]",
+      },
+      {
+        key: "neutral" as const,
+        label: "Neutral",
+        icon: Meh,
+        tone: "text-sky-300 shadow-[0_0_22px_rgba(56,189,248,0.3)]",
+      },
+      {
+        key: "anxious" as const,
+        label: "Anxious",
+        icon: CloudLightning,
+        tone: "text-violet-300 shadow-[0_0_22px_rgba(167,139,250,0.35)]",
+      },
+      {
+        key: "sad" as const,
+        label: "Sad",
+        icon: Frown,
+        tone: "text-rose-300 shadow-[0_0_22px_rgba(251,113,133,0.3)]",
+      },
+    ];
+    if (!m || m.total === 0) {
+      return buckets.map((b) => ({ ...b, pct: "0%" }));
+    }
+    return buckets.map((b) => ({
+      ...b,
+      pct: `${Math.round((m[b.key] / m.total) * 100)}%`,
+    }));
+  }, [insights]);
 
   const streakDotsActive = useMemo(() => {
     if (completedSessionsTotal <= 0) return 0;
@@ -648,15 +762,9 @@ export function WellnessTools() {
       const ex = exercises.find((x) => x.id === exerciseId);
       if (ex) {
         recordBuiltinSession(user.id, exerciseId, ex.title, timeSpent);
-        void api.wellness
-          .getProgress()
-          .then((apiProg) => {
-            const arr = Array.isArray(apiProg) ? apiProg : [];
-            setProgress(
-              mergeWellnessProgressWithLocal(arr as WellnessProgressRow[], loadLocalProgress(user.id))
-            );
-          })
-          .catch((err) => console.error("Failed to refresh progress after built-in session:", err));
+        void refreshProgressSnapshot().catch((err) =>
+          console.error("Failed to refresh progress after built-in session:", err)
+        );
       }
       return;
     }
@@ -667,15 +775,7 @@ export function WellnessTools() {
         : api.wellness.trackProgress(exerciseId, { duration_spent: timeSpent });
 
       promise
-        .then(() => api.wellness.getProgress())
-        .then((apiProg) => {
-          const arr = Array.isArray(apiProg) ? apiProg : [];
-          setProgress(
-            user?.id
-              ? mergeWellnessProgressWithLocal(arr as WellnessProgressRow[], loadLocalProgress(user.id))
-              : arr
-          );
-        })
+        .then(() => refreshProgressSnapshot())
         .catch((err) => console.error("Failed to track progress on close:", err));
     }
   };
@@ -718,30 +818,16 @@ export function WellnessTools() {
               promise
                 .then(() => {
                   setCurrentSessionId(null);
-                  return api.wellness.getProgress();
-                })
-                .then((apiProg) => {
-                  const arr = Array.isArray(apiProg) ? apiProg : [];
-                  setProgress(
-                    user?.id
-                      ? mergeWellnessProgressWithLocal(arr as WellnessProgressRow[], loadLocalProgress(user.id))
-                      : arr
-                  );
+                  return refreshProgressSnapshot();
                 })
                 .catch((err) => console.error("Failed to track progress:", err));
             } else {
               setCurrentSessionId(null);
               if (activeExercise && user?.id && activeExerciseSourceRef.current === "builtin") {
                 recordBuiltinSession(user.id, activeExercise, activeExerciseData.title, durationSec);
-                void api.wellness
-                  .getProgress()
-                  .then((apiProg) => {
-                    const arr = Array.isArray(apiProg) ? apiProg : [];
-                    setProgress(
-                      mergeWellnessProgressWithLocal(arr as WellnessProgressRow[], loadLocalProgress(user.id))
-                    );
-                  })
-                  .catch((err) => console.error("Failed to refresh progress after built-in timer:", err));
+                void refreshProgressSnapshot().catch((err) =>
+                  console.error("Failed to refresh progress after built-in timer:", err)
+                );
               }
             }
           });
@@ -933,47 +1019,21 @@ export function WellnessTools() {
                 transition={{ delay: 0.04 }}
                 className="relative h-[260px] overflow-hidden rounded-3xl border border-white/[0.12] shadow-[0_32px_90px_-28px_rgba(139,92,246,0.28),0_24px_64px_-32px_rgba(0,0,0,0.9)] ring-1 ring-fuchsia-500/10"
               >
+                <img
+                  src={WELLNESS_TOOLS_IMAGES.hero}
+                  alt="Wooden deck with lanterns and candles overlooking a calm lake at dusk"
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[58%_42%]"
+                  loading="eager"
+                  decoding="async"
+                  width={1600}
+                  height={520}
+                />
                 <div
-                  className="pointer-events-none absolute inset-0 z-0 scale-[1.03] bg-cover bg-[center_40%]"
-                  style={{ backgroundImage: `url(${WELLNESS_HERO_BASE})` }}
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0618]/68 via-[#0a0618]/32 to-transparent"
                   aria-hidden
                 />
                 <div
-                  className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center opacity-[0.38] mix-blend-soft-light"
-                  style={{ backgroundImage: `url(${WELLNESS_HERO_WARM_LAYER})` }}
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 z-[2] bg-[radial-gradient(ellipse_90%_70%_at_70%_25%,rgba(251,191,36,0.14),transparent_55%),radial-gradient(ellipse_85%_60%_at_15%_80%,rgba(236,72,153,0.11),transparent_52%)]"
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 z-[3] bg-gradient-to-r from-[#0a0618]/96 via-violet-950/42 to-fuchsia-950/12"
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 z-[4] bg-gradient-to-t from-[#06040f]/92 via-transparent to-violet-300/12"
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 z-[5] bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,transparent_28%,transparent_55%,rgba(8,5,18,0.25)_100%)]"
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-y-0 right-0 z-[6] hidden w-[55%] bg-cover bg-[center_65%] opacity-[0.48] mix-blend-soft-light lg:block"
-                  style={{ backgroundImage: `url(${WELLNESS_HERO_CANDLE_WIDE})` }}
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-y-0 right-0 z-[7] hidden w-[40%] bg-gradient-to-l from-amber-100/12 via-orange-200/5 to-transparent opacity-80 mix-blend-overlay lg:block"
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 z-[8] rounded-3xl shadow-[inset_0_0_120px_rgba(0,0,0,0.5)]"
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 z-[9] bg-[radial-gradient(ellipse_at_center,transparent_0%,transparent_42%,rgba(0,0,0,0.35)_100%)] opacity-90"
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#06040f]/55 via-transparent to-transparent"
                   aria-hidden
                 />
                 <div className="relative z-10 grid h-full grid-cols-1 lg:grid-cols-[1.1fr_1fr]">
@@ -1028,21 +1088,39 @@ export function WellnessTools() {
                           setShowOnlyFavorites(false);
                         }}
                         className={cn(
-                          "flex h-[72px] w-[120px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-2xl border text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition",
+                          "group relative flex h-[72px] w-[120px] shrink-0 flex-col items-center justify-center gap-1.5 overflow-hidden rounded-2xl border text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition",
                           active
-                            ? "border-violet-400/45 bg-gradient-to-b from-violet-950/50 to-zinc-950/90 shadow-[0_0_36px_rgba(139,92,246,0.35),0_12px_32px_-18px_rgba(236,72,153,0.12)] ring-1 ring-fuchsia-400/20"
-                            : "border-white/[0.1] bg-black/35 shadow-[0_14px_36px_-22px_rgba(0,0,0,0.65)] hover:border-violet-400/30 hover:shadow-[0_0_28px_rgba(139,92,246,0.18)]"
+                            ? "border-violet-400/45 shadow-[0_0_36px_rgba(139,92,246,0.35),0_12px_32px_-18px_rgba(236,72,153,0.12)] ring-1 ring-fuchsia-400/20"
+                            : "border-white/[0.1] shadow-[0_14px_36px_-22px_rgba(0,0,0,0.65)] hover:border-violet-400/30 hover:shadow-[0_0_28px_rgba(139,92,246,0.18)]"
                         )}
                       >
+                        <div
+                          className="absolute inset-0 bg-cover bg-center transition duration-500 group-hover:scale-[1.04]"
+                          style={{ backgroundImage: `url(${pill.image})` }}
+                          aria-hidden
+                        />
+                        <div
+                          className="absolute inset-0 bg-gradient-to-t from-[#07030f]/95 via-black/55 to-violet-950/20"
+                          aria-hidden
+                        />
+                        <div
+                          className={cn(
+                            "absolute inset-0 transition",
+                            active ? "bg-violet-950/35" : "bg-black/25 group-hover:bg-black/15"
+                          )}
+                          aria-hidden
+                        />
                         <span
                           className={cn(
-                            "flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
+                            "relative z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.12] bg-black/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-[2px]",
                             pill.glow
                           )}
                         >
                           <Icon className="h-4 w-4 text-zinc-100" aria-hidden />
                         </span>
-                        <span className="px-1 text-[11px] font-medium leading-tight text-zinc-100">{pill.label}</span>
+                        <span className="relative z-10 px-1 text-[11px] font-medium leading-tight text-zinc-100 drop-shadow-[0_1px_8px_rgba(0,0,0,0.85)]">
+                          {pill.label}
+                        </span>
                       </button>
                     );
                   })}
@@ -1147,22 +1225,22 @@ export function WellnessTools() {
                     </h2>
                     <p className="mt-1 text-sm text-zinc-400">Handpicked experiences to support your wellbeing.</p>
                   </div>
-                  <label className="relative flex w-full shrink-0 items-center sm:w-auto">
-                    <span className="sr-only">Sort tools</span>
-                    <select
-                      value={sortOption}
-                      onChange={(e) =>
-                        setSortOption(e.target.value as "recommended" | "shortest" | "longest" | "az")
-                      }
-                      className="solace-scroll w-full cursor-pointer appearance-none rounded-xl border border-white/[0.1] bg-black/40 py-2 pl-3 pr-9 text-[13px] font-medium text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35 sm:w-auto"
-                    >
-                      <option value="recommended">Recommended</option>
-                      <option value="shortest">Shortest first</option>
-                      <option value="longest">Longest first</option>
-                      <option value="az">A–Z</option>
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500 sm:right-3" aria-hidden />
-                  </label>
+                  <SolaceSelect
+                    value={sortOption}
+                    onValueChange={(v) =>
+                      setSortOption(v as "recommended" | "shortest" | "longest" | "az")
+                    }
+                    ariaLabel="Sort tools"
+                    variant="default"
+                    size="sm"
+                    triggerClassName="w-full sm:w-auto"
+                    options={[
+                      { value: "recommended", label: "Recommended" },
+                      { value: "shortest", label: "Shortest first" },
+                      { value: "longest", label: "Longest first" },
+                      { value: "az", label: "A–Z" },
+                    ]}
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -1275,7 +1353,7 @@ export function WellnessTools() {
                                   className="h-9 min-h-0 shrink-0 rounded-full border-white/20 bg-gradient-to-br from-white/[0.1] to-violet-950/40 px-2.5 text-[11px] text-violet-50/95 shadow-[0_0_20px_rgba(139,92,246,0.22)] ring-1 ring-white/15 backdrop-blur-sm hover:from-white/[0.14] hover:to-violet-900/50"
                                 >
                                   <Sparkles className="h-3 w-3" aria-hidden />
-                                  Ezri
+                                  Solace
                                 </Button>
                               </div>
                             </div>
@@ -1332,13 +1410,19 @@ export function WellnessTools() {
                   <label className="sr-only" htmlFor="wellness-journey-period">
                     Time period
                   </label>
-                  <select
-                    id="wellness-journey-period"
-                    defaultValue="week"
-                    className="solace-scroll max-w-[7.5rem] cursor-pointer appearance-none rounded-lg border border-white/[0.08] bg-black/35 py-1 pl-2 pr-6 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/30"
-                  >
-                    <option value="week">This Week</option>
-                  </select>
+                  <div className="relative z-30 shrink-0">
+                    <SolaceSelect
+                      id="wellness-journey-period"
+                      value={insightsPeriod}
+                      onValueChange={(v) => setInsightsPeriod(v as WellnessInsightsPeriod)}
+                      ariaLabel="Time period"
+                      variant="compact"
+                      size="sm"
+                      triggerClassName="max-w-[7.5rem] uppercase tracking-wider text-[10px] text-zinc-400"
+                      contentClassName="z-[300]"
+                      options={WELLNESS_INSIGHTS_PERIOD_OPTIONS}
+                    />
+                  </div>
                 </div>
                 <div className="mt-4 flex flex-col items-center gap-3 text-center">
                   <div className="relative flex h-[120px] w-[120px] shrink-0 items-center justify-center">
@@ -1391,7 +1475,7 @@ export function WellnessTools() {
                   </div>
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Exercises</p>
-                    <p className="mt-1 text-sm font-semibold tabular-nums text-white">{progress.length}</p>
+                    <p className="mt-1 text-sm font-semibold tabular-nums text-white">{periodProgress.length}</p>
                   </div>
                 </div>
               </div>
@@ -1399,22 +1483,24 @@ export function WellnessTools() {
               <div className="rounded-2xl border border-white/[0.12] bg-[color-mix(in_oklab,var(--solace-panel)_86%,transparent)] p-5 shadow-[0_18px_48px_-22px_rgba(0,0,0,0.62),0_0_44px_-12px_rgba(236,72,153,0.14),inset_0_1px_0_rgba(255,255,255,0.09)] ring-1 ring-fuchsia-500/10 backdrop-blur-xl">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="text-base font-semibold tracking-tight text-white">Mood After Exercises</h3>
-                  <select
-                    aria-label="Mood period"
-                    defaultValue="week"
-                    className="solace-scroll max-w-[7.5rem] cursor-pointer appearance-none rounded-lg border border-white/[0.08] bg-black/35 py-1 pl-2 pr-6 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/30"
-                  >
-                    <option value="week">This Week</option>
-                  </select>
+                  <div className="relative z-30 shrink-0">
+                    <SolaceSelect
+                      value={insightsPeriod}
+                      onValueChange={(v) => setInsightsPeriod(v as WellnessInsightsPeriod)}
+                      ariaLabel="Mood period"
+                      variant="compact"
+                      size="sm"
+                      triggerClassName="max-w-[7.5rem] uppercase tracking-wider text-[10px] text-zinc-400"
+                      contentClassName="z-[300]"
+                      options={WELLNESS_INSIGHTS_PERIOD_OPTIONS}
+                    />
+                  </div>
                 </div>
-                <p className="sr-only">Illustrative reflection snapshot for your week.</p>
+                <p className="sr-only">
+                  Mood breakdown from session feedback and check-ins for the selected period.
+                </p>
                 <div className="mt-4 grid grid-cols-4 gap-2">
-                  {[
-                    { label: "Positive", pct: "60%", icon: Smile, tone: "text-emerald-300 shadow-[0_0_22px_rgba(52,211,153,0.35)]" },
-                    { label: "Neutral", pct: "30%", icon: Meh, tone: "text-sky-300 shadow-[0_0_22px_rgba(56,189,248,0.3)]" },
-                    { label: "Anxious", pct: "7%", icon: CloudLightning, tone: "text-violet-300 shadow-[0_0_22px_rgba(167,139,250,0.35)]" },
-                    { label: "Sad", pct: "3%", icon: Frown, tone: "text-rose-300 shadow-[0_0_22px_rgba(251,113,133,0.3)]" },
-                  ].map((m) => {
+                  {moodAfterDisplay.map((m) => {
                     const MIcon = m.icon;
                     return (
                       <div key={m.label} className="flex flex-col items-center text-center">
@@ -1468,30 +1554,17 @@ export function WellnessTools() {
               </div>
 
               <div className="relative h-[360px] overflow-hidden rounded-2xl border border-white/[0.12] shadow-[0_28px_100px_-40px_rgba(139,92,246,0.38),0_24px_64px_-36px_rgba(0,0,0,0.82)] ring-1 ring-fuchsia-500/10">
-                <div
-                  className="absolute inset-0 scale-[1.04] bg-cover bg-[center_45%]"
-                  style={{ backgroundImage: `url(${WELLNESS_HERO_BASE})` }}
-                  aria-hidden
+                <img
+                  src={WELLNESS_TOOLS_IMAGES.quote}
+                  alt=""
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
+                  loading="lazy"
+                  decoding="async"
+                  width={640}
+                  height={360}
                 />
                 <div
-                  className="absolute inset-0 bg-cover bg-center opacity-[0.35] mix-blend-soft-light"
-                  style={{ backgroundImage: `url(${WELLNESS_HERO_WARM_LAYER})` }}
-                  aria-hidden
-                />
-                <div
-                  className="absolute inset-0 bg-[radial-gradient(ellipse_100%_85%_at_50%_50%,rgba(8,5,18,0.2)_0%,rgba(8,5,18,0.55)_55%,rgba(8,5,18,0.82)_100%)]"
-                  aria-hidden
-                />
-                <div
-                  className="absolute inset-0 bg-[radial-gradient(ellipse_90%_80%_at_50%_88%,rgba(236,72,153,0.2),transparent_55%),radial-gradient(ellipse_70%_55%_at_50%_5%,rgba(139,92,246,0.18),transparent_52%)] mix-blend-multiply opacity-90"
-                  aria-hidden
-                />
-                <div
-                  className="absolute inset-0 bg-gradient-to-b from-violet-950/25 via-transparent to-[#080512]/90"
-                  aria-hidden
-                />
-                <div
-                  className="absolute inset-0 rounded-2xl shadow-[inset_0_0_100px_rgba(0,0,0,0.55)]"
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#0a0618]/45 via-[#0a0618]/25 to-[#080512]/72"
                   aria-hidden
                 />
                 <div className="relative z-10 flex h-full flex-col items-center justify-center gap-5 px-7 py-10 text-center sm:px-10">

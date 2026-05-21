@@ -10,7 +10,6 @@ import {
   Mic,
   Shield,
   Sparkles,
-  Text as TextIcon,
   User,
   Video,
   Waves,
@@ -21,7 +20,6 @@ import type { LucideIcon } from "lucide-react";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { Button } from "@/app/components/ui/button";
 import { cn } from "@/lib/utils";
-import { SolaceHeroAtmosphere } from "@/app/solace/SolaceHeroAtmosphere";
 import {
   TALK_IT_OUT_ENVIRONMENT_THUMBS,
   TALK_IT_OUT_IMAGES,
@@ -71,8 +69,8 @@ interface TalkItOutLobbyLayoutProps {
   showCarveoutBanner: boolean;
   checklistItems: ChecklistItem[];
   toggleChecklist: (index: number) => void;
-  connectMode: "voice" | "text" | "deep" | "quick";
-  setConnectMode: (m: "voice" | "text" | "deep" | "quick") => void;
+  connectMode: "voice" | "video" | "deep" | "quick";
+  setConnectMode: (m: "voice" | "video" | "deep" | "quick") => void;
   conversationEnergy: "gentle" | "reflective" | "grounding" | "open";
   setConversationEnergy: (e: "gentle" | "reflective" | "grounding" | "open") => void;
   selectedEnvironment: string;
@@ -142,9 +140,9 @@ export function TalkItOutLobbyLayout({
   onStartDeep,
   onQuickCheckInNavigate,
 }: TalkItOutLobbyLayoutProps) {
-  const sessionModes: { id: "voice" | "text" | "deep" | "quick"; label: string; Icon: LucideIcon }[] = [
+  const sessionModes: { id: "voice" | "video" | "deep" | "quick"; label: string; Icon: LucideIcon }[] = [
     { id: "voice", label: "Voice", Icon: Mic },
-    { id: "text", label: "Text", Icon: TextIcon },
+    { id: "video", label: "Video", Icon: Video },
     { id: "deep", label: "Deep Reflection", Icon: Sparkles },
     { id: "quick", label: "Quick Release", Icon: Wind },
   ];
@@ -195,21 +193,7 @@ export function TalkItOutLobbyLayout({
   return (
     <>
       <motion.div className="relative min-h-[calc(100dvh-5rem)] overflow-x-hidden pb-28 text-[var(--solace-text)] lg:pb-10">
-        <img
-          src={TALK_IT_OUT_IMAGES.pageBackground}
-          alt=""
-          className="pointer-events-none fixed inset-0 z-0 h-full w-full object-cover opacity-35"
-          loading="eager"
-          decoding="async"
-        />
-        <img
-          src={TALK_IT_OUT_IMAGES.pageGlow}
-          alt=""
-          className="pointer-events-none fixed inset-0 z-0 h-full w-full object-cover opacity-25 mix-blend-screen"
-          loading="lazy"
-          decoding="async"
-        />
-        <div className="relative z-[1] mx-auto max-w-[1680px] px-4 sm:px-5 lg:px-8">
+        <div className="relative z-[1] mx-auto max-w-[1680px] px-4 pt-6 sm:px-5 sm:pt-8 lg:px-8 lg:pt-10">
           <header className="mb-8 border-b border-white/[0.05] pb-8">
             <h1 className="font-serif text-[1.75rem] font-normal tracking-tight text-zinc-50 sm:text-[2rem]">
               Talk It Out
@@ -251,42 +235,29 @@ export function TalkItOutLobbyLayout({
                 <img
                   src={TALK_IT_OUT_IMAGES.heroBackground}
                   alt=""
-                  className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
                   loading="eager"
                   decoding="async"
                 />
-                <img
-                  src={TALK_IT_OUT_IMAGES.heroMoonLayer}
-                  alt=""
-                  className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-35 mix-blend-soft-light"
-                  loading="lazy"
-                  decoding="async"
-                />
-                <img
-                  src={TALK_IT_OUT_IMAGES.heroCandleAccent}
-                  alt=""
-                  className="pointer-events-none absolute bottom-0 left-0 h-[55%] w-[62%] object-cover object-left-bottom opacity-70 mix-blend-soft-light"
-                  loading="lazy"
-                  decoding="async"
-                />
-                <img
-                  src={TALK_IT_OUT_IMAGES.heroEmbers}
-                  alt=""
-                  className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-20 mix-blend-screen"
-                  loading="lazy"
-                  decoding="async"
-                />
-                <SolaceHeroAtmosphere className="rounded-none" />
                 <div className="relative z-[2] flex min-h-[420px] flex-col items-center px-5 pb-10 pt-10 text-center sm:px-8 sm:pb-12 sm:pt-12">
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#060711]/55 via-[#060711]/75 to-[#060711]/92" />
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#120818]/25 via-[#0a0612]/45 to-[#06040c]/78" />
+                  <div
+                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_55%_at_50%_42%,rgba(255,180,80,0.12)_0%,transparent_62%)]"
+                    aria-hidden
+                  />
                   <div className="relative z-[3] flex w-full max-w-lg flex-col items-center">
-                    <div className="relative mb-7">
-                      <div className="absolute inset-0 scale-110 rounded-full bg-violet-500/25 blur-2xl" aria-hidden />
-                      <div className="relative h-[108px] w-[108px] overflow-hidden rounded-full border-2 border-violet-400/45 bg-black/40 shadow-[0_0_48px_rgba(139,92,246,0.45)] ring-4 ring-violet-500/15">
+                    <div className="relative mb-7 flex justify-center">
+                      <div
+                        className="absolute h-[108px] w-[108px] scale-110 rounded-full bg-violet-500/25 blur-2xl"
+                        aria-hidden
+                      />
+                      <div className="relative h-[208px] w-[208px] shrink-0 overflow-hidden rounded-full border-2 border-violet-400/50 bg-black/45 shadow-[0_0_52px_rgba(139,92,246,0.4)] ring-2 ring-violet-500/20">
                         <img
                           src={heroPortraitSrc}
                           alt={companionAlt}
-                          className="h-full w-full object-cover object-top"
+                          className="h-full w-full object-cover object-center"
+                          loading="eager"
+                          decoding="async"
                           onError={(event) => {
                             const img = event.currentTarget;
                             if (img.src.endsWith(TALK_IT_OUT_IMAGES.companionPortrait)) return;
@@ -367,34 +338,35 @@ export function TalkItOutLobbyLayout({
 
               <section aria-label="Preparation guidance">
                 <h3 className="text-[17px] font-medium tracking-tight text-zinc-100">Before we begin</h3>
-                <div className={cn(mattePanelClass("relative mt-5 overflow-hidden"))}>
-                  <div className="pointer-events-none absolute -right-2 bottom-0 top-0 w-[42%] max-w-[220px]">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(167,139,250,0.35)_0%,transparent_72%)]" aria-hidden />
-                    <img
-                      src={TALK_IT_OUT_IMAGES.lotusDecor}
-                      alt=""
-                      className="absolute bottom-4 right-2 h-auto w-full max-h-[88%] object-contain object-bottom opacity-[0.42]"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </div>
-                  <div className="relative z-[1] flex flex-col gap-0 lg:flex-row lg:flex-wrap lg:items-stretch">
-                    {checklistItems.map((item, idx) => {
-                      const IconClass = checklistIcons[idx % checklistIcons.length];
-                      return (
-                        <button
-                          key={item.label}
-                          type="button"
-                          onClick={() => toggleChecklist(idx)}
-                          className={cn(
-                            "flex min-h-[72px] min-w-0 flex-1 gap-4 px-6 py-5 text-left transition-colors hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-400/35 lg:max-w-[25%]",
-                            idx < checklistItems.length - 1 &&
-                              "border-b border-white/[0.06] lg:border-b-0 lg:border-r"
-                          )}
-                        >
+                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {checklistItems.map((item, idx) => {
+                    const IconClass = checklistIcons[idx % checklistIcons.length];
+                    return (
+                      <button
+                        key={item.label}
+                        type="button"
+                        onClick={() => toggleChecklist(idx)}
+                        className={cn(
+                          mattePanelClass(
+                            "relative min-h-[88px] w-full overflow-hidden text-left transition-[border-color,transform] duration-300 hover:-translate-y-0.5 hover:border-violet-400/28 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
+                          )
+                        )}
+                      >
+                        <img
+                          src={TALK_IT_OUT_IMAGES.lotusDecor}
+                          alt=""
+                          className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.42]"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                        <div
+                          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#060711]/92 via-[#060711]/62 to-[#060711]/38"
+                          aria-hidden
+                        />
+                        <div className="relative z-[1] flex gap-4 px-5 py-5">
                           <div
                             className={cn(
-                              "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-black/35 transition-colors",
+                              "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-black/45 backdrop-blur-sm transition-colors",
                               item.checked
                                 ? cn("border-white/[0.12]", IconClass)
                                 : "border-white/[0.08] text-zinc-600"
@@ -414,10 +386,10 @@ export function TalkItOutLobbyLayout({
                           >
                             {item.label}
                           </p>
-                        </button>
-                      );
-                    })}
-                  </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </section>
 
@@ -437,7 +409,7 @@ export function TalkItOutLobbyLayout({
                   }}
                 >
                   <Calendar className="mr-2 h-5 w-5 opacity-95" aria-hidden />
-                  Schedule a session
+                  Schedule a Talk
                   <ArrowRight className="ml-2 h-4 w-4 opacity-85" aria-hidden />
                 </Button>
                 {!isLoadingUpcoming ? (
@@ -534,42 +506,37 @@ export function TalkItOutLobbyLayout({
                 </div>
               </div>
 
-              <div className={cn(mattePanelClass("relative overflow-hidden p-5"))}>
-                <img
-                  src={TALK_IT_OUT_IMAGES.environmentCozyCabin}
-                  alt=""
-                  className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-[0.14]"
-                  loading="lazy"
-                  decoding="async"
-                />
-                <p className="relative text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
-                  Companion
+              <div className={cn(mattePanelClass("p-5"))}>
+                <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
+                  Customize Solace Voice & Avatar
                 </p>
                 <button
                   type="button"
                   onClick={onOpenCustomize}
-                  className="relative mt-4 flex min-h-[48px] w-full items-start justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/28 px-3 py-3 text-left transition-colors hover:border-violet-400/28 hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
+                  className="mt-2 flex min-h-[48px] w-full items-center gap-3 rounded-xl border border-white/[0.06] bg-black/28 px-3 py-2.5 text-left transition-colors hover:border-violet-400/28 hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35"
                   aria-expanded={false}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-white/[0.1] bg-black/40">
-                      <img
-                        src={heroPortraitSrc}
-                        alt=""
-                        className="h-full w-full object-cover object-top"
-                        onError={(event) => {
-                          const img = event.currentTarget;
-                          if (img.src.endsWith(TALK_IT_OUT_IMAGES.companionPortrait)) return;
-                          img.src = TALK_IT_OUT_IMAGES.companionPortrait;
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <p className="text-[13.5px] font-medium text-zinc-100">{companionDisplayName}</p>
-                      <p className="mt-0.5 text-[11px] text-[var(--solace-muted)]">{companionTraitsLine}</p>
-                    </div>
+                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/[0.1] bg-black/40">
+                    <img
+                      src={heroPortraitSrc}
+                      alt={companionAlt || companionDisplayName}
+                      className="h-full w-full object-cover object-center"
+                      loading="lazy"
+                      decoding="async"
+                      onError={(event) => {
+                        const img = event.currentTarget;
+                        if (img.src.endsWith(TALK_IT_OUT_IMAGES.companionPortrait)) return;
+                        img.src = TALK_IT_OUT_IMAGES.companionPortrait;
+                      }}
+                    />
                   </div>
-                  <ChevronDown className="mt-2 h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+                  <span className="min-w-0 flex-1">
+                    <p className="text-[13.5px] font-medium leading-tight text-zinc-100">{companionDisplayName}</p>
+                    <p className="mt-0.5 line-clamp-1 text-[11px] text-[var(--solace-muted)]">
+                      {companionTraitsLine}
+                    </p>
+                  </span>
+                  <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
                 </button>
               </div>
 

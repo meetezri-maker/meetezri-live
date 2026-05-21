@@ -773,11 +773,11 @@ export function DataRetentionPrivacy() {
 
         {/* Archive Old Data Modal */}
         {showArchiveModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
+              className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
@@ -826,11 +826,11 @@ export function DataRetentionPrivacy() {
 
         {/* Add Policy Modal */}
         {showAddPolicyModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
@@ -902,11 +902,11 @@ export function DataRetentionPrivacy() {
 
         {/* View Policy Modal */}
         {showViewModal && selectedPolicy && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full"
+              className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
@@ -1005,11 +1005,11 @@ export function DataRetentionPrivacy() {
 
         {/* Mark as Reviewed Modal */}
         {showReviewModal && selectedPolicy && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-lg w-full"
+              className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
@@ -1099,11 +1099,11 @@ export function DataRetentionPrivacy() {
 
         {/* Configure Policy Modal */}
         {showConfigureModal && selectedPolicy && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full"
+              className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">

@@ -12,10 +12,10 @@ interface SolaceSupportStripProps {
 
 export function SolaceSupportStrip({ getSupportSlot, className }: SolaceSupportStripProps) {
   const links = [
-    { to: "/app/emergency-resources", label: "Crisis Helpline", icon: Phone, danger: true },
-    { to: "/app/session-lobby", label: "Talk to Solace", icon: Video },
+    { to: "/app/emergency-resources", label: "Emergency Resources", icon: Phone, danger: true },
+    { to: "/app/session-lobby", label: "Talk It Out", icon: Video },
     { to: "/app/settings/wellness-plan", label: "Safety Plan", icon: Shield },
-    { to: "/app/settings/resources", label: "Resources", icon: BookMarked },
+    { to: "/app/settings/resources", label: "Reading Library", icon: BookMarked },
   ];
   return (
     <SolacePanel glow="violet" className={cn("p-4 sm:p-5", className)}>

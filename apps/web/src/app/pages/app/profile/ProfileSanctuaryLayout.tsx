@@ -33,7 +33,7 @@ import {
   MessageCircle,
   FileText,
 } from "lucide-react";
-import { SolaceHeroEnvironment } from "@/app/solace";
+import { SolaceHeroEnvironment, SolaceSelect } from "@/app/solace";
 import { Switch } from "@/app/components/ui/switch";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import {
@@ -78,7 +78,15 @@ import {
   profileEmergencyCard,
   profileEmergencyWarmthAmber,
   profileEmergencyWarmthViolet,
+  profileEmergencyInput,
+  profileEmergencyLabel,
+  profileEmergencyPhoneButton,
+  profileEmergencyPhoneInput,
+  profileFieldLabel,
   profileHeroShell,
+  profileInput,
+  profilePhoneButton,
+  profilePhoneInput,
   profileHeroStatStrip,
   profileIconCircle,
   profileMilestoneChip,
@@ -589,27 +597,32 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                               {isEditing ? (
                                 f.name === "pronouns" ? (
                                   <motion.div className="space-y-2">
-                                    <select
-                                      value={pronounsOptions.includes((field.value || "").toLowerCase()) ? (field.value || "").toLowerCase() : "__custom__"}
-                                      disabled={isSaving}
-                                      onChange={(e) => {
-                                        const v = e.target.value;
+                                    <SolaceSelect
+                                      value={
+                                        pronounsOptions.includes((field.value || "").toLowerCase())
+                                          ? (field.value || "").toLowerCase()
+                                          : "__custom__"
+                                      }
+                                      onValueChange={(v) => {
                                         if (v === "__custom__") {
                                           field.onChange("");
                                           return;
                                         }
                                         field.onChange(v);
                                       }}
-                                      className="w-full bg-transparent text-sm font-medium text-zinc-100 outline-none disabled:opacity-60"
-                                    >
-                                      <option value="">Select pronouns</option>
-                                      {pronounsOptions.map((option) => (
-                                        <option key={option} value={option}>
-                                          {option}
-                                        </option>
-                                      ))}
-                                      <option value="__custom__">Other (custom)</option>
-                                    </select>
+                                      disabled={isSaving}
+                                      ariaLabel="Pronouns"
+                                      placeholder="Select pronouns"
+                                      variant="default"
+                                      triggerClassName="h-auto w-full border-0 bg-transparent px-0 py-0 text-sm font-medium text-zinc-100 shadow-none"
+                                      options={[
+                                        ...pronounsOptions.map((option) => ({
+                                          value: option,
+                                          label: option,
+                                        })),
+                                        { value: "__custom__", label: "Other (custom)" },
+                                      ]}
+                                    />
                                     {!pronounsOptions.includes((field.value || "").toLowerCase()) && (
                                       <input
                                         value={field.value || ""}
@@ -689,15 +702,30 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                       name="phone"
                       render={({ field }) => (
                         <FormItem id="profile-field-phone" className="scroll-mt-24">
-                          <FieldRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" editing={isEditing}>
-                            {isEditing ? (
-                              <PhoneInput value={field.value} onChange={field.onChange} disabled={isSaving} placeholder="Phone number" className="w-full min-w-0" />
-                            ) : (
-                              <p className="text-sm font-medium text-zinc-200">
-                                {field.value || <span className="font-normal text-zinc-600">Not set</span>}
+                          {isEditing ? (
+                            <div className="space-y-2 rounded-2xl border border-violet-400/25 bg-violet-500/[0.08] px-3.5 py-3">
+                              <p className={`flex items-center gap-2 ${profileFieldLabel}`}>
+                                <Phone className="h-3.5 w-3.5 text-violet-300" />
+                                Phone
                               </p>
-                            )}
-                          </FieldRow>
+                              <PhoneInput
+                                key={`profile-phone-${field.value ?? ""}`}
+                                value={field.value ?? ""}
+                                onChange={field.onChange}
+                                disabled={isSaving}
+                                placeholder="Phone number"
+                                className="w-full min-w-0"
+                                buttonClassName={profilePhoneButton}
+                                inputClassName={profilePhoneInput}
+                              />
+                            </div>
+                          ) : (
+                            <FieldRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" editing={false}>
+                              <p className="text-sm font-medium text-[rgba(255,255,255,0.88)]">
+                                {field.value || <span className="font-normal text-[rgba(255,255,255,0.45)]">Not set</span>}
+                              </p>
+                            </FieldRow>
+                          )}
                           <FormMessage className="mt-0.5 px-1 text-xs" />
                         </FormItem>
                       )}
@@ -752,16 +780,19 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                           </div>
                           <FormControl>
                             {isEditing ? (
-                              <select
-                                {...field}
+                              <SolaceSelect
+                                value={field.value || "__unset__"}
+                                onValueChange={(v) => field.onChange(v === "__unset__" ? "" : v)}
                                 disabled={isSaving}
-                                className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-zinc-100 outline-none focus:ring-2 focus:ring-violet-400/30"
-                              >
-                                <option value="">Select…</option>
-                                <option>Yes</option>
-                                <option>No</option>
-                                <option>Prefer not to say</option>
-                              </select>
+                                ariaLabel="Therapist"
+                                placeholder="Select…"
+                                variant="form"
+                                options={[
+                                  { value: "Yes", label: "Yes" },
+                                  { value: "No", label: "No" },
+                                  { value: "Prefer not to say", label: "Prefer not to say" },
+                                ]}
+                              />
                             ) : (
                               <span className={`${PILL} border-violet-400/25 bg-violet-500/15 text-violet-200`}>
                                 {field.value || "Not specified"}
@@ -929,17 +960,17 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                           name={f.name}
                           render={({ field }) => (
                             <FormItem id={`profile-field-${f.name}`} className="scroll-mt-24">
-                              <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{f.label}</p>
+                              <p className={profileEmergencyLabel}>{f.label}</p>
                               {isEditing ? (
                                 <input
                                   {...field}
                                   disabled={isSaving}
                                   placeholder={f.placeholder}
-                                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm font-medium text-zinc-100 outline-none focus:ring-2 focus:ring-rose-400/25"
+                                  className={profileEmergencyInput}
                                 />
                               ) : (
-                                <p className="text-sm font-medium text-zinc-200">
-                                  {field.value || <span className="font-normal text-zinc-600">Not set</span>}
+                                <p className="text-sm font-medium text-[rgba(255,255,255,0.88)]">
+                                  {field.value || <span className="font-normal text-[rgba(255,255,255,0.45)]">Not set</span>}
                                 </p>
                               )}
                               <FormMessage className="mt-0.5 text-xs" />
@@ -952,22 +983,23 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                         name="emergency_contact_phone"
                         render={({ field }) => (
                           <FormItem id="profile-field-emergency_contact_phone" className="scroll-mt-24">
-                            <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Phone</p>
+                            <p className={profileEmergencyLabel}>Phone</p>
                             {isEditing ? (
                               <PhoneInput
-                                value={field.value}
+                                key={`emergency-phone-${field.value ?? ""}`}
+                                value={field.value ?? ""}
                                 onChange={field.onChange}
                                 disabled={isSaving}
                                 placeholder="Contact phone"
                                 className="w-full min-w-0"
-                                buttonClassName="h-10 w-[110px] rounded-xl text-sm"
-                                inputClassName="h-10 rounded-xl text-sm"
+                                buttonClassName={profileEmergencyPhoneButton}
+                                inputClassName={profileEmergencyPhoneInput}
                               />
                             ) : (
                               <div className="flex items-center gap-2">
-                                <Phone className="h-3.5 w-3.5 text-zinc-500" />
-                                <p className="text-sm font-medium text-zinc-200">
-                                  {field.value || <span className="font-normal text-zinc-600">Not set</span>}
+                                <Phone className="h-3.5 w-3.5 text-rose-300/70" />
+                                <p className="text-sm font-medium text-[rgba(255,255,255,0.88)]">
+                                  {field.value || <span className="font-normal text-[rgba(255,255,255,0.45)]">Not set</span>}
                                 </p>
                               </div>
                             )}
@@ -976,8 +1008,8 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                         )}
                       />
                       {isEditing && (
-                        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2.5">
-                          <label className="flex cursor-pointer items-start gap-2 text-xs text-zinc-300">
+                        <div className="rounded-xl border border-rose-400/20 bg-rose-500/[0.08] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                          <label className="flex cursor-pointer items-start gap-2 text-xs text-[rgba(255,255,255,0.72)]">
                             <input
                               type="checkbox"
                               checked={emergencyConsentChecked}

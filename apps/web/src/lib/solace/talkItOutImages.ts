@@ -1,25 +1,19 @@
 /** Static assets under `public/talk-it-out/` for the Talk It Out lobby. */
 export const TALK_IT_OUT_IMAGES = {
-  /** Hero — night lake, dock, and candle lantern */
-  heroBackground: "/talk-it-out/1.png",
+  /** Hero — sunset mountain lake (`public/wellness-tools/6.png`) */
+  heroBackground: "/wellness-tools/6.png",
   /** Warm candle glow — layered on hero lower-left */
   heroCandleAccent: "/talk-it-out/2.png",
   /** Moonlit lake — hero / environment atmosphere */
   heroMoonLayer: "/talk-it-out/3.png",
-  /** Environment: Night Lake (matches hero scene) */
-  environmentNightLake: "/talk-it-out/1.png",
-  /** Environment: Mist Forest */
-  environmentForest: "/talk-it-out/4.png",
-  /** Environment: Golden river at sunset */
-  environmentSunsetRiver: "/talk-it-out/5.png",
-  /** Environment: Cozy cabin porch */
+  /** Environment thumbnails — `public/Avatar-bg/` */
+  environmentNightLake: "/Avatar-bg/B1.png",
+  environmentForest: "/Avatar-bg/B3.png",
+  environmentSunsetRiver: "/Avatar-bg/B4.png",
   environmentCozyCabin: "/talk-it-out/6.png",
-  /** Environment: Campfire in the woods */
-  environmentCampfire: "/talk-it-out/7.png",
+  environmentCampfire: "/Avatar-bg/IMG_2250.jpeg",
   /** “Before we begin” lotus accent */
   lotusDecor: "/talk-it-out/8.png",
-  /** Ambient player thumbnail — Night Calm */
-  ambientThumbnail: "/talk-it-out/9.png",
   /** Full-page cool texture */
   pageBackground: "/talk-it-out/10.png",
   /** Violet glow overlay */
@@ -51,22 +45,22 @@ export const TALK_IT_OUT_ENVIRONMENT_THUMBS: {
   value: string;
 }[] = [
   {
-    label: "Night Lake",
+    label: "Minimal Luxe Pedestal",
     image: TALK_IT_OUT_IMAGES.environmentNightLake,
     value: "mountains",
   },
   {
-    label: "Forest Calm",
+    label: "Padded Editorial Chamber",
     image: TALK_IT_OUT_IMAGES.environmentForest,
     value: "forest",
   },
   {
-    label: "Golden River",
+    label: "Aqua Serenity Stage",
     image: TALK_IT_OUT_IMAGES.environmentSunsetRiver,
     value: "minimal",
   },
   {
-    label: "Campfire Woods",
+    label: "Monolith Gallery Space",
     image: TALK_IT_OUT_IMAGES.environmentCampfire,
     value: "beach",
   },

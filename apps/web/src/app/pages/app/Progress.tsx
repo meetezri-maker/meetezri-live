@@ -13,7 +13,9 @@ import {
   Moon,
   Sparkles,
   MessageCircle,
+  ChevronLeft,
   ChevronRight,
+  BookMarked,
   Quote,
 } from "lucide-react";
 import {
@@ -32,9 +34,42 @@ import {
   wellnessProgressTotalSeconds,
 } from "@/lib/wellnessLocalProgress";
 import { PROGRESS_IMAGES } from "@/lib/solace/progressImages";
-
+import { DASHBOARD_IMAGES } from "@/lib/solace/dashboardImages";
+import { SolaceSelect } from "@/app/solace";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import {
+  PROGRESS_TIME_RANGE_OPTIONS,
+  buildEmotionalBalanceSeries,
+  buildJourneyMilestoneSeeds,
+  buildRangeSparkline,
+  computeAreasOfGrowth,
+  computeGrowthScore,
+  filterByProgressRange,
+  filterMilestonesByRange,
+  formatMilestoneDate,
+  type MoodInsightRow,
+  type ProgressTimeRange,
+} from "./progress/progressInsights";
+
+interface ProgressRangeSelectProps {
+  value: ProgressTimeRange;
+  onValueChange: (value: ProgressTimeRange) => void;
+  ariaLabel: string;
+}
+
+function ProgressRangeSelect({ value, onValueChange, ariaLabel }: ProgressRangeSelectProps) {
+  return (
+    <SolaceSelect
+      value={value}
+      onValueChange={(v) => onValueChange(v as ProgressTimeRange)}
+      options={PROGRESS_TIME_RANGE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+      ariaLabel={ariaLabel}
+      variant="compact"
+      size="sm"
+    />
+  );
+}
 
 function escapeCsvCell(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -217,24 +252,73 @@ export function Progress() {
   const [wellnessProgress, setWellnessProgress] = useState<any[]>([]);
   const [isLoadingWellness, setIsLoadingWellness] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [timelineRange, setTimelineRange] = useState<ProgressTimeRange>("this_month");
+  const [growthToolsPage, setGrowthToolsPage] = useState(0);
   const [statsData, setStatsData] = useState<{
-    weeklyProgress: any[];
-    wellnessScore: any[];
-    monthlyActivity: any[];
+    weeklyProgress: { name: string; sessions: number; mood: number; wellness: number }[];
+    wellnessScore: { subject: string; A: number; fullMark: number }[];
+    monthlyActivity: { month: string; value: number }[];
   } | null>(null);
+  const [moodEntries, setMoodEntries] = useState<MoodInsightRow[]>([]);
+  const [journalEntries, setJournalEntries] = useState<{ created_at: string }[]>([]);
+  const [sessionEntries, setSessionEntries] = useState<
+    { started_at?: string; ended_at?: string | null }[]
+  >([]);
+  const [sleepEntries, setSleepEntries] = useState<
+    { created_at: string; quality_rating?: number | null }[]
+  >([]);
 
   const loadWellness = useCallback(() => {
     setLoadError(false);
     setIsLoadingWellness(true);
-    Promise.all([api.wellness.getProgress(), api.wellness.getStats()])
-      .then(([progress, stats]) => {
+    Promise.all([
+      api.wellness.getProgress(),
+      api.wellness.getStats(),
+      api.moods.getMyMoods().catch(() => []),
+      api.journal.getAll().catch(() => []),
+      api.sessions.list({ limit: 300 }).catch(() => []),
+      api.sleep.getEntries().catch(() => []),
+    ])
+      .then(([progress, stats, moods, journals, sessions, sleep]) => {
         setWellnessProgress(Array.isArray(progress) ? progress : []);
         setStatsData(stats ?? null);
+        setMoodEntries(
+          (Array.isArray(moods) ? moods : []).map((m: { created_at: string; mood: string; intensity: number }) => ({
+            created_at: m.created_at,
+            mood: m.mood,
+            intensity: Number(m.intensity) || 5,
+          }))
+        );
+        setJournalEntries(
+          (Array.isArray(journals) ? journals : []).map((j: { created_at: string }) => ({
+            created_at: j.created_at,
+          }))
+        );
+        setSessionEntries(
+          (Array.isArray(sessions) ? sessions : []).map(
+            (s: { started_at?: string; ended_at?: string | null }) => ({
+              started_at: s.started_at,
+              ended_at: s.ended_at,
+            })
+          )
+        );
+        setSleepEntries(
+          (Array.isArray(sleep) ? sleep : []).map(
+            (s: { created_at: string; quality_rating?: number | null }) => ({
+              created_at: s.created_at,
+              quality_rating: s.quality_rating,
+            })
+          )
+        );
       })
       .catch((err) => {
         console.error("Failed to load wellness data:", err);
         setLoadError(true);
         setStatsData(null);
+        setMoodEntries([]);
+        setJournalEntries([]);
+        setSessionEntries([]);
+        setSleepEntries([]);
       })
       .finally(() => setIsLoadingWellness(false));
   }, []);
@@ -278,134 +362,115 @@ export function Progress() {
     0
   );
 
-  const totalTalks = profile?.stats?.completed_sessions ?? 0;
-  const totalMoodCheckins = profile?.stats?.total_checkins ?? 0;
-  const totalJournals = profile?.stats?.total_journals ?? 0;
   const currentStreak = profile?.streak_days ?? 0;
 
-  const sparklineData = useMemo(() => {
-    if (weeklyProgress.length === 0) {
-      return {
-        talks: [0, 1, 2, 1, 3, 2, 4],
-        mood: [1, 2, 1, 3, 2, 4, 3],
-        journal: [0, 1, 1, 2, 1, 2, 3],
-        wellness: [1, 0, 2, 1, 2, 3, 2],
-      };
+  const activityInput = useMemo(
+    () => ({
+      moods: moodEntries,
+      journals: journalEntries,
+      sessions: sessionEntries,
+      sleep: sleepEntries,
+      wellnessCompletions: [] as { completed_at?: string }[],
+    }),
+    [moodEntries, journalEntries, sessionEntries, sleepEntries]
+  );
+
+  const wellnessCountInRange = useMemo(() => {
+    if (timelineRange === "all") return totalWellnessSessions;
+    if (weeklyProgress.length === 0) return 0;
+    if (timelineRange === "this_week") {
+      return weeklyProgress[weeklyProgress.length - 1]?.wellness ?? 0;
     }
-    return {
-      talks: weeklyProgress.map((w) => w.sessions),
-      mood: weeklyProgress.map((w) => w.mood),
-      journal: weeklyProgress.map((w) => Math.max(0, w.mood - w.sessions)),
-      wellness: weeklyProgress.map((w) => w.wellness),
-    };
-  }, [weeklyProgress]);
+    return weeklyProgress.reduce((sum, w) => sum + w.wellness, 0);
+  }, [timelineRange, totalWellnessSessions, weeklyProgress]);
 
-  const emotionalBalanceData = useMemo(() => {
-    if (weeklyProgress.length === 0) {
-      return [
-        { week: 1, positive: 4, neutral: 2, difficult: 1 },
-        { week: 2, positive: 5, neutral: 3, difficult: 2 },
-        { week: 3, positive: 6, neutral: 2, difficult: 1 },
-        { week: 4, positive: 5, neutral: 4, difficult: 2 },
-      ];
-    }
-    return weeklyProgress.map((w, i) => ({
-      week: i + 1,
-      positive: Math.max(1, w.mood),
-      neutral: Math.max(1, Math.floor(w.mood * 0.5)),
-      difficult: Math.max(0, Math.floor(w.mood * 0.2)),
-    }));
-  }, [weeklyProgress]);
+  const rangeTalks = useMemo(
+    () =>
+      filterByProgressRange(
+        sessionEntries.filter((s) => s.ended_at),
+        timelineRange
+      ).length,
+    [sessionEntries, timelineRange]
+  );
 
-  const growthScore = useMemo(() => {
-    if (wellnessScore.length === 0) return 72;
-    const avg = wellnessScore.reduce((sum, s) => sum + s.A, 0) / wellnessScore.length;
-    return Math.round(avg);
-  }, [wellnessScore]);
+  const rangeMoodCheckins = useMemo(
+    () => filterByProgressRange(moodEntries, timelineRange).length,
+    [moodEntries, timelineRange]
+  );
 
-  const areasOfGrowth = useMemo(() => {
-    const baseAreas = [
-      { label: "Emotional Awareness", value: 82, color: "bg-gradient-to-r from-purple-500 to-purple-400" },
-      { label: "Consistency", value: 76, color: "bg-gradient-to-r from-pink-500 to-pink-400" },
-      { label: "Self Reflection", value: 64, color: "bg-gradient-to-r from-cyan-500 to-cyan-400" },
-      { label: "Mindfulness", value: 58, color: "bg-gradient-to-r from-amber-500 to-amber-400" },
-      { label: "Sleep Quality", value: 42, color: "bg-gradient-to-r from-green-500 to-green-400" },
-    ];
+  const rangeJournals = useMemo(
+    () => filterByProgressRange(journalEntries, timelineRange).length,
+    [journalEntries, timelineRange]
+  );
 
-    if (wellnessScore.length > 0) {
-      const hasValidScores = wellnessScore.some(
-        (score) => score.A > 0 && score.A < 100
-      );
-      if (hasValidScores) {
-        wellnessScore.forEach((score, i) => {
-          if (baseAreas[i] && score.A > 0 && score.A < 100) {
-            baseAreas[i].value = score.A;
-          }
-        });
-      }
-    }
+  const sparklineData = useMemo(
+    () => ({
+      talks: buildRangeSparkline(
+        sessionEntries.filter((s) => s.ended_at).map((s) => ({ started_at: s.started_at })),
+        timelineRange
+      ),
+      mood: buildRangeSparkline(moodEntries, timelineRange),
+      journal: buildRangeSparkline(journalEntries, timelineRange),
+      wellness: weeklyProgress.length
+        ? weeklyProgress.map((w) => w.wellness)
+        : buildRangeSparkline(
+            Array.from({ length: wellnessCountInRange }, (_, i) => ({
+              created_at: new Date(Date.now() - i * 86400000).toISOString(),
+            })),
+            timelineRange
+          ),
+    }),
+    [
+      sessionEntries,
+      moodEntries,
+      journalEntries,
+      timelineRange,
+      weeklyProgress,
+      wellnessCountInRange,
+    ]
+  );
 
-    return baseAreas;
-  }, [wellnessScore]);
+  const emotionalBalanceData = useMemo(
+    () => buildEmotionalBalanceSeries(moodEntries, timelineRange),
+    [moodEntries, timelineRange]
+  );
+
+  const areasOfGrowth = useMemo(
+    () => computeAreasOfGrowth(activityInput, timelineRange, new Date(), wellnessCountInRange),
+    [activityInput, timelineRange, wellnessCountInRange]
+  );
+
+  const growthScore = useMemo(() => computeGrowthScore(areasOfGrowth), [areasOfGrowth]);
 
   const journeyMilestones = useMemo(() => {
-    const milestones = [];
-
-    if (totalTalks >= 1) {
-      milestones.push({
-        icon: <Star className="w-4 h-4" />,
-        title: "First Talk",
-        description: "You took the first step and had your first conversation.",
-        date: "Apr 10, 2026",
-        pill: "Milestone",
-        pillColor: "bg-amber-500/20 text-amber-400",
-      });
-    }
-
-    if (currentStreak >= 7) {
-      milestones.push({
-        icon: <Flame className="w-4 h-4" />,
-        title: "7 Day Streak",
-        description: "You showed up for yourself 7 days in a row.",
-        date: "Apr 17, 2026",
-        pill: "Streak",
-        pillColor: "bg-orange-500/20 text-orange-400",
-      });
-    }
-
-    if (totalJournals >= 1) {
-      milestones.push({
-        icon: <BookOpen className="w-4 h-4" />,
-        title: "Deep Reflection",
-        description: "You wrote a meaningful journal entry.",
-        date: "Apr 22, 2026",
-        pill: "Reflection",
-        pillColor: "bg-purple-500/20 text-purple-400",
-      });
-    }
-
-    if (totalMoodCheckins >= 10) {
-      milestones.push({
-        icon: <Heart className="w-4 h-4" />,
-        title: "Mood Explorer",
-        description: "You completed 10 mood check-ins.",
-        date: "Apr 25, 2026",
-        pill: "Insight",
-        pillColor: "bg-pink-500/20 text-pink-400",
-      });
-    }
-
-    milestones.push({
-      icon: <Trophy className="w-4 h-4" />,
-      title: "Consistency King",
-      description: "You've maintained your wellness habits.",
-      date: "May 5, 2026",
-      pill: "Achievement",
-      pillColor: "bg-green-500/20 text-green-400",
-    });
-
-    return milestones.slice(0, 5);
-  }, [totalTalks, currentStreak, totalJournals, totalMoodCheckins]);
+    const seeds = buildJourneyMilestoneSeeds(
+      { ...activityInput, currentStreak },
+      new Date()
+    );
+    const filtered = filterMilestonesByRange(seeds, timelineRange);
+    const iconForTone = (tone: (typeof seeds)[0]["tone"]) => {
+      switch (tone) {
+        case "streak":
+          return <Flame className="w-4 h-4" />;
+        case "reflection":
+          return <BookOpen className="w-4 h-4" />;
+        case "insight":
+          return <Heart className="w-4 h-4" />;
+        case "achievement":
+          return <Trophy className="w-4 h-4" />;
+        default:
+          return <Star className="w-4 h-4" />;
+      }
+    };
+    return filtered.slice(0, 5).map((seed) => ({
+      icon: iconForTone(seed.tone),
+      title: seed.title,
+      description: seed.description,
+      date: formatMilestoneDate(seed.occurredAt),
+      pill: seed.pill,
+      pillColor: seed.pillColor,
+    }));
+  }, [activityInput, currentStreak, timelineRange]);
 
   const handleExportReport = () => {
     try {
@@ -414,9 +479,10 @@ export function Progress() {
       sections.push("Summary");
       sections.push(
         csvLine(["Metric", "Value"]),
-        csvLine(["Talks (total)", totalTalks]),
-        csvLine(["Mood check-ins (total)", totalMoodCheckins]),
-        csvLine(["Journal entries (total)", totalJournals]),
+        csvLine(["Talks (in range)", rangeTalks]),
+        csvLine(["Mood check-ins (in range)", rangeMoodCheckins]),
+        csvLine(["Journal entries (in range)", rangeJournals]),
+        csvLine(["Time range", timelineRange]),
         csvLine(["Wellness exercise completions (total)", totalWellnessSessions]),
         csvLine(["Current streak (days)", currentStreak]),
         ""
@@ -587,11 +653,14 @@ export function Progress() {
     );
   }
 
+  const lifetimeTalks = profile?.stats?.completed_sessions ?? 0;
+  const lifetimeJournals = profile?.stats?.total_journals ?? 0;
+
   const tools = [
     {
       icon: <MessageCircle className="w-5 h-5" />,
       title: "Talk It Out",
-      description: `You've opened up ${totalTalks} times.`,
+      description: `You've opened up ${lifetimeTalks} times.`,
       cta: "Continue",
       route: "/app/session-lobby",
       color: "from-blue-500/20 to-cyan-500/20",
@@ -600,7 +669,7 @@ export function Progress() {
     {
       icon: <BookOpen className="w-5 h-5" />,
       title: "Journal",
-      description: `You've written ${totalJournals} entries.`,
+      description: `You've written ${lifetimeJournals} entries.`,
       cta: "Write More",
       route: "/app/journal",
       color: "from-purple-500/20 to-pink-500/20",
@@ -633,7 +702,30 @@ export function Progress() {
       color: "from-indigo-500/20 to-violet-500/20",
       iconColor: "text-indigo-400",
     },
+    {
+      icon: <BookMarked className="w-5 h-5" />,
+      title: "Reading Library",
+      description: "Explore articles for your wellbeing.",
+      cta: "Browse",
+      route: "/app/settings/resources",
+      color: "from-amber-500/20 to-orange-500/20",
+      iconColor: "text-amber-400",
+    },
   ];
+
+  /** Carousel: Journal → Mood → Breathing, then Sleep Tracker & Reading Library */
+  const growthToolsCarousel = tools.filter((t) => t.title !== "Talk It Out");
+  const growthToolsPerPage = 3;
+  const growthToolsPageCount = Math.max(
+    1,
+    Math.ceil(growthToolsCarousel.length / growthToolsPerPage)
+  );
+  const visibleGrowthTools = growthToolsCarousel.slice(
+    growthToolsPage * growthToolsPerPage,
+    growthToolsPage * growthToolsPerPage + growthToolsPerPage
+  );
+  const canShowGrowthToolsPrev = growthToolsPage > 0;
+  const canShowGrowthToolsNext = growthToolsPage < growthToolsPageCount - 1;
 
   return (
     <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
@@ -695,14 +787,14 @@ export function Progress() {
               <p className="text-slate-300 mb-6 text-sm md:text-base">
                 Every conversation, every reflection, every small step is building a stronger you.
               </p>
-              <Button
+              {/* <Button
                 onClick={() => {
                   document.getElementById("journey-timeline")?.scrollIntoView({ behavior: "smooth" });
                 }}
                 className="bg-slate-800/60 hover:bg-slate-700/60 text-white border border-slate-600/50 rounded-full px-6 backdrop-blur-sm"
               >
                 See Your Journey
-              </Button>
+              </Button> */}
             </div>
           </div>
         </motion.div>
@@ -722,8 +814,8 @@ export function Progress() {
               <MessageCircle className="w-4 h-4 text-cyan-400" />
               <span className="text-xs text-slate-400">Talk It Out</span>
             </div>
-            <p className="text-2xl font-bold text-white mb-1">{totalTalks}</p>
-            <p className="text-xs text-slate-500 mb-2">Total talks</p>
+            <p className="text-2xl font-bold text-white mb-1">{rangeTalks}</p>
+            <p className="text-xs text-slate-500 mb-2">Talks in period</p>
             <Sparkline data={sparklineData.talks} color="#22d3ee" height={36} />
           </div>
         </div>
@@ -736,8 +828,8 @@ export function Progress() {
               <Heart className="w-4 h-4 text-pink-400" />
               <span className="text-xs text-slate-400">Mood Check-ups</span>
             </div>
-            <p className="text-2xl font-bold text-white mb-1">{totalMoodCheckins}</p>
-            <p className="text-xs text-slate-500 mb-2">Total check-ins</p>
+            <p className="text-2xl font-bold text-white mb-1">{rangeMoodCheckins}</p>
+            <p className="text-xs text-slate-500 mb-2">Check-ins in period</p>
             <Sparkline data={sparklineData.mood} color="#ec4899" height={36} />
           </div>
         </div>
@@ -750,8 +842,8 @@ export function Progress() {
               <BookOpen className="w-4 h-4 text-purple-400" />
               <span className="text-xs text-slate-400">Journal Entries</span>
             </div>
-            <p className="text-2xl font-bold text-white mb-1">{totalJournals}</p>
-            <p className="text-xs text-slate-500 mb-2">Total entries</p>
+            <p className="text-2xl font-bold text-white mb-1">{rangeJournals}</p>
+            <p className="text-xs text-slate-500 mb-2">Entries in period</p>
             <Sparkline data={sparklineData.journal} color="#a855f7" height={36} />
           </div>
         </div>
@@ -764,8 +856,8 @@ export function Progress() {
               <Wind className="w-4 h-4 text-green-400" />
               <span className="text-xs text-slate-400">Wellness Exercises</span>
             </div>
-            <p className="text-2xl font-bold text-white mb-1">{totalWellnessSessions}</p>
-            <p className="text-xs text-slate-500 mb-2">Completions this week</p>
+            <p className="text-2xl font-bold text-white mb-1">{wellnessCountInRange}</p>
+            <p className="text-xs text-slate-500 mb-2">Completions in period</p>
             <Sparkline data={sparklineData.wellness} color="#4ade80" height={36} />
           </div>
         </div>
@@ -832,17 +924,22 @@ export function Progress() {
                     <h3 className="text-lg font-semibold text-white mb-1">Your Journey Timeline</h3>
                     <p className="text-sm text-slate-400">Key moments from your wellness journey</p>
                   </div>
-                  <select className="bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-sm text-slate-300 focus:outline-none focus:ring-2 focus:ring-purple-500/50">
-                    <option>All Time</option>
-                    <option>This Month</option>
-                    <option>This Week</option>
-                  </select>
+                  <ProgressRangeSelect
+                    value={timelineRange}
+                    onValueChange={setTimelineRange}
+                    ariaLabel="Journey timeline range"
+                  />
                 </div>
 
                 <div className="space-y-0">
+                  {journeyMilestones.length === 0 ? (
+                    <p className="py-10 text-center text-sm text-slate-400">
+                      No milestones in this period yet. Keep showing up — your next win will appear here.
+                    </p>
+                  ) : null}
                   {journeyMilestones.map((milestone, index) => (
                     <TimelineItem
-                      key={index}
+                      key={`${milestone.title}-${index}`}
                       icon={milestone.icon}
                       title={milestone.title}
                       description={milestone.description}
@@ -934,41 +1031,86 @@ export function Progress() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
-              className="space-y-4"
+              className="relative overflow-hidden rounded-2xl border border-slate-800/50"
             >
+              <img
+                src={DASHBOARD_IMAGES.quoteDecor}
+                alt=""
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
+                loading="lazy"
+                decoding="async"
+              />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#0a0c14]/82 via-[#0a0c14]/72 to-purple-950/55" />
+              <div className="relative space-y-4 p-5 sm:p-6">
               <div>
                 <h3 className="text-lg font-semibold text-white mb-1">Tools that support your growth</h3>
                 <p className="text-sm text-slate-400">Keep using what helps you feel better.</p>
               </div>
 
-              <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 lg:mx-0 lg:px-0 scrollbar-hide">
-                {tools.map((tool, index) => (
-                  <motion.div
-                    key={index}
-                    whileHover={{ y: -2 }}
-                    className="relative overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm p-4 min-w-[180px] flex-shrink-0"
+              <div className="flex items-stretch gap-3">
+                {canShowGrowthToolsPrev ? (
+                  <button
+                    type="button"
+                    aria-label="Show previous growth tools"
+                    onClick={() => setGrowthToolsPage((p) => Math.max(0, p - 1))}
+                    className="flex h-auto shrink-0 items-center justify-center self-center rounded-xl border border-white/10 bg-slate-800/80 px-2 py-6 text-violet-300 shadow-[0_0_20px_-6px_rgba(139,92,246,0.35)] transition-colors hover:border-violet-400/35 hover:bg-slate-700/80 hover:text-violet-200"
                   >
-                    <div className={cn("absolute inset-0 bg-gradient-to-br opacity-50", tool.color)} />
-                    <div className="relative">
-                      <div className={cn("w-10 h-10 rounded-full bg-slate-800/80 flex items-center justify-center mb-3", tool.iconColor)}>
-                        {tool.icon}
+                    <ChevronLeft className="h-5 w-5" aria-hidden />
+                  </button>
+                ) : null}
+
+                <div
+                  className={cn(
+                    "grid min-w-0 flex-1 gap-4 overflow-hidden",
+                    visibleGrowthTools.length === 1 && "max-w-[220px] grid-cols-1",
+                    visibleGrowthTools.length === 2 && "grid-cols-2",
+                    visibleGrowthTools.length >= 3 && "grid-cols-3"
+                  )}
+                >
+                  {visibleGrowthTools.map((tool) => (
+                    <motion.div
+                      key={tool.title}
+                      whileHover={{ y: -2 }}
+                      className="relative min-w-0 overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/50 p-4 backdrop-blur-sm"
+                    >
+                      <div className={cn("absolute inset-0 bg-gradient-to-br opacity-50", tool.color)} />
+                      <div className="relative">
+                        <div
+                          className={cn(
+                            "mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-slate-800/80",
+                            tool.iconColor
+                          )}
+                        >
+                          {tool.icon}
+                        </div>
+                        <h4 className="mb-1 text-sm font-semibold text-white">{tool.title}</h4>
+                        <p className="mb-3 text-xs text-slate-400">{tool.description}</p>
+                        <Button
+                          onClick={() => navigate(tool.route)}
+                          variant="ghost"
+                          size="sm"
+                          className="w-full rounded-lg bg-slate-800/50 text-xs text-white hover:bg-slate-700/50"
+                        >
+                          {tool.cta}
+                        </Button>
                       </div>
-                      <h4 className="font-semibold text-white text-sm mb-1">{tool.title}</h4>
-                      <p className="text-xs text-slate-400 mb-3">{tool.description}</p>
-                      <Button
-                        onClick={() => navigate(tool.route)}
-                        variant="ghost"
-                        size="sm"
-                        className="w-full bg-slate-800/50 hover:bg-slate-700/50 text-white text-xs rounded-lg"
-                      >
-                        {tool.cta}
-                      </Button>
-                    </div>
-                  </motion.div>
-                ))}
-                <div className="flex items-center justify-center min-w-[40px] flex-shrink-0">
-                  <ChevronRight className="w-5 h-5 text-slate-600" />
+                    </motion.div>
+                  ))}
                 </div>
+
+                {canShowGrowthToolsNext ? (
+                  <button
+                    type="button"
+                    aria-label="Show next growth tool"
+                    onClick={() =>
+                      setGrowthToolsPage((p) => Math.min(growthToolsPageCount - 1, p + 1))
+                    }
+                    className="flex h-auto shrink-0 items-center justify-center self-center rounded-xl border border-white/10 bg-slate-800/80 px-2 py-6 text-violet-300 shadow-[0_0_20px_-6px_rgba(139,92,246,0.35)] transition-colors hover:border-violet-400/35 hover:bg-slate-700/80 hover:text-violet-200"
+                  >
+                    <ChevronRight className="h-5 w-5" aria-hidden />
+                  </button>
+                ) : null}
+              </div>
               </div>
             </motion.div>
 
@@ -977,16 +1119,16 @@ export function Progress() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
-              className="relative overflow-hidden rounded-2xl"
+              className="relative min-h-[168px] overflow-hidden rounded-2xl sm:min-h-[180px]"
             >
               <img
                 src={PROGRESS_IMAGES.celebrateBanner}
                 alt=""
-                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[right_center]"
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
                 loading="lazy"
                 decoding="async"
               />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-purple-900/55 via-violet-900/45 to-fuchsia-900/35" />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/75 via-purple-900/50 to-fuchsia-900/40" />
               <div className="relative px-6 py-8 md:px-8 md:py-10 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
@@ -1024,7 +1166,11 @@ export function Progress() {
               <div className="relative">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-white">Growth Overview</h3>
-                  <span className="text-xs text-slate-400">This year</span>
+                  <ProgressRangeSelect
+                    value={timelineRange}
+                    onValueChange={setTimelineRange}
+                    ariaLabel="Growth overview range"
+                  />
                 </div>
                 <div className="flex flex-col items-center relative">
                   <CircularProgress value={growthScore} size={140} strokeWidth={10} />
@@ -1054,10 +1200,19 @@ export function Progress() {
               <div className="relative">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-white">Emotional Balance</h3>
-                  <span className="text-xs text-slate-400">This month</span>
+                  <ProgressRangeSelect
+                    value={timelineRange}
+                    onValueChange={setTimelineRange}
+                    ariaLabel="Emotional balance range"
+                  />
                 </div>
 
                 <div className="h-[140px] mb-4">
+                  {emotionalBalanceData.length === 0 ? (
+                    <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                      No mood check-ins in this period yet.
+                    </div>
+                  ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={emotionalBalanceData}>
                       <Line
@@ -1083,6 +1238,7 @@ export function Progress() {
                       />
                     </LineChart>
                   </ResponsiveContainer>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-center gap-6 text-center">
@@ -1128,7 +1284,11 @@ export function Progress() {
               <div className="relative">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-white">Top Areas of Growth</h3>
-                  <span className="text-xs text-slate-400">This month</span>
+                  <ProgressRangeSelect
+                    value={timelineRange}
+                    onValueChange={setTimelineRange}
+                    ariaLabel="Top areas of growth range"
+                  />
                 </div>
 
                 <div className="space-y-4">

@@ -1097,7 +1097,7 @@ export function CrisisEventDetails() {
               {showNotes && (
           <div
             key="crisis-notes-overlay"
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
             onClick={() => setShowNotes(false)}
           >
             <div
@@ -1169,12 +1169,12 @@ export function CrisisEventDetails() {
               {showCallModal && (
           <div
             key="crisis-call-overlay"
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
             onClick={() => setShowCallModal(false)}
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl"
+              className="w-full max-w-xl p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="flex items-start justify-between mb-6">
                 <div>
@@ -1261,12 +1261,12 @@ export function CrisisEventDetails() {
               {showEmailModal && (
           <div
             key="crisis-email-overlay"
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
             onClick={() => setShowEmailModal(false)}
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="flex items-start justify-between mb-6">
                 <div>
@@ -1343,12 +1343,12 @@ export function CrisisEventDetails() {
               {showEmergencyModal && (
           <div
             key="crisis-emergency-services-overlay"
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
             onClick={() => setShowEmergencyModal(false)}
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl"
+              className="w-full max-w-xl p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="flex items-start justify-between mb-6">
                 <div>
@@ -1413,12 +1413,12 @@ export function CrisisEventDetails() {
               {showEmergencyContactModal && (
           <div
             key="crisis-emergency-contact-overlay"
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
             onClick={() => setShowEmergencyContactModal(false)}
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl"
+              className="w-full max-w-xl p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="flex items-start justify-between mb-6">
                 <div>
@@ -1497,12 +1497,12 @@ export function CrisisEventDetails() {
               {showTherapistModal && (
           <div
             key="crisis-therapist-overlay"
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
             onClick={() => setShowTherapistModal(false)}
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl"
+              className="w-full max-w-xl p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="flex items-start justify-between mb-6">
                 <div>
@@ -1581,12 +1581,12 @@ export function CrisisEventDetails() {
               {showStatusModal && (
           <div
             key="crisis-status-overlay"
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
             onClick={() => setShowStatusModal(false)}
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl"
+              className="w-full max-w-xl p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="flex items-start justify-between mb-6">
                 <div>
@@ -1704,12 +1704,12 @@ export function CrisisEventDetails() {
               {showCompleteLogModal && (
           <div
             key="crisis-complete-log-overlay"
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
             onClick={() => setShowCompleteLogModal(false)}
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="flex items-start justify-between mb-6">
                 <div>

@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { createWellnessToolSchema, updateWellnessToolSchema, wellnessToolResponseSchema, trackProgressSchema, progressResponseSchema, wellnessChallengeResponseSchema, createWellnessChallengeSchema } from './wellness.schema';
-import { createWellnessToolHandler, createWellnessChallengeHandler, deleteWellnessToolHandler, getWellnessToolByIdHandler, getWellnessToolsHandler, updateWellnessToolHandler, trackWellnessProgressHandler, getUserWellnessProgressHandler, startWellnessSessionHandler, completeWellnessSessionHandler, getWellnessStatsHandler, getWellnessChallengesHandler, getWellnessChallengesMeHandler, toggleWellnessToolFavoriteHandler, updateWellnessChallengeHandler, joinWellnessChallengeHandler, unjoinWellnessChallengeHandler } from './wellness.controller';
+import { createWellnessToolHandler, createWellnessChallengeHandler, deleteWellnessToolHandler, getWellnessToolByIdHandler, getWellnessToolsHandler, updateWellnessToolHandler, trackWellnessProgressHandler, getUserWellnessProgressHandler, getWellnessInsightsHandler, startWellnessSessionHandler, completeWellnessSessionHandler, getWellnessStatsHandler, getWellnessChallengesHandler, getWellnessChallengesMeHandler, toggleWellnessToolFavoriteHandler, updateWellnessChallengeHandler, joinWellnessChallengeHandler, unjoinWellnessChallengeHandler } from './wellness.controller';
 import { z } from 'zod';
 
 export async function wellnessRoutes(app: FastifyInstance) {
@@ -84,6 +84,35 @@ export async function wellnessRoutes(app: FastifyInstance) {
       preHandler: [app.authenticate],
     },
     unjoinWellnessChallengeHandler
+  );
+
+  app.get(
+    '/progress',
+    {
+      preHandler: [app.authenticate],
+    },
+    getUserWellnessProgressHandler
+  );
+
+  app.get(
+    '/insights',
+    {
+      schema: {
+        querystring: z.object({
+          period: z.enum(['today', 'week', 'month']).optional(),
+        }),
+      },
+      preHandler: [app.authenticate],
+    },
+    getWellnessInsightsHandler
+  );
+
+  app.get(
+    '/stats',
+    {
+      preHandler: [app.authenticate],
+    },
+    getWellnessStatsHandler
   );
 
   app.get(
@@ -218,19 +247,4 @@ export async function wellnessRoutes(app: FastifyInstance) {
     completeWellnessSessionHandler
   );
 
-  app.get(
-    '/progress',
-    {
-      preHandler: [app.authenticate],
-    },
-    getUserWellnessProgressHandler
-  );
-
-  app.get(
-    '/stats',
-    {
-      preHandler: [app.authenticate],
-    },
-    getWellnessStatsHandler
-  );
 }

@@ -26,6 +26,21 @@ import type { LucideIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import {
+  modalBodyText,
+  modalCheckboxLabel,
+  modalCloseButton,
+  modalInput,
+  modalLabel,
+  modalLink,
+  modalOverlay,
+  modalPanelLg,
+  modalPrimaryButton,
+  modalTabActive,
+  modalTabInactive,
+  modalTitle,
+} from '@/lib/modalTheme';
+import { ACHIEVEMENTS_IMAGES } from '@/lib/solace/achievementsImages';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -34,6 +49,7 @@ import { Textarea } from '@/app/components/ui/textarea';
 import { GOAL_CATEGORY_OPTIONS, GOAL_EMOTION_TAG_OPTIONS } from '@/app/features/goals/constants';
 import { PREDEFINED_GOALS } from '@/app/features/goals/seedGoals';
 import type { GoalCategory } from '@/app/features/goals/types';
+import { SolaceSelect } from '@/app/solace';
 
 interface Achievement {
   id: string;
@@ -195,20 +211,13 @@ function parseMoodForApi(selected: string, fallback?: Achievement['moodTag']): s
   return mapMoodTagToGoalEmotionTag(fallback);
 }
 
-const RARITY_RANK: Record<Achievement['rarity'], number> = {
-  common: 0,
-  rare: 1,
-  epic: 2,
-  legendary: 3,
-};
-
 /** Maps a selected achievement to a journey node index for local preview (no backend). */
 function journeyIndexFromSelectedAchievement(a: Achievement): number {
   const total = Math.max(1, a.total);
   const ratio = a.progress / total;
   if (a.unlocked) {
-    if (a.rarity === 'legendary') return 4;
-    if (a.rarity === 'epic' || a.rarity === 'rare') return 3;
+    if (ratio >= 1 && a.points >= 50) return 4;
+    if (ratio >= 1) return 3;
     return 2;
   }
   if (ratio <= 0.2) return 0;
@@ -259,7 +268,6 @@ function VaultParticles({ className }: VaultParticlesProps) {
 export function Achievements() {
   const { profile } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedRarity, setSelectedRarity] = useState<'all' | Achievement['rarity']>('all');
   const [showAllAchievements, setShowAllAchievements] = useState(false);
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const [wellnessExercises, setWellnessExercises] = useState(0);
@@ -268,7 +276,7 @@ export function Achievements() {
   useEffect(() => {
     setShowAllAchievements(false);
     setSelectedAchievement(null);
-  }, [selectedCategory, selectedRarity]);
+  }, [selectedCategory]);
 
   const [communityPosts, setCommunityPosts] = useState(0);
   const [customAchievements, setCustomAchievements] = useState<Achievement[]>([]);
@@ -304,6 +312,19 @@ export function Achievements() {
   const customStorageKey = useMemo(
     () => `ezri_custom_achievements_${profile?.id || 'guest'}`,
     [profile?.id]
+  );
+
+  const achievementGoalTemplateGroups = useMemo(
+    () =>
+      GOAL_CATEGORY_OPTIONS.map((cat) => ({
+        label: cat.label,
+        options: PREDEFINED_GOALS.flatMap((g, i) =>
+          g.goal_category === cat.value
+            ? [{ value: `pre:${i}` as const, label: g.goal_title }]
+            : []
+        ),
+      })),
+    []
   );
 
   const mapApiCustomAchievement = (item: any): Achievement => ({
@@ -563,28 +584,15 @@ export function Achievements() {
     { id: 'personal', label: 'Personal', icon: Star },
   ];
 
-  const rarityFilters: { id: 'all' | Achievement['rarity']; label: string }[] = [
-    { id: 'all', label: 'All Rarities' },
-    { id: 'common', label: 'Common' },
-    { id: 'rare', label: 'Rare' },
-    { id: 'epic', label: 'Epic' },
-    { id: 'legendary', label: 'Legendary' },
-  ];
-
   const filteredAchievements = useMemo(() => {
-    let list =
-      selectedCategory === 'all'
-        ? achievements
-        : selectedCategory === 'personal'
-          ? achievements.filter((a) =>
-              ['personal', 'self_improvement', 'professional'].includes(a.category)
-            )
-          : achievements.filter((a) => a.category === selectedCategory);
-    if (selectedRarity !== 'all') {
-      list = list.filter((a) => a.rarity === selectedRarity);
+    if (selectedCategory === 'all') return achievements;
+    if (selectedCategory === 'personal') {
+      return achievements.filter((a) =>
+        ['personal', 'self_improvement', 'professional'].includes(a.category)
+      );
     }
-    return list;
-  }, [achievements, selectedCategory, selectedRarity]);
+    return achievements.filter((a) => a.category === selectedCategory);
+  }, [achievements, selectedCategory]);
 
   const recentUnlocked = useMemo(() => {
     const unlocked = achievements.filter((a) => a.unlocked);
@@ -596,21 +604,9 @@ export function Achievements() {
         const maxD = h.reduce((best, d) => (d > best ? d : best), h[0]);
         t = new Date(`${maxD}T12:00:00`).getTime();
       }
-      return t * 10 + RARITY_RANK[a.rarity] * 1000 + a.points;
+      return t * 10 + a.points;
     };
     return unlocked.reduce((best, a) => (score(a) >= score(best) ? a : best), unlocked[0]);
-  }, [achievements]);
-
-  const rarestUnlock = useMemo(() => {
-    const unlocked = achievements.filter((a) => a.unlocked);
-    if (unlocked.length === 0) return null;
-    return unlocked.reduce((best, a) =>
-      RARITY_RANK[a.rarity] > RARITY_RANK[best.rarity]
-        ? a
-        : RARITY_RANK[a.rarity] === RARITY_RANK[best.rarity] && a.points > best.points
-          ? a
-          : best
-    );
   }, [achievements]);
 
   const overallCompletionPct =
@@ -650,19 +646,8 @@ export function Achievements() {
 
   const pointsToNext = Math.max(0, nextPointsMilestone - stats.totalPoints);
 
-  const rarityVaultGlow = {
-    common: 'border-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
-    rare: 'border-cyan-400/20 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]',
-    epic: 'border-fuchsia-400/22 shadow-[0_0_0_1px_rgba(192,132,252,0.14)]',
-    legendary: 'border-amber-400/25 shadow-[0_0_0_1px_rgba(251,191,36,0.16)]',
-  };
-
-  const rarityPillStyle: Record<Achievement['rarity'], string> = {
-    common: 'text-zinc-200/90 bg-white/[0.05] ring-1 ring-white/10',
-    rare: 'text-cyan-100/95 bg-cyan-500/10 ring-1 ring-cyan-400/22',
-    epic: 'text-fuchsia-100/95 bg-fuchsia-500/10 ring-1 ring-fuchsia-400/25',
-    legendary: 'text-amber-50/95 bg-amber-500/12 ring-1 ring-amber-400/28',
-  };
+  const unlockedEmblemClass =
+    'border-white/10 bg-gradient-to-br from-white/[0.07] to-black/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]';
 
   const iconMap: Record<string, LucideIcon> = {
     footprints: Target,
@@ -1143,14 +1128,6 @@ export function Achievements() {
     document.getElementById(`ach-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
-  const handleViewAllRarities = () => {
-    setSelectedRarity('all');
-    document.getElementById('achievement-rarity-filters')?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest',
-    });
-  };
-
   const journeyNodes: {
     key: string;
     label: string;
@@ -1168,7 +1145,6 @@ export function Achievements() {
     stats.totalCount > 0 ? Math.min(100, (stats.unlockedCount / stats.totalCount) * 100) : 0;
 
   const FeaturedIcon = recentUnlocked ? getIcon(recentUnlocked.icon) : Trophy;
-  const RarestIcon = rarestUnlock ? getIcon(rarestUnlock.icon) : Trophy;
 
   return (
     <>
@@ -1199,29 +1175,32 @@ export function Achievements() {
 
           <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_280px] xl:gap-10">
             <div className="min-w-0 space-y-8 sm:space-y-10">
-              {/* Hero — cinematic vault */}
-              <section className="relative overflow-hidden rounded-3xl border border-white/[0.07] bg-[#0a0f1a]/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_24px_80px_-48px_rgba(0,0,0,0.85)] backdrop-blur-xl">
-                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_20%_0%,rgba(168,85,247,0.08),transparent_55%)]" />
-                <div className="relative grid gap-0 lg:min-h-[280px] lg:grid-cols-[minmax(0,1.02fr)_minmax(0,1.08fr)] lg:items-stretch">
-                  <div className="relative z-10 flex flex-col justify-center space-y-4 p-6 sm:p-8 lg:pr-6">
-                    <h1 className="font-serif text-4xl font-semibold tracking-tight text-white sm:text-[2.75rem] sm:leading-tight">
-                      Achievements
-                    </h1>
-                    <p className="max-w-md text-[15px] leading-relaxed text-zinc-400">
-                      Celebrate your growth and the milestones that shape your best self.
-                    </p>
-                  </div>
-                  <div className="relative min-h-[200px] border-t border-white/[0.06] lg:min-h-0 lg:border-l lg:border-t-0">
-                    <img
-                      src="/solace-achievements-hero.png"
-                      alt="Calm lake at dusk with a warm lantern on a pier—symbol of reflection and earned progress."
-                      className="h-full min-h-[200px] w-full object-cover object-center lg:min-h-full"
-                      width={960}
-                      height={540}
-                      loading="eager"
-                    />
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#05070f]/95 via-[#05070f]/35 to-transparent lg:bg-gradient-to-l" />
-                  </div>
+              {/* Hero — full-bleed lotus scene */}
+              <section className="relative overflow-hidden rounded-3xl border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_24px_80px_-48px_rgba(0,0,0,0.85)]">
+                <img
+                  src={ACHIEVEMENTS_IMAGES.hero}
+                  alt="Glowing lotus on a moonlit lake with mountains at twilight"
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[58%_50%]"
+                  width={1600}
+                  height={520}
+                  loading="eager"
+                  decoding="async"
+                />
+                <div
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0618]/68 via-[#0a0618]/32 to-transparent"
+                  aria-hidden
+                />
+                <div
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#05070f]/50 via-transparent to-transparent"
+                  aria-hidden
+                />
+                <div className="relative z-10 flex min-h-[280px] flex-col justify-center px-6 py-10 sm:min-h-[320px] sm:px-10 sm:py-12 lg:min-h-[340px] lg:px-12">
+                  <h1 className="max-w-xl font-serif text-4xl font-semibold tracking-tight text-white sm:text-[2.75rem] sm:leading-tight [text-shadow:0_2px_24px_rgba(0,0,0,0.55)]">
+                    Achievements
+                  </h1>
+                  <p className="mt-4 max-w-md text-[15px] leading-relaxed text-zinc-200/95 [text-shadow:0_1px_16px_rgba(0,0,0,0.45)]">
+                    Celebrate your growth and the milestones that shape your best self.
+                  </p>
                 </div>
               </section>
 
@@ -1287,58 +1266,29 @@ export function Achievements() {
                 </div>
               </section>
 
-              {/* Category + rarity filters */}
-              <div className="space-y-3">
-                <div className="-mx-1 flex gap-2 overflow-x-auto pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible">
-                  {categories.map((category) => {
-                    const Icon = category.icon;
-                    const isActive = selectedCategory === category.id;
-                    return (
-                      <motion.button
-                        key={category.id}
-                        type="button"
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setSelectedCategory(category.id)}
-                        className={cn(
-                          'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-medium transition-colors sm:px-3 sm:py-1.5',
-                          isActive
-                            ? 'border-fuchsia-400/30 bg-fuchsia-950/40 text-white shadow-[0_0_20px_-8px_rgba(168,85,247,0.35)]'
-                            : 'border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:border-white/15 hover:bg-white/[0.05] hover:text-zinc-200'
-                        )}
-                      >
-                        <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
-                        {category.label}
-                      </motion.button>
-                    );
-                  })}
-                </div>
-                <div
-                  id="achievement-rarity-filters"
-                  className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible"
-                >
-                  <span className="hidden shrink-0 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 sm:inline">
-                    Rarity
-                  </span>
-                  {rarityFilters.map((r) => {
-                    const isActive = selectedRarity === r.id;
-                    return (
-                      <motion.button
-                        key={r.id}
-                        type="button"
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setSelectedRarity(r.id)}
-                        className={cn(
-                          'inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-wide transition sm:min-h-0 sm:px-3 sm:py-1.5',
-                          isActive
-                            ? 'border-fuchsia-400/28 bg-white/[0.1] text-white'
-                            : 'border-white/[0.08] bg-white/[0.03] text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300'
-                        )}
-                      >
-                        {r.label}
-                      </motion.button>
-                    );
-                  })}
-                </div>
+              {/* Category filters */}
+              <div className="-mx-1 flex gap-2 overflow-x-auto pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible">
+                {categories.map((category) => {
+                  const Icon = category.icon;
+                  const isActive = selectedCategory === category.id;
+                  return (
+                    <motion.button
+                      key={category.id}
+                      type="button"
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setSelectedCategory(category.id)}
+                      className={cn(
+                        'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-medium transition-colors sm:px-3 sm:py-1.5',
+                        isActive
+                          ? 'border-fuchsia-400/30 bg-fuchsia-950/40 text-white shadow-[0_0_20px_-8px_rgba(168,85,247,0.35)]'
+                          : 'border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:border-white/15 hover:bg-white/[0.05] hover:text-zinc-200'
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+                      {category.label}
+                    </motion.button>
+                  );
+                })}
               </div>
 
               {/* Recently unlocked */}
@@ -1415,8 +1365,6 @@ export function Achievements() {
                     const isUnlocked = achievement.unlocked;
                     const total = Math.max(1, achievement.total);
                     const pct = Math.min(100, (achievement.progress / total) * 100);
-                    const glow = rarityVaultGlow[achievement.rarity];
-                    const pill = rarityPillStyle[achievement.rarity];
                     const isSelected = selectedAchievement?.id === achievement.id;
                     const showProgressBar = !isUnlocked && achievement.progress < total;
 
@@ -1451,7 +1399,7 @@ export function Achievements() {
                             className={cn(
                               'relative flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-2xl border transition',
                               isUnlocked
-                                ? cn('border-white/10 bg-gradient-to-br from-white/[0.07] to-black/45', glow)
+                                ? unlockedEmblemClass
                                 : 'border-white/[0.06] bg-black/50 opacity-75 saturate-[0.7]'
                             )}
                           >
@@ -1479,15 +1427,6 @@ export function Achievements() {
                               {achievement.description}
                             </p>
                           </div>
-
-                          <span
-                            className={cn(
-                              'inline-flex items-center justify-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider',
-                              pill
-                            )}
-                          >
-                            {achievement.rarity}
-                          </span>
 
                           {showProgressBar ? (
                             <div className="w-full space-y-1 px-1">
@@ -1580,12 +1519,7 @@ export function Achievements() {
                   {selectedAchievement.unlocked ? (
                     <>
                       Earned and held — the path ahead stays lit through{' '}
-                      <span className="text-zinc-300">{journeyNodes[journeyHighlightIndex]?.label ?? 'today'}</span>
-                      {selectedAchievement.rarity === 'legendary' ? (
-                        <span className="text-amber-200/90"> — a rare crown moment in your vault.</span>
-                      ) : (
-                        '.'
-                      )}
+                      <span className="text-zinc-300">{journeyNodes[journeyHighlightIndex]?.label ?? 'today'}</span>.
                     </>
                   ) : (
                     <>
@@ -1749,20 +1683,25 @@ export function Achievements() {
                             <Label htmlFor={`mood-${goal.id}`} className="text-zinc-300">
                               Emotion tag
                             </Label>
-                            <select
-                              id={`mood-${goal.id}`}
-                              value={inputState.mood}
-                              onChange={(e) => patchFields({ mood: e.target.value })}
+                            <SolaceSelect
+                              value={inputState.mood || "__none__"}
+                              onValueChange={(mood) =>
+                                patchFields({ mood: mood === "__none__" ? "" : mood })
+                              }
                               disabled={checkedToday}
-                              className="h-9 w-full rounded-md border border-white/15 bg-black/40 px-3 text-sm text-white disabled:opacity-60"
-                            >
-                              <option value="">How are you feeling? (optional)</option>
-                              {GOAL_EMOTION_TAG_OPTIONS.map((item) => (
-                                <option key={item.value} value={item.value}>
-                                  {item.label}
-                                </option>
-                              ))}
-                            </select>
+                              ariaLabel="Emotion tag"
+                              placeholder="How are you feeling? (optional)"
+                              variant="default"
+                              size="sm"
+                              triggerClassName="h-9"
+                              options={[
+                                { value: "__none__", label: "How are you feeling? (optional)" },
+                                ...GOAL_EMOTION_TAG_OPTIONS.map((item) => ({
+                                  value: item.value,
+                                  label: item.label,
+                                })),
+                              ]}
+                            />
                             {goal.moodTag ? (
                               <p className="text-xs text-zinc-500">
                                 Default on your goal: {goal.moodTag} (when left blank)
@@ -1960,8 +1899,8 @@ export function Achievements() {
             <aside className="min-w-0 space-y-5 xl:sticky xl:top-4 xl:self-start">
               <div className="rounded-3xl border border-white/[0.08] bg-[#0b101c]/90 p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Your Progress</p>
-                <div className="relative mx-auto mt-4 h-[136px] w-[136px] sm:h-40 sm:w-40">
-                  <svg className="-rotate-90" viewBox="0 0 100 100" width="144" height="144" aria-hidden>
+                <div className="relative mx-auto mt-4 size-36 overflow-hidden sm:size-40">
+                  <svg className="size-full -rotate-90" viewBox="0 0 100 100" aria-hidden>
                     <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
                     <circle
                       cx="50"
@@ -1980,9 +1919,13 @@ export function Achievements() {
                       </linearGradient>
                     </defs>
                   </svg>
-                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5">
-                    <p className="font-serif text-2xl font-semibold text-white sm:text-3xl">{overallCompletionPct}%</p>
-                    <p className="text-[10px] uppercase tracking-wider text-zinc-500">Overall completion</p>
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+                    <p className="font-serif text-xl font-semibold leading-none tabular-nums text-white sm:text-2xl">
+                      {overallCompletionPct}%
+                    </p>
+                    <p className="mt-1 max-w-[4.5rem] text-[9px] font-medium uppercase leading-tight tracking-wide text-zinc-500 sm:max-w-[5rem] sm:text-[10px]">
+                      Overall completion
+                    </p>
                   </div>
                 </div>
                 <p className="mt-4 text-xs text-zinc-400">
@@ -2019,43 +1962,6 @@ export function Achievements() {
                 <p className="mt-1.5 text-[10px] text-zinc-600">
                   Next reward · {nextPointsMilestone.toLocaleString()} pts
                 </p>
-              </div>
-
-              <div className="rounded-3xl border border-amber-400/18 bg-[linear-gradient(145deg,rgba(251,191,36,0.07),rgba(12,18,28,0.92))] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-200/85">Rarest Unlocked</p>
-                {rarestUnlock ? (
-                  <>
-                    <div className="mt-3 flex items-center gap-3">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-500/25 to-orange-950/40 shadow-[0_0_18px_-8px_rgba(251,191,36,0.35)]">
-                        <RarestIcon className="h-6 w-6 text-amber-50" aria-hidden />
-                      </div>
-                      <div className="min-w-0 text-left">
-                        <p className="truncate font-serif text-base font-semibold text-white">{rarestUnlock.title}</p>
-                        <p className="text-[11px] capitalize text-amber-200/75">{rarestUnlock.rarity}</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleViewAllRarities}
-                      className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-full border border-white/[0.1] bg-black/30 px-4 text-xs font-semibold text-zinc-200 transition hover:border-fuchsia-400/25 hover:bg-white/[0.05]"
-                    >
-                      View All Rarities
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                      Your rarest unlock will appear here.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleViewAllRarities}
-                      className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-full border border-white/[0.1] bg-black/30 px-4 text-xs font-semibold text-zinc-400 transition hover:border-fuchsia-400/25 hover:text-zinc-200"
-                    >
-                      View All Rarities
-                    </button>
-                  </>
-                )}
               </div>
 
               <div className="rounded-3xl border border-orange-400/15 bg-[#0b101c]/90 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
@@ -2113,21 +2019,21 @@ export function Achievements() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          className={modalOverlay}
           onClick={() => setShowCreateModal(false)}
         >
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
-            className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6"
+            className={cn(modalPanelLg, "max-h-[90vh] overflow-y-auto p-6")}
           >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Add your own achievement</h2>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className={modalTitle}>Add your own achievement</h2>
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="text-sm text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white"
+                className={modalCloseButton}
               >
                 Close
               </button>
@@ -2140,7 +2046,7 @@ export function Achievements() {
                   setPersonalGoalFormOpen(false);
                   setGoalTemplateKey('');
                 }}
-                className={`px-3 py-2 rounded-lg text-sm font-semibold ${activeAddTab === 'personal_goals' ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300'}`}
+                className={activeAddTab === 'personal_goals' ? modalTabActive : modalTabInactive}
               >
                 Personal Goals
               </button>
@@ -2151,7 +2057,7 @@ export function Achievements() {
                   setPersonalGoalFormOpen(false);
                   setGoalTemplateKey('');
                 }}
-                className={`px-3 py-2 rounded-lg text-sm font-semibold ${activeAddTab === 'personal_achievements' ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300'}`}
+                className={activeAddTab === 'personal_achievements' ? modalTabActive : modalTabInactive}
               >
                 Personal Achievements
               </button>
@@ -2161,37 +2067,27 @@ export function Achievements() {
               <>
                 {!personalGoalFormOpen ? (
                   <div className="space-y-3">
-                    <p className="text-sm text-gray-600 dark:text-slate-400">
+                    <p className={modalBodyText}>
                       Select a goal from the catalog (grouped by area), then continue to the form to add details and save.
                     </p>
                     <label htmlFor="achievement-goal-template" className="sr-only">
                       Goal template
                     </label>
-                    <select
+                    <SolaceSelect
                       id="achievement-goal-template"
                       value={goalTemplateKey}
-                      onChange={(e) => setGoalTemplateKey(e.target.value as PersonalGoalTemplateKey)}
-                      className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white text-sm"
-                    >
-                      <option value="">Select a goal…</option>
-                      {GOAL_CATEGORY_OPTIONS.map((cat) => (
-                        <optgroup key={cat.value} label={cat.label}>
-                          {PREDEFINED_GOALS.map((g, i) =>
-                            g.goal_category === cat.value ? (
-                              <option key={`${cat.value}-${i}`} value={`pre:${i}`}>
-                                {g.goal_title}
-                              </option>
-                            ) : null
-                          )}
-                        </optgroup>
-                      ))}
-                      <option value="custom">Custom goal (write your own)</option>
-                    </select>
+                      onValueChange={(v) => setGoalTemplateKey(v as PersonalGoalTemplateKey)}
+                      ariaLabel="Goal template"
+                      placeholder="Select a goal…"
+                      variant="form"
+                      groups={achievementGoalTemplateGroups}
+                      options={[{ value: "custom", label: "Custom goal (write your own)" }]}
+                    />
                     <button
                       type="button"
                       disabled={!goalTemplateKey}
                       onClick={openPersonalGoalFormFromTemplate}
-                      className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold hover:opacity-95 disabled:opacity-50 disabled:pointer-events-none"
+                      className={cn(modalPrimaryButton, "w-full sm:w-auto")}
                     >
                       Continue to form
                     </button>
@@ -2201,83 +2097,137 @@ export function Achievements() {
                 <button
                   type="button"
                   onClick={backToPersonalGoalTemplatePicker}
-                  className="mb-3 text-sm font-medium text-purple-600 dark:text-purple-400 hover:underline"
+                  className={cn("mb-3", modalLink)}
                 >
                   ← Change goal template
                 </button>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-title" className="text-xs font-medium text-gray-600 dark:text-slate-400">Goal Title</label>
-                    <input id="pg-title" type="text" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} placeholder="e.g. Build a daily meditation habit" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-title" className={modalLabel}>Goal Title</label>
+                    <input id="pg-title" type="text" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} placeholder="e.g. Build a daily meditation habit" className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-category" className="text-xs font-medium text-gray-600 dark:text-slate-400">Category</label>
-                    <select id="pg-category" value={goalCategory} onChange={(e) => setGoalCategory(e.target.value as NonNullable<Achievement['goalCategory']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                      <option value="Mental">Mental</option><option value="Emotional">Emotional</option><option value="Productivity">Productivity</option><option value="Relationships">Relationships</option><option value="Wellness">Wellness</option>
-                    </select>
+                    <label htmlFor="pg-category" className={modalLabel}>Category</label>
+                    <SolaceSelect
+                      id="pg-category"
+                      value={goalCategory}
+                      onValueChange={(v) => setGoalCategory(v as NonNullable<Achievement['goalCategory']>)}
+                      ariaLabel="Goal category"
+                      variant="form"
+                      options={[
+                        { value: "Mental", label: "Mental" },
+                        { value: "Emotional", label: "Emotional" },
+                        { value: "Productivity", label: "Productivity" },
+                        { value: "Relationships", label: "Relationships" },
+                        { value: "Wellness", label: "Wellness" },
+                      ]}
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-description" className="text-xs font-medium text-gray-600 dark:text-slate-400">Goal Description</label>
-                    <input id="pg-description" type="text" value={goalDescription} onChange={(e) => setGoalDescription(e.target.value)} placeholder="Briefly describe your goal" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-description" className={modalLabel}>Goal Description</label>
+                    <input id="pg-description" type="text" value={goalDescription} onChange={(e) => setGoalDescription(e.target.value)} placeholder="Briefly describe your goal" className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-why" className="text-xs font-medium text-gray-600 dark:text-slate-400">Why This Goal Matters</label>
-                    <input id="pg-why" type="text" value={goalWhyItMatters} onChange={(e) => setGoalWhyItMatters(e.target.value)} placeholder="What motivates you to pursue this?" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-why" className={modalLabel}>Why This Goal Matters</label>
+                    <input id="pg-why" type="text" value={goalWhyItMatters} onChange={(e) => setGoalWhyItMatters(e.target.value)} placeholder="What motivates you to pursue this?" className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-outcome" className="text-xs font-medium text-gray-600 dark:text-slate-400">Target Outcome</label>
-                    <input id="pg-outcome" type="text" value={goalTargetOutcome} onChange={(e) => setGoalTargetOutcome(e.target.value)} placeholder="What does success look like?" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-outcome" className={modalLabel}>Target Outcome</label>
+                    <input id="pg-outcome" type="text" value={goalTargetOutcome} onChange={(e) => setGoalTargetOutcome(e.target.value)} placeholder="What does success look like?" className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-priority" className="text-xs font-medium text-gray-600 dark:text-slate-400">Priority Level</label>
-                    <select id="pg-priority" value={goalPriority} onChange={(e) => setGoalPriority(e.target.value as NonNullable<Achievement['priority']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                      <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option>
-                    </select>
+                    <label htmlFor="pg-priority" className={modalLabel}>Priority Level</label>
+                    <SolaceSelect
+                      id="pg-priority"
+                      value={goalPriority}
+                      onValueChange={(v) => setGoalPriority(v as NonNullable<Achievement['priority']>)}
+                      ariaLabel="Priority level"
+                      variant="form"
+                      options={[
+                        { value: "Low", label: "Low" },
+                        { value: "Medium", label: "Medium" },
+                        { value: "High", label: "High" },
+                      ]}
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-start" className="text-xs font-medium text-gray-600 dark:text-slate-400">Start Date</label>
-                    <input id="pg-start" type="date" value={goalStartDate} onChange={(e) => setGoalStartDate(e.target.value)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-start" className={modalLabel}>Start Date</label>
+                    <input id="pg-start" type="date" value={goalStartDate} onChange={(e) => setGoalStartDate(e.target.value)} className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-target" className="text-xs font-medium text-gray-600 dark:text-slate-400">Target Date</label>
-                    <input id="pg-target" type="date" value={goalTargetDate} onChange={(e) => setGoalTargetDate(e.target.value)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-target" className={modalLabel}>Target Date</label>
+                    <input id="pg-target" type="date" value={goalTargetDate} onChange={(e) => setGoalTargetDate(e.target.value)} className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-progress" className="text-xs font-medium text-gray-600 dark:text-slate-400">Current Progress (0–100%)</label>
-                    <input id="pg-progress" type="number" min={0} max={100} value={goalProgress} onChange={(e) => setGoalProgress(e.target.value)} placeholder="0" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-progress" className={modalLabel}>Current Progress (0–100%)</label>
+                    <input id="pg-progress" type="number" min={0} max={100} value={goalProgress} onChange={(e) => setGoalProgress(e.target.value)} placeholder="0" className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-frequency" className="text-xs font-medium text-gray-600 dark:text-slate-400">Check-in Frequency</label>
-                    <select id="pg-frequency" value={goalCheckInFrequency} onChange={(e) => setGoalCheckInFrequency(e.target.value as NonNullable<Achievement['checkInFrequency']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                      <option value="Daily">Daily</option><option value="Weekly">Weekly</option><option value="Custom">Custom</option>
-                    </select>
+                    <label htmlFor="pg-frequency" className={modalLabel}>Check-in Frequency</label>
+                    <SolaceSelect
+                      id="pg-frequency"
+                      value={goalCheckInFrequency}
+                      onValueChange={(v) =>
+                        setGoalCheckInFrequency(v as NonNullable<Achievement['checkInFrequency']>)
+                      }
+                      ariaLabel="Check-in frequency"
+                      variant="form"
+                      options={[
+                        { value: "Daily", label: "Daily" },
+                        { value: "Weekly", label: "Weekly" },
+                        { value: "Custom", label: "Custom" },
+                      ]}
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-actions" className="text-xs font-medium text-gray-600 dark:text-slate-400">Small Action Steps</label>
-                    <input id="pg-actions" type="text" value={goalActionSteps} onChange={(e) => setGoalActionSteps(e.target.value)} placeholder="Comma-separated steps, e.g. Read 10 pages, Journal 5 min" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-actions" className={modalLabel}>Small Action Steps</label>
+                    <input id="pg-actions" type="text" value={goalActionSteps} onChange={(e) => setGoalActionSteps(e.target.value)} placeholder="Comma-separated steps, e.g. Read 10 pages, Journal 5 min" className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-mood" className="text-xs font-medium text-gray-600 dark:text-slate-400">Emotion Tag</label>
-                    <select id="pg-mood" value={goalMoodTag} onChange={(e) => setGoalMoodTag(e.target.value as NonNullable<Achievement['moodTag']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                      <option value="Stress">Stress</option><option value="Sadness">Sadness</option><option value="Fear">Fear</option><option value="Confidence">Confidence</option><option value="Motivation">Motivation</option>
-                    </select>
+                    <label htmlFor="pg-mood" className={modalLabel}>Emotion Tag</label>
+                    <SolaceSelect
+                      id="pg-mood"
+                      value={goalMoodTag}
+                      onValueChange={(v) => setGoalMoodTag(v as NonNullable<Achievement['moodTag']>)}
+                      ariaLabel="Emotion tag"
+                      variant="form"
+                      options={[
+                        { value: "Stress", label: "Stress" },
+                        { value: "Sadness", label: "Sadness" },
+                        { value: "Fear", label: "Fear" },
+                        { value: "Confidence", label: "Confidence" },
+                        { value: "Motivation", label: "Motivation" },
+                      ]}
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-support" className="text-xs font-medium text-gray-600 dark:text-slate-400">Support Type Needed</label>
-                    <select id="pg-support" value={goalSupportType} onChange={(e) => setGoalSupportType(e.target.value as NonNullable<Achievement['supportType']>)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white">
-                      <option value="Encouragement">Encouragement</option><option value="Accountability">Accountability</option><option value="Reflection">Reflection</option><option value="Coping Help">Coping Help</option>
-                    </select>
+                    <label htmlFor="pg-support" className={modalLabel}>Support Type Needed</label>
+                    <SolaceSelect
+                      id="pg-support"
+                      value={goalSupportType}
+                      onValueChange={(v) =>
+                        setGoalSupportType(v as NonNullable<Achievement['supportType']>)
+                      }
+                      ariaLabel="Support type needed"
+                      variant="form"
+                      options={[
+                        { value: "Encouragement", label: "Encouragement" },
+                        { value: "Accountability", label: "Accountability" },
+                        { value: "Reflection", label: "Reflection" },
+                        { value: "Coping Help", label: "Coping Help" },
+                      ]}
+                    />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-notes" className="text-xs font-medium text-gray-600 dark:text-slate-400">Notes / Journal Entry</label>
-                    <input id="pg-notes" type="text" value={goalNotes} onChange={(e) => setGoalNotes(e.target.value)} placeholder="Any additional notes (optional)" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-notes" className={modalLabel}>Notes / Journal Entry</label>
+                    <input id="pg-notes" type="text" value={goalNotes} onChange={(e) => setGoalNotes(e.target.value)} placeholder="Any additional notes (optional)" className={modalInput} />
                   </div>
                 </div>
-                <label className="mt-3 flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
+                <label className={cn("mt-3", modalCheckboxLabel)}>
                   <input type="checkbox" checked={goalReminderEnabled} onChange={(e) => setGoalReminderEnabled(e.target.checked)} />
                   Reminder Enabled
                 </label>
-                <button type="button" onClick={addPersonalGoalFromTab} className="mt-4 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold hover:opacity-95">
+                <button type="button" onClick={addPersonalGoalFromTab} className={cn(modalPrimaryButton, "mt-4")}>
                   Save Personal Goal
                 </button>
                   </>
@@ -2286,10 +2236,10 @@ export function Achievements() {
             ) : (
               <>
                 <div className="grid grid-cols-1 gap-3">
-                  <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Achievement Title" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
-                  <input type="text" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="Achievement Description" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Achievement Title" className={modalInput} />
+                  <input type="text" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="Achievement Description" className={modalInput} />
                 </div>
-                <button type="button" onClick={addPersonalAchievementFromTab} className="mt-4 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold hover:opacity-95">
+                <button type="button" onClick={addPersonalAchievementFromTab} className={cn(modalPrimaryButton, "mt-4")}>
                   Save Personal Achievement
                 </button>
               </>

@@ -21,6 +21,7 @@ import {
   fetchReadingLibraryArticles,
   type ReadingLibraryArticle,
 } from "@/lib/readingLibraryArticles";
+import { SolaceSelect } from "@/app/solace";
 import {
   RESOURCES_HERO_IMG,
   formatCategoryLabel,
@@ -43,7 +44,6 @@ import {
   resourcesPageVignette,
   resourcesReadBtn,
   resourcesSearchInput,
-  resourcesSelect,
   secondarySourceLabel,
 } from "@/app/pages/app/resources-library/resourcesLibraryUi";
 
@@ -229,20 +229,21 @@ export function Resources() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.08, duration: 0.35 }}
           >
-            <select
+            <SolaceSelect
               value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className={resourcesSelect}
-              aria-label="Filter by category"
-            >
-              <option value="all">All categories</option>
-              {WELLNESS_TOOL_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-              <option value="General">General</option>
-            </select>
+              onValueChange={setSelectedCategory}
+              ariaLabel="Filter by category"
+              variant="default"
+              triggerClassName="min-h-[44px] w-full rounded-full sm:w-52"
+              options={[
+                { value: "all", label: "All categories" },
+                ...WELLNESS_TOOL_CATEGORIES.map((category) => ({
+                  value: category,
+                  label: category,
+                })),
+                { value: "General", label: "General" },
+              ]}
+            />
           </motion.div>
         </div>
 
@@ -434,7 +435,7 @@ export function Resources() {
         <footer className="pt-2 text-center">
           <p className="text-sm text-[rgba(255,255,255,0.42)]">Made with care for your wellbeing</p>
           <p className="mt-1 text-xs text-[rgba(255,255,255,0.32)]">
-            Solace v1.0.0 • © 2024 •{" "}
+            Solace v1.0.0 • © 2026 •{" "}
             <Link to="/privacy" className="underline-offset-2 hover:text-violet-300/80 hover:underline">
               Privacy
             </Link>{" "}

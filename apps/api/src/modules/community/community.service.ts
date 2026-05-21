@@ -1,5 +1,9 @@
 import prisma from '../../lib/prisma';
 import { Prisma } from '@prisma/client';
+import {
+  computeCommunityPulsePercent,
+  sentimentSignalsFromTexts,
+} from '@meetezri/shared';
 import { invalidateCommunityCaches } from '../admin/admin.service';
 import { calculateStreak } from '../users/user.service';
 
@@ -99,12 +103,19 @@ export async function getCommunityOverview() {
   ) {
     return communityOverviewCacheValue.data;
   }
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
+
   const [
     groupCount,
     postCount,
     commentCount,
     distinctMembers,
     recentPosts,
+    likeAggregate,
+    recentPosts7d,
+    recentPostContents,
+    recentCommentContents,
   ] = await Promise.all([
     prisma.community_groups.count({ where: { archived_at: null } }),
     prisma.community_posts.count({ where: { deleted_at: null } }),
@@ -119,10 +130,37 @@ export async function getCommunityOverview() {
       take: 80,
       select: { created_at: true },
     }),
+    prisma.community_posts.aggregate({
+      where: { deleted_at: null },
+      _sum: { likes_count: true },
+    }),
+    prisma.community_posts.count({
+      where: { deleted_at: null, created_at: { gte: sevenDaysAgo } },
+    }),
+    prisma.community_posts.findMany({
+      where: { deleted_at: null, created_at: { gte: sevenDaysAgo } },
+      orderBy: { created_at: 'desc' },
+      take: 100,
+      select: { content: true },
+    }),
+    prisma.community_comments.findMany({
+      where: { created_at: { gte: sevenDaysAgo } },
+      orderBy: { created_at: 'desc' },
+      take: 150,
+      select: { content: true },
+    }),
   ]);
 
-  const since = Date.now() - 30 * 60 * 1000;
-  const activeNow = recentPosts.filter((p) => p.created_at.getTime() >= since).length;
+  const totalLikes = likeAggregate._sum.likes_count ?? 0;
+  const activeNow = recentPosts.filter((p) => p.created_at.getTime() >= thirtyMinutesAgo).length;
+  const pulseSignals = sentimentSignalsFromTexts([
+    ...recentPostContents.map((p) => p.content),
+    ...recentCommentContents.map((c) => c.content),
+  ]);
+  const pulse = computeCommunityPulsePercent({
+    signals: pulseSignals,
+    totalPosts: postCount,
+  });
 
   const tagCounts = new Map<string, number>();
   const tagRows = await prisma.community_posts.findMany({
@@ -161,6 +199,12 @@ export async function getCommunityOverview() {
     groups: groupCount,
     comments: commentCount,
     activeNow,
+    totalLikes,
+    recentPosts7d,
+    pulsePercent: pulse.percent,
+    pulsePositive: pulse.positive,
+    pulseNegative: pulse.negative,
+    pulseNeutral: pulse.neutral,
     trendingTags,
   };
   communityOverviewCacheValue = { data, timestamp: Date.now() };

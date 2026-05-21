@@ -4,6 +4,7 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
 import { GOAL_CATEGORY_OPTIONS, GOAL_EMOTION_TAG_OPTIONS } from '../constants';
+import { SolaceSelect } from '@/app/solace';
 import type { EmotionTag, Goal, GoalCheckInValues } from '../types';
 
 function categoryLabel(category: Goal['goal_category']) {
@@ -93,19 +94,22 @@ export function GoalCheckInForm({
         </div>
         <div className="space-y-2">
           <Label htmlFor={`checkin-mood-${goal.id}`}>Emotion tag</Label>
-          <select
+          <SolaceSelect
             id={`checkin-mood-${goal.id}`}
-            value={mood}
-            onChange={(e) => setMood(e.target.value)}
-            className="h-9 w-full rounded-md border border-input bg-input-background px-3 text-sm"
-          >
-            <option value="">How are you feeling? (optional)</option>
-            {GOAL_EMOTION_TAG_OPTIONS.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+            value={mood || "__none__"}
+            onValueChange={(v) => setMood(v === "__none__" ? "" : v)}
+            ariaLabel="Emotion tag"
+            variant="default"
+            size="sm"
+            triggerClassName="h-9"
+            options={[
+              { value: "__none__", label: "How are you feeling? (optional)" },
+              ...GOAL_EMOTION_TAG_OPTIONS.map((item) => ({
+                value: item.value,
+                label: item.label,
+              })),
+            ]}
+          />
         </div>
         <div className="md:col-span-2 space-y-2">
           <Label htmlFor={`checkin-reflection-${goal.id}`}>Reflection</Label>

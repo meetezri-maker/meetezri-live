@@ -29,6 +29,32 @@ export const settingsCard = cn(
   "backdrop-blur-xl"
 );
 
+/** Hero banner — transparent shell so the photo fills the full section */
+export const settingsHeroSection = cn(
+  "relative isolate overflow-hidden rounded-[1.25rem] border border-violet-500/10",
+  "shadow-[0_0_56px_-20px_rgba(139,92,246,0.35),0_24px_64px_-36px_rgba(0,0,0,0.72),inset_0_1px_0_rgba(255,255,255,0.07)]"
+);
+
+export const settingsHeroImage = cn(
+  "absolute inset-0 z-0 h-full w-full object-cover object-[center_32%]",
+  "brightness-[0.94] contrast-[1.05] saturate-[1.08]"
+);
+
+export const settingsHeroOverlayReadability = cn(
+  "pointer-events-none absolute inset-0 z-[1]",
+  "bg-[linear-gradient(90deg,rgba(10,11,24,0.62)_0%,rgba(10,11,24,0.28)_40%,transparent_62%)]"
+);
+
+export const settingsHeroOverlayBottom = cn(
+  "pointer-events-none absolute inset-0 z-[1]",
+  "bg-[linear-gradient(180deg,transparent_0%,rgba(5,8,22,0.28)_50%,rgba(5,8,22,0.62)_100%)]"
+);
+
+export const settingsHeroOverlayAccent = cn(
+  "pointer-events-none absolute inset-0 z-[1]",
+  "bg-[radial-gradient(ellipse_70%_80%_at_85%_40%,rgba(192,132,252,0.14),transparent_55%)]"
+);
+
 export const settingsSectionTitle = "text-sm font-semibold uppercase tracking-[0.22em] text-[rgba(255,255,255,0.45)]";
 
 export const settingsRowLink = cn(

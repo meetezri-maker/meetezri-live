@@ -10,6 +10,57 @@ import {
 
 const PROGRESS_CACHE_TTL = 30 * 1000; // 30 seconds
 const progressCache = new Map<string, { data: any[]; timestamp: number }>();
+const insightsCache = new Map<string, { data: WellnessInsightsResult; timestamp: number }>();
+
+export type WellnessInsightsPeriod = 'today' | 'week' | 'month';
+
+export interface WellnessMoodBreakdown {
+  positive: number;
+  neutral: number;
+  anxious: number;
+  sad: number;
+  total: number;
+}
+
+export interface WellnessInsightsResult {
+  progress: {
+    toolId: string;
+    toolTitle: string;
+    sessionsCompleted: number;
+    totalSeconds: number;
+    totalMinutes: number;
+  }[];
+  moodAfterExercises: WellnessMoodBreakdown;
+}
+
+function wellnessInsightsPeriodStart(period: WellnessInsightsPeriod, now = new Date()): Date {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  if (period === 'today') return start;
+  if (period === 'week') {
+    const day = start.getDay();
+    const diff = day === 0 ? 6 : day - 1;
+    start.setDate(start.getDate() - diff);
+    return start;
+  }
+  return new Date(start.getFullYear(), start.getMonth(), 1);
+}
+
+function mapFeedbackRating(rating: number): keyof Omit<WellnessMoodBreakdown, 'total'> {
+  if (rating >= 4) return 'positive';
+  if (rating === 3) return 'neutral';
+  if (rating === 2) return 'anxious';
+  return 'sad';
+}
+
+function mapMoodLabelToBucket(mood: string): keyof Omit<WellnessMoodBreakdown, 'total'> {
+  const m = mood.trim().toLowerCase();
+  if (['happy', 'hopeful', 'grateful', 'excited'].includes(m)) return 'positive';
+  if (['neutral', 'tired', 'calm', 'meh'].includes(m)) return 'neutral';
+  if (['anxious', 'nervous', 'overwhelmed', 'stressed'].includes(m)) return 'anxious';
+  if (['sad', 'angry', 'emotional', 'heavy'].includes(m)) return 'sad';
+  return 'neutral';
+}
 
 const WELLNESS_TOOLS_CACHE_TTL = 60 * 1000; // 60 seconds
 const wellnessToolsCache = new Map<string, { data: any[]; timestamp: number }>();
@@ -35,6 +86,9 @@ function clearWellnessToolCaches() {
 
 function clearUserWellnessCaches(userId: string) {
   progressCache.delete(userId);
+  for (const key of insightsCache.keys()) {
+    if (key.startsWith(`${userId}:`)) insightsCache.delete(key);
+  }
   wellnessStatsCache.delete(userId);
   // Dashboard depends on these signals (sessions/moods/journals/wellness). Safe short TTL but clear on writes.
   wellnessChallengesDashboardCache.delete(userId);
@@ -865,6 +919,96 @@ export async function getUserWellnessProgress(userId: string) {
   });
 
   progressCache.set(userId, { data: result, timestamp: Date.now() });
+  return result;
+}
+
+export async function getWellnessInsights(
+  userId: string,
+  period: WellnessInsightsPeriod = 'week'
+): Promise<WellnessInsightsResult> {
+  const cacheKey = `${userId}:${period}`;
+  const cached = insightsCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < PROGRESS_CACHE_TTL) {
+    return cached.data;
+  }
+
+  const periodStart = wellnessInsightsPeriodStart(period);
+
+  const progress = await prisma.$queryRaw<any[]>`
+    SELECT 
+      wp.tool_id, 
+      wt.title as "toolTitle", 
+      COUNT(wp.tool_id)::int as "sessionsCompleted", 
+      SUM(wp.duration_spent)::int as "totalSeconds"
+    FROM user_wellness_progress wp
+    JOIN wellness_tools wt ON wp.tool_id = wt.id
+    WHERE wp.user_id = ${userId}::uuid
+      AND wp.completed_at IS NOT NULL 
+      AND wp.completed_at >= ${periodStart}
+      AND wp.duration_spent > 0
+    GROUP BY wp.tool_id, wt.title
+  `;
+
+  const mappedProgress = progress.map((p) => {
+    const totalSeconds = Number(p.totalSeconds) || 0;
+    return {
+      toolId: p.tool_id,
+      toolTitle: p.toolTitle,
+      sessionsCompleted: p.sessionsCompleted,
+      totalSeconds,
+      totalMinutes: Math.round(totalSeconds / 60),
+    };
+  });
+
+  const ratings = await prisma.user_wellness_progress.findMany({
+    where: {
+      user_id: userId,
+      completed_at: { gte: periodStart },
+      feedback_rating: { not: null },
+    },
+    select: { feedback_rating: true },
+    take: 500,
+  });
+
+  const moodAfterExercises: WellnessMoodBreakdown = {
+    positive: 0,
+    neutral: 0,
+    anxious: 0,
+    sad: 0,
+    total: 0,
+  };
+
+  if (ratings.length > 0) {
+    for (const row of ratings) {
+      const rating = row.feedback_rating;
+      if (rating == null) continue;
+      const bucket = mapFeedbackRating(rating);
+      moodAfterExercises[bucket] += 1;
+      moodAfterExercises.total += 1;
+    }
+  } else {
+    const moodRows = await prisma.mood_entries.findMany({
+      where: {
+        user_id: userId,
+        created_at: { gte: periodStart },
+      },
+      select: { mood: true },
+      take: 200,
+      orderBy: { created_at: 'desc' },
+    });
+    for (const row of moodRows) {
+      const bucket = mapMoodLabelToBucket(row.mood);
+      moodAfterExercises[bucket] += 1;
+      moodAfterExercises.total += 1;
+    }
+  }
+
+  const result: WellnessInsightsResult = {
+    progress: mappedProgress,
+    moodAfterExercises,
+  };
+
+  insightsCache.set(cacheKey, { data: result, timestamp: Date.now() });
   return result;
 }
 

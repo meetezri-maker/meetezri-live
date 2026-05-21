@@ -23,7 +23,6 @@ import {
   Smartphone,
   Heart,
   Lock,
-  Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -53,6 +52,11 @@ import {
   settingsPageFogMid,
   settingsPageVignette,
   settingsCard,
+  settingsHeroSection,
+  settingsHeroImage,
+  settingsHeroOverlayReadability,
+  settingsHeroOverlayBottom,
+  settingsHeroOverlayAccent,
   settingsSectionTitle,
   settingsRowLink,
   settingsIconChip,
@@ -364,10 +368,6 @@ export function SettingsHub() {
     user?.email?.split("@")[0] ||
     "Member";
 
-  const premiumish =
-    ["pro", "core", "active"].includes(String(profile?.subscription_plan || "").toLowerCase()) ||
-    String(profile?.subscription_status || "").toLowerCase() === "active";
-
   const planLabel = formatSubscriptionPlanLabel(
     typeof profile?.subscription_plan === "string" ? profile.subscription_plan : undefined
   );
@@ -396,29 +396,19 @@ export function SettingsHub() {
             transition={{ delay: 0.05 }}
           >
             {/* Hero */}
-            <section
-              className={cn(
-                settingsCard,
-                "relative overflow-hidden border-violet-500/10 shadow-[0_0_56px_-20px_rgba(139,92,246,0.35)]"
-              )}
-            >
-              <div className="absolute inset-0">
-                <img
-                  src={SETTINGS_HERO_IMG}
-                  alt=""
-                  className="h-full w-full object-cover object-right brightness-[0.55] contrast-[0.95] saturate-[1.08]"
-                />
-                <motion.div
-                  className="absolute inset-0 bg-gradient-to-r from-[#0a0b18] via-[#0a0b18]/88 to-[#0a0b18]/25"
-                  aria-hidden
-                />
-                <div
-                  className="absolute inset-0 bg-[radial-gradient(ellipse_70%_80%_at_85%_50%,rgba(192,132,252,0.18),transparent_55%)]"
-                  aria-hidden
-                />
-              </div>
+            <section className={settingsHeroSection}>
+              <img
+                src={SETTINGS_HERO_IMG}
+                alt=""
+                className={settingsHeroImage}
+                width={1600}
+                height={900}
+              />
+              <div className={settingsHeroOverlayReadability} aria-hidden />
+              <div className={settingsHeroOverlayAccent} aria-hidden />
+              <div className={settingsHeroOverlayBottom} aria-hidden />
 
-              <div className="relative px-5 pb-5 pt-5 sm:px-7 sm:pb-6 sm:pt-6">
+              <div className="relative z-10 px-5 pb-5 pt-5 sm:px-7 sm:pb-6 sm:pt-6">
                 <Link
                   to="/app/dashboard"
                   className="inline-flex min-h-[44px] items-center gap-2 text-sm text-[rgba(255,255,255,0.62)] transition-colors hover:text-white"
@@ -531,7 +521,7 @@ export function SettingsHub() {
                 <span>Made with care for your wellbeing</span>
               </div>
               <p className="text-xs text-[rgba(255,255,255,0.32)]">
-                Solace v1.0.0 • © 2024 •{" "}
+                Solace v1.0.0 • © 2026 •{" "}
                 <Link to="/privacy" className="underline-offset-2 hover:text-violet-300/80 hover:underline">
                   Privacy
                 </Link>{" "}
@@ -563,11 +553,9 @@ export function SettingsHub() {
                   )}
                 </div>
                 <p className="mt-3 text-lg font-semibold text-white">{displayName}</p>
-                {premiumish ? (
-                  <span className="mt-1.5 inline-flex rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-200/90">
-                    Premium member
-                  </span>
-                ) : null}
+                <span className="mt-1.5 inline-flex rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-0.5 text-[10px] font-semibold tracking-wide text-violet-200/90">
+                  {planLabel}
+                </span>
                 <Link
                   to="/app/billing"
                   className="mt-4 flex w-full min-h-[44px] items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3 text-sm transition-colors hover:border-violet-400/20 hover:bg-violet-500/[0.06]"
@@ -579,33 +567,9 @@ export function SettingsHub() {
                   </span>
                 </Link>
                 <Link to="/app/billing" className={cn(settingsBtnPrimary, "mt-3")}>
-                  Manage plan
+                  Manage Plan
                 </Link>
               </div>
-            </div>
-
-            <div className={cn(settingsCard, "p-5")}>
-              <h2 className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">Settings tips</h2>
-              <ul className="mt-4 divide-y divide-white/[0.06]">
-                <TipRow
-                  icon={Bell}
-                  tone="violet"
-                  title="Customize your alerts"
-                  description="Stay on track with smart reminders."
-                />
-                <TipRow
-                  icon={Shield}
-                  tone="pink"
-                  title="Protect your privacy"
-                  description="Review your data and security settings."
-                />
-                <TipRow
-                  icon={Sparkles}
-                  tone="cyan"
-                  title="Explore wellness tools"
-                  description="Make the most of Solace resources."
-                />
-              </ul>
             </div>
 
             <div className={cn(settingsCard, "relative overflow-hidden p-0")}>
@@ -746,26 +710,5 @@ function SystemToolCard({ section }: { section: SettingSection }) {
       </motion.div>
       <ChevronRight className="mt-3 h-4 w-4 text-[rgba(255,255,255,0.28)]" aria-hidden />
     </Link>
-  );
-}
-
-interface TipRowProps {
-  icon: LucideIcon;
-  tone: "violet" | "pink" | "cyan";
-  title: string;
-  description: string;
-}
-
-function TipRow({ icon: Icon, tone, title, description }: TipRowProps) {
-  return (
-    <li className="flex gap-3 py-3.5 first:pt-0 last:pb-0">
-      <div className={settingsIconChip(tone)}>
-        <Icon className="h-4 w-4" aria-hidden />
-      </div>
-      <div>
-        <p className="text-sm font-medium text-[rgba(255,255,255,0.9)]">{title}</p>
-        <p className="mt-0.5 text-xs text-[rgba(255,255,255,0.45)]">{description}</p>
-      </div>
-    </li>
   );
 }
