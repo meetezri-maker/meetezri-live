@@ -673,7 +673,7 @@ export function CrisisProtocol() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
             onClick={() => setShowContactModal(false)}
           >
             <motion.div
@@ -681,7 +681,7 @@ export function CrisisProtocol() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl"
+              className="w-full max-w-xl p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="flex items-start justify-between mb-6">
                 <div>
@@ -771,7 +771,7 @@ export function CrisisProtocol() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
             onClick={() => setShowAlertTeamModal(false)}
           >
             <motion.div
@@ -779,7 +779,7 @@ export function CrisisProtocol() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl"
+              className="w-full max-w-xl p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="flex items-start justify-between mb-6">
                 <div>
@@ -880,7 +880,7 @@ export function CrisisProtocol() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
             onClick={() => setShowCopyModal(false)}
           >
             <motion.div
@@ -888,7 +888,7 @@ export function CrisisProtocol() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+              className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="flex items-start justify-between mb-6">
                 <div>

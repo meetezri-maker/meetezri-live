@@ -78,7 +78,7 @@ export function LowMinutesWarning({
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white rounded-3xl shadow-2xl max-w-md w-full pointer-events-auto overflow-hidden"
+              className="w-full max-w-md pointer-events-auto overflow-hidden rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl"
             >
               {/* Close Button */}
               <button

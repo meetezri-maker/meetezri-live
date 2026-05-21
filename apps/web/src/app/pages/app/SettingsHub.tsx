@@ -53,6 +53,11 @@ import {
   settingsPageFogMid,
   settingsPageVignette,
   settingsCard,
+  settingsHeroSection,
+  settingsHeroImage,
+  settingsHeroOverlayReadability,
+  settingsHeroOverlayBottom,
+  settingsHeroOverlayAccent,
   settingsSectionTitle,
   settingsRowLink,
   settingsIconChip,
@@ -396,29 +401,19 @@ export function SettingsHub() {
             transition={{ delay: 0.05 }}
           >
             {/* Hero */}
-            <section
-              className={cn(
-                settingsCard,
-                "relative overflow-hidden border-violet-500/10 shadow-[0_0_56px_-20px_rgba(139,92,246,0.35)]"
-              )}
-            >
-              <div className="absolute inset-0">
-                <img
-                  src={SETTINGS_HERO_IMG}
-                  alt=""
-                  className="h-full w-full object-cover object-right brightness-[0.55] contrast-[0.95] saturate-[1.08]"
-                />
-                <motion.div
-                  className="absolute inset-0 bg-gradient-to-r from-[#0a0b18] via-[#0a0b18]/88 to-[#0a0b18]/25"
-                  aria-hidden
-                />
-                <div
-                  className="absolute inset-0 bg-[radial-gradient(ellipse_70%_80%_at_85%_50%,rgba(192,132,252,0.18),transparent_55%)]"
-                  aria-hidden
-                />
-              </div>
+            <section className={settingsHeroSection}>
+              <img
+                src={SETTINGS_HERO_IMG}
+                alt=""
+                className={settingsHeroImage}
+                width={1600}
+                height={900}
+              />
+              <div className={settingsHeroOverlayReadability} aria-hidden />
+              <div className={settingsHeroOverlayAccent} aria-hidden />
+              <div className={settingsHeroOverlayBottom} aria-hidden />
 
-              <div className="relative px-5 pb-5 pt-5 sm:px-7 sm:pb-6 sm:pt-6">
+              <div className="relative z-10 px-5 pb-5 pt-5 sm:px-7 sm:pb-6 sm:pt-6">
                 <Link
                   to="/app/dashboard"
                   className="inline-flex min-h-[44px] items-center gap-2 text-sm text-[rgba(255,255,255,0.62)] transition-colors hover:text-white"
@@ -531,7 +526,7 @@ export function SettingsHub() {
                 <span>Made with care for your wellbeing</span>
               </div>
               <p className="text-xs text-[rgba(255,255,255,0.32)]">
-                Solace v1.0.0 • © 2024 •{" "}
+                Solace v1.0.0 • © 2026 •{" "}
                 <Link to="/privacy" className="underline-offset-2 hover:text-violet-300/80 hover:underline">
                   Privacy
                 </Link>{" "}

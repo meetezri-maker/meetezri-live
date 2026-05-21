@@ -31,12 +31,42 @@ export function formatWellnessDuration(totalSeconds: number): string {
   return `${m} min ${rem} sec`;
 }
 
+export type WellnessInsightsPeriod = "today" | "week" | "month";
+
 type LocalAgg = {
   toolId: string;
   toolTitle: string;
   sessionsCompleted: number;
   totalSeconds: number;
+  /** ISO timestamp of the most recent built-in session (for period filters). */
+  lastSessionAt?: string;
 };
+
+export function wellnessInsightsPeriodStart(period: WellnessInsightsPeriod, now = new Date()): Date {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  if (period === "today") return start;
+  if (period === "week") {
+    const day = start.getDay();
+    const diff = day === 0 ? 6 : day - 1;
+    start.setDate(start.getDate() - diff);
+    return start;
+  }
+  return new Date(start.getFullYear(), start.getMonth(), 1);
+}
+
+export function filterLocalProgressByPeriod(
+  rows: LocalAgg[],
+  period: WellnessInsightsPeriod,
+  now = new Date()
+): LocalAgg[] {
+  const start = wellnessInsightsPeriodStart(period, now).getTime();
+  return rows.filter((row) => {
+    if (!row.lastSessionAt) return period !== "today";
+    const t = new Date(row.lastSessionAt).getTime();
+    return Number.isFinite(t) && t >= start;
+  });
+}
 
 const STORAGE_PREFIX = "wellness-builtin-progress:";
 
@@ -83,12 +113,14 @@ export function recordBuiltinSession(
   const sec = Math.floor(durationSeconds);
   const rows = loadLocalProgress(userId);
   const idx = rows.findIndex((r) => r.toolId === toolId);
+  const completedAt = new Date().toISOString();
   if (idx >= 0) {
     rows[idx] = {
       ...rows[idx],
       toolTitle: toolTitle || rows[idx].toolTitle,
       sessionsCompleted: rows[idx].sessionsCompleted + 1,
       totalSeconds: rows[idx].totalSeconds + sec,
+      lastSessionAt: completedAt,
     };
   } else {
     rows.push({
@@ -96,6 +128,7 @@ export function recordBuiltinSession(
       toolTitle,
       sessionsCompleted: 1,
       totalSeconds: sec,
+      lastSessionAt: completedAt,
     });
   }
   saveLocalProgress(userId, rows);

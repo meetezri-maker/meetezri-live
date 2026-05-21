@@ -100,7 +100,7 @@ export const profileHeroShell = cn(
   "min-h-[300px] sm:min-h-[340px]",
   "border border-white/[0.05]",
   "shadow-[0_0_48px_rgba(168,85,247,0.08),0_32px_80px_-40px_rgba(0,0,0,0.88),inset_0_1px_0_rgba(255,255,255,0.09)]",
-  "[&>img]:brightness-[0.76] [&>img]:contrast-[0.9] [&>img]:saturate-[1.06]"
+  "[&>img]:z-0 [&>img]:object-[center_32%] [&>img]:brightness-[0.94] [&>img]:contrast-[1.05] [&>img]:saturate-[1.08]"
 );
 
 export const profileHeroStatStrip = cn(

@@ -1022,6 +1022,16 @@ export const api = {
       return handleResponse(res, 'Failed to fetch wellness progress');
     },
 
+    async getInsights(period: 'today' | 'week' | 'month' = 'week') {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/wellness/insights?period=${period}`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch wellness insights');
+    },
+
     async getStats() {
       const headers = await getHeaders();
       const res = await fetch(`${API_URL}/wellness/stats`, {

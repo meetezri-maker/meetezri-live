@@ -1244,7 +1244,7 @@ export function SystemSettingsEnhanced() {
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl"
+              className="w-full max-w-md p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -1338,7 +1338,7 @@ export function SystemSettingsEnhanced() {
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl"
+              className="w-full max-w-md p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">

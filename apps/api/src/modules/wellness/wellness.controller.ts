@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { createWellnessTool, createWellnessChallenge, deleteWellnessTool, getWellnessToolById, getWellnessTools, updateWellnessTool, trackWellnessProgress, getUserWellnessProgress, startWellnessSession, completeWellnessSession, getWellnessStats, getWellnessChallengesWithStats, getWellnessChallengesForUserDashboard, toggleWellnessToolFavorite, updateWellnessChallenge, joinWellnessChallenge, unjoinWellnessChallenge } from './wellness.service';
+import { createWellnessTool, createWellnessChallenge, deleteWellnessTool, getWellnessToolById, getWellnessTools, updateWellnessTool, trackWellnessProgress, getUserWellnessProgress, getWellnessInsights, startWellnessSession, completeWellnessSession, getWellnessStats, getWellnessChallengesWithStats, getWellnessChallengesForUserDashboard, toggleWellnessToolFavorite, updateWellnessChallenge, joinWellnessChallenge, unjoinWellnessChallenge, type WellnessInsightsPeriod } from './wellness.service';
 import {
   CreateWellnessChallengeInput,
   CreateWellnessToolInput,
@@ -75,6 +75,20 @@ export async function getUserWellnessProgressHandler(
     return reply.send(progress);
   } catch (error) {
     return reply.code(500).send({ message: 'Failed to fetch wellness progress' });
+  }
+}
+
+export async function getWellnessInsightsHandler(
+  request: FastifyRequest<{ Querystring: { period?: string } }>,
+  reply: FastifyReply
+) {
+  try {
+    const raw = request.query?.period ?? 'week';
+    const period = (['today', 'week', 'month'].includes(raw) ? raw : 'week') as WellnessInsightsPeriod;
+    const insights = await getWellnessInsights((request.user as any).sub, period);
+    return reply.send(insights);
+  } catch (error) {
+    return reply.code(500).send({ message: 'Failed to fetch wellness insights' });
   }
 }
 

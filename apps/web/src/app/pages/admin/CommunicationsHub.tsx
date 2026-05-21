@@ -699,7 +699,7 @@ function PushTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setDeletingNotif(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-md w-full">
+              onClick={e => e.stopPropagation()} className="w-full max-w-md p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 bg-red-100 rounded-lg"><AlertCircle className="w-5 h-5 text-red-600" /></div>
                 <h3 className="font-bold text-lg">Delete notification?</h3>
@@ -958,7 +958,7 @@ function EmailTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setShowSendModal(false)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-md w-full">
+              onClick={e => e.stopPropagation()} className="w-full max-w-md p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold">Send Test Email</h3>
                 <Button variant="ghost" size="sm" onClick={() => setShowSendModal(false)}><X className="w-4 h-4" /></Button>
@@ -991,7 +991,7 @@ function EmailTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setShowEditModal(false)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              onClick={e => e.stopPropagation()} className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">{editMode === "create" ? "Create Template" : "Edit Template"}</h3>
                 <Button variant="ghost" size="sm" onClick={() => setShowEditModal(false)}><X className="w-4 h-4" /></Button>
@@ -1131,7 +1131,7 @@ function HistoryTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setDetail(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-md w-full">
+              onClick={e => e.stopPropagation()} className="w-full max-w-md p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold">Notification Details</h3>
                 <Button variant="ghost" size="sm" onClick={() => setDetail(null)}><X className="w-4 h-4" /></Button>

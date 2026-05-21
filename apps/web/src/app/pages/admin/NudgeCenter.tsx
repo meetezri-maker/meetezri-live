@@ -406,7 +406,7 @@ function NudgesTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setShowCreateModal(false)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              onClick={e => e.stopPropagation()} className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">Create Nudge</h3>
                 <Button variant="ghost" size="sm" onClick={() => setShowCreateModal(false)}><X className="w-4 h-4" /></Button>
@@ -448,7 +448,7 @@ function NudgesTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setViewModalNudge(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-md w-full">
+              onClick={e => e.stopPropagation()} className="w-full max-w-md p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">Nudge Details</h3>
                 <Button variant="ghost" size="sm" onClick={() => setViewModalNudge(null)}><X className="w-4 h-4" /></Button>
@@ -480,7 +480,7 @@ function NudgesTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setEditModalNudge(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              onClick={e => e.stopPropagation()} className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">Edit Nudge</h3>
                 <Button variant="ghost" size="sm" onClick={() => setEditModalNudge(null)}><X className="w-4 h-4" /></Button>
@@ -523,7 +523,7 @@ function NudgesTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setDeleteModalNudge(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-md w-full">
+              onClick={e => e.stopPropagation()} className="w-full max-w-md p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-start gap-3 mb-4"><div className="p-2 bg-red-100 rounded-lg"><AlertCircle className="w-5 h-5 text-red-600" /></div><h3 className="font-bold text-lg pt-1">Delete Nudge?</h3></div>
               <p className="text-gray-600 mb-5">"{deleteModalNudge.title}" will be permanently deleted.</p>
               <div className="flex gap-3">
@@ -542,7 +542,7 @@ function NudgesTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setShowImportModal(false)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-md w-full">
+              onClick={e => e.stopPropagation()} className="w-full max-w-md p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">Import Nudges</h3>
                 <Button variant="ghost" size="sm" onClick={() => setShowImportModal(false)}><X className="w-4 h-4" /></Button>
@@ -745,7 +745,7 @@ function TemplatesTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setViewModal(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              onClick={e => e.stopPropagation()} className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">View Template</h3>
                 <Button variant="ghost" size="sm" onClick={() => setViewModal(null)}><X className="w-4 h-4" /></Button>
@@ -788,7 +788,7 @@ function TemplatesTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setEditModal(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              onClick={e => e.stopPropagation()} className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">Edit Template</h3>
                 <Button variant="ghost" size="sm" onClick={() => setEditModal(null)}><X className="w-4 h-4" /></Button>
@@ -840,7 +840,7 @@ function TemplatesTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setDeleteModal(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-md w-full">
+              onClick={e => e.stopPropagation()} className="w-full max-w-md p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-start gap-3 mb-4"><div className="p-2 bg-red-100 rounded-lg"><AlertCircle className="w-5 h-5 text-red-600" /></div><h3 className="font-bold text-lg pt-1">Delete template?</h3></div>
               <p className="text-gray-600 mb-5">"{deleteModal.name}" will be permanently deleted.</p>
               <div className="flex gap-3">
@@ -1039,7 +1039,7 @@ function ScheduleTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setShowCreate(false)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              onClick={e => e.stopPropagation()} className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">Create Campaign</h3>
                 <Button variant="ghost" size="sm" onClick={() => setShowCreate(false)}><X className="w-4 h-4" /></Button>
@@ -1092,7 +1092,7 @@ function ScheduleTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setEditModal(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              onClick={e => e.stopPropagation()} className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">Edit Campaign</h3>
                 <Button variant="ghost" size="sm" onClick={() => setEditModal(null)}><X className="w-4 h-4" /></Button>
@@ -1135,7 +1135,7 @@ function ScheduleTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setViewModal(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              onClick={e => e.stopPropagation()} className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">Campaign Details</h3>
                 <Button variant="ghost" size="sm" onClick={() => setViewModal(null)}><X className="w-4 h-4" /></Button>
@@ -1173,7 +1173,7 @@ function ScheduleTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setDeleteModal(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-md w-full">
+              onClick={e => e.stopPropagation()} className="w-full max-w-md p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <h3 className="font-bold text-lg mb-3">Delete campaign?</h3>
               <p className="text-gray-600 mb-5">"{deleteModal.name}" will be permanently deleted.</p>
               <div className="flex gap-3">

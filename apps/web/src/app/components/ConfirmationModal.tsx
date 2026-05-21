@@ -1,5 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import {
+  modalBodyText,
+  modalCloseButton,
+  modalOverlay,
+  modalPanelSm,
+  modalSecondaryButton,
+  modalTitle,
+} from "@/lib/modalTheme";
 import { Button } from "./ui/button";
 import { X } from "lucide-react";
 
@@ -55,7 +64,7 @@ export function ConfirmationModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4"
+          className={cn(modalOverlay, "z-[110]")}
           onClick={handleClose}
         >
           <motion.div
@@ -63,24 +72,31 @@ export function ConfirmationModal({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
+            className={modalPanelSm}
           >
             <div className="p-6">
-              <div className="flex items-start justify-between">
-                <h2 className="text-xl font-bold text-gray-900">{title}</h2>
+              <div className="flex items-start justify-between gap-3">
+                <h2 className={modalTitle}>{title}</h2>
                 <button
                   type="button"
                   onClick={handleClose}
                   disabled={confirmLoading}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                  aria-label="Close"
+                  className={cn(modalCloseButton, "disabled:opacity-50 disabled:pointer-events-none")}
                 >
-                  <X className="w-5 h-5 text-gray-500" />
+                  <X className="size-5" />
                 </button>
               </div>
-              <p className="mt-2 text-gray-600">{message}</p>
+              <p className={cn("mt-2", modalBodyText)}>{message}</p>
             </div>
-            <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 rounded-b-2xl">
-              <Button type="button" variant="outline" onClick={handleClose} disabled={confirmLoading}>
+            <div className="flex justify-end gap-3 border-t border-white/[0.08] px-6 py-4">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleClose}
+                disabled={confirmLoading}
+                className={modalSecondaryButton}
+              >
                 Cancel
               </Button>
               <Button type="button" onClick={() => void handleConfirm()} isLoading={confirmLoading} disabled={confirmLoading}>

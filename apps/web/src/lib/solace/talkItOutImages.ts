@@ -6,16 +6,12 @@ export const TALK_IT_OUT_IMAGES = {
   heroCandleAccent: "/talk-it-out/2.png",
   /** Moonlit lake — hero / environment atmosphere */
   heroMoonLayer: "/talk-it-out/3.png",
-  /** Environment: Night Lake (matches hero scene) */
-  environmentNightLake: "/talk-it-out/1.png",
-  /** Environment: Mist Forest */
-  environmentForest: "/talk-it-out/4.png",
-  /** Environment: Golden river at sunset */
-  environmentSunsetRiver: "/talk-it-out/5.png",
-  /** Environment: Cozy cabin porch */
+  /** Environment thumbnails — `public/Avatar-bg/` */
+  environmentNightLake: "/Avatar-bg/B1.png",
+  environmentForest: "/Avatar-bg/B3.png",
+  environmentSunsetRiver: "/Avatar-bg/B4.png",
   environmentCozyCabin: "/talk-it-out/6.png",
-  /** Environment: Campfire in the woods */
-  environmentCampfire: "/talk-it-out/7.png",
+  environmentCampfire: "/Avatar-bg/IMG_2250.jpeg",
   /** “Before we begin” lotus accent */
   lotusDecor: "/talk-it-out/8.png",
   /** Full-page cool texture */

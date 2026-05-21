@@ -696,7 +696,7 @@ export function CompanionManagement() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl border border-gray-100"
+              className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] shadow-xl border border-gray-100"
             >
               <div className="flex items-start justify-between gap-4 mb-6">
                 <h3 className="text-2xl font-bold text-gray-900">Add New Companion</h3>
@@ -886,7 +886,7 @@ export function CompanionManagement() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
             >
               <h3 className="text-2xl font-bold text-gray-900 mb-6">Companion Details</h3>
               <div className="space-y-3 text-sm">
@@ -937,7 +937,7 @@ export function CompanionManagement() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl border border-gray-100"
+              className="w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] shadow-xl border border-gray-100"
             >
               <div className="flex items-start justify-between gap-4 mb-6">
                 <h3 className="text-2xl font-bold text-gray-900">Edit Companion</h3>

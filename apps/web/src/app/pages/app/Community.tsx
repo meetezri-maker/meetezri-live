@@ -185,6 +185,17 @@ const SUPPORT_SPACES: ReadonlyArray<{
 ];
 
 const FEED_PAGE_SIZE = 10;
+const PULSE_GAUGE_RADIUS = 48;
+const PULSE_GAUGE_ARC_LENGTH = Math.PI * PULSE_GAUGE_RADIUS;
+const PULSE_RECENT_MS = 48 * 60 * 60 * 1000;
+
+const COMMUNITY_POST_CATEGORIES = [
+  "General Discussion",
+  "Wins & Progress",
+  "Support & Advice",
+  "Professional Insights",
+  "Community Events",
+] as const;
 
 
 function findGroupForCircleTitle(title: string, groups: FeedGroup[]): FeedGroup | undefined {
@@ -226,17 +237,78 @@ function primaryEmotionalTag(post: FeedPost): string | null {
 
 const BOOKMARKS_STORAGE_KEY = "meetezri_community_bookmarks";
 
-function vibePercentFromOverview(overview: Overview | null): number | null {
-  if (!overview) return null;
-  const hasSignal = overview.posts > 0 || overview.activeNow > 0 || overview.comments > 0;
-  if (!hasSignal) return null;
-  const engagement =
-    overview.posts > 0 ? Math.min(1, overview.comments / Math.max(overview.posts * 2.5, 1)) : 0;
-  const presence =
-    overview.members > 0 ? Math.min(1, overview.activeNow / Math.max(overview.members * 0.05, 8)) : 0;
-  const blended =
-    overview.posts > 0 ? engagement * 0.55 + presence * 0.45 : presence > 0 ? presence : engagement;
-  return Math.round(Math.min(94, Math.max(52, 58 + blended * 36)));
+type CommunityPulse = {
+  percent: number | null;
+  headline: string;
+  detail: string;
+};
+
+function isRecentCommunityPost(createdAt: string, nowMs: number): boolean {
+  try {
+    return nowMs - parseISO(createdAt).getTime() < PULSE_RECENT_MS;
+  } catch {
+    return false;
+  }
+}
+
+function computeCommunityPulse(overview: Overview | null, posts: FeedPost[]): CommunityPulse {
+  const nowMs = Date.now();
+  const recentPosts = posts.filter((p) => isRecentCommunityPost(p.createdAt, nowMs));
+  const recentLikes = recentPosts.reduce((sum, p) => sum + p.likes, 0);
+  const recentComments = recentPosts.reduce((sum, p) => sum + p.comments, 0);
+  const recentPostCount = recentPosts.length;
+
+  const hasFeedSignal = recentPostCount > 0 || recentLikes > 0 || recentComments > 0;
+  const hasOverviewSignal =
+    overview != null &&
+    (overview.posts > 0 || overview.comments > 0 || overview.activeNow > 0);
+
+  if (!hasFeedSignal && !hasOverviewSignal) {
+    return {
+      percent: null,
+      headline: "",
+      detail: "We'll show a gentle pulse once there's a little more activity to reflect on.",
+    };
+  }
+
+  const replyRate =
+    recentPostCount > 0 ? Math.min(1, recentComments / Math.max(recentPostCount * 2, 1)) : 0;
+  const warmthRate =
+    recentPostCount > 0 ? Math.min(1, recentLikes / Math.max(recentPostCount * 3, 1)) : 0;
+  const presenceRate = overview
+    ? Math.min(1, overview.activeNow / Math.max(Math.min(overview.members, 12), 3))
+    : 0;
+  const overviewEngagement =
+    overview && overview.posts > 0
+      ? Math.min(1, overview.comments / Math.max(overview.posts * 2, 1))
+      : 0;
+
+  const blended = hasFeedSignal
+    ? replyRate * 0.4 + warmthRate * 0.35 + presenceRate * 0.25
+    : overviewEngagement * 0.6 + presenceRate * 0.4;
+
+  const percent = Math.round(Math.min(96, Math.max(34, 38 + blended * 58)));
+
+  let headline = "The community is quietly present today.";
+  if (percent >= 78) headline = "Positive energy is growing today.";
+  else if (percent >= 62) headline = "Support is flowing gently through the feed.";
+  else if (percent >= 48) headline = "A calm space — room for your voice.";
+
+  let detail = "Shaped by recent replies and people showing up gently.";
+  if (recentComments > 0 || recentLikes > 0) {
+    const parts: string[] = [];
+    if (recentComments > 0) {
+      parts.push(`${recentComments} recent ${recentComments === 1 ? "reply" : "replies"}`);
+    }
+    if (recentLikes > 0) {
+      parts.push(`${recentLikes} ${recentLikes === 1 ? "reaction" : "reactions"}`);
+    }
+    detail = `Shaped by ${parts.join(" and ")} in the last couple of days.`;
+  } else if (overview && overview.activeNow > 0) {
+    detail = `${overview.activeNow} ${overview.activeNow === 1 ? "person" : "people"} showed up recently — your voice can spark the next wave.`;
+  }
+
+  return { percent, headline, detail };
 }
 
 function emotionalSocialProofLine(post: FeedPost): string | null {
@@ -270,6 +342,10 @@ export function Community() {
   const { profile, refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<"feed" | "groups" | "trending">("feed");
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterMyPostsOnly, setFilterMyPostsOnly] = useState(false);
+  const [filterBookmarkedOnly, setFilterBookmarkedOnly] = useState(false);
   const [showNewPostModal, setShowNewPostModal] = useState(false);
   const [newPostContent, setNewPostContent] = useState("");
   const [newPostCategory, setNewPostCategory] = useState("General Discussion");
@@ -419,17 +495,31 @@ export function Community() {
     });
   };
 
+  const hasActiveFeedFilters = filterCategory !== "" || filterMyPostsOnly || filterBookmarkedOnly;
+
   const filteredPosts = useMemo(() => {
+    let list = postsData;
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return postsData;
-    return postsData.filter(
-      (p) =>
-        p.content.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q) ||
-        p.author.name.toLowerCase().includes(q) ||
-        p.tags.some((t) => t.toLowerCase().includes(q))
-    );
-  }, [postsData, searchQuery]);
+    if (q) {
+      list = list.filter(
+        (p) =>
+          p.content.toLowerCase().includes(q) ||
+          p.category.toLowerCase().includes(q) ||
+          p.author.name.toLowerCase().includes(q) ||
+          p.tags.some((t) => t.toLowerCase().includes(q)),
+      );
+    }
+    if (filterCategory) {
+      list = list.filter((p) => p.category === filterCategory);
+    }
+    if (filterMyPostsOnly) {
+      list = list.filter((p) => p.isByCurrentUser);
+    }
+    if (filterBookmarkedOnly) {
+      list = list.filter((p) => bookmarkedPostIds.has(p.id));
+    }
+    return list;
+  }, [postsData, searchQuery, filterCategory, filterMyPostsOnly, filterBookmarkedOnly, bookmarkedPostIds]);
 
   const [feedPage, setFeedPage] = useState(1);
   const feedTotalPages = Math.max(1, Math.ceil(filteredPosts.length / FEED_PAGE_SIZE));
@@ -442,7 +532,17 @@ export function Community() {
 
   useEffect(() => {
     setFeedPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, filterCategory, filterMyPostsOnly, filterBookmarkedOnly]);
+
+  const clearFeedFilters = () => {
+    setFilterCategory("");
+    setFilterMyPostsOnly(false);
+    setFilterBookmarkedOnly(false);
+  };
+
+  const applyFeedFilterChange = () => {
+    if (activeTab !== "feed") setActiveTab("feed");
+  };
 
   useEffect(() => {
     setFeedPage((p) => Math.min(Math.max(1, p), feedTotalPages));
@@ -503,6 +603,7 @@ export function Community() {
           p.id === postId ? { ...p, likes: res.likes, likedByMe: res.likedByMe } : p
         )
       );
+      void loadMeta();
     } catch {
       toast.error("Could not update like");
     }
@@ -536,6 +637,8 @@ export function Community() {
       const latest = (await api.getCommunityPostComments(postId)) as PostComment[];
       setCommentsByPostId((m) => ({ ...m, [postId]: Array.isArray(latest) ? latest : [] }));
       setPostsData((prev) => prev.map((p) => (p.id === postId ? { ...p, comments: res.comments } : p)));
+      setOverview((prev) => (prev ? { ...prev, comments: prev.comments + 1 } : prev));
+      void loadMeta();
     } catch {
       toast.error("Could not post comment");
     } finally {
@@ -713,6 +816,7 @@ export function Community() {
         try {
           const posts = (await api.getCommunityPosts(40)) as FeedPost[];
           if (Array.isArray(posts)) setPostsData(posts);
+          await loadMeta();
         } catch {
           // ignore; optimistic UI already updated
         }
@@ -752,16 +856,14 @@ export function Community() {
       }
     : { members: 0, posts: 0, groups: 0, activeNow: 0 };
 
-  const vibePct = vibePercentFromOverview(overview);
-  const vibeGauge = useMemo(() => {
-    const pct = vibePct ?? 0;
-    const endAngle = Math.PI * (1 - pct / 100);
-    return {
-      x2: 60 + 48 * Math.cos(endAngle),
-      y2: 60 - 48 * Math.sin(endAngle),
-      largeArc: pct > 50 ? 1 : 0,
-    };
-  }, [vibePct]);
+  const communityPulse = useMemo(
+    () => computeCommunityPulse(overview, postsData),
+    [overview, postsData],
+  );
+  const pulseArcFilled =
+    communityPulse.percent != null
+      ? (communityPulse.percent / 100) * PULSE_GAUGE_ARC_LENGTH
+      : 0;
 
   if (loadingPosts && postsData.length === 0) {
     return (
@@ -848,58 +950,58 @@ export function Community() {
           </details>
 
           <CinematicEnter className="mb-10">
-            <div className="relative overflow-hidden rounded-[28px] border border-[color:rgba(168,85,247,0.25)] bg-[#0B1020] shadow-[0_0_80px_-24px_rgba(88,28,135,0.45),inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_70%_100%,rgba(251,191,36,0.15)_0%,transparent_50%)]" aria-hidden />
-              <div className="grid min-h-[280px] grid-cols-1 lg:min-h-[300px] lg:grid-cols-[minmax(0,1.05fr)_minmax(260px,0.95fr)]">
-                <div className="relative z-10 flex flex-col justify-center space-y-5 px-6 py-8 sm:px-8 lg:pr-6">
-                  <h2 className="text-balance font-serif text-3xl font-normal leading-[1.12] tracking-tight text-white sm:text-[2.25rem] lg:text-[2.5rem]">
-                    A safe place to{" "}
-                    <span className="bg-gradient-to-r from-violet-200 via-fuchsia-200 to-pink-300 bg-clip-text text-transparent">
-                      be you.
-                    </span>
-                  </h2>
-                  <p className="max-w-md text-[15px] leading-relaxed text-[#A7A1B8]">
-                    Share your thoughts, listen with kindness and grow together.
-                  </p>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex -space-x-2">
-                      {postsData.slice(0, 5).map((p) => (
-                        <div
-                          key={p.id}
-                          className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-[#050816]"
-                        >
-                          {p.author.avatarUrl ? (
-                            <img src={p.author.avatarUrl} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-600/85 to-indigo-900 text-[11px] font-semibold text-white">
-                              {initials(p.author.name)}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-violet-100/85">
-                      {stats.members > 0
-                        ? `${stats.members.toLocaleString()} people here for you today.`
-                        : "People are here for you today."}
-                    </span>
+            <div className="relative min-h-[280px] overflow-hidden rounded-[28px] border border-[color:rgba(168,85,247,0.25)] bg-[#0B1020] shadow-[0_0_80px_-24px_rgba(88,28,135,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] lg:min-h-[300px]">
+              <img
+                src={COMMUNITY_IMAGES.hero}
+                alt=""
+                width={1200}
+                height={800}
+                loading="eager"
+                decoding="async"
+                aria-hidden
+                className="absolute inset-0 h-full w-full object-cover object-[62%_45%]"
+              />
+              <div
+                className="absolute inset-0 bg-gradient-to-r from-[#050816]/90 via-[#050816]/55 to-[#050816]/20"
+                aria-hidden
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#050816]/55 via-transparent to-[#050816]/25" aria-hidden />
+              <div
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_70%_100%,rgba(251,191,36,0.15)_0%,transparent_50%)]"
+                aria-hidden
+              />
+              <div className="relative z-10 flex min-h-[280px] flex-col justify-center space-y-5 px-6 py-8 sm:px-8 lg:min-h-[300px] lg:px-10">
+                <h2 className="text-balance font-serif text-3xl font-normal leading-[1.12] tracking-tight text-white sm:text-[2.25rem] lg:text-[2.5rem]">
+                  A safe place to{" "}
+                  <span className="bg-gradient-to-r from-violet-200 via-fuchsia-200 to-pink-300 bg-clip-text text-transparent">
+                    be you.
+                  </span>
+                </h2>
+                <p className="max-w-md text-[15px] leading-relaxed text-[#A7A1B8]">
+                  Share your thoughts, listen with kindness and grow together.
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex -space-x-2">
+                    {postsData.slice(0, 5).map((p) => (
+                      <div
+                        key={p.id}
+                        className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-[#050816]"
+                      >
+                        {p.author.avatarUrl ? (
+                          <img src={p.author.avatarUrl} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-600/85 to-indigo-900 text-[11px] font-semibold text-white">
+                            {initials(p.author.name)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                </div>
-                <div className="relative min-h-[200px] border-t border-white/10 lg:min-h-0 lg:border-l lg:border-t-0">
-                  <img
-                    src={COMMUNITY_IMAGES.hero}
-                    alt="People gathered around a campfire by a lake at twilight"
-                    width={1200}
-                    height={800}
-                    loading="eager"
-                    decoding="async"
-                    className="absolute inset-0 h-full w-full object-cover object-[62%_45%]"
-                  />
-                  <div
-                    className="absolute inset-0 bg-gradient-to-r from-[#050816]/72 via-[#050816]/28 to-transparent lg:from-[#050816]/55 lg:via-transparent"
-                    aria-hidden
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#050816]/50 via-transparent to-transparent" />
+                  <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-violet-100/85">
+                    {stats.members > 0
+                      ? `${stats.members.toLocaleString()} people here for you today.`
+                      : "People are here for you today."}
+                  </span>
                 </div>
               </div>
             </div>
@@ -913,13 +1015,14 @@ export function Community() {
               </div>
               <button
                 type="button"
-                className="min-h-[44px] text-sm font-medium text-fuchsia-200/90 underline-offset-4 transition-colors hover:text-fuchsia-100 hover:underline"
+                className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-medium text-violet-100/85 backdrop-blur-md transition-all hover:border-fuchsia-400/30 hover:bg-white/[0.08] hover:text-white"
                 onClick={() => {
                   setActiveTab("groups");
                   if (groupsData.length === 0) void loadMeta({ includeGroups: true });
                 }}
               >
                 View all circles
+                <ChevronRight className="h-4 w-4 opacity-70" aria-hidden />
               </button>
             </div>
             <div className="flex gap-3 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -1009,13 +1112,132 @@ export function Community() {
                   className="min-h-[44px] w-full rounded-full border border-white/10 bg-black/30 py-2.5 pl-10 pr-4 text-sm text-[#F7F3FF] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-md placeholder:text-violet-300/35 focus:border-violet-400/35 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
                 />
               </div>
-              <button
-                type="button"
-                className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center self-end rounded-full border border-white/10 bg-white/[0.05] text-violet-200/80 backdrop-blur-md transition-colors hover:border-fuchsia-400/30 hover:bg-white/[0.08] sm:self-center"
-                aria-label="Filter"
-              >
-                <Filter className="h-5 w-5" />
-              </button>
+              <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-medium backdrop-blur-md transition-all",
+                      hasActiveFeedFilters
+                        ? "border-violet-400/35 bg-violet-500/15 text-violet-100 shadow-[0_0_24px_rgba(124,58,237,0.25)]"
+                        : "border-white/10 bg-white/[0.05] text-violet-100/80 hover:border-fuchsia-400/30 hover:bg-white/[0.08] hover:text-white",
+                    )}
+                    aria-label="Filter posts"
+                  >
+                    <Filter className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                    Filter
+                    <ChevronDown
+                      className={cn("h-3.5 w-3.5 shrink-0 opacity-60 transition-transform", filterOpen && "rotate-180")}
+                      aria-hidden
+                    />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="end"
+                  sideOffset={8}
+                  className="w-[min(100vw-2rem,20rem)] rounded-2xl border border-white/10 bg-[#0e0e18]/98 p-4 shadow-[0_0_48px_-12px_rgba(139,92,246,0.45)] backdrop-blur-xl"
+                >
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-violet-300/70">Category</p>
+                  <div className="mb-4 flex max-h-32 flex-wrap gap-2 overflow-y-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterCategory("");
+                        applyFeedFilterChange();
+                      }}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-xs font-medium transition-all",
+                        filterCategory === ""
+                          ? "border-violet-400/40 bg-violet-500/15 text-violet-100"
+                          : "border-white/10 bg-white/[0.04] text-violet-200/60 hover:border-violet-400/25 hover:text-violet-100",
+                      )}
+                    >
+                      All
+                    </button>
+                    {COMMUNITY_POST_CATEGORIES.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => {
+                          setFilterCategory(cat);
+                          applyFeedFilterChange();
+                        }}
+                        className={cn(
+                          "rounded-full border px-3 py-1.5 text-xs font-medium transition-all",
+                          filterCategory === cat
+                            ? "border-violet-400/40 bg-violet-500/15 text-violet-100"
+                            : "border-white/10 bg-white/[0.04] text-violet-200/60 hover:border-violet-400/25 hover:text-violet-100",
+                        )}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mb-3 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterMyPostsOnly((v) => !v);
+                        applyFeedFilterChange();
+                      }}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition-all",
+                        filterMyPostsOnly
+                          ? "border-violet-400/35 bg-violet-500/10"
+                          : "border-white/10 bg-white/[0.03] hover:border-violet-400/25",
+                      )}
+                    >
+                      <span className="text-sm font-medium text-violet-50/90">My posts only</span>
+                      <span
+                        className={cn(
+                          "text-[10px] font-semibold uppercase tracking-wider",
+                          filterMyPostsOnly ? "text-fuchsia-200" : "text-violet-300/45",
+                        )}
+                      >
+                        {filterMyPostsOnly ? "On" : "Off"}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterBookmarkedOnly((v) => !v);
+                        applyFeedFilterChange();
+                      }}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition-all",
+                        filterBookmarkedOnly
+                          ? "border-fuchsia-400/35 bg-fuchsia-500/10"
+                          : "border-white/10 bg-white/[0.03] hover:border-fuchsia-400/25",
+                      )}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-medium text-violet-50/90">
+                        <Bookmark className="h-3.5 w-3.5 text-fuchsia-300/80" aria-hidden />
+                        Saved posts only
+                      </span>
+                      <span
+                        className={cn(
+                          "text-[10px] font-semibold uppercase tracking-wider",
+                          filterBookmarkedOnly ? "text-fuchsia-200" : "text-violet-300/45",
+                        )}
+                      >
+                        {filterBookmarkedOnly ? "On" : "Off"}
+                      </span>
+                    </button>
+                  </div>
+                  {hasActiveFeedFilters ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearFeedFilters();
+                        applyFeedFilterChange();
+                      }}
+                      className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 text-xs font-medium text-violet-100/80 transition-colors hover:border-violet-400/30 hover:bg-white/[0.08]"
+                    >
+                      Clear all filters
+                    </button>
+                  ) : null}
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 
@@ -1743,53 +1965,76 @@ export function Community() {
             <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
               <CinematicEnter delay={0.05}>
                 <div className="rounded-[26px] border border-fuchsia-500/20 bg-[rgba(15,18,32,0.82)] p-6 shadow-[0_24px_80px_-40px_rgba(0,0,0,0.75)] backdrop-blur-xl">
-                  <div className="mb-4 flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-violet-200/70">Community Pulse</h3>
-                    <Heart className="h-4 w-4 text-fuchsia-300/80" aria-hidden />
-                  </div>
-                  <p className="mb-4 text-center text-sm font-medium leading-snug text-[#F7F3FF]/90">
-                    Positive energy is growing today.
-                  </p>
-                  <div className="relative flex flex-col items-center">
-                    <div className="pointer-events-none absolute inset-x-0 top-6 mx-auto h-28 w-28 rounded-full bg-fuchsia-500/20 blur-2xl" />
-                    <div className="pointer-events-none absolute inset-x-0 top-10 mx-auto h-20 w-20 rounded-full bg-violet-500/15 blur-xl" />
-                    <svg viewBox="0 0 120 72" className="relative w-full max-w-[200px] drop-shadow-[0_0_20px_rgba(192,132,252,0.35)]">
-                      <defs>
-                        <linearGradient id="vibeArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="#c084fc" />
-                          <stop offset="100%" stopColor="#f472b6" />
-                        </linearGradient>
-                      </defs>
-                      <path
-                        d="M 12 60 A 48 48 0 0 1 108 60"
-                        fill="none"
-                        stroke="rgba(255,255,255,0.08)"
-                        strokeWidth="10"
-                        strokeLinecap="round"
-                      />
-                      {vibePct != null ? (
-                        <path
-                          d={`M 12 60 A 48 48 0 ${vibeGauge.largeArc} 1 ${vibeGauge.x2.toFixed(2)} ${vibeGauge.y2.toFixed(2)}`}
-                          fill="none"
-                          stroke="url(#vibeArcGrad)"
-                          strokeWidth="10"
-                          strokeLinecap="round"
-                        />
-                      ) : null}
-                    </svg>
-                    {vibePct != null ? (
-                      <>
-                        <p className="-mt-2 text-center text-3xl font-semibold tabular-nums text-white">{vibePct}%</p>
-                        <p className="mt-1 max-w-[14rem] text-center text-xs font-medium leading-relaxed text-fuchsia-200/70">
-                          Shaped by recent replies and people showing up gently.
+                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-200/70">Community Pulse</h3>
+                  {loadingMeta && communityPulse.percent == null ? (
+                    <div className="mb-4 flex justify-center py-6">
+                      <Loader2 className="h-6 w-6 animate-spin text-fuchsia-300/70" aria-hidden />
+                      <span className="sr-only">Loading community pulse</span>
+                    </div>
+                  ) : (
+                    <>
+                      {communityPulse.percent != null ? (
+                        <p className="mb-4 text-center text-sm font-medium leading-snug text-[#F7F3FF]/90">
+                          {communityPulse.headline}
                         </p>
-                      </>
-                    ) : (
-                      <p className="-mt-1 max-w-[15rem] text-center text-xs leading-relaxed text-[#A7A1B8]">
-                        We&apos;ll show a gentle pulse once there&apos;s a little more activity to reflect on.
-                      </p>
-                    )}
-                  </div>
+                      ) : null}
+                      <div className="relative flex flex-col items-center">
+                        <div className="pointer-events-none absolute inset-x-0 top-6 mx-auto h-28 w-28 rounded-full bg-fuchsia-500/20 blur-2xl" />
+                        <div className="pointer-events-none absolute inset-x-0 top-10 mx-auto h-20 w-20 rounded-full bg-violet-500/15 blur-xl" />
+                        <svg
+                          viewBox="0 0 120 72"
+                          className="relative w-full max-w-[200px] drop-shadow-[0_0_20px_rgba(192,132,252,0.35)]"
+                          role="img"
+                          aria-label={
+                            communityPulse.percent != null
+                              ? `Community pulse at ${communityPulse.percent} percent`
+                              : "Community pulse unavailable"
+                          }
+                        >
+                          <defs>
+                            <linearGradient id="communityPulseArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                              <stop offset="0%" stopColor="#c084fc" />
+                              <stop offset="100%" stopColor="#f472b6" />
+                            </linearGradient>
+                          </defs>
+                          <path
+                            d="M 12 60 A 48 48 0 0 1 108 60"
+                            fill="none"
+                            pathLength={PULSE_GAUGE_ARC_LENGTH}
+                            stroke="rgba(255,255,255,0.08)"
+                            strokeWidth="10"
+                            strokeLinecap="round"
+                          />
+                          {communityPulse.percent != null ? (
+                            <path
+                              d="M 12 60 A 48 48 0 0 1 108 60"
+                              fill="none"
+                              pathLength={PULSE_GAUGE_ARC_LENGTH}
+                              stroke="url(#communityPulseArcGrad)"
+                              strokeWidth="10"
+                              strokeLinecap="round"
+                              strokeDasharray={`${pulseArcFilled} ${PULSE_GAUGE_ARC_LENGTH}`}
+                              className="transition-[stroke-dasharray] duration-700 ease-out"
+                            />
+                          ) : null}
+                        </svg>
+                        {communityPulse.percent != null ? (
+                          <>
+                            <p className="-mt-2 text-center text-3xl font-semibold tabular-nums text-white">
+                              {communityPulse.percent}%
+                            </p>
+                            <p className="mt-1 max-w-[14rem] text-center text-xs font-medium leading-relaxed text-fuchsia-200/70">
+                              {communityPulse.detail}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="-mt-1 max-w-[15rem] text-center text-xs leading-relaxed text-[#A7A1B8]">
+                            {communityPulse.detail}
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               </CinematicEnter>
 
@@ -2037,13 +2282,7 @@ export function Community() {
                   variant="form"
                   disabled={posting}
                   triggerClassName="flex-1"
-                  options={[
-                    { value: "General Discussion", label: "General Discussion" },
-                    { value: "Wins & Progress", label: "Wins & Progress" },
-                    { value: "Support & Advice", label: "Support & Advice" },
-                    { value: "Professional Insights", label: "Professional Insights" },
-                    { value: "Community Events", label: "Community Events" },
-                  ]}
+                  options={COMMUNITY_POST_CATEGORIES.map((c) => ({ value: c, label: c }))}
                 />
               </div>
 

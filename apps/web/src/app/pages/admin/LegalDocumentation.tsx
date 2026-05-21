@@ -281,7 +281,7 @@ export function LegalDocumentation() {
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col"
+        className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
       >
         <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-4">
           <div>
@@ -349,7 +349,7 @@ export function LegalDocumentation() {
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col"
+        className="w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Editor header */}
@@ -446,7 +446,7 @@ export function LegalDocumentation() {
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col"
+        className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
@@ -490,7 +490,7 @@ export function LegalDocumentation() {
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6"
+        className="w-full max-w-md p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
@@ -761,7 +761,7 @@ export function LegalDocumentation() {
 function ModalOverlay({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   return (
     <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
       onClick={onClose}
     >
       <div onClick={(e) => e.stopPropagation()}>{children}</div>

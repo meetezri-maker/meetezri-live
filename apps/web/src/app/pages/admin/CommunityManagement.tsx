@@ -1138,7 +1138,7 @@ export function CommunityManagement() {
                 onClick={() => setLockingPost(null)}
               >
                 <div
-                  className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
+                  className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="p-6">
@@ -1212,7 +1212,7 @@ export function CommunityManagement() {
                 onClick={() => setDeletingPost(null)}
               >
                 <div
-                  className="bg-white rounded-2xl shadow-2xl max-w-md w-full"
+                  className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="p-6">
@@ -1464,7 +1464,7 @@ export function CommunityManagement() {
               />
               <motion.div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
                 <div
-                  className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6"
+                  className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] p-6"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <h3 className="text-lg font-bold mb-4">Edit group</h3>
@@ -1544,7 +1544,7 @@ export function CommunityManagement() {
               onClick={() => setCreateGroupOpen(false)}
             >
               <div
-                className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6"
+                className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] p-6"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between mb-5">
