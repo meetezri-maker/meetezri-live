@@ -26,9 +26,25 @@ import {
   insightLabelForMoodKey,
 } from "./mood-check-in/moodCheckInData";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/app/components/ui/select";
+import {
+  solaceSelectContentClass,
+  solaceSelectItemCompactClass,
+  solaceSelectTriggerCompact,
+} from "@/app/solace";
+import {
   computeCheckInStreak,
-  weeklyIntensitySeries,
+  filterMoodEntriesInPeriod,
+  intensitySeriesForPeriod,
+  MOOD_PATTERN_PERIOD_OPTIONS,
+  topMoodKeyInEntries,
   type MoodEntryLite,
+  type MoodPatternPeriod,
 } from "./mood-check-in/moodCheckInUtils";
 
 function matteClass(extra?: string) {
@@ -50,6 +66,7 @@ export function MoodCheckIn() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [insightLoading, setInsightLoading] = useState(true);
   const [entries, setEntries] = useState<MoodEntryLite[]>([]);
+  const [patternPeriod, setPatternPeriod] = useState<MoodPatternPeriod>("this_week");
 
   const selectedIntensity = INTENSITY_BY_TIER[intensityTier];
 
@@ -75,55 +92,45 @@ export function MoodCheckIn() {
     [profile?.selected_avatar]
   );
 
-  const monthInsight = useMemo(() => {
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const inMonth = entries.filter((e) => {
-      const d = new Date(e.created_at);
-      return !Number.isNaN(d.getTime()) && d >= monthStart && d <= now;
-    });
-    const count = inMonth.length;
-    if (count === 0) return { count: 0, topKey: "" as string };
-    const counts = new Map<string, number>();
-    for (const e of inMonth) {
-      const key = String(e.mood ?? "")
-        .toLowerCase()
-        .trim();
-      if (!key) continue;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    let bestKey = "";
-    let bestCount = 0;
-    for (const [k, c] of counts) {
-      if (c > bestCount) {
-        bestCount = c;
-        bestKey = k;
-      }
-    }
-    return { count, topKey: bestKey };
-  }, [entries]);
+  const periodEntries = useMemo(
+    () => filterMoodEntriesInPeriod(entries, patternPeriod),
+    [entries, patternPeriod],
+  );
+
+  const periodInsight = useMemo(
+    () => topMoodKeyInEntries(periodEntries),
+    [periodEntries],
+  );
 
   const topMoodInsightLabel =
-    monthInsight.topKey ? insightLabelForMoodKey(monthInsight.topKey) : null;
+    periodInsight.topKey ? insightLabelForMoodKey(periodInsight.topKey) : null;
 
   const streakDays = useMemo(() => computeCheckInStreak(entries), [entries]);
 
-  const chartSeries = useMemo(() => weeklyIntensitySeries(entries), [entries]);
+  const chartSeries = useMemo(
+    () => intensitySeriesForPeriod(entries, patternPeriod),
+    [entries, patternPeriod],
+  );
+
+  const patternPeriodLabel = useMemo(
+    () => MOOD_PATTERN_PERIOD_OPTIONS.find((o) => o.value === patternPeriod)?.label.toLowerCase() ?? "this week",
+    [patternPeriod],
+  );
 
   const exhaustionHeavy = useMemo(() => {
-    const k = monthInsight.topKey.toLowerCase();
+    const k = periodInsight.topKey.toLowerCase();
     return ["tired", "heavy", "overwhelmed", "anxious", "sad", "exhausted"].some((x) =>
       k.includes(x)
     );
-  }, [monthInsight.topKey]);
+  }, [periodInsight.topKey]);
 
   const patternNarrative = insightLoading
     ? "Gathering your gentle patterns…"
-    : monthInsight.count === 0
-      ? "As you check in, a soft picture of your week will grow here."
+    : periodInsight.count === 0
+      ? `As you check in, a soft picture of ${patternPeriodLabel} will grow here.`
       : exhaustionHeavy
-        ? "You've felt mentally exhausted more often this week."
-        : `You’ve been feeling “${topMoodInsightLabel}” more often this week.`;
+        ? `You've felt mentally exhausted more often ${patternPeriodLabel}.`
+        : `You’ve been feeling “${topMoodInsightLabel}” more often ${patternPeriodLabel}.`;
 
   const toggleActivity = (value: string) => {
     if (selectedActivities.includes(value)) {
@@ -249,7 +256,7 @@ export function MoodCheckIn() {
                     <h2 className="font-serif text-[clamp(1.6rem,4.25vw,2.35rem)] font-normal leading-[1.26] tracking-[-0.02em] text-zinc-50 [text-shadow:0_2px_24px_rgba(0,0,0,0.65)]">
                       Let&apos;s check in with
                       <br />
-                      how you&apos;re feeling <FluentEmoji emoji="💗" size={26} className="inline-block align-[-3px]" />
+                      your mood today 
                     </h2>
                     <p className="mt-6 max-w-xl text-[15px] leading-[1.82] tracking-[-0.01em] text-zinc-100/95 sm:text-[1.0625rem] [text-shadow:0_1px_16px_rgba(0,0,0,0.55)]">
                       There&apos;s no right or wrong way to feel.
@@ -266,10 +273,10 @@ export function MoodCheckIn() {
                   <div>
                     <div className="flex items-center gap-2 text-[17px] font-medium tracking-[-0.015em] text-zinc-100 sm:text-[1.125rem]">
                       <Clock className="h-4 w-4 text-violet-300/80 sm:h-[1.125rem] sm:w-[1.125rem]" strokeWidth={1.75} />
-                      How are you feeling?
+                      What's your current mood?
                     </div>
                     <p className="mt-3 max-w-2xl text-[13px] leading-relaxed text-[var(--solace-muted)] sm:text-[14px]">
-                      Choose the emotion that best fits you right now.
+                      Choose the mood that best fits you right now.
                     </p>
                   </div>
                 </div>
@@ -383,27 +390,48 @@ export function MoodCheckIn() {
               {/* Influence */}
               <section aria-label="Influences" className={matteClass("px-6 py-9 sm:px-9 sm:py-10")}>
                 <h3 className="text-[17px] font-medium tracking-[-0.015em] text-zinc-100 sm:text-[1.125rem]">
-                  What may be influencing how you feel?
+                  What's influencing your mood?
                 </h3>
                 <p className="mt-2 text-[13px] leading-snug text-[var(--solace-muted)]">
                   Select any that apply. You can choose more than one.
                 </p>
-                <div className="mt-6 flex flex-wrap gap-2.5">
+                <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
                   {INFLUENCE_CHIPS.map((a) => {
                     const on = selectedActivities.includes(a.value);
+                    const Icon = a.Icon;
                     return (
                       <button
                         key={a.value}
                         type="button"
                         onClick={() => toggleActivity(a.value)}
+                        aria-pressed={on}
                         className={cn(
-                          "min-h-[44px] rounded-full border px-[0.95rem] py-2.5 text-[12.5px] font-normal tracking-[-0.01em] transition-[border-color,background-color,box-shadow] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/28",
+                          "group relative min-h-[108px] overflow-hidden rounded-[1.15rem] border text-center transition-[transform,box-shadow,border-color,background-color] duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35 sm:min-h-[118px] sm:rounded-2xl lg:aspect-[5/4] lg:min-h-[124px]",
                           on
-                            ? "border-violet-400/28 bg-violet-500/[0.14] text-zinc-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ring-1 ring-violet-400/15"
-                            : "border-white/[0.06] bg-black/[0.1] text-zinc-400 hover:border-white/[0.12] hover:bg-white/[0.04]"
+                            ? "scale-[1.02] border-violet-400/45 bg-violet-500/[0.12] shadow-[0_20px_56px_-24px_rgba(76,29,149,0.55),inset_0_0_0_1px_rgba(167,139,250,0.28)] ring-1 ring-violet-400/22"
+                            : "border-white/[0.07] bg-black/[0.12] hover:border-white/[0.14] hover:bg-white/[0.04] hover:shadow-[0_18px_48px_-28px_rgba(76,29,149,0.38)]"
                         )}
                       >
-                        {a.label}
+                        <div className="relative z-[1] flex h-full min-h-[108px] flex-col items-center justify-center gap-2.5 p-3.5 sm:min-h-[118px] sm:gap-3 sm:p-4 lg:min-h-0">
+                          {on ? (
+                            <span className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-full border border-violet-300/40 bg-black/48 text-violet-200 shadow-[0_0_20px_rgba(139,92,246,0.4)] sm:right-3 sm:top-3">
+                              <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                            </span>
+                          ) : null}
+                          <span
+                            className={cn(
+                              "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-colors duration-300 sm:h-10 sm:w-10",
+                              on
+                                ? "border-violet-300/35 bg-violet-500/25 text-violet-100"
+                                : "border-white/15 bg-white/[0.06] text-violet-200/95"
+                            )}
+                          >
+                            <Icon className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" strokeWidth={1.75} aria-hidden />
+                          </span>
+                          <p className="text-[13px] font-medium tracking-[-0.01em] text-zinc-50 sm:text-[14px]">
+                            {a.label}
+                          </p>
+                        </div>
                       </button>
                     );
                   })}
@@ -481,20 +509,41 @@ export function MoodCheckIn() {
                           <br />
                           I&apos;m here with you.
                         </p>
-                        <Heart className="mt-3 h-4 w-4 text-rose-400/45" strokeWidth={1.5} aria-hidden />
+                        {/* <Heart className="mt-3 h-4 w-4 text-rose-400/45" strokeWidth={1.5} aria-hidden /> */}
                       </div>
                     </div>
                   </section>
 
                   <section className="px-6 py-7 lg:px-7 lg:py-8">
-                    <p className="text-[10.5px] font-medium uppercase tracking-[0.2em] text-zinc-400/88">
-                      Your pattern this week
-                    </p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-[10.5px] font-medium uppercase tracking-[0.2em] text-zinc-400/88">
+                        Your pattern
+                      </p>
+                      <Select
+                        value={patternPeriod}
+                        onValueChange={(v) => setPatternPeriod(v as MoodPatternPeriod)}
+                      >
+                        <SelectTrigger
+                          size="sm"
+                          aria-label="Pattern time range"
+                          className={solaceSelectTriggerCompact}
+                        >
+                          <SelectValue placeholder="This week" />
+                        </SelectTrigger>
+                        <SelectContent position="popper" sideOffset={6} className={solaceSelectContentClass}>
+                          {MOOD_PATTERN_PERIOD_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value} className={solaceSelectItemCompactClass}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="mt-4 h-[148px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={chartSeries} margin={{ top: 6, right: 4, left: -24, bottom: 0 }}>
                           <defs>
-                            <linearGradient id="moodWeekFill" x1="0" y1="0" x2="0" y2="1">
+                            <linearGradient id={`moodPatternFill-${patternPeriod}`} x1="0" y1="0" x2="0" y2="1">
                               <stop offset="0%" stopColor="rgb(139 92 246)" stopOpacity={0.35} />
                               <stop offset="100%" stopColor="rgb(139 92 246)" stopOpacity={0} />
                             </linearGradient>
@@ -505,7 +554,7 @@ export function MoodCheckIn() {
                             dataKey="avg"
                             stroke="rgb(167 139 250)"
                             strokeWidth={1.5}
-                            fill="url(#moodWeekFill)"
+                            fill={`url(#moodPatternFill-${patternPeriod})`}
                             dot={false}
                             isAnimationActive={!insightLoading}
                           />
@@ -586,7 +635,7 @@ export function MoodCheckIn() {
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                           <span className="text-[1.1rem] font-medium text-zinc-100">{insightLoading ? "—" : streakDays}</span>
-                          <span className="text-[9px] uppercase tracking-wider text-zinc-500">days</span>
+                          <span className="text-[9px] uppercase tracking-wider text-zinc-500">day</span>
                         </div>
                       </div>
                       <p className="text-[13.5px] leading-[1.7] text-[var(--solace-muted)]">

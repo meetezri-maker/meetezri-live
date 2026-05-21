@@ -946,8 +946,13 @@ export function BrainHealthPage() {
             </section>
 
             {/* Wizard step cards + bubble navigation */}
-            <section aria-label="Guided reflection steps" className="min-w-0">
-              <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-2 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:min-w-0 sm:snap-none sm:grid-cols-5 sm:gap-2 sm:overflow-visible sm:pb-0 sm:pt-0 [&::-webkit-scrollbar]:hidden">
+            <section aria-label="Guided reflection steps" className="flex min-w-0 flex-col gap-3">
+              <div
+                className={cn(
+                  "flex snap-x snap-mandatory items-start gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+                  "sm:grid sm:grid-cols-[repeat(5,minmax(0,1fr))] sm:gap-2 sm:overflow-visible sm:snap-none sm:pb-0"
+                )}
+              >
                 {GUIDED_QUESTIONS.map((q, idx) => {
                   const Icon = REFLECTION_ICONS[q.iconKey] ?? Brain;
                   const locked =
@@ -955,7 +960,7 @@ export function BrainHealthPage() {
                   const active = idx === reflectionStep;
                   const completed = Boolean(localChoiceByStep[idx]) && !active;
                   const cardClass = cn(
-                    "relative flex min-h-[120px] w-[min(42vw,160px)] shrink-0 snap-center flex-col items-center rounded-xl border px-2.5 pb-3 pt-4 text-center transition-all duration-300 sm:min-h-[132px] sm:w-full md:min-h-[142px]",
+                    "relative flex min-h-[120px] w-[min(42vw,160px)] min-w-0 shrink-0 snap-center flex-col items-center rounded-xl border px-2.5 pb-3 pt-4 text-center transition-all duration-300 sm:min-h-[132px] sm:w-full sm:max-w-none md:min-h-[140px]",
                     locked &&
                       "cursor-not-allowed border-white/[0.04] bg-black/20 opacity-[0.38] shadow-none saturate-[0.65]",
                     !locked &&
@@ -984,9 +989,18 @@ export function BrainHealthPage() {
                     locked && "text-zinc-600"
                   );
                   return (
-                    <div key={q.shortLabel} className="flex shrink-0 items-stretch sm:min-w-0">
+                    <div
+                      key={q.shortLabel}
+                      className="flex min-w-0 shrink-0 snap-center items-start gap-0.5 sm:w-full sm:shrink"
+                    >
+                      {idx > 0 && (
+                        <ArrowRight
+                          className="mt-[2.75rem] hidden h-3.5 w-3.5 shrink-0 text-zinc-600 sm:block"
+                          aria-hidden
+                        />
+                      )}
                       {locked ? (
-                        <div className={cardClass} aria-disabled="true">
+                        <div className={cn(cardClass, "flex-1")} aria-disabled="true">
                           <Lock className="absolute right-2 top-2 h-3.5 w-3.5 text-zinc-600" aria-hidden />
                           <Icon className={iconClass} aria-hidden />
                           <span className={labelClass}>{q.shortLabel}</span>
@@ -995,7 +1009,7 @@ export function BrainHealthPage() {
                         <button
                           type="button"
                           onClick={() => handleStepCardClick(idx)}
-                          className={cardClass}
+                          className={cn(cardClass, "flex-1")}
                           aria-current={active ? "step" : undefined}
                         >
                           {completed && (
@@ -1007,17 +1021,12 @@ export function BrainHealthPage() {
                           <span className={labelClass}>{q.shortLabel}</span>
                         </button>
                       )}
-                      {idx < GUIDED_QUESTIONS.length - 1 && (
-                        <div className="hidden w-2 shrink-0 items-center justify-center self-center sm:flex" aria-hidden>
-                          <ArrowRight className="h-3.5 w-3.5 text-zinc-600" />
-                        </div>
-                      )}
                     </div>
                   );
                 })}
               </div>
 
-              <div className="mt-6 flex flex-col items-center gap-4 sm:mt-8" aria-label="Reflection navigation">
+              <div className="flex flex-col items-center gap-3" aria-label="Reflection navigation">
                 <p className="text-[11px] font-medium tabular-nums tracking-wide text-zinc-500">
                   {progressLabelCurrent} of {GUIDED_STEP_COUNT}
                 </p>
@@ -1095,19 +1104,25 @@ export function BrainHealthPage() {
             </section>
 
             {/* Answers */}
-            <section aria-labelledby="answer-heading">
+            <section aria-labelledby="answer-heading" className="min-w-0">
               <h3 id="answer-heading" className="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-500">
                 Choose what feels true for you
               </h3>
-              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <AnimatePresence mode="popLayout">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={reflectionStep}
+                  initial={reducedMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reducedMotion ? undefined : { opacity: 0, y: -4 }}
+                  transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+                  className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+                >
                   {currentChoices.map((choice) => {
                     const Icon = REFLECTION_ICONS[choice.iconKey] ?? HelpCircle;
                     const selected = selectedChoiceId === choice.id;
                     const wide = choice.id === "q1-other";
                     return (
-                      <motion.button
-                        layout
+                      <button
                         key={choice.id}
                         type="button"
                         onClick={() => handleSelectChoice(choice)}
@@ -1132,11 +1147,11 @@ export function BrainHealthPage() {
                           <span className="block text-sm font-semibold text-zinc-100 sm:text-[15px]">{choice.title}</span>
                           <span className="mt-1 block text-xs leading-relaxed text-zinc-500 sm:text-[13px]">{choice.sub}</span>
                         </div>
-                      </motion.button>
+                      </button>
                     );
                   })}
-                </AnimatePresence>
-              </div>
+                </motion.div>
+              </AnimatePresence>
             </section>
 
             {/* Live mental state */}

@@ -150,11 +150,73 @@ export const profileEmergencyWarmthViolet = cn(
   "bg-[radial-gradient(ellipse_60%_50%_at_20%_20%,rgba(192,132,252,0.12),transparent_50%)]"
 );
 
+/** Dark sanctuary form controls (profile edit mode) */
+export const profileFieldLabel = "mb-1 text-[10px] font-semibold uppercase tracking-widest text-[rgba(255,255,255,0.45)]";
+
+export const profileInput = cn(
+  "w-full rounded-xl border border-white/[0.08] px-3 py-2.5 text-sm font-medium",
+  "bg-[rgba(15,18,38,0.92)] text-[rgba(255,255,255,0.95)]",
+  "shadow-[inset_0_2px_10px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.04)]",
+  "placeholder:text-[rgba(255,255,255,0.28)]",
+  "transition-all duration-300",
+  "hover:border-violet-400/22",
+  "focus:border-violet-400/35 focus:outline-none focus:ring-2 focus:ring-violet-500/22",
+  "focus:shadow-[inset_0_2px_10px_rgba(0,0,0,0.32),0_0_20px_-8px_rgba(139,92,246,0.28)]",
+  "disabled:opacity-60"
+);
+
+export const profilePhoneButton = cn(
+  "h-10 shrink-0 justify-between rounded-xl border-white/[0.08] px-3 sm:w-[120px]",
+  "bg-[rgba(15,18,38,0.92)] text-[rgba(255,255,255,0.92)]",
+  "shadow-[inset_0_2px_10px_rgba(0,0,0,0.35)]",
+  "hover:border-violet-400/25 hover:bg-[rgba(22,18,48,0.95)] hover:text-white"
+);
+
+export const profilePhoneInput = cn(
+  "h-10 min-h-[40px] flex-1 rounded-xl border-white/[0.08]",
+  "bg-[rgba(15,18,38,0.92)] text-[rgba(255,255,255,0.95)]",
+  "shadow-[inset_0_2px_10px_rgba(0,0,0,0.35)]",
+  "placeholder:text-[rgba(255,255,255,0.28)]",
+  "focus-visible:border-violet-400/35 focus-visible:ring-violet-500/22",
+  "!bg-[rgba(15,18,38,0.92)]"
+);
+
+export const profileEmergencyLabel = "mb-1 text-[10px] font-semibold uppercase tracking-widest text-[rgba(255,255,255,0.52)]";
+
+export const profileEmergencyInput = cn(
+  "w-full rounded-xl border border-rose-400/15 px-3 py-2.5 text-sm font-medium",
+  "bg-[rgba(18,14,32,0.92)] text-[rgba(255,255,255,0.95)]",
+  "shadow-[inset_0_2px_10px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.04)]",
+  "placeholder:text-[rgba(255,255,255,0.28)]",
+  "transition-all duration-300",
+  "hover:border-rose-400/22",
+  "focus:border-rose-400/30 focus:outline-none focus:ring-2 focus:ring-rose-400/20",
+  "focus:shadow-[inset_0_2px_10px_rgba(0,0,0,0.32),0_0_20px_-8px_rgba(244,63,94,0.2)]",
+  "disabled:opacity-60"
+);
+
+export const profileEmergencyPhoneButton = cn(
+  "h-10 shrink-0 justify-between rounded-xl border-rose-400/15 px-3 sm:w-[120px]",
+  "bg-[rgba(18,14,32,0.92)] text-[rgba(255,255,255,0.9)]",
+  "shadow-[inset_0_2px_10px_rgba(0,0,0,0.38)]",
+  "hover:border-rose-400/28 hover:bg-rose-500/[0.08] hover:text-white"
+);
+
+export const profileEmergencyPhoneInput = cn(
+  "h-10 min-h-[40px] flex-1 rounded-xl border-rose-400/15",
+  "bg-[rgba(18,14,32,0.92)] text-[rgba(255,255,255,0.95)]",
+  "shadow-[inset_0_2px_10px_rgba(0,0,0,0.38)]",
+  "placeholder:text-[rgba(255,255,255,0.28)]",
+  "focus-visible:border-rose-400/30 focus-visible:ring-rose-400/20",
+  "!bg-[rgba(18,14,32,0.92)]"
+);
+
 export function formatSubscriptionPlanLabel(plan: string | undefined | null): string {
   const raw = String(plan || "").trim().toLowerCase();
   if (!raw) return "Member plan";
   if (raw === "trial") return "Trial plan";
-  if (raw === "core" || raw === "pro") return "Core plan";
+  if (raw === "core") return "Core plan";
+  if (raw === "pro") return "Pro plan";
   if (raw === "basic") return "Basic plan";
   if (raw.includes("premium")) return "Premium plan";
   return raw.charAt(0).toUpperCase() + raw.slice(1).replace(/_/g, " ");

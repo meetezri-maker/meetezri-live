@@ -577,10 +577,11 @@ function JournalInsightsRail({
             topTags.map(({ tag, count }) => {
               const width = Math.max(12, (count / maxTag) * 100);
               const style = getMoodTagStyle(tag);
+              const tagLabel = normalizeMoodTag(tag);
               return (
-                <div key={tag} className="space-y-1.5">
+                <div key={tagLabel} className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2 text-[13px]">
-                    <span className="truncate text-zinc-400">#{tag.replace(/\s+/g, "-")}</span>
+                    <span className="truncate text-zinc-400">#{tagLabel}</span>
                     <span className="shrink-0 tabular-nums text-zinc-500">{count}</span>
                   </div>
                   <div className="h-1 overflow-hidden rounded-full bg-white/[0.06]">
@@ -1060,7 +1061,8 @@ export function Journal() {
     
     entries.forEach(entry => {
       entry.mood_tags?.forEach(tag => {
-        const normalized = tag.toLowerCase();
+        const normalized = normalizeMoodTag(tag);
+        if (!normalized) return;
         tagCounts.set(normalized, (tagCounts.get(normalized) || 0) + 1);
       });
     });
@@ -1113,6 +1115,53 @@ export function Journal() {
           aria-hidden
         />
         <div className="relative z-[1] mx-auto max-w-[1680px] px-4 py-8 sm:px-5 sm:py-10 lg:px-8">
+          <motion.header
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 flex flex-row items-start justify-between gap-3 border-b border-white/[0.04] pb-8 sm:mb-10 sm:items-center sm:gap-6 lg:mb-10"
+          >
+            <div className="flex min-w-0 flex-1 gap-4">
+              <div
+                className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-500/20 to-fuchsia-500/15 shadow-[0_0_28px_rgba(217,70,239,0.25)]"
+                aria-hidden
+              >
+                <BookOpen className="h-6 w-6 text-violet-200" />
+                <span className="pointer-events-none absolute inset-0 rounded-2xl shadow-[inset_0_0_20px_rgba(255,255,255,0.06)]" />
+              </div>
+              <div className="min-w-0 space-y-1.5">
+                <h1 className="text-2xl font-semibold tracking-tight text-slate-50 sm:text-3xl">My Journal</h1>
+                <p className="max-w-md text-sm leading-relaxed text-slate-400">
+                  Your private space for thoughts and reflections
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-2.5">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowExportModal(true)}
+                className="min-h-11 border-white/[0.12] bg-white/[0.04] text-slate-200 shadow-none backdrop-blur-sm hover:border-violet-500/35 hover:bg-violet-500/10 hover:text-white"
+              >
+                <Download className="mr-2 h-4 w-4 shrink-0 opacity-80" />
+                Export
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setEditingEntry(null);
+                  setNewEntryTitle("");
+                  setNewEntryContent("");
+                  setSelectedMood("");
+                  setShowNewEntry(true);
+                }}
+                className="min-h-11 bg-gradient-to-r from-violet-600/95 to-fuchsia-600/90 text-white shadow-[0_0_32px_rgba(139,92,246,0.35)] hover:from-violet-500 hover:to-fuchsia-500"
+              >
+                <Plus className="mr-2 h-4 w-4 shrink-0" />
+                New Entry
+              </Button>
+            </div>
+          </motion.header>
+
           <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-x-10 xl:gap-x-12">
             <div className="min-w-0 space-y-8 sm:space-y-10 lg:space-y-[2.75rem]">
             {loadError && entries.length > 0 ? (
@@ -1131,51 +1180,6 @@ export function Journal() {
                 </Button>
               </div>
             ) : null}
-
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-8 lg:mb-10">
-              <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex gap-4">
-                  <div
-                    className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-500/20 to-fuchsia-500/15 shadow-[0_0_28px_rgba(217,70,239,0.25)]"
-                    aria-hidden
-                  >
-                    <BookOpen className="h-6 w-6 text-violet-200" />
-                    <span className="pointer-events-none absolute inset-0 rounded-2xl shadow-[inset_0_0_20px_rgba(255,255,255,0.06)]" />
-                  </div>
-                  <div className="min-w-0 space-y-1.5">
-                    <h1 className="text-2xl font-semibold tracking-tight text-slate-50 sm:text-3xl">My Journal</h1>
-                    <p className="max-w-md text-sm leading-relaxed text-slate-400">
-                      Your private space for thoughts and reflections
-                    </p>
-                  </div>
-                </div>
-                <div className="flex w-full flex-col gap-2 self-stretch sm:max-w-none sm:flex-row sm:justify-end lg:w-auto">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowExportModal(true)}
-                    className="order-2 min-h-11 w-full border-white/[0.12] bg-white/[0.04] text-slate-200 shadow-none backdrop-blur-sm hover:border-violet-500/35 hover:bg-violet-500/10 hover:text-white sm:order-1 sm:w-auto"
-                  >
-                    <Download className="mr-2 h-4 w-4 shrink-0 opacity-80" />
-                    Export
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      setEditingEntry(null);
-                      setNewEntryTitle("");
-                      setNewEntryContent("");
-                      setSelectedMood("");
-                      setShowNewEntry(true);
-                    }}
-                    className="order-1 min-h-11 w-full bg-gradient-to-r from-violet-600/95 to-fuchsia-600/90 text-white shadow-[0_0_32px_rgba(139,92,246,0.35)] hover:from-violet-500 hover:to-fuchsia-500 sm:order-2 sm:w-auto"
-                  >
-                    <Plus className="mr-2 h-4 w-4 shrink-0" />
-                    New Entry
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
 
             <motion.div
               initial={{ opacity: 0, y: 12 }}

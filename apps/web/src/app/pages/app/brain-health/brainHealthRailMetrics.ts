@@ -174,40 +174,42 @@ function averageSleepQuality(entries: BrainHealthSleepLite[]): number | null {
   return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
 
-function formatHourWindow(startHour: number): string {
-  const endHour = (startHour + 3) % 24;
-  const fmt = (h: number) => {
-    const period = h >= 12 ? "PM" : "AM";
-    const hour12 = h % 12 === 0 ? 12 : h % 12;
-    return `${hour12} ${period}`;
-  };
-  return `${fmt(startHour)} – ${fmt(endHour)}`;
+/** Local time from an API timestamp (viewer's timezone). */
+function parseLocalDate(iso: string): Date | null {
+  return parseDate(iso);
 }
 
-function peakHourWindow(hours: number[]): number {
-  if (hours.length === 0) return new Date().getHours();
-  const counts = new Array(24).fill(0) as number[];
-  for (const h of hours) counts[h] = (counts[h] ?? 0) + 1;
-  let best = 9;
-  let bestCount = -1;
-  for (let h = 0; h < 24; h++) {
-    const window =
-      (counts[h] ?? 0) + (counts[(h + 1) % 24] ?? 0) + (counts[(h + 2) % 24] ?? 0);
-    if (window > bestCount) {
-      bestCount = window;
-      best = h;
-    }
+/** e.g. 1:23 PM — matches actual log time, not a rounded hour band. */
+function formatLocalTime(d: Date): string {
+  const hours = d.getHours();
+  const minutes = d.getMinutes();
+  const period = hours >= 12 ? "PM" : "AM";
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  const mm = minutes.toString().padStart(2, "0");
+  return `${hour12}:${mm} ${period}`;
+}
+
+function isSameLocalMinute(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate() &&
+    a.getHours() === b.getHours() &&
+    a.getMinutes() === b.getMinutes()
+  );
+}
+
+/** Earliest → latest actual log times in the filter range. */
+function formatLoggedTimeRange(times: Date[]): string {
+  const sorted = [...times].sort((a, b) => a.getTime() - b.getTime());
+  const first = sorted[0]!;
+  const last = sorted[sorted.length - 1]!;
+  const startLabel = formatLocalTime(first);
+  const endLabel = formatLocalTime(last);
+  if (sorted.length === 1 || isSameLocalMinute(first, last)) {
+    return startLabel;
   }
-  return best;
-}
-
-function focusWindowFromClockToday(): { time: string; line: string } {
-  const h = new Date().getHours();
-  if (h >= 5 && h < 11) return { time: "9 AM – 12 PM", line: "No sessions or check-ins logged today yet — typical morning focus band." };
-  if (h >= 11 && h < 14) return { time: "10 AM – 1 PM", line: "No sessions or check-ins logged today yet — midday is often steadier." };
-  if (h >= 14 && h < 18) return { time: "2 PM – 5 PM", line: "No sessions or check-ins logged today yet — afternoon can still work with lighter load." };
-  if (h >= 18 && h < 22) return { time: "6 PM – 9 PM", line: "No sessions or check-ins logged today yet — evening suits winding down." };
-  return { time: "Rest window", line: "No sessions or check-ins logged today yet — night is for recovery." };
+  return `${startLabel} – ${endLabel}`;
 }
 
 export function computeFocusWindow(
@@ -219,43 +221,48 @@ export function computeFocusWindow(
   const rangeSessions = sessionsInRange(sessions, start);
   const rangeMoods = moodsInRange(moods, start);
 
-  const sessionHours = rangeSessions
-    .map((s) => parseDate(s.started_at ?? s.created_at))
-    .filter((d): d is Date => d != null)
-    .map((d) => d.getHours());
+  const sessionTimes = rangeSessions
+    .map((s) => parseLocalDate(s.started_at ?? s.created_at))
+    .filter((d): d is Date => d != null);
 
-  const moodHours = rangeMoods
-    .map((m) => parseDate(m.created_at))
-    .filter((d): d is Date => d != null)
-    .map((d) => d.getHours());
+  const moodTimes = rangeMoods
+    .map((m) => parseLocalDate(m.created_at))
+    .filter((d): d is Date => d != null);
 
-  const hours = sessionHours.length > 0 ? sessionHours : moodHours;
-
-  if (hours.length === 0) {
-    if (filter !== "today") {
-      return {
-        time: "No activity yet",
-        line:
-          filter === "last_month"
-            ? "Complete a Talk It Out session or mood check-in this month to see your focus window."
-            : "Complete a Talk It Out session or mood check-in this week to see your focus window.",
-      };
-    }
-    return focusWindowFromClockToday();
-  }
-
+  const times = sessionTimes.length > 0 ? sessionTimes : moodTimes;
   const period = railFilterPeriodLabel(filter);
-  const peak = peakHourWindow(hours);
-  const label = formatHourWindow(peak);
-  if (sessionHours.length > 0) {
+  const fromSessions = sessionTimes.length > 0;
+
+  if (times.length === 0) {
     return {
-      time: label,
-      line: `Based on ${sessionHours.length} Talk It Out session${sessionHours.length === 1 ? "" : "s"} ${period}.`,
+      time: "—",
+      line:
+        filter === "last_month"
+          ? "Complete a Talk It Out session or mood check-in this month to see your focus window."
+          : filter === "today"
+            ? "Log a Talk It Out session or mood check-in today to see your focus window."
+            : "Complete a Talk It Out session or mood check-in this week to see your focus window.",
     };
   }
+
+  const timeLabel = formatLoggedTimeRange(times);
+
+  if (fromSessions) {
+    return {
+      time: timeLabel,
+      line:
+        sessionTimes.length === 1
+          ? `When you started your Talk It Out session ${period}.`
+          : `Earliest to latest Talk It Out session ${period} (${sessionTimes.length} logged).`,
+    };
+  }
+
   return {
-    time: label,
-    line: `Based on ${moodHours.length} mood check-in${moodHours.length === 1 ? "" : "s"} ${period}.`,
+    time: timeLabel,
+    line:
+      moodTimes.length === 1
+        ? `When you completed your mood check-in ${period}.`
+        : `Earliest to latest mood check-in ${period} (${moodTimes.length} logged).`,
   };
 }
 

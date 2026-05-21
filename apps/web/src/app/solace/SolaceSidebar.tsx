@@ -19,12 +19,11 @@ import {
   LifeBuoy,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useAuth } from "@/app/contexts/AuthContext";
+import { formatSubscriptionPlanLabel } from "@/app/pages/app/profile/profileUi";
 import { cn } from "@/lib/utils";
 import { DASHBOARD_IMAGES } from "@/lib/solace/dashboardImages";
-
-const FOCUS_KEY = "solace_focus_mode";
 
 interface NavItem {
   path: string;
@@ -54,26 +53,6 @@ const mainNav: NavItem[] = [
 export function SolaceSidebar() {
   const location = useLocation();
   const { profile, user } = useAuth();
-  const [focusMode, setFocusMode] = useState(false);
-
-  useEffect(() => {
-    try {
-      const v = window.localStorage.getItem(FOCUS_KEY);
-      setFocusMode(v === "1");
-    } catch {
-      setFocusMode(false);
-    }
-  }, []);
-
-  const setFocus = useCallback((next: boolean) => {
-    setFocusMode(next);
-    try {
-      window.localStorage.setItem(FOCUS_KEY, next ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-    window.dispatchEvent(new CustomEvent("solace-focus-mode", { detail: { enabled: next } }));
-  }, []);
 
   const isActive = useMemo(() => {
     const matches = (path: string) =>
@@ -95,20 +74,18 @@ export function SolaceSidebar() {
     typeof profile?.avatar_url === "string" && profile.avatar_url.trim()
       ? profile.avatar_url.trim()
       : DASHBOARD_IMAGES.userAvatar;
-  const premiumish =
-    ["pro", "core", "active"].includes(String(profile?.subscription_plan || "").toLowerCase()) ||
-    String(profile?.subscription_status || "").toLowerCase() === "active";
+  const subscriptionPlan =
+    typeof profile?.subscription_plan === "string" ? profile.subscription_plan : undefined;
+  const planLabel = formatSubscriptionPlanLabel(subscriptionPlan);
 
   return (
     <div
       className={cn(
-        "solace-scroll flex h-full min-h-0 flex-col gap-1 overflow-y-auto overscroll-y-contain px-2 pb-3 pt-2",
-        "[scrollbar-gutter:stable]"
+        "flex h-full min-h-0 flex-col gap-1 overflow-y-auto overscroll-y-contain px-2 pb-3 pt-2",
+        "[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       )}
     >
-      <div className="px-2 pb-2">
-        <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">Solace</p>
-      </div>
+     
 
       {mainNav.map((item) => {
         const Icon = item.icon;
@@ -151,39 +128,15 @@ export function SolaceSidebar() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-zinc-100">{firstName}</p>
-              {premiumish ? (
-                <span className="mt-0.5 inline-block rounded-full border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-violet-200/90">
-                  Premium
+              {subscriptionPlan ? (
+                <span className="mt-0.5 inline-block rounded-full border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-violet-200/90">
+                  {planLabel}
                 </span>
               ) : (
                 <p className="truncate text-[11px] text-zinc-500">{user?.email}</p>
               )}
             </div>
           </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2.5">
-          <div>
-            <p className="text-xs font-medium text-zinc-200">Focus mode</p>
-            <p className="text-[10px] text-zinc-500">Minimize distractions</p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={focusMode}
-            onClick={() => setFocus(!focusMode)}
-            className={cn(
-              "relative h-7 w-12 shrink-0 rounded-full transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50",
-              focusMode ? "bg-violet-500/50" : "bg-zinc-700/80"
-            )}
-          >
-            <span
-              className={cn(
-                "absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-zinc-100 shadow transition-transform duration-300",
-                focusMode && "translate-x-5 bg-white"
-              )}
-            />
-          </button>
         </div>
 
         {location.pathname === "/app/wellness-tools" && (
@@ -230,37 +183,6 @@ export function SolaceSidebar() {
             </div>
           </div>
         )}
-        {location.pathname.startsWith("/app/settings") && (
-          <motion.div
-            className="relative overflow-hidden rounded-xl border border-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_32px_-8px_rgba(139,92,246,0.2)]"
-            aria-label="Privacy sanctuary reminder"
-          >
-            <img
-              src="/community/scene-forest.jpg"
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover brightness-[0.5] saturate-[1.08]"
-              width={320}
-              height={180}
-            />
-            <div
-              className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,10,35,0.2)_0%,rgba(8,8,20,0.9)_72%)]"
-              aria-hidden
-            />
-            <motion.div
-              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_30%_85%,rgba(251,191,36,0.18),transparent_55%)]"
-              aria-hidden
-            />
-            <div className="relative px-3.5 py-3.5">
-              <p className="text-[11px] font-medium tracking-wide text-[rgba(255,255,255,0.92)]">
-                Your sanctuary. Your story. Your safe space.
-              </p>
-              <p className="mt-1.5 text-[10px] leading-relaxed text-[rgba(255,255,255,0.58)]">
-                Take a breath. Your privacy and emotional safety matter here.
-              </p>
-            </div>
-          </motion.div>
-        )}
-
 
       </div>
     </div>

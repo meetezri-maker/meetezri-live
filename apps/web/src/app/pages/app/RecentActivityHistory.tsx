@@ -61,6 +61,7 @@ const MOOD_EMOJIS: Record<string, string> = {
   anxious: "😰",
   sad: "😢",
   angry: "😡",
+  exhausted: "😴",
   overwhelmed: "😰",
   hopeful: "🤩",
   tired: "😌",

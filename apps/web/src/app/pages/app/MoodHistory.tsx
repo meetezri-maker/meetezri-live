@@ -61,11 +61,14 @@ import { SolacePanel } from "@/app/solace/SolacePanel";
 import { lobbyAvatarByName } from "@/lib/avatar/lobbyAvatars";
 import { MOOD_CHECKIN_IMAGES, moodCheckInImageForValue } from "@/lib/solace/moodCheckInImages";
 import {
+  getMoodDisplayInfo,
+  MOOD_CALENDAR_LEGEND,
+} from "./mood-check-in/moodDisplay";
+import {
   computeCheckInStreak,
   weeklyIntensitySeries,
   type MoodEntryLite,
 } from "./mood-check-in/moodCheckInUtils";
-
 interface MoodEntry {
   id: string;
   created_at: string;
@@ -76,33 +79,35 @@ interface MoodEntry {
   source: "journal" | "check-in";
 }
 
-const MOOD_MAPPING: Record<string, { label: string; score: number; color: string }> = {
-  "😊": { label: "Happy", score: 10, color: "#fbbf24" },
-  "😌": { label: "Calm", score: 8, color: "#3b82f6" },
-  "🤩": { label: "Excited", score: 9, color: "#a855f7" },
-  "😰": { label: "Anxious", score: 4, color: "#f97316" },
-  "😢": { label: "Sad", score: 2, color: "#6366f1" },
-  "😡": { label: "Angry", score: 1, color: "#ef4444" },
-  "😴": { label: "Tired", score: 5, color: "#6b7280" },
-  "😐": { label: "Neutral", score: 6, color: "#94a3b8" },
+/** Reflection prompts keyed by Most Common mood label. `{period}` → this week / month / year. */
+const MOOD_REFLECTION_LINES: Record<string, string> = {
+  Calm: "What moment made everything feel quiet for a little while {period}?",
+  Overwhelmed: "What felt like too much {period}?",
+  Hopeful: "What gave you a reason to keep looking forward {period}?",
+  Tired: "What drained most of your energy {period}?",
+  Heavy: "What has been weighing on your heart lately?",
+  Grateful: "What are you thankful for {period}?",
+  Excited: "What are you genuinely looking forward to right now?",
+  Anxious: "What thoughts kept circling in your mind {period}?",
+  Numb: "Did anything make you feel emotionally disconnected {period}?",
+  Happy: "What small thing made you smile {period}?",
+  Nervous: "What situation made your stomach tighten {period}?",
+  Sad: "What brought comfort when things felt heavy {period}?",
+  Energetic: "What made you feel alive or motivated {period}?",
+  Angry: "What frustration or tension showed up for you {period}?",
+  Neutral: "What felt steady or uneventful for you {period}?",
 };
 
-const getMoodInfo = (mood: string) => {
-  if (!mood) return null;
-  const trimmedMood = mood.trim();
-  const normalizedMood = trimmedMood.toLowerCase();
-  const aliasToEmoji: Record<string, string> = {
-    happy: "😊", calm: "😌", excited: "🤩", energetic: "⚡", nervous: "😬", anxious: "😰",
-    overwhelmed: "😰", hopeful: "🤩", heavy: "😢", grateful: "😊", numb: "😐",
-    sad: "😢", angry: "😡", tired: "😴", neutral: "😐", "😠": "😡",
-  };
-  if (MOOD_MAPPING[trimmedMood]) return { ...MOOD_MAPPING[trimmedMood], emoji: trimmedMood };
-  const mappedEmoji = aliasToEmoji[normalizedMood];
-  if (mappedEmoji && MOOD_MAPPING[mappedEmoji]) return { ...MOOD_MAPPING[mappedEmoji], emoji: mappedEmoji };
-  const entry = Object.entries(MOOD_MAPPING).find(([, info]) => info.label.toLowerCase() === normalizedMood);
-  if (entry) return { ...entry[1], emoji: entry[0] };
-  if (/[\u{1F300}-\u{1FAFF}]/u.test(trimmedMood)) return { label: "Mood", score: 5, color: "#9ca3af", emoji: trimmedMood };
-  return null;
+const getReflectionPrompt = (
+  moodLabel: string | null | undefined,
+  period: "week" | "month" | "year",
+): string => {
+  const periodPhrase = period === "week" ? "this week" : period === "month" ? "this month" : "this year";
+  const template =
+    (moodLabel && MOOD_REFLECTION_LINES[moodLabel]) ??
+    "What moments brought you peace {period}?";
+  if (!template.includes("{period}")) return template;
+  return template.replace("{period}", periodPhrase);
 };
 
 const MOOD_HISTORY_PAGE_OPTIONS = [10, 20, 50] as const;
@@ -155,7 +160,7 @@ export function MoodHistory() {
       ]);
       const normalizedJournal: MoodEntry[] = (journalData || []).map((j: any) => {
         const mood = j.mood_tags?.[0] || "";
-        const info = getMoodInfo(mood);
+        const info = getMoodDisplayInfo(mood);
         return { id: j.id, created_at: j.created_at, mood, intensity: info?.score || 5, notes: j.content, source: "journal" as const };
       }).filter((e: MoodEntry) => e.mood);
       const normalizedMoods: MoodEntry[] = (moodData || []).map((m: any) => ({
@@ -176,7 +181,7 @@ export function MoodHistory() {
     const csvRows = [
       ["Date", "Mood", "Mood Label", "Intensity", "Source", "Activities", "Notes"].join(","),
       ...periodEntries.map(entry => {
-        const info = getMoodInfo(entry.mood);
+        const info = getMoodDisplayInfo(entry.mood);
         return [format(new Date(entry.created_at), "yyyy-MM-dd HH:mm"), entry.mood, info?.label ?? "", String(entry.intensity), entry.source, entry.activities?.join(" | ") ?? "", entry.notes ?? ""]
           .map(v => `"${String(v).replace(/"/g, '""')}"`).join(",");
       }),
@@ -201,7 +206,7 @@ export function MoodHistory() {
   const recentCheckIns = useMemo(() => entries.filter(e => e.source === "check-in").sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), [entries]);
   const displayedCheckIns = useMemo(() => recentCheckIns.slice(0, 4), [recentCheckIns]);
 
-  const { calendarData, summaryData, patternChartData, heatmapData } = useMemo(() => {
+  const { calendarData, summaryData, patternChartData, heatmapData, reflectionPrompt } = useMemo(() => {
     const { start, end } = getPeriodRange();
     const periodEntries = entries.filter(entry => { const date = new Date(entry.created_at); return date >= start && date <= end; });
     const periodCheckIns = periodEntries.filter(e => e.source === "check-in");
@@ -215,23 +220,29 @@ export function MoodHistory() {
     const calendarData = eachDayOfInterval({ start: startDate, end: endDate }).map(day => {
       const dayEntries = entries.filter(e => isSameDay(new Date(e.created_at), day));
       const dayEntry = dayEntries.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-      const info = dayEntry ? getMoodInfo(dayEntry.mood) : null;
-      return { 
-        day: day.getDate(), 
-        isCurrentMonth: day.getMonth() === calendarDate.getMonth(), 
-        emoji: info?.emoji || "", 
-        color: info?.color || "", 
-        mood: dayEntry?.intensity || (info?.score || 0),
-        date: day 
+      const info = dayEntry ? getMoodDisplayInfo(dayEntry.mood) : null;
+      return {
+        day: day.getDate(),
+        isCurrentMonth: day.getMonth() === calendarDate.getMonth(),
+        emoji: info?.emoji || "",
+        color: info?.color || "",
+        label: info?.label || "",
+        mood: dayEntry?.intensity ?? info?.score ?? 0,
+        date: day,
       };
     });
 
     // Summary calculations
     const currAvg = periodInsightEntries.length > 0 ? periodInsightEntries.reduce((acc, e) => acc + e.intensity, 0) / periodInsightEntries.length : 0;
     const moodCounts: Record<string, number> = {};
-    periodEntries.forEach(e => { const info = getMoodInfo(e.mood); if (info?.label) moodCounts[info.label] = (moodCounts[info.label] || 0) + 1; });
+    periodEntries.forEach((e) => {
+      const info = getMoodDisplayInfo(e.mood);
+      if (info?.label) moodCounts[info.label] = (moodCounts[info.label] || 0) + 1;
+    });
     const mostCommon = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0];
-    const mostCommonMoodEntry = mostCommon ? Object.entries(MOOD_MAPPING).find(([, v]) => v.label === mostCommon[0]) : null;
+    const mostCommonDisplay = mostCommon
+      ? MOOD_CALENDAR_LEGEND.find((d) => d.label === mostCommon[0])
+      : null;
     
     const calmCount = (moodCounts["Calm"] || 0) + (moodCounts["Happy"] || 0);
     const totalCount = periodEntries.length || 1;
@@ -244,7 +255,9 @@ export function MoodHistory() {
     const recoveryPattern = totalCount > anxiousCount ? Math.round(((totalCount - anxiousCount) / totalCount) * 100) : 0;
 
     const summaryData = {
-      mostCommonMood: mostCommonMoodEntry ? { label: mostCommon![0], emoji: mostCommonMoodEntry[0] } : null,
+      mostCommonMood: mostCommon && mostCommonDisplay
+        ? { label: mostCommon[0], emoji: mostCommonDisplay.emoji }
+        : null,
       emotionalTrend: currAvg >= 7 ? "Upward" : currAvg >= 5 ? "Stable" : "Needs Care",
       trendValue: currAvg.toFixed(1),
       reflectionConsistency,
@@ -269,7 +282,12 @@ export function MoodHistory() {
       heatmapData.push(weekData);
     }
 
-    return { calendarData, summaryData, patternChartData, heatmapData };
+    const reflectionPrompt = getReflectionPrompt(
+      summaryData.mostCommonMood?.label,
+      selectedView,
+    );
+
+    return { calendarData, summaryData, patternChartData, heatmapData, reflectionPrompt };
   }, [selectedView, currentDate, calendarDate, entries]);
 
   const companionPreview = useMemo(() => lobbyAvatarByName(profile?.selected_avatar ?? "Jordan Taylor"), [profile?.selected_avatar]);
@@ -312,8 +330,7 @@ export function MoodHistory() {
                   <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(168,85,247,0.15),transparent_50%)]" />
                   <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(236,72,153,0.08),transparent_50%)]" />
                 </div>
-                <div className="relative flex min-h-[200px] items-center justify-between p-8">
-                  {/* Left content */}
+                <div className="relative flex min-h-[200px] items-center p-8">
                   <div className="max-w-md space-y-3">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-400/80">Your Emotional Journey</p>
                     <h2 className="font-serif text-2xl font-normal leading-tight tracking-tight text-zinc-50">
@@ -325,33 +342,6 @@ export function MoodHistory() {
                         : "Begin capturing your emotional moments to see your journey unfold."}
                     </p>
                   </div>
-                  
-                  {/* Right: Emotional Orbit Visualization */}
-                  <div className="relative mr-4 flex h-[160px] w-[160px] items-center justify-center">
-                    {/* Outer glow rings */}
-                    <div className="absolute h-[160px] w-[160px] animate-pulse rounded-full border border-violet-500/10 shadow-[0_0_60px_rgba(139,92,246,0.15)]" />
-                    <div className="absolute h-[130px] w-[130px] rounded-full border border-purple-500/15" />
-                    <div className="absolute h-[100px] w-[100px] rounded-full border border-pink-500/10" />
-                    
-                    {/* Center mood face */}
-                    <div className="relative z-10 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/30 to-purple-600/20 shadow-[0_0_40px_rgba(139,92,246,0.4)]">
-                      <FluentEmoji emoji={summaryData.mostCommonMood?.emoji || "😊"} size={36} />
-                    </div>
-                    
-                    {/* Orbiting mood indicators */}
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-1 shadow-[0_0_15px_rgba(251,191,36,0.3)]">
-                      <FluentEmoji emoji="😊" size={20} />
-                    </div>
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-1 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
-                      <FluentEmoji emoji="😌" size={20} />
-                    </div>
-                    <div className="absolute left-1/2 top-2 -translate-x-1/2 rounded-full bg-black/40 p-1 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
-                      <FluentEmoji emoji="🤩" size={18} />
-                    </div>
-                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/40 p-1 shadow-[0_0_15px_rgba(99,102,241,0.3)]">
-                      <FluentEmoji emoji="😢" size={18} />
-                    </div>
-                  </div>
                 </div>
               </div>
             </motion.div>
@@ -359,7 +349,7 @@ export function MoodHistory() {
             {/* Emotional Summary Row - 5 Cards */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="grid grid-cols-5 gap-3">
               {[
-                { icon: Heart, label: "Most Common", value: summaryData.mostCommonMood?.label || "—", emoji: summaryData.mostCommonMood?.emoji, gradient: "from-amber-500/20 to-orange-600/10", glow: "rgba(251,191,36,0.2)" },
+                { icon: Heart, label: "Most Common", value: summaryData.mostCommonMood?.label || "—", gradient: "from-amber-500/20 to-orange-600/10", glow: "rgba(251,191,36,0.2)" },
                 { icon: TrendingUp, label: "Emotional Trend", value: summaryData.emotionalTrend, sub: `${summaryData.trendValue}/10`, gradient: "from-emerald-500/20 to-teal-600/10", glow: "rgba(52,211,153,0.2)" },
                 { icon: MessageCircle, label: "Reflection", value: `${summaryData.reflectionConsistency}%`, sub: "Consistency", gradient: "from-cyan-500/20 to-blue-600/10", glow: "rgba(34,211,238,0.2)" },
                 { icon: Sun, label: "Calmness", value: `${summaryData.calmnessScore}%`, sub: "Score", gradient: "from-violet-500/20 to-purple-600/10", glow: "rgba(139,92,246,0.2)" },
@@ -370,10 +360,7 @@ export function MoodHistory() {
                   <div className="relative">
                     <card.icon className="mb-2 h-4 w-4 text-zinc-400" strokeWidth={1.5} />
                     <p className="text-[9px] font-medium uppercase tracking-wider text-zinc-500">{card.label}</p>
-                    <div className="mt-1 flex items-center gap-1.5">
-                      {card.emoji && <FluentEmoji emoji={card.emoji} size={18} />}
-                      <span className="text-lg font-semibold text-zinc-100">{card.value}</span>
-                    </div>
+                    <p className="mt-1 text-lg font-semibold text-zinc-100">{card.value}</p>
                     {card.sub && <p className="mt-0.5 text-[10px] text-zinc-500">{card.sub}</p>}
                   </div>
                 </div>
@@ -400,7 +387,7 @@ export function MoodHistory() {
                     
                     <div className="space-y-4">
                       {displayedCheckIns.map((entry, idx) => {
-                        const info = getMoodInfo(entry.mood);
+                        const info = getMoodDisplayInfo(entry.mood);
                         const isFavorite = favoriteEntryIds.includes(getEntryKey(entry));
                         const thumbnailUrl = moodCheckInImageForValue(entry.mood);
                         
@@ -420,9 +407,6 @@ export function MoodHistory() {
                                 <div className="relative h-[90px] w-[130px] shrink-0 overflow-hidden">
                                   <img src={thumbnailUrl} alt="" className="h-full w-full object-cover" />
                                   <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#0a0612]/80" />
-                                  <div className="absolute bottom-2 left-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm">
-                                    <FluentEmoji emoji={info?.emoji || "🙂"} size={20} />
-                                  </div>
                                 </div>
                                 
                                 {/* Content */}
@@ -503,18 +487,20 @@ export function MoodHistory() {
                   {/* Calendar days */}
                   <div className="grid grid-cols-7 gap-1">
                     {calendarData.map((day, i) => {
-                      const intensity = day.mood || 0;
-                      const bgColor = intensity >= 8 ? "bg-emerald-500/20" : intensity >= 6 ? "bg-cyan-500/20" : intensity >= 4 ? "bg-amber-500/20" : intensity >= 2 ? "bg-orange-500/20" : intensity > 0 ? "bg-rose-500/20" : "";
-                      const isHighlighted = day.emoji && day.isCurrentMonth;
-                      
+                      const isHighlighted = Boolean(day.emoji && day.isCurrentMonth);
                       return (
                         <div
                           key={i}
+                          title={day.label ? `${day.label}` : undefined}
                           className={cn(
                             "relative flex h-10 flex-col items-center justify-center rounded-lg transition-all",
                             day.isCurrentMonth ? "hover:bg-white/[0.05]" : "opacity-30",
-                            isHighlighted && bgColor
                           )}
+                          style={
+                            isHighlighted && day.color
+                              ? { backgroundColor: `${day.color}28`, boxShadow: `inset 0 0 0 1px ${day.color}40` }
+                              : undefined
+                          }
                         >
                           <span className={cn("text-[11px]", day.isCurrentMonth ? (day.emoji ? "font-medium text-zinc-200" : "text-zinc-500") : "text-zinc-700")}>
                             {day.day}
@@ -530,21 +516,21 @@ export function MoodHistory() {
                   </div>
                 </div>
                 
-                {/* Legend */}
-                <div className="mt-4 flex items-center justify-center gap-4 border-t border-white/[0.05] pt-3">
-                  <span className="text-[10px] text-zinc-500">Legend:</span>
-                  {[
-                    { label: "Great", color: "bg-emerald-500", emoji: "😊" },
-                    { label: "Good", color: "bg-cyan-500", emoji: "😌" },
-                    { label: "Okay", color: "bg-amber-500", emoji: "😐" },
-                    { label: "Low", color: "bg-orange-500", emoji: "😰" },
-                    { label: "Tough", color: "bg-rose-500", emoji: "😢" },
-                  ].map((item) => (
-                    <div key={item.label} className="flex items-center gap-1">
-                      <div className={cn("h-2.5 w-2.5 rounded-full", item.color)} />
-                      <span className="text-[9px] text-zinc-400">{item.label}</span>
-                    </div>
-                  ))}
+                {/* Legend — current check-in moods */}
+                <div className="mt-4 border-t border-white/[0.05] pt-3">
+                  <p className="mb-2 text-center text-[10px] text-zinc-500">Moods</p>
+                  <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+                    {MOOD_CALENDAR_LEGEND.map((item) => (
+                      <div key={item.label} className="flex items-center gap-1">
+                        <div
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <FluentEmoji emoji={item.emoji} size={12} />
+                        <span className="text-[9px] text-zinc-400">{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -639,12 +625,9 @@ export function MoodHistory() {
           <aside className="hidden w-[280px] shrink-0 space-y-3 lg:block">
             {/* Your Pattern - Line Graph */}
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }} className="rounded-2xl border border-white/[0.06] bg-black/30 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-3.5 w-3.5 text-violet-400" />
-                  <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Your Pattern</h3>
-                </div>
-                <button className="text-[9px] text-violet-400 hover:text-violet-300">View all</button>
+              <div className="mb-3 flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+                <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Your Pattern</h3>
               </div>
               <div className="h-[80px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -673,9 +656,9 @@ export function MoodHistory() {
                 <h3 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Reflection</h3>
               </div>
               <p className="font-serif text-sm italic leading-relaxed text-zinc-300">
-                "What moments brought you peace this week?"
+                &ldquo;{reflectionPrompt}&rdquo;
               </p>
-              <button className="mt-3 w-full rounded-lg border border-white/[0.08] bg-white/[0.03] py-1.5 text-[10px] font-medium text-zinc-400 transition-all hover:bg-white/[0.06]">
+              <button onClick={() => navigate("/app/session-lobby")} className="mt-3 w-full rounded-lg border border-white/[0.08] bg-white/[0.03] py-1.5 text-[10px] font-medium text-zinc-400 transition-all hover:bg-white/[0.06]">
                 Reflect now
               </button>
             </motion.div>

@@ -23,7 +23,6 @@ import {
   Smartphone,
   Heart,
   Lock,
-  Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -369,10 +368,6 @@ export function SettingsHub() {
     user?.email?.split("@")[0] ||
     "Member";
 
-  const premiumish =
-    ["pro", "core", "active"].includes(String(profile?.subscription_plan || "").toLowerCase()) ||
-    String(profile?.subscription_status || "").toLowerCase() === "active";
-
   const planLabel = formatSubscriptionPlanLabel(
     typeof profile?.subscription_plan === "string" ? profile.subscription_plan : undefined
   );
@@ -558,11 +553,9 @@ export function SettingsHub() {
                   )}
                 </div>
                 <p className="mt-3 text-lg font-semibold text-white">{displayName}</p>
-                {premiumish ? (
-                  <span className="mt-1.5 inline-flex rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-200/90">
-                    Premium member
-                  </span>
-                ) : null}
+                <span className="mt-1.5 inline-flex rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-0.5 text-[10px] font-semibold tracking-wide text-violet-200/90">
+                  {planLabel}
+                </span>
                 <Link
                   to="/app/billing"
                   className="mt-4 flex w-full min-h-[44px] items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3 text-sm transition-colors hover:border-violet-400/20 hover:bg-violet-500/[0.06]"
@@ -574,33 +567,9 @@ export function SettingsHub() {
                   </span>
                 </Link>
                 <Link to="/app/billing" className={cn(settingsBtnPrimary, "mt-3")}>
-                  Manage plan
+                  Manage Plan
                 </Link>
               </div>
-            </div>
-
-            <div className={cn(settingsCard, "p-5")}>
-              <h2 className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">Settings tips</h2>
-              <ul className="mt-4 divide-y divide-white/[0.06]">
-                <TipRow
-                  icon={Bell}
-                  tone="violet"
-                  title="Customize your alerts"
-                  description="Stay on track with smart reminders."
-                />
-                <TipRow
-                  icon={Shield}
-                  tone="pink"
-                  title="Protect your privacy"
-                  description="Review your data and security settings."
-                />
-                <TipRow
-                  icon={Sparkles}
-                  tone="cyan"
-                  title="Explore wellness tools"
-                  description="Make the most of Solace resources."
-                />
-              </ul>
             </div>
 
             <div className={cn(settingsCard, "relative overflow-hidden p-0")}>
@@ -741,26 +710,5 @@ function SystemToolCard({ section }: { section: SettingSection }) {
       </motion.div>
       <ChevronRight className="mt-3 h-4 w-4 text-[rgba(255,255,255,0.28)]" aria-hidden />
     </Link>
-  );
-}
-
-interface TipRowProps {
-  icon: LucideIcon;
-  tone: "violet" | "pink" | "cyan";
-  title: string;
-  description: string;
-}
-
-function TipRow({ icon: Icon, tone, title, description }: TipRowProps) {
-  return (
-    <li className="flex gap-3 py-3.5 first:pt-0 last:pb-0">
-      <div className={settingsIconChip(tone)}>
-        <Icon className="h-4 w-4" aria-hidden />
-      </div>
-      <div>
-        <p className="text-sm font-medium text-[rgba(255,255,255,0.9)]">{title}</p>
-        <p className="mt-0.5 text-xs text-[rgba(255,255,255,0.45)]">{description}</p>
-      </div>
-    </li>
   );
 }

@@ -25,6 +25,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDot,
+  Target,
 } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useState, useEffect, useMemo, useId } from "react";
@@ -35,6 +36,7 @@ import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { format, isSameDay, subDays, startOfWeek, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import {
+  SolaceGlowButton,
   SolacePanel,
   solaceSelectContentClass,
   solaceSelectItemClass,
@@ -157,7 +159,7 @@ function HeroProgressRing({ completed, total }: HeroProgressRingProps) {
 
   return (
     <div
-      className="relative flex h-[240px] w-[240px] shrink-0 items-center justify-center sm:h-[268px] sm:w-[268px]"
+      className="relative flex h-[188px] w-[188px] shrink-0 items-center justify-center sm:h-[204px] sm:w-[204px]"
       role="img"
       aria-label={`Today's progress: ${completed} of ${Math.max(total, 1)} habits completed, ${pct} percent`}
     >
@@ -578,11 +580,11 @@ function RightRailBlocks({ weeklyBarData, habitsCompletedWeek, habitsPotentialWe
                   <p className="text-[14px] font-medium tracking-tight text-zinc-100">{title}</p>
                   <p className="mt-2 text-[13px] leading-relaxed text-[var(--solace-muted)]">{body}</p>
                 </div>
-                <ArrowRight
+                {/* <ArrowRight
                   className="mt-1.5 h-4 w-4 shrink-0 text-zinc-600 transition-colors group-hover:text-violet-200/95"
                   aria-hidden
                   strokeWidth={2}
-                />
+                /> */}
               </li>
             ))}
           </ul>
@@ -963,14 +965,17 @@ export function HabitTracker() {
             className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_100%_60%_at_50%_-10%,rgba(76,29,149,0.2),transparent_52%),radial-gradient(ellipse_70%_50%_at_100%_40%,rgba(14,165,233,0.06),transparent_42%)]"
             aria-hidden
           />
-          <div className="relative z-[1] mx-auto max-w-[1680px] px-3 sm:px-5">
-            <div className="mb-8 space-y-3 border-b border-white/[0.04] pb-6">
-              <Skeleton className="h-9 w-48 rounded-lg bg-zinc-800/90" />
-              <Skeleton className="h-4 w-72 bg-zinc-800/80" />
+          <div className="relative z-[1] mx-auto max-w-[1680px] px-3 sm:px-5 lg:px-8">
+            <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.04] pb-8 sm:pb-10">
+              <div className="space-y-3">
+                <Skeleton className="h-9 w-52 rounded-lg bg-zinc-800/90" />
+                <Skeleton className="h-4 w-72 bg-zinc-800/80" />
+              </div>
+              <Skeleton className="h-11 w-36 rounded-full bg-zinc-800/80" />
             </div>
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_min(100%,340px)] xl:gap-8">
               <div className="space-y-5">
-                <Skeleton className="h-[400px] w-full rounded-[2rem] bg-zinc-800/70" />
+                <Skeleton className="h-[300px] w-full rounded-[2rem] bg-zinc-800/70" />
                 <Skeleton className="h-[180px] w-full rounded-[1.55rem] bg-zinc-800/62" />
                 <Skeleton className="h-[180px] w-full rounded-[1.55rem] bg-zinc-800/62" />
               </div>
@@ -988,10 +993,30 @@ export function HabitTracker() {
           aria-hidden
         />
 
-        <div className="relative z-[1] mx-auto max-w-[1680px] px-3 sm:px-5">
-          <p className="mb-5 text-center font-serif text-[15px] text-zinc-400 lg:hidden">
-            Habit journey
-          </p>
+        <div className="relative z-[1] mx-auto max-w-[1680px] px-3 sm:px-5 lg:px-8 mt-8">
+          <header className="mb-8 border-b border-white/[0.04] ">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-3xl">
+                <div className="flex items-center gap-3">
+                  <Target className="h-7 w-7 shrink-0 text-violet-300/85 sm:h-8 sm:w-8" aria-hidden strokeWidth={1.5} />
+                  <h1 className="font-serif text-[1.9rem] font-normal leading-tight tracking-[-0.02em] text-zinc-50 sm:text-[2.15rem] lg:text-[2.25rem]">
+                    Habit Tracker
+                  </h1>
+                </div>
+                <p className="mt-4 max-w-2xl text-[15px] leading-relaxed tracking-[-0.01em] text-[var(--solace-muted)] sm:text-[1.05rem] sm:leading-[1.75]">
+                  Build gentle rhythms—small steps that add up over time.
+                </p>
+              </div>
+              <SolaceGlowButton
+                type="button"
+                onClick={() => setShowNewHabit(true)}
+                className="min-h-[44px] shrink-0 shadow-[0_0_32px_rgba(139,92,246,0.35)]"
+              >
+                <Plus className="size-4" aria-hidden strokeWidth={2} />
+                Add Habit
+              </SolaceGlowButton>
+            </div>
+          </header>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_min(100%,340px)] xl:items-start xl:gap-8">
             <div className="min-w-0 space-y-8 lg:space-y-10">
@@ -1002,7 +1027,7 @@ export function HabitTracker() {
                 transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
               >
                 <SolacePanel glow="violet" className="overflow-hidden rounded-[2rem] p-0 shadow-[0_56px_140px_-58px_rgba(0,0,0,0.92)] ring-1 ring-inset ring-white/[0.09] sm:rounded-[2.1rem]">
-                  <div className="relative min-h-[400px] md:min-h-[440px]">
+                  <div className="relative min-h-[280px] md:min-h-[300px]">
                     <img
                       src={HABIT_TRACKER_IMAGES.hero}
                       alt=""
@@ -1028,22 +1053,22 @@ export function HabitTracker() {
                       aria-hidden
                     />
 
-                    <div className="relative z-10 min-h-[400px] md:min-h-[440px]">
-                      <div className="flex min-h-[400px] flex-col justify-center px-7 py-10 pr-[16.5rem] sm:px-10 sm:py-11 sm:pr-[18.5rem] md:min-h-[440px] lg:max-w-[56%] lg:pr-10">
-                        <p className="text-[13px] font-medium tracking-[0.02em] text-violet-200/90">
+                    <div className="relative z-10 min-h-[280px] md:min-h-[300px]">
+                      <div className="flex min-h-[280px] flex-col justify-center px-6 py-6 pr-[12.5rem] sm:px-8 sm:py-7 sm:pr-[13.5rem] md:min-h-[300px] lg:max-w-[58%] lg:pr-10">
+                        <p className="text-[12px] font-medium tracking-[0.02em] text-violet-200/90">
                           Your habits, your rhythm.
                         </p>
-                        <h2 className="mt-4 font-serif text-[clamp(1.65rem,3.5vw,2.35rem)] font-normal leading-[1.18] tracking-[-0.025em] text-zinc-50">
+                        <h2 className="mt-3 font-serif text-[clamp(1.45rem,3vw,2rem)] font-normal leading-[1.18] tracking-[-0.025em] text-zinc-50">
                           Your Habit Journey
                         </h2>
-                        <p className="mt-5 max-w-md text-[15.5px] leading-[1.72] text-zinc-400/96">
+                        <p className="mt-3 max-w-md text-[14px] leading-[1.65] text-zinc-400/96 sm:text-[15px]">
                           Small steps. Consistent presence. Big changes over time.
                         </p>
                       </div>
 
-                      <div className="absolute right-4 top-6 z-[12] sm:right-6 sm:top-8 md:right-8 md:top-9 lg:right-10 lg:top-10">
+                      <div className="absolute right-3 top-4 z-[12] sm:right-5 sm:top-5 md:right-6 md:top-6 lg:right-8 lg:top-7">
                         <div
-                          className="pointer-events-none absolute left-1/2 top-1/2 h-[min(68vw,280px)] w-[min(68vw,280px)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(167,139,250,0.16)_0%,rgba(34,211,238,0.07)_42%,transparent_68%)] blur-md"
+                          className="pointer-events-none absolute left-1/2 top-1/2 h-[min(56vw,220px)] w-[min(56vw,220px)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(167,139,250,0.16)_0%,rgba(34,211,238,0.07)_42%,transparent_68%)] blur-md"
                           aria-hidden
                         />
                         <HeroProgressRing completed={completedTodayCount} total={totalHabits} />
@@ -1083,15 +1108,15 @@ export function HabitTracker() {
                             iconClass: "text-cyan-300/88",
                           },
                         ].map(({ label, value, sub, Icon: SI, iconClass }) => (
-                          <div key={label} className="flex flex-col justify-center px-5 py-6 sm:min-h-[112px] sm:px-6 sm:py-6">
-                            <div className="flex items-center gap-2.5">
-                              <SI className={cn("h-[18px] w-[18px] shrink-0", iconClass)} aria-hidden />
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">{label}</span>
+                          <div key={label} className="flex flex-col justify-center px-4 py-4 sm:min-h-[88px] sm:px-5 sm:py-5">
+                            <div className="flex items-center gap-2">
+                              <SI className={cn("h-4 w-4 shrink-0", iconClass)} aria-hidden />
+                              <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-500">{label}</span>
                             </div>
-                            <p className="mt-3 font-serif text-[1.35rem] font-normal tabular-nums tracking-tight text-zinc-50 sm:text-[1.45rem]">
+                            <p className="mt-2 font-serif text-[1.2rem] font-normal tabular-nums tracking-tight text-zinc-50 sm:text-[1.3rem]">
                               {value}
                             </p>
-                            <p className="mt-1.5 text-[12px] leading-snug text-zinc-500">{sub}</p>
+                            <p className="mt-1 text-[11px] leading-snug text-zinc-500">{sub}</p>
                           </div>
                         ))}
                       </div>
@@ -1102,24 +1127,12 @@ export function HabitTracker() {
 
               {/* Habits */}
               <section aria-label="My habits" className="space-y-7">
-                <div className="flex flex-wrap items-end justify-between gap-4 pb-1.5">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Rhythm</p>
-                    <h2 className="mt-2 font-serif text-2xl font-normal tracking-tight text-zinc-50 sm:text-[1.65rem]">My Habits</h2>
-                    <p className="mt-3 max-w-xl text-[15px] leading-[1.7] text-[var(--solace-muted)]">
-                      Build the life you gently choose, one moment at a time.
-                    </p>
-                  </div>
-                  <motion.button
-                    type="button"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowNewHabit(true)}
-                    className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-violet-400/35 bg-violet-500/[0.08] px-5 py-2.5 text-[13px] font-medium text-violet-100 shadow-[0_0_32px_rgba(76,29,149,0.2)] transition-[box-shadow,background-color] duration-500 hover:border-violet-400/45 hover:bg-violet-500/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
-                  >
-                    <Plus className="h-4 w-4" aria-hidden strokeWidth={2} />
-                    Add Habit
-                  </motion.button>
+                <div className="pb-1.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Rhythm</p>
+                  <h2 className="mt-2 font-serif text-2xl font-normal tracking-tight text-zinc-50 sm:text-[1.65rem]">My Habits</h2>
+                  <p className="mt-3 max-w-xl text-[15px] leading-[1.7] text-[var(--solace-muted)]">
+                    Build the life you gently choose, one moment at a time.
+                  </p>
                 </div>
 
                 {habits.length === 0 ? (
@@ -1233,7 +1246,7 @@ export function HabitTracker() {
               <MobileContinuation {...railProps} />
             </div>
 
-            <aside className="relative z-[10] hidden min-w-0 xl:block xl:sticky xl:top-[5rem] xl:self-start xl:rounded-[1.65rem] xl:ring-1 xl:ring-inset xl:ring-white/[0.015] xl:shadow-[inset_0_1px_0_rgba(255,255,255,0.018)]">
+            <aside className="relative z-[10] hidden min-w-0 xl:block xl:sticky  xl:self-start xl:rounded-[1.65rem] xl:ring-1 xl:ring-inset xl:ring-white/[0.015] xl:shadow-[inset_0_1px_0_rgba(255,255,255,0.018)]">
               <RightRailBlocks {...railProps} />
             </aside>
           </div>
