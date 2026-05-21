@@ -805,14 +805,14 @@ export function SupportRightRail() {
           to="/app/emergency-resources"
           className="mt-4 flex w-full items-center justify-center rounded-full bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-500 py-3.5 text-sm font-semibold text-white shadow-[0_0_32px_rgba(139,92,246,0.4),0_0_48px_-8px_rgba(236,72,153,0.3)] transition hover:shadow-[0_0_40px_rgba(168,85,247,0.5)]"
         >
-          Crisis Support
+         Emergency Resources
         </Link>
-        <Link
+        {/* <Link
           to="/app/emergency-resources"
           className="mt-3 block text-center text-xs font-medium text-violet-300/90 transition hover:text-violet-100"
         >
           Emergency Resources →
-        </Link>
+        </Link> */}
       </RailCard>
 
       <RailCard className="text-center" glow="hover:border-violet-400/20">
