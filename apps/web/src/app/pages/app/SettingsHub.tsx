@@ -574,7 +574,11 @@ export function SettingsHub() {
 
             <div className={cn(settingsCard, "relative overflow-hidden p-0")}>
               <div className="relative h-28 overflow-hidden">
-                <img src={SETTINGS_HELP_IMG} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={SETTINGS_HELP_IMG}
+                  alt="Calm mountain landscape at dusk with soft twilight light"
+                  className="h-full w-full object-cover object-[center_42%]"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0a0b18] via-[#0a0b18]/55 to-transparent" />
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_90%,rgba(251,146,60,0.18),transparent_60%)]" />
               </div>

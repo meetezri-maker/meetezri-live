@@ -1,7 +1,8 @@
 import { cn } from "@/lib/utils";
+import { SOLACE_SUPPORT_CARD_IMG } from "@/lib/solace/referenceImagery";
 
 export const SETTINGS_HERO_IMG = "/community/hero-lake.jpg";
-export const SETTINGS_HELP_IMG = "/community/scene-bedroom.jpg";
+export const SETTINGS_HELP_IMG = SOLACE_SUPPORT_CARD_IMG;
 
 export const settingsPageAtmosphere = cn(
   "relative min-h-full overflow-x-hidden pb-10 bg-[#0a0b18]"

@@ -1,8 +1,9 @@
 import { cn } from "@/lib/utils";
+import { SOLACE_SUPPORT_CARD_IMG } from "@/lib/solace/referenceImagery";
 import { settingsIconChip } from "@/app/pages/app/settings-hub/settingsUi";
 
 export const ACCOUNT_HERO_IMG = "/community/hero-lake.jpg";
-export const ACCOUNT_HELP_IMG = "/community/scene-bedroom.jpg";
+export const ACCOUNT_HELP_IMG = SOLACE_SUPPORT_CARD_IMG;
 
 /** Matte navy sanctuary base — not flat black */
 export const accountPageAtmosphere = cn(
@@ -251,7 +252,7 @@ export const accountRailProfileGlow = cn(
 );
 
 export const accountHelpImage = cn(
-  "absolute inset-0 size-full object-cover object-center",
+  "absolute inset-0 size-full object-cover object-[center_42%]",
   "brightness-[0.5] contrast-[0.95] saturate-[1.08]"
 );
 

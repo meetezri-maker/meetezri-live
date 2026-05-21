@@ -1680,7 +1680,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
             <div className={cn(accountRailCard, "relative min-h-[200px] overflow-hidden bg-transparent p-6 before:opacity-35")}>
               <img
                 src={ACCOUNT_HELP_IMG}
-                alt=""
+                alt="Calm mountain landscape at dusk with soft twilight light"
                 className={accountHelpImage}
                 width={400}
                 height={320}
