@@ -1002,13 +1002,16 @@ export function Billing() {
                 <img
                   src={HERO_SCENERY_SRC}
                   alt=""
-                  className="absolute inset-y-0 right-0 w-1/2 max-w-md object-cover opacity-35 sm:w-[42%]"
+                  className="absolute inset-0 size-full object-cover"
                   width={900}
                   height={600}
                   loading="lazy"
                   decoding="async"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-[#07080f] via-[#07080f]/92 to-transparent" />
+                <div
+                  className="absolute inset-0 bg-gradient-to-r from-[#07080f]/97 via-[#07080f]/88 to-[#07080f]/55"
+                  aria-hidden
+                />
                 <div className="relative flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:gap-6 sm:p-8">
                   <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/50 text-violet-200">
                     <Lock className="size-6" aria-hidden />
@@ -1115,9 +1118,19 @@ export function Billing() {
 
               {/* 5 Need help */}
               <div className={cn("relative overflow-hidden p-6", panel)}>
-                <div className="pointer-events-none absolute -right-4 bottom-0 h-28 w-36 opacity-40">
-                  <img src={HELP_SCENERY_SRC} alt="" className="size-full rounded-2xl object-cover" width={200} height={200} />
-                </div>
+                <img
+                  src={HELP_SCENERY_SRC}
+                  alt=""
+                  className="absolute inset-0 size-full object-cover"
+                  width={400}
+                  height={300}
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div
+                  className="absolute inset-0 bg-gradient-to-br from-[#07080f]/97 via-[#07080f]/90 to-[#07080f]/65"
+                  aria-hidden
+                />
                 <MessageCircle className="relative size-5 text-violet-300/90" aria-hidden />
                 <p className="relative mt-3 text-sm font-medium text-zinc-100">Need help?</p>
                 <p className="relative mt-2 max-w-[14rem] text-xs leading-relaxed text-zinc-500">

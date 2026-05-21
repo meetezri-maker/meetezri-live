@@ -31,6 +31,15 @@ const HERO_IMG = "/community/hero-lake.jpg";
 const BANNER_IMG = "/community/scene-water.jpg";
 const COMFORT_IMG = TALK_ENV_CANDLE;
 const LANTERN_IMG = "/community/scene-bedroom.jpg";
+const FOREST_IMG = "/community/scene-forest.jpg";
+const STARS_IMG = "/community/scene-stars.jpg";
+
+const actionCardShell = cn(
+  "group relative isolate flex min-h-[210px] flex-col overflow-hidden rounded-[24px]",
+  "border border-white/[0.09]",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_1px_rgba(168,85,247,0.1),0_24px_64px_-32px_rgba(0,0,0,0.88),0_0_40px_-24px_rgba(109,40,217,0.22)]",
+  "transition-all duration-500 hover:-translate-y-0.5"
+);
 
 /** Premium glass surface — translucent, glowing edges, depth */
 export const glassPanel = cn(
@@ -272,6 +281,9 @@ export function SupportHero({ backLink }: SupportHeroProps) {
 interface ActionCard {
   title: string;
   description: string;
+  image: string;
+  imagePosition?: string;
+  overlayTint: string;
   hoverGlow: string;
   iconGlow: string;
   iconRing: string;
@@ -295,6 +307,9 @@ export function SupportActionCards({
     {
       title: "Talk to Support",
       description: "Reach our caring team for personalized help with anything on your mind.",
+      image: BANNER_IMG,
+      imagePosition: "object-center",
+      overlayTint: "from-violet-950/50 via-[#05060c]/55 to-[#05060c]/80",
       hoverGlow: "hover:border-violet-400/25 hover:shadow-[0_0_40px_rgba(139,92,246,0.22),inset_0_1px_0_rgba(255,255,255,0.1)]",
       iconGlow: "from-violet-500/45 to-fuchsia-700/30",
       iconRing: "shadow-[0_0_24px_rgba(139,92,246,0.35)]",
@@ -304,6 +319,9 @@ export function SupportActionCards({
     {
       title: "Crisis Support",
       description: "Immediate help when you need it most. You are not alone.",
+      image: STARS_IMG,
+      imagePosition: "object-[center_40%]",
+      overlayTint: "from-fuchsia-950/45 via-[#05060c]/60 to-[#05060c]/85",
       hoverGlow: "hover:border-fuchsia-400/25 hover:shadow-[0_0_40px_rgba(236,72,153,0.2),inset_0_1px_0_rgba(255,255,255,0.1)]",
       iconGlow: "from-fuchsia-500/45 to-rose-700/30",
       iconRing: "shadow-[0_0_24px_rgba(236,72,153,0.32)]",
@@ -313,6 +331,9 @@ export function SupportActionCards({
     {
       title: "Resource Guide",
       description: "Explore guides, tutorials, and tools to support your wellbeing journey.",
+      image: FOREST_IMG,
+      imagePosition: "object-center",
+      overlayTint: "from-cyan-950/40 via-[#05060c]/55 to-[#05060c]/82",
       hoverGlow: "hover:border-cyan-400/25 hover:shadow-[0_0_40px_rgba(34,211,238,0.18),inset_0_1px_0_rgba(255,255,255,0.1)]",
       iconGlow: "from-cyan-500/45 to-blue-700/30",
       iconRing: "shadow-[0_0_24px_rgba(34,211,238,0.28)]",
@@ -322,6 +343,9 @@ export function SupportActionCards({
     {
       title: "Community Help",
       description: "Connect with others who understand. Share, listen, and grow together.",
+      image: HERO_IMG,
+      imagePosition: "object-[center_35%]",
+      overlayTint: "from-emerald-950/35 via-[#05060c]/50 to-[#05060c]/80",
       hoverGlow: "hover:border-teal-400/25 hover:shadow-[0_0_40px_rgba(45,212,191,0.18),inset_0_1px_0_rgba(255,255,255,0.1)]",
       iconGlow: "from-teal-500/45 to-emerald-700/30",
       iconRing: "shadow-[0_0_24px_rgba(45,212,191,0.28)]",
@@ -331,6 +355,9 @@ export function SupportActionCards({
     {
       title: "Safety Center",
       description: "Your safety matters. Access tools, plans, and resources to protect yourself.",
+      image: LANTERN_IMG,
+      imagePosition: "object-center",
+      overlayTint: "from-amber-950/40 via-[#05060c]/55 to-[#05060c]/85",
       hoverGlow: "hover:border-amber-400/25 hover:shadow-[0_0_40px_rgba(251,191,36,0.18),inset_0_1px_0_rgba(255,255,255,0.1)]",
       iconGlow: "from-amber-500/45 to-orange-700/30",
       iconRing: "shadow-[0_0_24px_rgba(251,191,36,0.28)]",
@@ -353,35 +380,57 @@ export function SupportActionCards({
         {cards.map((card) => {
           const inner = (
             <>
-              <motion.div
-                whileHover={{ scale: 1.05 }}
+              <img
+                src={card.image}
+                alt=""
+                className={cn("absolute inset-0 size-full object-cover", card.imagePosition)}
+                width={480}
+                height={320}
+                loading="lazy"
+                decoding="async"
+              />
+              <div
+                className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#05060c]/95 via-[#05060c]/72 to-[#05060c]/35"
+                aria-hidden
+              />
+              <div
                 className={cn(
-                  "flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br text-white",
-                  card.iconGlow,
-                  card.iconRing
+                  "pointer-events-none absolute inset-0 bg-gradient-to-br",
+                  card.overlayTint
                 )}
-              >
-                <card.Icon className="h-5 w-5" aria-hidden />
-              </motion.div>
-              <h3 className="mt-5 text-sm font-semibold leading-snug text-zinc-50">{card.title}</h3>
-              <p className="mt-2 flex-1 text-xs leading-relaxed text-zinc-500">{card.description}</p>
-              <span
-                className={cn(
-                  "absolute bottom-4 right-4 flex h-8 w-8 items-center justify-center rounded-full",
-                  "border border-white/10 bg-white/[0.05] text-zinc-400",
-                  "transition-all duration-300 group-hover:border-violet-400/35 group-hover:bg-violet-500/15 group-hover:text-violet-200 group-hover:shadow-[0_0_16px_rgba(139,92,246,0.25)]"
-                )}
-              >
-                <ArrowRight className="h-4 w-4" aria-hidden />
-              </span>
+                aria-hidden
+              />
+              <div
+                className="pointer-events-none absolute inset-0 shadow-[inset_0_0_60px_rgba(0,0,0,0.35)]"
+                aria-hidden
+              />
+              <div className="relative z-10 flex flex-1 flex-col p-5">
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  className={cn(
+                    "flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br text-white",
+                    card.iconGlow,
+                    card.iconRing
+                  )}
+                >
+                  <card.Icon className="h-5 w-5" aria-hidden />
+                </motion.div>
+                <h3 className="mt-5 text-sm font-semibold leading-snug text-zinc-50">{card.title}</h3>
+                <p className="mt-2 flex-1 text-xs leading-relaxed text-zinc-300/90">{card.description}</p>
+                <span
+                  className={cn(
+                    "absolute bottom-4 right-4 flex h-8 w-8 items-center justify-center rounded-full",
+                    "border border-white/10 bg-black/35 text-zinc-300 backdrop-blur-sm",
+                    "transition-all duration-300 group-hover:border-violet-400/35 group-hover:bg-violet-500/20 group-hover:text-violet-200 group-hover:shadow-[0_0_16px_rgba(139,92,246,0.25)]"
+                  )}
+                >
+                  <ArrowRight className="h-4 w-4" aria-hidden />
+                </span>
+              </div>
             </>
           );
 
-          const className = cn(
-            glassAccent(card.hoverGlow),
-            "group relative flex min-h-[210px] flex-col p-5",
-            "hover:-translate-y-0.5"
-          );
+          const className = cn(actionCardShell, card.hoverGlow);
 
           if (card.to) {
             return (

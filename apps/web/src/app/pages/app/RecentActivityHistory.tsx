@@ -155,6 +155,14 @@ export function RecentActivityHistory() {
     void refetch();
   };
 
+  const paginationDark = cn(
+    notificationsGlassCard,
+    "overflow-hidden p-0",
+    "[&_button]:border-white/10 [&_button]:bg-[rgba(12,14,30,0.9)] [&_button]:text-white/80",
+    "[&_select]:border-white/10 [&_select]:bg-[rgba(12,14,30,0.9)] [&_select]:text-violet-200",
+    "[&_span]:text-[rgba(255,255,255,0.55)]"
+  );
+
   if (isLoading) {
     return (
       <div className={notificationsPageAtmosphere}>
@@ -280,9 +288,8 @@ export function RecentActivityHistory() {
                 })}
               </div>
 
-              <div className={cn(notificationsGlassCard, "mt-4 overflow-hidden p-0")}>
+              <div className={cn(paginationDark, "mt-4")}>
                 <AdminPaginationBar
-                  variant="solace"
                   total={mapped.length}
                   page={safePage}
                   pageSize={pageSize}

@@ -713,7 +713,7 @@ export function LiveSessionsMonitor() {
                 onClick={() => setMonitoringSession(null)}
               >
                 <div
-                  className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+                  className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {/* Modal Header */}
@@ -869,7 +869,7 @@ export function LiveSessionsMonitor() {
                 onClick={() => setInterveningSession(null)}
               >
                 <div
-                  className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full"
+                  className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="p-6">

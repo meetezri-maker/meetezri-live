@@ -90,30 +90,6 @@ export const MOOD_CHECKIN_CARDS: MoodCheckInCard[] = [
 
   {
 
-    value: "sad",
-
-    label: "Sad",
-
-    micro: "Something feels heavy or tender inside.",
-
-    image: MOOD_CHECKIN_IMAGES.sad,
-
-  },
-
-  {
-
-    value: "angry",
-
-    label: "Angry",
-
-    micro: "Frustration or heat is rising in you.",
-
-    image: MOOD_CHECKIN_IMAGES.angry,
-
-  },
-
-  {
-
     value: "grateful",
 
     label: "Grateful",
@@ -218,13 +194,13 @@ export const INFLUENCE_CHIPS: InfluenceChip[] = [
 
   { value: "work", label: "Work" },
 
-  { value: "loneliness", label: "Loneliness" },
+  { value: "family", label: "Family" },
 
   { value: "health", label: "Health" },
 
   { value: "relationships", label: "Relationships" },
 
-  { value: "social_energy", label: "Social" },
+  { value: "social_energy", label: "Social Energy" },
 
   { value: "gratitude", label: "Gratitude" },
 
@@ -269,6 +245,10 @@ export function insightLabelForMoodKey(key: string): string {
   if (card) return card.label;
 
   const legacy: Record<string, string> = {
+
+    sad: "Sad",
+
+    angry: "Angry",
 
     neutral: "Neutral",
 

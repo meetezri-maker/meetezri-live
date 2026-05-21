@@ -11,6 +11,15 @@ export const WELLNESS_TOOLS_IMAGES = {
     relax: "/wellness-tools/6.png",
     sleep: "/wellness-tools/7.png",
   },
+  /** “How can we support you today?” quick-action pills */
+  support: {
+    calmAnxiety: "/wellness-tools/8.png",
+    sleepBetter: "/wellness-tools/12.png",
+    boostFocus: "/wellness-tools/3.png",
+    manageStress: "/wellness-tools/10.png",
+    liftMood: "/wellness-tools/13.png",
+    buildConfidence: "/wellness-tools/5.png",
+  },
   exercise: {
     "grounding-54321": "/wellness-tools/8.png",
     "stress-release-waves": "/wellness-tools/10.png",

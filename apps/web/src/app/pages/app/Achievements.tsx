@@ -26,6 +26,20 @@ import type { LucideIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import {
+  modalBodyText,
+  modalCheckboxLabel,
+  modalCloseButton,
+  modalInput,
+  modalLabel,
+  modalLink,
+  modalOverlay,
+  modalPanelLg,
+  modalPrimaryButton,
+  modalTabActive,
+  modalTabInactive,
+  modalTitle,
+} from '@/lib/modalTheme';
 import { ACHIEVEMENTS_IMAGES } from '@/lib/solace/achievementsImages';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { api } from '@/lib/api';
@@ -1983,8 +1997,8 @@ export function Achievements() {
             <aside className="min-w-0 space-y-5 xl:sticky xl:top-4 xl:self-start">
               <div className="rounded-3xl border border-white/[0.08] bg-[#0b101c]/90 p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Your Progress</p>
-                <div className="relative mx-auto mt-4 h-[136px] w-[136px] sm:h-40 sm:w-40">
-                  <svg className="-rotate-90" viewBox="0 0 100 100" width="144" height="144" aria-hidden>
+                <div className="relative mx-auto mt-4 size-36 overflow-hidden sm:size-40">
+                  <svg className="size-full -rotate-90" viewBox="0 0 100 100" aria-hidden>
                     <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
                     <circle
                       cx="50"
@@ -2003,9 +2017,13 @@ export function Achievements() {
                       </linearGradient>
                     </defs>
                   </svg>
-                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5">
-                    <p className="font-serif text-2xl font-semibold text-white sm:text-3xl">{overallCompletionPct}%</p>
-                    <p className="text-[10px] uppercase tracking-wider text-zinc-500">Overall completion</p>
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+                    <p className="font-serif text-xl font-semibold leading-none tabular-nums text-white sm:text-2xl">
+                      {overallCompletionPct}%
+                    </p>
+                    <p className="mt-1 max-w-[4.5rem] text-[9px] font-medium uppercase leading-tight tracking-wide text-zinc-500 sm:max-w-[5rem] sm:text-[10px]">
+                      Overall completion
+                    </p>
                   </div>
                 </div>
                 <p className="mt-4 text-xs text-zinc-400">
@@ -2136,21 +2154,21 @@ export function Achievements() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          className={modalOverlay}
           onClick={() => setShowCreateModal(false)}
         >
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             onClick={(e: React.MouseEvent<HTMLDivElement>) => e.stopPropagation()}
-            className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6"
+            className={cn(modalPanelLg, "max-h-[90vh] overflow-y-auto p-6")}
           >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Add your own achievement</h2>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className={modalTitle}>Add your own achievement</h2>
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="text-sm text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white"
+                className={modalCloseButton}
               >
                 Close
               </button>
@@ -2163,7 +2181,7 @@ export function Achievements() {
                   setPersonalGoalFormOpen(false);
                   setGoalTemplateKey('');
                 }}
-                className={`px-3 py-2 rounded-lg text-sm font-semibold ${activeAddTab === 'personal_goals' ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300'}`}
+                className={activeAddTab === 'personal_goals' ? modalTabActive : modalTabInactive}
               >
                 Personal Goals
               </button>
@@ -2174,7 +2192,7 @@ export function Achievements() {
                   setPersonalGoalFormOpen(false);
                   setGoalTemplateKey('');
                 }}
-                className={`px-3 py-2 rounded-lg text-sm font-semibold ${activeAddTab === 'personal_achievements' ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300'}`}
+                className={activeAddTab === 'personal_achievements' ? modalTabActive : modalTabInactive}
               >
                 Personal Achievements
               </button>
@@ -2184,7 +2202,7 @@ export function Achievements() {
               <>
                 {!personalGoalFormOpen ? (
                   <div className="space-y-3">
-                    <p className="text-sm text-gray-600 dark:text-slate-400">
+                    <p className={modalBodyText}>
                       Select a goal from the catalog (grouped by area), then continue to the form to add details and save.
                     </p>
                     <label htmlFor="achievement-goal-template" className="sr-only">
@@ -2204,7 +2222,7 @@ export function Achievements() {
                       type="button"
                       disabled={!goalTemplateKey}
                       onClick={openPersonalGoalFormFromTemplate}
-                      className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold hover:opacity-95 disabled:opacity-50 disabled:pointer-events-none"
+                      className={cn(modalPrimaryButton, "w-full sm:w-auto")}
                     >
                       Continue to form
                     </button>
@@ -2214,17 +2232,17 @@ export function Achievements() {
                 <button
                   type="button"
                   onClick={backToPersonalGoalTemplatePicker}
-                  className="mb-3 text-sm font-medium text-purple-600 dark:text-purple-400 hover:underline"
+                  className={cn("mb-3", modalLink)}
                 >
                   ← Change goal template
                 </button>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-title" className="text-xs font-medium text-gray-600 dark:text-slate-400">Goal Title</label>
-                    <input id="pg-title" type="text" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} placeholder="e.g. Build a daily meditation habit" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-title" className={modalLabel}>Goal Title</label>
+                    <input id="pg-title" type="text" value={goalTitle} onChange={(e) => setGoalTitle(e.target.value)} placeholder="e.g. Build a daily meditation habit" className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-category" className="text-xs font-medium text-gray-600 dark:text-slate-400">Category</label>
+                    <label htmlFor="pg-category" className={modalLabel}>Category</label>
                     <SolaceSelect
                       id="pg-category"
                       value={goalCategory}
@@ -2241,19 +2259,19 @@ export function Achievements() {
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-description" className="text-xs font-medium text-gray-600 dark:text-slate-400">Goal Description</label>
-                    <input id="pg-description" type="text" value={goalDescription} onChange={(e) => setGoalDescription(e.target.value)} placeholder="Briefly describe your goal" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-description" className={modalLabel}>Goal Description</label>
+                    <input id="pg-description" type="text" value={goalDescription} onChange={(e) => setGoalDescription(e.target.value)} placeholder="Briefly describe your goal" className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-why" className="text-xs font-medium text-gray-600 dark:text-slate-400">Why This Goal Matters</label>
-                    <input id="pg-why" type="text" value={goalWhyItMatters} onChange={(e) => setGoalWhyItMatters(e.target.value)} placeholder="What motivates you to pursue this?" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-why" className={modalLabel}>Why This Goal Matters</label>
+                    <input id="pg-why" type="text" value={goalWhyItMatters} onChange={(e) => setGoalWhyItMatters(e.target.value)} placeholder="What motivates you to pursue this?" className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-outcome" className="text-xs font-medium text-gray-600 dark:text-slate-400">Target Outcome</label>
-                    <input id="pg-outcome" type="text" value={goalTargetOutcome} onChange={(e) => setGoalTargetOutcome(e.target.value)} placeholder="What does success look like?" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-outcome" className={modalLabel}>Target Outcome</label>
+                    <input id="pg-outcome" type="text" value={goalTargetOutcome} onChange={(e) => setGoalTargetOutcome(e.target.value)} placeholder="What does success look like?" className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-priority" className="text-xs font-medium text-gray-600 dark:text-slate-400">Priority Level</label>
+                    <label htmlFor="pg-priority" className={modalLabel}>Priority Level</label>
                     <SolaceSelect
                       id="pg-priority"
                       value={goalPriority}
@@ -2268,19 +2286,19 @@ export function Achievements() {
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-start" className="text-xs font-medium text-gray-600 dark:text-slate-400">Start Date</label>
-                    <input id="pg-start" type="date" value={goalStartDate} onChange={(e) => setGoalStartDate(e.target.value)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-start" className={modalLabel}>Start Date</label>
+                    <input id="pg-start" type="date" value={goalStartDate} onChange={(e) => setGoalStartDate(e.target.value)} className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-target" className="text-xs font-medium text-gray-600 dark:text-slate-400">Target Date</label>
-                    <input id="pg-target" type="date" value={goalTargetDate} onChange={(e) => setGoalTargetDate(e.target.value)} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-target" className={modalLabel}>Target Date</label>
+                    <input id="pg-target" type="date" value={goalTargetDate} onChange={(e) => setGoalTargetDate(e.target.value)} className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-progress" className="text-xs font-medium text-gray-600 dark:text-slate-400">Current Progress (0–100%)</label>
-                    <input id="pg-progress" type="number" min={0} max={100} value={goalProgress} onChange={(e) => setGoalProgress(e.target.value)} placeholder="0" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-progress" className={modalLabel}>Current Progress (0–100%)</label>
+                    <input id="pg-progress" type="number" min={0} max={100} value={goalProgress} onChange={(e) => setGoalProgress(e.target.value)} placeholder="0" className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-frequency" className="text-xs font-medium text-gray-600 dark:text-slate-400">Check-in Frequency</label>
+                    <label htmlFor="pg-frequency" className={modalLabel}>Check-in Frequency</label>
                     <SolaceSelect
                       id="pg-frequency"
                       value={goalCheckInFrequency}
@@ -2297,11 +2315,11 @@ export function Achievements() {
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-actions" className="text-xs font-medium text-gray-600 dark:text-slate-400">Small Action Steps</label>
-                    <input id="pg-actions" type="text" value={goalActionSteps} onChange={(e) => setGoalActionSteps(e.target.value)} placeholder="Comma-separated steps, e.g. Read 10 pages, Journal 5 min" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-actions" className={modalLabel}>Small Action Steps</label>
+                    <input id="pg-actions" type="text" value={goalActionSteps} onChange={(e) => setGoalActionSteps(e.target.value)} placeholder="Comma-separated steps, e.g. Read 10 pages, Journal 5 min" className={modalInput} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-mood" className="text-xs font-medium text-gray-600 dark:text-slate-400">Emotion Tag</label>
+                    <label htmlFor="pg-mood" className={modalLabel}>Emotion Tag</label>
                     <SolaceSelect
                       id="pg-mood"
                       value={goalMoodTag}
@@ -2318,7 +2336,7 @@ export function Achievements() {
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-support" className="text-xs font-medium text-gray-600 dark:text-slate-400">Support Type Needed</label>
+                    <label htmlFor="pg-support" className={modalLabel}>Support Type Needed</label>
                     <SolaceSelect
                       id="pg-support"
                       value={goalSupportType}
@@ -2336,15 +2354,15 @@ export function Achievements() {
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="pg-notes" className="text-xs font-medium text-gray-600 dark:text-slate-400">Notes / Journal Entry</label>
-                    <input id="pg-notes" type="text" value={goalNotes} onChange={(e) => setGoalNotes(e.target.value)} placeholder="Any additional notes (optional)" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                    <label htmlFor="pg-notes" className={modalLabel}>Notes / Journal Entry</label>
+                    <input id="pg-notes" type="text" value={goalNotes} onChange={(e) => setGoalNotes(e.target.value)} placeholder="Any additional notes (optional)" className={modalInput} />
                   </div>
                 </div>
-                <label className="mt-3 flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
+                <label className={cn("mt-3", modalCheckboxLabel)}>
                   <input type="checkbox" checked={goalReminderEnabled} onChange={(e) => setGoalReminderEnabled(e.target.checked)} />
                   Reminder Enabled
                 </label>
-                <button type="button" onClick={addPersonalGoalFromTab} className="mt-4 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold hover:opacity-95">
+                <button type="button" onClick={addPersonalGoalFromTab} className={cn(modalPrimaryButton, "mt-4")}>
                   Save Personal Goal
                 </button>
                   </>
@@ -2353,10 +2371,10 @@ export function Achievements() {
             ) : (
               <>
                 <div className="grid grid-cols-1 gap-3">
-                  <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Achievement Title" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
-                  <input type="text" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="Achievement Description" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white" />
+                  <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Achievement Title" className={modalInput} />
+                  <input type="text" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="Achievement Description" className={modalInput} />
                 </div>
-                <button type="button" onClick={addPersonalAchievementFromTab} className="mt-4 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold hover:opacity-95">
+                <button type="button" onClick={addPersonalAchievementFromTab} className={cn(modalPrimaryButton, "mt-4")}>
                   Save Personal Achievement
                 </button>
               </>

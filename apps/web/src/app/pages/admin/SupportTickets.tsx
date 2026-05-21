@@ -113,7 +113,7 @@ function CompactModal({
     >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <motion.div
-        className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-md"
+        className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
         initial={{ scale: 0.95, y: 8 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.95, y: 8 }}
@@ -170,7 +170,7 @@ function TicketDetailModal({
     >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <motion.div
-        className="relative z-10 bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col"
+        className="relative z-10 w-full max-w-2xl rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] max-h-[90vh] flex flex-col"
         initial={{ scale: 0.96, y: 12 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.96, y: 12 }}

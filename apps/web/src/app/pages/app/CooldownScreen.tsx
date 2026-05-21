@@ -308,7 +308,7 @@ function CooldownFooter() {
         <span>Made with care for your wellbeing</span>
       </div>
       <p className="text-xs text-[rgba(255,255,255,0.32)]">
-        Solace v1.0.0 • © 2024 •{" "}
+        Solace v1.0.0 • © 2026 •{" "}
         <Link to="/privacy" className="underline-offset-2 hover:text-violet-300/80 hover:underline">
           Privacy
         </Link>{" "}

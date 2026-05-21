@@ -19,6 +19,12 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import {
+  modalCloseButton,
+  modalInput,
+  modalPrimaryButton,
+  modalSecondaryButton,
+} from "@/lib/modalTheme";
 import { SolaceSelect } from "@/app/solace";
 import {
   SanctuaryPageShell,
@@ -504,18 +510,18 @@ export function HelpSupport() {
               onClick={(e) => e.stopPropagation()}
               className={cn(glassPanel, "w-full max-w-4xl overflow-hidden")}
             >
-              <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-gray-100 dark:border-slate-700">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
+              <div className="flex items-center justify-between gap-4 border-b border-white/10 px-6 py-5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600">
                     {selectedResource === "User Guide" ? (
-                      <BookOpen className="w-6 h-6 text-white" />
+                      <BookOpen className="size-6 text-white" />
                     ) : (
-                      <ExternalLink className="w-6 h-6 text-white" />
+                      <ExternalLink className="size-6 text-white" />
                     )}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">Help Resource</div>
-                    <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Help Resource</div>
+                    <h3 className="truncate font-serif text-xl font-semibold text-zinc-50 sm:text-2xl">
                       {selectedResource}
                     </h3>
                   </div>
@@ -523,14 +529,14 @@ export function HelpSupport() {
                 <button
                   type="button"
                   onClick={() => setShowResourceModal(false)}
-                  className="inline-flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                  className={cn(modalCloseButton, "inline-flex size-10 shrink-0 items-center justify-center")}
                   aria-label="Close"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="size-5" />
                 </button>
               </div>
 
-              <div className="px-6 py-6 max-h-[78vh] overflow-y-auto">
+              <div className="max-h-[78vh] overflow-y-auto px-6 py-6 text-zinc-300">
                 {selectedResource === "User Guide" ? (
                   <div className="text-left">
                     <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5 mb-5">
@@ -814,14 +820,17 @@ export function HelpSupport() {
               onClick={(e) => e.stopPropagation()}
               className={cn(glassPanel, "w-full max-w-3xl overflow-hidden")}
             >
-              <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-gray-100 dark:border-slate-700">
+              <div className="flex items-center justify-between gap-4 border-b border-white/10 px-6 py-5">
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">Support ticket</div>
-                  <div className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 truncate">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Support ticket</div>
+                  <div className="truncate font-serif text-lg font-semibold text-zinc-50 sm:text-xl">
                     {activeTicket?.subject || "Loading…"}
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                    Status: <span className="font-semibold">{activeTicket?.status || "open"}</span>
+                  <div className="mt-1 text-xs text-zinc-400">
+                    Status:{" "}
+                    <span className="font-semibold capitalize text-zinc-200">
+                      {activeTicket?.status || "open"}
+                    </span>
                   </div>
                 </div>
                 <button
@@ -832,18 +841,16 @@ export function HelpSupport() {
                     setActiveTicket(null);
                     setTicketReply("");
                   }}
-                  className="inline-flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                  className={cn(modalCloseButton, "inline-flex size-10 shrink-0 items-center justify-center")}
                   aria-label="Close"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="size-5" />
                 </button>
               </div>
 
-              <div className="px-6 py-5 max-h-[62vh] overflow-y-auto space-y-3 bg-gray-50 dark:bg-slate-950">
+              <div className="max-h-[62vh] space-y-3 overflow-y-auto px-6 py-5">
                 {(activeTicket?.support_ticket_messages || []).length === 0 ? (
-                  <div className="text-sm text-gray-600 dark:text-gray-400 py-8 text-center">
-                    No messages yet.
-                  </div>
+                  <div className="py-8 text-center text-sm text-zinc-500">No messages yet.</div>
                 ) : (
                   (activeTicket?.support_ticket_messages || []).map((m: any) => {
                     const byMe = m?.author_role === "user";
@@ -851,17 +858,16 @@ export function HelpSupport() {
                     return (
                       <div
                         key={m.id}
-                        className={`rounded-2xl border ${
+                        className={cn(
+                          "rounded-2xl border p-4",
                           byMe
-                            ? "border-blue-200 dark:border-blue-900/40 bg-white dark:bg-slate-900"
-                            : "border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900"
-                        } p-4`}
+                            ? "border-violet-400/25 bg-violet-500/[0.08]"
+                            : "border-white/10 bg-white/[0.04]",
+                        )}
                       >
-                        <div className="flex items-center justify-between gap-3 mb-2">
-                          <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-                            {name}
-                          </div>
-                          <div className="text-[11px] text-gray-500 dark:text-gray-400 shrink-0">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <div className="truncate text-sm font-semibold text-zinc-100">{name}</div>
+                          <div className="shrink-0 text-[11px] text-zinc-500">
                             {(() => {
                               try {
                                 return formatDistanceToNow(parseISO(m.created_at), { addSuffix: true });
@@ -871,26 +877,24 @@ export function HelpSupport() {
                             })()}
                           </div>
                         </div>
-                        <div className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
-                          {m.body}
-                        </div>
+                        <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">{m.body}</div>
                       </div>
                     );
                   })
                 )}
               </div>
 
-              <div className="px-6 py-5 border-t border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-900">
+              <div className="border-t border-white/10 px-6 py-5">
                 <div className="flex flex-col gap-3">
                   <textarea
                     value={ticketReply}
                     onChange={(e) => setTicketReply(e.target.value)}
                     rows={3}
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className={cn(modalInput, "resize-none")}
                     placeholder="Write a reply…"
                     disabled={ticketReplySending}
                   />
-                  <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <button
                       type="button"
                       onClick={async () => {
@@ -907,7 +911,7 @@ export function HelpSupport() {
                           setClosingTicket(false);
                         }
                       }}
-                      className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-sm font-semibold disabled:opacity-60"
+                      className={cn(modalSecondaryButton, "text-sm disabled:opacity-60")}
                       disabled={closingTicket || !activeTicketId}
                     >
                       {closingTicket ? "Closing..." : "Close ticket"}
@@ -930,10 +934,10 @@ export function HelpSupport() {
                           setTicketReplySending(false);
                         }
                       }}
-                      className="px-4 py-2.5 rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 text-sm font-semibold disabled:opacity-60"
+                      className={cn(modalPrimaryButton, "gap-2 disabled:opacity-60")}
                       disabled={ticketReplySending || !ticketReply.trim() || !activeTicketId}
                     >
-                      <Send className="w-4 h-4" />
+                      <Send className="size-4" />
                       {ticketReplySending ? "Sending..." : "Send reply"}
                     </button>
                   </div>

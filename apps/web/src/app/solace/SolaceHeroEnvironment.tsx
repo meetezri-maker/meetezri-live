@@ -43,7 +43,7 @@ export function SolaceHeroEnvironment({
         <img
           src={imageSrc}
           alt={imageAlt}
-          className={cn("absolute inset-0 h-full w-full object-cover", imageClassName)}
+          className={cn("absolute inset-0 z-0 h-full w-full object-cover", imageClassName)}
           width={1600}
           height={900}
         />
@@ -55,41 +55,66 @@ export function SolaceHeroEnvironment({
       )}
 
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_70%_at_70%_90%,rgba(251,191,36,0.18),transparent_55%)]"
+        className={cn(
+          "pointer-events-none absolute inset-0 z-[1]",
+          cinematicDepth
+            ? "bg-[radial-gradient(ellipse_90%_70%_at_70%_90%,rgba(251,191,36,0.12),transparent_55%)]"
+            : "bg-[radial-gradient(ellipse_90%_70%_at_70%_90%,rgba(251,191,36,0.18),transparent_55%)]"
+        )}
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,rgba(168,85,247,0.22),transparent_50%)]"
+        className={cn(
+          "pointer-events-none absolute inset-0 z-[1]",
+          cinematicDepth
+            ? "bg-[radial-gradient(ellipse_at_20%_0%,rgba(168,85,247,0.14),transparent_50%)]"
+            : "bg-[radial-gradient(ellipse_at_20%_0%,rgba(168,85,247,0.22),transparent_50%)]"
+        )}
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_100%_30%,rgba(236,72,153,0.14),transparent_45%)]"
+        className={cn(
+          "pointer-events-none absolute inset-0 z-[1]",
+          cinematicDepth
+            ? "bg-[radial-gradient(ellipse_at_100%_30%,rgba(236,72,153,0.08),transparent_45%)]"
+            : "bg-[radial-gradient(ellipse_at_100%_30%,rgba(236,72,153,0.14),transparent_45%)]"
+        )}
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(5,8,22,0.35)_0%,rgba(5,8,22,0.75)_45%,rgba(5,8,22,0.92)_100%)]"
+        className={cn(
+          "pointer-events-none absolute inset-0 z-[1]",
+          cinematicDepth
+            ? "bg-[linear-gradient(180deg,rgba(5,8,22,0.12)_0%,rgba(5,8,22,0.42)_50%,rgba(5,8,22,0.72)_100%)]"
+            : "bg-[linear-gradient(180deg,rgba(5,8,22,0.35)_0%,rgba(5,8,22,0.75)_45%,rgba(5,8,22,0.92)_100%)]"
+        )}
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-0 shadow-[inset_0_0_120px_rgba(0,0,0,0.55)]"
+        className={cn(
+          "pointer-events-none absolute inset-0 z-[1]",
+          cinematicDepth
+            ? "shadow-[inset_0_0_80px_rgba(0,0,0,0.32)]"
+            : "shadow-[inset_0_0_120px_rgba(0,0,0,0.55)]"
+        )}
         aria-hidden
       />
       {cinematicDepth ? (
         <>
           <div
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_50%_42%_at_78%_18%,rgba(196,181,253,0.22),transparent_58%)]"
+            className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_50%_42%_at_78%_18%,rgba(196,181,253,0.14),transparent_58%)]"
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_45%_38%_at_12%_88%,rgba(251,191,36,0.14),transparent_52%)]"
+            className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_45%_38%_at_12%_88%,rgba(251,191,36,0.1),transparent_52%)]"
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(49,46,129,0.28)_0%,rgba(15,10,35,0.55)_42%,rgba(5,6,16,0.88)_100%)]"
+            className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(180deg,rgba(49,46,129,0.14)_0%,rgba(15,10,35,0.32)_45%,rgba(5,6,16,0.62)_100%)]"
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(139,92,246,0.12),transparent)]"
+            className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-20 bg-[linear-gradient(180deg,rgba(139,92,246,0.08),transparent)]"
             aria-hidden
           />
         </>

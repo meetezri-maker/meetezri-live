@@ -477,7 +477,7 @@ function ChallengesTab() {
             onClick={() => setShowCreateModal(false)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
               onClick={e => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">New Challenge</h3>
                 <Button variant="ghost" size="sm" onClick={() => setShowCreateModal(false)}><X className="w-4 h-4" /></Button>
@@ -559,7 +559,7 @@ function ChallengesTab() {
             onClick={() => setEditModal(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
               onClick={e => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">Edit Challenge</h3>
                 <Button variant="ghost" size="sm" onClick={() => setEditModal(null)}><X className="w-4 h-4" /></Button>
@@ -641,7 +641,7 @@ function ChallengesTab() {
             onClick={() => setViewStatsModal(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
               onClick={e => e.stopPropagation()}
-              className="bg-white rounded-2xl p-6 max-w-md w-full">
+              className="w-full max-w-md p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-xl font-bold">Challenge Stats</h3>
                 <Button variant="ghost" size="sm" onClick={() => setViewStatsModal(null)}><X className="w-4 h-4" /></Button>
@@ -888,7 +888,7 @@ function BadgesTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setShowCreateModal(false)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              onClick={e => e.stopPropagation()} className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-2xl font-bold">New Achievement</h3>
                 <Button variant="ghost" size="sm" onClick={() => setShowCreateModal(false)}><X className="w-4 h-4" /></Button>
@@ -928,7 +928,7 @@ function BadgesTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setEditModal(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              onClick={e => e.stopPropagation()} className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-2xl font-bold">Edit Achievement</h3>
                 <Button variant="ghost" size="sm" onClick={() => setEditModal(null)}><X className="w-4 h-4" /></Button>
@@ -968,7 +968,7 @@ function BadgesTab() {
             className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
             onClick={() => setViewStatsModal(null)}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()} className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              onClick={e => e.stopPropagation()} className="w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 rounded-3xl border border-white/10 bg-[#0b0d14] shadow-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-2xl font-bold">Achievement Stats</h3>
                 <Button variant="ghost" size="sm" onClick={() => setViewStatsModal(null)}><X className="w-4 h-4" /></Button>
