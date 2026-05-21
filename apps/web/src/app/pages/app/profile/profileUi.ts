@@ -154,7 +154,8 @@ export function formatSubscriptionPlanLabel(plan: string | undefined | null): st
   const raw = String(plan || "").trim().toLowerCase();
   if (!raw) return "Member plan";
   if (raw === "trial") return "Trial plan";
-  if (raw === "core" || raw === "pro") return "Core plan";
+  if (raw === "core") return "Core plan";
+  if (raw === "pro") return "Pro plan";
   if (raw === "basic") return "Basic plan";
   if (raw.includes("premium")) return "Premium plan";
   return raw.charAt(0).toUpperCase() + raw.slice(1).replace(/_/g, " ");

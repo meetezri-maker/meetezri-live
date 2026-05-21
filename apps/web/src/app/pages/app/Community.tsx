@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
+  COMMUNITY_CIRCLE_CARD_IMAGES,
   COMMUNITY_IMAGES,
   communityPostSceneForId,
 } from "@/lib/solace/communityImages";
@@ -36,6 +37,7 @@ import {
   Bookmark,
   Filter,
   Check,
+  Eye,
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -49,6 +51,13 @@ import { SolaceSelect } from "@/app/solace";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { EmojiText } from "@/components/ui/EmojiText";
+import { Skeleton } from "@/app/components/ui/skeleton";
+import {
+  computeCommunityPulsePercent,
+  communityPulseDetailFromSignals,
+  communityPulseHeadlineFromPercent,
+  sentimentSignalsFromTexts,
+} from "@/lib/communityPulse";
 
 type FeedPost = {
   id: string;
@@ -75,11 +84,27 @@ function normalizeCommunityTopicLabel(value: string): string {
     .replace(/\s+/g, " ");
 }
 
-/** Tags shown under a post as hashtags — excludes any tag that duplicates the category line. */
-function feedHashtagsExcludingDisplayedCategory(post: FeedPost): string[] {
+const COMMUNITY_POST_CATEGORIES = [
+  "General Discussion",
+  "Wins & Progress",
+  "Support & Advice",
+  "Professional Insights",
+  "Community Events",
+] as const;
+
+/** Hashtags the member typed — excludes category and preset category values stored in `tags`. */
+function userEnteredHashtags(post: FeedPost): string[] {
   const catKey = normalizeCommunityTopicLabel(post.category ?? "");
-  if (!catKey) return post.tags;
-  return post.tags.filter((tag) => normalizeCommunityTopicLabel(tag) !== catKey);
+  const presetCategoryKeys = new Set(
+    COMMUNITY_POST_CATEGORIES.map((c) => normalizeCommunityTopicLabel(c)),
+  );
+  return (post.tags ?? []).filter((tag) => {
+    const key = normalizeCommunityTopicLabel(tag);
+    if (!key) return false;
+    if (catKey && key === catKey) return false;
+    if (presetCategoryKeys.has(key)) return false;
+    return true;
+  });
 }
 
 type FeedGroup = {
@@ -125,6 +150,12 @@ type Overview = {
   groups: number;
   comments: number;
   activeNow: number;
+  totalLikes?: number;
+  recentPosts7d?: number;
+  pulsePercent?: number | null;
+  pulsePositive?: number;
+  pulseNegative?: number;
+  pulseNeutral?: number;
   trendingTags: { tag: string; posts: number }[];
 };
 
@@ -139,6 +170,7 @@ const SUPPORT_SPACES: ReadonlyArray<{
   Icon: LucideIcon;
   glow: string;
   iconWrap: string;
+  image: string;
 }> = [
   {
     title: "Anxiousness Support",
@@ -146,6 +178,7 @@ const SUPPORT_SPACES: ReadonlyArray<{
     Icon: Cloud,
     glow: "from-sky-500/25 via-indigo-500/10 to-transparent",
     iconWrap: "bg-sky-400/20 text-sky-200 shadow-[0_0_24px_rgba(56,189,248,0.35)]",
+    image: COMMUNITY_CIRCLE_CARD_IMAGES[0]!,
   },
   {
     title: "Late Night Thoughts",
@@ -153,6 +186,7 @@ const SUPPORT_SPACES: ReadonlyArray<{
     Icon: Moon,
     glow: "from-indigo-500/30 via-violet-900/20 to-transparent",
     iconWrap: "bg-indigo-400/20 text-indigo-100 shadow-[0_0_24px_rgba(129,140,248,0.4)]",
+    image: COMMUNITY_CIRCLE_CARD_IMAGES[1]!,
   },
   {
     title: "Quiet Wins",
@@ -160,6 +194,7 @@ const SUPPORT_SPACES: ReadonlyArray<{
     Icon: Star,
     glow: "from-amber-400/20 via-fuchsia-500/15 to-transparent",
     iconWrap: "bg-amber-300/20 text-amber-100 shadow-[0_0_22px_rgba(251,191,36,0.35)]",
+    image: COMMUNITY_CIRCLE_CARD_IMAGES[2]!,
   },
   {
     title: "Sleep Circle",
@@ -167,6 +202,7 @@ const SUPPORT_SPACES: ReadonlyArray<{
     Icon: Sparkles,
     glow: "from-violet-500/25 via-slate-500/10 to-transparent",
     iconWrap: "bg-violet-400/20 text-violet-100 shadow-[0_0_24px_rgba(167,139,250,0.4)]",
+    image: COMMUNITY_CIRCLE_CARD_IMAGES[3]!,
   },
   {
     title: "Burnout Recovery",
@@ -174,6 +210,7 @@ const SUPPORT_SPACES: ReadonlyArray<{
     Icon: Flame,
     glow: "from-orange-400/20 via-rose-500/15 to-transparent",
     iconWrap: "bg-orange-300/20 text-orange-100 shadow-[0_0_22px_rgba(251,146,60,0.35)]",
+    image: COMMUNITY_CIRCLE_CARD_IMAGES[4]!,
   },
   {
     title: "Healing Journey",
@@ -181,22 +218,14 @@ const SUPPORT_SPACES: ReadonlyArray<{
     Icon: Flower2,
     glow: "from-emerald-400/15 via-fuchsia-500/20 to-transparent",
     iconWrap: "bg-emerald-400/15 text-emerald-100 shadow-[0_0_22px_rgba(52,211,153,0.3)]",
+    image: COMMUNITY_CIRCLE_CARD_IMAGES[5]!,
   },
 ];
 
 const FEED_PAGE_SIZE = 10;
 const PULSE_GAUGE_RADIUS = 48;
 const PULSE_GAUGE_ARC_LENGTH = Math.PI * PULSE_GAUGE_RADIUS;
-const PULSE_RECENT_MS = 48 * 60 * 60 * 1000;
-
-const COMMUNITY_POST_CATEGORIES = [
-  "General Discussion",
-  "Wins & Progress",
-  "Support & Advice",
-  "Professional Insights",
-  "Community Events",
-] as const;
-
+const PULSE_RECENT_MS = 7 * 24 * 60 * 60 * 1000;
 
 function findGroupForCircleTitle(title: string, groups: FeedGroup[]): FeedGroup | undefined {
   const t = title.toLowerCase();
@@ -229,8 +258,7 @@ function pickGroupCircleIcon(group: FeedGroup): LucideIcon {
 }
 
 function primaryEmotionalTag(post: FeedPost): string | null {
-  const extra = feedHashtagsExcludingDisplayedCategory(post);
-  const raw = extra[0] ?? post.tags?.[0] ?? null;
+  const raw = userEnteredHashtags(post)[0] ?? null;
   if (!raw) return null;
   return raw.replace(/^#/, "").trim() || null;
 }
@@ -251,64 +279,76 @@ function isRecentCommunityPost(createdAt: string, nowMs: number): boolean {
   }
 }
 
-function computeCommunityPulse(overview: Overview | null, posts: FeedPost[]): CommunityPulse {
+function buildPulseSignalsFromFeed(
+  posts: FeedPost[],
+  commentsByPostId: Record<string, PostComment[]>,
+): ReturnType<typeof sentimentSignalsFromTexts> {
+  const texts: string[] = [];
   const nowMs = Date.now();
-  const recentPosts = posts.filter((p) => isRecentCommunityPost(p.createdAt, nowMs));
-  const recentLikes = recentPosts.reduce((sum, p) => sum + p.likes, 0);
-  const recentComments = recentPosts.reduce((sum, p) => sum + p.comments, 0);
-  const recentPostCount = recentPosts.length;
+  for (const post of posts) {
+    if (!isRecentCommunityPost(post.createdAt, nowMs)) continue;
+    texts.push(post.content);
+    for (const comment of commentsByPostId[post.id] ?? []) {
+      texts.push(comment.content);
+    }
+  }
+  return sentimentSignalsFromTexts(texts);
+}
 
-  const hasFeedSignal = recentPostCount > 0 || recentLikes > 0 || recentComments > 0;
-  const hasOverviewSignal =
-    overview != null &&
-    (overview.posts > 0 || overview.comments > 0 || overview.activeNow > 0);
-
-  if (!hasFeedSignal && !hasOverviewSignal) {
+function computeCommunityPulse(
+  overview: Overview | null,
+  posts: FeedPost[],
+  commentsByPostId: Record<string, PostComment[]>,
+): CommunityPulse {
+  const postCount = Math.max(overview?.posts ?? 0, posts.length);
+  if (postCount <= 0 && posts.length === 0) {
     return {
       percent: null,
       headline: "",
-      detail: "We'll show a gentle pulse once there's a little more activity to reflect on.",
+      detail: "We'll show a gentle pulse once there's a little more conversation to reflect on.",
     };
   }
 
-  const replyRate =
-    recentPostCount > 0 ? Math.min(1, recentComments / Math.max(recentPostCount * 2, 1)) : 0;
-  const warmthRate =
-    recentPostCount > 0 ? Math.min(1, recentLikes / Math.max(recentPostCount * 3, 1)) : 0;
-  const presenceRate = overview
-    ? Math.min(1, overview.activeNow / Math.max(Math.min(overview.members, 12), 3))
-    : 0;
-  const overviewEngagement =
-    overview && overview.posts > 0
-      ? Math.min(1, overview.comments / Math.max(overview.posts * 2, 1))
-      : 0;
+  const fallbackPulse = computeCommunityPulsePercent({
+    signals: buildPulseSignalsFromFeed(posts, commentsByPostId),
+    totalPosts: postCount,
+  });
 
-  const blended = hasFeedSignal
-    ? replyRate * 0.4 + warmthRate * 0.35 + presenceRate * 0.25
-    : overviewEngagement * 0.6 + presenceRate * 0.4;
+  const scoredSignals =
+    fallbackPulse.positive + fallbackPulse.negative + fallbackPulse.neutral;
+  /** Prefer live feed text so edits/deletes update the gauge immediately. */
+  const useFeedPulse = posts.length > 0 && scoredSignals > 0;
 
-  const percent = Math.round(Math.min(96, Math.max(34, 38 + blended * 58)));
+  const positive = useFeedPulse
+    ? fallbackPulse.positive
+    : (overview?.pulsePositive ?? fallbackPulse.positive);
+  const negative = useFeedPulse
+    ? fallbackPulse.negative
+    : (overview?.pulseNegative ?? fallbackPulse.negative);
+  const neutral = useFeedPulse
+    ? fallbackPulse.neutral
+    : (overview?.pulseNeutral ?? fallbackPulse.neutral);
+  const overviewPercent =
+    overview?.pulsePercent != null ? Number(overview.pulsePercent) : null;
+  const percent = useFeedPulse
+    ? fallbackPulse.percent
+    : overviewPercent != null && Number.isFinite(overviewPercent)
+      ? overviewPercent
+      : fallbackPulse.percent;
 
-  let headline = "The community is quietly present today.";
-  if (percent >= 78) headline = "Positive energy is growing today.";
-  else if (percent >= 62) headline = "Support is flowing gently through the feed.";
-  else if (percent >= 48) headline = "A calm space — room for your voice.";
-
-  let detail = "Shaped by recent replies and people showing up gently.";
-  if (recentComments > 0 || recentLikes > 0) {
-    const parts: string[] = [];
-    if (recentComments > 0) {
-      parts.push(`${recentComments} recent ${recentComments === 1 ? "reply" : "replies"}`);
-    }
-    if (recentLikes > 0) {
-      parts.push(`${recentLikes} ${recentLikes === 1 ? "reaction" : "reactions"}`);
-    }
-    detail = `Shaped by ${parts.join(" and ")} in the last couple of days.`;
-  } else if (overview && overview.activeNow > 0) {
-    detail = `${overview.activeNow} ${overview.activeNow === 1 ? "person" : "people"} showed up recently — your voice can spark the next wave.`;
+  if (percent == null) {
+    return {
+      percent: null,
+      headline: "",
+      detail: "We'll show a gentle pulse once there's a little more conversation to reflect on.",
+    };
   }
 
-  return { percent, headline, detail };
+  return {
+    percent,
+    headline: communityPulseHeadlineFromPercent(percent),
+    detail: communityPulseDetailFromSignals({ positive, negative, neutral }),
+  };
 }
 
 function emotionalSocialProofLine(post: FeedPost): string | null {
@@ -335,6 +375,81 @@ function CinematicEnter({ children, delay = 0, className }: CinematicEnterProps)
     >
       {children}
     </motion.div>
+  );
+}
+
+function CommunityLoadingSkeleton() {
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-[#06060f] text-slate-100">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(109,40,217,0.35)_0%,transparent_50%),radial-gradient(ellipse_at_100%_0%,rgba(236,72,153,0.12)_0%,transparent_45%),radial-gradient(ellipse_at_0%_100%,rgba(56,189,248,0.08)_0%,transparent_40%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.4)_0%,transparent_35%,rgba(2,6,23,0.85)_100%)]" />
+
+      <div className="relative z-10 mx-auto max-w-[1720px] px-4 pb-24 pt-8 sm:px-6 sm:pt-10 lg:px-10">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <Skeleton className="h-11 w-11 shrink-0 rounded-2xl bg-white/[0.06]" />
+            <div className="space-y-2">
+              <Skeleton className="h-9 w-40 rounded-lg bg-white/[0.07]" />
+              <Skeleton className="h-4 w-64 max-w-full rounded-md bg-white/[0.05]" />
+            </div>
+          </div>
+          <Skeleton className="h-11 w-32 shrink-0 rounded-full bg-white/[0.06]" />
+        </div>
+
+        <Skeleton className="mb-8 h-14 w-full rounded-[24px] bg-white/[0.04]" />
+
+        <Skeleton className="mb-10 min-h-[280px] w-full rounded-[28px] bg-white/[0.06] lg:min-h-[300px]" />
+
+        <div className="mb-10">
+          <div className="mb-4 space-y-2">
+            <Skeleton className="h-6 w-36 rounded-md bg-white/[0.07]" />
+            <Skeleton className="h-4 w-72 max-w-full rounded-md bg-white/[0.05]" />
+          </div>
+          <div className="flex gap-3 overflow-hidden pb-2">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-[168px] w-[148px] shrink-0 rounded-2xl bg-white/[0.06] sm:w-[158px]" />
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+          <div className="flex gap-2">
+            <Skeleton className="h-11 w-24 rounded-full bg-white/[0.06]" />
+            <Skeleton className="h-11 w-28 rounded-full bg-white/[0.06]" />
+            <Skeleton className="h-11 w-28 rounded-full bg-white/[0.06]" />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+            <Skeleton className="h-11 min-h-[44px] flex-1 rounded-full bg-white/[0.06]" />
+            <Skeleton className="h-11 w-24 shrink-0 rounded-full bg-white/[0.06]" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,2.15fr)_minmax(280px,1fr)] lg:items-start lg:gap-10">
+          <div className="min-w-0 space-y-5">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-[220px] w-full rounded-3xl bg-white/[0.06]" />
+            ))}
+            <Skeleton className="h-32 w-full rounded-[26px] bg-white/[0.05]" />
+          </div>
+          <div className="space-y-6">
+            <Skeleton className="h-56 w-full rounded-[26px] bg-white/[0.06]" />
+            <Skeleton className="h-40 w-full rounded-[26px] bg-white/[0.06]" />
+            <Skeleton className="h-48 w-full rounded-[26px] bg-white/[0.06]" />
+          </div>
+        </div>
+      </div>
+      <span className="sr-only">Loading community</span>
+    </div>
+  );
+}
+
+function CommunityFeedPostsSkeleton() {
+  return (
+    <div className="space-y-5" aria-busy="true" aria-label="Loading posts">
+      {[0, 1, 2].map((i) => (
+        <Skeleton key={i} className="h-[220px] w-full rounded-3xl bg-white/[0.06]" />
+      ))}
+    </div>
   );
 }
 
@@ -667,6 +782,7 @@ export function Community() {
       setCommentsByPostId((m) => ({ ...m, [postId]: Array.isArray(latest) ? latest : [] }));
       cancelEditComment(postId);
       toast.success("Comment updated");
+      void loadMeta();
     } catch {
       toast.error("Could not update comment");
     } finally {
@@ -695,6 +811,7 @@ export function Community() {
       await api.deleteCommunityPost(post.id);
       setPostsData((prev) => prev.filter((p) => p.id !== post.id));
       toast.success("Post deleted");
+      void loadMeta();
     } catch {
       toast.error("Could not delete post");
     }
@@ -703,16 +820,20 @@ export function Community() {
   const startEditPost = (post: FeedPost) => {
     setEditingPostId(post.id);
     setEditDraft(post.content);
-    setEditTagsDraft(post.tags.join(", "));
+    setEditTagsDraft(userEnteredHashtags(post).join(", "));
   };
 
   const saveEditPost = async (postId: string) => {
     if (!editDraft.trim()) return;
-    const nextTags = editTagsDraft
+    const userTags = editTagsDraft
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean)
-      .slice(0, 20);
+      .slice(0, 19);
+    const post = postsData.find((p) => p.id === postId);
+    const nextTags = post
+      ? [post.category, ...userTags].map((t) => t.trim()).filter(Boolean).slice(0, 20)
+      : userTags;
     setEditSaving(true);
     try {
       await api.updateCommunityPost(postId, editDraft.trim(), nextTags);
@@ -725,6 +846,7 @@ export function Community() {
       setEditDraft("");
       setEditTagsDraft("");
       toast.success("Post updated");
+      void loadMeta();
     } catch {
       toast.error("Could not update post");
     } finally {
@@ -857,8 +979,8 @@ export function Community() {
     : { members: 0, posts: 0, groups: 0, activeNow: 0 };
 
   const communityPulse = useMemo(
-    () => computeCommunityPulse(overview, postsData),
-    [overview, postsData],
+    () => computeCommunityPulse(overview, postsData, commentsByPostId),
+    [overview, postsData, commentsByPostId],
   );
   const pulseArcFilled =
     communityPulse.percent != null
@@ -866,14 +988,7 @@ export function Community() {
       : 0;
 
   if (loadingPosts && postsData.length === 0) {
-    return (
-      <div className="relative flex min-h-[50vh] items-center justify-center overflow-hidden bg-[#06060f]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_20%,rgba(139,92,246,0.25)_0%,transparent_55%),radial-gradient(ellipse_at_80%_80%,rgba(236,72,153,0.12)_0%,transparent_50%)]" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.03)_0%,transparent_70%)]" />
-        <Loader2 className="relative h-10 w-10 animate-spin text-violet-300 drop-shadow-[0_0_20px_rgba(167,139,250,0.6)]" aria-hidden />
-        <span className="sr-only">Loading community</span>
-      </div>
-    );
+    return <CommunityLoadingSkeleton />;
   }
 
   return (
@@ -1037,17 +1152,27 @@ export function Community() {
                         setActiveTab("groups");
                         if (groupsData.length === 0) void loadMeta({ includeGroups: true });
                       }}
-                      className="group relative flex h-full min-h-[168px] w-full flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-white/[0.04] p-3.5 text-left shadow-[0_20px_50px_-40px_rgba(0,0,0,0.85)] transition-all duration-300 hover:border-violet-400/35 hover:shadow-[0_0_32px_-8px_rgba(168,85,247,0.35)]"
+                      className="group relative flex h-full min-h-[168px] w-full flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-[#050816] p-3.5 text-left shadow-[0_20px_50px_-40px_rgba(0,0,0,0.85)] transition-all duration-300 hover:border-violet-400/35 hover:shadow-[0_0_32px_-8px_rgba(168,85,247,0.35)]"
                     >
+                      <img
+                        src={space.image}
+                        alt=""
+                        width={316}
+                        height={336}
+                        loading="lazy"
+                        decoding="async"
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
                       <div
                         className={cn(
-                          "pointer-events-none absolute inset-0 opacity-55 transition-opacity duration-300 group-hover:opacity-80",
+                          "pointer-events-none absolute inset-0 opacity-45 transition-opacity duration-300 group-hover:opacity-60",
                           "bg-gradient-to-br",
                           space.glow,
                         )}
                       />
-                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050816]/90 via-[#050816]/35 to-transparent" />
-                      <div className="relative flex flex-1 flex-col">
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050816]/95 via-[#050816]/55 to-[#050816]/25" />
+                      <div className="relative z-10 flex flex-1 flex-col">
                         <div className={cn("mb-2 inline-flex h-9 w-9 items-center justify-center rounded-lg", space.iconWrap)}>
                           <Icon className="h-4 w-4" strokeWidth={1.5} />
                         </div>
@@ -1245,16 +1370,14 @@ export function Community() {
             <div className="min-w-0 space-y-5">
               {activeTab === "feed" &&
                 (loadingPosts ? (
-                  <div className="flex justify-center py-20">
-                    <Loader2 className="h-9 w-9 animate-spin text-fuchsia-300/80 drop-shadow-[0_0_20px_rgba(217,70,239,0.45)]" />
-                  </div>
+                  <CommunityFeedPostsSkeleton />
                 ) : filteredPosts.length === 0 ? (
                   <div className="rounded-3xl border border-dashed border-white/15 bg-white/[0.03] py-20 text-center text-violet-200/55 backdrop-blur-md">
                     No posts yet. Be the first to share—or check back soon.
                   </div>
                 ) : (
                   pagedFeedPosts.map((post, index) => {
-                    const hashtagsForDisplay = feedHashtagsExcludingDisplayedCategory(post);
+                    const userTags = userEnteredHashtags(post);
                     const proofLine = emotionalSocialProofLine(post);
                     const moodTag = primaryEmotionalTag(post);
                     const postSceneSrc = communityPostSceneForId(post.id);
@@ -1266,9 +1389,11 @@ export function Community() {
                       }
                     })();
                     const extraTags =
-                      moodTag && hashtagsForDisplay.length
-                        ? hashtagsForDisplay.filter((t) => normalizeCommunityTopicLabel(t) !== normalizeCommunityTopicLabel(moodTag))
-                        : hashtagsForDisplay;
+                      moodTag && userTags.length > 1
+                        ? userTags.filter((t) => normalizeCommunityTopicLabel(t) !== normalizeCommunityTopicLabel(moodTag))
+                        : moodTag
+                          ? []
+                          : userTags;
 
                     const headerLeft = (
                       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -1393,7 +1518,7 @@ export function Community() {
                                       value={editTagsDraft}
                                       onChange={(e) => setEditTagsDraft(e.target.value)}
                                       className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white backdrop-blur-sm focus:border-fuchsia-400/40 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/20"
-                                      placeholder="e.g. General Discussion, anxiety, support"
+                                      placeholder="e.g. anxiety, support, gratitude"
                                     />
                                   </div>
                                   <div className="flex justify-end gap-2">
@@ -1466,22 +1591,7 @@ export function Community() {
 
                                 {proofLine ? (
                                   <div className="hidden min-w-0 flex-1 items-center justify-center gap-2 px-2 sm:flex">
-                                    <div className="flex -space-x-1.5">
-                                      {postsData.slice(0, 4).map((p) => (
-                                        <div
-                                          key={`pf-${post.id}-${p.id}`}
-                                          className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full ring-2 ring-[#050816]"
-                                        >
-                                          {p.author.avatarUrl ? (
-                                            <img src={p.author.avatarUrl} alt="" className="h-full w-full object-cover" />
-                                          ) : (
-                                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/90 to-indigo-900 text-[8px] font-bold text-white">
-                                              {initials(p.author.name)}
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
+                                    <Eye className="h-4 w-4 shrink-0 text-fuchsia-300/70" aria-hidden />
                                     <p className="truncate text-center text-[11px] font-medium text-fuchsia-200/75">{proofLine}</p>
                                   </div>
                                 ) : (
@@ -1513,22 +1623,7 @@ export function Community() {
 
                               {proofLine ? (
                                 <div className="mt-2 flex items-center gap-2 border-t border-transparent pt-0 sm:hidden">
-                                  <div className="flex -space-x-1.5">
-                                    {postsData.slice(0, 3).map((p) => (
-                                      <div
-                                        key={`pm-${post.id}-${p.id}`}
-                                        className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full ring-2 ring-[#050816]"
-                                      >
-                                        {p.author.avatarUrl ? (
-                                          <img src={p.author.avatarUrl} alt="" className="h-full w-full object-cover" />
-                                        ) : (
-                                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/90 to-indigo-900 text-[8px] font-bold text-white">
-                                            {initials(p.author.name)}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
+                                  <Eye className="h-4 w-4 shrink-0 text-fuchsia-300/70" aria-hidden />
                                   <p className="text-[11px] font-medium text-fuchsia-200/75">{proofLine}</p>
                                 </div>
                               ) : null}
@@ -1937,15 +2032,32 @@ export function Community() {
               )}
 
               <CinematicEnter delay={0.15} className="mt-10">
-                <div className="relative overflow-hidden rounded-[26px] border border-fuchsia-400/20 bg-gradient-to-br from-violet-950/50 to-[#0c0c16] p-6 shadow-[0_0_48px_-12px_rgba(192,38,211,0.35)]">
-                  <div className="pointer-events-none absolute -right-8 top-0 h-32 w-32 rounded-full bg-fuchsia-500/20 blur-3xl" />
-                  <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center">
-                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/30 text-fuchsia-200/90 shadow-[inset_0_0_24px_rgba(244,114,182,0.12)]">
+                <div className="relative overflow-hidden rounded-[26px] border border-fuchsia-400/20 shadow-[0_0_48px_-12px_rgba(192,38,211,0.35)]">
+                  <img
+                    src={COMMUNITY_IMAGES.togetherness}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    width={960}
+                    height={400}
+                    className="absolute inset-0 h-full w-full object-cover object-center"
+                    aria-hidden
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#050816]/92 via-[#050816]/72 to-[#050816]/40"
+                    aria-hidden
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050816]/55 via-transparent to-[#1e1b4b]/30"
+                    aria-hidden
+                  />
+                  <div className="relative z-10 flex flex-col gap-4 p-6 sm:flex-row sm:items-center">
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/40 text-fuchsia-200/90 shadow-[inset_0_0_24px_rgba(244,114,182,0.12)] backdrop-blur-sm">
                       <Heart className="h-9 w-9" strokeWidth={1.25} />
                     </div>
                     <div className="min-w-0 flex-1 space-y-2">
                       <p className="text-[11px] font-medium uppercase tracking-[0.25em] text-fuchsia-200/60">You matter here</p>
-                      <p className="text-lg font-medium leading-snug text-white">Your voice is a lantern — someone needs that light.</p>
+                      <p className="text-lg font-medium leading-snug text-white">Your voice might be the reason someone smiles today.</p>
                       <p className="text-sm text-violet-200/50">There is no wrong way to show up gently.</p>
                     </div>
                     <motion.button
@@ -1966,7 +2078,7 @@ export function Community() {
               <CinematicEnter delay={0.05}>
                 <div className="rounded-[26px] border border-fuchsia-500/20 bg-[rgba(15,18,32,0.82)] p-6 shadow-[0_24px_80px_-40px_rgba(0,0,0,0.75)] backdrop-blur-xl">
                   <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-200/70">Community Pulse</h3>
-                  {loadingMeta && communityPulse.percent == null ? (
+                  {loadingMeta && overview == null ? (
                     <div className="mb-4 flex justify-center py-6">
                       <Loader2 className="h-6 w-6 animate-spin text-fuchsia-300/70" aria-hidden />
                       <span className="sr-only">Loading community pulse</span>
@@ -2000,7 +2112,6 @@ export function Community() {
                           <path
                             d="M 12 60 A 48 48 0 0 1 108 60"
                             fill="none"
-                            pathLength={PULSE_GAUGE_ARC_LENGTH}
                             stroke="rgba(255,255,255,0.08)"
                             strokeWidth="10"
                             strokeLinecap="round"
@@ -2009,12 +2120,11 @@ export function Community() {
                             <path
                               d="M 12 60 A 48 48 0 0 1 108 60"
                               fill="none"
-                              pathLength={PULSE_GAUGE_ARC_LENGTH}
                               stroke="url(#communityPulseArcGrad)"
                               strokeWidth="10"
                               strokeLinecap="round"
                               strokeDasharray={`${pulseArcFilled} ${PULSE_GAUGE_ARC_LENGTH}`}
-                              className="transition-[stroke-dasharray] duration-700 ease-out"
+                              style={{ transition: "stroke-dasharray 0.7s ease-out" }}
                             />
                           ) : null}
                         </svg>
@@ -2041,29 +2151,11 @@ export function Community() {
               <CinematicEnter delay={0.1}>
                 <div className="rounded-[26px] border border-white/10 bg-[rgba(15,18,32,0.82)] p-6 backdrop-blur-xl">
                   <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-violet-200/70">Active Now</h3>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex -space-x-2">
-                      {postsData.slice(0, 6).map((p) => (
-                        <div
-                          key={`active-${p.id}`}
-                          className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-[#0b0b14]"
-                        >
-                          {p.author.avatarUrl ? (
-                            <img src={p.author.avatarUrl} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/90 to-indigo-900 text-[10px] font-bold text-white">
-                              {initials(p.author.name)}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    {stats.activeNow > 0 ? (
-                      <span className="rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-xs font-medium text-violet-100/85">
-                        {stats.activeNow.toLocaleString()} online
-                      </span>
-                    ) : null}
-                  </div>
+                  {stats.activeNow > 0 ? (
+                    <span className="inline-flex rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-xs font-medium text-violet-100/85">
+                      {stats.activeNow.toLocaleString()} online
+                    </span>
+                  ) : null}
                   <p className="mt-3 text-sm leading-relaxed text-[#A7A1B8]">
                     {stats.activeNow > 0
                       ? "People supporting each other right now."

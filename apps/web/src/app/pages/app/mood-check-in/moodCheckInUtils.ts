@@ -1,4 +1,101 @@
-import { format, startOfDay, subDays } from "date-fns";
+import {
+  eachDayOfInterval,
+  endOfDay,
+  endOfMonth,
+  format,
+  startOfDay,
+  startOfMonth,
+  subDays,
+  subMonths,
+} from "date-fns";
+
+export type MoodPatternPeriod = "this_week" | "last_week" | "last_month";
+
+export const MOOD_PATTERN_PERIOD_OPTIONS: { value: MoodPatternPeriod; label: string }[] = [
+  { value: "this_week", label: "This week" },
+  { value: "last_week", label: "Last week" },
+  { value: "last_month", label: "Last month" },
+];
+
+export function moodPatternPeriodBounds(period: MoodPatternPeriod, now = new Date()): {
+  start: Date;
+  end: Date;
+} {
+  const today = startOfDay(now);
+
+  if (period === "this_week") {
+    return { start: subDays(today, 6), end: endOfDay(now) };
+  }
+  if (period === "last_week") {
+    return { start: subDays(today, 13), end: endOfDay(subDays(today, 7)) };
+  }
+  const prevMonth = subMonths(now, 1);
+  return { start: startOfMonth(prevMonth), end: endOfMonth(prevMonth) };
+}
+
+export function filterMoodEntriesInPeriod(
+  entries: MoodEntryLite[],
+  period: MoodPatternPeriod,
+  now = new Date(),
+): MoodEntryLite[] {
+  const { start, end } = moodPatternPeriodBounds(period, now);
+  return entries.filter((e) => {
+    const d = new Date(e.created_at);
+    return !Number.isNaN(d.getTime()) && d >= start && d <= end;
+  });
+}
+
+export function topMoodKeyInEntries(entries: MoodEntryLite[]): { count: number; topKey: string } {
+  if (entries.length === 0) return { count: 0, topKey: "" };
+  const counts = new Map<string, number>();
+  for (const e of entries) {
+    const key = String(e.mood ?? "")
+      .toLowerCase()
+      .trim();
+    if (!key) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  let bestKey = "";
+  let bestCount = 0;
+  for (const [k, c] of counts) {
+    if (c > bestCount) {
+      bestCount = c;
+      bestKey = k;
+    }
+  }
+  return { count: entries.length, topKey: bestKey };
+}
+
+export function intensitySeriesForPeriod(
+  entries: MoodEntryLite[],
+  period: MoodPatternPeriod,
+  now = new Date(),
+): { day: string; avg: number; short: string }[] {
+  const { start, end } = moodPatternPeriodBounds(period, now);
+  const byDay = new Map<string, number[]>();
+  for (const e of entries) {
+    const d = new Date(e.created_at);
+    if (Number.isNaN(d.getTime()) || d < start || d > end) continue;
+    const k = format(startOfDay(d), "yyyy-MM-dd");
+    const v = typeof e.intensity === "number" && Number.isFinite(e.intensity) ? e.intensity : 5;
+    if (!byDay.has(k)) byDay.set(k, []);
+    byDay.get(k)!.push(v);
+  }
+
+  const days = eachDayOfInterval({ start, end });
+  const shortFmt = period === "last_month" ? "MMM d" : "EEE";
+
+  return days.map((d) => {
+    const k = format(d, "yyyy-MM-dd");
+    const arr = byDay.get(k);
+    const avg = arr?.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+    return {
+      day: k,
+      avg: Math.round(avg * 10) / 10,
+      short: format(d, shortFmt),
+    };
+  });
+}
 
 export interface MoodEntryLite {
   mood: string;
@@ -30,27 +127,7 @@ export function computeCheckInStreak(entries: MoodEntryLite[]): number {
   return streak;
 }
 
+/** @deprecated Use intensitySeriesForPeriod(entries, "this_week") */
 export function weeklyIntensitySeries(entries: MoodEntryLite[]) {
-  const byDay = new Map<string, number[]>();
-  for (const e of entries) {
-    const d = new Date(e.created_at);
-    if (Number.isNaN(d.getTime())) continue;
-    const k = format(startOfDay(d), "yyyy-MM-dd");
-    const v = typeof e.intensity === "number" && Number.isFinite(e.intensity) ? e.intensity : 5;
-    if (!byDay.has(k)) byDay.set(k, []);
-    byDay.get(k)!.push(v);
-  }
-  const out: { day: string; avg: number; short: string }[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = subDays(startOfDay(new Date()), i);
-    const k = format(d, "yyyy-MM-dd");
-    const arr = byDay.get(k);
-    const avg = arr?.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-    out.push({
-      day: k,
-      avg: Math.round(avg * 10) / 10,
-      short: format(d, "EEE"),
-    });
-  }
-  return out;
+  return intensitySeriesForPeriod(entries, "this_week");
 }

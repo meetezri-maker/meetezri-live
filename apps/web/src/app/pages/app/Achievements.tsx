@@ -211,20 +211,13 @@ function parseMoodForApi(selected: string, fallback?: Achievement['moodTag']): s
   return mapMoodTagToGoalEmotionTag(fallback);
 }
 
-const RARITY_RANK: Record<Achievement['rarity'], number> = {
-  common: 0,
-  rare: 1,
-  epic: 2,
-  legendary: 3,
-};
-
 /** Maps a selected achievement to a journey node index for local preview (no backend). */
 function journeyIndexFromSelectedAchievement(a: Achievement): number {
   const total = Math.max(1, a.total);
   const ratio = a.progress / total;
   if (a.unlocked) {
-    if (a.rarity === 'legendary') return 4;
-    if (a.rarity === 'epic' || a.rarity === 'rare') return 3;
+    if (ratio >= 1 && a.points >= 50) return 4;
+    if (ratio >= 1) return 3;
     return 2;
   }
   if (ratio <= 0.2) return 0;
@@ -275,7 +268,6 @@ function VaultParticles({ className }: VaultParticlesProps) {
 export function Achievements() {
   const { profile } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedRarity, setSelectedRarity] = useState<'all' | Achievement['rarity']>('all');
   const [showAllAchievements, setShowAllAchievements] = useState(false);
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
   const [wellnessExercises, setWellnessExercises] = useState(0);
@@ -284,7 +276,7 @@ export function Achievements() {
   useEffect(() => {
     setShowAllAchievements(false);
     setSelectedAchievement(null);
-  }, [selectedCategory, selectedRarity]);
+  }, [selectedCategory]);
 
   const [communityPosts, setCommunityPosts] = useState(0);
   const [customAchievements, setCustomAchievements] = useState<Achievement[]>([]);
@@ -592,28 +584,15 @@ export function Achievements() {
     { id: 'personal', label: 'Personal', icon: Star },
   ];
 
-  const rarityFilters: { id: 'all' | Achievement['rarity']; label: string }[] = [
-    { id: 'all', label: 'All Rarities' },
-    { id: 'common', label: 'Common' },
-    { id: 'rare', label: 'Rare' },
-    { id: 'epic', label: 'Epic' },
-    { id: 'legendary', label: 'Legendary' },
-  ];
-
   const filteredAchievements = useMemo(() => {
-    let list =
-      selectedCategory === 'all'
-        ? achievements
-        : selectedCategory === 'personal'
-          ? achievements.filter((a) =>
-              ['personal', 'self_improvement', 'professional'].includes(a.category)
-            )
-          : achievements.filter((a) => a.category === selectedCategory);
-    if (selectedRarity !== 'all') {
-      list = list.filter((a) => a.rarity === selectedRarity);
+    if (selectedCategory === 'all') return achievements;
+    if (selectedCategory === 'personal') {
+      return achievements.filter((a) =>
+        ['personal', 'self_improvement', 'professional'].includes(a.category)
+      );
     }
-    return list;
-  }, [achievements, selectedCategory, selectedRarity]);
+    return achievements.filter((a) => a.category === selectedCategory);
+  }, [achievements, selectedCategory]);
 
   const recentUnlocked = useMemo(() => {
     const unlocked = achievements.filter((a) => a.unlocked);
@@ -625,21 +604,9 @@ export function Achievements() {
         const maxD = h.reduce((best, d) => (d > best ? d : best), h[0]);
         t = new Date(`${maxD}T12:00:00`).getTime();
       }
-      return t * 10 + RARITY_RANK[a.rarity] * 1000 + a.points;
+      return t * 10 + a.points;
     };
     return unlocked.reduce((best, a) => (score(a) >= score(best) ? a : best), unlocked[0]);
-  }, [achievements]);
-
-  const rarestUnlock = useMemo(() => {
-    const unlocked = achievements.filter((a) => a.unlocked);
-    if (unlocked.length === 0) return null;
-    return unlocked.reduce((best, a) =>
-      RARITY_RANK[a.rarity] > RARITY_RANK[best.rarity]
-        ? a
-        : RARITY_RANK[a.rarity] === RARITY_RANK[best.rarity] && a.points > best.points
-          ? a
-          : best
-    );
   }, [achievements]);
 
   const overallCompletionPct =
@@ -679,19 +646,8 @@ export function Achievements() {
 
   const pointsToNext = Math.max(0, nextPointsMilestone - stats.totalPoints);
 
-  const rarityVaultGlow = {
-    common: 'border-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
-    rare: 'border-cyan-400/20 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]',
-    epic: 'border-fuchsia-400/22 shadow-[0_0_0_1px_rgba(192,132,252,0.14)]',
-    legendary: 'border-amber-400/25 shadow-[0_0_0_1px_rgba(251,191,36,0.16)]',
-  };
-
-  const rarityPillStyle: Record<Achievement['rarity'], string> = {
-    common: 'text-zinc-200/90 bg-white/[0.05] ring-1 ring-white/10',
-    rare: 'text-cyan-100/95 bg-cyan-500/10 ring-1 ring-cyan-400/22',
-    epic: 'text-fuchsia-100/95 bg-fuchsia-500/10 ring-1 ring-fuchsia-400/25',
-    legendary: 'text-amber-50/95 bg-amber-500/12 ring-1 ring-amber-400/28',
-  };
+  const unlockedEmblemClass =
+    'border-white/10 bg-gradient-to-br from-white/[0.07] to-black/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]';
 
   const iconMap: Record<string, LucideIcon> = {
     footprints: Target,
@@ -1172,14 +1128,6 @@ export function Achievements() {
     document.getElementById(`ach-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
-  const handleViewAllRarities = () => {
-    setSelectedRarity('all');
-    document.getElementById('achievement-rarity-filters')?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest',
-    });
-  };
-
   const journeyNodes: {
     key: string;
     label: string;
@@ -1197,7 +1145,6 @@ export function Achievements() {
     stats.totalCount > 0 ? Math.min(100, (stats.unlockedCount / stats.totalCount) * 100) : 0;
 
   const FeaturedIcon = recentUnlocked ? getIcon(recentUnlocked.icon) : Trophy;
-  const RarestIcon = rarestUnlock ? getIcon(rarestUnlock.icon) : Trophy;
 
   return (
     <>
@@ -1319,58 +1266,29 @@ export function Achievements() {
                 </div>
               </section>
 
-              {/* Category + rarity filters */}
-              <div className="space-y-3">
-                <div className="-mx-1 flex gap-2 overflow-x-auto pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible">
-                  {categories.map((category) => {
-                    const Icon = category.icon;
-                    const isActive = selectedCategory === category.id;
-                    return (
-                      <motion.button
-                        key={category.id}
-                        type="button"
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setSelectedCategory(category.id)}
-                        className={cn(
-                          'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-medium transition-colors sm:px-3 sm:py-1.5',
-                          isActive
-                            ? 'border-fuchsia-400/30 bg-fuchsia-950/40 text-white shadow-[0_0_20px_-8px_rgba(168,85,247,0.35)]'
-                            : 'border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:border-white/15 hover:bg-white/[0.05] hover:text-zinc-200'
-                        )}
-                      >
-                        <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
-                        {category.label}
-                      </motion.button>
-                    );
-                  })}
-                </div>
-                <div
-                  id="achievement-rarity-filters"
-                  className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible"
-                >
-                  <span className="hidden shrink-0 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 sm:inline">
-                    Rarity
-                  </span>
-                  {rarityFilters.map((r) => {
-                    const isActive = selectedRarity === r.id;
-                    return (
-                      <motion.button
-                        key={r.id}
-                        type="button"
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setSelectedRarity(r.id)}
-                        className={cn(
-                          'inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-wide transition sm:min-h-0 sm:px-3 sm:py-1.5',
-                          isActive
-                            ? 'border-fuchsia-400/28 bg-white/[0.1] text-white'
-                            : 'border-white/[0.08] bg-white/[0.03] text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-300'
-                        )}
-                      >
-                        {r.label}
-                      </motion.button>
-                    );
-                  })}
-                </div>
+              {/* Category filters */}
+              <div className="-mx-1 flex gap-2 overflow-x-auto pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible">
+                {categories.map((category) => {
+                  const Icon = category.icon;
+                  const isActive = selectedCategory === category.id;
+                  return (
+                    <motion.button
+                      key={category.id}
+                      type="button"
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setSelectedCategory(category.id)}
+                      className={cn(
+                        'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-medium transition-colors sm:px-3 sm:py-1.5',
+                        isActive
+                          ? 'border-fuchsia-400/30 bg-fuchsia-950/40 text-white shadow-[0_0_20px_-8px_rgba(168,85,247,0.35)]'
+                          : 'border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:border-white/15 hover:bg-white/[0.05] hover:text-zinc-200'
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+                      {category.label}
+                    </motion.button>
+                  );
+                })}
               </div>
 
               {/* Recently unlocked */}
@@ -1447,8 +1365,6 @@ export function Achievements() {
                     const isUnlocked = achievement.unlocked;
                     const total = Math.max(1, achievement.total);
                     const pct = Math.min(100, (achievement.progress / total) * 100);
-                    const glow = rarityVaultGlow[achievement.rarity];
-                    const pill = rarityPillStyle[achievement.rarity];
                     const isSelected = selectedAchievement?.id === achievement.id;
                     const showProgressBar = !isUnlocked && achievement.progress < total;
 
@@ -1483,7 +1399,7 @@ export function Achievements() {
                             className={cn(
                               'relative flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-2xl border transition',
                               isUnlocked
-                                ? cn('border-white/10 bg-gradient-to-br from-white/[0.07] to-black/45', glow)
+                                ? unlockedEmblemClass
                                 : 'border-white/[0.06] bg-black/50 opacity-75 saturate-[0.7]'
                             )}
                           >
@@ -1511,15 +1427,6 @@ export function Achievements() {
                               {achievement.description}
                             </p>
                           </div>
-
-                          <span
-                            className={cn(
-                              'inline-flex items-center justify-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider',
-                              pill
-                            )}
-                          >
-                            {achievement.rarity}
-                          </span>
 
                           {showProgressBar ? (
                             <div className="w-full space-y-1 px-1">
@@ -1612,12 +1519,7 @@ export function Achievements() {
                   {selectedAchievement.unlocked ? (
                     <>
                       Earned and held — the path ahead stays lit through{' '}
-                      <span className="text-zinc-300">{journeyNodes[journeyHighlightIndex]?.label ?? 'today'}</span>
-                      {selectedAchievement.rarity === 'legendary' ? (
-                        <span className="text-amber-200/90"> — a rare crown moment in your vault.</span>
-                      ) : (
-                        '.'
-                      )}
+                      <span className="text-zinc-300">{journeyNodes[journeyHighlightIndex]?.label ?? 'today'}</span>.
                     </>
                   ) : (
                     <>
@@ -2060,43 +1962,6 @@ export function Achievements() {
                 <p className="mt-1.5 text-[10px] text-zinc-600">
                   Next reward · {nextPointsMilestone.toLocaleString()} pts
                 </p>
-              </div>
-
-              <div className="rounded-3xl border border-amber-400/18 bg-[linear-gradient(145deg,rgba(251,191,36,0.07),rgba(12,18,28,0.92))] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-200/85">Rarest Unlocked</p>
-                {rarestUnlock ? (
-                  <>
-                    <div className="mt-3 flex items-center gap-3">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-500/25 to-orange-950/40 shadow-[0_0_18px_-8px_rgba(251,191,36,0.35)]">
-                        <RarestIcon className="h-6 w-6 text-amber-50" aria-hidden />
-                      </div>
-                      <div className="min-w-0 text-left">
-                        <p className="truncate font-serif text-base font-semibold text-white">{rarestUnlock.title}</p>
-                        <p className="text-[11px] capitalize text-amber-200/75">{rarestUnlock.rarity}</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleViewAllRarities}
-                      className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-full border border-white/[0.1] bg-black/30 px-4 text-xs font-semibold text-zinc-200 transition hover:border-fuchsia-400/25 hover:bg-white/[0.05]"
-                    >
-                      View All Rarities
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                      Your rarest unlock will appear here.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleViewAllRarities}
-                      className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-full border border-white/[0.1] bg-black/30 px-4 text-xs font-semibold text-zinc-400 transition hover:border-fuchsia-400/25 hover:text-zinc-200"
-                    >
-                      View All Rarities
-                    </button>
-                  </>
-                )}
               </div>
 
               <div className="rounded-3xl border border-orange-400/15 bg-[#0b101c]/90 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">

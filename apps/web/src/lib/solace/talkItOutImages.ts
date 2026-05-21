@@ -45,22 +45,22 @@ export const TALK_IT_OUT_ENVIRONMENT_THUMBS: {
   value: string;
 }[] = [
   {
-    label: "Night Lake",
+    label: "Minimal Luxe Pedestal",
     image: TALK_IT_OUT_IMAGES.environmentNightLake,
     value: "mountains",
   },
   {
-    label: "Forest Calm",
+    label: "Padded Editorial Chamber",
     image: TALK_IT_OUT_IMAGES.environmentForest,
     value: "forest",
   },
   {
-    label: "Golden River",
+    label: "Aqua Serenity Stage",
     image: TALK_IT_OUT_IMAGES.environmentSunsetRiver,
     value: "minimal",
   },
   {
-    label: "Campfire Woods",
+    label: "Monolith Gallery Space",
     image: TALK_IT_OUT_IMAGES.environmentCampfire,
     value: "beach",
   },

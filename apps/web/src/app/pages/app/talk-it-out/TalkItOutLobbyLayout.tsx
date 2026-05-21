@@ -508,7 +508,7 @@ export function TalkItOutLobbyLayout({
 
               <div className={cn(mattePanelClass("p-5"))}>
                 <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500/75">
-                  Change your Solace Avatar
+                  Customize Solace Voice & Avatar
                 </p>
                 <button
                   type="button"

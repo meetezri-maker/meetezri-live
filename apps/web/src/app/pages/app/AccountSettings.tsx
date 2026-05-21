@@ -1073,10 +1073,6 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
     user?.email?.split("@")[0] ||
     "Member";
 
-  const premiumish =
-    ["pro", "core", "active"].includes(String(authProfile?.subscription_plan || "").toLowerCase()) ||
-    String(authProfile?.subscription_status || "").toLowerCase() === "active";
-
   const planLabel = formatSubscriptionPlanLabel(
     typeof authProfile?.subscription_plan === "string" ? authProfile.subscription_plan : undefined
   );
@@ -1648,14 +1644,11 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   )}
                 </div>
                 <p className="mt-3 text-lg font-semibold text-white">{displayName}</p>
-                {premiumish ? (
-                  <span className="mt-1.5 inline-flex rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-200/90">
-                    Premium member
-                  </span>
-                ) : null}
-                <p className="mt-3 text-sm text-[rgba(255,255,255,0.5)]">{planLabel}</p>
+                <span className="mt-1.5 inline-flex rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-0.5 text-[10px] font-semibold tracking-wide text-violet-200/90">
+                  {planLabel}
+                </span>
                 <Link to="/app/billing" className={cn(accountBtnPrimary, "mt-4 w-full")}>
-                  Manage plan
+                  Manage Plan
                 </Link>
               </div>
             </div>

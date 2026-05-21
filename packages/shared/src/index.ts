@@ -17,6 +17,17 @@ export {
   type DefaultAiCompanionDefinition,
 } from './defaultAiCompanions';
 
+export {
+  scoreCommunityTextSentiment,
+  sentimentSignalsFromTexts,
+  computeCommunityPulsePercent,
+  communityPulseHeadlineFromPercent,
+  communityPulseDetailFromSignals,
+  type CommunitySentimentScore,
+  type CommunityPulseSignal,
+  type CommunityPulseResult,
+} from './communityPulse';
+
 export const UserProfileSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),

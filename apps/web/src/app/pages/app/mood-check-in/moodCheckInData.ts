@@ -6,6 +6,17 @@
 
 
 
+import type { LucideIcon } from "lucide-react";
+import {
+  Briefcase,
+  Heart,
+  HeartPulse,
+  Moon,
+  Sparkles,
+  Users,
+  Zap,
+} from "lucide-react";
+import { INFLUENCE_CHECKIN_IMAGES } from "@/lib/solace/influenceCheckInImages";
 import { MOOD_CHECKIN_IMAGES } from "@/lib/solace/moodCheckInImages";
 
 
@@ -99,7 +110,17 @@ export const MOOD_CHECKIN_CARDS: MoodCheckInCard[] = [
     image: MOOD_CHECKIN_IMAGES.grateful,
 
   },
+  {
 
+    value: "excited",
+
+    label: "Excited",
+
+    micro: "Energy and anticipation are building.",
+
+    image: MOOD_CHECKIN_IMAGES.excited,
+
+  },
   {
 
     value: "anxious",
@@ -124,29 +145,9 @@ export const MOOD_CHECKIN_CARDS: MoodCheckInCard[] = [
 
   },
 
-  {
+ 
 
-    value: "excited",
-
-    label: "Excited",
-
-    micro: "Energy and anticipation are building.",
-
-    image: MOOD_CHECKIN_IMAGES.excited,
-
-  },
-
-  {
-
-    value: "energetic",
-
-    label: "Energetic",
-
-    micro: "You feel awake, charged, and ready to go.",
-
-    image: MOOD_CHECKIN_IMAGES.energetic,
-
-  },
+ 
 
   {
 
@@ -172,6 +173,41 @@ export const MOOD_CHECKIN_CARDS: MoodCheckInCard[] = [
 
   },
 
+  {
+
+    value: "sad",
+
+    label: "Sad",
+
+    micro: "Sorrow or heaviness is weighing on you.",
+
+    image: MOOD_CHECKIN_IMAGES.sad,
+
+  },
+  {
+
+    value: "energetic",
+
+    label: "Energetic",
+
+    micro: "You feel awake, charged, and ready to go.",
+
+    image: MOOD_CHECKIN_IMAGES.energetic,
+
+  },
+
+  {
+
+    value: "angry",
+
+    label: "Angry",
+
+    micro: "Frustration or heat is bubbling up inside.",
+
+    image: MOOD_CHECKIN_IMAGES.angry,
+
+  },
+
 ];
 
 
@@ -182,6 +218,10 @@ export interface InfluenceChip {
 
   label: string;
 
+  image: string;
+
+  Icon: LucideIcon;
+
 }
 
 
@@ -190,19 +230,19 @@ export interface InfluenceChip {
 
 export const INFLUENCE_CHIPS: InfluenceChip[] = [
 
-  { value: "sleep", label: "Sleep" },
+  { value: "sleep", label: "Sleep", image: INFLUENCE_CHECKIN_IMAGES.sleep, Icon: Moon },
 
-  { value: "work", label: "Work" },
+  { value: "work", label: "Work", image: INFLUENCE_CHECKIN_IMAGES.work, Icon: Briefcase },
 
-  { value: "family", label: "Family" },
+  { value: "family", label: "Family", image: INFLUENCE_CHECKIN_IMAGES.family, Icon: Users },
 
-  { value: "health", label: "Health" },
+  { value: "health", label: "Health", image: INFLUENCE_CHECKIN_IMAGES.health, Icon: HeartPulse },
 
-  { value: "relationships", label: "Relationships" },
+  { value: "relationships", label: "Relationships", image: INFLUENCE_CHECKIN_IMAGES.relationships, Icon: Heart },
 
-  { value: "social_energy", label: "Social Energy" },
+  { value: "social_energy", label: "Social Energy", image: INFLUENCE_CHECKIN_IMAGES.social_energy, Icon: Zap },
 
-  { value: "gratitude", label: "Gratitude" },
+  { value: "gratitude", label: "Gratitude", image: INFLUENCE_CHECKIN_IMAGES.gratitude, Icon: Sparkles },
 
 ];
 
@@ -245,10 +285,6 @@ export function insightLabelForMoodKey(key: string): string {
   if (card) return card.label;
 
   const legacy: Record<string, string> = {
-
-    sad: "Sad",
-
-    angry: "Angry",
 
     neutral: "Neutral",
 

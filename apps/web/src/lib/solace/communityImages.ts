@@ -11,7 +11,19 @@ export const COMMUNITY_IMAGES = {
   sceneBedroom: "/community/scene-bedroom.jpg",
   sceneForest: "/community/scene-forest.jpg",
   sceneStars: "/community/scene-stars.jpg",
+  /** Find-your-circle card backdrops */
+  circleLake: "/community/hero-lake.jpg",
 } as const;
+
+/** One backdrop per support-space card (order matches Community SUPPORT_SPACES). */
+export const COMMUNITY_CIRCLE_CARD_IMAGES: readonly string[] = [
+  COMMUNITY_IMAGES.sceneWater,
+  COMMUNITY_IMAGES.sceneStars,
+  COMMUNITY_IMAGES.sceneForest,
+  COMMUNITY_IMAGES.sceneBedroom,
+  COMMUNITY_IMAGES.togetherness,
+  COMMUNITY_IMAGES.circleLake,
+] as const;
 
 /** Rotating scenic backdrops on feed post cards (community + shared Solace pool). */
 export const COMMUNITY_POST_SCENES: readonly string[] = [

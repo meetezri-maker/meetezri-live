@@ -358,14 +358,13 @@ export function SolaceDashboardView({
           </p>
 
           <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_min(100%,340px)] xl:items-start xl:gap-x-10 xl:gap-y-8">
-            {/* Center column */}
-            <div className="min-w-0 space-y-8 lg:space-y-10">
-              {/* Hero */}
-              <motion.section
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
-              >
+            {/* Hero — shares top row with right rail on xl */}
+            <motion.section
+              className="min-w-0 order-1 xl:col-start-1 xl:row-start-1"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
+            >
                 <SolacePanel glow="violet" className="overflow-hidden p-0">
                   <div className="relative min-h-[300px] md:min-h-[380px]">
                     <SolaceHeroAtmosphere backgroundSrc={DASHBOARD_IMAGES.heroAtmosphere} />
@@ -419,8 +418,20 @@ export function SolaceDashboardView({
                     </div>
                   </div>
                 </SolacePanel>
-              </motion.section>
+            </motion.section>
 
+            {/* Right rail — top-aligned with hero on xl; stacks after main column on mobile */}
+            <aside className="min-w-0 order-3 xl:order-none xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:self-start xl:sticky">
+              <RightRailContent
+                insights={insights}
+                insightDistributionData={insightDistributionData}
+                insightDistributionTotal={insightDistributionTotal}
+                showTrialChip={showTrialChip}
+              />
+            </aside>
+
+            {/* Main column — below hero on xl */}
+            <div className="min-w-0 order-2 space-y-8 lg:space-y-10 xl:order-none xl:col-start-1 xl:row-start-2">
               {/* Status — carousel mobile, grid desktop */}
               <section aria-label="Today's snapshot">
                 <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto overflow-y-visible pb-2 [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-2 md:gap-3 md:overflow-visible lg:grid-cols-4 lg:gap-4 [&::-webkit-scrollbar]:hidden">
@@ -618,16 +629,6 @@ export function SolaceDashboardView({
 
               <PWAInstallPrompt />
             </div>
-
-            {/* Right rail — xl+ sticky; stacks below on smaller breakpoints via grid */}
-            <aside className="min-w-0 xl:sticky xl:top-[calc(4rem+2.5rem)] xl:self-start">
-              <RightRailContent
-                insights={insights}
-                insightDistributionData={insightDistributionData}
-                insightDistributionTotal={insightDistributionTotal}
-                showTrialChip={showTrialChip}
-              />
-            </aside>
           </div>
 
           <div className="mt-10">

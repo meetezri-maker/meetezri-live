@@ -129,6 +129,24 @@ function durationHours(entry: SleepEntry): number {
   return safeNumber(differenceInMinutes(parseISO(entry.wake_time), parseISO(entry.bed_time)) / 60);
 }
 
+/** Restorative hours estimated from logged duration + quality (not wearable deep-sleep data). */
+function estimateRestorativeHours(entry: SleepEntry): number {
+  const hours = durationHours(entry);
+  if (hours <= 0) return 0;
+  const q = entry.quality_rating ?? 65;
+  const fraction = Math.min(
+    0.38,
+    Math.max(0.12, 0.14 + (q / 100) * 0.16 + (hours >= 7 ? 0.035 : 0))
+  );
+  return hours * fraction;
+}
+
+function averageRestorativeHours(entries: SleepEntry[]): number {
+  if (!entries.length) return 0;
+  const sum = entries.reduce((acc, e) => acc + estimateRestorativeHours(e), 0);
+  return safeNumber(sum / entries.length);
+}
+
 function sleepMemoryLabel(hours: number, quality: number | null): { label: string; Icon: LucideIcon } {
   const q = quality ?? 0;
   if (hours < 5 || q < 45) return { label: "Interrupted Night", Icon: Zap };
@@ -150,25 +168,69 @@ function thumbnailClassForId(id: string): string {
   return palettes[n] ?? palettes[0];
 }
 
-function averageBedDate(entries: SleepEntry[]): Date | null {
-  if (!entries.length) return null;
-  const ref = new Date();
-  ref.setHours(0, 0, 0, 0);
-  let sum = 0;
-  for (const e of entries) {
-    const d = parseISO(e.bed_time);
-    sum += d.getHours() * 60 + d.getMinutes();
+const MINUTES_PER_DAY = 24 * 60;
+
+function clockMinutesFromIso(iso: string): number {
+  const d = parseISO(iso);
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+/** Circular mean so 11 PM + 1 AM average to ~midnight, not ~noon. */
+function circularMeanMinutes(minutesList: number[]): number | null {
+  if (!minutesList.length) return null;
+  let sinSum = 0;
+  let cosSum = 0;
+  for (const mins of minutesList) {
+    const rad = (2 * Math.PI * mins) / MINUTES_PER_DAY;
+    sinSum += Math.sin(rad);
+    cosSum += Math.cos(rad);
   }
-  const avg = Math.round(sum / entries.length);
-  const h = Math.floor(avg / 60) % 24;
-  const m = avg % 60;
-  const t = new Date(ref);
-  t.setHours(h, m, 0, 0);
+  if (Math.abs(sinSum) < 1e-9 && Math.abs(cosSum) < 1e-9) return null;
+  const rad = Math.atan2(sinSum / minutesList.length, cosSum / minutesList.length);
+  let avg = Math.round((rad / (2 * Math.PI)) * MINUTES_PER_DAY);
+  if (avg < 0) avg += MINUTES_PER_DAY;
+  return avg % MINUTES_PER_DAY;
+}
+
+/** Bedtimes usually fall 8 PM–6 AM; plain mean can land at 8 AM — prefer PM when sensible. */
+function normalizeEveningBedtimeMinutes(minutes: number): number {
+  const h = Math.floor(minutes / 60);
+  if (h >= 6 && h < 18) {
+    const shifted = (minutes + 12 * 60) % MINUTES_PER_DAY;
+    const shiftedH = Math.floor(shifted / 60);
+    if (shiftedH >= 18 || shiftedH < 6) return shifted;
+  }
+  return minutes;
+}
+
+function averageBedtimeMinutes(entries: SleepEntry[]): number | null {
+  const beds = entries.map((e) => clockMinutesFromIso(e.bed_time));
+  const mean = circularMeanMinutes(beds);
+  if (mean == null) return null;
+  return normalizeEveningBedtimeMinutes(mean);
+}
+
+function averageWakeMinutes(entries: SleepEntry[]): number | null {
+  const wakes = entries.map((e) => clockMinutesFromIso(e.wake_time));
+  return circularMeanMinutes(wakes);
+}
+
+function dateAtNextClockMinutes(minutes: number): Date {
   const now = new Date();
-  if (t.getTime() <= now.getTime()) {
-    t.setDate(t.getDate() + 1);
+  const next = new Date(now);
+  next.setSeconds(0, 0);
+  next.setMilliseconds(0);
+  next.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+  if (next.getTime() <= now.getTime()) {
+    next.setDate(next.getDate() + 1);
   }
-  return t;
+  return next;
+}
+
+function averageBedDate(entries: SleepEntry[]): Date | null {
+  const avgMinutes = averageBedtimeMinutes(entries);
+  if (avgMinutes == null) return null;
+  return dateAtNextClockMinutes(avgMinutes);
 }
 
 function windDownTarget(bedAvg: Date | null): Date | null {
@@ -177,7 +239,7 @@ function windDownTarget(bedAvg: Date | null): Date | null {
 }
 
 function formatCountdown(ms: number): string {
-  if (ms <= 0) return "Anytime you are ready";
+  if (ms <= 0) return "Wind-down window is here";
   const h = Math.floor(ms / 3_600_000);
   const m = Math.floor((ms % 3_600_000) / 60_000);
   if (h <= 0) return `${m}m`;
@@ -222,11 +284,12 @@ function journeyStageIndex(entryCount: number): number {
 function computeWeekTrends(entries: SleepEntry[]): {
   avgSleepHoursDelta: number | null;
   avgQualityDelta: number | null;
+  avgRestorativeHoursDelta: number | null;
 } {
   const last7 = entries.slice(0, 7);
   const prev7 = entries.slice(7, 14);
   if (last7.length < 3 || prev7.length < 3) {
-    return { avgSleepHoursDelta: null, avgQualityDelta: null };
+    return { avgSleepHoursDelta: null, avgQualityDelta: null, avgRestorativeHoursDelta: null };
   }
   const avgH = (arr: SleepEntry[]) =>
     arr.reduce((sum, e) => sum + durationHours(e), 0) / arr.length;
@@ -239,9 +302,12 @@ function computeWeekTrends(entries: SleepEntry[]): {
   const h0 = avgH(prev7);
   const q1 = avgQ(last7);
   const q0 = avgQ(prev7);
+  const r1 = averageRestorativeHours(last7);
+  const r0 = averageRestorativeHours(prev7);
   return {
     avgSleepHoursDelta: h1 - h0,
     avgQualityDelta: q1 != null && q0 != null ? q1 - q0 : null,
+    avgRestorativeHoursDelta: r1 - r0,
   };
 }
 
@@ -682,7 +748,7 @@ export function SleepTracker() {
       return {
         avgDuration: "0.0",
         avgQuality: 0,
-        deepSleepDisplay: "—" as const,
+        avgRestorativeHours: "0.0",
         streak: 0,
         recoveryLevel: 0,
         calmNights: 0,
@@ -706,6 +772,7 @@ export function SleepTracker() {
 
     const avgDuration = safeNumber(totalDurationMinutes / sleepEntries.length / 60).toFixed(1);
     const avgQualityVal = qualityCount > 0 ? safeNumber(Math.round(qualitySum / qualityCount)) : 0;
+    const avgRestorative = averageRestorativeHours(sleepEntries);
     const streak = consecutiveSleepNightStreak(sleepEntries);
     const calmNights = calmNightsCount(sleepEntries);
     const consistency = sleepConsistencyScore(sleepEntries);
@@ -713,7 +780,7 @@ export function SleepTracker() {
     return {
       avgDuration,
       avgQuality: avgQualityVal,
-      deepSleepDisplay: "—" as const,
+      avgRestorativeHours: avgRestorative.toFixed(1),
       streak,
       recoveryLevel: avgQualityVal,
       calmNights,
@@ -795,24 +862,36 @@ export function SleepTracker() {
   const journeyIdx = journeyStageIndex(sleepEntries.length);
 
   const bedtimeProgress = useMemo(() => {
-    if (!avgBed) return null;
+    if (!windDownAt) return null;
     void nowTick;
+    const now = Date.now();
+    const wakeMins = averageWakeMinutes(sleepEntries);
     const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const span = avgBed.getTime() - start.getTime();
-    if (span <= 0) return 0.5;
-    const p = (Date.now() - start.getTime()) / span;
-    return Math.min(1, Math.max(0, p));
-  }, [avgBed, nowTick]);
+    start.setSeconds(0, 0);
+    start.setMilliseconds(0);
+    if (wakeMins != null) {
+      start.setHours(Math.floor(wakeMins / 60), wakeMins % 60, 0, 0);
+      if (start.getTime() > now) {
+        start.setDate(start.getDate() - 1);
+      }
+    } else {
+      start.setHours(6, 0, 0, 0);
+    }
+    const end = windDownAt.getTime();
+    if (now >= end) return 1;
+    if (end <= start.getTime()) return 0;
+    return Math.min(1, Math.max(0, (now - start.getTime()) / (end - start.getTime())));
+  }, [windDownAt, sleepEntries, nowTick]);
 
   const nextBedtimeLabel = useMemo(() => {
     if (!avgBed) return null;
-    const key = format(avgBed, "yyyy-MM-dd");
-    const today = format(new Date(), "yyyy-MM-dd");
-    const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
-    if (key === today) return "Tonight";
-    if (key === tomorrow) return "Tomorrow night";
-    return format(avgBed, "MMM d");
+    const now = new Date();
+    const bedDay = format(avgBed, "yyyy-MM-dd");
+    const today = format(now, "yyyy-MM-dd");
+    const tomorrow = format(addDays(now, 1), "yyyy-MM-dd");
+    if (bedDay === today) return "Tonight";
+    if (bedDay === tomorrow) return "Tomorrow night";
+    return format(avgBed, "EEEE");
   }, [avgBed]);
 
   const [chartRange, setChartRange] = useState<"week">("week");
@@ -833,6 +912,13 @@ export function SleepTracker() {
   if (isLoading) {
     return (
       <SolaceAmbientBackground className="min-h-[60vh] w-full min-w-0 rounded-[32px] p-4 sm:p-6">
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.04] pb-6">
+          <div className="max-w-3xl space-y-3">
+            <Skeleton className="h-9 w-56 rounded-lg bg-white/[0.06]" />
+            <Skeleton className="h-4 w-full max-w-md rounded-lg bg-white/[0.06]" />
+          </div>
+          <Skeleton className="h-11 w-32 shrink-0 rounded-full bg-white/[0.06]" />
+        </div>
         <div className="grid w-full min-w-0 gap-8 xl:grid-cols-[minmax(0,2.55fr)_minmax(280px,1fr)]">
           <div className="min-w-0 space-y-8">
             <Skeleton className="h-[min(380px,42vh)] w-full rounded-[28px] bg-white/[0.06]" />
@@ -864,6 +950,36 @@ export function SleepTracker() {
         />
 
         <div className="relative z-10 w-full min-w-0 px-3 py-6 sm:px-5 sm:py-8 lg:px-6 xl:px-8">
+          <header className="mb-10 border-b border-white/[0.04] pb-8 sm:mb-12 sm:pb-10">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-3xl">
+                <div className="flex items-center gap-3">
+                  <Moon
+                    className="h-7 w-7 text-violet-300/90 sm:h-8 sm:w-8"
+                    fill="currentColor"
+                    fillOpacity={0.28}
+                    strokeWidth={1.35}
+                    aria-hidden
+                  />
+                  <h1 className="font-serif text-[1.9rem] font-normal leading-tight tracking-[-0.02em] text-zinc-50 sm:text-[2.15rem] lg:text-[2.25rem]">
+                    Sleep Tracker
+                  </h1>
+                </div>
+                <p className="mt-4 max-w-2xl text-[15px] leading-relaxed tracking-[-0.01em] text-[var(--solace-muted)] sm:text-[1.05rem] sm:leading-[1.75]">
+                  Understand your sleep, embrace your rest, and wake up to a better you.
+                </p>
+              </div>
+              <SolaceGlowButton
+                type="button"
+                onClick={openLogModal}
+                className="min-h-[44px] shrink-0 shadow-[0_0_32px_rgba(168,85,247,0.45)]"
+              >
+                <Plus className="size-4" aria-hidden />
+                Log Sleep
+              </SolaceGlowButton>
+            </div>
+          </header>
+
           <div className="grid w-full min-w-0 grid-cols-1 gap-10 xl:grid-cols-[minmax(0,2.55fr)_minmax(280px,1fr)] xl:items-start xl:gap-10">
             <div className="min-w-0 space-y-10">
               {/* 1. Hero — wide cinematic sanctuary */}
@@ -894,22 +1010,14 @@ export function SleepTracker() {
                     aria-hidden
                   />
                   <HeroParticles reduced={prefersReducedMotion} />
-                  <div className="relative z-10 flex h-full min-h-[min(380px,42vh)] max-h-[400px] flex-col justify-between p-6 sm:p-8 lg:p-10">
-                  <div className="relative flex min-h-0 w-full flex-1 flex-col gap-6 lg:flex-row lg:justify-between">
-                    <div className="max-w-2xl space-y-4 lg:pr-8">
-                      <Link
-                        to="/app/settings"
-                        className="inline-flex min-h-[44px] items-center gap-2 text-sm text-zinc-300/95 transition-colors hover:text-white"
-                      >
-                        <ArrowLeft className="size-4 shrink-0 text-violet-300/90" aria-hidden />
-                        Back to Settings
-                      </Link>
-                      <h1 className="font-serif text-[clamp(2.1rem,4.2vw,3.5rem)] font-light leading-[1.06] tracking-tight text-white [text-shadow:0_2px_48px_rgba(0,0,0,0.65)]">
-                        Sleep{" "}
+                  <div className="relative z-10 flex h-full min-h-[min(380px,42vh)] max-h-[400px] flex-col justify-end p-6 sm:p-8 lg:p-10">
+                    <div className="max-w-2xl space-y-4">
+                      <h2 className="font-serif text-[clamp(2.1rem,4.2vw,3.5rem)] font-light leading-[1.06] tracking-tight text-white [text-shadow:0_2px_48px_rgba(0,0,0,0.65)]">
+                        Your{" "}
                         <span className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-pink-300 bg-clip-text text-transparent">
-                          Tracker
+                          Sleep Journey
                         </span>
-                      </h1>
+                      </h2>
                       <p className="max-w-xl text-[15px] leading-relaxed text-zinc-200/95 sm:text-base">
                         Understand your sleep, embrace your rest,
                         <br className="hidden sm:block" /> and wake up to a better you.
@@ -920,17 +1028,6 @@ export function SleepTracker() {
                         <span className="mt-2 block text-xs not-italic text-zinc-500">— Thomas Dekker</span>
                       </blockquote>
                     </div>
-                    <div className="flex shrink-0 flex-col items-start gap-4 lg:items-end lg:pt-1">
-                      <SolaceGlowButton
-                        type="button"
-                        onClick={openLogModal}
-                        className="min-h-[44px] shadow-[0_0_32px_rgba(168,85,247,0.45)]"
-                      >
-                        <Plus className="size-4" aria-hidden />
-                        Log Sleep
-                      </SolaceGlowButton>
-                    </div>
-                  </div>
                   </div>
                 </div>
               </motion.section>
@@ -962,9 +1059,12 @@ export function SleepTracker() {
                         ring: "from-cyan-500/25 to-violet-900/20",
                       },
                       {
-                        label: "Avg Deep Sleep",
-                        value: stats.deepSleepDisplay,
-                        trend: "Not tracked in your logs",
+                        label: "Restorative Sleep",
+                        value: `${stats.avgRestorativeHours}h`,
+                        trend:
+                          weekTrends.avgRestorativeHoursDelta != null
+                            ? formatHoursTrend(weekTrends.avgRestorativeHoursDelta)
+                            : "Estimated from your logged nights",
                         icon: Brain,
                         iconClass: "text-fuchsia-200/90 shadow-[0_0_18px_rgba(236,72,153,0.35)]",
                         ring: "from-fuchsia-500/25 to-violet-900/20",
@@ -1289,10 +1389,7 @@ export function SleepTracker() {
                 transition={{ delay: 0.16, duration: 0.5 }}
                 className="w-full space-y-4 pb-2"
               >
-                <div>
-                  <h3 className="font-serif text-xl font-light text-zinc-50 sm:text-2xl">Your Sleep Journey</h3>
-                  <p className="mt-1 text-sm text-zinc-500">Small steps create better nights.</p>
-                </div>
+                <p className="text-sm text-zinc-500">Small steps create better nights.</p>
                 <div className="relative min-h-[220px] overflow-hidden rounded-[28px] border border-white/[0.08] bg-[#0a0614] shadow-[0_0_56px_-28px_rgba(88,28,135,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl sm:min-h-[240px]">
                   <img
                     src={SLEEP_TRACKER_IMAGES.starfieldAccent}
@@ -1409,7 +1506,7 @@ export function SleepTracker() {
                     {bedtimeProgress != null ? (
                       <div className="mt-5 space-y-2">
                         <div className="flex justify-between text-[11px] text-zinc-500">
-                          <span>Day toward rest</span>
+                          <span>Progress toward wind-down</span>
                           <span>{Math.round(bedtimeProgress * 100)}%</span>
                         </div>
                         <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800/90">
@@ -1427,7 +1524,9 @@ export function SleepTracker() {
                       </p>
                       <p className="mt-2 text-xs text-zinc-500">
                         {windDownRemainingMs != null
-                          ? `${formatCountdown(windDownRemainingMs)} until that softer window`
+                          ? windDownRemainingMs > 0
+                            ? `${formatCountdown(windDownRemainingMs)} until wind-down`
+                            : "Your wind-down window is open now"
                           : "We will refine this as you log more nights."}
                       </p>
                     </div>

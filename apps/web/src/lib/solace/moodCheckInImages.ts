@@ -15,6 +15,8 @@ export const MOOD_CHECKIN_IMAGES = {
   energetic: "/mood-check-in/energetic.png",
   happy: "/mood-check-in/happy.png",
   nervous: "/mood-check-in/nervous.png",
+  sad: "/mood-check-in/sad.png",
+  angry: "/mood-check-in/angry.png",
 } as const;
 
 const MOOD_IMAGE_BY_VALUE: Record<string, string> = {
@@ -30,6 +32,8 @@ const MOOD_IMAGE_BY_VALUE: Record<string, string> = {
   energetic: MOOD_CHECKIN_IMAGES.energetic,
   happy: MOOD_CHECKIN_IMAGES.happy,
   nervous: MOOD_CHECKIN_IMAGES.nervous,
+  sad: MOOD_CHECKIN_IMAGES.sad,
+  angry: MOOD_CHECKIN_IMAGES.angry,
 };
 
 export function moodCheckInImageForValue(value: string): string {

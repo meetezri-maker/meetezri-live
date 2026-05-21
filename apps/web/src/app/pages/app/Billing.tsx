@@ -132,8 +132,74 @@ function formatBillingCycle(raw: unknown): string {
   return "Monthly";
 }
 
+/** Canonical minutes view from GET /users/credits (seconds-first, matches dashboard). */
+function buildCreditsMinutesView(creditsData: Record<string, unknown>) {
+  const ceilMinFromSec = (sec: number) => (sec <= 0 ? 0 : Math.ceil(sec / 60));
+
+  const subscriptionRemainingMinutes =
+    typeof creditsData.subscription === "number"
+      ? Math.max(0, creditsData.subscription)
+      : typeof creditsData.subscription_seconds === "number"
+        ? ceilMinFromSec(Math.max(0, creditsData.subscription_seconds))
+        : 0;
+
+  const purchasedRemainingMinutes =
+    typeof creditsData.purchased === "number"
+      ? Math.max(0, creditsData.purchased)
+      : typeof creditsData.purchased_seconds === "number"
+        ? ceilMinFromSec(Math.max(0, creditsData.purchased_seconds))
+        : 0;
+
+  const remainingSeconds =
+    typeof creditsData.credits_seconds === "number"
+      ? Math.max(0, creditsData.credits_seconds)
+      : typeof creditsData.credits === "number"
+        ? Math.max(0, creditsData.credits * 60)
+        : (subscriptionRemainingMinutes + purchasedRemainingMinutes) * 60;
+
+  const remainingMinutes = ceilMinFromSec(remainingSeconds);
+
+  const subscriptionTotalSeconds =
+    typeof creditsData.subscription_total_seconds === "number"
+      ? Math.max(0, creditsData.subscription_total_seconds)
+      : typeof creditsData.subscription_total === "number"
+        ? Math.max(0, creditsData.subscription_total * 60)
+        : null;
+
+  const purchasedSeconds =
+    typeof creditsData.purchased_seconds === "number"
+      ? Math.max(0, creditsData.purchased_seconds)
+      : purchasedRemainingMinutes * 60;
+
+  const accountTotalSeconds =
+    subscriptionTotalSeconds !== null
+      ? subscriptionTotalSeconds + purchasedSeconds
+      : remainingSeconds;
+
+  const usedSeconds = Math.max(0, accountTotalSeconds - remainingSeconds);
+  const accountTotalMinutes = ceilMinFromSec(accountTotalSeconds);
+  const accountUsedMinutes = ceilMinFromSec(usedSeconds);
+  const accountProgressPercent =
+    accountTotalSeconds > 0
+      ? Math.min(100, Math.max(0, (usedSeconds / accountTotalSeconds) * 100))
+      : 0;
+
+  const subscriptionPeriodTotalMinutes =
+    subscriptionTotalSeconds !== null ? ceilMinFromSec(subscriptionTotalSeconds) : 0;
+
+  return {
+    remainingMinutes,
+    subscriptionRemainingMinutes,
+    purchasedRemainingMinutes,
+    accountTotalMinutes,
+    accountUsedMinutes,
+    accountProgressPercent,
+    subscriptionPeriodTotalMinutes,
+  };
+}
+
 export function Billing() {
-  const { session, profile } = useAuth();
+  const { session } = useAuth();
   const [searchParams] = useSearchParams();
   const checkoutSuccess = searchParams.get("success") === "true";
   const historyTableRef = useRef<HTMLElement>(null);
@@ -180,7 +246,7 @@ export function Billing() {
           api.sessions.list({ status: "completed", limit: 50 }),
           api.billing.getHistory(),
           api.billing.getInvoices(),
-          api.getCredits(),
+          api.getCredits({ bypassCache: true }),
         ]);
 
         const subData = subDataRaw && typeof subDataRaw === "object" ? (subDataRaw as Record<string, any>) : {};
@@ -190,23 +256,18 @@ export function Billing() {
         void _billingHistoryParallel;
         const invoiceData = Array.isArray(invoiceDataRaw) ? invoiceDataRaw : [];
         const creditsData =
-          creditsDataRaw && typeof creditsDataRaw === "object" ? (creditsDataRaw as Record<string, any>) : {};
+          creditsDataRaw && typeof creditsDataRaw === "object"
+            ? (creditsDataRaw as Record<string, unknown>)
+            : {};
 
         const rawPlanId = subData.plan_type;
         const planId = (SUBSCRIPTION_PLANS[rawPlanId as PlanTier] ? rawPlanId : "trial") as PlanTier;
         const plan = SUBSCRIPTION_PLANS[planId];
         const now = new Date();
 
-        const subscriptionCredits = creditsData.subscription ?? profile?.credits ?? 0;
-        const purchasedCredits = creditsData.purchased ?? profile?.purchased_credits ?? 0;
-        const accountRemainingMinutes =
-          creditsData.remaining_minutes ?? subscriptionCredits + purchasedCredits;
-        const accountTotalMinutes =
-          creditsData.total_minutes ?? accountRemainingMinutes + (creditsData.used_minutes ?? profile?.minutes_used ?? 0);
-        const accountUsedMinutes = creditsData.used_minutes ?? profile?.minutes_used ?? 0;
-
-        const creditsRemaining = subscriptionCredits;
-        const payAsYouGoCredits = purchasedCredits;
+        const creditsView = buildCreditsMinutesView(creditsData);
+        const creditsRemaining = creditsView.subscriptionRemainingMinutes;
+        const payAsYouGoCredits = creditsView.purchasedRemainingMinutes;
 
         const usageHistory: UsageRecord[] = sessionsData
           .filter((s: any) => s.status === "completed")
@@ -236,7 +297,7 @@ export function Billing() {
           planId: planId,
           status: subData.status as any,
           creditsRemaining,
-          creditsTotal: creditsData.subscription_total ?? plan.credits,
+          creditsTotal: creditsView.subscriptionPeriodTotalMinutes || plan.credits,
           billingCycle: {
             startDate: subscriptionStartDate,
             endDate: subData.next_billing_at || fallbackEndDate,
@@ -247,9 +308,9 @@ export function Billing() {
           usageHistory,
           createdAt: subData.created_at || new Date().toISOString(),
           updatedAt: subData.updated_at || new Date().toISOString(),
-          accountTotalMinutes,
-          accountUsedMinutes,
-          accountRemainingMinutes,
+          accountTotalMinutes: creditsView.accountTotalMinutes,
+          accountUsedMinutes: creditsView.accountUsedMinutes,
+          accountRemainingMinutes: creditsView.remainingMinutes,
         };
 
         setUserSubscription(subscription);
@@ -265,16 +326,46 @@ export function Billing() {
     fetchData();
   }, [session?.user?.id, checkoutSuccess]);
 
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const refreshCredits = async () => {
+      try {
+        const creditsDataRaw = await api.getCredits({ bypassCache: true });
+        if (!creditsDataRaw || typeof creditsDataRaw !== "object") return;
+        const creditsView = buildCreditsMinutesView(creditsDataRaw as Record<string, unknown>);
+        setUserSubscription((prev) => ({
+          ...prev,
+          creditsRemaining: creditsView.subscriptionRemainingMinutes,
+          payAsYouGoCredits: creditsView.purchasedRemainingMinutes,
+          accountTotalMinutes: creditsView.accountTotalMinutes,
+          accountUsedMinutes: creditsView.accountUsedMinutes,
+          accountRemainingMinutes: creditsView.remainingMinutes,
+          creditsTotal: creditsView.subscriptionPeriodTotalMinutes || prev.creditsTotal,
+        }));
+      } catch {
+        /* keep last snapshot */
+      }
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshCredits();
+    };
+
+    const intervalId = window.setInterval(() => void refreshCredits(), 60_000);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [session?.user?.id]);
+
   const isCancelled = ["canceled", "cancelled"].includes(String(userSubscription.status || "").toLowerCase());
   const currentPlan = SUBSCRIPTION_PLANS[userSubscription.planId] ?? SUBSCRIPTION_PLANS.trial;
   const canCancelSubscription = ["active", "trialing", "past_due"].includes(
     String(userSubscription.status || "").toLowerCase()
   );
-
-  const usagePercentage =
-    userSubscription.creditsTotal > 0
-      ? ((userSubscription.creditsTotal - userSubscription.creditsRemaining) / userSubscription.creditsTotal) * 100
-      : 0;
 
   const billingEndDate = userSubscription.billingCycle.endDate ? new Date(userSubscription.billingCycle.endDate) : null;
   const billingEndIsValid = !!billingEndDate && !Number.isNaN(billingEndDate.getTime());
@@ -311,8 +402,12 @@ export function Billing() {
 
   const accountTotal = userSubscription.accountTotalMinutes ?? 0;
   const accountUsed = userSubscription.accountUsedMinutes ?? 0;
+  const accountRemaining = userSubscription.accountRemainingMinutes ?? 0;
   const accountProgress =
-    accountTotal > 0 ? Math.min(100, Math.max(0, (accountUsed / accountTotal) * 100)) : 0;
+    accountTotal > 0
+      ? Math.min(100, Math.max(0, (accountUsed / accountTotal) * 100))
+      : 0;
+  const accountProgressRounded = Math.round(accountProgress);
 
   const googleCalendarRenewalUrl = useMemo(() => {
     if (!billingEndIsValid || !billingEndDate) return null;
@@ -358,12 +453,27 @@ export function Billing() {
     setProcessingAction("sync_credits");
     try {
       const result = await api.billing.syncCredits();
+      const creditsDataRaw = await api.getCredits({ bypassCache: true });
+      if (creditsDataRaw && typeof creditsDataRaw === "object") {
+        const creditsView = buildCreditsMinutesView(creditsDataRaw as Record<string, unknown>);
+        setUserSubscription((prev) => ({
+          ...prev,
+          creditsRemaining: creditsView.subscriptionRemainingMinutes,
+          payAsYouGoCredits: creditsView.purchasedRemainingMinutes,
+          accountTotalMinutes: creditsView.accountTotalMinutes,
+          accountUsedMinutes: creditsView.accountUsedMinutes,
+          accountRemainingMinutes: creditsView.remainingMinutes,
+          creditsTotal: creditsView.subscriptionPeriodTotalMinutes || prev.creditsTotal,
+        }));
+      }
       if (result.added > 0) {
         toast.success(`Synced ${result.added} credits from past purchases.`);
-        window.location.reload();
+      } else {
+        toast.success("Minutes balance updated.");
       }
     } catch (error) {
       console.error("Failed to sync credits:", error);
+      toast.error("Could not sync minutes. Please try again.");
     } finally {
       setProcessingAction(null);
     }
@@ -477,7 +587,7 @@ export function Billing() {
   }
 
   const ringPrimary = `${accountUsed} / ${accountTotal} min`;
-  const ringSecondary = `${Math.round(accountProgress)}% used this cycle`;
+  const ringSecondary = `${accountProgressRounded}% used this cycle`;
 
   const minutesRailBlock = (
     <div className={cn("p-6", panel)}>
@@ -492,19 +602,29 @@ export function Billing() {
           centerSecondary={ringSecondary}
           gradientFrom="#e9d5ff"
           gradientTo="#22d3ee"
-          ariaLabel={`Minutes: ${accountUsed} of ${accountTotal} used, about ${Math.round(accountProgress)} percent`}
+          ariaLabel={`Minutes: ${accountUsed} of ${accountTotal} used, about ${accountProgressRounded} percent`}
         />
       </div>
       <div className="mt-6 space-y-2 border-t border-white/[0.06] pt-5 text-center text-sm text-zinc-400">
         <p>
-          Subscription balance{" "}
-          <span className="font-medium text-zinc-100">{userSubscription.creditsRemaining} min</span>
+          Total remaining{" "}
+          <span className="font-medium text-zinc-100">{accountRemaining.toLocaleString()} min</span>
         </p>
         <p>
-          Pay-as-you-go <span className="font-medium text-zinc-100">{userSubscription.payAsYouGoCredits} min</span>
+          Subscription balance{" "}
+          <span className="font-medium text-zinc-100">
+            {userSubscription.creditsRemaining.toLocaleString()} min
+          </span>
         </p>
-        <p className="mt-2 text-[11px] text-zinc-600">
-          Plan allowance: {usagePercentage.toFixed(0)}% used this billing cycle.
+        <p>
+          Pay-as-you-go{" "}
+          <span className="font-medium text-zinc-100">
+            {userSubscription.payAsYouGoCredits.toLocaleString()} min
+          </span>
+        </p>
+        <p className="mt-2 text-[11px] text-zinc-500">
+          {accountProgressRounded}% used ({accountUsed.toLocaleString()} of {accountTotal.toLocaleString()} min
+          total capacity).
         </p>
         <button
           type="button"
@@ -539,33 +659,32 @@ export function Billing() {
             </motion.div>
           )}
 
+          <header className="mb-10 flex flex-row items-start justify-between gap-3 border-b border-white/[0.04] pb-8 sm:items-center sm:gap-6">
+            <div className="min-w-0 flex-1 space-y-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-violet-300/85">Account</p>
+              <h1 className="font-serif text-3xl font-light tracking-tight text-zinc-50 sm:text-4xl">
+                Billing &{" "}
+                <span className="bg-gradient-to-r from-violet-200 via-fuchsia-200 to-cyan-100 bg-clip-text text-transparent">
+                  Subscription
+                </span>
+              </h1>
+              <p className="max-w-lg text-sm leading-relaxed text-zinc-500">
+                Manage your plan, view usage, and purchase additional minutes.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={scrollToHistory}
+              className="inline-flex h-11 min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-5 text-sm text-zinc-200 transition hover:border-violet-400/35 hover:bg-white/[0.07]"
+            >
+              <History className="size-4" aria-hidden />
+              Billing history
+            </button>
+          </header>
+
           <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-10">
             {/* ——— Main column ——— */}
             <div className="min-w-0 flex-1 space-y-10">
-              {/* 1 Header */}
-              <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-violet-300/85">Account</p>
-                  <h1 className="font-serif text-3xl font-light tracking-tight text-zinc-50 sm:text-4xl">
-                    Billing &{" "}
-                    <span className="bg-gradient-to-r from-violet-200 via-fuchsia-200 to-cyan-100 bg-clip-text text-transparent">
-                      Subscription
-                    </span>
-                  </h1>
-                  <p className="max-w-lg text-sm leading-relaxed text-zinc-500">
-                    Manage your plan, view usage, and purchase additional minutes.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={scrollToHistory}
-                  className="inline-flex h-11 min-h-[44px] shrink-0 items-center justify-center gap-2 self-start rounded-full border border-white/12 bg-white/[0.04] px-5 text-sm text-zinc-200 transition hover:border-violet-400/35 hover:bg-white/[0.07] sm:self-auto"
-                >
-                  <History className="size-4" aria-hidden />
-                  Billing history
-                </button>
-              </header>
-
               {/* 2 Current plan hero */}
               <section
                 aria-labelledby="current-plan-title"
@@ -604,7 +723,7 @@ export function Billing() {
                         disabled={isActionLocked}
                         className="h-11 min-h-[44px] rounded-full border-0 bg-gradient-to-r from-violet-600 to-fuchsia-600 px-7 text-white shadow-[0_0_28px_rgba(139,92,246,0.35)]"
                       >
-                        Manage plan
+                        Manage Plan
                       </Button>
                       {canCancelSubscription ? (
                         <Button
@@ -705,7 +824,7 @@ export function Billing() {
                                 disabled={isActionLocked}
                                 className="h-11 min-h-[44px] w-full rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
                               >
-                                Manage plan
+                                Manage Plan
                               </Button>
                             ) : (
                               <Button

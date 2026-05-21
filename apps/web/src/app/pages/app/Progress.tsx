@@ -787,14 +787,14 @@ export function Progress() {
               <p className="text-slate-300 mb-6 text-sm md:text-base">
                 Every conversation, every reflection, every small step is building a stronger you.
               </p>
-              <Button
+              {/* <Button
                 onClick={() => {
                   document.getElementById("journey-timeline")?.scrollIntoView({ behavior: "smooth" });
                 }}
                 className="bg-slate-800/60 hover:bg-slate-700/60 text-white border border-slate-600/50 rounded-full px-6 backdrop-blur-sm"
               >
                 See Your Journey
-              </Button>
+              </Button> */}
             </div>
           </div>
         </motion.div>
