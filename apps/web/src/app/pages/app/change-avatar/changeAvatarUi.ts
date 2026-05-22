@@ -12,8 +12,7 @@ import {
 export const CHANGE_AVATAR_HERO_IMG = "/community/hero-lake.jpg";
 
 export const changeAvatarPageAtmosphere = cn(
-  settingsPageAtmosphere,
-  "bg-[linear-gradient(165deg,#0a0b18_0%,#090a16_42%,#0c0a18_100%)]"
+  settingsPageAtmosphere
 );
 
 export const changeAvatarPageGlowTop = settingsPageGlowTop;

@@ -14,6 +14,16 @@ import { ProtectedRoute } from '@/app/components/ProtectedRoute';
 import { Toaster } from '@/app/components/ui/sonner';
 import { MobileMetaTags } from '@/app/components/MobileMetaTags';
 import { ThemeManager } from '@/app/components/ThemeManager';
+import {
+  applyAccentColorToDocument,
+  applyThemeToDocument,
+  isAccentColorKey,
+  resolveAppearanceTheme,
+} from '@/app/pages/app/appearance-settings/appearanceConstants';
+import {
+  applyAccessibilitySettings,
+  loadAccessibilitySettings,
+} from '@/app/pages/app/accessibility-settings/applyAccessibilitySettings';
 import { AppLayout } from '@/app/components/AppLayout';
 import { PageLoader } from '@/app/components/PageLoader';
 
@@ -33,6 +43,7 @@ const AuthCallback         = lazy(() => import('@/app/pages/AuthCallback').then(
 const ForgotPassword       = lazy(() => import('@/app/pages/ForgotPassword').then(m => ({ default: m.ForgotPassword })));
 const ResetPassword        = lazy(() => import('@/app/pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
 const InviteCreatePassword = lazy(() => import('@/app/pages/InviteCreatePassword').then(m => ({ default: m.InviteCreatePassword })));
+const AuthActivateAccount  = lazy(() => import('@/app/pages/AuthActivateAccount').then(m => ({ default: m.AuthActivateAccount })));
 
 // Admin public auth pages (no role required — treated as auth section)
 const AdminLogin           = lazy(() => import('@/app/pages/admin/AdminLogin').then(m => ({ default: m.AdminLogin })));
@@ -282,16 +293,9 @@ function OnboardingAccessGuard({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   useEffect(() => {
-    let theme = "light";
+    let theme = "dark";
     let accentKey = "pink";
-    let accessibilitySettings: {
-      highContrast?: boolean;
-      reducedMotion?: boolean;
-      focusIndicators?: boolean;
-      largeClickTargets?: boolean;
-      fontSize?: "small" | "medium" | "large" | "xlarge";
-      textSpacing?: "compact" | "normal" | "relaxed" | "loose";
-    } = {};
+    let accessibilitySettings = loadAccessibilitySettings();
 
     if (typeof window !== "undefined" && typeof window.localStorage !== "undefined") {
       const pathname = window.location.pathname;
@@ -305,7 +309,7 @@ export default function App() {
           try {
             const parsed = JSON.parse(saved);
             if (parsed.theme) {
-              theme = parsed.theme;
+              theme = resolveAppearanceTheme(parsed.theme, parsed.appearanceVersion);
             }
             if (parsed.accentColor) {
               accentKey = parsed.accentColor;
@@ -324,7 +328,7 @@ export default function App() {
               reducedMotion?: boolean;
             };
             if (ap.defaultTheme === "Dark") theme = "dark";
-            else if (ap.defaultTheme === "System") theme = "auto";
+            else if (ap.defaultTheme === "System") theme = "dark";
             else if (ap.defaultTheme === "Light") theme = "light";
             // Colors and reduced motion apply everywhere
             if (ap.primaryColor) (window as any).__adminPrimaryColor = ap.primaryColor;
@@ -335,7 +339,7 @@ export default function App() {
         }
         if (savedAccessibility) {
           try {
-            accessibilitySettings = JSON.parse(savedAccessibility);
+            accessibilitySettings = loadAccessibilitySettings();
           } catch {
           }
         }
@@ -345,36 +349,9 @@ export default function App() {
     if (typeof document === "undefined") return;
     const root = document.documentElement;
 
-    if (theme === "auto") {
-      if (typeof window !== "undefined" && window.matchMedia) {
-        const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-        if (mediaQuery.matches) {
-          root.classList.add("dark");
-        } else {
-          root.classList.remove("dark");
-        }
-      } else {
-        root.classList.remove("dark");
-      }
-    } else if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
+    applyThemeToDocument(theme === "light" ? "light" : "dark");
 
-    const accentMap: Record<string, string> = {
-      blue: "#3b82f6",
-      purple: "#a855f7",
-      pink: "#ec4899",
-      green: "#22c55e",
-      orange: "#f97316",
-      teal: "#14b8a6"
-    };
-
-    const accent = accentMap[accentKey] || accentMap.pink;
-    root.style.setProperty("--accent", accent);
-    root.style.setProperty("--primary", accent);
-    root.style.setProperty("--ring", accent);
+    applyAccentColorToDocument(isAccentColorKey(accentKey) ? accentKey : "pink");
 
     // Override with admin appearance colors (from system settings page)
     const adminPrimary = (window as any).__adminPrimaryColor;
@@ -406,29 +383,10 @@ export default function App() {
       // ignore storage errors
     }
 
-    const fontSizeMap: Record<string, string> = {
-      small: "14px",
-      medium: "16px",
-      large: "18px",
-      xlarge: "20px",
-    };
-    const fontSize = fontSizeMap[accessibilitySettings.fontSize || "medium"] || "16px";
-    root.style.setProperty("--font-size", fontSize);
-
-    const textSpacingMap: Record<string, { lineHeight: string; letterSpacing: string }> = {
-      compact: { lineHeight: "1.35", letterSpacing: "-0.005em" },
-      normal: { lineHeight: "1.5", letterSpacing: "0em" },
-      relaxed: { lineHeight: "1.7", letterSpacing: "0.01em" },
-      loose: { lineHeight: "1.9", letterSpacing: "0.015em" },
-    };
-    const spacing = textSpacingMap[accessibilitySettings.textSpacing || "normal"] || textSpacingMap.normal;
-    root.style.setProperty("--text-line-height", spacing.lineHeight);
-    root.style.setProperty("--text-letter-spacing", spacing.letterSpacing);
-
-    root.classList.toggle("high-contrast", Boolean(accessibilitySettings.highContrast));
-    root.classList.toggle("reduced-motion", Boolean(accessibilitySettings.reducedMotion));
-    root.classList.toggle("focus-indicators", Boolean(accessibilitySettings.focusIndicators));
-    root.classList.toggle("large-click-targets", Boolean(accessibilitySettings.largeClickTargets));
+    applyAccessibilitySettings(accessibilitySettings);
+    if (adminReducedMotion != null) {
+      root.classList.toggle("reduced-motion", Boolean(adminReducedMotion));
+    }
   }, []);
 
   return (
@@ -467,6 +425,7 @@ export default function App() {
             <Route path="/signup" element={<Signup />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/auth/activate-account" element={<AuthActivateAccount />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/invite/create-password" element={<InviteCreatePassword />} />
@@ -518,9 +477,11 @@ export default function App() {
                 <Route
                   path="/app/active-session"
                   element={
-                    <Suspense fallback={<PageLoader />}>
-                      <ActiveSession />
-                    </Suspense>
+                    <div className="flex min-h-0 flex-1 flex-col">
+                      <Suspense fallback={<PageLoader />}>
+                        <ActiveSession />
+                      </Suspense>
+                    </div>
                   }
                 />
                 <Route path="/app/settings/privacy" element={<PrivacySettings />} />

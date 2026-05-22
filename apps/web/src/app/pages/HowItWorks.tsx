@@ -505,7 +505,7 @@ export function HowItWorks() {
               </span>{" "}
               Works
             </h1>
-            <p className="mx-auto max-w-2xl text-base leading-relaxed text-white/75 sm:text-lg">
+            <p className="mx-auto max-w-3xl text-base leading-relaxed text-white/75 sm:text-lg">
               Your personal AI wellness companion, designed to support your mental health journey
             </p>
           </motion.div>

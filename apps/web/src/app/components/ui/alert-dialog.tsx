@@ -3,10 +3,14 @@
 import * as React from "react";
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 
-import { modalDialogContent, modalDialogOverlay } from "@/lib/modalTheme";
+import {
+  modalDialogContent,
+  modalDialogOverlay,
+  modalPrimaryButton,
+  modalSecondaryButton,
+} from "@/lib/modalTheme";
 
 import { cn } from "./utils";
-import { buttonVariants } from "./button";
 
 function AlertDialog({
   ...props
@@ -120,7 +124,7 @@ function AlertDialogAction({
 }: React.ComponentProps<typeof AlertDialogPrimitive.Action>) {
   return (
     <AlertDialogPrimitive.Action
-      className={cn(buttonVariants(), className)}
+      className={cn(modalPrimaryButton, "h-auto flex-none", className)}
       {...props}
     />
   );
@@ -132,7 +136,7 @@ function AlertDialogCancel({
 }: React.ComponentProps<typeof AlertDialogPrimitive.Cancel>) {
   return (
     <AlertDialogPrimitive.Cancel
-      className={cn(buttonVariants({ variant: "outline" }), className)}
+      className={cn(modalSecondaryButton, "h-auto flex-none", className)}
       {...props}
     />
   );

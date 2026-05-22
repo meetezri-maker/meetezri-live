@@ -1,0 +1,20 @@
+/** Re-export canonical wellness plan schemas from the shared package. */
+export {
+  WELLNESS_PLAN_SECTION_IDS,
+  wellnessPlanListItemSchema,
+  wellnessPlanOnboardingDraftSchema,
+  wellnessPlanProfessionalSupportSchema,
+  wellnessPlanRecordSchema,
+  wellnessPlanResponseSchema,
+  wellnessPlanSectionIdSchema,
+  wellnessPlanTrustedContactSchema,
+  wellnessPlanUpsertBodySchema,
+  type WellnessPlanListItem,
+  type WellnessPlanOnboardingDraft,
+  type WellnessPlanProfessionalSupport,
+  type WellnessPlanRecord,
+  type WellnessPlanResponse,
+  type WellnessPlanSectionId,
+  type WellnessPlanTrustedContact,
+  type WellnessPlanUpsertBody,
+} from '@meetezri/shared';

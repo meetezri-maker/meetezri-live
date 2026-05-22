@@ -1,7 +1,57 @@
+import { format, isValid, parse, parseISO } from "date-fns";
+
 /** `profiles.age` stores either a numeric age string ("24") or an ISO date of birth ("2000-04-15"). */
 
 const ISO_DOB = /^\d{4}-\d{2}-\d{2}$/;
 
+const DOB_INPUT_FORMATS = [
+  "MM/dd/yyyy",
+  "M/d/yyyy",
+  "yyyy-MM-dd",
+  "MMM d, yyyy",
+  "MM-dd-yyyy",
+] as const;
+
+function isBirthDateAllowed(birth: Date, minAgeYears: number): boolean {
+  const max = new Date();
+  max.setHours(12, 0, 0, 0);
+  max.setFullYear(max.getFullYear() - minAgeYears);
+  const normalized = new Date(birth);
+  normalized.setHours(12, 0, 0, 0);
+  return normalized.getTime() <= max.getTime();
+}
+
+/** Parse typed DOB (keyboard) into ISO `YYYY-MM-DD`, empty, or invalid. */
+export function parseDateOfBirthInput(
+  raw: string,
+  minAgeYears = 13
+): { iso: string } | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return { iso: "" };
+
+  if (isIsoDobString(trimmed)) {
+    const birth = parseISO(trimmed);
+    if (!isValid(birth) || !isBirthDateAllowed(birth, minAgeYears)) return null;
+    return { iso: trimmed };
+  }
+
+  for (const pattern of DOB_INPUT_FORMATS) {
+    const birth = parse(trimmed, pattern, new Date());
+    if (isValid(birth) && isBirthDateAllowed(birth, minAgeYears)) {
+      return { iso: format(birth, "yyyy-MM-dd") };
+    }
+  }
+
+  return null;
+}
+
+/** Display string for DOB text input while editing. */
+export function formatDateOfBirthForInput(iso: string): string {
+  if (!isIsoDobString(iso)) return "";
+  const birth = parseISO(iso);
+  if (!isValid(birth)) return "";
+  return format(birth, "MM/dd/yyyy");
+}
 export function isIsoDobString(value: string): boolean {
   return ISO_DOB.test(value.trim());
 }
@@ -38,4 +88,13 @@ export function profileAgeStorageToDisplayYears(age: string | null | undefined):
     return y !== undefined ? String(y) : "";
   }
   return t;
+}
+
+/** Human-readable age for profile / settings rails (e.g. "24 years old"). */
+export function profileAgeDisplayLabel(age: string | null | undefined): string {
+  const years = profileAgeStorageToDisplayYears(age);
+  if (!years) return "";
+  const n = Number.parseInt(years, 10);
+  if (!Number.isFinite(n) || n < 0) return "";
+  return `${n} years old`;
 }

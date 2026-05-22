@@ -2,4 +2,8 @@
 @import './tailwind.css';
 @import './theme.css';
 @import '../app/solace/solace-tokens.css';
+@import './light-theme.css';
+@import './solace-light-system.css';
+@import '../app/solace/solace-icon-chips.css';
+@import '../app/pages/app/appearance-settings/appearanceTheme.css';
 @import '../app/landing/landing-tokens.css';

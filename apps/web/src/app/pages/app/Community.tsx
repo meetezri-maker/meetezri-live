@@ -58,6 +58,7 @@ import {
   communityPulseHeadlineFromPercent,
   sentimentSignalsFromTexts,
 } from "@/lib/communityPulse";
+import { CommunitySharePostModal } from "@/app/pages/app/community/CommunitySharePostModal";
 
 type FeedPost = {
   id: string;
@@ -65,6 +66,8 @@ type FeedPost = {
   isByCurrentUser?: boolean;
   /** Present when the author shows a name (not Anonymous) — opens view profile. */
   authorUserId?: string | null;
+  /** Author profile is private — show hover hint instead of a profile link. */
+  authorProfilePrivate?: boolean;
   content: string;
   category: string;
   createdAt: string;
@@ -380,7 +383,7 @@ function CinematicEnter({ children, delay = 0, className }: CinematicEnterProps)
 
 function CommunityLoadingSkeleton() {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#06060f] text-slate-100">
+    <div className="relative min-h-screen overflow-hidden bg-[var(--solace-page-bg,var(--solace-bg))] text-[var(--solace-text)]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(109,40,217,0.35)_0%,transparent_50%),radial-gradient(ellipse_at_100%_0%,rgba(236,72,153,0.12)_0%,transparent_45%),radial-gradient(ellipse_at_0%_100%,rgba(56,189,248,0.08)_0%,transparent_40%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.4)_0%,transparent_35%,rgba(2,6,23,0.85)_100%)]" />
 
@@ -462,9 +465,7 @@ export function Community() {
   const [filterMyPostsOnly, setFilterMyPostsOnly] = useState(false);
   const [filterBookmarkedOnly, setFilterBookmarkedOnly] = useState(false);
   const [showNewPostModal, setShowNewPostModal] = useState(false);
-  const [newPostContent, setNewPostContent] = useState("");
-  const [newPostCategory, setNewPostCategory] = useState("General Discussion");
-  const [newPostTags, setNewPostTags] = useState("");
+  const [privateProfileModalOpen, setPrivateProfileModalOpen] = useState(false);
   // Group posting is admin-managed; end-users post to the main feed.
 
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -864,23 +865,28 @@ export function Community() {
     }
   };
 
-  const handleCreatePost = async () => {
-    if (!newPostContent.trim()) {
-      toast.error("Write something before posting.");
+  const handleCreatePost = async (payload: {
+    content: string;
+    category: string;
+    userTags: string;
+  }) => {
+    const { content, category, userTags } = payload;
+    if (!content.trim()) {
+      toast.error("Select at least one item to share.");
       return;
     }
     setPosting(true);
     try {
-      const extra = newPostTags
+      const extra = userTags
         .split(",")
         .map((t) => t.trim())
         .filter(Boolean);
-      const tags = [newPostCategory, ...extra]
+      const tags = [category, ...extra]
         .map((t) => t.trim())
         .filter(Boolean)
         .slice(0, 20);
       const created = (await api.createCommunityPost({
-        content: newPostContent.trim(),
+        content: content.trim(),
         tags: tags.length ? tags : undefined,
         // group_id intentionally omitted
       })) as { id?: string; created_at?: string } | { id?: string; createdAt?: string } | any;
@@ -914,8 +920,8 @@ export function Community() {
         },
         isByCurrentUser: true,
         authorUserId: (profile as any)?.id ?? null,
-        content: newPostContent.trim(),
-        category: newPostCategory,
+        content: content.trim(),
+        category,
         createdAt: createdAtIso,
         views: 0,
         likes: 0,
@@ -927,9 +933,6 @@ export function Community() {
       setPostsData((prev) => [optimisticPost, ...prev]);
       setOverview((prev) => (prev ? { ...prev, posts: prev.posts + 1 } : prev));
 
-      setNewPostContent("");
-      setNewPostTags("");
-      setNewPostCategory("General Discussion");
       setShowNewPostModal(false);
       toast.success("Post published");
 
@@ -993,7 +996,7 @@ export function Community() {
 
   return (
     <>
-      <div className="relative min-h-screen overflow-hidden bg-[#06060f] text-slate-100 transition-colors duration-500">
+      <div className="relative min-h-screen overflow-hidden bg-[var(--solace-page-bg,var(--solace-bg))] text-[var(--solace-text)] transition-colors duration-500">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_120%_80%_at_50%_-20%,rgba(109,40,217,0.35)_0%,transparent_50%),radial-gradient(ellipse_at_100%_0%,rgba(236,72,153,0.12)_0%,transparent_45%),radial-gradient(ellipse_at_0%_100%,rgba(56,189,248,0.08)_0%,transparent_40%)]" />
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.4)_0%,transparent_35%,rgba(2,6,23,0.85)_100%)]" />
         <div className="pointer-events-none absolute inset-0 opacity-[0.4] mix-blend-soft-light bg-[url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.8%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22 opacity=%220.06%22/%3E%3C/svg%3E')]" />
@@ -1470,6 +1473,15 @@ export function Community() {
                                   >
                                     {headerLeft}
                                   </Link>
+                                ) : post.authorProfilePrivate ? (
+                                  <button
+                                    type="button"
+                                    className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none ring-offset-2 ring-offset-[#050816] transition-colors hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-violet-500/50"
+                                    onClick={() => setPrivateProfileModalOpen(true)}
+                                    aria-label={`${post.author.name} — private account`}
+                                  >
+                                    {headerLeft}
+                                  </button>
                                 ) : (
                                   headerLeft
                                 )}
@@ -2329,84 +2341,54 @@ export function Community() {
         </div>
       </div>
 
-      {showNewPostModal && (
+      {privateProfileModalOpen && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-[#030308]/80 p-4 backdrop-blur-xl"
-          onClick={() => !posting && setShowNewPostModal(false)}
+          onClick={() => setPrivateProfileModalOpen(false)}
+          role="presentation"
         >
           <motion.div
             initial={{ scale: 0.96, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
             onClick={(e: React.MouseEvent) => e.stopPropagation()}
-            className="w-full max-w-2xl rounded-[28px] border border-white/10 bg-[#0e0e18]/95 p-8 shadow-[0_0_80px_-20px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl"
+            className="w-full max-w-sm rounded-[28px] border border-white/10 bg-[#0e0e18]/95 p-8 text-center shadow-[0_0_80px_-20px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="private-profile-modal-title"
           >
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-2xl font-semibold tracking-tight text-white">Create a New Post</h3>
-              <button
-                type="button"
-                className="rounded-full border border-white/10 p-2 text-violet-200/70 transition-colors hover:bg-white/10 hover:text-white"
-                onClick={() => !posting && setShowNewPostModal(false)}
-                aria-label="Close"
-              >
-                <ArrowLeft className="h-6 w-6" />
-              </button>
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-violet-400/25 bg-violet-500/15 shadow-[0_0_32px_-8px_rgba(139,92,246,0.45)]">
+              <Lock className="h-6 w-6 text-violet-200/90" aria-hidden />
             </div>
-
-            <div className="space-y-4">
-              <textarea
-                value={newPostContent}
-                onChange={(e) => setNewPostContent(e.target.value)}
-                placeholder="Write your post here..."
-                className="min-h-[160px] w-full resize-none rounded-2xl border border-white/10 bg-black/40 p-4 text-white placeholder:text-violet-300/35 backdrop-blur-sm focus:border-fuchsia-400/40 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/20 disabled:opacity-50"
-                rows={6}
-                disabled={posting}
-              />
-
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-                <label className="shrink-0 font-medium text-violet-100/80">Category:</label>
-                <SolaceSelect
-                  value={newPostCategory}
-                  onValueChange={setNewPostCategory}
-                  ariaLabel="Post category"
-                  variant="form"
-                  disabled={posting}
-                  triggerClassName="flex-1"
-                  options={COMMUNITY_POST_CATEGORIES.map((c) => ({ value: c, label: c }))}
-                />
-              </div>
-
-              {/* Group selection removed: admins create/manage groups. */}
-
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-                <label className="shrink-0 font-medium text-violet-100/80">Tags:</label>
-                <input
-                  type="text"
-                  value={newPostTags}
-                  onChange={(e) => setNewPostTags(e.target.value)}
-                  placeholder="Add tags (comma-separated)"
-                  className="flex-1 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder:text-violet-300/35 backdrop-blur-sm focus:border-fuchsia-400/40 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/20 disabled:opacity-50"
-                  disabled={posting}
-                />
-              </div>
-
-              <motion.button
-                whileHover={{ y: posting ? 0 : -1 }}
-                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-500 px-6 py-4 text-lg font-semibold text-white shadow-[0_0_36px_rgba(192,38,211,0.35)] transition-shadow hover:shadow-[0_0_48px_rgba(192,38,211,0.5)] disabled:opacity-60"
-                onClick={handleCreatePost}
-                disabled={posting}
-                type="button"
-              >
-                {posting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
-                Post
-              </motion.button>
-            </div>
+            <h3
+              id="private-profile-modal-title"
+              className="text-lg font-semibold tracking-tight text-white"
+            >
+              Private account
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-[rgba(255,255,255,0.55)]">
+              This account is private.
+            </p>
+            <button
+              type="button"
+              className="mt-6 w-full rounded-2xl bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-500 px-6 py-3 text-sm font-semibold text-white shadow-[0_0_36px_rgba(192,38,211,0.35)] transition-shadow hover:shadow-[0_0_48px_rgba(192,38,211,0.5)]"
+              onClick={() => setPrivateProfileModalOpen(false)}
+            >
+              Got it
+            </button>
           </motion.div>
         </motion.div>
       )}
+
+      <CommunitySharePostModal
+        open={showNewPostModal}
+        posting={posting}
+        profile={profile}
+        onClose={() => setShowNewPostModal(false)}
+        onSubmit={(payload) => void handleCreatePost(payload)}
+      />
     </>
   );
 }

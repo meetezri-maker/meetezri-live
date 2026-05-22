@@ -20,12 +20,9 @@ import {
   wellnessPlanRailActionRow,
   wellnessPlanRailCard,
 } from "@/app/pages/app/wellness-plan-settings/wellnessPlanSettingsUi";
+import type { WellnessPlanEmergencyContact } from "@/app/pages/app/wellness-plan-settings/wellnessPlanModel";
 
-export interface WellnessPlanEmergencyContact {
-  id: string;
-  name: string;
-  phone: string | null;
-}
+export type { WellnessPlanEmergencyContact };
 
 interface WellnessPlanSafetyRailProps {
   contacts: WellnessPlanEmergencyContact[];
@@ -78,7 +75,7 @@ export function WellnessPlanSafetyRail({
               <HandHeart className="h-4 w-4" aria-hidden />
             </motion.div>
             <motion.div>
-              <h3 className="text-sm font-semibold text-white">In Crisis?</h3>
+              <h3 className="text-sm font-semibold text-white">In Emergency?</h3>
               <p className="mt-2 text-xs leading-relaxed text-[rgba(255,255,255,0.55)]">
                 You&apos;re not alone. Support is just a call or text away.
               </p>

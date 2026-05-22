@@ -50,6 +50,22 @@ import { GOAL_CATEGORY_OPTIONS, GOAL_EMOTION_TAG_OPTIONS } from '@/app/features/
 import { PREDEFINED_GOALS } from '@/app/features/goals/seedGoals';
 import type { GoalCategory } from '@/app/features/goals/types';
 import { SolaceSelect } from '@/app/solace';
+import {
+  achievementsCard,
+  achievementsEmptyState,
+  achievementsHeroOverlay,
+  achievementsHeroOverlayBottom,
+  achievementsHeroSection,
+  achievementsHeroSubtitle,
+  achievementsHeroTitle,
+  achievementsMilestoneCard,
+  achievementsPageAtmosphere,
+  achievementsPageFogMid,
+  achievementsPageGlowTop,
+  achievementsPageVignette,
+  achievementsSectionPanel,
+  achievementsStatStrip,
+} from '@/app/pages/app/achievements/achievementsUi';
 
 interface Achievement {
   id: string;
@@ -1148,14 +1164,11 @@ export function Achievements() {
 
   return (
     <>
-      <div
-        className={cn(
-          'min-h-full pb-12',
-          'bg-[radial-gradient(ellipse_110%_70%_at_50%_-18%,rgba(124,58,237,0.12),transparent_52%),radial-gradient(ellipse_50%_38%_at_100%_0%,rgba(236,72,153,0.06),transparent_40%),linear-gradient(180deg,#080b14_0%,#060912_55%,#05070f_100%)]',
-          'text-zinc-100'
-        )}
-      >
-        <div className="relative mx-auto max-w-[1580px] px-4 pb-10 pt-6 sm:px-6 lg:px-8 lg:pt-8">
+      <div className={cn(achievementsPageAtmosphere, 'relative min-h-full pb-12')}>
+        <div className={achievementsPageGlowTop} aria-hidden />
+        <div className={achievementsPageFogMid} aria-hidden />
+        <div className={achievementsPageVignette} aria-hidden />
+        <div className="relative z-10 mx-auto max-w-[1580px] px-4 pb-10 pt-6 sm:px-6 lg:px-8 lg:pt-8">
           <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
             <Link
               to="/app/settings"
@@ -1176,7 +1189,7 @@ export function Achievements() {
           <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_280px] xl:gap-10">
             <div className="min-w-0 space-y-8 sm:space-y-10">
               {/* Hero — full-bleed lotus scene */}
-              <section className="relative overflow-hidden rounded-3xl border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_24px_80px_-48px_rgba(0,0,0,0.85)]">
+              <section className={achievementsHeroSection}>
                 <img
                   src={ACHIEVEMENTS_IMAGES.hero}
                   alt="Glowing lotus on a moonlit lake with mountains at twilight"
@@ -1186,26 +1199,18 @@ export function Achievements() {
                   loading="eager"
                   decoding="async"
                 />
-                <div
-                  className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0618]/68 via-[#0a0618]/32 to-transparent"
-                  aria-hidden
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#05070f]/50 via-transparent to-transparent"
-                  aria-hidden
-                />
-                <div className="relative z-10 flex min-h-[280px] flex-col justify-center px-6 py-10 sm:min-h-[320px] sm:px-10 sm:py-12 lg:min-h-[340px] lg:px-12">
-                  <h1 className="max-w-xl font-serif text-4xl font-semibold tracking-tight text-white sm:text-[2.75rem] sm:leading-tight [text-shadow:0_2px_24px_rgba(0,0,0,0.55)]">
-                    Achievements
-                  </h1>
-                  <p className="mt-4 max-w-md text-[15px] leading-relaxed text-zinc-200/95 [text-shadow:0_1px_16px_rgba(0,0,0,0.45)]">
+                <div className={cn(achievementsHeroOverlay, 'pointer-events-none absolute inset-0 z-[1]')} aria-hidden />
+                <div className={cn(achievementsHeroOverlayBottom, 'pointer-events-none absolute inset-0 z-[1]')} aria-hidden />
+                <div className="solace-on-dark relative z-10 flex min-h-[280px] flex-col justify-center px-6 py-10 sm:min-h-[320px] sm:px-10 sm:py-12 lg:min-h-[340px] lg:px-12">
+                  <h1 className={achievementsHeroTitle}>Achievements</h1>
+                  <p className={achievementsHeroSubtitle}>
                     Celebrate your growth and the milestones that shape your best self.
                   </p>
                 </div>
               </section>
 
               {/* Progress summary strip */}
-              <section className="rounded-2xl border border-white/[0.07] bg-[#0b101c]/80 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md sm:p-0">
+              <section className={achievementsStatStrip}>
                 <div className="grid grid-cols-2 divide-y divide-white/[0.06] sm:grid-cols-4 sm:divide-x sm:divide-y-0">
                   <div className="flex min-h-[72px] items-center gap-3 px-3 py-3 sm:min-h-[76px] sm:px-4 sm:py-3">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/10 ring-1 ring-amber-400/20">
@@ -1377,7 +1382,7 @@ export function Achievements() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: Math.min(index * 0.04, 0.24) }}
                         className={cn(
-                          'group relative flex min-h-[280px] flex-col overflow-hidden rounded-2xl border bg-[#0c1018]/95 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md transition',
+                          'group relative flex min-h-[280px] flex-col overflow-hidden rounded-2xl border bg-[var(--solace-card-bg)] text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md transition',
                           isUnlocked
                             ? 'border-emerald-400/12 hover:border-emerald-400/22'
                             : 'border-white/[0.06] hover:border-white/12',
@@ -1493,7 +1498,7 @@ export function Achievements() {
               </section>
 
           {filteredAchievements.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-white/[0.12] bg-[#0b101c]/50 py-16 text-center backdrop-blur-xl">
+            <div className="rounded-3xl border border-dashed border-white/[0.12] bg-[var(--solace-card-bg)] py-16 text-center backdrop-blur-xl">
               <Trophy className="mx-auto mb-4 h-14 w-14 text-fuchsia-400/35" aria-hidden />
               <h3 className="font-serif text-xl font-semibold text-white">No trophies in this view</h3>
               <p className="mx-auto mt-2 max-w-md text-sm text-zinc-400">
@@ -1597,7 +1602,7 @@ export function Achievements() {
           </section>
 
           {/* Daily check-ins: goals sync to the goals API; personal achievements stay on this page only */}
-          <div className="space-y-6 rounded-3xl border border-white/[0.08] bg-[#0b101c]/55 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] backdrop-blur-xl sm:p-6">
+          <div className="space-y-6 rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] backdrop-blur-xl sm:p-6">
             {personalTrackItems.length === 0 ? (
               <>
                 <h2 className="text-lg font-semibold text-white">Daily rhythm</h2>
@@ -1863,7 +1868,7 @@ export function Achievements() {
             ) : null}
           </div>
 
-          <div className="space-y-4 rounded-3xl border border-white/[0.08] bg-[#0b101c]/55 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] backdrop-blur-xl sm:p-6">
+          <div className="space-y-4 rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] backdrop-blur-xl sm:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="font-serif text-lg font-semibold text-white">30-day reflection export</h2>
@@ -1897,7 +1902,7 @@ export function Achievements() {
             </div>
 
             <aside className="min-w-0 space-y-5 xl:sticky xl:top-4 xl:self-start">
-              <div className="rounded-3xl border border-white/[0.08] bg-[#0b101c]/90 p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
+              <div className="rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Your Progress</p>
                 <div className="relative mx-auto mt-4 size-36 overflow-hidden sm:size-40">
                   <svg className="size-full -rotate-90" viewBox="0 0 100 100" aria-hidden>
@@ -1933,7 +1938,7 @@ export function Achievements() {
                 </p>
               </div>
 
-              <div className="rounded-3xl border border-white/[0.08] bg-[#0b101c]/90 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
+              <div className="rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
                 <div className="flex items-center gap-3">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-fuchsia-500/12 ring-1 ring-fuchsia-400/22">
                     <Diamond className="h-5 w-5 text-fuchsia-200/95" aria-hidden />
@@ -1964,7 +1969,7 @@ export function Achievements() {
                 </p>
               </div>
 
-              <div className="rounded-3xl border border-orange-400/15 bg-[#0b101c]/90 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
+              <div className="rounded-3xl border border-orange-400/15 bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
                 <div className="flex items-start gap-3">
                   <Flame
                     className="mt-0.5 h-6 w-6 shrink-0 text-amber-300/90"
@@ -1993,7 +1998,7 @@ export function Achievements() {
                 </div>
               </div>
 
-              <div className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[#0a0f18] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_85%_0%,rgba(251,191,36,0.08),transparent_48%)]" />
                 <div className="relative flex items-start gap-3">
                   <Headphones className="mt-0.5 h-6 w-6 shrink-0 text-cyan-200/80" aria-hidden />

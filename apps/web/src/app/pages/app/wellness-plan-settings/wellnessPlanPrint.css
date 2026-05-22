@@ -1,0 +1,133 @@
+/**
+ * Wellness plan print/PDF — preserve dark theme and hide app chrome.
+ * Scoped via `.wellness-plan-print-root` on the SafetyPlan page wrapper.
+ */
+
+@media print {
+  @page {
+    margin: 0.6in;
+    size: portrait;
+    background: #0a0b18;
+  }
+
+  html,
+  html.wellness-plan-printing,
+  body,
+  html.wellness-plan-printing body {
+    background: #0a0b18 !important;
+    color: #f4f4f5 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-scheme: dark;
+  }
+
+  /* Hide member app shell */
+  .solace-app-header,
+  .solace-mobile-nav,
+  .solace-sidebar-shell {
+    display: none !important;
+  }
+
+  .solace-app,
+  .solace-scroll,
+  .solace-app main {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    padding: 0 !important;
+    padding-left: 0 !important;
+    padding-bottom: 0 !important;
+    margin: 0 !important;
+    background: #0a0b18 !important;
+  }
+
+  .wellness-plan-print-root {
+    position: relative !important;
+    min-height: auto !important;
+    background: #0a0b18 !important;
+    color: #f4f4f5 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .wellness-plan-print-root,
+  .wellness-plan-print-root * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .wellness-plan-print-root .wellness-plan-print-atmosphere {
+    display: none !important;
+  }
+
+  .wellness-plan-print-root > .relative.z-10 {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  .wellness-plan-print-root .wellness-plan-print-grid {
+    display: block !important;
+  }
+
+  .wellness-plan-print-root aside,
+  .wellness-plan-printing .wellness-plan-print-root aside {
+    display: none !important;
+  }
+
+  .wellness-plan-print-root .print\\:hidden {
+    display: none !important;
+  }
+
+  .wellness-plan-print-root h1,
+  .wellness-plan-print-root h2,
+  .wellness-plan-print-root h3,
+  .wellness-plan-print-root p,
+  .wellness-plan-print-root li,
+  .wellness-plan-print-root span {
+    color: inherit;
+  }
+
+  .wellness-plan-print-root h1,
+  .wellness-plan-print-root h2,
+  .wellness-plan-print-root h3 {
+    color: #ffffff !important;
+  }
+
+  .wellness-plan-print-root p,
+  .wellness-plan-print-root .text-sm,
+  .wellness-plan-print-root [class*="text-\\[rgba"] {
+    color: rgba(255, 255, 255, 0.82) !important;
+  }
+
+  .wellness-plan-print-root .font-serif {
+    color: #ffffff !important;
+  }
+
+  .wellness-plan-print-root section,
+  .wellness-plan-print-root article {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .wellness-plan-print-root [class*="rounded-3xl"],
+  .wellness-plan-print-root [class*="rounded-2xl"],
+  .wellness-plan-print-root [class*="rounded-[1.625rem]"] {
+    background: linear-gradient(
+      165deg,
+      rgba(24, 16, 36, 0.95) 0%,
+      rgba(12, 10, 24, 0.98) 100%
+    ) !important;
+    border-color: rgba(255, 255, 255, 0.14) !important;
+    box-shadow: none !important;
+  }
+
+  .wellness-plan-print-root img {
+    opacity: 0.55 !important;
+    filter: none !important;
+  }
+
+  .wellness-plan-print-root a[href^="tel:"] {
+    color: #fda4af !important;
+    text-decoration: none !important;
+  }
+}

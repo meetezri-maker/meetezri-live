@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { MOOD_CHECKIN_IMAGES } from "@/lib/solace/moodCheckInImages";
 import {
   EMERGENCY_HERO_IMG,
   EMERGENCY_RAIL_IMG,
@@ -124,11 +125,24 @@ export const crisisArticleRow = cn(
   "hover:shadow-[0_0_32px_-12px_rgba(139,92,246,0.28)]"
 );
 
+/** Lotus-on-lake mood check-in hero — "You Are Not Alone" banner plate */
+export const CRISIS_ALONE_BANNER_IMG = MOOD_CHECKIN_IMAGES.heroBanner;
+
 export const crisisAloneBanner = cn(
-  "relative overflow-hidden rounded-[1.5rem] border border-fuchsia-400/20 p-5 sm:p-6",
-  "bg-[linear-gradient(135deg,rgba(76,29,149,0.55)_0%,rgba(136,19,55,0.45)_48%,rgba(30,16,48,0.88)_100%)]",
+  "relative overflow-hidden rounded-[1.5rem] border border-fuchsia-400/20",
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_0_48px_-12px_rgba(236,72,153,0.35),0_28px_72px_-36px_rgba(0,0,0,0.75)]"
 );
+
+export const crisisAloneBannerImage = cn(
+  "absolute inset-0 h-full w-full object-cover object-[center_38%] opacity-45"
+);
+
+export const crisisAloneBannerOverlay = cn(
+  "absolute inset-0",
+  "bg-[linear-gradient(135deg,rgba(76,29,149,0.55)_0%,rgba(136,19,55,0.45)_48%,rgba(30,16,48,0.88)_100%)]"
+);
+
+export const crisisAloneBannerContent = cn("relative p-5 sm:p-6");
 
 export const crisisRailHeartWrap = cn(
   "mx-auto flex h-16 w-16 items-center justify-center rounded-full",

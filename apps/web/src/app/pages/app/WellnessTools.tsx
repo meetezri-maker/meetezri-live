@@ -938,7 +938,7 @@ export function WellnessTools() {
 
   if (isLoading) {
     return (
-      <div className="relative overflow-x-hidden bg-[#080512] px-8 pt-6 pb-28 text-zinc-100 lg:pb-16">
+      <div className="relative overflow-x-hidden bg-[var(--solace-page-bg,var(--solace-bg))] px-8 pt-6 pb-28 text-[var(--solace-text)] lg:pb-16">
         <div
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_100%_55%_at_50%_-8%,rgba(192,132,252,0.2),transparent_52%),radial-gradient(ellipse_55%_48%_at_100%_15%,rgba(244,114,182,0.11),transparent_52%),radial-gradient(ellipse_50%_42%_at_0%_50%,rgba(139,92,246,0.1),transparent_48%),radial-gradient(ellipse_70%_45%_at_50%_100%,rgba(251,146,60,0.06),transparent_55%)]"
           aria-hidden
@@ -978,7 +978,7 @@ export function WellnessTools() {
 
   return (
     <>
-      <div className="relative overflow-x-hidden bg-[#080512] pb-28 text-zinc-100 lg:pb-16">
+      <div className="relative overflow-x-hidden bg-[var(--solace-page-bg,var(--solace-bg))] pb-28 text-[var(--solace-text)] lg:pb-16">
         <div
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_100%_55%_at_50%_-8%,rgba(192,132,252,0.2),transparent_52%),radial-gradient(ellipse_55%_48%_at_100%_15%,rgba(244,114,182,0.11),transparent_52%),radial-gradient(ellipse_50%_42%_at_0%_50%,rgba(139,92,246,0.1),transparent_48%),radial-gradient(ellipse_70%_45%_at_50%_100%,rgba(251,146,60,0.06),transparent_55%)]"
           aria-hidden
@@ -1345,7 +1345,7 @@ export function WellnessTools() {
                                   <Play className="h-3.5 w-3.5 shrink-0" aria-hidden />
                                   Start Practice
                                 </Button>
-                                <Button
+                                {/* <Button
                                   type="button"
                                   onClick={() => setGuidedExercise(exercise.id)}
                                   size="sm"
@@ -1354,7 +1354,7 @@ export function WellnessTools() {
                                 >
                                   <Sparkles className="h-3 w-3" aria-hidden />
                                   Solace
-                                </Button>
+                                </Button> */}
                               </div>
                             </div>
                           </div>

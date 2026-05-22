@@ -96,7 +96,7 @@ export function BrainHealthRightRail({
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <SolacePanel glow="cyan" soft className="p-4 sm:p-5">
+      <SolacePanel glow="cyan" soft className="solace-rail-card light-theme-card-hover p-4 sm:p-5">
         <div className="flex items-start justify-between gap-2">
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--solace-muted)]">
             Your Cognitive Rhythm
@@ -166,7 +166,7 @@ export function BrainHealthRightRail({
         </div>
       </SolacePanel>
 
-      <SolacePanel glow="violet" soft className="p-4 sm:p-5">
+      <SolacePanel glow="violet" soft className="solace-rail-card light-theme-card-hover p-4 sm:p-5">
         <div className="flex items-start justify-between gap-2">
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--solace-muted)]">Clarity trend</p>
           <Select value={clarityRange} onValueChange={(v) => onClarityRangeChange(v as BrainHealthClarityRange)}>
@@ -234,7 +234,7 @@ export function BrainHealthRightRail({
         )}
       </SolacePanel>
 
-      <SolacePanel glow="amber" soft className="p-4 sm:p-5">
+      <SolacePanel glow="amber" soft className="solace-rail-card light-theme-card-hover--gold p-4 sm:p-5">
         <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--solace-muted)]">Recent insights</p>
         {insightRows.length > 0 ? (
           <ul className="mt-4 space-y-3">
@@ -260,7 +260,7 @@ export function BrainHealthRightRail({
         )}
       </SolacePanel>
 
-      <SolacePanel glow="violet" className="p-4 sm:p-5">
+      <SolacePanel glow="violet" className="solace-rail-card light-theme-card-hover p-4 sm:p-5">
         <p className="text-sm font-medium text-zinc-100">Need extra support?</p>
         <p className="mt-2 text-xs leading-relaxed text-zinc-400">
           Talk to Solace anytime or explore tools that can help.

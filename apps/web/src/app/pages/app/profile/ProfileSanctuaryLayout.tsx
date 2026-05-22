@@ -33,7 +33,9 @@ import {
   MessageCircle,
   FileText,
 } from "lucide-react";
-import { SolaceHeroEnvironment, SolaceSelect } from "@/app/solace";
+import { SolaceDateOfBirthPicker, SolaceHeroEnvironment, SolaceSelect } from "@/app/solace";
+import { profileAgeDisplayLabel } from "@/lib/profileAge";
+import { cn } from "@/lib/utils";
 import { Switch } from "@/app/components/ui/switch";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import {
@@ -87,6 +89,12 @@ import {
   profileInput,
   profilePhoneButton,
   profilePhoneInput,
+  profileDropdownCommand,
+  profileDropdownCommandEmpty,
+  profileDropdownCommandInput,
+  profileDropdownCommandItem,
+  profileDropdownCommandList,
+  profileDropdownPopover,
   profileHeroStatStrip,
   profileIconCircle,
   profileMilestoneChip,
@@ -172,6 +180,7 @@ interface ProfileSanctuaryLayoutProps {
     iconTone?: "violet" | "pink" | "cyan" | "amber" | "rose" | "emerald";
   }>;
   PILL: string;
+  profileAgeStorage: string | null;
 }
 
 export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
@@ -231,6 +240,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
     AVATAR_EXPORT_HEIGHT,
     FieldRow,
     PILL,
+    profileAgeStorage,
   } = props;
 
   const displayName = form.watch("name") || "Your name";
@@ -583,7 +593,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                     {[
                       { name: "name" as const, label: "Full name", icon: <User className="h-3.5 w-3.5" />, placeholder: "Your name" },
                       { name: "email" as const, label: "Email", icon: <Mail className="h-3.5 w-3.5" />, placeholder: "you@email.com" },
-                      { name: "birthday" as const, label: "Age", icon: <Calendar className="h-3.5 w-3.5" />, placeholder: "Age", numeric: true },
+                      { name: "birthday" as const, label: "Age", icon: <Calendar className="h-3.5 w-3.5" />, placeholder: "Select date of birth", isBirthday: true },
                       { name: "pronouns" as const, label: "Pronouns", icon: <User className="h-3.5 w-3.5" />, placeholder: "they/them" },
                       { name: "location" as const, label: "Location / Timezone", icon: <MapPin className="h-3.5 w-3.5" />, placeholder: "Timezone" },
                     ].map((f) => (
@@ -633,6 +643,20 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                       />
                                     )}
                                   </motion.div>
+                                ) : f.name === "birthday" ? (
+                                  <SolaceDateOfBirthPicker
+                                    value={field.value ?? ""}
+                                    onChange={field.onChange}
+                                    disabled={isSaving}
+                                    showLabelIcon={false}
+                                    showAgeHint
+                                    placeholder="MM/DD/YYYY"
+                                    triggerClassName={cn(
+                                      profileInput,
+                                      "pr-10 text-sm"
+                                    )}
+                                    className="w-full"
+                                  />
                                 ) : f.name === "location" ? (
                                   <Popover open={timezoneOpen} onOpenChange={setTimezoneOpen}>
                                     <PopoverTrigger asChild>
@@ -647,15 +671,27 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
                                       </button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-[--radix-popover-trigger-width] border-white/10 bg-zinc-900 p-0" align="start">
-                                      <Command>
-                                        <CommandInput placeholder="Search timezone…" />
-                                        <CommandList>
-                                          <CommandEmpty>No timezone found.</CommandEmpty>
+                                    <PopoverContent
+                                      className={cn(
+                                        profileDropdownPopover,
+                                        "w-[--radix-popover-trigger-width]"
+                                      )}
+                                      align="start"
+                                    >
+                                      <Command className={profileDropdownCommand}>
+                                        <CommandInput
+                                          placeholder="Search timezone…"
+                                          className={profileDropdownCommandInput}
+                                        />
+                                        <CommandList className={profileDropdownCommandList}>
+                                          <CommandEmpty className={profileDropdownCommandEmpty}>
+                                            No timezone found.
+                                          </CommandEmpty>
                                           <CommandGroup>
                                             {availableTimezones.map((timezone) => (
                                               <CommandItem
                                                 key={timezone}
+                                                className={profileDropdownCommandItem}
                                                 value={`${timezone} ${formatTimezoneOptionLabel(timezone)}`}
                                                 onSelect={() => {
                                                   field.onChange(timezone);
@@ -676,18 +712,22 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                     {...field}
                                     disabled={isSaving}
                                     placeholder={f.placeholder}
-                                    inputMode={f.numeric ? "numeric" : undefined}
-                                    onChange={f.numeric ? (e) => field.onChange(e.target.value.replace(/\D/g, "")) : field.onChange}
                                     className="w-full bg-transparent text-sm font-medium text-zinc-100 outline-none placeholder:text-zinc-600"
                                   />
                                 )
                               ) : (
                                 <p className="truncate text-sm font-medium text-zinc-200">
-                                  {f.numeric && field.value
-                                    ? `${String(field.value).replace(/\D/g, "")} years old`
-                                    : f.name === "location" && field.value
-                                      ? formatTimezoneOptionLabel(String(field.value))
-                                      : field.value || <span className="font-normal text-zinc-600">Not set</span>}
+                                  {f.name === "birthday" ? (
+                                    profileAgeDisplayLabel(profileAgeStorage ?? field.value) || (
+                                      <span className="font-normal text-zinc-600">Not set</span>
+                                    )
+                                  ) : f.name === "location" && field.value ? (
+                                    formatTimezoneOptionLabel(String(field.value))
+                                  ) : field.value ? (
+                                    String(field.value)
+                                  ) : (
+                                    <span className="font-normal text-zinc-600">Not set</span>
+                                  )}
                                 </p>
                               )}
                             </FieldRow>
@@ -717,6 +757,12 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                 className="w-full min-w-0"
                                 buttonClassName={profilePhoneButton}
                                 inputClassName={profilePhoneInput}
+                                popoverClassName={profileDropdownPopover}
+                                commandClassName={profileDropdownCommand}
+                                commandInputClassName={profileDropdownCommandInput}
+                                commandListClassName={profileDropdownCommandList}
+                                commandItemClassName={profileDropdownCommandItem}
+                                commandEmptyClassName={profileDropdownCommandEmpty}
                               />
                             </div>
                           ) : (
@@ -994,6 +1040,12 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                 className="w-full min-w-0"
                                 buttonClassName={profileEmergencyPhoneButton}
                                 inputClassName={profileEmergencyPhoneInput}
+                                popoverClassName={profileDropdownPopover}
+                                commandClassName={profileDropdownCommand}
+                                commandInputClassName={profileDropdownCommandInput}
+                                commandListClassName={profileDropdownCommandList}
+                                commandItemClassName={profileDropdownCommandItem}
+                                commandEmptyClassName={profileDropdownCommandEmpty}
                               />
                             ) : (
                               <div className="flex items-center gap-2">

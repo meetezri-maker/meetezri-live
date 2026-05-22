@@ -4,36 +4,32 @@ import {
   ArrowLeft,
   BookOpen,
   Check,
-  ChevronDown,
   Contrast,
   ExternalLink,
-  Focus,
   Hand,
   Heart,
-  Keyboard,
-  Link2,
-  Mic,
   MousePointer,
   PlayCircle,
   Shield,
   Sparkles,
-  Subtitles,
   Type,
-  Volume2,
   Waves,
   AlignVerticalSpaceAround,
   SeparatorHorizontal,
   HelpCircle,
-  Home,
-  MessageCircle,
-  BarChart3,
-  Settings,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useAuth } from "@/app/contexts/AuthContext";
 import { cn } from "@/lib/utils";
-import { SolaceSelect } from "@/app/solace";
+import {
+  applyAccessibilitySettings,
+  lineHeightToNumber,
+  letterSpacingToCss,
+  wordSpacingToCss,
+  loadAccessibilitySettings,
+  saveAccessibilitySettings,
+  type AccessibilitySettings,
+} from "@/app/pages/app/accessibility-settings/applyAccessibilitySettings";
 import {
   ACCESSIBILITY_HEART_IMG,
   ACCESSIBILITY_HERO_IMG,
@@ -74,45 +70,41 @@ import {
   accessibilityWcagBanner,
 } from "@/app/pages/app/accessibility-settings/accessibilitySettingsUi";
 
-type AccessibilitySettingsState = {
-  fontSize: string;
-  textSpacing: string;
-  highContrast: boolean;
-  reducedMotion: boolean;
-  screenReader: boolean;
-  closedCaptions: boolean;
-  keyboardNav: boolean;
-  focusIndicators: boolean;
-  autoPlay: boolean;
-  largeClickTargets: boolean;
-};
-
 interface AccessibilityToggleProps {
   enabled: boolean;
   onToggle: () => void;
   ariaLabel: string;
+  disabled?: boolean;
 }
 
-function AccessibilityToggle({ enabled, onToggle, ariaLabel }: AccessibilityToggleProps) {
+function AccessibilityToggle({
+  enabled,
+  onToggle,
+  ariaLabel,
+  disabled = false,
+}: AccessibilityToggleProps) {
   return (
     <motion.button
       type="button"
       role="switch"
       aria-checked={enabled}
       aria-label={ariaLabel}
-      whileTap={{ scale: 0.95 }}
-      onClick={onToggle}
+      aria-disabled={disabled}
+      disabled={disabled}
+      whileTap={disabled ? undefined : { scale: 0.95 }}
+      onClick={disabled ? undefined : onToggle}
       className={cn(
-        "relative h-8 w-14 shrink-0 rounded-full transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/45",
+        "a11y-toggle relative h-8 w-14 shrink-0 rounded-full border border-transparent transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/45",
+        disabled && "cursor-not-allowed opacity-45",
         enabled
-          ? "bg-gradient-to-r from-emerald-500/75 to-teal-500/75 shadow-[0_0_20px_-4px_rgba(52,211,153,0.55)]"
+          ? "border-emerald-400/45 bg-gradient-to-r from-emerald-500/75 to-teal-500/75 shadow-[0_0_20px_-4px_rgba(52,211,153,0.55)]"
           : "bg-white/10"
       )}
     >
       <motion.span
         animate={{ x: enabled ? 26 : 4 }}
         transition={{ type: "spring", stiffness: 500, damping: 32 }}
-        className="absolute top-1 left-0 h-6 w-6 rounded-full bg-white shadow-md"
+        className="a11y-toggle-thumb absolute top-1 left-0 h-6 w-6 rounded-full bg-white shadow-md"
       />
     </motion.button>
   );
@@ -127,7 +119,11 @@ interface SegmentedControlProps {
 
 function SegmentedControl({ options, value, onChange, ariaLabel }: SegmentedControlProps) {
   return (
-    <motion.div className={accessibilitySegmentTrack} role="group" aria-label={ariaLabel}>
+    <motion.div
+      className={cn(accessibilitySegmentTrack, "a11y-segment-track")}
+      role="group"
+      aria-label={ariaLabel}
+    >
       {options.map((opt) => {
         const selected = value === opt.value;
         return (
@@ -136,7 +132,7 @@ function SegmentedControl({ options, value, onChange, ariaLabel }: SegmentedCont
             type="button"
             whileTap={{ scale: 0.98 }}
             onClick={() => onChange(opt.value)}
-            className={accessibilitySegmentOption(selected)}
+            className={cn(accessibilitySegmentOption(selected), "a11y-segment-btn")}
             aria-pressed={selected}
           >
             {selected && <Check className="h-3 w-3 shrink-0 text-emerald-300" strokeWidth={3} aria-hidden />}
@@ -145,29 +141,6 @@ function SegmentedControl({ options, value, onChange, ariaLabel }: SegmentedCont
         );
       })}
     </motion.div>
-  );
-}
-
-interface AccessibilitySliderProps {
-  value: number;
-  onChange: (value: number) => void;
-  ariaLabel: string;
-}
-
-function AccessibilitySlider({ value, onChange, ariaLabel }: AccessibilitySliderProps) {
-  return (
-    <input
-      type="range"
-      min={0}
-      max={100}
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      aria-label={ariaLabel}
-      className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/[0.08] accent-emerald-400 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-emerald-400 [&::-webkit-slider-thumb]:shadow-[0_0_12px_rgba(52,211,153,0.65)]"
-      style={{
-        background: `linear-gradient(to right, rgba(52,211,153,0.65) 0%, rgba(52,211,153,0.65) ${value}%, rgba(255,255,255,0.08) ${value}%, rgba(255,255,255,0.08) 100%)`,
-      }}
-    />
   );
 }
 
@@ -203,6 +176,7 @@ interface CompactToggleCardProps {
   onToggle: () => void;
   ariaLabel: string;
   tight?: boolean;
+  disabled?: boolean;
 }
 
 function CompactToggleCard({
@@ -214,6 +188,7 @@ function CompactToggleCard({
   onToggle,
   ariaLabel,
   tight = false,
+  disabled = false,
 }: CompactToggleCardProps) {
   return (
     <motion.div
@@ -226,62 +201,27 @@ function CompactToggleCard({
         <p className="mt-1 text-[11px] leading-relaxed text-[rgba(255,255,255,0.42)]">{description}</p>
       </div>
       <div className={tight ? "mt-3" : "mt-4"}>
-        <AccessibilityToggle enabled={enabled} onToggle={onToggle} ariaLabel={ariaLabel} />
+        <AccessibilityToggle
+          enabled={enabled}
+          onToggle={onToggle}
+          ariaLabel={ariaLabel}
+          disabled={disabled}
+        />
       </div>
     </motion.div>
   );
 }
 
 export function AccessibilitySettings() {
-  const { user, profile } = useAuth();
-
-  const getDefaultSettings = (): AccessibilitySettingsState => ({
-    fontSize: "medium",
-    textSpacing: "normal",
-    highContrast: false,
-    reducedMotion: false,
-    screenReader: false,
-    closedCaptions: true,
-    keyboardNav: true,
-    focusIndicators: true,
-    autoPlay: false,
-    largeClickTargets: false,
-  });
-
-  const [settings, setSettings] = useState<AccessibilitySettingsState>(() => {
-    const isBrowser =
-      typeof window !== "undefined" && typeof window.localStorage !== "undefined";
-    const saved = isBrowser
-      ? window.localStorage.getItem("ezri_accessibility_settings")
-      : null;
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as Partial<AccessibilitySettingsState>;
-        return {
-          ...getDefaultSettings(),
-          ...parsed,
-        };
-      } catch {
-        return getDefaultSettings();
-      }
-    }
-    return getDefaultSettings();
-  });
-
+  const [settings, setSettings] = useState<AccessibilitySettings>(() => loadAccessibilitySettings());
   const [showSavedMessage, setShowSavedMessage] = useState(false);
   const hasInitializedSettings = useRef(false);
 
-  const [ambientEffects, setAmbientEffects] = useState(28);
-  const [breathingAnimation, setBreathingAnimation] = useState(42);
-  const [dyslexiaFont, setDyslexiaFont] = useState(false);
-  const [readingWidth, setReadingWidth] = useState("medium");
-  const [calmTransitions, setCalmTransitions] = useState(true);
-  const [voiceNavigation, setVoiceNavigation] = useState(false);
-  const [guidedMode, setGuidedMode] = useState(false);
-  const [colorFilter, setColorFilter] = useState("off");
-  const [descriptiveLabels, setDescriptiveLabels] = useState(true);
+  const updateSettings = (patch: Partial<AccessibilitySettings>) => {
+    setSettings((prev) => ({ ...prev, ...patch }));
+  };
 
-  const toggleSetting = (key: keyof AccessibilitySettingsState) => {
+  const toggleSetting = (key: keyof AccessibilitySettings) => {
     setSettings((prev) => ({
       ...prev,
       [key]: !prev[key],
@@ -289,93 +229,19 @@ export function AccessibilitySettings() {
   };
 
   useEffect(() => {
-    if (typeof window === "undefined" || typeof window.localStorage === "undefined") return;
+    applyAccessibilitySettings(settings);
+  }, [settings]);
+
+  useEffect(() => {
     if (!hasInitializedSettings.current) {
       hasInitializedSettings.current = true;
       return;
     }
-    window.localStorage.setItem("ezri_accessibility_settings", JSON.stringify(settings));
+    saveAccessibilitySettings(settings);
     setShowSavedMessage(true);
-    const timer = setTimeout(() => {
-      setShowSavedMessage(false);
-    }, 2000);
+    const timer = setTimeout(() => setShowSavedMessage(false), 2000);
     return () => clearTimeout(timer);
   }, [settings]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const root = document.documentElement;
-    const fontSizePx =
-      settings.fontSize === "small"
-        ? "14px"
-        : settings.fontSize === "large"
-          ? "18px"
-          : settings.fontSize === "xlarge"
-            ? "20px"
-            : "16px";
-    root.style.setProperty("--font-size", fontSizePx);
-  }, [settings.fontSize]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const root = document.documentElement;
-    const textSpacingMap: Record<string, { lineHeight: string; letterSpacing: string }> = {
-      compact: { lineHeight: "1.35", letterSpacing: "-0.005em" },
-      normal: { lineHeight: "1.5", letterSpacing: "0em" },
-      relaxed: { lineHeight: "1.7", letterSpacing: "0.01em" },
-      loose: { lineHeight: "1.9", letterSpacing: "0.015em" },
-    };
-    const spacing = textSpacingMap[settings.textSpacing] || textSpacingMap.normal;
-    root.style.setProperty("--text-line-height", spacing.lineHeight);
-    root.style.setProperty("--text-letter-spacing", spacing.letterSpacing);
-  }, [settings.textSpacing]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const root = document.documentElement;
-    if (settings.highContrast) {
-      root.classList.add("high-contrast");
-    } else {
-      root.classList.remove("high-contrast");
-    }
-  }, [settings.highContrast]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const root = document.documentElement;
-    if (settings.reducedMotion) {
-      root.classList.add("reduced-motion");
-    } else {
-      root.classList.remove("reduced-motion");
-    }
-  }, [settings.reducedMotion]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const root = document.documentElement;
-    if (settings.focusIndicators) {
-      root.classList.add("focus-indicators");
-    } else {
-      root.classList.remove("focus-indicators");
-    }
-  }, [settings.focusIndicators]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const root = document.documentElement;
-    if (settings.largeClickTargets) {
-      root.classList.add("large-click-targets");
-    } else {
-      root.classList.remove("large-click-targets");
-    }
-  }, [settings.largeClickTargets]);
-
-  const displayName =
-    (typeof profile?.full_name === "string" && profile.full_name.trim()) ||
-    user?.email?.split("@")[0] ||
-    "Member";
-
-  const firstName = displayName.split(" ")[0];
 
   const fontSizes = [
     { value: "small", label: "Small" },
@@ -390,33 +256,13 @@ export function AccessibilitySettings() {
     { value: "relaxed", label: "Relaxed" },
   ];
 
-  const lineHeightValue =
-    settings.textSpacing === "compact"
-      ? "tight"
-      : settings.textSpacing === "relaxed" || settings.textSpacing === "loose"
-        ? "loose"
-        : "normal";
-
   const lineHeightOptions = [
     { value: "tight", label: "Tight" },
     { value: "normal", label: "Normal" },
     { value: "loose", label: "Loose" },
   ];
 
-  const readingWidthOptions = [
-    { value: "narrow", label: "Narrow" },
-    { value: "medium", label: "Medium" },
-    { value: "wide", label: "Wide" },
-  ];
-
-  const handleLineHeightChange = (value: string) => {
-    const map: Record<string, string> = {
-      tight: "compact",
-      normal: "normal",
-      loose: "relaxed",
-    };
-    setSettings((prev) => ({ ...prev, textSpacing: map[value] || "normal" }));
-  };
+  const previewLineHeight = lineHeightToNumber(settings.lineHeight);
 
   const containerFontSize =
     settings.fontSize === "small"
@@ -437,20 +283,17 @@ export function AccessibilitySettings() {
           : "text-2xl";
 
   const comfortScore = useMemo(() => {
-    let score = 62;
-    if (settings.fontSize === "large" || settings.fontSize === "xlarge") score += 6;
-    if (settings.textSpacing === "normal" || settings.textSpacing === "relaxed") score += 4;
-    if (settings.keyboardNav) score += 5;
-    if (settings.screenReader) score += 4;
-    if (settings.focusIndicators) score += 5;
-    if (settings.largeClickTargets) score += 4;
-    if (settings.closedCaptions) score += 3;
-    if (!settings.reducedMotion && calmTransitions) score += 4;
-    if (!settings.highContrast) score += 2;
-    if (settings.closedCaptions) score += 3;
-    if (descriptiveLabels) score += 3;
+    let score = 58;
+    if (settings.fontSize === "large" || settings.fontSize === "xlarge") score += 8;
+    if (settings.letterSpacing === "normal" || settings.letterSpacing === "relaxed") score += 4;
+    if (settings.lineHeight === "normal" || settings.lineHeight === "loose") score += 4;
+    if (settings.dyslexiaFont) score += 5;
+    if (settings.largeClickTargets) score += 8;
+    if (settings.reducedMotion) score += 6;
+    else if (settings.calmTransitions) score += 5;
+    if (settings.highContrast) score += 8;
     return Math.min(95, score);
-  }, [settings, calmTransitions, descriptiveLabels]);
+  }, [settings]);
 
   const comfortLabel =
     comfortScore >= 85 ? "Great Balance" : comfortScore >= 70 ? "Comfortable" : "Getting Started";
@@ -459,14 +302,14 @@ export function AccessibilitySettings() {
     const order = ["xlarge", "large", "medium", "small"] as const;
     const idx = order.indexOf(settings.fontSize as (typeof order)[number]);
     const next = order[Math.min(order.length - 1, idx + 1)] ?? "small";
-    setSettings((prev) => ({ ...prev, fontSize: next }));
+    updateSettings({ fontSize: next });
   };
 
   const cycleFontLarger = () => {
     const order = ["small", "medium", "large", "xlarge"] as const;
     const idx = order.indexOf(settings.fontSize as (typeof order)[number]);
     const next = order[Math.min(order.length - 1, idx + 1)] ?? "xlarge";
-    setSettings((prev) => ({ ...prev, fontSize: next }));
+    updateSettings({ fontSize: next });
   };
 
   return (
@@ -529,7 +372,7 @@ export function AccessibilitySettings() {
                   <BookOpen className="h-4 w-4" aria-hidden />
                 </div>
                 <div>
-                  <h2 className={accessibilitySectionHeading}>1. Text &amp; Readability</h2>
+                  <h2 className={accessibilitySectionHeading}>Text &amp; Readability</h2>
                   <p className={accessibilitySectionSubtitle}>
                     Improve clarity and reduce eye strain.
                   </p>
@@ -546,7 +389,7 @@ export function AccessibilitySettings() {
                     <SegmentedControl
                       options={fontSizes}
                       value={settings.fontSize}
-                      onChange={(v) => setSettings((prev) => ({ ...prev, fontSize: v }))}
+                      onChange={(v) => updateSettings({ fontSize: v })}
                       ariaLabel="Font size"
                     />
                   }
@@ -555,14 +398,16 @@ export function AccessibilitySettings() {
                   icon={<SeparatorHorizontal className="h-4 w-4" aria-hidden />}
                   tone="cyan"
                   title="Text Spacing"
-                  description="Adjust spacing between text"
+                  description="Adjust space between letters and words"
                   control={
                     <SegmentedControl
                       options={textSpacingOptions}
-                      value={
-                        settings.textSpacing === "loose" ? "relaxed" : settings.textSpacing
+                      value={settings.letterSpacing}
+                      onChange={(v) =>
+                        updateSettings({
+                          letterSpacing: v as AccessibilitySettings["letterSpacing"],
+                        })
                       }
-                      onChange={(v) => setSettings((prev) => ({ ...prev, textSpacing: v }))}
                       ariaLabel="Text spacing"
                     />
                   }
@@ -571,45 +416,33 @@ export function AccessibilitySettings() {
                   icon={<AlignVerticalSpaceAround className="h-4 w-4" aria-hidden />}
                   tone="blue"
                   title="Line Height"
-                  description="Adjust line height for easier reading"
+                  description="Adjust vertical space between lines"
                   control={
                     <SegmentedControl
                       options={lineHeightOptions}
-                      value={lineHeightValue}
-                      onChange={handleLineHeightChange}
+                      value={settings.lineHeight}
+                      onChange={(v) =>
+                        updateSettings({
+                          lineHeight: v as AccessibilitySettings["lineHeight"],
+                        })
+                      }
                       ariaLabel="Line height"
                     />
                   }
                 />
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  <AccessibilityPrefRow
-                    icon={<Type className="h-4 w-4" aria-hidden />}
-                    tone="violet"
-                    title="Dyslexia Friendly Font"
-                    description="Use a dyslexia-friendly typeface"
-                    control={
-                      <AccessibilityToggle
-                        enabled={dyslexiaFont}
-                        onToggle={() => setDyslexiaFont((v) => !v)}
-                        ariaLabel="Dyslexia friendly font"
-                      />
-                    }
-                  />
-                  <AccessibilityPrefRow
-                    icon={<BookOpen className="h-4 w-4" aria-hidden />}
-                    tone="amber"
-                    title="Reading Width"
-                    description="Optimize reading width"
-                    control={
-                      <SegmentedControl
-                        options={readingWidthOptions}
-                        value={readingWidth}
-                        onChange={setReadingWidth}
-                        ariaLabel="Reading width"
-                      />
-                    }
-                  />
-                </div>
+                <AccessibilityPrefRow
+                  icon={<Type className="h-4 w-4" aria-hidden />}
+                  tone="violet"
+                  title="Dyslexia Friendly Font"
+                  description="Use a dyslexia-friendly typeface"
+                  control={
+                    <AccessibilityToggle
+                      enabled={settings.dyslexiaFont}
+                      onToggle={() => toggleSetting("dyslexiaFont")}
+                      ariaLabel="Dyslexia friendly font"
+                    />
+                  }
+                />
               </motion.div>
             </section>
 
@@ -620,14 +453,14 @@ export function AccessibilitySettings() {
                   <Waves className="h-4 w-4" aria-hidden />
                 </div>
                 <div>
-                  <h2 className={accessibilitySectionHeading}>2. Motion Comfort</h2>
+                  <h2 className={accessibilitySectionHeading}>Motion Comfort</h2>
                   <p className={accessibilitySectionSubtitle}>
                     Reduce motion and create a calmer experience.
                   </p>
                 </div>
               </div>
 
-              <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <CompactToggleCard
                   icon={<PlayCircle className="h-4 w-4" aria-hidden />}
                   tone="violet"
@@ -642,192 +475,59 @@ export function AccessibilitySettings() {
                   tone="emerald"
                   title="Calm Transitions"
                   description="Use softer, gentler transitions"
-                  enabled={calmTransitions}
-                  onToggle={() => setCalmTransitions((v) => !v)}
+                  enabled={settings.calmTransitions}
+                  onToggle={() => toggleSetting("calmTransitions")}
                   ariaLabel="Calm transitions"
+                  disabled={settings.reducedMotion}
                 />
-                <motion.div className={accessibilityCompactCard}>
-                  <div className={accessibilityIconChip("cyan")}>
-                    <Waves className="h-4 w-4" aria-hidden />
-                  </div>
-                  <p className="mt-3 text-sm font-medium text-[rgba(255,255,255,0.92)]">Ambient Effects</p>
-                  <p className="mt-1 text-[11px] text-[rgba(255,255,255,0.42)]">
-                    Lower intensity of ambient visuals
-                  </p>
-                  <div className="mt-4">
-                    <AccessibilitySlider
-                      value={ambientEffects}
-                      onChange={setAmbientEffects}
-                      ariaLabel="Ambient effects intensity"
-                    />
-                  </div>
-                </motion.div>
-                <motion.div className={accessibilityCompactCard}>
-                  <div className={accessibilityIconChip("pink")}>
-                    <Heart className="h-4 w-4" aria-hidden />
-                  </div>
-                  <p className="mt-3 text-sm font-medium text-[rgba(255,255,255,0.92)]">Breathing Animation</p>
-                  <p className="mt-1 text-[11px] text-[rgba(255,255,255,0.42)]">
-                    Adjust breathing animation intensity
-                  </p>
-                  <div className="mt-4">
-                    <AccessibilitySlider
-                      value={breathingAnimation}
-                      onChange={setBreathingAnimation}
-                      ariaLabel="Breathing animation intensity"
-                    />
-                  </div>
-                </motion.div>
               </div>
+              {settings.reducedMotion && settings.calmTransitions && (
+                <p className="mt-3 text-xs text-[rgba(255,255,255,0.42)]">
+                  Calm transitions pause while reduce motion is on.
+                </p>
+              )}
             </section>
 
-            {/* 3. Interaction Comfort */}
+            {/* 3. Interaction & Assistive */}
             <section className={accessibilityPanel}>
               <div className="flex items-start gap-3">
                 <div className={accessibilityIconChip("cyan")}>
                   <Hand className="h-4 w-4" aria-hidden />
                 </div>
                 <div>
-                  <h2 className={accessibilitySectionHeading}>3. Interaction Comfort</h2>
+                  <h2 className={accessibilitySectionHeading}>Interaction &amp; Assistive</h2>
                   <p className={accessibilitySectionSubtitle}>
-                    Optimize how you interact with Solace.
+                    Easier tapping and stronger contrast across Solace.
                   </p>
                 </div>
               </div>
 
-              <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                <CompactToggleCard
+              <div className="mt-6 space-y-3">
+                <AccessibilityPrefRow
                   icon={<MousePointer className="h-4 w-4" aria-hidden />}
                   tone="orange"
                   title="Large Click Targets"
-                  description="Increase button and link sizes"
-                  enabled={settings.largeClickTargets}
-                  onToggle={() => toggleSetting("largeClickTargets")}
-                  ariaLabel="Large click targets"
-                  tight
+                  description="Increase button and link sizes for easier tapping"
+                  control={
+                    <AccessibilityToggle
+                      enabled={settings.largeClickTargets}
+                      onToggle={() => toggleSetting("largeClickTargets")}
+                      ariaLabel="Large click targets"
+                    />
+                  }
                 />
-                <CompactToggleCard
-                  icon={<Keyboard className="h-4 w-4" aria-hidden />}
-                  tone="violet"
-                  title="Keyboard Navigation"
-                  description="Navigate using keyboard only"
-                  enabled={settings.keyboardNav}
-                  onToggle={() => toggleSetting("keyboardNav")}
-                  ariaLabel="Keyboard navigation"
-                  tight
-                />
-                <CompactToggleCard
-                  icon={<Volume2 className="h-4 w-4" aria-hidden />}
-                  tone="cyan"
-                  title="Screen Reader"
-                  description="Optimize for screen readers"
-                  enabled={settings.screenReader}
-                  onToggle={() => toggleSetting("screenReader")}
-                  ariaLabel="Screen reader"
-                  tight
-                />
-                <CompactToggleCard
-                  icon={<Mic className="h-4 w-4" aria-hidden />}
-                  tone="blue"
-                  title="Voice Navigation"
-                  description="Use voice commands to navigate"
-                  enabled={voiceNavigation}
-                  onToggle={() => setVoiceNavigation((v) => !v)}
-                  ariaLabel="Voice navigation"
-                  tight
-                />
-                <CompactToggleCard
-                  icon={<HelpCircle className="h-4 w-4" aria-hidden />}
-                  tone="amber"
-                  title="Guided Mode"
-                  description="Step-by-step interaction help"
-                  enabled={guidedMode}
-                  onToggle={() => setGuidedMode((v) => !v)}
-                  ariaLabel="Guided mode"
-                  tight
-                />
-              </div>
-            </section>
-
-            {/* 4. Assistive Features */}
-            <section className={accessibilityPanel}>
-              <div className="flex items-start gap-3">
-                <div className={accessibilityIconChip("rose")}>
-                  <Heart className="h-4 w-4" aria-hidden />
-                </div>
-                <div>
-                  <h2 className={accessibilitySectionHeading}>4. Assistive Features</h2>
-                  <p className={accessibilitySectionSubtitle}>
-                    Tools to support your unique needs.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                <CompactToggleCard
+                <AccessibilityPrefRow
                   icon={<Contrast className="h-4 w-4" aria-hidden />}
                   tone="amber"
                   title="High Contrast Mode"
                   description="Increase contrast for better visibility"
-                  enabled={settings.highContrast}
-                  onToggle={() => toggleSetting("highContrast")}
-                  ariaLabel="High contrast mode"
-                  tight
-                />
-                <motion.div className={accessibilityCompactCardTight}>
-                  <div className={accessibilityIconChip("violet")}>
-                    <Sparkles className="h-4 w-4" aria-hidden />
-                  </div>
-                  <p className="mt-2.5 text-sm font-medium text-[rgba(255,255,255,0.92)]">Color Filter</p>
-                  <p className="mt-1 text-[11px] text-[rgba(255,255,255,0.42)]">
-                    Adjust colors for better clarity
-                  </p>
-                  <div className="mt-3">
-                    <SolaceSelect
-                      value={colorFilter}
-                      onValueChange={setColorFilter}
-                      ariaLabel="Color filter"
-                      variant="compact"
-                      size="sm"
-                      triggerClassName="h-9 w-full rounded-full border-white/[0.1] bg-black/30 text-xs font-medium text-white focus-visible:ring-emerald-400/35"
-                      options={[
-                        { value: "off", label: "Off" },
-                        { value: "protanopia", label: "Protanopia" },
-                        { value: "deuteranopia", label: "Deuteranopia" },
-                        { value: "tritanopia", label: "Tritanopia" },
-                      ]}
+                  control={
+                    <AccessibilityToggle
+                      enabled={settings.highContrast}
+                      onToggle={() => toggleSetting("highContrast")}
+                      ariaLabel="High contrast mode"
                     />
-                  </div>
-                </motion.div>
-                <CompactToggleCard
-                  icon={<Focus className="h-4 w-4" aria-hidden />}
-                  tone="emerald"
-                  title="Focus Indicator"
-                  description="Highlight focused elements more clearly"
-                  enabled={settings.focusIndicators}
-                  onToggle={() => toggleSetting("focusIndicators")}
-                  ariaLabel="Focus indicator"
-                  tight
-                />
-                <CompactToggleCard
-                  icon={<Link2 className="h-4 w-4" aria-hidden />}
-                  tone="cyan"
-                  title="Highlight Links"
-                  description="Underline links and buttons"
-                  enabled={settings.closedCaptions}
-                  onToggle={() => toggleSetting("closedCaptions")}
-                  ariaLabel="Highlight links"
-                  tight
-                />
-                <CompactToggleCard
-                  icon={<Subtitles className="h-4 w-4" aria-hidden />}
-                  tone="pink"
-                  title="Descriptive Labels"
-                  description="Show helpful labels and hints"
-                  enabled={descriptiveLabels}
-                  onToggle={() => setDescriptiveLabels((v) => !v)}
-                  ariaLabel="Descriptive labels"
-                  tight
+                  }
                 />
               </div>
             </section>
@@ -859,95 +559,6 @@ export function AccessibilitySettings() {
 
           {/* Right rail */}
           <aside className="w-full shrink-0 space-y-4 xl:sticky xl:top-4 xl:self-start">
-            {/* Accessibility Preview */}
-            <div className={accessibilityRailCard}>
-              <p className={accessibilitySectionLabel}>Preview</p>
-              <h2 className="mt-2 text-sm font-semibold text-white">Accessibility Preview</h2>
-              <p className="mt-1 text-xs text-[rgba(255,255,255,0.45)]">
-                See how your settings look in real-time.
-              </p>
-
-              <div className="relative mt-4 overflow-hidden rounded-[1.75rem] border border-white/[0.08] bg-[#0c0d1a] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_40px_-12px_rgba(52,211,153,0.22)]">
-                <motion.div className="flex min-h-[280px]">
-                  <div className="flex w-10 shrink-0 flex-col items-center gap-2 border-r border-white/[0.06] bg-[#090a14] py-3">
-                    {[Home, MessageCircle, BookOpen, BarChart3].map((Icon, i) => (
-                      <span
-                        key={`nav-${i}`}
-                        className={cn(
-                          "flex h-6 w-6 items-center justify-center rounded-md",
-                          i === 0 ? "bg-emerald-500/20 text-emerald-200" : "text-white/30"
-                        )}
-                      >
-                        <Icon className="h-3 w-3" aria-hidden />
-                      </span>
-                    ))}
-                  </div>
-                  <div className="min-w-0 flex-1 p-2.5">
-                    <div className="relative mb-2 h-14 overflow-hidden rounded-xl">
-                      <img
-                        src={ACCESSIBILITY_HERO_IMG}
-                        alt=""
-                        className="h-full w-full object-cover brightness-[0.48]"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-r from-[#0a0b18]/92 to-transparent" />
-                      <p className="absolute bottom-2 left-2 text-[9px] font-semibold text-white">
-                        Good evening, {firstName}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.04] p-2">
-                      <p className="text-[8px] font-semibold uppercase tracking-wider text-white/50">
-                        Daily Progress
-                      </p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
-                          <svg className="h-10 w-10 -rotate-90" viewBox="0 0 36 36" aria-hidden>
-                            <circle
-                              cx="18"
-                              cy="18"
-                              r="14"
-                              fill="none"
-                              stroke="rgba(255,255,255,0.08)"
-                              strokeWidth="3"
-                            />
-                            <circle
-                              cx="18"
-                              cy="18"
-                              r="14"
-                              fill="none"
-                              stroke="url(#a11yPreviewRing)"
-                              strokeWidth="3"
-                              strokeDasharray={`${72 * 0.88} 88`}
-                              strokeLinecap="round"
-                            />
-                            <defs>
-                              <linearGradient id="a11yPreviewRing" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stopColor="#34d399" />
-                                <stop offset="100%" stopColor="#2dd4bf" />
-                              </linearGradient>
-                            </defs>
-                          </svg>
-                          <span className="absolute text-[8px] font-bold text-white">72%</span>
-                        </div>
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <motion.div className="h-1.5 rounded-full bg-white/[0.08]" />
-                          <div className="h-1.5 w-3/4 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-2 flex justify-around border-t border-white/[0.06] pt-2">
-                      {[Home, MessageCircle, BookOpen, BarChart3, Settings].map((Icon, i) => (
-                        <Icon
-                          key={`bottom-${i}`}
-                          className={cn("h-3 w-3", i === 0 ? "text-emerald-300" : "text-white/25")}
-                          aria-hidden
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </motion.div>
-              </div>
-            </div>
-
             {/* Readability Preview */}
             <div className={accessibilityRailCard}>
               <p className={accessibilitySectionLabel}>Readability</p>
@@ -960,29 +571,26 @@ export function AccessibilitySettings() {
                 className={cn(
                   accessibilityMiniPreviewCard,
                   "mt-4 p-5",
-                  settings.textSpacing === "relaxed" && "tracking-wide",
-                  settings.textSpacing === "compact" && "tracking-tight"
+                  settings.dyslexiaFont && "dyslexia-font",
+                  settings.highContrast && "border-white/40"
                 )}
                 style={{
-                  lineHeight:
-                    settings.textSpacing === "compact"
-                      ? 1.35
-                      : settings.textSpacing === "relaxed" || settings.textSpacing === "loose"
-                        ? 1.7
-                        : 1.5,
+                  lineHeight: previewLineHeight,
+                  letterSpacing: letterSpacingToCss(settings.letterSpacing),
+                  wordSpacing: wordSpacingToCss(settings.letterSpacing),
                 }}
               >
                 <p className={cn("font-serif text-white", previewSerifSize)}>
                   This is your preview text
                 </p>
-                <p className="mt-3 text-sm leading-relaxed text-[rgba(255,255,255,0.55)]">
+                <p className="mt-3 text-sm text-[rgba(255,255,255,0.55)]">
                   Solace is here to support you on your journey to healing and growth.
                 </p>
                 <div className="mt-5 flex gap-2">
                   <button
                     type="button"
                     onClick={cycleFontSmaller}
-                    className={accessibilityBtnGhost}
+                    className={cn(accessibilityBtnGhost, "a11y-btn-ghost")}
                     aria-label="Smaller preview text"
                   >
                     Aa Smaller
@@ -992,6 +600,7 @@ export function AccessibilitySettings() {
                     onClick={cycleFontLarger}
                     className={cn(
                       accessibilityBtnGhost,
+                      "a11y-btn-ghost",
                       (settings.fontSize === "large" || settings.fontSize === "xlarge") &&
                         "border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
                     )}

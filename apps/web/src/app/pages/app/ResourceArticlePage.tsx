@@ -11,7 +11,22 @@ import {
   type GuidedWellnessPayload,
 } from "@/lib/parseGuidedWellnessContentUrl";
 import { toast } from "sonner";
-import { cn } from "@/app/components/ui/utils";
+import { cn } from "@/lib/utils";
+import {
+  formatCategoryLabel,
+  getResourceCardAtmosphere,
+  resourcesArticleBodyText,
+  resourcesArticleShell,
+  resourcesArticleStepNumber,
+  resourcesArticleStepShell,
+  resourcesArticleTitle,
+  resourcesBackLink,
+  resourcesPageAtmosphere,
+  resourcesPageFogMid,
+  resourcesPageGlowTop,
+  resourcesPageVignette,
+  resourcesReadBtn,
+} from "@/app/pages/app/resources-library/resourcesLibraryUi";
 
 function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value.trim());
@@ -28,7 +43,6 @@ export function ResourceArticlePage() {
   const [description, setDescription] = useState("");
   const [body, setBody] = useState<string | null>(null);
   const [externalUrl, setExternalUrl] = useState<string | null>(null);
-  /** When `content_url` holds guided JSON (`scriptSteps`), render steps instead of raw text. */
   const [guided, setGuided] = useState<Partial<GuidedWellnessPayload> | null>(null);
 
   useEffect(() => {
@@ -139,140 +153,175 @@ export function ResourceArticlePage() {
   const isBuiltinArticle = articleId.startsWith("builtin:");
   const guidedSteps = guided?.scriptSteps?.length ? guided.scriptSteps : null;
   const showWellnessCta = isBuiltinArticle || Boolean(guidedSteps);
+  const atmosphere = getResourceCardAtmosphere(category);
 
   if (loading) {
     return (
-      <div className="min-h-[50vh] flex items-center justify-center bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
-          <Loader2 className="h-10 w-10 animate-spin text-violet-600" aria-label="Loading" />
+      <div className={resourcesPageAtmosphere} aria-busy="true" aria-label="Loading article">
+        <motion.div
+          className={resourcesPageGlowTop}
+          aria-hidden
+          animate={{ opacity: [0.55, 0.85, 0.55] }}
+          transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <div className={resourcesPageFogMid} aria-hidden />
+        <motion.div
+          className={resourcesPageVignette}
+          aria-hidden
+          animate={{ opacity: [0.85, 1, 0.85] }}
+          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <div className="relative z-10 flex min-h-[50vh] items-center justify-center">
+          <Loader2 className="h-10 w-10 animate-spin text-violet-400" aria-label="Loading" />
         </div>
+      </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-violet-50/40 dark:from-slate-950 dark:via-slate-950 dark:to-violet-950/20 transition-colors duration-300">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-16">
-          <Link
-            to="/app/settings/resources"
-            className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 mb-8 transition-colors font-medium text-sm"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to reading library
-          </Link>
+    <div className={resourcesPageAtmosphere}>
+      <motion.div
+        className={resourcesPageGlowTop}
+        aria-hidden
+        animate={{ opacity: [0.55, 0.85, 0.55] }}
+        transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <div className={resourcesPageFogMid} aria-hidden />
+      <motion.div
+        className={resourcesPageVignette}
+        aria-hidden
+        animate={{ opacity: [0.85, 1, 0.85] }}
+        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+      />
 
-          <motion.article
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35 }}
-            className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm shadow-violet-500/5 overflow-hidden"
+      <div className="relative z-10 mx-auto w-full max-w-[min(100%,48rem)] px-4 pb-12 pt-5 sm:px-6 sm:pb-14 lg:px-8 lg:pt-6">
+        <Link to="/app/settings/resources" className={cn(resourcesBackLink, "mb-6")}>
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          Back to reading library
+        </Link>
+
+        <motion.article
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          className={resourcesArticleShell}
+        >
+          <header
+            className={cn(
+              "relative overflow-hidden border-b border-white/[0.06] px-6 py-8 sm:px-10 sm:py-10",
+              atmosphere.visualBg
+            )}
           >
-            <header className="border-b border-slate-100 dark:border-slate-800 px-6 sm:px-10 py-8 bg-gradient-to-br from-violet-50/90 to-fuchsia-50/50 dark:from-violet-950/40 dark:to-slate-900">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/90 dark:bg-slate-950/80 px-3 py-1 text-xs font-semibold text-violet-800 dark:text-violet-200 mb-4">
-                <BookOpen className="h-3.5 w-3.5" aria-hidden />
-                {category}
+            <div className={cn("pointer-events-none absolute inset-0", atmosphere.radialGlow)} aria-hidden />
+            <div
+              className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,transparent_0%,rgba(8,9,20,0.75)_100%)]"
+              aria-hidden
+            />
+            <div className="relative z-10">
+              <div
+                className={cn(
+                  "mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[0.65rem] font-semibold tracking-[0.14em]",
+                  atmosphere.pillClass
+                )}
+              >
+                <BookOpen className={cn("h-3.5 w-3.5 shrink-0", atmosphere.iconClass)} aria-hidden />
+                {formatCategoryLabel(category)}
               </div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
-                {title}
-              </h1>
+              <h1 className={resourcesArticleTitle}>{title}</h1>
               {description ? (
-                <p className="mt-4 text-slate-700 dark:text-slate-300 text-base leading-relaxed">{description}</p>
-              ) : null}
-            </header>
-
-            <div className="px-6 sm:px-10 py-8 sm:py-10">
-              {externalUrl ? (
-                <div className="space-y-6">
-                  <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                    This piece is hosted outside the app. Use the button below to read it in full; your session has been
-                    started so we can keep your library in sync.
-                  </p>
-                  <a
-                    href={externalUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-semibold px-6 py-3 text-sm shadow-md shadow-violet-500/25 hover:opacity-95 transition-opacity"
-                  >
-                    Read full article
-                    <ExternalLink className="w-4 h-4 shrink-0" aria-hidden />
-                  </a>
-                </div>
-              ) : guidedSteps ? (
-                <div className="space-y-6">
-                  <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
-                    Step-by-step script from your care team. For timed prompts, audio, and visuals, use Wellness Tools.
-                  </p>
-                  <ol className="space-y-4 list-none p-0 m-0">
-                    {guidedSteps.map((step, index) => (
-                      <li
-                        key={String(step.id ?? index)}
-                        className="flex gap-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800/50 p-4 sm:p-5"
-                      >
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 text-sm font-bold text-white shadow-sm">
-                          {index + 1}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-slate-900 dark:text-white font-medium leading-relaxed">
-                            {step.instruction?.trim() || "—"}
-                          </p>
-                          <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
-                            <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden />
-                            {formatStepDurationSeconds(step.duration)}
-                          </p>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                  {(guided?.tags && guided.tags.length > 0) ||
-                  guided?.audioEnabled != null ||
-                  guided?.visualsEnabled != null ? (
-                    <div className="flex flex-wrap items-center gap-2 pt-2">
-                      {guided?.tags?.map((t) => (
-                        <span
-                          key={t}
-                          className="rounded-full bg-violet-100 dark:bg-violet-950/80 px-2.5 py-0.5 text-xs font-medium text-violet-800 dark:text-violet-200"
-                        >
-                          #{t}
-                        </span>
-                      ))}
-                      {guided?.audioEnabled ? (
-                        <span className="text-xs text-slate-500 dark:text-slate-400">Audio on</span>
-                      ) : null}
-                      {guided?.visualsEnabled ? (
-                        <span className="text-xs text-slate-500 dark:text-slate-400">Visuals on</span>
-                      ) : null}
-                      {guided?.enabledForGuidedMode === false ? (
-                        <span className="text-xs text-amber-700 dark:text-amber-300">Guided mode off in editor</span>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <div
-                  className={cn(
-                    "prose prose-slate dark:prose-invert max-w-none",
-                    "prose-p:text-slate-700 dark:prose-p:text-slate-300 prose-p:leading-relaxed prose-p:mb-4",
-                    "prose-headings:text-slate-900 dark:prose-headings:text-white"
-                  )}
-                >
-                  {paragraphs.map((para, i) => (
-                    <p key={i}>{para}</p>
-                  ))}
-                </div>
-              )}
-
-              {showWellnessCta ? (
-                <p className="mt-10 pt-8 border-t border-slate-100 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-400">
-                  {guidedSteps ? "Run this with timers and cues in the app. " : "Want timers and audio in the app? "}
-                  <Link
-                    to="/app/wellness-tools"
-                    className="font-semibold text-violet-700 dark:text-violet-300 hover:underline"
-                  >
-                    Open Wellness Tools
-                  </Link>
-                </p>
+                <p className={cn("mt-4 max-w-2xl", resourcesArticleBodyText)}>{description}</p>
               ) : null}
             </div>
-          </motion.article>
-        </div>
+          </header>
+
+          <div className="px-6 py-8 sm:px-10 sm:py-10">
+            {externalUrl ? (
+              <div className="space-y-6">
+                <p className={resourcesArticleBodyText}>
+                  This piece is hosted outside the app. Use the button below to read it in full; your session has been
+                  started so we can keep your library in sync.
+                </p>
+                <a
+                  href={externalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(resourcesReadBtn, "w-fit px-6")}
+                >
+                  Read full article
+                  <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
+                </a>
+              </div>
+            ) : guidedSteps ? (
+              <div className="space-y-6">
+                <p className={resourcesArticleBodyText}>
+                  Step-by-step script from your care team. For timed prompts, audio, and visuals, use Wellness Tools.
+                </p>
+                <ol className="m-0 list-none space-y-4 p-0">
+                  {guidedSteps.map((step, index) => (
+                    <li key={String(step.id ?? index)} className={resourcesArticleStepShell}>
+                      <span className={resourcesArticleStepNumber} aria-hidden>
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium leading-relaxed text-[var(--solace-text)]">
+                          {step.instruction?.trim() || "—"}
+                        </p>
+                        <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-[rgba(255,255,255,0.45)]">
+                          <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                          {formatStepDurationSeconds(step.duration)}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+                {(guided?.tags && guided.tags.length > 0) ||
+                guided?.audioEnabled != null ||
+                guided?.visualsEnabled != null ? (
+                  <div className="flex flex-wrap items-center gap-2 pt-2">
+                    {guided?.tags?.map((t) => (
+                      <span
+                        key={t}
+                        className="rounded-full border border-violet-400/25 bg-violet-500/12 px-2.5 py-0.5 text-xs font-medium text-violet-200/90"
+                      >
+                        #{t}
+                      </span>
+                    ))}
+                    {guided?.audioEnabled ? (
+                      <span className="text-xs text-[rgba(255,255,255,0.45)]">Audio on</span>
+                    ) : null}
+                    {guided?.visualsEnabled ? (
+                      <span className="text-xs text-[rgba(255,255,255,0.45)]">Visuals on</span>
+                    ) : null}
+                    {guided?.enabledForGuidedMode === false ? (
+                      <span className="text-xs text-amber-200/90">Guided mode off in editor</span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {paragraphs.map((para, i) => (
+                  <p key={i} className={resourcesArticleBodyText}>
+                    {para}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {showWellnessCta ? (
+              <p className="mt-10 border-t border-white/[0.08] pt-8 text-sm text-[rgba(255,255,255,0.52)]">
+                {guidedSteps ? "Run this with timers and cues in the app. " : "Want timers and audio in the app? "}
+                <Link
+                  to="/app/wellness-tools"
+                  className="font-semibold text-[color:var(--accent-secondary,#a78bfa)] transition-colors hover:text-[color:var(--accent-secondary,#a78bfa)]"
+                >
+                  Open Wellness Tools
+                </Link>
+              </p>
+            ) : null}
+          </div>
+        </motion.article>
       </div>
+    </div>
   );
 }

@@ -1,5 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
-import { Button } from "../components/ui/button";
+import { forwardRef, useState, useEffect } from "react";
 import { Input } from "../components/ui/input";
 import { PhoneInput } from "../components/ui/phone-input";
 import { Label } from "../components/ui/label";
@@ -12,8 +11,6 @@ import {
   Shield,
   Lock,
   Users,
-  Menu,
-  X,
   Mail,
   User,
   Calendar,
@@ -39,6 +36,7 @@ import {
   FormMessage,
 } from "../components/ui/form";
 import { cn } from "@/lib/utils";
+import { PublicNav } from "../components/PublicNav";
 
 const signupSchema = z.object({
   firstName: z.string().min(2, "First name must be at least 2 characters"),
@@ -57,12 +55,18 @@ const signupSchema = z.object({
 
 type SignupFormValues = z.infer<typeof signupSchema>;
 
-/** Scene-only alpine sunrise — no baked UI (signup page only). */
-const SIGNUP_HERO_BG = "/solace/companion-selection-calm-mountain.jpg";
-const SIGNUP_NAV_H = "4.75rem";
+/** Same twilight scene as login — full-page backdrop. */
+const SIGNUP_HERO_BG = "/solace/emotional-focus-twilight-sanctuary.jpg";
 
 const glassInput =
-  "h-12 w-full rounded-2xl border border-white/12 bg-white/[0.045] text-[15px] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none transition-[box-shadow,border-color] placeholder:text-violet-200/35 focus:border-[#E91E63]/45 focus:ring-2 focus:ring-[#E91E63]/28 focus-visible:ring-[#E91E63]/28";
+  "h-10 w-full rounded-xl border border-white/12 bg-white/[0.045] text-[13px] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none transition-[box-shadow,border-color] placeholder:text-violet-200/35 focus:border-[#E91E63]/45 focus:ring-2 focus:ring-[#E91E63]/28 focus-visible:ring-[#E91E63]/28 sm:text-[14px]";
+
+const SIGNUP_PANEL_SHELL = cn(
+  "relative w-full overflow-visible rounded-[20px] border border-[#e879a9]/20 sm:rounded-[22px] lg:rounded-[24px]",
+  "bg-[rgba(12,10,24,0.72)] p-4 backdrop-blur-[20px] sm:p-5 lg:p-6",
+  "shadow-[0_0_0_1px_rgba(236,72,153,0.08),0_0_24px_-18px_rgba(168,85,247,0.16),0_16px_40px_-28px_rgba(0,0,0,0.82)]",
+  "supports-[backdrop-filter]:bg-[rgba(12,10,24,0.68)]",
+);
 
 const SIGNUP_BENEFITS = [
   {
@@ -99,101 +103,27 @@ const SIGNUP_BENEFITS = [
   },
 ] as const;
 
-interface SolaceSignupNavProps {
-  className?: string;
-}
-
-function SolaceSignupNav({ className }: SolaceSignupNavProps) {
-  const [open, setOpen] = useState(false);
-
+function SignupSceneBackdrop() {
   return (
-    <header
-      className={cn(
-        "relative z-50 shrink-0 border-b border-white/[0.08] bg-[#070815]/75 backdrop-blur-2xl",
-        "shadow-[inset_0_-1px_0_rgba(233,30,99,0.14)] supports-[backdrop-filter]:bg-[#070815]/55",
-        className,
-      )}
-      style={{ height: SIGNUP_NAV_H }}
-    >
-      <div className="relative flex h-full w-full items-center justify-between gap-4 px-5 sm:px-8 lg:px-10">
-        <Link to="/" className="relative z-10 flex shrink-0 items-center">
-          <BrandLogo heightClass="h-10" />
-        </Link>
-
-        <nav
-          className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 text-[14px] font-normal tracking-wide text-violet-100/78 md:flex"
-          aria-label="Primary"
-        >
-          <Link
-            to="/how-it-works"
-            className="transition-colors hover:text-white/95"
-          >
-            How It Works
-          </Link>
-          <Link to="/pricing" className="transition-colors hover:text-white/95">
-            Pricing
-          </Link>
-          <Link to="/privacy" className="transition-colors hover:text-white/95">
-            Privacy &amp; Safety
-          </Link>
-        </nav>
-
-        <div className="relative z-10 hidden items-center gap-5 sm:flex">
-          <Link
-            to="/login"
-            className="text-[14px] text-violet-100/78 transition-colors hover:text-white"
-          >
-            Log In
-          </Link>
-          <Link
-            to="/signup"
-            className="rounded-full bg-gradient-to-r from-[#E91E63] to-[#9C27B0] px-6 py-2.5 text-[13px] font-medium text-white shadow-[0_0_28px_-4px_rgba(233,30,99,0.55)] transition-[box-shadow,transform] duration-300 hover:shadow-[0_0_40px_-2px_rgba(168,85,247,0.42)] active:scale-[0.98]"
-          >
-            Get Started
-          </Link>
-        </div>
-
-        <button
-          type="button"
-          className="relative z-10 flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-white/90 sm:hidden"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-controls="solace-signup-mobile-nav"
-          aria-label={open ? "Close menu" : "Open menu"}
-        >
-          {open ? <X size={18} /> : <Menu size={18} />}
-        </button>
-      </div>
-
-      {open ? (
-        <div
-          id="solace-signup-mobile-nav"
-          className="border-t border-white/[0.06] bg-[#070812]/85 px-4 py-4 backdrop-blur-xl sm:hidden"
-        >
-          <nav className="flex flex-col gap-3 text-sm text-violet-100/85">
-            <Link to="/how-it-works" onClick={() => setOpen(false)}>
-              How It Works
-            </Link>
-            <Link to="/pricing" onClick={() => setOpen(false)}>
-              Pricing
-            </Link>
-            <Link to="/privacy" onClick={() => setOpen(false)}>
-              Privacy &amp; Safety
-            </Link>
-            <Link to="/login" onClick={() => setOpen(false)}>
-              Log In
-            </Link>
-            <Link
-              to="/signup"
-              onClick={() => setOpen(false)}
-              className="mt-1 inline-flex w-fit rounded-full bg-gradient-to-r from-[#E91E63] to-[#9C27B0] px-5 py-2 text-sm font-medium text-white shadow-[0_0_22px_-4px_rgba(233,30,99,0.5)]"
-            >
-              Get Started
-            </Link>
-          </nav>
-        </div>
-      ) : null}
-    </header>
+    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden>
+      <img
+        src={SIGNUP_HERO_BG}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover object-[center_35%] brightness-[0.55] contrast-[1.04] saturate-[1.06] sm:object-center"
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(105deg, rgba(5,6,18,0.78) 0%, rgba(5,6,18,0.32) 45%, rgba(5,6,18,0.68) 100%)",
+        }}
+      />
+      <div
+        className="absolute inset-0 bg-[radial-gradient(ellipse_90%_50%_at_50%_100%,rgba(236,72,153,0.12)_0%,transparent_55%)]"
+        aria-hidden
+      />
+      <div className="login-hero-stars absolute inset-0 opacity-30" aria-hidden />
+    </div>
   );
 }
 
@@ -306,113 +236,11 @@ function SignupWelcomeBlock({ className, showMark = true }: SignupWelcomeBlockPr
   );
 }
 
-interface SignupCinematicLeftProps {
-  className?: string;
-  variant: "immersive" | "hero-banner";
-}
-
-function SignupCinematicLeft({ className, variant }: SignupCinematicLeftProps) {
-  const particles = useMemo(() => [...Array(10)].map((_, i) => i), []);
-  const isBanner = variant === "hero-banner";
-
-  return (
-    <div
-      className={cn(
-        "relative overflow-hidden bg-[#05040a]",
-        isBanner
-          ? "min-h-[260px] sm:min-h-[320px]"
-          : "min-h-[280px] lg:h-full lg:min-h-[calc(100vh-4.75rem)]",
-        className,
-      )}
-    >
-      <img
-        src={SIGNUP_HERO_BG}
-        alt=""
-        aria-hidden
-        className="absolute inset-0 h-full w-full object-cover object-center brightness-[0.52] contrast-[1.05] saturate-[1.08] scale-[1.02]"
-      />
-      <div
-        className="absolute inset-0 bg-gradient-to-br from-[#0a0a12]/88 via-[#15051f]/55 to-transparent"
-        aria-hidden
-      />
-      <div
-        className="absolute inset-0 bg-gradient-to-t from-[#07040d]/94 via-transparent to-[#0a0814]/72"
-        aria-hidden
-      />
-      <div
-        className="absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-t from-[#090515]/92 to-transparent"
-        aria-hidden
-      />
-      <div
-        className="solace-login-water-shimmer pointer-events-none absolute inset-x-[-20%] bottom-0 h-[42%] bg-gradient-to-t from-orange-400/[0.07] via-fuchsia-500/[0.04] to-transparent mix-blend-screen"
-        aria-hidden
-      />
-      <div className="pointer-events-none absolute inset-x-[-10%] bottom-[-8%] h-[52%] bg-[radial-gradient(ellipse_at_50%_100%,rgba(125,74,218,0.22),transparent_58%)] blur-3xl" />
-      <div className="pointer-events-none absolute left-[8%] top-[14%] h-px w-px rounded-full bg-white/90 shadow-[2px_14px_0_0_rgba(255,255,255,0.85),118px_32px_0_0_rgba(255,255,255,0.35),212px_-10px_0_0_rgba(255,255,255,0.45),286px_24px_0_0_rgba(255,255,255,0.25),356px_-6px_0_0_rgba(255,255,255,0.4)] opacity-95" />
-
-      <div
-        className="pointer-events-none absolute right-[10%] top-[14%] h-11 w-11 rounded-full bg-gradient-to-br from-[#f5f0ff] to-[#9b87c9]/25 opacity-[0.9] shadow-[0_0_32px_-4px_rgba(200,181,255,0.45)] [mask-image:radial-gradient(circle_at_76%_24%,transparent_58%,black_58.8%)] [-webkit-mask-image:radial-gradient(circle_at_76%_24%,transparent_58%,black_58.8%)]"
-        aria-hidden
-      />
-
-      <div className="pointer-events-none absolute inset-x-0 bottom-[-2%] h-[52%]" aria-hidden>
-        <div className="absolute bottom-[-4%] left-1/2 h-[62%] w-[120%] -translate-x-1/2 skew-x-[10deg] bg-gradient-to-t from-orange-950/45 via-purple-950/12 to-transparent opacity-95 mix-blend-multiply blur-sm" />
-        <div className="absolute bottom-[6%] left-[42%] h-2 w-[min(340px,38vw)] -translate-x-1/2 rotate-[-6deg] rounded-full bg-gradient-to-r from-amber-900/95 via-orange-950/58 to-transparent shadow-[inset_0_1px_0_rgba(255,237,206,0.25)] blur-[0.8px]" />
-        <div
-          className="solace-login-lantern-breathe absolute bottom-[10%] left-[calc(42%-72px)] h-28 w-24"
-          aria-hidden
-        >
-          <div className="absolute bottom-10 left-1/2 flex h-[120px] w-[120px] -translate-x-1/2 items-end justify-center">
-            <div className="h-full w-[2px] bg-gradient-to-b from-transparent via-amber-800/58 to-transparent" />
-            <div className="absolute bottom-0 h-[78px] w-[58px] rounded-sm bg-gradient-to-b from-orange-950/94 via-orange-950/92 to-orange-950/88 shadow-[0_26px_50px_-8px_rgba(0,0,0,0.65)] outline outline-1 outline-amber-400/35" />
-            <div className="absolute bottom-[52px] h-8 w-[56px] rounded-t-full bg-gradient-to-b from-amber-200/55 to-amber-500/85 shadow-[inset_0_-4px_10px_rgba(0,0,0,0.35)]" />
-            <div className="absolute bottom-[74px] left-1/2 h-10 w-[68px] -translate-x-1/2 rounded-lg bg-orange-950/88 shadow-inner ring-2 ring-orange-700/58" />
-            <div className="absolute bottom-[92px] left-1/2 h-7 w-[46px] -translate-x-1/2 rounded-md bg-orange-950/78" />
-            <div className="absolute bottom-[84px] left-1/2 h-16 w-16 -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,193,7,0.95)_12%,rgba(255,154,71,0.55)_42%,transparent_68%)] opacity-92 blur-[0.5px] mix-blend-screen" />
-          </div>
-          <div className="absolute bottom-[4%] left-[42%] h-24 w-[min(560px,80vw)] -translate-x-1/2 rounded-[100%] bg-[radial-gradient(ellipse_at_50%_50%,rgba(255,173,74,0.35),transparent_62%)] mix-blend-screen blur-md" />
-        </div>
-
-        {particles.map((i) => (
-          <span
-            key={i}
-            className="solace-login-particle"
-            style={
-              {
-                "--delay": `${i * 0.92}s`,
-                "--ox": `${(i % 7) * 26 - 78}px`,
-                "--sx": `${(i % 5) * 12 - 24}px`,
-              } as React.CSSProperties
-            }
-          />
-        ))}
-      </div>
-
-      {!isBanner ? (
-        <div className="relative z-[1] hidden h-full min-h-[calc(100vh-4.75rem)] flex-col justify-between gap-10 px-10 py-10 lg:flex xl:px-14">
-          <div className="max-w-md shrink-0">
-            <SignupWelcomeBlock />
-            <div className="mt-10">
-              <SignupBenefitsList />
-            </div>
-          </div>
-          <SignupTrustCard className="mt-auto max-w-sm shrink-0" />
-          <div className="pointer-events-none h-4 shrink-0" />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function ShieldEmblem({ className }: { className?: string }) {
   return (
-    <div className={cn("flex", className)}>
-      <div className="relative flex h-[72px] w-[72px] items-center justify-center rounded-full border border-[#E91E63]/25 bg-gradient-to-b from-[#E91E63]/14 to-[#9C27B0]/10 shadow-[0_0_40px_-8px_rgba(233,30,99,0.55),inset_0_0_24px_rgba(168,85,247,0.12)]">
-        <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_40%,rgba(233,30,99,0.35),transparent_68%)] opacity-80" />
-        <Shield
-          className="relative h-9 w-9 text-[#f9a8d4] drop-shadow-[0_0_18px_rgba(233,30,99,0.45)]"
-          aria-hidden
-        />
+    <div className={cn("flex justify-center", className)}>
+      <div className="relative flex h-14 w-14 items-center justify-center rounded-full border border-[#E91E63]/25 bg-gradient-to-br from-[#E91E63]/15 to-[#9C27B0]/12 shadow-[0_0_32px_-8px_rgba(233,30,99,0.45)] sm:h-16 sm:w-16">
+        <Shield className="h-6 w-6 text-[#f9a8d4]" aria-hidden />
       </div>
     </div>
   );
@@ -429,43 +257,40 @@ interface PasswordFieldProps {
   autoComplete?: string;
 }
 
-function PasswordField({
-  value,
-  onChange,
-  onBlur,
-  name,
-  placeholder,
-  show,
-  onToggle,
-  autoComplete,
-}: PasswordFieldProps) {
-  return (
-    <div className="relative">
-      <Lock
-        className="pointer-events-none absolute left-3.5 top-1/2 z-[1] h-[18px] w-[18px] -translate-y-1/2 text-violet-200/42"
-        aria-hidden
-      />
-      <Input
-        type={show ? "text" : "password"}
-        name={name}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
-        className={cn(glassInput, "pr-11 pl-11")}
-      />
-      <button
-        type="button"
-        onClick={onToggle}
-        className="absolute right-3 top-1/2 z-[1] -translate-y-1/2 rounded-md p-1 text-violet-200/50 transition-colors hover:text-violet-100/90"
-        aria-label={show ? "Hide password" : "Show password"}
-      >
-        {show ? <EyeOff size={18} /> : <Eye size={18} />}
-      </button>
-    </div>
-  );
-}
+const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
+  function PasswordField(
+    { value, onChange, onBlur, name, placeholder, show, onToggle, autoComplete },
+    ref,
+  ) {
+    return (
+      <div className="relative">
+        <Lock
+          className="pointer-events-none absolute left-3.5 top-1/2 z-[1] h-[18px] w-[18px] -translate-y-1/2 text-violet-200/42"
+          aria-hidden
+        />
+        <input
+          ref={ref}
+          type={show ? "text" : "password"}
+          name={name}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          className={cn(glassInput, "pr-11 pl-11")}
+        />
+        <button
+          type="button"
+          onClick={onToggle}
+          className="absolute right-3.5 top-1/2 z-[1] -translate-y-1/2 text-violet-200/50 transition-colors hover:text-violet-100"
+          aria-label={show ? "Hide password" : "Show password"}
+        >
+          {show ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+    );
+  },
+);
 
 export function Signup() {
   const navigate = useNavigate();
@@ -706,51 +531,30 @@ export function Signup() {
   const trialGlassInput = cn(glassInput, "pl-3");
 
   return (
-    <div className="solace-login-page min-h-screen bg-[#0a0a12] text-[#f4f4f8]">
-      <SolaceSignupNav />
+    <div className="solace-login-page relative flex min-h-screen flex-col overflow-x-hidden bg-[#050612] text-[#f4f4f8]">
+      <SignupSceneBackdrop />
+      <PublicNav variant="cinematic" />
 
-      <div className="flex flex-col lg:hidden">
-        <SignupCinematicLeft variant="hero-banner" />
-        <div className="relative z-[2] mx-auto w-full max-w-lg px-5 pb-2 pt-8">
-          <SignupWelcomeBlock showMark={false} />
-          <div className="mt-8">
-            <SignupBenefitsList compact />
-          </div>
-          <SignupTrustCard className="mt-8" />
-        </div>
-      </div>
+      <main className="relative z-10 flex w-full flex-1 flex-col justify-center py-4 sm:py-5 lg:py-6">
+        <div className="mx-auto flex w-full max-w-[980px] flex-col items-stretch gap-6 px-4 sm:px-5 lg:flex-row lg:items-start lg:justify-center lg:gap-6 lg:px-6 xl:max-w-[1020px] xl:gap-8">
+          <section className="hidden min-w-0 flex-col gap-5 lg:flex lg:w-full lg:max-w-[420px] lg:justify-center lg:pt-2">
+            <SignupWelcomeBlock showMark={false} />
+            <SignupBenefitsList className="max-w-md" compact />
+            <SignupTrustCard className="max-w-sm" />
+          </section>
 
-      <div className="relative z-[1] flex w-full justify-center px-3 sm:px-5 lg:min-h-[calc(100vh-4.75rem)] lg:px-6 xl:px-8">
-        <div
-          className={cn(
-            "flex w-full max-w-[min(1320px,calc(100vw-1.5rem))] flex-col gap-0 xl:max-w-[1360px]",
-            "lg:flex-row lg:items-stretch lg:overflow-hidden lg:rounded-[2rem]",
-            "lg:border lg:border-white/[0.08] lg:bg-[#05040a]/40",
-            "lg:shadow-[0_0_0_1px_rgba(233,30,99,0.06),0_48px_120px_-48px_rgba(0,0,0,0.82)]",
-            "lg:min-h-[calc(100vh-4.75rem)]",
-          )}
-        >
-          <div className="relative hidden min-h-0 lg:block lg:w-[52%] lg:min-w-0 lg:flex-none">
-            <SignupCinematicLeft variant="immersive" className="h-full min-h-[calc(100vh-4.75rem)]" />
-          </div>
-
-          <div
-            className={cn(
-              "flex w-full flex-col justify-center lg:w-[48%] lg:min-w-0 lg:flex-none",
-              "lg:min-h-[calc(100vh-4.75rem)] lg:border-l lg:border-white/[0.06]",
-              "lg:bg-[#080812]/55 lg:px-6 lg:py-10 xl:px-10 xl:py-12",
-            )}
-          >
-            <div className="mx-auto w-full max-w-[600px] px-5 pb-12 pt-4 sm:px-8 lg:px-0 lg:pb-0 lg:pt-0">
-              <div className="relative rounded-[2rem] border border-[#E91E63]/22 bg-[#0c0e18]/75 p-7 shadow-[0_0_0_1px_rgba(168,85,247,0.08),0_48px_120px_-48px_rgba(0,0,0,0.92),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl sm:p-9">
-                <div className="pointer-events-none absolute inset-0 rounded-[2rem] bg-gradient-to-br from-[#E91E63]/[0.07] via-transparent to-[#9C27B0]/[0.08]" />
+          <section className="order-first flex w-full shrink-0 justify-center lg:order-none lg:max-w-[440px] lg:flex-initial lg:justify-end xl:max-w-[460px]">
+            <div className="mx-auto w-full max-w-[400px] sm:max-w-[420px] lg:mx-0">
+              <div className={SIGNUP_PANEL_SHELL}>
+                <div className="pointer-events-none absolute -left-8 -top-8 h-20 w-20 rounded-full bg-[radial-gradient(circle,rgba(236,72,153,0.22),transparent_70%)]" />
+                <div className="pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br from-[#E91E63]/[0.06] via-transparent to-[#9C27B0]/[0.05]" />
                 <div className="relative">
-                  <ShieldEmblem className="mb-6" />
-                  <div className="mb-8">
-                    <h2 className="solace-login-serif text-[1.85rem] font-medium leading-tight text-[#faf8fc] sm:text-[2rem]">
+                  <ShieldEmblem className="mb-4 justify-center sm:mb-5" />
+                  <div className="mb-5 text-center sm:mb-6">
+                    <h2 className="solace-login-serif text-[clamp(1.35rem,2.4vw,1.85rem)] font-medium leading-tight text-[#faf8fc]">
                       {phase === "form" ? "Create Your Account" : "Emergency Contact & Terms"}
                     </h2>
-                    <p className="mt-2 text-[14px] leading-relaxed text-violet-200/75 sm:text-[15px]">
+                    <p className="mt-1.5 text-[13px] leading-relaxed text-violet-200/75 sm:text-[14px]">
                       {phase === "form"
                         ? "Begin your journey to a better you"
                         : "One more step before your first session"}
@@ -762,7 +566,7 @@ export function Signup() {
                       <button
                         type="button"
                         onClick={handleGoogleLogin}
-                        className="flex w-full items-center justify-center gap-3 rounded-[1.125rem] border border-white/14 bg-white/[0.05] py-3.5 text-[15px] font-medium text-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_24px_-12px_rgba(233,30,99,0.25)] transition-[box-shadow,background-color,border-color] hover:border-[#E91E63]/28 hover:bg-white/[0.08] hover:shadow-[0_0_40px_-12px_rgba(168,85,247,0.28)]"
+                        className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.045] text-[13px] font-medium text-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-[box-shadow,background-color,border-color] hover:border-[#E91E63]/28 hover:bg-white/[0.08] sm:text-[14px]"
                       >
                         <svg className="h-[22px] w-[22px]" viewBox="0 0 24 24" aria-hidden>
                           <path
@@ -785,17 +589,17 @@ export function Signup() {
                         Sign up with Google
                       </button>
 
-                      <div className="my-7 flex items-center gap-4">
-                        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[#E91E63]/25 to-white/[0.18]" />
-                        <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-violet-200/45">
+                      <div className="my-3 flex items-center gap-2.5">
+                        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/[0.08] to-white/[0.22]" />
+                        <span className="text-[11px] uppercase tracking-[0.22em] text-violet-200/42">
                           Or sign up with email
                         </span>
-                        <div className="h-px flex-1 bg-gradient-to-l from-transparent via-[#E91E63]/25 to-white/[0.18]" />
+                        <div className="h-px flex-1 bg-gradient-to-l from-transparent via-white/[0.08] to-white/[0.22]" />
                       </div>
 
                       <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <FormField
                               control={form.control}
                               name="firstName"
@@ -908,6 +712,7 @@ export function Signup() {
                                 <FormLabel className={trialGlassLabel}>Password</FormLabel>
                                 <FormControl>
                                   <PasswordField
+                                    ref={field.ref}
                                     value={field.value ?? ""}
                                     onChange={field.onChange}
                                     onBlur={field.onBlur}
@@ -932,6 +737,7 @@ export function Signup() {
                                 <FormLabel className={trialGlassLabel}>Confirm Password</FormLabel>
                                 <FormControl>
                                   <PasswordField
+                                    ref={field.ref}
                                     value={field.value ?? ""}
                                     onChange={field.onChange}
                                     onBlur={field.onBlur}
@@ -950,7 +756,7 @@ export function Signup() {
                           <button
                             type="submit"
                             disabled={isLoading}
-                            className="group relative mt-2 flex w-full items-center justify-center gap-2 overflow-hidden rounded-full bg-gradient-to-r from-[#E91E63] via-[#c026d3] to-[#9C27B0] py-3.5 text-[15px] font-semibold text-white shadow-[0_0_42px_-8px_rgba(233,30,99,0.55),inset_0_1px_0_rgba(255,255,255,0.18)] transition-[transform,box-shadow] duration-300 hover:shadow-[0_0_56px_-4px_rgba(168,85,247,0.45)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-55"
+                            className="group relative mt-1 flex h-10 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-[#E91E63] via-[#c026d3] to-[#9C27B0] text-[13px] font-semibold text-white shadow-[0_0_28px_-10px_rgba(233,30,99,0.45),inset_0_1px_0_rgba(255,255,255,0.18)] transition-[transform,box-shadow] duration-300 hover:shadow-[0_0_40px_-6px_rgba(168,85,247,0.38)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-55 sm:text-[14px]"
                           >
                             <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_0%,rgba(255,255,255,0.28),transparent_55%)] opacity-60 mix-blend-screen" />
                             <span className="relative z-[1] flex items-center gap-2">
@@ -1211,7 +1017,7 @@ export function Signup() {
                   )}
 
                   {phase === "form" && (
-                    <p className="mt-7 text-center text-[14px] text-violet-200/65">
+                    <p className="mt-5 text-center text-[13px] text-violet-200/65 sm:text-[14px]">
                       Already have an account?{" "}
                       <Link
                         to="/login"
@@ -1223,7 +1029,7 @@ export function Signup() {
                   )}
 
                   {phase === "form" && (
-                    <p className="mt-6 text-center text-[11px] leading-relaxed text-violet-200/42">
+                    <p className="mt-4 text-center text-[11px] leading-relaxed text-violet-200/42">
                       By signing up, you agree to our{" "}
                       <Link
                         to="/terms"
@@ -1243,9 +1049,15 @@ export function Signup() {
                 </div>
               </div>
             </div>
-          </div>
+          </section>
+
+          <section className="w-full shrink-0 pb-6 pt-2 lg:hidden">
+            <SignupWelcomeBlock showMark={false} />
+            <SignupBenefitsList className="mt-4" compact />
+            <SignupTrustCard className="mt-4" />
+          </section>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

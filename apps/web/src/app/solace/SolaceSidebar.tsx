@@ -96,9 +96,9 @@ export function SolaceSidebar() {
               whileHover={{ x: 2 }}
               transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
               className={cn(
-                "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-all duration-300",
+                "solace-sidebar-nav flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-all duration-300",
                 active
-                  ? "bg-gradient-to-r from-violet-500/20 to-fuchsia-500/10 text-[rgba(255,255,255,0.96)] shadow-[0_0_32px_rgba(139,92,246,0.22),inset_0_0_0_1px_rgba(167,139,250,0.32)]"
+                  ? "solace-sidebar-nav--active bg-gradient-to-r from-violet-500/20 to-fuchsia-500/10 text-[rgba(255,255,255,0.96)] shadow-[0_0_32px_rgba(139,92,246,0.22),inset_0_0_0_1px_rgba(167,139,250,0.32)]"
                   : "text-[rgba(255,255,255,0.55)] hover:bg-white/[0.04] hover:text-[rgba(255,255,255,0.82)]"
               )}
             >
@@ -115,7 +115,7 @@ export function SolaceSidebar() {
       })}
 
       <div className="mt-auto space-y-3 border-t border-white/[0.06] pt-3">
-        <div className="rounded-xl border border-white/[0.06] bg-[linear-gradient(180deg,rgba(18,18,40,0.55)_0%,rgba(10,10,24,0.75)_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_28px_-10px_rgba(139,92,246,0.15)]">
+        <div className="solace-sidebar-profile rounded-xl border border-white/[0.06] bg-[linear-gradient(180deg,rgba(18,18,40,0.55)_0%,rgba(10,10,24,0.75)_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_28px_-10px_rgba(139,92,246,0.15)]">
           <div className="flex items-center gap-3">
             <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-violet-500/30 to-cyan-500/15">
               <img

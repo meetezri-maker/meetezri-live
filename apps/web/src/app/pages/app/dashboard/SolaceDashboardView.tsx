@@ -197,7 +197,7 @@ function RightRailContent({
           className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050508]/40 via-transparent to-transparent"
           aria-hidden
         />
-        <div className="relative z-10 flex min-h-[172px] flex-col justify-center p-5 sm:p-6">
+        <div className="solace-on-dark relative z-10 flex min-h-[172px] flex-col justify-center p-5 sm:p-6">
           <span className="font-serif text-4xl leading-none text-violet-200/35" aria-hidden>
             “
           </span>

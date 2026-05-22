@@ -20,7 +20,8 @@ interface ResourceAnalyticsRailProps {
   engagementLabel: string;
   engagementPercent: number;
   mostUsedCategory: string;
-  supportConsistencyDays: number;
+  activeDaysInPeriod: number;
+  periodLabel: string;
   emotionalEngagement: string;
 }
 
@@ -28,11 +29,12 @@ export function ResourceAnalyticsRail({
   engagementLabel,
   engagementPercent,
   mostUsedCategory,
-  supportConsistencyDays,
+  activeDaysInPeriod,
+  periodLabel,
   emotionalEngagement,
 }: ResourceAnalyticsRailProps) {
   return (
-    <aside className="space-y-5 xl:space-y-6">
+    <aside className="min-w-0 space-y-5 xl:sticky xl:top-4 xl:self-start xl:space-y-6">
       {/* 1. Your Wellness Trends */}
       <section className={wellnessPlanRailCard}>
         <h2 className="font-serif text-lg font-light text-white">Your Wellness Trends</h2>
@@ -58,8 +60,8 @@ export function ResourceAnalyticsRail({
           <li className="flex items-start justify-between gap-2 text-xs">
             <span className="text-[rgba(255,255,255,0.45)]">Support consistency</span>
             <span className="text-right font-medium text-[rgba(255,255,255,0.82)]">
-              {supportConsistencyDays > 0
-                ? `${supportConsistencyDays} day${supportConsistencyDays === 1 ? '' : 's'} this week`
+              {activeDaysInPeriod > 0
+                ? `${activeDaysInPeriod} active day${activeDaysInPeriod === 1 ? '' : 's'} (${periodLabel})`
                 : 'Not enough data yet'}
             </span>
           </li>

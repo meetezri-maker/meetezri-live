@@ -23,7 +23,7 @@ export function MobileBottomNav({ compact = false }: MobileBottomNavProps) {
     <motion.div
       initial={{ y: 100 }}
       animate={{ y: 0 }}
-      className="solace-app fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[color-mix(in_srgb,var(--solace-bg)_88%,transparent)] shadow-[0_-12px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl safe-area-pb lg:hidden"
+      className="solace-mobile-nav solace-app fixed bottom-0 left-0 right-0 z-50 border-t border-[color:var(--solace-border)] bg-[color-mix(in_srgb,var(--solace-bg)_88%,transparent)] shadow-[var(--solace-ds-shadow-cinematic)] backdrop-blur-xl safe-area-pb lg:hidden"
     >
       <div className={`flex items-stretch justify-around px-1 ${compact ? "py-1.5" : "py-2"}`}>
         {navItems.map((item) => {
@@ -49,8 +49,8 @@ export function MobileBottomNav({ compact = false }: MobileBottomNavProps) {
                 <span
                   className={`flex h-10 w-10 items-center justify-center rounded-2xl border transition-colors ${
                     isActive
-                      ? "border-violet-400/35 bg-violet-500/15 text-violet-200 shadow-[var(--solace-glow-purple)]"
-                      : "border-transparent bg-transparent text-zinc-500"
+                      ? "solace-mobile-nav-tab--active border-violet-400/35 bg-violet-500/15 text-violet-200 shadow-[var(--solace-glow-purple)]"
+                      : "solace-mobile-nav-tab border-transparent bg-transparent text-[var(--solace-muted)]"
                   }`}
                 >
                   <Icon className={compact ? "h-[18px] w-[18px]" : "h-5 w-5"} aria-hidden />
@@ -58,7 +58,7 @@ export function MobileBottomNav({ compact = false }: MobileBottomNavProps) {
                 <span
                   className={`truncate font-medium ${
                     compact ? "max-w-[4.5rem] text-[10px] leading-tight" : "max-w-[4.75rem] text-[11px]"
-                  } ${isActive ? "text-zinc-100" : "text-zinc-500"}`}
+                  } ${isActive ? "solace-mobile-nav-label--active text-[var(--solace-text)]" : "text-[var(--solace-muted)]"}`}
                 >
                   {item.label}
                 </span>

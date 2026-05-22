@@ -3,7 +3,7 @@
  * Cinematic emotional wellness sanctuary (not analytics dashboard).
  */
 
-import { useMemo, useState, useEffect, useId } from "react";
+import { useMemo, useId } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
@@ -39,11 +39,11 @@ import {
   Loader2,
 } from "lucide-react";
 import { useSafety } from "@/app/contexts/SafetyContext";
-import { getUserSafetyEvents } from "@/app/utils/safetyLogger";
-import type { SafetyEvent } from "@/app/types/safety";
 import {
   getMostUsedResources,
   getInteractionsBySafetyState,
+  getInteractionsByTimePeriod,
+  getResourceInteractions,
   mapServerRowsToInteractions,
 } from "@/app/utils/resourceTracking";
 import { getSafetyResources } from "@/app/utils/safetyResources";
@@ -71,45 +71,21 @@ import {
   wellnessPlanPageGlowTop,
   wellnessPlanPageVignette,
 } from "@/app/pages/app/wellness-plan-settings/wellnessPlanSettingsUi";
+import { SafetyInsightsRail } from "@/app/pages/app/safety-insights/SafetyInsightsRail";
 import {
-  SafetyInsightsRail,
-  type SafetyCheckInEntry,
-} from "@/app/pages/app/safety-insights/SafetyInsightsRail";
-
-type SafetyTrend = "increasing" | "decreasing" | "stable";
-
-interface SafetyRecommendation {
-  type: string;
-  icon: typeof Heart;
-  title: string;
-  description: string;
-  action: string;
-  actionLink: string;
-}
-
-interface SafetyInsightsData {
-  totalEvents: number;
-  last30DaysCount: number;
-  stateDistribution: Record<string, number>;
-  timePatterns: Record<string, number>;
-  dayPatterns: Record<string, number>;
-  triggers: Record<string, number>;
-  topResources: Array<{ resourceId: string; totalClicks: number }>;
-  resourcesByState: Record<string, unknown>;
-  trend: SafetyTrend;
-  highRiskLast14: number;
-  highRiskPrevious14: number;
-  recommendations: SafetyRecommendation[];
-  safetyScore: number;
-  currentState: string;
-}
-
-const STATE_LABELS: Record<string, { label: string; color: string }> = {
-  NORMAL: { label: "Safe", color: "#34d399" },
-  ELEVATED_CONCERN: { label: "Caution", color: "#fbbf24" },
-  HIGH_RISK: { label: "Stress", color: "#fb923c" },
-  SAFETY_MODE: { label: "Crisis", color: "#f87171" },
-};
+  buildCheckInEntries,
+  buildInsightsAnalyticsCharts,
+  breathingResourcesSummary,
+  computeSafetyInsights,
+  connectionDaysSummary,
+  journalingSummary,
+  loadLocalSafetyEvents,
+  mergeSafetyHistories,
+  moodStabilitySummary,
+  safetyEventsFromResourceInteractions,
+  thirtyDaysAgo,
+} from "@/app/pages/app/safety-insights/safetyInsightsData";
+import type { MoodEntryForInsights } from "@/app/pages/app/safety-insights/safetyInsightsData";
 
 function getScoreLabel(score: number): string {
   if (score >= 80) return "Excellent";
@@ -128,34 +104,64 @@ function getSupportiveMessage(score: number, last30DaysCount: number): string {
   return "You deserve care and connection. Reaching out is a brave step.";
 }
 
-function triggerSeverity(count: number, max: number): { label: string; tone: "high" | "medium" | "low" } {
-  if (max === 0) return { label: "Low", tone: "low" };
-  const ratio = count / max;
-  if (ratio >= 0.66) return { label: "High", tone: "high" };
-  if (ratio >= 0.33) return { label: "Medium", tone: "medium" };
-  return { label: "Low", tone: "low" };
+interface DonutSegment {
+  name: string;
+  value: number;
+  color: string;
 }
 
-function formatTriggerLabel(signal: string): string {
-  return signal
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+interface MoodDonutTooltipProps {
+  active?: boolean;
+  payload?: Array<{ name?: string; value?: number; payload?: DonutSegment }>;
 }
 
-function eventToCheckInNote(event: SafetyEvent): string {
-  const state = event.newState;
-  const map: Record<string, string> = {
-    NORMAL: "Feeling safe and calm",
-    ELEVATED_CONCERN: "Noticed elevated concern—took a mindful pause",
-    HIGH_RISK: "Managed stress with care",
-    SAFETY_MODE: "Activated safety support",
-  };
-  if (map[state]) return map[state];
-  if (event.trigger) return `Reflected on ${formatTriggerLabel(event.trigger)}`;
-  if (event.detectedSignals?.[0]) {
-    return `Reflected on ${formatTriggerLabel(event.detectedSignals[0])}`;
-  }
-  return "Safety check-in recorded";
+function MoodDonutTooltip({ active, payload }: MoodDonutTooltipProps) {
+  if (!active || !payload?.length) return null;
+  const item = payload[0];
+  const name = item.name ?? item.payload?.name ?? "Mood";
+  const value = item.value ?? item.payload?.value ?? 0;
+  const color = item.payload?.color ?? "#a78bfa";
+
+  return (
+    <div className="rounded-xl border border-white/15 bg-[#0c0d18] px-3 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.55)]">
+      <div className="flex items-center gap-2">
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: color }}
+          aria-hidden
+        />
+        <span className="text-sm font-medium text-white">{name}</span>
+      </div>
+      <p className="mt-0.5 pl-[18px] text-xs font-semibold tabular-nums text-fuchsia-200">{value}%</p>
+    </div>
+  );
+}
+
+interface DonutLegendProps {
+  segments: DonutSegment[];
+}
+
+function DonutLegend({ segments }: DonutLegendProps) {
+  if (segments.length === 0) return null;
+  return (
+    <ul
+      className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-1.5"
+      aria-label="Chart legend"
+    >
+      {segments.map((seg) => (
+        <li key={seg.name} className="flex items-center gap-1.5 text-[11px] text-[rgba(255,255,255,0.72)]">
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ backgroundColor: seg.color }}
+            aria-hidden
+          />
+          <span>
+            {seg.name} <span className="tabular-nums text-[rgba(255,255,255,0.45)]">{seg.value}%</span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 interface SafetyScoreRingProps {
@@ -231,320 +237,111 @@ function SafetyScoreRing({ score, size = 128 }: SafetyScoreRingProps) {
 export function SafetyInsights() {
   const navigate = useNavigate();
   const { currentState } = useSafety();
-  const { user } = useAuth();
-  const [insights, setInsights] = useState<SafetyInsightsData | null>(null);
-  const [safetyHistory, setSafetyHistory] = useState<SafetyEvent[]>([]);
+  const { user, isLoading: authLoading } = useAuth();
+  const userId = user?.id;
   const chartGradId = useId().replace(/:/g, "");
+
+  const periodStart = useMemo(() => thirtyDaysAgo(), []);
+  const periodEnd = useMemo(() => new Date(), []);
 
   const resourceIdToName = useMemo(() => {
     const resources = getSafetyResources();
     return new Map(resources.map((r) => [r.id, r.name]));
   }, []);
 
-  const { data: rawSafetyResourceIx } = useQuery({
+  const rangeIso = useMemo(
+    () => ({
+      from: periodStart.toISOString(),
+      to: periodEnd.toISOString(),
+    }),
+    [periodStart, periodEnd]
+  );
+
+  const {
+    data: rawSafetyResourceIx,
+    isLoading: resourcesLoading,
+    isError: resourcesError,
+    isSuccess: resourcesSuccess,
+    refetch: refetchResources,
+    isFetching: resourcesFetching,
+  } = useQuery({
     queryKey: queryKeys.safetyResourceInteractions.list({
-      userId: user?.id,
-      window: "safety-insights",
+      userId,
+      from: rangeIso.from,
+      to: rangeIso.to,
+      window: "safety-insights-30d",
     }),
     queryFn: async () => {
       const rows = (await api.safetyResourceInteractions.list({
-        limit: 3000,
+        from: rangeIso.from,
+        to: rangeIso.to,
+        limit: 5000,
       })) as Array<Record<string, unknown>>;
       return Array.isArray(rows) ? rows : [];
     },
-    enabled: !!user?.id,
+    enabled: !!userId,
     staleTime: 60_000,
   });
 
-  const resourceInteractions = useMemo(
+  const {
+    data: moodEntries = [],
+    isLoading: moodsLoading,
+    isError: moodsError,
+    refetch: refetchMoods,
+  } = useQuery({
+    queryKey: queryKeys.moods.my(userId),
+    queryFn: async () => {
+      const raw = (await api.moods.getMyMoods()) as MoodEntryForInsights[];
+      return Array.isArray(raw) ? raw : [];
+    },
+    enabled: !!userId,
+    staleTime: 60_000,
+  });
+
+  const serverInteractions = useMemo(
     () => mapServerRowsToInteractions(rawSafetyResourceIx ?? []),
     [rawSafetyResourceIx]
   );
 
-  useEffect(() => {
-    const userId = user?.id || "anonymous";
-    const history = getUserSafetyEvents(userId);
-    setSafetyHistory(history);
-  }, [user?.id]);
+  const localInteractions = useMemo(
+    () => getInteractionsByTimePeriod(periodStart, periodEnd, getResourceInteractions()),
+    [periodStart, periodEnd]
+  );
 
-  const calculateInsights = () => {
-    const events = safetyHistory || [];
+  const resourceInteractions = useMemo(() => {
+    if (serverInteractions.length > 0) return serverInteractions;
+    if (resourcesSuccess || resourcesError) return localInteractions;
+    return [];
+  }, [serverInteractions, localInteractions, resourcesSuccess, resourcesError]);
 
-    const totalEvents = events.length;
-    const last30Days = events.filter((e) => {
-      const eventDate = new Date(e.timestamp);
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      return eventDate >= thirtyDaysAgo;
-    });
+  const safetyHistory = useMemo(() => {
+    if (!userId) return [];
+    const localEvents = loadLocalSafetyEvents(userId);
+    const derived = safetyEventsFromResourceInteractions(resourceInteractions, userId);
+    return mergeSafetyHistories(localEvents, derived);
+  }, [userId, resourceInteractions]);
 
-    const stateDistribution = events.reduce<Record<string, number>>((acc, event) => {
-      const state = event.newState || "NORMAL";
-      acc[state] = (acc[state] || 0) + 1;
-      return acc;
-    }, {});
-
-    const timePatterns = events.reduce<Record<string, number>>((acc, event) => {
-      const hour = new Date(event.timestamp).getHours();
-      const period =
-        hour < 6 ? "night" : hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
-      acc[period] = (acc[period] || 0) + 1;
-      return acc;
-    }, {});
-
-    const dayPatterns = events.reduce<Record<string, number>>((acc, event) => {
-      const day = new Date(event.timestamp).getDay();
-      const dayNames = [
-        "Sunday",
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday",
-      ];
-      acc[dayNames[day]] = (acc[dayNames[day]] || 0) + 1;
-      return acc;
-    }, {});
-
-    const triggers = events.reduce<Record<string, number>>((acc, event) => {
-      const signal = event.trigger || event.detectedSignals?.[0];
-      if (!signal) return acc;
-      acc[signal] = (acc[signal] || 0) + 1;
-      return acc;
-    }, {});
-
+  const insights = useMemo(() => {
     const topResources = getMostUsedResources(3, resourceInteractions);
     const resourcesByState = getInteractionsBySafetyState(resourceInteractions);
-
-    const last14Days = events.filter((e) => {
-      const eventDate = new Date(e.timestamp);
-      const fourteenDaysAgo = new Date();
-      fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-      return eventDate >= fourteenDaysAgo;
-    });
-
-    const previous14Days = events.filter((e) => {
-      const eventDate = new Date(e.timestamp);
-      const fourteenDaysAgo = new Date();
-      fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-      const twentyEightDaysAgo = new Date();
-      twentyEightDaysAgo.setDate(twentyEightDaysAgo.getDate() - 28);
-      return eventDate >= twentyEightDaysAgo && eventDate < fourteenDaysAgo;
-    });
-
-    const highRiskLast14 = last14Days.filter(
-      (e) => e.newState === "HIGH_RISK" || e.newState === "SAFETY_MODE"
-    ).length;
-
-    const highRiskPrevious14 = previous14Days.filter(
-      (e) => e.newState === "HIGH_RISK" || e.newState === "SAFETY_MODE"
-    ).length;
-
-    const trend: SafetyTrend =
-      highRiskPrevious14 === 0
-        ? highRiskLast14 > 0
-          ? "increasing"
-          : "stable"
-        : highRiskLast14 > highRiskPrevious14
-          ? "increasing"
-          : highRiskLast14 < highRiskPrevious14
-            ? "decreasing"
-            : "stable";
-
-    const recommendations = generateRecommendations({
-      stateDistribution,
-      timePatterns,
-      dayPatterns,
-      triggers,
-      trend,
-      topResources,
-      totalEvents: last30Days.length,
-    });
-
-    setInsights({
-      totalEvents,
-      last30DaysCount: last30Days.length,
-      stateDistribution,
-      timePatterns,
-      dayPatterns,
-      triggers,
+    return computeSafetyInsights({
+      events: safetyHistory,
       topResources,
       resourcesByState,
-      trend,
-      highRiskLast14,
-      highRiskPrevious14,
-      recommendations,
-      safetyScore: calculateSafetyScore(stateDistribution, trend),
       currentState,
+      moods: moodEntries,
     });
-  };
+  }, [safetyHistory, resourceInteractions, currentState, moodEntries]);
 
-  const generateRecommendations = (data: {
-    stateDistribution: Record<string, number>;
-    timePatterns: Record<string, number>;
-    dayPatterns: Record<string, number>;
-    triggers: Record<string, number>;
-    trend: SafetyTrend;
-    topResources: Array<{ resourceId: string; totalClicks: number }>;
-    totalEvents: number;
-  }): SafetyRecommendation[] => {
-    const recs: SafetyRecommendation[] = [];
+  const dataReady =
+    !authLoading && (!userId || (!resourcesLoading && !moodsLoading));
 
-    const mostCommonTime = Object.entries(data.timePatterns).sort(
-      ([, a], [, b]) => b - a
-    )[0] as [string, number] | undefined;
+  const hasDataIssue = !!userId && (resourcesError || moodsError);
 
-    if (mostCommonTime && mostCommonTime[1] > 2) {
-      recs.push({
-        type: "time",
-        icon: Clock,
-        title: "Time Pattern Detected",
-        description: `You experience elevated concerns most often in the ${mostCommonTime[0]}. Consider scheduling check-ins or self-care during this time.`,
-        action: "Set Reminder",
-        actionLink: "/app/settings/notifications",
-      });
-    }
-
-    if (Object.keys(data.triggers).length > 0) {
-      const topTrigger = Object.entries(data.triggers).sort(([, a], [, b]) => b - a)[0] as [
-        string,
-        number,
-      ];
-      recs.push({
-        type: "trigger",
-        icon: AlertTriangle,
-        title: "Common Trigger Identified",
-        description: `"${formatTriggerLabel(topTrigger[0])}" has been detected ${topTrigger[1]} times. Consider adding coping strategies for this trigger to your Safety Plan.`,
-        action: "Update Safety Plan",
-        actionLink: "/app/settings/wellness-plan",
-      });
-    }
-
-    if (data.topResources.length === 0 || data.totalEvents > 5) {
-      recs.push({
-        type: "resource",
-        icon: Phone,
-        title: "Explore Support Resources",
-        description:
-          "You have resources available but haven't used them recently. Having quick access to support can be helpful during difficult moments.",
-        action: "View Resources",
-        actionLink: "/app/emergency-resources",
-      });
-    }
-
-    if (data.trend === "increasing") {
-      recs.push({
-        type: "trend",
-        icon: TrendingUp,
-        title: "Increased Activity Noticed",
-        description:
-          "You've had more safety concerns recently. This might be a good time to reach out to your trusted contacts or a professional.",
-        action: "Contact Support",
-        actionLink: "/app/settings/emergency-contacts",
-      });
-    } else if (data.trend === "decreasing") {
-      recs.push({
-        type: "trend",
-        icon: TrendingDown,
-        title: "Positive Progress!",
-        description:
-          "You've had fewer safety concerns lately. Keep up the great work with your wellness practices!",
-        action: "View Progress",
-        actionLink: "/app/progress",
-      });
-    }
-
-    recs.push({
-      type: "selfcare",
-      icon: Heart,
-      title: "Daily Self-Care",
-      description: "Small daily actions create big changes. Prioritize you.",
-      action: "Explore Tools",
-      actionLink: "/app/wellness-tools",
-    });
-
-    return recs.slice(0, 4);
-  };
-
-  const calculateSafetyScore = (distribution: Record<string, number>, trend: SafetyTrend) => {
-    const normalCount = distribution.NORMAL || 0;
-    const elevatedCount = distribution.ELEVATED_CONCERN || 0;
-    const highRiskCount = distribution.HIGH_RISK || 0;
-    const safetyModeCount = distribution.SAFETY_MODE || 0;
-    const total = normalCount + elevatedCount + highRiskCount + safetyModeCount;
-
-    if (total === 0) return 100;
-
-    const score =
-      ((normalCount * 1.0 +
-        elevatedCount * 0.7 +
-        highRiskCount * 0.3 +
-        safetyModeCount * 0.1) /
-        total) *
-      100;
-
-    const trendAdjustment = trend === "decreasing" ? 5 : trend === "increasing" ? -5 : 0;
-    return Math.round(Math.min(100, Math.max(0, score + trendAdjustment)));
-  };
-
-  useEffect(() => {
-    calculateInsights();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [safetyHistory, resourceInteractions, currentState]);
-
-  const timeChartData = useMemo(() => {
-    if (!insights) return [];
-    const base = [
-      { label: "6 AM", hour: 6, value: 0 },
-      { label: "10 AM", hour: 10, value: 0 },
-      { label: "2 PM", hour: 14, value: 0 },
-      { label: "6 PM", hour: 18, value: 0 },
-      { label: "10 PM", hour: 22, value: 0 },
-    ];
-    safetyHistory.forEach((event) => {
-      const hour = new Date(event.timestamp).getHours();
-      const nearest = base.reduce((prev, curr) =>
-        Math.abs(curr.hour - hour) < Math.abs(prev.hour - hour) ? curr : prev
-      );
-      nearest.value += 1;
-    });
-    return base;
-  }, [insights, safetyHistory]);
-
-  const donutData = useMemo(() => {
-    if (!insights) return [];
-    const dist = insights.stateDistribution;
-    const total = Object.values(dist).reduce((s, c) => s + c, 0);
-    if (total === 0) {
-      return [{ name: "Safe", value: 100, color: "#34d399" }];
-    }
-    return Object.entries(dist).map(([key, count]) => ({
-      name: STATE_LABELS[key]?.label ?? key,
-      value: Math.round((count / total) * 100),
-      color: STATE_LABELS[key]?.color ?? "#a78bfa",
-    }));
-  }, [insights]);
-
-  const safePercent = useMemo(() => {
-    const safe = donutData.find((d) => d.name === "Safe");
-    return safe?.value ?? 0;
-  }, [donutData]);
-
-  const triggerRows = useMemo(() => {
-    if (!insights) return [];
-    const entries = Object.entries(insights.triggers).sort(([, a], [, b]) => b - a);
-    const max = entries[0]?.[1] ?? 0;
-    return entries.slice(0, 5).map(([signal, count]) => {
-      const severity = triggerSeverity(count, max);
-      return {
-        label: formatTriggerLabel(signal),
-        count,
-        severityLabel: severity.label,
-        tone: severity.tone,
-      };
-    });
-  }, [insights]);
+  const analyticsCharts = useMemo(() => {
+    if (!insights) return null;
+    return buildInsightsAnalyticsCharts(insights, moodEntries, safetyHistory);
+  }, [insights, moodEntries, safetyHistory]);
 
   const featuredRecommendation = useMemo(() => {
     if (!insights) return null;
@@ -553,22 +350,34 @@ export function SafetyInsights() {
     );
   }, [insights]);
 
-  const checkIns = useMemo((): SafetyCheckInEntry[] => {
-    return [...safetyHistory]
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 6)
-      .map((e) => ({
-        timestamp: new Date(e.timestamp).toISOString(),
-        note: eventToCheckInNote(e),
-      }));
-  }, [safetyHistory]);
+  const checkIns = useMemo(
+    () => buildCheckInEntries(moodEntries, safetyHistory, 6),
+    [moodEntries, safetyHistory]
+  );
 
-  if (!insights) {
+  const summaryCopy = useMemo(() => {
+    if (!insights) return null;
+    const moodsLast30 = moodEntries.filter(
+      (m) => new Date(m.created_at) >= periodStart
+    );
+    return {
+      mood: moodStabilitySummary(moodsLast30, insights.trend),
+      journal: journalingSummary(moodsLast30),
+      breathing: breathingResourcesSummary(insights.topResources, resourceIdToName),
+      connection: connectionDaysSummary(
+        insights.moodCheckInsLast30,
+        insights.last30DaysCount
+      ),
+    };
+  }, [insights, moodEntries, periodStart, resourceIdToName]);
+
+  if (!dataReady) {
     return (
       <motion.div className={wellnessPlanPageAtmosphere}>
         <motion.div className={wellnessPlanPageGlowTop} aria-hidden />
-        <div className="relative z-10 flex min-h-[50vh] items-center justify-center">
+        <div className="relative z-10 flex min-h-[50vh] flex-col items-center justify-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-fuchsia-300/60" aria-label="Loading" />
+          <p className="text-sm text-[rgba(255,255,255,0.45)]">Loading your safety insights…</p>
         </div>
       </motion.div>
     );
@@ -610,6 +419,31 @@ export function SafetyInsights() {
               </div>
             </motion.header>
 
+            {hasDataIssue ? (
+              <div
+                className={cn(
+                  wellnessPlanGlassCard,
+                  "flex flex-wrap items-center justify-between gap-3 border-amber-400/20 p-4"
+                )}
+                role="status"
+              >
+                <p className="text-sm text-amber-200/85">
+                  Some data could not be synced. Showing what is available on this device.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void refetchResources();
+                    void refetchMoods();
+                  }}
+                  disabled={resourcesFetching}
+                  className={wellnessPlanBtnGhost}
+                >
+                  {resourcesFetching ? "Retrying…" : "Retry sync"}
+                </button>
+              </div>
+            ) : null}
+
             {/* Hero */}
             <motion.section
               className={wellnessPlanHeroCard}
@@ -626,7 +460,7 @@ export function SafetyInsights() {
               <motion.div className={wellnessPlanHeroOverlayPurple} aria-hidden />
               <motion.div className={wellnessPlanHeroOverlayWarmth} aria-hidden />
 
-              <motion.div className="relative flex min-h-[280px] flex-col gap-6 p-6 sm:min-h-[300px] sm:p-8 lg:min-h-[320px] lg:flex-row lg:items-center lg:justify-between">
+              <motion.div className="relative flex min-h-[280px] flex-col gap-6 p-6 sm:min-h-[300px] sm:p-8 lg:min-h-[320px] lg:flex-row lg:items-center lg:justify-between lg:gap-8">
                 <div className="flex flex-col gap-6 sm:flex-row sm:items-center lg:flex-1">
                   <SafetyScoreRing score={insights.safetyScore} />
                   <div className="min-w-0 flex-1">
@@ -634,7 +468,10 @@ export function SafetyInsights() {
                       {scoreLabel} Wellness
                     </h2>
                     <p className="mt-2 text-sm text-[rgba(255,255,255,0.55)]">
-                      Based on {insights.last30DaysCount} safety events in the last 30 days
+                      Based on {insights.moodCheckInsLast30} mood check-in
+                      {insights.moodCheckInsLast30 === 1 ? "" : "s"} and{" "}
+                      {insights.last30DaysCount} safety moment
+                      {insights.last30DaysCount === 1 ? "" : "s"} in the last 30 days
                     </p>
                     <p className="mt-3 max-w-md text-sm leading-relaxed text-rose-200/75">
                       {getSupportiveMessage(insights.safetyScore, insights.last30DaysCount)}
@@ -658,24 +495,7 @@ export function SafetyInsights() {
                   </div>
                 </div>
 
-                <div className="hidden shrink-0 lg:block lg:w-[38%] xl:w-[42%]" aria-hidden>
-                  <div
-                    className="relative h-[200px] w-full overflow-hidden rounded-2xl ring-1 ring-white/[0.08]"
-                    style={{
-                      backgroundImage: `url(${WELLNESS_PLAN_HERO_IMG})`,
-                      backgroundSize: "cover",
-                      backgroundPosition: "72% 38%",
-                    }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-l from-transparent via-[#0a0b18]/20 to-[#0a0b18]/60" />
-                    <motion.div
-                      className="absolute inset-0 bg-[radial-gradient(ellipse_50%_50%_at_60%_50%,rgba(251,146,60,0.35)_0%,transparent_65%)]"
-                      aria-hidden
-                    />
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-3 lg:absolute lg:bottom-6 lg:right-6 lg:mt-0">
+                <div className="flex flex-wrap gap-3 lg:mt-0">
                   <button
                     type="button"
                     onClick={() => navigate("/app/settings/wellness-plan")}
@@ -749,45 +569,73 @@ export function SafetyInsights() {
                   </div>
                   <h3 className="font-serif text-lg font-light text-white">Time of Day Patterns</h3>
                 </div>
-                <div className="min-h-[180px] flex-1">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={timeChartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id={`${chartGradId}-time`} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#ff4fa3" stopOpacity={0.45} />
-                          <stop offset="95%" stopColor="#ff4fa3" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis
-                        dataKey="label"
-                        tick={{ fill: "#a1a1aa", fontSize: 10 }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis hide />
-                      <Tooltip
-                        contentStyle={{
-                          background: "rgba(10,11,24,0.95)",
-                          border: "1px solid rgba(255,255,255,0.08)",
-                          borderRadius: 12,
-                          fontSize: 12,
-                        }}
-                        labelStyle={{ color: "#e4e4e7" }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="value"
-                        stroke="#ff4fa3"
-                        strokeWidth={2}
-                        fill={`url(#${chartGradId}-time)`}
-                        dot={{ fill: "#ff4fa3", r: 4, strokeWidth: 0 }}
-                        style={{ filter: "drop-shadow(0 0 8px rgba(255,79,163,0.45))" }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                <div className="h-[180px] w-full">
+                  {analyticsCharts && analyticsCharts.timeChartTotal > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={analyticsCharts.timeChartData}
+                        margin={{ top: 8, right: 8, left: -16, bottom: 0 }}
+                      >
+                        <defs>
+                          <linearGradient id={`${chartGradId}-time`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#ff4fa3" stopOpacity={0.45} />
+                            <stop offset="95%" stopColor="#ff4fa3" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis
+                          dataKey="label"
+                          tick={{ fill: "#a1a1aa", fontSize: 10 }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          allowDecimals={false}
+                          tick={{ fill: "#71717a", fontSize: 10 }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={28}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            background: "rgba(10,11,24,0.95)",
+                            border: "1px solid rgba(255,255,255,0.08)",
+                            borderRadius: 12,
+                            fontSize: 12,
+                          }}
+                          labelStyle={{ color: "#e4e4e7" }}
+                          formatter={(value: number) => [
+                            `${value} check-in${value === 1 ? "" : "s"}`,
+                            "Activity",
+                          ]}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="value"
+                          stroke="#ff4fa3"
+                          strokeWidth={2}
+                          fill={`url(#${chartGradId}-time)`}
+                          dot={{ fill: "#ff4fa3", r: 4, strokeWidth: 0 }}
+                          style={{ filter: "drop-shadow(0 0 8px rgba(255,79,163,0.45))" }}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+                      <p className="text-sm text-[rgba(255,255,255,0.5)]">No activity yet</p>
+                      <Link
+                        to="/app/mood-check-in"
+                        className="text-xs font-medium text-fuchsia-300/80 hover:text-fuchsia-200"
+                      >
+                        Log a mood check-in
+                      </Link>
+                    </div>
+                  )}
                 </div>
                 <p className="mt-3 text-xs text-[rgba(255,255,255,0.45)]">
-                  Try evening grounding practices
+                  {analyticsCharts?.timeHint}
+                  {analyticsCharts && analyticsCharts.timeChartTotal > 0
+                    ? ` (${analyticsCharts.timeChartTotal} total in the last 30 days.)`
+                    : ""}
                 </p>
               </SolaceGlassCard>
 
@@ -796,13 +644,22 @@ export function SafetyInsights() {
                   <div className={wellnessPlanIconChip("rose")}>
                     <Heart className="h-4 w-4" aria-hidden />
                   </div>
-                  <h3 className="font-serif text-lg font-light text-white">Safety State Distribution</h3>
+                  <h3 className="font-serif text-lg font-light text-white">
+                    {analyticsCharts?.donutUsesMoods
+                      ? "Mood Check-in Mix"
+                      : "Safety State Distribution"}
+                  </h3>
                 </div>
-                <div className="relative mx-auto h-[180px] w-full max-w-[200px] flex-1">
+                {analyticsCharts?.donutUsesMoods ? (
+                  <p className="mb-2 text-center text-[10px] text-[rgba(255,255,255,0.38)]">
+                    Based on your last 30 days of mood check-ins
+                  </p>
+                ) : null}
+                <div className="relative mx-auto h-[180px] w-full max-w-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={donutData}
+                        data={analyticsCharts?.donutData ?? []}
                         cx="50%"
                         cy="50%"
                         innerRadius={52}
@@ -811,18 +668,23 @@ export function SafetyInsights() {
                         dataKey="value"
                         stroke="none"
                       >
-                        {donutData.map((entry) => (
+                        {(analyticsCharts?.donutData ?? []).map((entry) => (
                           <Cell key={entry.name} fill={entry.color} />
                         ))}
                       </Pie>
+                      <Tooltip
+                        content={<MoodDonutTooltip />}
+                        wrapperStyle={{ zIndex: 20, outline: "none" }}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                     <Heart className="h-6 w-6 text-fuchsia-300/80" aria-hidden />
                   </div>
                 </div>
+                <DonutLegend segments={analyticsCharts?.donutData ?? []} />
                 <p className="mt-2 text-center text-xs leading-relaxed text-[rgba(255,255,255,0.5)]">
-                  You&apos;re in a safe state {safePercent}% of the time. Keep going.
+                  {analyticsCharts?.donutFooter}
                 </p>
               </SolaceGlassCard>
 
@@ -834,17 +696,22 @@ export function SafetyInsights() {
                   <h3 className="font-serif text-lg font-light text-white">Top Triggers</h3>
                 </motion.div>
                 <ul className="flex-1 space-y-3">
-                  {triggerRows.length === 0 ? (
+                  {(analyticsCharts?.triggerRows.length ?? 0) === 0 ? (
                     <li className="text-sm text-[rgba(255,255,255,0.45)]">
-                      No triggers recorded yet—your patterns will appear here as you reflect.
+                      No patterns yet—mood check-ins and safety moments will populate this list.
                     </li>
                   ) : (
-                    triggerRows.map((row) => (
+                    analyticsCharts?.triggerRows.map((row) => (
                       <li
                         key={row.label}
                         className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.05] bg-white/[0.02] px-4 py-3"
                       >
-                        <span className="text-sm text-[rgba(255,255,255,0.82)]">{row.label}</span>
+                        <div className="min-w-0">
+                          <span className="text-sm text-[rgba(255,255,255,0.82)]">{row.label}</span>
+                          <p className="mt-0.5 text-[10px] text-[rgba(255,255,255,0.38)]">
+                            {row.count} time{row.count === 1 ? "" : "s"} (30d)
+                          </p>
+                        </div>
                         <span
                           className={cn(
                             "shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
@@ -886,28 +753,22 @@ export function SafetyInsights() {
                   {
                     icon: Sun,
                     title: "Mood stability",
-                    text:
-                      insights.trend === "stable" || insights.trend === "decreasing"
-                        ? "Your emotional rhythm looks steady lately."
-                        : "Check-ins can help you notice shifts early.",
+                    text: summaryCopy?.mood ?? "",
                   },
                   {
                     icon: Leaf,
                     title: "Journaling correlation",
-                    text: "Reflective writing often deepens self-understanding.",
+                    text: summaryCopy?.journal ?? "",
                   },
                   {
                     icon: Cloud,
                     title: "Breathing exercises",
-                    text:
-                      insights.topResources.length > 0
-                        ? "Your go-to tools are within reach when you need them."
-                        : "Gentle breath work can calm the nervous system.",
+                    text: summaryCopy?.breathing ?? "",
                   },
                   {
                     icon: Users,
                     title: "Connection days",
-                    text: `${insights.last30DaysCount} safety moments logged this month.`,
+                    text: summaryCopy?.connection ?? "",
                   },
                 ].map((block, i) => (
                   <div
@@ -1042,12 +903,7 @@ export function SafetyInsights() {
             </motion.section>
           </div>
 
-          <SafetyInsightsRail
-            safetyScore={insights.safetyScore}
-            trend={insights.trend}
-            last30DaysCount={insights.last30DaysCount}
-            checkIns={checkIns}
-          />
+          <SafetyInsightsRail insights={insights} checkIns={checkIns} />
         </div>
       </div>
     </motion.div>

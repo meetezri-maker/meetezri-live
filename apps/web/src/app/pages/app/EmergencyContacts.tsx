@@ -19,6 +19,8 @@ import {
   MessageCircle,
   MoreVertical,
   ChevronRight,
+  Eye,
+  Check,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -46,10 +48,13 @@ import {
   EMERGENCY_RAIL_IMG,
   emergencyAboutCard,
   emergencyActionBtn,
+  emergencyConsentReviewTrigger,
+  emergencyConsentReviewTriggerAgreed,
   emergencyBackLink,
   emergencyBtnPrimary,
   emergencyBtnRose,
   emergencyContactAvatar,
+  emergencyContactConsentBadge,
   emergencyContactCard,
   emergencyGlassCard,
   emergencyHeroAccent,
@@ -61,6 +66,7 @@ import {
   emergencyHeroTitle,
   emergencyIconChip,
   emergencyModalBtnCancel,
+  emergencyModalBtnDestructive,
   emergencyModalBtnRow,
   emergencyModalBtnSave,
   emergencyModalCheckbox,
@@ -96,9 +102,13 @@ interface EmergencyContact {
   relationship: string | null;
   phone: string | null;
   email: string | null;
-  is_trusted: boolean;
+  is_trusted: boolean | null;
   created_at: string;
   updated_at: string;
+}
+
+function contactHasConsent(contact: EmergencyContact): boolean {
+  return contact.is_trusted === true;
 }
 
 function contactInitials(name: string): string {
@@ -192,6 +202,7 @@ export function EmergencyContacts() {
     mutationFn: () => api.updateProfile({ emergency_consent: true }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.profile.me() });
+      setConsentReviewOpen(false);
       toast.success("Your consent has been saved.");
     },
     onError: () => {
@@ -200,8 +211,11 @@ export function EmergencyContacts() {
   });
 
   const hasPageConsent = profile?.emergency_consent === true;
-  const showConsentModal =
+  const showBlockingConsentModal =
     !profileLoading && !profileError && profile != null && !hasPageConsent;
+  const [consentReviewOpen, setConsentReviewOpen] = useState(false);
+  const consentModalVariant = showBlockingConsentModal ? "gate" : "review";
+  const consentModalOpen = showBlockingConsentModal || consentReviewOpen;
 
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -209,6 +223,7 @@ export function EmergencyContacts() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<EmergencyContact | null>(null);
   const [editingContact, setEditingContact] = useState<EmergencyContact | null>(null);
   const [emergencyConsentChecked, setEmergencyConsentChecked] = useState(false);
   const [formData, setFormData] = useState({
@@ -297,9 +312,12 @@ export function EmergencyContacts() {
       phone: normalizeStoredPhoneForInput(contact.phone || ""),
       email: contact.email || "",
     });
-    setEmergencyConsentChecked(false);
+    setEmergencyConsentChecked(contactHasConsent(contact));
     setShowAddModal(true);
   };
+
+  const isConsentLocked =
+    (editingContact != null && contactHasConsent(editingContact)) || emergencyConsentChecked;
 
   const handleUpdateContact = async () => {
     if (!editingContact) return;
@@ -325,7 +343,7 @@ export function EmergencyContacts() {
         relationship: formData.relationship || undefined,
         phone: formData.phone.trim() || undefined,
         email: formData.email || undefined,
-        is_trusted: true,
+        is_trusted: contactHasConsent(editingContact) || emergencyConsentChecked,
       });
 
       setContacts(contacts.map((c) => (c.id === editingContact.id ? updatedContact : c)));
@@ -339,19 +357,20 @@ export function EmergencyContacts() {
     }
   };
 
-  const handleDeleteContact = async (id: string) => {
-    if (confirm("Are you sure you want to delete this emergency contact?")) {
-      try {
-        setDeletingId(id);
-        await api.emergencyContacts.delete(id);
-        setContacts(contacts.filter((c) => c.id !== id));
-        toast.success("Contact deleted successfully");
-      } catch (error) {
-        console.error("Failed to delete contact:", error);
-        toast.error("Failed to delete contact");
-      } finally {
-        setDeletingId(null);
-      }
+  const confirmDeleteContact = async () => {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    try {
+      setDeletingId(id);
+      await api.emergencyContacts.delete(id);
+      setContacts(contacts.filter((c) => c.id !== id));
+      setDeleteTarget(null);
+      toast.success("Contact deleted successfully");
+    } catch (error) {
+      console.error("Failed to delete contact:", error);
+      toast.error("Failed to delete contact");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -385,9 +404,18 @@ export function EmergencyContacts() {
   return (
     <>
       <EmergencyContactConsentModal
-        open={showConsentModal}
+        open={consentModalOpen}
+        variant={consentModalVariant}
+        alreadyConsented={hasPageConsent}
         onConsent={() => consentMutation.mutate()}
-        onCancel={() => navigate("/app/settings")}
+        onCancel={() => {
+          if (consentReviewOpen) {
+            setConsentReviewOpen(false);
+            return;
+          }
+          navigate("/app/settings");
+        }}
+        onClose={() => setConsentReviewOpen(false)}
         isSubmitting={consentMutation.isPending}
       />
 
@@ -404,9 +432,9 @@ export function EmergencyContacts() {
         <div
           className={cn(
             "relative z-10 mx-auto w-full max-w-[1500px] px-4 py-7 sm:px-7 sm:py-9",
-            showConsentModal && "pointer-events-none select-none opacity-40",
+            showBlockingConsentModal && "pointer-events-none select-none opacity-40",
           )}
-          aria-hidden={showConsentModal}
+          aria-hidden={showBlockingConsentModal}
         >
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
             {/* Main column */}
@@ -472,7 +500,32 @@ export function EmergencyContacts() {
                     <Info className="h-5 w-5" aria-hidden />
                   </div>
                   <motion.div className="min-w-0 flex-1">
-                    <h2 className="font-serif text-lg font-light text-white">About Emergency Contacts</h2>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h2 className="font-serif text-lg font-light text-white">
+                        About Emergency Contacts
+                      </h2>
+                      <button
+                        type="button"
+                        onClick={() => setConsentReviewOpen(true)}
+                        className={cn(
+                          hasPageConsent
+                            ? emergencyConsentReviewTriggerAgreed
+                            : emergencyConsentReviewTrigger,
+                        )}
+                        aria-label={
+                          hasPageConsent
+                            ? "View safety consent — you already agreed"
+                            : "View emergency contact safety consent"
+                        }
+                      >
+                        <Eye className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        {hasPageConsent ? (
+                          <span>You have provided Consent</span>
+                        ) : (
+                          <span>Safety Consent</span>
+                        )}
+                      </button>
+                    </div>
                     <p className="mt-2 text-sm leading-relaxed text-[rgba(255,255,255,0.55)]">
                       These contacts may be notified if you&apos;re in distress or need immediate
                       support. Make sure to inform them that they&apos;re listed as emergency
@@ -500,9 +553,20 @@ export function EmergencyContacts() {
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                       {/* Left: avatar + identity */}
                       <div className="flex min-w-0 items-center gap-4">
-                        <motion.div className={emergencyContactAvatar} aria-hidden>
-                          {contactInitials(contact.name)}
-                        </motion.div>
+                        <div className="relative shrink-0">
+                          <motion.div className={emergencyContactAvatar} aria-hidden>
+                            {contactInitials(contact.name)}
+                          </motion.div>
+                          {contactHasConsent(contact) ? (
+                            <span
+                              className={emergencyContactConsentBadge}
+                              title="Consent confirmed for this contact"
+                              aria-label="Consent confirmed for this contact"
+                            >
+                              <Check className="h-3 w-3" strokeWidth={3} aria-hidden />
+                            </span>
+                          ) : null}
+                        </div>
                         <div className="min-w-0">
                           <h3 className="truncate text-base font-semibold text-white">{contact.name}</h3>
                           <p className="mt-0.5 text-sm text-[rgba(255,255,255,0.45)]">
@@ -592,7 +656,7 @@ export function EmergencyContacts() {
                             <DropdownMenuItem
                               variant="destructive"
                               className="cursor-pointer focus:bg-rose-500/15"
-                              onClick={() => void handleDeleteContact(contact.id)}
+                              onClick={() => setDeleteTarget(contact)}
                             >
                               <Trash2 className="h-4 w-4" />
                               Delete contact
@@ -722,7 +786,7 @@ export function EmergencyContacts() {
                       id="emergency-resources-heading"
                       className="font-serif text-xl font-light text-white sm:text-[1.35rem]"
                     >
-                      Helpful Resources â€” Available 24/7
+                      Helpful Resources Available 24/7
                     </h2>
                     <p className="mt-2 text-sm text-[rgba(255,255,255,0.62)]">
                       Support is always here when you need it.
@@ -761,6 +825,76 @@ export function EmergencyContacts() {
           </div>
         </div>
       </motion.div>
+
+      {/* Delete confirmation modal */}
+      {deleteTarget ? (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => {
+              if (!deletingId) setDeleteTarget(null);
+            }}
+            className={emergencyModalOverlayMotion}
+            aria-hidden
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 16 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="emergency-contact-delete-title"
+            aria-describedby="emergency-contact-delete-desc"
+          >
+            <div
+              className={emergencyModalShell}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-4">
+                <div className={cn(emergencyIconChip("rose"), "h-12 w-12 shrink-0 [&_svg]:h-5 [&_svg]:w-5")}>
+                  <Trash2 className="h-5 w-5 text-rose-200/95" aria-hidden />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className={emergencyModalEyebrow}>Remove contact</p>
+                  <h2 id="emergency-contact-delete-title" className={emergencyModalTitle}>
+                    Delete emergency contact?
+                  </h2>
+                  <p id="emergency-contact-delete-desc" className={emergencyModalSubtitle}>
+                    Are you sure you want to remove{" "}
+                    <span className="font-medium text-white/90">{deleteTarget.name}</span> from
+                    your emergency contacts? This cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <div className={cn(emergencyModalBtnRow, "mt-6")}>
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deletingId === deleteTarget.id}
+                  className={emergencyModalBtnCancel}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void confirmDeleteContact()}
+                  disabled={deletingId === deleteTarget.id}
+                  className={emergencyModalBtnDestructive}
+                >
+                  {deletingId === deleteTarget.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : null}
+                  Delete contact
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </>
+      ) : null}
 
       {/* Add / Edit modal */}
       {showAddModal ? (
@@ -875,14 +1009,21 @@ export function EmergencyContacts() {
                     <Checkbox
                       id="emergency-contact-consent-modal"
                       checked={emergencyConsentChecked}
-                      onCheckedChange={(value) => setEmergencyConsentChecked(value === true)}
+                      onCheckedChange={(value) => {
+                        if (isConsentLocked && value !== true) return;
+                        setEmergencyConsentChecked(value === true);
+                      }}
+                      disabled={isConsentLocked}
                       className={emergencyModalCheckbox}
                       aria-describedby="emergency-contact-consent-modal-desc"
                     />
                     <div className="min-w-0 space-y-1">
                       <Label
                         htmlFor="emergency-contact-consent-modal"
-                        className={emergencyModalCheckboxLabel}
+                        className={cn(
+                          emergencyModalCheckboxLabel,
+                          isConsentLocked && "cursor-default opacity-90",
+                        )}
                       >
                         I confirm this person knows they may be contacted only during urgent
                         wellbeing or safety situations.
@@ -891,7 +1032,9 @@ export function EmergencyContacts() {
                         id="emergency-contact-consent-modal-desc"
                         className={emergencyModalCheckboxHelp}
                       >
-                        Required to save changes in this form.
+                        {isConsentLocked
+                          ? "Consent is saved for this contact and cannot be removed."
+                          : "Required to save changes in this form."}
                       </p>
                     </div>
                   </div>

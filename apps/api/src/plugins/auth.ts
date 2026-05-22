@@ -11,10 +11,50 @@ const userRoleCache = new Map<
     permissions: any;
     onboardingCompleted: boolean;
     signupType: 'trial' | 'plan' | null;
+    accountStatus: string | null;
     timestamp: number;
   }
 >();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const INACTIVE_ACCOUNT_ALLOWED_PREFIXES = [
+  '/api/users/me',
+  '/api/users/me/deactivate',
+  '/api/users/activation',
+  '/api/users/resend-verification',
+  '/api/users/confirm-email',
+  '/api/users/init',
+  '/api/users/2fa',
+];
+
+function isInactiveAccountAllowedPath(path: string) {
+  return INACTIVE_ACCOUNT_ALLOWED_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+function blockInactiveAccountApiAccess(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  accountStatus: string | null | undefined
+): boolean {
+  if (accountStatus !== 'inactive') return true;
+  const path = request.url.split('?')[0] || '';
+  if (isInactiveAccountAllowedPath(path)) return true;
+
+  const isOnboardingApi = path.startsWith('/api/users/onboarding');
+  const isAppApi = APP_API_PREFIXES.some((p) => path.startsWith(p));
+  const isBillingApi = path.startsWith('/api/billing');
+
+  if (isAppApi || isBillingApi || isOnboardingApi) {
+    reply.code(403).send({
+      statusCode: 403,
+      error: 'Forbidden',
+      code: 'ACCOUNT_INACTIVE',
+      message: 'Account is deactivated. Reactivate your account to continue.',
+    });
+    return false;
+  }
+  return true;
+}
 
 const APP_API_PREFIXES = [
   '/api/users/credits',
@@ -27,6 +67,7 @@ const APP_API_PREFIXES = [
   '/api/notifications',
   '/api/ai-avatars',
   '/api/emergency-contacts',
+  '/api/wellness-plan',
   '/api/safety-resource-interactions',
   '/api/community',
 ];
@@ -165,6 +206,11 @@ export default fp(async (fastify: FastifyInstance) => {
           user.appRole = normalizeAppRole(cached.role);
           user.permissions = cached.permissions;
           user.onboarding_completed = cached.onboardingCompleted;
+          user.account_status = cached.accountStatus ?? 'active';
+
+          if (!blockInactiveAccountApiAccess(request, reply, cached.accountStatus)) {
+            return;
+          }
 
           const isOnboardingApi = path.startsWith('/api/users/onboarding');
           const isAppApi = APP_API_PREFIXES.some((p) => path.startsWith(p));
@@ -228,6 +274,7 @@ export default fp(async (fastify: FastifyInstance) => {
                 notification_preferences: true,
                 timezone: true,
                 signup_type: true,
+                account_status: true,
               } as any,
             });
           } catch (e: any) {
@@ -245,6 +292,7 @@ export default fp(async (fastify: FastifyInstance) => {
                 emergency_contact_relationship: true,
                 notification_preferences: true,
                 timezone: true,
+                account_status: true,
               },
             });
           }
@@ -336,18 +384,28 @@ export default fp(async (fastify: FastifyInstance) => {
             })();
 
             user.onboarding_completed = onboardingCompletedResolved;
-            
+            const accountStatusResolved =
+              typeof (profile as any).account_status === 'string'
+                ? (profile as any).account_status
+                : 'active';
+            user.account_status = accountStatusResolved;
+
             // Update cache
             userRoleCache.set(user.sub, {
               role: resolvedAppRole ?? 'user',
               permissions: profile.permissions,
               onboardingCompleted: onboardingCompletedResolved,
               signupType: signupTypeResolved,
+              accountStatus: accountStatusResolved,
               timestamp: now
             });
 
             // Backend route guard: deny app API usage until onboarding is complete
             const path = request.url.split('?')[0] || '';
+
+            if (!blockInactiveAccountApiAccess(request, reply, accountStatusResolved)) {
+              return;
+            }
 
             const isOnboardingApi = path.startsWith('/api/users/onboarding');
             const isAppApi = APP_API_PREFIXES.some((p) => path.startsWith(p));

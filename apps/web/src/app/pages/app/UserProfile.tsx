@@ -11,7 +11,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
-import { profileAgeStorageToDisplayYears } from "@/lib/profileAge";
+import { isIsoDobString, profileAgeStorageToDisplayYears } from "@/lib/profileAge";
 import { resolveVerificationRedirectForFlow } from "@/lib/verificationRedirect";
 import { Skeleton } from "../../components/ui/skeleton";
 
@@ -301,7 +301,9 @@ export function UserProfile() {
         name: profile.full_name || "",
         email: profile.email || user?.email || "",
         phone: profile.phone || "",
-        birthday: profileAgeStorageToDisplayYears(profile.age),
+        birthday: isIsoDobString(profile.age ?? "")
+          ? profile.age!.trim()
+          : profileAgeStorageToDisplayYears(profile.age),
         location: profile.timezone || getBrowserTimezone(),
         pronouns: profile.pronouns || "",
         emergency_contact_name: profile.emergency_contact_name || "",
@@ -565,7 +567,9 @@ export function UserProfile() {
       if (dirty.name) patch.full_name = data.name;
       if (dirty.email) patch.email = data.email;
       if (dirty.phone) patch.phone = data.phone;
-      if (dirty.birthday) patch.age = data.birthday;
+      if (dirty.birthday) {
+        patch.age = (data.birthday ?? "").trim();
+      }
       // Pronouns can be changed via dropdown/custom input; compare values directly
       // so updates do not depend on dirty field tracking quirks.
       if (nextPronouns !== currentPronouns) patch.pronouns = nextPronouns;
@@ -581,9 +585,13 @@ export function UserProfile() {
       }
       if (!Object.keys(patch).length) { toast.success("No changes to save"); setIsEditing(false); return; }
       const updated = await api.updateProfile(patch);
+      setRawProfile(updated);
       form.reset({
         name: updated.full_name || "", email: updated.email || "", phone: updated.phone || "",
-        birthday: profileAgeStorageToDisplayYears(updated.age), pronouns: updated.pronouns || "",
+        birthday: isIsoDobString(updated.age ?? "")
+          ? updated.age!.trim()
+          : profileAgeStorageToDisplayYears(updated.age),
+        pronouns: updated.pronouns || "",
         location: updated.timezone || "", in_therapy: updated.in_therapy || "Not specified",
         selected_goals: toProfileGoals(updated.selected_goals),
         selected_triggers: toProfileGoals(updated.selected_triggers),
@@ -713,6 +721,7 @@ export function UserProfile() {
         AVATAR_EXPORT_HEIGHT={AVATAR_EXPORT_HEIGHT}
         FieldRow={FieldRow}
         PILL={PILL}
+        profileAgeStorage={rawProfile?.age ?? null}
       />
 
       {/* verified alert */}

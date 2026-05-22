@@ -580,7 +580,7 @@ export function LiveSessionsMonitor() {
                             className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2 text-red-600"
                           >
                             <PhoneOff className="w-4 h-4" />
-                            End Session
+                            End Talk
                           </button>
                         </div>
                       )}

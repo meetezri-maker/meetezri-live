@@ -38,6 +38,12 @@ export const modalSecondaryButton = cn(
   "inline-flex flex-1 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3",
   "text-sm font-medium text-zinc-300 transition hover:border-violet-400/25 hover:bg-white/[0.07]",
 );
+export const modalDestructiveButton = cn(
+  "inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-rose-600 to-rose-500 px-4 py-2.5",
+  "text-sm font-semibold text-white shadow-[0_0_24px_-8px_rgba(244,63,94,0.55)]",
+  "transition hover:opacity-95 focus-visible:ring-2 focus-visible:ring-rose-500/40",
+  "disabled:pointer-events-none disabled:opacity-50",
+);
 export const modalLink = "font-medium text-violet-400 hover:text-violet-300 hover:underline";
 export const modalCheckboxLabel = "flex items-center gap-2 text-sm text-zinc-300";
 

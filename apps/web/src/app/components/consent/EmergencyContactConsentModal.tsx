@@ -4,7 +4,7 @@ import {
   EMERGENCY_CONTACT_CONSENT_PROMPT,
   type EmergencyContactConsentPrompt,
 } from "@meetezri/shared";
-import { AlertTriangle, Check, Heart, Loader2, Shield } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Heart, Loader2, Shield } from "lucide-react";
 import { cn } from "@/app/components/ui/utils";
 import { Dialog, DialogPortal } from "../ui/dialog";
 import { Checkbox } from "../ui/checkbox";
@@ -31,12 +31,20 @@ import {
   emergencyModalTitle,
 } from "@/app/pages/app/emergency-contacts/emergencyContactsUi";
 
+export type EmergencyContactConsentModalVariant = "gate" | "review";
+
 export interface EmergencyContactConsentModalProps {
   open: boolean;
+  /** `gate` blocks the page until consent; `review` is opened anytime via the eye control. */
+  variant?: EmergencyContactConsentModalVariant;
+  /** When true in `review` mode, shows read-only “already agreed” state. */
+  alreadyConsented?: boolean;
   /** Defaults to shared production prompt; inject alternatives for A/B or admin preview. */
   promptConfig?: EmergencyContactConsentPrompt;
   onConsent: () => void | Promise<void>;
   onCancel: () => void;
+  /** Called when the user dismisses a `review` modal (Close, overlay, or Escape). */
+  onClose?: () => void;
   isSubmitting?: boolean;
 }
 
@@ -46,31 +54,55 @@ export interface EmergencyContactConsentModalProps {
  */
 export function EmergencyContactConsentModal({
   open,
+  variant = "gate",
+  alreadyConsented = false,
   promptConfig = EMERGENCY_CONTACT_CONSENT_PROMPT,
   onConsent,
   onCancel,
+  onClose,
   isSubmitting = false,
 }: EmergencyContactConsentModalProps) {
   const baseId = useId();
   const [checkboxChecked, setCheckboxChecked] = useState(false);
+  const isReview = variant === "review";
+  const showAlreadyAgreed = isReview && alreadyConsented;
 
   useEffect(() => {
-    if (open) {
+    if (open && !showAlreadyAgreed) {
       setCheckboxChecked(false);
     }
-  }, [open]);
+  }, [open, showAlreadyAgreed]);
 
   const descriptionId = `${baseId}-description`;
   const checkboxDescId = `${baseId}-checkbox-help`;
 
+  const handleDismissReview = () => {
+    onClose?.();
+    onCancel();
+  };
+
   return (
-    <Dialog open={open} modal>
+    <Dialog
+      open={open}
+      modal
+      onOpenChange={(next) => {
+        if (!next && isReview) {
+          handleDismissReview();
+        }
+      }}
+    >
       <DialogPortal>
         <DialogPrimitive.Overlay className={emergencyModalOverlayDialog} />
         <DialogPrimitive.Content
           aria-describedby={descriptionId}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => {
+            if (isReview) return;
+            e.preventDefault();
+          }}
+          onPointerDownOutside={(e) => {
+            if (isReview) return;
+            e.preventDefault();
+          }}
           className={cn(
             "fixed inset-0 z-[201] flex items-center justify-center p-4 sm:p-6",
             "duration-200 outline-none",
@@ -102,7 +134,7 @@ export function EmergencyContactConsentModal({
 
               <section className={emergencyModalAmberNotice} role="note">
                 <h3 className={emergencyModalAmberTitle}>
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300/90" aria-hidden />
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-violet-300/85" aria-hidden />
                   {promptConfig.emergencyOnlyHeading}
                 </h3>
                 <p className={emergencyModalBody}>{promptConfig.emergencyOnlyBody}</p>
@@ -121,45 +153,76 @@ export function EmergencyContactConsentModal({
             </div>
 
             <div className={cn(emergencyModalConsentBox, "mt-6")}>
-              <div className="flex items-start gap-3">
-                <Checkbox
-                  id={`${baseId}-consent-cb`}
-                  checked={checkboxChecked}
-                  onCheckedChange={(v) => setCheckboxChecked(v === true)}
-                  className={emergencyModalCheckbox}
-                  aria-describedby={checkboxDescId}
-                  disabled={isSubmitting}
-                />
-                <div className="min-w-0 space-y-1">
-                  <Label htmlFor={`${baseId}-consent-cb`} className={emergencyModalCheckboxLabel}>
-                    {promptConfig.checkboxLabel}
-                  </Label>
-                  <p id={checkboxDescId} className={emergencyModalCheckboxHelp}>
-                    Required before you can continue to emergency contacts.
-                  </p>
+              {showAlreadyAgreed ? (
+                <div className="flex items-start gap-3">
+                  <CheckCircle2
+                    className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300/90"
+                    aria-hidden
+                  />
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-sm font-medium text-emerald-100/95">You already agreed</p>
+                    <p className={emergencyModalCheckboxHelp}>
+                      You previously consented to emergency contact notification for serious safety
+                      situations. You can review the details above at any time.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id={`${baseId}-consent-cb`}
+                    checked={checkboxChecked}
+                    onCheckedChange={(v) => setCheckboxChecked(v === true)}
+                    className={emergencyModalCheckbox}
+                    aria-describedby={checkboxDescId}
+                    disabled={isSubmitting}
+                  />
+                  <div className="min-w-0 space-y-1">
+                    <Label htmlFor={`${baseId}-consent-cb`} className={emergencyModalCheckboxLabel}>
+                      {promptConfig.checkboxLabel}
+                    </Label>
+                    <p id={checkboxDescId} className={emergencyModalCheckboxHelp}>
+                      {isReview
+                        ? "Check the box and select I Consent to save your agreement."
+                        : "Required before you can continue to emergency contacts."}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className={cn(emergencyModalBtnRow, "mt-6")}>
-              <button
-                type="button"
-                onClick={onCancel}
-                disabled={isSubmitting}
-                className={emergencyModalBtnCancel}
-              >
-                {promptConfig.cancelButtonLabel}
-              </button>
-              <button
-                type="button"
-                onClick={() => void onConsent()}
-                disabled={!checkboxChecked || isSubmitting}
-                className={emergencyModalBtnPrimary}
-              >
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-                <Heart className="h-4 w-4 opacity-80" aria-hidden />
-                {promptConfig.consentButtonLabel}
-              </button>
+              {showAlreadyAgreed ? (
+                <button
+                  type="button"
+                  onClick={handleDismissReview}
+                  disabled={isSubmitting}
+                  className={cn(emergencyModalBtnPrimary, "w-full sm:flex-1")}
+                >
+                  Close
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={isReview ? handleDismissReview : onCancel}
+                    disabled={isSubmitting}
+                    className={emergencyModalBtnCancel}
+                  >
+                    {isReview ? "Close" : promptConfig.cancelButtonLabel}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onConsent()}
+                    disabled={!checkboxChecked || isSubmitting}
+                    className={emergencyModalBtnPrimary}
+                  >
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+                    <Heart className="h-4 w-4 opacity-80" aria-hidden />
+                    {promptConfig.consentButtonLabel}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </DialogPrimitive.Content>

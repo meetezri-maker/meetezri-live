@@ -5904,7 +5904,7 @@ export default ThreeAvatar;
         }
         toast.success("Session ended successfully");
       } catch (error) {
-        console.error("Failed to end session:", error);
+        console.error("Failed to End Talking:", error);
         toast.error("Failed to save session data");
       } finally {
         setIsUploading(false);
@@ -5943,7 +5943,7 @@ export default ThreeAvatar;
           });
         }
       } catch (e) {
-        console.error("End session navigation failed:", e);
+        console.error("End Talking navigation failed:", e);
         setIsEndingSession(false);
       }
     };
@@ -6045,7 +6045,7 @@ export default ThreeAvatar;
           <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#07041C]/95 backdrop-blur-md px-6">
             <Loader2 className="h-12 w-12 text-purple-400 animate-spin mb-4" />
             <p className="text-lg font-semibold text-white text-center">
-              Ending session…
+              Ending Talking
             </p>
             <p className="text-sm text-gray-400 mt-2 text-center max-w-sm">
               Hang on — we&apos;re saving your session and taking you to the lobby.
@@ -6546,7 +6546,7 @@ export default ThreeAvatar;
                     whileTap={{ scale: 0.94 }}
                     onClick={() => setShowEndConfirm(true)}
                     className={`flex size-12 items-center justify-center rounded-full md:size-14 ${glassControlBtnDanger}`}
-                    aria-label="End session"
+                    aria-label="End Talking"
                   >
                     <PhoneOff className="size-6 text-white md:size-7" />
                   </motion.button>
@@ -6935,7 +6935,7 @@ export default ThreeAvatar;
                   onClick={() => navigate("/app/dashboard")}
                   className="w-full px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
                 >
-                  End Session & Return to Dashboard
+                  End Talking & Return to Dashboard
                 </button>
               </motion.div>
             </motion.div>
@@ -6948,7 +6948,7 @@ export default ThreeAvatar;
           minutesRemaining={remainingWholeMinutes ?? 0}
         />
 
-        {/* End Session Confirm */}
+        {/* End Talking Confirm */}
         <AnimatePresence>
           {showEndConfirm && (
             <motion.div
@@ -6970,7 +6970,7 @@ export default ThreeAvatar;
                     <PhoneOff className="w-8 h-8 text-red-400" />
                   </div>
                   <h3 className="text-xl font-bold text-white mb-2">
-                    End Session?
+                    End Talk?
                   </h3>
                   <p className="text-gray-300">
                     Are you sure you want to end your video session with{" "}
@@ -7002,7 +7002,7 @@ export default ThreeAvatar;
                     {isUploading ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : null}
-                    {isUploading ? "Ending..." : "End Session"}
+                    {isUploading ? "Ending..." : "End Talking"}
                   </motion.button>
                 </div>
               </motion.div>
@@ -7170,7 +7170,7 @@ export default ThreeAvatar;
                     onClick={() => navigate("/app/dashboard")}
                     className="w-full px-4 sm:px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
                   >
-                    End Session & Return to Dashboard
+                    End Talking & Return to Dashboard
                   </button>
                 </div>
               </motion.div>

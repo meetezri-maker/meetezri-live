@@ -34,6 +34,10 @@ export const queryKeys = {
     me: () => ["profile", "me"] as const,
     byUser: (userId: string | undefined) => ["profile", userId] as const,
   },
+  moods: {
+    all: () => ["moods"] as const,
+    my: (userId: string | undefined) => ["moods", "my", userId] as const,
+  },
   safetyResourceInteractions: {
     all: () => ["safetyResourceInteractions"] as const,
     list: (params: {

@@ -405,6 +405,14 @@ export const api = {
       headers,
       cache: 'no-store',
     });
+    if (res.status === 403) {
+      const errorData = await res.json().catch(() => ({} as Record<string, unknown>));
+      if (errorData.code === 'PROFILE_PRIVATE') {
+        const err = new Error('This account is private');
+        (err as Error & { code: string }).code = 'PROFILE_PRIVATE';
+        throw err;
+      }
+    }
     return handleResponse(res, 'Failed to load member profile');
   },
 
@@ -543,6 +551,33 @@ export const api = {
     });
     
     return handleResponse(res, 'Failed to delete account');
+  },
+
+  async deactivateAccount() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/me/deactivate`, {
+      method: 'POST',
+      headers,
+    });
+    return handleResponse(res, 'Failed to deactivate account');
+  },
+
+  async requestAccountActivation() {
+    const headers = await getHeaders();
+    const res = await fetch(`${API_URL}/users/activation/request`, {
+      method: 'POST',
+      headers,
+    });
+    return handleResponse(res, 'Failed to send activation email');
+  },
+
+  async confirmAccountActivation(token: string) {
+    const res = await fetch(`${API_URL}/users/activation/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    return handleResponse(res, 'Failed to activate account');
   },
 
   async exportUserData() {
@@ -818,6 +853,45 @@ export const api = {
       body: JSON.stringify(payload),
     });
     return handleResponse(res, 'Failed to save branding');
+  },
+
+  // Wellness Plan (safety_plans) API
+  wellnessPlan: {
+    async get() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/wellness-plan`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      });
+      return handleResponse(res, 'Failed to fetch wellness plan');
+    },
+
+    async save(data: {
+      warning_signs: string[];
+      coping_strategies: string[];
+      social_distractions: string[];
+      trusted_contacts: string[] | Array<{ name?: string; phone?: string; relation?: string }>;
+      reasons_to_live: string[];
+      environment_safety: string[];
+    }) {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/wellness-plan`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(data),
+      });
+      return handleResponse(res, 'Failed to save wellness plan');
+    },
+
+    async clear() {
+      const headers = await getHeaders();
+      const res = await fetch(`${API_URL}/wellness-plan`, {
+        method: 'DELETE',
+        headers,
+      });
+      return handleResponse(res, 'Failed to clear wellness plan');
+    },
   },
 
   // Emergency Contacts API

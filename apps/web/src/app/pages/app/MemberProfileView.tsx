@@ -1,28 +1,47 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion } from "motion/react";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
 import {
+  Activity,
   ArrowLeft,
   CalendarCheck,
   CheckCircle2,
   Circle,
+  Heart,
   History,
   Loader2,
+  Lock,
   Sparkles,
   Trophy,
   Users,
 } from "lucide-react";
-import { Button } from "@/app/components/ui/button";
+import { SolaceHeroEnvironment } from "@/app/solace";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-
-const GRAD =
-  "linear-gradient(135deg, #ff7a18 0%, #ff5c87 48%, #e040fb 100%)";
-const GRAD_SOFT =
-  "linear-gradient(135deg, rgba(255,122,24,0.12) 0%, rgba(224,64,251,0.1) 100%)";
-const CARD_SHELL =
-  "rounded-[1.25rem] bg-white dark:bg-gray-950 shadow-[0_4px_24px_rgba(15,23,42,0.06)] border border-gray-100/90 dark:border-gray-800";
+import { cn } from "@/lib/utils";
+import {
+  PROFILE_HERO_IMG,
+  formatSubscriptionPlanLabel,
+  profileBodyMuted,
+  profileBtnGhost,
+  profileBtnPrimary,
+  profileCard,
+  profileCardHeader,
+  profileCardSubtitle,
+  profileCardTitle,
+  profileHeroShell,
+  profileHeroStatStrip,
+  profileIconCircle,
+  profileMilestoneChip,
+  profilePageAtmosphere,
+  profilePageFogMid,
+  profilePageGlowBottom,
+  profilePageGlowTop,
+  profilePageNoise,
+  profilePageVignette,
+  profilePill,
+} from "@/app/pages/app/profile/profileUi";
 
 type MemberProfilePayload = {
   id: string;
@@ -46,18 +65,16 @@ type MemberProfilePayload = {
 function getRoleBadge(role: string) {
   const badges = {
     member: {
-      bg: "bg-gray-100 dark:bg-slate-800",
-      text: "text-gray-700 dark:text-slate-200",
+      className:
+        "border-white/[0.08] bg-white/[0.04] text-[rgba(255,255,255,0.72)]",
       label: "Member",
     },
     moderator: {
-      bg: "bg-blue-100 dark:bg-blue-900/40",
-      text: "text-blue-700 dark:text-blue-200",
+      className: "border-cyan-400/25 bg-cyan-500/12 text-cyan-200",
       label: "Moderator",
     },
     companion: {
-      bg: "bg-purple-100 dark:bg-purple-900/40",
-      text: "text-purple-700 dark:text-purple-200",
+      className: "border-violet-400/25 bg-violet-500/12 text-violet-200",
       label: "Companion",
     },
   };
@@ -75,10 +92,28 @@ function initials(name: string) {
   );
 }
 
+function ProfilePageShell({ children }: { children: ReactNode }) {
+  return (
+    <motion.div
+      className={profilePageAtmosphere}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+    >
+      <div className={profilePageGlowTop} aria-hidden />
+      <div className={profilePageFogMid} aria-hidden />
+      <div className={profilePageGlowBottom} aria-hidden />
+      <div className={profilePageVignette} aria-hidden />
+      <div className={profilePageNoise} aria-hidden />
+      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8">{children}</div>
+    </motion.div>
+  );
+}
+
 export function MemberProfileView() {
   const { userId } = useParams<{ userId: string }>();
   const [data, setData] = useState<MemberProfilePayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPrivateAccount, setIsPrivateAccount] = useState(false);
 
   useEffect(() => {
     if (!userId) {
@@ -88,13 +123,20 @@ export function MemberProfileView() {
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setIsPrivateAccount(false);
       try {
         const res = (await api.getCommunityMemberProfile(userId)) as MemberProfilePayload;
         if (!cancelled) setData(res);
-      } catch {
+      } catch (err) {
         if (!cancelled) {
           setData(null);
-          toast.error("Could not load this profile.");
+          const code = (err as Error & { code?: string }).code;
+          const message = err instanceof Error ? err.message.toLowerCase() : "";
+          if (code === "PROFILE_PRIVATE" || message.includes("private")) {
+            setIsPrivateAccount(true);
+          } else {
+            toast.error("Could not load this profile.");
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -138,29 +180,47 @@ export function MemberProfileView() {
 
   if (loading) {
     return (
-      <div className="relative min-h-[50vh] bg-[#eef0f4] dark:bg-[#0c0e12]">
-          <div className="flex min-h-[40vh] items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-          </div>
+      <ProfilePageShell>
+        <div className="flex min-h-[40vh] items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
         </div>
+      </ProfilePageShell>
     );
   }
 
   if (!data || !userId) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-4">
-          <p className="text-muted-foreground">This profile isn’t available or doesn’t exist.</p>
-          <Button variant="outline" asChild>
-            <Link to="/app/community">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to community
-            </Link>
-          </Button>
+      <ProfilePageShell>
+        <div className="mb-6">
+          <Link to="/app/community" className={cn(profileBtnGhost, "inline-flex h-9 px-3 py-2 text-xs")}>
+            <ArrowLeft className="h-4 w-4" />
+            Community
+          </Link>
         </div>
+        <div className="mx-auto max-w-md space-y-4 py-16 text-center">
+          {isPrivateAccount ? (
+            <>
+              <span className={cn(profileIconCircle("violet"), "mx-auto h-12 w-12")}>
+                <Lock className="h-5 w-5" />
+              </span>
+              <h1 className="text-lg font-semibold text-[rgba(255,255,255,0.92)]">Member profile</h1>
+              <p className="text-sm text-[rgba(255,255,255,0.55)]">This account is private.</p>
+            </>
+          ) : (
+            <p className={profileBodyMuted}>This profile isn&apos;t available or doesn&apos;t exist.</p>
+          )}
+          <Link to="/app/community" className={cn(profileBtnGhost, "inline-flex")}>
+            <ArrowLeft className="h-4 w-4" />
+            Back to community
+          </Link>
+        </div>
+      </ProfilePageShell>
     );
   }
 
   const rb = getRoleBadge(data.authorRole);
+  const planPill = formatSubscriptionPlanLabel(data.planLabel);
+  const pageTitle = data.isSelf ? "My Profile" : "Member profile";
   const companionLabel =
     data.selectedAvatarLabel &&
     data.selectedAvatarLabel.trim() &&
@@ -169,62 +229,58 @@ export function MemberProfileView() {
       : null;
 
   return (
-    <div className="relative min-h-screen bg-[#eef0f4] dark:bg-[#0c0e12] overflow-hidden">
-        <div className="pointer-events-none absolute -top-28 -right-20 h-[28rem] w-[28rem] rounded-[3rem] bg-gradient-to-bl from-orange-400/30 via-pink-400/15 to-transparent blur-3xl" />
-        <div className="pointer-events-none absolute top-1/3 -left-24 h-80 w-80 rounded-[2.5rem] bg-gradient-to-tr from-fuchsia-500/12 to-amber-300/10 blur-3xl" />
+    <ProfilePageShell>
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <Link to="/app/community" className={cn(profileBtnGhost, "inline-flex h-9 px-3 py-2 text-xs")}>
+          <ArrowLeft className="h-4 w-4" />
+          Community
+        </Link>
+        {data.isSelf ? (
+          <Link to="/app/user-profile" className={cn(profileBtnPrimary, "inline-flex h-9 px-4 py-2 text-xs")}>
+            My profile &amp; settings
+          </Link>
+        ) : null}
+      </div>
 
-        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8">
-          <div className="mb-6 flex flex-wrap items-center gap-2">
-            <Button variant="ghost" size="sm" className="-ml-2 text-gray-600 dark:text-gray-300" asChild>
-              <Link to="/app/community">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Community
-              </Link>
-            </Button>
-            {data.isSelf ? (
-              <Button
-                size="sm"
-                className="text-white shadow-md border-0"
-                style={{ background: GRAD }}
-                asChild
-              >
-                <Link to="/app/user-profile">My profile &amp; settings</Link>
-              </Button>
-            ) : null}
-          </div>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-8 sm:mb-10"
+      >
+        <div className="inline-flex max-w-2xl flex-col gap-2 sm:gap-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-violet-300/80 sm:text-xs">
+            {data.isSelf ? "Profile" : "Community"}
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight text-[rgba(255,255,255,0.96)] [text-shadow:0_0_32px_rgba(167,139,250,0.2)] sm:text-4xl">
+            {pageTitle}
+          </h1>
+          <p className="text-sm leading-relaxed text-[rgba(255,255,255,0.68)] sm:text-base">
+            {data.isSelf
+              ? "This is how your profile appears to other members."
+              : "What other members can see about this person—no private contact or account details."}
+          </p>
+        </div>
+      </motion.div>
 
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[4fr_6fr]">
+        <div className="min-w-0 space-y-5">
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8 sm:mb-10"
+            initial={{ opacity: 0, x: -12 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.06 }}
+            className={cn(profileCard, "overflow-hidden p-0")}
           >
-            <div className="inline-flex flex-col gap-2 sm:gap-3 max-w-2xl">
-              <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-orange-600/90 dark:text-orange-400/90">
-                Community
-              </p>
-              <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-gray-900 dark:text-white">
-                Member profile
-              </h1>
-              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 leading-relaxed">
-                {data.isSelf
-                  ? "This is how your profile appears to other members."
-                  : "What other members can see about this person—no private contact or account details."}
-              </p>
-            </div>
-          </motion.div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-[4fr_6fr] gap-6">
-            {/* LEFT — public identity + stats (safe for viewers) */}
-            <div className="space-y-5 min-w-0">
-              <motion.div
-                initial={{ opacity: 0, x: -12 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.06 }}
-              >
-                <div className={`${CARD_SHELL} overflow-hidden`}>
-                  <div className="relative aspect-[4/3] max-h-64 sm:max-h-72 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
-                    <div className="absolute inset-0 opacity-35" style={{ background: GRAD }} />
-                    <div className="absolute inset-4 sm:inset-6 rounded-2xl overflow-hidden border-4 border-white/90 dark:border-gray-800 shadow-xl bg-gray-200 dark:bg-gray-700">
+            <SolaceHeroEnvironment
+              imageSrc={PROFILE_HERO_IMG}
+              imageAlt="Calm moonlit sanctuary"
+              cinematicDepth
+              className={cn(profileHeroShell, "rounded-none border-0 shadow-none")}
+              contentClassName="flex min-h-[220px] flex-col p-0 sm:min-h-[260px]"
+            >
+              <div className="flex flex-1 flex-col justify-end p-5 sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                  <div className="relative mx-auto shrink-0 sm:mx-0">
+                    <div className="relative h-24 w-24 overflow-hidden rounded-full border-[3px] border-violet-300/35 shadow-[0_0_48px_-6px_rgba(167,139,250,0.65),inset_0_0_0_1px_rgba(255,255,255,0.12)] sm:h-28 sm:w-28">
                       {data.avatarUrl ? (
                         <img
                           src={data.avatarUrl}
@@ -232,181 +288,211 @@ export function MemberProfileView() {
                           className="h-full w-full object-cover object-top"
                         />
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-purple-200 to-blue-200 text-5xl font-bold text-purple-900 dark:from-purple-900 dark:to-blue-900 dark:text-purple-100">
+                        <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-900/80 to-fuchsia-900/60 text-3xl font-bold text-violet-100 sm:text-4xl">
                           {initials(data.displayName)}
-                        </div>
+                        </span>
                       )}
                     </div>
                   </div>
 
-                  <div className="px-5 pt-5 pb-5">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">
+                  <div className="min-w-0 flex-1 space-y-2 pb-1 text-center sm:text-left">
+                    <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                      <h2 className="text-xl font-bold leading-tight text-[rgba(255,255,255,0.96)] sm:text-2xl">
                         {data.displayName}
                       </h2>
                       <span
-                        className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-semibold ${rb.bg} ${rb.text}`}
+                        className={cn(
+                          profilePill,
+                          "shrink-0 border px-2.5 py-0.5 text-[10px]",
+                          rb.className
+                        )}
                       >
                         {rb.label}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                      Plan ·{" "}
-                      <span className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-                        {data.planLabel}
-                      </span>
-                    </p>
+                    <span
+                      className={cn(
+                        profilePill,
+                        "inline-flex border-violet-400/25 bg-violet-500/18 text-violet-100"
+                      )}
+                    >
+                      {planPill}
+                    </span>
 
                     {companionLabel ? (
-                      <div className="mb-4 flex items-start gap-2 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/40 px-3 py-2.5">
-                        <Users className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-400 shrink-0 mt-0.5" />
+                      <div className="flex items-start justify-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 sm:justify-start">
+                        <Users className="mt-0.5 h-4 w-4 shrink-0 text-fuchsia-300" />
                         <div>
-                          <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-[rgba(255,255,255,0.45)]">
                             Solace companion
                           </p>
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                          <p className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">
                             {companionLabel}
                           </p>
                         </div>
                       </div>
                     ) : null}
-
-                    <div className="flex justify-center gap-4 sm:gap-6 py-4 rounded-2xl bg-gray-50/90 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800">
-                      {[
-                        { label: "Talk it out", value: data.stats.completedSessions },
-                        { label: "Check-ins", value: data.stats.totalCheckins },
-                        { label: "Days streak", value: data.stats.streakDays },
-                      ].map((s) => (
-                        <div key={s.label} className="flex flex-col items-center min-w-[3.5rem]">
-                          <span className="text-xl font-black bg-gradient-to-r from-orange-500 to-pink-500 bg-clip-text text-transparent tabular-nums">
-                            {s.value}
-                          </span>
-                          <span className="text-[10px] text-gray-400 uppercase tracking-wider text-center">
-                            {s.label}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 </div>
-              </motion.div>
-            </div>
+              </div>
 
-            {/* RIGHT — activity & milestones (community-safe) */}
-            <div className="space-y-5 min-w-0">
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className={`${CARD_SHELL} overflow-hidden`}
-              >
-                <div className="bg-gradient-to-r from-orange-50/80 via-white to-pink-50/50 dark:from-orange-950/20 dark:via-gray-950 dark:to-fuchsia-950/20 px-5 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-                  <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <CalendarCheck className="w-5 h-5 text-orange-500" />
-                    Member activity
-                  </h3>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                    Joining and plan — visible in community
-                  </p>
-                </div>
-                <div className="p-5 sm:p-6">
-                  <dl className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <dt className="text-[10px] uppercase tracking-wider text-gray-400">Member since</dt>
-                      <dd className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {joiningDetails.joinDateLabel}
-                      </dd>
-                    </div>
-                    {joiningDetails.tenureLabel ? (
-                      <div>
-                        <dt className="text-[10px] uppercase tracking-wider text-gray-400">Tenure</dt>
-                        <dd className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {joiningDetails.tenureLabel}
-                        </dd>
-                      </div>
-                    ) : null}
-                    <div>
-                      <dt className="text-[10px] uppercase tracking-wider text-gray-400">Onboarding</dt>
-                      <dd
-                        className={`text-sm font-semibold ${
-                          data.onboardingCompleted
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-gray-500"
-                        }`}
-                      >
-                        {joiningDetails.onboardingDoneLabel ||
-                          (data.onboardingCompleted ? "Complete" : "In progress")}
-                      </dd>
-                    </div>
-                    <div className="flex items-start gap-3 rounded-xl border border-gray-100 dark:border-gray-800 p-3" style={{ background: GRAD_SOFT }}>
-                      <History className="w-5 h-5 text-fuchsia-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider text-gray-400">Talk it out</p>
-                        <p className="text-2xl font-black bg-gradient-to-r from-orange-500 to-pink-500 bg-clip-text text-transparent tabular-nums">
-                          {data.stats.completedSessions}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Check-ins: {data.stats.totalCheckins} · Streak {data.stats.streakDays}d
-                        </p>
-                      </div>
-                    </div>
-                  </dl>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.14 }}
-                className={`${CARD_SHELL} overflow-hidden`}
-              >
-                <div className="bg-gradient-to-r from-amber-50/80 via-white to-orange-50/40 dark:from-amber-950/25 dark:via-gray-950 dark:to-orange-950/20 px-5 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-                  <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <Trophy className="w-5 h-5 text-amber-500" />
-                    Milestones
-                  </h3>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                    Progress badges others can see
-                  </p>
-                </div>
-                <div className="p-5 sm:p-6">
-                  <ul className="grid gap-2 sm:grid-cols-2">
-                    {data.milestones.map((m) => (
-                      <li
-                        key={m.id}
-                        className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm ${
-                          m.unlocked
-                            ? "border-emerald-200/80 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20"
-                            : "border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30"
-                        }`}
-                      >
-                        {m.unlocked ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                        ) : (
-                          <Circle className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" />
+              <motion.div className={profileHeroStatStrip}>
+                <div className="grid grid-cols-3 divide-x divide-white/[0.06]">
+                  {[
+                    { icon: Activity, label: "Talk it out", value: data.stats.completedSessions, tone: "violet" as const },
+                    { icon: Heart, label: "Check-ins", value: data.stats.totalCheckins, tone: "pink" as const },
+                    { icon: Trophy, label: "Days streak", value: data.stats.streakDays, tone: "amber" as const },
+                  ].map((s) => (
+                    <div
+                      key={s.label}
+                      className="flex min-w-[3.5rem] flex-col items-center gap-1.5 px-3 py-4 sm:py-5"
+                    >
+                      <span className={profileIconCircle(s.tone)}>
+                        <s.icon className="h-4 w-4" />
+                      </span>
+                      <span className="text-xl font-bold tabular-nums text-[rgba(255,255,255,0.96)] sm:text-2xl">
+                        {s.value}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-center text-[10px] font-semibold uppercase tracking-wider",
+                          profileBodyMuted
                         )}
-                        <span
-                          className={
-                            m.unlocked
-                              ? "text-gray-900 dark:text-gray-100 font-medium"
-                              : "text-gray-400"
-                          }
-                        >
-                          {m.label}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                      >
+                        {s.label}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </motion.div>
-            </div>
-          </div>
+            </SolaceHeroEnvironment>
+          </motion.div>
+        </div>
 
-          <p className="mt-8 text-center text-[11px] text-gray-400 dark:text-gray-500 flex items-center justify-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-orange-400/80" />
-            Email, phone, and emergency contacts are never shown on public member profiles.
-          </p>
+        <div className="min-w-0 space-y-5">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className={profileCard}
+          >
+            <div className={profileCardHeader}>
+              <div>
+                <h3 className={cn(profileCardTitle, "flex items-center gap-2")}>
+                  <span className={profileIconCircle("violet")}>
+                    <CalendarCheck className="h-4 w-4" />
+                  </span>
+                  Member activity
+                </h3>
+                <p className={profileCardSubtitle}>
+                  {data.isSelf
+                    ? "Your journey and plan—visible to community"
+                    : "Journey and plans—visible to community"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-violet-400/20 bg-violet-500/10 px-4 py-3 text-right shadow-[0_0_28px_-10px_rgba(139,92,246,0.35)]">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[rgba(255,255,255,0.45)]">
+                  Talk it out
+                </p>
+                <p className="text-2xl font-bold tabular-nums text-[rgba(255,255,255,0.96)]">
+                  {data.stats.completedSessions}
+                </p>
+                <p className="mt-0.5 text-xs text-[rgba(255,255,255,0.55)]">
+                  Check-ins: {data.stats.totalCheckins} · Streak {data.stats.streakDays}d
+                </p>
+              </div>
+            </div>
+            <div className="p-5 sm:p-6">
+              <dl className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-[rgba(255,255,255,0.45)]">
+                    Member since
+                  </dt>
+                  <dd className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">
+                    {joiningDetails.joinDateLabel}
+                  </dd>
+                </div>
+                {joiningDetails.tenureLabel ? (
+                  <div>
+                    <dt className="text-[10px] font-semibold uppercase tracking-wider text-[rgba(255,255,255,0.45)]">
+                      Tenure
+                    </dt>
+                    <dd className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">
+                      {joiningDetails.tenureLabel}
+                    </dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-[rgba(255,255,255,0.45)]">
+                    Onboarding
+                  </dt>
+                  <dd
+                    className={cn(
+                      "text-sm font-semibold",
+                      data.onboardingCompleted
+                        ? "text-emerald-300"
+                        : "text-[rgba(255,255,255,0.55)]"
+                    )}
+                  >
+                    {joiningDetails.onboardingDoneLabel ||
+                      (data.onboardingCompleted ? "Complete" : "In progress")}
+                  </dd>
+                </div>
+                <div className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.03] p-3 sm:col-span-2">
+                  <span className={profileIconCircle("pink")}>
+                    <History className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[rgba(255,255,255,0.45)]">
+                      Activity summary
+                    </p>
+                    <p className="text-sm text-[rgba(255,255,255,0.72)]">
+                      {data.stats.completedSessions} talks completed · {data.stats.totalCheckins}{" "}
+                      check-ins · {data.stats.streakDays} day streak
+                    </p>
+                  </div>
+                </div>
+              </dl>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.14 }}
+            className={profileCard}
+          >
+            <div className={profileCardHeader}>
+              <div>
+                <h3 className={cn(profileCardTitle, "flex items-center gap-2")}>
+                  <Trophy className="h-5 w-5 text-amber-300 drop-shadow-[0_0_12px_rgba(251,191,36,0.45)]" />
+                  Milestones
+                </h3>
+                <p className={profileCardSubtitle}>Progress badges others can see</p>
+              </div>
+            </div>
+            <ul className="grid gap-2 p-5 sm:grid-cols-2 sm:p-6">
+              {data.milestones.map((m) => (
+                <li key={m.id} className={profileMilestoneChip(m.unlocked)}>
+                  {m.unlocked ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                  ) : (
+                    <Circle className="h-4 w-4 shrink-0 text-zinc-600" />
+                  )}
+                  <span className={m.unlocked ? "font-medium text-[rgba(255,255,255,0.92)]" : ""}>
+                    {m.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
         </div>
       </div>
+
+      <p className="mt-8 flex items-center justify-center gap-1.5 text-center text-[11px] text-[rgba(255,255,255,0.4)]">
+        <Sparkles className="h-3.5 w-3.5 text-violet-400/80" />
+        Email, phone, and emergency contacts are never shown on public member profiles.
+      </p>
+    </ProfilePageShell>
   );
 }

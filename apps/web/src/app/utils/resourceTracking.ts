@@ -189,8 +189,14 @@ export function getResourceEffectivenessScore(
   interactions: InteractionSet = getResourceInteractions()
 ): number {
   const analytics = getResourceAnalyticsFromInteractions(resourceId, interactions);
+  const totalEvents = analytics.totalViews + analytics.totalClicks;
 
-  if (analytics.totalViews === 0) return 0;
+  if (totalEvents === 0) return 0;
+
+  if (analytics.totalViews === 0) {
+    const engagementScore = Math.min((analytics.totalClicks / 10) * 100, 85);
+    return Math.round(Math.max(engagementScore, 35));
+  }
 
   const ctr = (analytics.totalClicks / analytics.totalViews) * 100;
   const ctrWeight = 0.7;

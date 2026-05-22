@@ -8,10 +8,14 @@ export const cooldownPageAtmosphere = cn(
 );
 
 export const cooldownMatteCard = cn(
-  "relative overflow-hidden rounded-[26px] border border-white/[0.08]",
+  "light-theme-card light-theme-card-hover relative overflow-hidden rounded-[26px] border border-white/[0.08]",
   "bg-[linear-gradient(160deg,rgba(22,24,38,0.92)_0%,rgba(10,12,22,0.9)_55%,rgba(8,10,18,0.94)_100%)]",
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_32px_80px_-40px_rgba(0,0,0,0.85)]",
-  "backdrop-blur-xl",
+  "backdrop-blur-xl text-[var(--solace-text)]",
+  "[html[data-ezri-theme=light]_&]:bg-[var(--card)]",
+  "[html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
+  "[html[data-theme=light]_&]:bg-[var(--card)]",
+  "[html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
 );
 
 export const cooldownBackLink = cn(
@@ -29,6 +33,8 @@ export const cooldownHeroImage = "absolute inset-0 h-full w-full object-cover ob
 export const cooldownHeroOverlay = cn(
   "absolute inset-0",
   "bg-[linear-gradient(105deg,rgba(5,6,14,0.92)_0%,rgba(15,10,28,0.72)_42%,rgba(40,20,50,0.45)_68%,rgba(5,6,14,0.55)_100%)]",
+  "[html[data-ezri-theme=light]_&]:bg-[var(--hero-overlay-readability)]",
+  "[html[data-theme=light]_&]:bg-[var(--hero-overlay-readability)]"
 );
 
 export const cooldownHeroWarmth = cn(

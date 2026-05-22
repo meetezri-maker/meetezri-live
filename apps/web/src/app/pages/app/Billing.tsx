@@ -35,6 +35,20 @@ import { SUBSCRIPTION_PLANS } from "../../utils/subscriptionPlans";
 import type { PlanTier, UserSubscription, UsageRecord } from "../../utils/subscriptionPlans";
 import { cn } from "@/lib/utils";
 import { SolaceSelect } from "@/app/solace";
+import {
+  billingCard,
+  billingGhostBtn,
+  billingHeroOverlay,
+  billingHeroOverlayBottom,
+  billingHeroSection,
+  billingHeroTitle,
+  billingPageAtmosphere,
+  billingPageFogMid,
+  billingPageGlowTop,
+  billingPageSubtitle,
+  billingPageTitle,
+  billingRailCard,
+} from "@/app/pages/app/billing/billingUi";
 
 const PAYG_CAPSULES = [25, 50, 100, 200] as const;
 
@@ -561,8 +575,10 @@ export function Billing() {
     setShowPAYGModal(true);
   };
 
-  const panel =
-    "rounded-3xl border border-white/[0.08] bg-[color-mix(in_oklab,#0b0d14_88%,transparent)] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl";
+  const panel = cn(
+    billingCard,
+    "rounded-3xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+  );
 
   const paymentMethodLabel = useMemo(() => {
     const pm = subscriptionSource?.payment_method;
@@ -641,12 +657,11 @@ export function Billing() {
 
   return (
     <>
-      <div className="relative min-h-full overflow-x-hidden bg-[#07080f] text-zinc-200 [--void:#0b0d14]">
-        <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_85%_50%_at_50%_-8%,rgba(109,40,217,0.16),transparent_52%)]" />
-        <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_100%_20%,rgba(236,72,153,0.06),transparent_38%)]" />
-        <div className="pointer-events-none fixed inset-0 shadow-[inset_0_0_90px_rgba(0,0,0,0.5)]" />
+      <div className={cn(billingPageAtmosphere, "relative mx-auto max-w-[1500px] [--void:var(--card-muted,#f8f3ff)]")}>
+        <div className={billingPageGlowTop} aria-hidden />
+        <div className={billingPageFogMid} aria-hidden />
 
-        <div className="relative z-10 mx-auto max-w-[1500px] px-4 pb-20 pt-6 sm:px-6 lg:px-8">
+        <div className="relative z-10">
           {searchParams.get("success") && (
             <motion.div
               initial={{ opacity: 0, y: -6 }}
@@ -659,23 +674,23 @@ export function Billing() {
             </motion.div>
           )}
 
-          <header className="mb-10 flex flex-row items-start justify-between gap-3 border-b border-white/[0.04] pb-8 sm:items-center sm:gap-6">
+          <header className="mb-10 flex flex-row items-start justify-between gap-3 border-b border-[color:var(--solace-border)] pb-8 sm:items-center sm:gap-6">
             <div className="min-w-0 flex-1 space-y-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-violet-300/85">Account</p>
-              <h1 className="font-serif text-3xl font-light tracking-tight text-zinc-50 sm:text-4xl">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-[color:var(--accent-violet,#a78bfa)]">Account</p>
+              <h1 className={billingPageTitle}>
                 Billing &{" "}
-                <span className="bg-gradient-to-r from-violet-200 via-fuchsia-200 to-cyan-100 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-violet-600 via-fuchsia-600 to-teal-600 bg-clip-text text-transparent">
                   Subscription
                 </span>
               </h1>
-              <p className="max-w-lg text-sm leading-relaxed text-zinc-500">
+              <p className={billingPageSubtitle}>
                 Manage your plan, view usage, and purchase additional minutes.
               </p>
             </div>
             <button
               type="button"
               onClick={scrollToHistory}
-              className="inline-flex h-11 min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-5 text-sm text-zinc-200 transition hover:border-violet-400/35 hover:bg-white/[0.07]"
+              className={billingGhostBtn}
             >
               <History className="size-4" aria-hidden />
               Billing history
@@ -686,10 +701,7 @@ export function Billing() {
             {/* ——— Main column ——— */}
             <div className="min-w-0 flex-1 space-y-10">
               {/* 2 Current plan hero */}
-              <section
-                aria-labelledby="current-plan-title"
-                className="relative overflow-hidden rounded-3xl border border-white/[0.09] shadow-[0_40px_100px_-48px_rgba(76,29,149,0.55)]"
-              >
+              <section aria-labelledby="current-plan-title" className={billingHeroSection}>
                 <img
                   src={HERO_SCENERY_SRC}
                   alt=""
@@ -699,14 +711,13 @@ export function Billing() {
                   loading="eager"
                   decoding="async"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-[#07080f]/97 via-[#07080f]/88 to-[#07080f]/45 lg:via-[#07080f]/65 lg:to-[#07080f]/25" />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#07080f] via-transparent to-violet-950/25" />
-                <div className="absolute inset-0 shadow-[inset_0_0_80px_rgba(0,0,0,0.35)]" />
+                <div className={cn(billingHeroOverlay, "pointer-events-none absolute inset-0 z-[1]")} aria-hidden />
+                <div className={cn(billingHeroOverlayBottom, "pointer-events-none absolute inset-0 z-[1]")} aria-hidden />
 
-                <div className="relative z-10 flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-end lg:justify-between lg:p-10">
+                <div className="solace-on-dark relative z-10 flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-end lg:justify-between lg:p-10">
                   <div className="max-w-xl space-y-5">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-violet-200/80">Current plan</p>
-                    <h2 id="current-plan-title" className="font-serif text-2xl font-light text-white sm:text-3xl lg:text-[1.85rem]">
+                    <h2 id="current-plan-title" className={billingHeroTitle}>
                       {currentPlan.displayName}
                     </h2>
                     <p className="text-sm leading-relaxed text-zinc-300">{heroRenewalLead}</p>
@@ -1281,7 +1292,7 @@ export function Billing() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.96, opacity: 0 }}
               onClick={(e: MouseEvent<HTMLDivElement>) => e.stopPropagation()}
-              className="w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#0b0d14] p-7 shadow-2xl"
+              className={cn(billingCard, "w-full max-w-md overflow-hidden rounded-3xl p-7")}
               role="dialog"
               aria-modal="true"
               aria-labelledby="payg-title"
@@ -1340,7 +1351,7 @@ export function Billing() {
       </AnimatePresence>
 
       <Dialog open={showCancelModal} onOpenChange={setShowCancelModal}>
-        <DialogContent className="border-white/10 bg-[#0f111a] text-zinc-200 sm:max-w-md">
+        <DialogContent className={cn(billingCard, "sm:max-w-md text-[var(--solace-text)]")}>
           <DialogHeader>
             <div className="mb-1 flex items-center gap-3">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-rose-500/15 text-rose-300">
