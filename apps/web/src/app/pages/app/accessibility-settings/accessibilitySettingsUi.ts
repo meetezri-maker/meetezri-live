@@ -25,13 +25,7 @@ export const ACCESSIBILITY_HEART_IMG = "/community/scene-stars.jpg";
 
 
 
-export const accessibilityPageAtmosphere = cn(
-
-  settingsPageAtmosphere,
-
-  "bg-[linear-gradient(168deg,#070812_0%,#0a0b18_38%,#0c0a1a_72%,#090a14_100%)]"
-
-);
+export const accessibilityPageAtmosphere = settingsPageAtmosphere;
 
 
 

@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
+import { toast } from "sonner";
 import type { LucideIcon } from "lucide-react";
 import {
   Bell,
@@ -24,11 +26,14 @@ import {
   Headphones,
 } from "lucide-react";
 import { Skeleton } from "@/app/components/ui/skeleton";
+import { useAuth } from "@/app/contexts/AuthContext";
 import { useNotifications } from "@/app/contexts/NotificationsContext";
 import type { Notification } from "@/app/contexts/NotificationsContext";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "react-router-dom";
 import { AdminPaginationBar } from "@/app/components/admin/AdminPaginationBar";
+import { api } from "@/lib/api";
+import { queryKeys } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import {
   NOTIFICATIONS_HERO_IMG,
@@ -60,12 +65,14 @@ import {
   getNotificationCategory,
   groupNotifications,
   matchesCategory,
+  matchesQuietMode,
   matchesSearch,
   pickPriorityMoments,
   type NotificationCategory,
   type TimelineGroup,
 } from "@/app/pages/app/notifications-settings/notificationGrouping";
 import { NotificationsWellnessRail } from "@/app/pages/app/notifications-settings/NotificationsWellnessRail";
+import { computeWellnessPulse } from "@/app/pages/app/notifications-settings/wellnessPulse";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -108,20 +115,72 @@ const PRIORITY_META: Record<
 };
 
 export function Notifications() {
-  const { notifications: allNotifications, unreadCount, markAsRead, markAllAsRead, isLoading } =
-    useNotifications();
+  const { user, profile, refreshProfile } = useAuth();
+  const { notifications: allNotifications, markAsRead, markAllAsRead, isLoading } = useNotifications();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<NotificationCategory>("All");
   const [quietMode, setQuietMode] = useState(false);
+  const [quietModeSaving, setQuietModeSaving] = useState(false);
+
+  const { data: activityRaw } = useQuery({
+    queryKey: queryKeys.activity.recent(user?.id, 50),
+    queryFn: () => api.getRecentActivity(50),
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  });
+
+  const wellnessPulse = useMemo(() => computeWellnessPulse(activityRaw), [activityRaw]);
+
+  useEffect(() => {
+    const prefs = profile?.notification_preferences as Record<string, unknown> | null | undefined;
+    if (typeof prefs?.quietMode === "boolean") {
+      setQuietMode(prefs.quietMode);
+    }
+  }, [profile?.notification_preferences]);
+
+  const handleQuietModeChange = useCallback(
+    async (nextValue: boolean) => {
+      const previousValue = quietMode;
+      setQuietMode(nextValue);
+      setQuietModeSaving(true);
+
+      const currentPrefs =
+        (profile?.notification_preferences as Record<string, unknown> | null | undefined) || {};
+      const newPrefs = { ...currentPrefs, quietMode: nextValue };
+
+      try {
+        await api.updateProfile({ notification_preferences: newPrefs });
+        await refreshProfile();
+        toast.success(nextValue ? "Quiet mode enabled" : "Quiet mode disabled");
+      } catch (error) {
+        setQuietMode(previousValue);
+        console.error("Failed to update quiet mode:", error);
+        toast.error("Failed to save quiet mode");
+      } finally {
+        setQuietModeSaving(false);
+      }
+    },
+    [quietMode, profile?.notification_preferences, refreshProfile]
+  );
+
+  const visibleNotifications = useMemo(
+    () => allNotifications.filter((n) => matchesQuietMode(n, quietMode)),
+    [allNotifications, quietMode]
+  );
+
+  const displayUnreadCount = useMemo(
+    () => visibleNotifications.filter((n) => !n.is_read).length,
+    [visibleNotifications]
+  );
 
   const filteredNotifications = useMemo(
     () =>
-      allNotifications.filter(
+      visibleNotifications.filter(
         (n) => matchesCategory(n, activeCategory) && matchesSearch(n, searchQuery)
       ),
-    [allNotifications, activeCategory, searchQuery]
+    [visibleNotifications, activeCategory, searchQuery]
   );
 
   const total = filteredNotifications.length;
@@ -144,8 +203,8 @@ export function Notifications() {
   );
 
   const readCount = useMemo(
-    () => allNotifications.filter((n) => n.is_read === true).length,
-    [allNotifications]
+    () => visibleNotifications.filter((n) => n.is_read === true).length,
+    [visibleNotifications]
   );
 
   useEffect(() => {
@@ -154,7 +213,7 @@ export function Notifications() {
 
   useEffect(() => {
     setPage(1);
-  }, [activeCategory, searchQuery, pageSize]);
+  }, [activeCategory, searchQuery, pageSize, quietMode]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -315,7 +374,7 @@ export function Notifications() {
                     />
                     <div className="relative flex h-full w-full flex-col items-center justify-center rounded-full border border-fuchsia-300/25 bg-[linear-gradient(180deg,rgba(255,255,255,0.09)_0%,rgba(15,16,36,0.78)_100%)] text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_0_52px_-8px_rgba(192,132,252,0.55)] backdrop-blur-md">
                       <Bell className="h-7 w-7 text-violet-200/90" aria-hidden />
-                      <p className="mt-2 text-3xl font-semibold text-white">{unreadCount}</p>
+                      <p className="mt-2 text-3xl font-semibold text-white">{displayUnreadCount}</p>
                       <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-fuchsia-200/70">
                         Unread moments
                       </p>
@@ -356,7 +415,7 @@ export function Notifications() {
                   />
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  {unreadCount > 0 ? (
+                  {displayUnreadCount > 0 ? (
                     <button type="button" onClick={markAllAsRead} className={notificationsBtnGhost}>
                       <CheckCircle2 className="h-4 w-4" />
                       Mark all as read
@@ -456,10 +515,12 @@ export function Notifications() {
           </div>
 
           <NotificationsWellnessRail
-            unreadCount={unreadCount}
+            unreadCount={displayUnreadCount}
             readCount={readCount}
             quietMode={quietMode}
-            onQuietModeChange={setQuietMode}
+            quietModeSaving={quietModeSaving}
+            onQuietModeChange={handleQuietModeChange}
+            wellnessPulse={wellnessPulse}
           />
         </div>
       </div>

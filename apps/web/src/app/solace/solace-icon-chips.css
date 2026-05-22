@@ -1,0 +1,218 @@
+/**
+ * Solace icon chips — tone backgrounds adapt to data-ezri-theme.
+ */
+.solace-icon-chip {
+  position: relative;
+  display: flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border-width: 1px;
+  border-style: solid;
+}
+
+.solace-icon-chip::before {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: "";
+  filter: blur(12px);
+}
+
+/* Dark sanctuary (default) */
+html[data-ezri-theme="dark"] .solace-icon-chip--violet,
+html:not([data-ezri-theme]) .solace-icon-chip--violet {
+  border-color: rgba(167, 139, 250, 0.2);
+  background: rgba(139, 92, 246, 0.12);
+  color: #c4b5fd;
+  box-shadow: 0 0 22px -6px rgba(139, 92, 246, 0.55);
+}
+html[data-ezri-theme="dark"] .solace-icon-chip--violet::before,
+html:not([data-ezri-theme]) .solace-icon-chip--violet::before {
+  background: rgba(139, 92, 246, 0.25);
+}
+
+html[data-ezri-theme="dark"] .solace-icon-chip--pink,
+html:not([data-ezri-theme]) .solace-icon-chip--pink {
+  border-color: rgba(244, 114, 182, 0.2);
+  background: rgba(236, 72, 153, 0.12);
+  color: #f9a8d4;
+  box-shadow: 0 0 22px -6px rgba(236, 72, 153, 0.5);
+}
+html[data-ezri-theme="dark"] .solace-icon-chip--pink::before,
+html:not([data-ezri-theme]) .solace-icon-chip--pink::before {
+  background: rgba(236, 72, 153, 0.22);
+}
+
+html[data-ezri-theme="dark"] .solace-icon-chip--cyan,
+html:not([data-ezri-theme]) .solace-icon-chip--cyan {
+  border-color: rgba(34, 211, 238, 0.2);
+  background: rgba(34, 211, 238, 0.12);
+  color: #67e8f9;
+  box-shadow: 0 0 22px -6px rgba(34, 211, 238, 0.4);
+}
+html[data-ezri-theme="dark"] .solace-icon-chip--cyan::before,
+html:not([data-ezri-theme]) .solace-icon-chip--cyan::before {
+  background: rgba(34, 211, 238, 0.2);
+}
+
+html[data-ezri-theme="dark"] .solace-icon-chip--amber,
+html:not([data-ezri-theme]) .solace-icon-chip--amber {
+  border-color: rgba(251, 191, 36, 0.2);
+  background: rgba(251, 191, 36, 0.12);
+  color: #fcd34d;
+  box-shadow: 0 0 22px -6px rgba(251, 191, 36, 0.45);
+}
+html[data-ezri-theme="dark"] .solace-icon-chip--amber::before,
+html:not([data-ezri-theme]) .solace-icon-chip--amber::before {
+  background: rgba(251, 191, 36, 0.25);
+}
+
+html[data-ezri-theme="dark"] .solace-icon-chip--rose,
+html:not([data-ezri-theme]) .solace-icon-chip--rose {
+  border-color: rgba(244, 63, 94, 0.2);
+  background: rgba(244, 63, 94, 0.12);
+  color: #fda4af;
+  box-shadow: 0 0 22px -6px rgba(244, 63, 94, 0.4);
+}
+html[data-ezri-theme="dark"] .solace-icon-chip--rose::before,
+html:not([data-ezri-theme]) .solace-icon-chip--rose::before {
+  background: rgba(244, 63, 94, 0.22);
+}
+
+html[data-ezri-theme="dark"] .solace-icon-chip--emerald,
+html:not([data-ezri-theme]) .solace-icon-chip--emerald {
+  border-color: rgba(52, 211, 153, 0.2);
+  background: rgba(52, 211, 153, 0.12);
+  color: #6ee7b7;
+  box-shadow: 0 0 22px -6px rgba(52, 211, 153, 0.4);
+}
+html[data-ezri-theme="dark"] .solace-icon-chip--emerald::before,
+html:not([data-ezri-theme]) .solace-icon-chip--emerald::before {
+  background: rgba(52, 211, 153, 0.22);
+}
+
+html[data-ezri-theme="dark"] .solace-icon-chip--blue,
+html:not([data-ezri-theme]) .solace-icon-chip--blue {
+  border-color: rgba(96, 165, 250, 0.2);
+  background: rgba(59, 130, 246, 0.12);
+  color: #93c5fd;
+  box-shadow: 0 0 22px -6px rgba(59, 130, 246, 0.4);
+}
+html[data-ezri-theme="dark"] .solace-icon-chip--blue::before,
+html:not([data-ezri-theme]) .solace-icon-chip--blue::before {
+  background: rgba(59, 130, 246, 0.22);
+}
+
+html[data-ezri-theme="dark"] .solace-icon-chip--orange,
+html:not([data-ezri-theme]) .solace-icon-chip--orange {
+  border-color: rgba(251, 146, 60, 0.2);
+  background: rgba(249, 115, 22, 0.12);
+  color: #fdba74;
+  box-shadow: 0 0 22px -6px rgba(249, 115, 22, 0.4);
+}
+html[data-ezri-theme="dark"] .solace-icon-chip--orange::before,
+html:not([data-ezri-theme]) .solace-icon-chip--orange::before {
+  background: rgba(249, 115, 22, 0.22);
+}
+
+/* Light — pastel tinted containers, deep readable icons */
+html[data-ezri-theme="light"] .solace-icon-chip--violet,
+html[data-theme="light"] .solace-icon-chip--violet {
+  border-color: #ddd0fa;
+  background: #f3ecff;
+  color: #7c3aed;
+  box-shadow: 0 4px 16px -8px rgba(167, 139, 250, 0.18);
+}
+html[data-ezri-theme="light"] .solace-icon-chip--violet::before,
+html[data-theme="light"] .solace-icon-chip--violet::before {
+  background: rgba(167, 139, 250, 0.15);
+}
+
+html[data-ezri-theme="light"] .solace-icon-chip--pink,
+html[data-theme="light"] .solace-icon-chip--pink {
+  border-color: #fbcfe8;
+  background: #fce7f3;
+  color: #db2777;
+  box-shadow: 0 4px 16px -8px rgba(236, 72, 153, 0.16);
+}
+html[data-ezri-theme="light"] .solace-icon-chip--pink::before,
+html[data-theme="light"] .solace-icon-chip--pink::before {
+  background: rgba(236, 72, 153, 0.12);
+}
+
+html[data-ezri-theme="light"] .solace-icon-chip--cyan,
+html[data-theme="light"] .solace-icon-chip--cyan {
+  border-color: #99f6e4;
+  background: #e6fffb;
+  color: #0f766e;
+  box-shadow: 0 4px 16px -8px rgba(78, 205, 196, 0.16);
+}
+html[data-ezri-theme="light"] .solace-icon-chip--cyan::before,
+html[data-theme="light"] .solace-icon-chip--cyan::before {
+  background: rgba(78, 205, 196, 0.14);
+}
+
+html[data-ezri-theme="light"] .solace-icon-chip--amber,
+html[data-theme="light"] .solace-icon-chip--amber {
+  border-color: #fde68a;
+  background: #fff7d6;
+  color: #b45309;
+  box-shadow: 0 4px 16px -8px rgba(251, 191, 36, 0.16);
+}
+html[data-ezri-theme="light"] .solace-icon-chip--amber::before,
+html[data-theme="light"] .solace-icon-chip--amber::before {
+  background: rgba(251, 191, 36, 0.12);
+}
+
+html[data-ezri-theme="light"] .solace-icon-chip--rose,
+html[data-theme="light"] .solace-icon-chip--rose {
+  border-color: #fecdd3;
+  background: #ffe4e6;
+  color: #9f1239;
+  box-shadow: 0 4px 16px -8px rgba(244, 63, 94, 0.15);
+}
+html[data-ezri-theme="light"] .solace-icon-chip--rose::before,
+html[data-theme="light"] .solace-icon-chip--rose::before {
+  background: rgba(244, 63, 94, 0.1);
+}
+
+html[data-ezri-theme="light"] .solace-icon-chip--emerald,
+html[data-theme="light"] .solace-icon-chip--emerald {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+  box-shadow: 0 4px 16px -8px rgba(16, 185, 129, 0.15);
+}
+html[data-ezri-theme="light"] .solace-icon-chip--emerald::before,
+html[data-theme="light"] .solace-icon-chip--emerald::before {
+  background: rgba(52, 211, 153, 0.12);
+}
+
+html[data-ezri-theme="light"] .solace-icon-chip--blue,
+html[data-theme="light"] .solace-icon-chip--blue {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #2563eb;
+  box-shadow: 0 4px 16px -8px rgba(59, 130, 246, 0.15);
+}
+html[data-ezri-theme="light"] .solace-icon-chip--blue::before,
+html[data-theme="light"] .solace-icon-chip--blue::before {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+html[data-ezri-theme="light"] .solace-icon-chip--orange,
+html[data-theme="light"] .solace-icon-chip--orange {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
+  box-shadow: 0 4px 16px -8px rgba(249, 115, 22, 0.15);
+}
+html[data-ezri-theme="light"] .solace-icon-chip--orange::before,
+html[data-theme="light"] .solace-icon-chip--orange::before {
+  background: rgba(249, 115, 22, 0.1);
+}

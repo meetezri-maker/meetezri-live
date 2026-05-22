@@ -18,6 +18,30 @@ export {
 } from './defaultAiCompanions';
 
 export {
+  WELLNESS_PLAN_SECTION_IDS,
+  wellnessPlanSectionIdSchema,
+  wellnessPlanTrustedContactSchema,
+  wellnessPlanProfessionalSupportSchema,
+  wellnessPlanListItemSchema,
+  wellnessPlanUpsertBodySchema,
+  wellnessPlanResponseSchema,
+  wellnessPlanRecordSchema,
+  wellnessPlanOnboardingDraftSchema,
+  emptyWellnessPlanResponse,
+  wellnessPlanResponseToDocument,
+  wellnessPlanUpsertBodyFromDocument,
+  type WellnessPlanSectionId,
+  type WellnessPlanTrustedContact,
+  type WellnessPlanProfessionalSupport,
+  type WellnessPlanListItem,
+  type WellnessPlanUpsertBody,
+  type WellnessPlanResponse,
+  type WellnessPlanRecord,
+  type WellnessPlanDocument,
+  type WellnessPlanOnboardingDraft,
+} from './wellnessPlan';
+
+export {
   scoreCommunityTextSentiment,
   sentimentSignalsFromTexts,
   computeCommunityPulsePercent,

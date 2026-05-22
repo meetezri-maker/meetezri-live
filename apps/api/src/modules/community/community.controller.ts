@@ -47,10 +47,12 @@ export async function getMemberProfileHandler(
       request.params.userId
     );
   } catch (err: any) {
-    const code = err?.statusCode === 404 ? 404 : 500;
-    return reply
-      .code(code)
-      .send({ message: err?.message || 'Failed to load profile' });
+    const status =
+      err?.statusCode === 404 ? 404 : err?.statusCode === 403 ? 403 : 500;
+    return reply.code(status).send({
+      message: err?.message || 'Failed to load profile',
+      ...(err?.code ? { code: err.code } : {}),
+    });
   }
 }
 

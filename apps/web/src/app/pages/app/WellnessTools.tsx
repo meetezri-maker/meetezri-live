@@ -1345,7 +1345,7 @@ export function WellnessTools() {
                                   <Play className="h-3.5 w-3.5 shrink-0" aria-hidden />
                                   Start Practice
                                 </Button>
-                                <Button
+                                {/* <Button
                                   type="button"
                                   onClick={() => setGuidedExercise(exercise.id)}
                                   size="sm"
@@ -1354,7 +1354,7 @@ export function WellnessTools() {
                                 >
                                   <Sparkles className="h-3 w-3" aria-hidden />
                                   Solace
-                                </Button>
+                                </Button> */}
                               </div>
                             </div>
                           </div>

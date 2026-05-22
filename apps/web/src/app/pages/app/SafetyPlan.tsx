@@ -5,27 +5,38 @@ import {
   Plus,
   Trash2,
   ArrowLeft,
-  AlertTriangle,
-  Heart,
   Phone,
-  Activity,
-  MapPin,
   BookOpen,
-  Users,
   Download,
   Loader2,
   ChevronRight,
   Printer,
   ShieldCheck,
+  Eraser,
+  RotateCcw,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import type { LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/app/components/ui/alert-dialog";
+import {
+  modalBodyText,
+  modalDestructiveButton,
+  modalSecondaryButton,
+  modalTitle,
+} from "@/lib/modalTheme";
 import {
   WELLNESS_PLAN_BANNER_IMG,
   WELLNESS_PLAN_HERO_IMG,
@@ -54,138 +65,48 @@ import {
   wellnessPlanSectionChip,
 } from "@/app/pages/app/wellness-plan-settings/wellnessPlanSettingsUi";
 import { WellnessPlanSafetyRail } from "@/app/pages/app/wellness-plan-settings/WellnessPlanSafetyRail";
-
-type SectionAccent = "rose" | "pink" | "magenta" | "violet" | "amber";
-
-interface SafetyPlanSection {
-  id: string;
-  title: string;
-  description: string;
-  accent: SectionAccent;
-  icon: LucideIcon;
-  items: string[];
-  placeholder: string;
-}
-
-const SECTION_BLUEPRINT: Omit<SafetyPlanSection, "items">[] = [
-  {
-    id: "warning-signs",
-    title: "Warning Signs",
-    description: "Thoughts, feelings, or behaviors that indicate I may need support.",
-    icon: AlertTriangle,
-    accent: "rose",
-    placeholder: "Add a warning sign...",
-  },
-  {
-    id: "coping-strategies",
-    title: "Coping Strategies",
-    description: "Things I can do to help myself feel better in difficult moments.",
-    icon: Heart,
-    accent: "pink",
-    placeholder: "Add a coping strategy...",
-  },
-  {
-    id: "distractions",
-    title: "Healthy Distractions",
-    description: "Activities that help take my mind off distressing thoughts.",
-    icon: Activity,
-    accent: "magenta",
-    placeholder: "Add a distraction...",
-  },
-  {
-    id: "safe-people",
-    title: "People I Can Contact",
-    description: "People I trust and can reach out to for support.",
-    icon: Users,
-    accent: "violet",
-    placeholder: "Add a contact person...",
-  },
-  {
-    id: "safe-places",
-    title: "Safe Places",
-    description: "Places where I feel safe, calm, and supported.",
-    icon: MapPin,
-    accent: "amber",
-    placeholder: "Add a safe place...",
-  },
-  {
-    id: "reasons-to-live",
-    title: "Reasons to Live",
-    description: "Reminders of why my life is valuable and worth living.",
-    icon: ShieldCheck,
-    accent: "violet",
-    placeholder: "Add a reason...",
-  },
-];
-
-function emptySections(): SafetyPlanSection[] {
-  return SECTION_BLUEPRINT.map((b) => ({ ...b, items: [] }));
-}
-
-function parseTrustedContacts(raw: unknown): string[] {
-  if (raw == null) return [];
-  if (Array.isArray(raw)) {
-    if (raw.length === 0) return [];
-    if (typeof raw[0] === "string") return raw as string[];
-    return (
-      raw as Array<{ name?: string; phone?: string; relation?: string }>
-    )
-      .map((o) => {
-        const bits = [o.name, o.phone, o.relation].filter(Boolean);
-        return bits.join(" — ");
-      })
-      .filter(Boolean);
-  }
-  return [];
-}
-
-function parseReasonsToLive(raw: unknown): string[] {
-  if (raw && typeof raw === "object" && "reasons_to_live" in raw) {
-    const r = (raw as { reasons_to_live?: unknown }).reasons_to_live;
-    if (Array.isArray(r) && r.every((x) => typeof x === "string")) {
-      return r;
-    }
-  }
-  return [];
-}
-
-type SafetyPlanRow = {
-  id: string;
-  user_id: string;
-  warning_signs: string[] | null;
-  coping_strategies: string[] | null;
-  social_distractions: string[] | null;
-  trusted_contacts: unknown;
-  professional_support: unknown;
-  environment_safety: string[] | null;
-};
-
-function rowToSections(row: SafetyPlanRow): SafetyPlanSection[] {
-  const byId: Record<string, string[]> = {
-    "warning-signs": row.warning_signs ?? [],
-    "coping-strategies": row.coping_strategies ?? [],
-    distractions: row.social_distractions ?? [],
-    "safe-people": parseTrustedContacts(row.trusted_contacts),
-    "safe-places": row.environment_safety ?? [],
-    "reasons-to-live": parseReasonsToLive(row.professional_support),
-  };
-  return SECTION_BLUEPRINT.map((b) => ({
-    ...b,
-    items: byId[b.id] ?? [],
-  }));
-}
+import {
+  addWellnessPlanSectionItem,
+  applyWellnessPlanToEditor,
+  computeWellnessPlanRecoveryPercent,
+  createEmptyWellnessPlanSections,
+  createInitialWellnessPlanEditorState,
+  removeWellnessPlanSectionItem,
+  resetWellnessPlanSectionsToSnapshot,
+  WELLNESS_PLAN_AUTOSAVE_DEBOUNCE_MS,
+  wellnessPlanResponseToSections,
+  wellnessPlanSectionsToUpsertBody,
+  type WellnessPlanEditorState,
+  type WellnessPlanSection,
+  type WellnessPlanSectionId,
+} from "@/app/pages/app/wellness-plan-settings/wellnessPlanModel";
 
 export function SafetyPlan() {
   const { user } = useAuth();
-  const [sections, setSections] = useState<SafetyPlanSection[]>(() => emptySections());
-  const [planId, setPlanId] = useState<string | null>(null);
-  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const [isDirty, setIsDirty] = useState(false);
+  const [editor, setEditor] = useState<WellnessPlanEditorState>(() =>
+    createInitialWellnessPlanEditorState()
+  );
   const saveStatusClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [editingSection, setEditingSection] = useState<string | null>(null);
+  const [editingSection, setEditingSection] = useState<WellnessPlanSectionId | null>(null);
   const [newItem, setNewItem] = useState("");
+  const [showClearDialog, setShowClearDialog] = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [clearLoading, setClearLoading] = useState(false);
+
+  const { sections, planId, loadState, saveStatus, isDirty, savedSnapshot } = editor;
+  const setSections = (next: WellnessPlanSection[] | ((prev: WellnessPlanSection[]) => WellnessPlanSection[])) => {
+    setEditor((prev) => ({
+      ...prev,
+      sections: typeof next === "function" ? next(prev.sections) : next,
+    }));
+  };
+  const setPlanId = (id: string | null) => setEditor((prev) => ({ ...prev, planId: id }));
+  const setLoadState = (state: WellnessPlanEditorState["loadState"]) =>
+    setEditor((prev) => ({ ...prev, loadState: state }));
+  const setSaveStatus = (status: WellnessPlanEditorState["saveStatus"]) =>
+    setEditor((prev) => ({ ...prev, saveStatus: status }));
+  const setIsDirty = (dirty: boolean) => setEditor((prev) => ({ ...prev, isDirty: dirty }));
 
   const { data: emergencyContacts = [], isLoading: contactsLoading } = useQuery<
     Array<{ id: string; name: string; phone: string | null }>
@@ -205,11 +126,10 @@ export function SafetyPlan() {
     [emergencyContacts]
   );
 
-  const recoveryPercent = useMemo(() => {
-    if (sections.length === 0) return 0;
-    const filled = sections.filter((s) => s.items.length > 0).length;
-    return Math.round((filled / sections.length) * 100);
-  }, [sections]);
+  const recoveryPercent = useMemo(
+    () => computeWellnessPlanRecoveryPercent(sections),
+    [sections]
+  );
 
   const loadPlan = useCallback(async () => {
     if (!user?.id) {
@@ -217,33 +137,18 @@ export function SafetyPlan() {
       return;
     }
     setLoadState("loading");
-    const { data: rows, error } = await supabase
-      .from("safety_plans")
-      .select(
-        "id, user_id, warning_signs, coping_strategies, social_distractions, trusted_contacts, professional_support, environment_safety"
-      )
-      .eq("user_id", user.id)
-      .order("last_updated", { ascending: false })
-      .limit(1);
-
-    if (error) {
-      console.error("Safety plan load:", error);
+    try {
+      const data = await api.wellnessPlan.get();
+      const loaded = wellnessPlanResponseToSections(data);
+      setEditor((prev) => applyWellnessPlanToEditor(prev, data.id, loaded));
+    } catch (error) {
+      console.error("Wellness plan load:", error);
       toast.error("Could not load your wellness plan. Please try again.");
-      setSections(emptySections());
-      setLoadState("error");
-      return;
+      setEditor((prev) => ({
+        ...applyWellnessPlanToEditor(prev, null, createEmptyWellnessPlanSections()),
+        loadState: "error",
+      }));
     }
-
-    const data = rows?.[0];
-    if (data) {
-      setPlanId(data.id);
-      setSections(rowToSections(data as SafetyPlanRow));
-    } else {
-      setPlanId(null);
-      setSections(emptySections());
-    }
-    setIsDirty(false);
-    setLoadState("ready");
   }, [user?.id]);
 
   useEffect(() => {
@@ -253,39 +158,21 @@ export function SafetyPlan() {
   const persist = useCallback(async () => {
     if (!user?.id || !isDirty) return;
 
-    const get = (id: string) => sections.find((s) => s.id === id)?.items ?? [];
-
-    const payload = {
-      user_id: user.id,
-      warning_signs: get("warning-signs"),
-      coping_strategies: get("coping-strategies"),
-      social_distractions: get("distractions"),
-      trusted_contacts: get("safe-people"),
-      professional_support: { reasons_to_live: get("reasons-to-live") },
-      environment_safety: get("safe-places"),
-      last_updated: new Date().toISOString(),
-    };
+    const body = wellnessPlanSectionsToUpsertBody(sections);
 
     setSaveStatus("saving");
     try {
-      if (planId) {
-        const { error } = await supabase
-          .from("safety_plans")
-          .update(payload)
-          .eq("id", planId)
-          .eq("user_id", user.id);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from("safety_plans")
-          .insert(payload)
-          .select("id")
-          .single();
-        if (error) throw error;
-        if (data?.id) setPlanId(data.id);
-      }
-      setIsDirty(false);
-      setSaveStatus("saved");
+      const saved = await api.wellnessPlan.save(body);
+      if (saved.id) setPlanId(saved.id);
+      setEditor((prev) => ({
+        ...prev,
+        isDirty: false,
+        savedSnapshot: prev.sections.map((section) => ({
+          ...section,
+          items: section.items.map((item) => ({ ...item })),
+        })),
+        saveStatus: "saved",
+      }));
       if (saveStatusClearRef.current) clearTimeout(saveStatusClearRef.current);
       saveStatusClearRef.current = setTimeout(() => {
         setSaveStatus("idle");
@@ -302,80 +189,80 @@ export function SafetyPlan() {
     if (!isDirty || loadState !== "ready" || !user?.id) return;
     const t = setTimeout(() => {
       void persist();
-    }, 700);
+    }, WELLNESS_PLAN_AUTOSAVE_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [sections, isDirty, loadState, user?.id, persist]);
 
-  const handleAddItem = (sectionId: string) => {
+  const handleAddItem = (sectionId: WellnessPlanSectionId) => {
     if (!newItem.trim()) return;
-    setSections((prev) =>
-      prev.map((section) =>
-        section.id === sectionId
-          ? { ...section, items: [...section.items, newItem.trim()] }
-          : section
-      )
-    );
+    setSections((prev) => addWellnessPlanSectionItem(prev, sectionId, newItem));
     setIsDirty(true);
     setNewItem("");
     setEditingSection(null);
   };
 
-  const handleDeleteItem = (sectionId: string, itemIndex: number) => {
-    setSections((prev) =>
-      prev.map((section) =>
-        section.id === sectionId
-          ? {
-              ...section,
-              items: section.items.filter((_, i) => i !== itemIndex),
-            }
-          : section
-      )
-    );
+  const handleDeleteItem = (sectionId: WellnessPlanSectionId, itemId: string) => {
+    setSections((prev) => removeWellnessPlanSectionItem(prev, sectionId, itemId));
     setIsDirty(true);
   };
 
-  const handlePrintOrPdf = () => {
+  const handlePrintOrPdf = useCallback(() => {
+    document.documentElement.classList.add("wellness-plan-printing");
+    const cleanup = () => {
+      document.documentElement.classList.remove("wellness-plan-printing");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
     window.print();
-  };
+  }, []);
 
-  const handleClearPlan = () => {
-    if (
-      !window.confirm(
-        "Clear all items from your wellness plan? This will save an empty plan to your account."
-      )
-    ) {
-      return;
+  const confirmClearPlan = useCallback(async () => {
+    setClearLoading(true);
+    try {
+      const cleared = await api.wellnessPlan.clear();
+      const emptySections = wellnessPlanResponseToSections(cleared);
+      setEditor((prev) => applyWellnessPlanToEditor(prev, cleared.id, emptySections));
+      setShowClearDialog(false);
+      toast.success("Plan cleared.");
+    } catch {
+      toast.error("Could not clear your wellness plan.");
+    } finally {
+      setClearLoading(false);
     }
-    setSections(emptySections());
-    setIsDirty(true);
-    toast.success("Plan cleared. Saving…");
-  };
+  }, []);
 
-  const handleResetPlan = () => {
-    if (
-      !window.confirm(
-        "Reset your plan to the last saved version? Unsaved changes will be lost."
-      )
-    ) {
-      return;
-    }
-    void loadPlan();
+  const confirmResetPlan = useCallback(() => {
+    setEditor((prev) => ({
+      ...prev,
+      sections: resetWellnessPlanSectionsToSnapshot(prev.savedSnapshot),
+      isDirty: false,
+    }));
+    setShowResetDialog(false);
     toast.success("Plan reset to last saved version.");
-  };
+  }, []);
 
   return (
     <motion.div
-      className={wellnessPlanPageAtmosphere}
+      className={cn(wellnessPlanPageAtmosphere, "wellness-plan-print-root")}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.35 }}
     >
-      <motion.div className={wellnessPlanPageGlowTop} aria-hidden />
-      <motion.div className={wellnessPlanPageFogMid} aria-hidden />
-      <motion.div className={wellnessPlanPageVignette} aria-hidden />
+      <motion.div
+        className={cn(wellnessPlanPageGlowTop, "wellness-plan-print-atmosphere print:hidden")}
+        aria-hidden
+      />
+      <motion.div
+        className={cn(wellnessPlanPageFogMid, "wellness-plan-print-atmosphere print:hidden")}
+        aria-hidden
+      />
+      <motion.div
+        className={cn(wellnessPlanPageVignette, "wellness-plan-print-atmosphere print:hidden")}
+        aria-hidden
+      />
 
-      <div className="relative z-10 mx-auto w-full max-w-[1500px] px-4 py-7 sm:px-7 sm:py-9">
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
+      <div className="relative z-10 mx-auto w-full max-w-[1500px] px-4 py-7 sm:px-7 sm:py-9 print:max-w-none print:px-0 print:py-0">
+        <div className="wellness-plan-print-grid grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(300px,340px)]">
           <div className="min-w-0 space-y-6">
             <section className={wellnessPlanHeroCard}>
               <img src={WELLNESS_PLAN_HERO_IMG} alt="" className={wellnessPlanHeroImage} />
@@ -385,7 +272,7 @@ export function SafetyPlan() {
 
               <div className="relative flex min-h-[280px] flex-col justify-between p-6 sm:min-h-[300px] sm:p-8 lg:min-h-[320px]">
                 <div className="max-w-2xl">
-                  <Link to="/app/settings" className={wellnessPlanBackLink}>
+                  <Link to="/app/settings" className={cn(wellnessPlanBackLink, "print:hidden")}>
                     <ArrowLeft className="h-4 w-4" aria-hidden />
                     Back to Settings
                   </Link>
@@ -399,13 +286,13 @@ export function SafetyPlan() {
                       {loadState === "ready" ? (
                         <span className="flex items-center gap-2 text-xs text-[rgba(255,255,255,0.45)]">
                           {saveStatus === "saving" ? (
-                            <>
+                            <span className="print:hidden">
                               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                               Saving…
-                            </>
+                            </span>
                           ) : null}
                           {saveStatus === "saved" ? (
-                            <span className="text-emerald-300/80">Saved</span>
+                            <span className="text-emerald-300/80 print:hidden">Saved</span>
                           ) : null}
                         </span>
                       ) : null}
@@ -449,7 +336,7 @@ export function SafetyPlan() {
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.08 }}
-                    className={cn(wellnessPlanGlassCard, "flex items-start gap-4 p-5 sm:p-6")}
+                    className={cn(wellnessPlanGlassCard, "flex items-start gap-4 p-5 sm:p-6 print:hidden")}
                   >
                     <div className={wellnessPlanIconChip("violet")}>
                       <BookOpen className="h-5 w-5" aria-hidden />
@@ -464,10 +351,10 @@ export function SafetyPlan() {
                         times.
                       </p>
                     </div>
-                    <ChevronRight
-                      className="mt-1 h-5 w-5 shrink-0 text-[rgba(255,255,255,0.25)]"
+                    {/* <ChevronRight
+                      className="mt-1 h-5 w-5 shrink-0 text-[rgba(255,255,255,0.25)] print:hidden"
                       aria-hidden
-                    />
+                    /> */}
                   </motion.div>
 
                   <motion.section
@@ -535,17 +422,17 @@ export function SafetyPlan() {
                                 {section.description}
                               </p>
                             </div>
-                            <ChevronRight
-                              className="mt-1 h-5 w-5 shrink-0 text-[rgba(255,255,255,0.25)]"
+                            {/* <ChevronRight
+                              className="mt-1 h-5 w-5 shrink-0 text-[rgba(255,255,255,0.25)] print:hidden"
                               aria-hidden
-                            />
+                            /> */}
                           </div>
 
                           {section.items.length > 0 ? (
                             <div className="space-y-2 px-5 pb-4 sm:px-6">
                               {section.items.map((item, itemIndex) => (
                                 <motion.div
-                                  key={`${section.id}-${itemIndex}-${item.slice(0, 24)}`}
+                                  key={item.id}
                                   initial={{ opacity: 0, x: -8 }}
                                   animate={{ opacity: 1, x: 0 }}
                                   className={wellnessPlanItemRow}
@@ -558,15 +445,15 @@ export function SafetyPlan() {
                                       {itemIndex + 1}
                                     </span>
                                     <p className="text-sm leading-relaxed text-[rgba(255,255,255,0.78)]">
-                                      {item}
+                                      {item.text}
                                     </p>
                                   </motion.div>
                                   <motion.button
                                     type="button"
                                     whileHover={{ scale: 1.08 }}
                                     whileTap={{ scale: 0.92 }}
-                                    onClick={() => handleDeleteItem(section.id, itemIndex)}
-                                    className="rounded-lg p-1.5 text-rose-300/60 opacity-0 transition-all group-hover:opacity-100 hover:bg-rose-500/10 hover:text-rose-200 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/40"
+                                    onClick={() => handleDeleteItem(section.id, item.id)}
+                                    className="rounded-lg p-1.5 text-rose-300/60 opacity-0 transition-all group-hover:opacity-100 hover:bg-rose-500/10 hover:text-rose-200 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/40 print:hidden"
                                     aria-label={`Remove item ${itemIndex + 1}`}
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -577,7 +464,7 @@ export function SafetyPlan() {
                           ) : null}
 
                           {editingSection === section.id ? (
-                            <div className="flex flex-wrap gap-2 px-5 pb-5 sm:px-6">
+                            <div className="flex flex-wrap gap-2 px-5 pb-5 sm:px-6 print:hidden">
                               <input
                                 type="text"
                                 value={newItem}
@@ -616,7 +503,7 @@ export function SafetyPlan() {
                               whileHover={{ scale: 1.01 }}
                               whileTap={{ scale: 0.99 }}
                               onClick={() => setEditingSection(section.id)}
-                              className={wellnessPlanAddZone}
+                              className={cn(wellnessPlanAddZone, "print:hidden")}
                             >
                               <Plus className="h-4 w-4" aria-hidden />
                               Add Item
@@ -705,12 +592,93 @@ export function SafetyPlan() {
               contactsLoading={contactsLoading}
               recoveryPercent={recoveryPercent}
               onExportPdf={handlePrintOrPdf}
-              onClearPlan={handleClearPlan}
-              onResetPlan={handleResetPlan}
+              onClearPlan={() => setShowClearDialog(true)}
+              onResetPlan={() => setShowResetDialog(true)}
             />
           ) : null}
         </div>
       </div>
+
+      <AlertDialog
+        open={showClearDialog}
+        onOpenChange={(open) => {
+          if (clearLoading) return;
+          setShowClearDialog(open);
+        }}
+      >
+        <AlertDialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
+          <div className="p-6 pb-5">
+            <div className="flex items-start gap-4">
+              <div className={wellnessPlanIconChip("rose")}>
+                <Eraser className="h-5 w-5" aria-hidden />
+              </div>
+              <AlertDialogHeader className="min-w-0 flex-1 gap-1.5 text-left">
+                <AlertDialogTitle className={cn(modalTitle, "text-xl")}>
+                  Clear your wellness plan?
+                </AlertDialogTitle>
+                <AlertDialogDescription className={modalBodyText}>
+                  All items will be removed and an empty plan will be saved to your account.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+            </div>
+          </div>
+          <AlertDialogFooter className="flex-row justify-end gap-3 border-t border-white/[0.08] bg-black/20 px-6 py-4 sm:justify-end">
+            <AlertDialogCancel disabled={clearLoading} className={modalSecondaryButton}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void confirmClearPlan();
+              }}
+              className={modalDestructiveButton}
+              disabled={clearLoading}
+            >
+              {clearLoading ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  Clearing…
+                </span>
+              ) : (
+                "Clear plan"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <AlertDialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
+          <div className="p-6 pb-5">
+            <div className="flex items-start gap-4">
+              <div className={wellnessPlanIconChip("violet")}>
+                <RotateCcw className="h-5 w-5" aria-hidden />
+              </div>
+              <AlertDialogHeader className="min-w-0 flex-1 gap-1.5 text-left">
+                <AlertDialogTitle className={cn(modalTitle, "text-xl")}>
+                  Reset to last saved version?
+                </AlertDialogTitle>
+                <AlertDialogDescription className={modalBodyText}>
+                  Unsaved changes will be lost. Your plan will match the last version saved to your
+                  account.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+            </div>
+          </div>
+          <AlertDialogFooter className="flex-row justify-end gap-3 border-t border-white/[0.08] bg-black/20 px-6 py-4 sm:justify-end">
+            <AlertDialogCancel className={modalSecondaryButton}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                confirmResetPlan();
+              }}
+              className={modalDestructiveButton}
+            >
+              Reset plan
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 }

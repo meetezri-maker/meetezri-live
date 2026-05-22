@@ -12,8 +12,7 @@ export const WELLNESS_PLAN_HERO_IMG = "/community/hero-lake.jpg";
 export const WELLNESS_PLAN_BANNER_IMG = "/community/scene-water.jpg";
 
 export const wellnessPlanPageAtmosphere = cn(
-  settingsPageAtmosphere,
-  "bg-[linear-gradient(165deg,#0a0b18_0%,#090a16_42%,#0c0a18_100%)]"
+  settingsPageAtmosphere
 );
 
 export const wellnessPlanPageGlowTop = settingsPageGlowTop;

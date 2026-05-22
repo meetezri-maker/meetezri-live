@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { solaceInputSurface } from "@/app/solace/solacePageChrome";
 import {
   settingsCard,
   settingsIconChip,
@@ -12,8 +13,7 @@ export const EMERGENCY_HERO_IMG = "/community/hero-lake.jpg";
 export const EMERGENCY_RAIL_IMG = "/community/hero-lake.jpg";
 
 export const emergencyPageAtmosphere = cn(
-  settingsPageAtmosphere,
-  "bg-[linear-gradient(165deg,#0a0b18_0%,#090a16_42%,#0c0a18_100%)]"
+  settingsPageAtmosphere
 );
 
 export const emergencyPageGlowTop = settingsPageGlowTop;
@@ -97,6 +97,13 @@ export const emergencyContactAvatar = cn(
   "flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-base font-semibold text-white",
   "bg-gradient-to-br from-violet-500/35 via-fuchsia-500/28 to-cyan-500/20 ring-1 ring-white/12",
   "shadow-[0_0_24px_-8px_rgba(139,92,246,0.45)]"
+);
+
+/** Consent confirmed badge on contact avatar */
+export const emergencyContactConsentBadge = cn(
+  "absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full",
+  "border border-emerald-300/40 bg-emerald-500/90 text-white",
+  "shadow-[0_0_12px_-2px_rgba(52,211,153,0.55)]"
 );
 
 export const emergencyActionBtn = cn(
@@ -226,33 +233,31 @@ export const emergencyModalNoteItem = cn(
 );
 
 export const emergencyModalField = cn(
-  "flex min-h-[48px] items-center gap-2.5 rounded-2xl border border-white/[0.09] px-3.5",
-  "bg-[rgba(12,14,30,0.92)] shadow-[inset_0_2px_12px_rgba(0,0,0,0.38)]",
-  "transition-all duration-300",
-  "focus-within:border-violet-400/40 focus-within:ring-2 focus-within:ring-violet-500/22",
-  "focus-within:shadow-[inset_0_2px_12px_rgba(0,0,0,0.35),0_0_24px_-8px_rgba(139,92,246,0.28)]"
+  solaceInputSurface,
+  "flex min-h-[48px] items-center gap-2.5 rounded-2xl px-3.5 shadow-[var(--solace-card-shadow)]",
+  "transition-all duration-300 focus-within:ring-2 focus-within:ring-[color:var(--accent-secondary,#a78bfa)]/25"
 );
 
 export const emergencyModalInput = cn(
-  "flex-1 bg-transparent text-sm text-white outline-none",
-  "placeholder:text-[rgba(255,255,255,0.32)]"
+  "flex-1 bg-transparent text-sm text-[var(--solace-text)] outline-none",
+  "placeholder:text-[var(--solace-muted)]"
 );
 
-export const emergencyModalLabel = "mb-2 block text-sm font-medium text-[rgba(255,255,255,0.88)]";
+export const emergencyModalLabel = "mb-2 block text-sm font-medium text-[var(--solace-text)]";
 
-export const emergencyModalFieldHint = "mb-2 text-xs text-[rgba(255,255,255,0.42)]";
+export const emergencyModalFieldHint = "mb-2 text-xs text-[var(--solace-muted)]";
 
 export const emergencyModalPhoneButton = cn(
-  "h-12 min-h-[48px] w-[120px] shrink-0 justify-between rounded-2xl border-white/[0.09] px-3 sm:w-[140px]",
-  "bg-[rgba(12,14,30,0.92)] text-[rgba(255,255,255,0.9)] shadow-[inset_0_2px_12px_rgba(0,0,0,0.38)]",
-  "hover:border-violet-400/28 hover:bg-violet-500/[0.08] hover:text-white"
+  solaceInputSurface,
+  "h-12 min-h-[48px] w-[120px] shrink-0 justify-between rounded-2xl px-3 sm:w-[140px]",
+  "text-[var(--solace-text)] shadow-[var(--solace-card-shadow)]",
+  "hover:border-[color:var(--solace-ds-border-glow)] hover:bg-[color-mix(in_srgb,var(--accent-secondary,#a78bfa)_8%,var(--input-bg))]"
 );
 
 export const emergencyModalPhoneInput = cn(
-  "h-12 min-h-[48px] flex-1 rounded-2xl border-white/[0.09]",
-  "bg-[rgba(12,14,30,0.92)] text-white shadow-[inset_0_2px_12px_rgba(0,0,0,0.38)]",
-  "placeholder:text-[rgba(255,255,255,0.32)]",
-  "focus-visible:border-violet-400/40 focus-visible:ring-violet-500/22"
+  solaceInputSurface,
+  "h-12 min-h-[48px] flex-1 rounded-2xl text-[var(--solace-text)] shadow-[var(--solace-card-shadow)]",
+  "placeholder:text-[var(--solace-muted)]"
 );
 
 export const emergencyModalFormStack = "space-y-[18px]";
@@ -282,3 +287,26 @@ export const emergencyModalBtnPrimary = cn(
 );
 
 export const emergencyModalBtnSave = emergencyModalBtnPrimary;
+
+export const emergencyModalBtnDestructive = cn(
+  "inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold text-white",
+  "bg-[linear-gradient(135deg,#e11d48_0%,#be123c_55%,#9f1239_100%)]",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_0_32px_-6px_rgba(244,63,94,0.42)]",
+  "transition-all duration-300 hover:enabled:brightness-110",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/40",
+  "disabled:cursor-not-allowed disabled:opacity-50"
+);
+
+/** Opens safety consent in review mode (eye control on Emergency Contacts hero). */
+export const emergencyConsentReviewTrigger = cn(
+  "inline-flex min-h-[36px] items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium",
+  "transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/35",
+  "border-violet-400/22 bg-violet-500/[0.08] text-violet-200/85",
+  "hover:border-violet-300/38 hover:bg-violet-500/14 hover:text-violet-100/95"
+);
+
+export const emergencyConsentReviewTriggerAgreed = cn(
+  emergencyConsentReviewTrigger,
+  "border-emerald-400/25 bg-emerald-500/[0.1] text-emerald-200/90",
+  "hover:border-emerald-300/35 hover:bg-emerald-500/16 hover:text-emerald-100/95"
+);

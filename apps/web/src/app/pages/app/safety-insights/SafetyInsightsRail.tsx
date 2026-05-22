@@ -1,109 +1,138 @@
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
-import { ChevronRight, HandHeart, Heart, Phone, Target, Users } from "lucide-react";
-import { format, isToday, isYesterday } from "date-fns";
+import { ChevronRight, HandHeart, Info, Phone, Target, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  wellnessPlanBtnGhost,
   wellnessPlanBtnRose,
   wellnessPlanIconChip,
   wellnessPlanRailActionRow,
   wellnessPlanRailCard,
 } from "@/app/pages/app/wellness-plan-settings/wellnessPlanSettingsUi";
+import {
+  computeSafetySnapshot,
+  SAFETY_SCORE_FORMULA_HINT,
+  SNAPSHOT_DATA_SOURCES_HINT,
+  type SafetyCheckInEntry,
+  type SafetyInsightsData,
+  type SafetySnapshotDisplay,
+  type SnapshotTone,
+} from "@/app/pages/app/safety-insights/safetyInsightsData";
 
-export interface SafetyCheckInEntry {
-  timestamp: string;
-  note: string;
-}
+export type { SafetyCheckInEntry };
 
 export interface SafetyInsightsRailProps {
-  safetyScore: number;
-  trend: "increasing" | "decreasing" | "stable";
-  last30DaysCount: number;
+  insights: SafetyInsightsData;
   checkIns: SafetyCheckInEntry[];
+}
+
+function toneClassName(tone: SnapshotTone): string {
+  if (tone === "emerald") return "text-emerald-300/90";
+  if (tone === "amber") return "text-amber-300/90";
+  return "text-rose-300/90";
 }
 
 function formatCheckInTime(iso: string): string {
   const d = new Date(iso);
-  if (isToday(d)) return `Today, ${format(d, "h:mm a")}`;
-  if (isYesterday(d)) return "Yesterday";
-  return format(d, "MMM d, h:mm a");
+  if (Number.isNaN(d.getTime())) return iso;
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - d.getTime()) / (24 * 60 * 60 * 1000));
+  if (diffDays === 0) {
+    return `Today, ${d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+  }
+  if (diffDays === 1) return "Yesterday";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function trendLabel(trend: SafetyInsightsRailProps["trend"]): string {
-  if (trend === "decreasing") return "Improving";
-  if (trend === "increasing") return "Needs care";
-  return "Stable";
-}
-
-function riskLevel(score: number): { label: string; tone: "emerald" | "amber" | "rose" } {
-  if (score >= 80) return { label: "Low", tone: "emerald" };
-  if (score >= 50) return { label: "Moderate", tone: "amber" };
-  return { label: "Elevated", tone: "rose" };
-}
-
-function SnapshotRow({
-  label,
-  value,
-  valueClassName,
-}: {
+interface SnapshotRowProps {
   label: string;
   value: string;
+  detail?: string;
   valueClassName?: string;
-}) {
+}
+
+function SnapshotRow({ label, value, detail, valueClassName }: SnapshotRowProps) {
   return (
-    <motion.div className="flex items-center justify-between gap-3 border-b border-white/[0.05] py-3 last:border-0 last:pb-0 first:pt-0">
-      <span className="text-xs text-[rgba(255,255,255,0.42)]">{label}</span>
-      <span className={cn("text-sm font-medium text-white", valueClassName)}>{value}</span>
+    <div className="border-b border-white/[0.05] py-3 last:border-0 last:pb-0 first:pt-0">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-[rgba(255,255,255,0.42)]">{label}</span>
+        <span className={cn("text-sm font-medium text-white", valueClassName)}>{value}</span>
+      </div>
+      {detail ? (
+        <p className="mt-1 text-[10px] leading-relaxed text-[rgba(255,255,255,0.38)]">{detail}</p>
+      ) : null}
+    </div>
+  );
+}
+
+interface SafetySnapshotCardProps {
+  snapshot: SafetySnapshotDisplay;
+}
+
+function SafetySnapshotCard({ snapshot }: SafetySnapshotCardProps) {
+  return (
+    <motion.div
+      className={wellnessPlanRailCard}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.05 }}
+    >
+      <h2 className="font-serif text-lg font-light text-white">Safety Snapshot</h2>
+      <p className="mt-1 text-xs text-[rgba(255,255,255,0.45)]">
+        A calm read on where you are right now.
+      </p>
+
+      <div className="mt-4" role="list" aria-label="Safety snapshot metrics">
+        <SnapshotRow
+          label="Current Score"
+          value={`${snapshot.safetyScore}%`}
+          valueClassName={toneClassName(snapshot.scoreTone)}
+          detail={SAFETY_SCORE_FORMULA_HINT}
+        />
+        <SnapshotRow
+          label="Trend"
+          value={snapshot.trendLabel}
+          valueClassName={toneClassName(snapshot.trendTone)}
+          detail={snapshot.trendDetail}
+        />
+        <SnapshotRow
+          label="Risk Level"
+          value={snapshot.riskLabel}
+          valueClassName={toneClassName(snapshot.riskTone)}
+          detail={snapshot.riskDetail}
+        />
+        <SnapshotRow
+          label="Last Check-in"
+          value={snapshot.lastCheckInLabel}
+          detail={
+            snapshot.lastCheckInSource === "mood"
+              ? "From your latest mood check-in."
+              : snapshot.lastCheckInSource === "safety"
+                ? "From a recent safety moment."
+                : snapshot.moodCheckInsLast30 === 0
+                  ? "Log a mood check-in to start tracking."
+                  : undefined
+          }
+        />
+      </div>
+
+      <p className="mt-3 flex items-start gap-1.5 text-[10px] leading-relaxed text-[rgba(255,255,255,0.35)]">
+        <Info className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+        <span>
+          {snapshot.moodCheckInsLast30} mood · {snapshot.safetyMomentsLast30} safety (30d)
+          {snapshot.moodStreak > 0 ? ` · ${snapshot.moodStreak}-day streak` : ""}.{" "}
+          {SNAPSHOT_DATA_SOURCES_HINT}
+        </span>
+      </p>
     </motion.div>
   );
 }
 
-export function SafetyInsightsRail({
-  safetyScore,
-  trend,
-  last30DaysCount,
-  checkIns,
-}: SafetyInsightsRailProps) {
-  const risk = riskLevel(safetyScore);
-  const lastCheckIn = checkIns[0];
+export function SafetyInsightsRail({ insights, checkIns }: SafetyInsightsRailProps) {
+  const snapshot = computeSafetySnapshot(insights, checkIns);
 
   return (
     <aside className="min-w-0 space-y-6 print:hidden xl:max-w-[340px]">
-      <motion.div
-        className={wellnessPlanRailCard}
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-      >
-        <h2 className="font-serif text-lg font-light text-white">Safety Snapshot</h2>
-        <p className="mt-1 text-xs text-[rgba(255,255,255,0.45)]">A calm read on where you are right now.</p>
-        <div className="mt-4">
-          <SnapshotRow label="Current Score" value={`${safetyScore}%`} valueClassName="text-emerald-300/90" />
-          <SnapshotRow label="Trend" value={trendLabel(trend)} />
-          <SnapshotRow
-            label="Risk Level"
-            value={risk.label}
-            valueClassName={
-              risk.tone === "emerald"
-                ? "text-emerald-300/90"
-                : risk.tone === "amber"
-                  ? "text-amber-300/90"
-                  : "text-rose-300/90"
-            }
-          />
-          <SnapshotRow
-            label="Last Check-in"
-            value={
-              lastCheckIn
-                ? formatCheckInTime(lastCheckIn.timestamp)
-                : last30DaysCount > 0
-                  ? "Recently"
-                  : "Not yet"
-            }
-          />
-        </div>
-      </motion.div>
+      <SafetySnapshotCard snapshot={snapshot} />
 
       <motion.div
         className={wellnessPlanRailCard}
@@ -136,7 +165,7 @@ export function SafetyInsightsRail({
           )}
         </div>
         <Link
-          to="/app/mood-check-in"
+          to="/app/mood-history"
           className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-fuchsia-300/75 transition-colors hover:text-fuchsia-200"
         >
           View all check-ins
@@ -177,7 +206,7 @@ export function SafetyInsightsRail({
       <motion.div
         className={cn(
           wellnessPlanRailCard,
-          "overflow-hidden border-rose-400/16",
+          "relative overflow-hidden border-rose-400/16",
           "bg-[linear-gradient(165deg,rgba(50,14,36,0.55)_0%,rgba(16,10,28,0.88)_100%)]"
         )}
         initial={{ opacity: 0, y: 12 }}
@@ -203,14 +232,6 @@ export function SafetyInsightsRail({
           Get Help Now
         </Link>
         <p className="relative mt-4 text-center text-xs italic text-rose-300/70">You are not alone.</p>
-        <motion.div
-          className="relative mt-4 flex justify-center"
-          aria-hidden
-        >
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500/10 ring-1 ring-rose-400/25 shadow-[0_0_32px_-8px_rgba(244,63,94,0.45)]">
-            <Heart className="h-7 w-7 text-rose-300/90" />
-          </div>
-        </motion.div>
       </motion.div>
     </aside>
   );

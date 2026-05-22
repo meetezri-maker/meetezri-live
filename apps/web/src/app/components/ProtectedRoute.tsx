@@ -22,11 +22,14 @@ interface ProtectedRouteProps {
 const ALLOW_EXPIRED_PLAN_ROUTES = new Set(['/app/dashboard', '/app/billing']);
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
-  const { user, profile, isLoading, hasRole } = useAuth();
+  const { user, profile, isLoading, hasRole, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const isOnboardingRoute = location.pathname.startsWith('/onboarding');
   const [isCancelling, setIsCancelling] = useState(false);
+  const [activationEmailSending, setActivationEmailSending] = useState(false);
+
+  const isAccountInactive = profile?.account_status === 'inactive';
 
   if (isLoading) {
     // If we already have a signed-in user, never unmount the entire route tree.
@@ -44,6 +47,69 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (isAccountInactive) {
+    const handleSendActivationEmail = async () => {
+      setActivationEmailSending(true);
+      try {
+        const result = await api.requestAccountActivation();
+        toast.success('Activation email sent', {
+          description: result?.email
+            ? `Check ${result.email} for your activation link.`
+            : 'Check your inbox for the activation link.',
+        });
+      } catch (error: unknown) {
+        toast.error(
+          error instanceof Error ? error.message : 'Failed to send activation email'
+        );
+      } finally {
+        setActivationEmailSending(false);
+      }
+    };
+
+    const handleSignOutInactive = async () => {
+      await signOut();
+      navigate('/login', { replace: true });
+    };
+
+    return (
+      <>
+        <div className="min-h-screen bg-[#0a0b18]" />
+        <Dialog open>
+          <DialogContent
+            className="border-white/10 bg-[#12141f] sm:max-w-md"
+            onInteractOutside={(event) => event.preventDefault()}
+          >
+            <DialogHeader>
+              <DialogTitle className="text-zinc-100">Account deactivated</DialogTitle>
+              <DialogDescription className="text-zinc-400">
+                Your Solace account is paused. You can reactivate it anytime. We will email you a
+                secure link to restore access.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex-col gap-2 sm:flex-col">
+              <Button
+                onClick={handleSendActivationEmail}
+                isLoading={activationEmailSending}
+                disabled={activationEmailSending}
+                className="w-full"
+              >
+                Send activation email
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleSignOutInactive}
+                disabled={activationEmailSending}
+                className="w-full border-white/15 bg-transparent text-zinc-300 hover:bg-white/5"
+              >
+                Sign out
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
   }
 
   if (profile && profile.role === 'suspended') {

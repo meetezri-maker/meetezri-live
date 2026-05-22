@@ -223,7 +223,7 @@ function HelpfulResourcesCard({ safetyLevel }: HelpfulResourcesCardProps) {
                 id="cooldown-resources-heading"
                 className="text-lg font-semibold tracking-tight text-white sm:text-xl"
               >
-                Helpful Resources — Available 24/7
+                Helpful Resources Available 24/7
               </h2>
               <p className="mt-1 text-sm text-white/70">Support is always here when you need it.</p>
             </div>

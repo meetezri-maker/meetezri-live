@@ -6,11 +6,10 @@ import {
   User,
   Mail,
   Phone,
-  Calendar,
   MapPin,
   Camera,
   Key,
-  Trash2,
+  UserX,
   Save,
   ArrowLeft,
   Check,
@@ -52,7 +51,7 @@ import {
 } from "@/app/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { SolaceSelect } from "@/app/solace";
+import { SolaceDateOfBirthPicker, SolaceSelect } from "@/app/solace";
 import { formatSubscriptionPlanLabel } from "@/app/pages/app/profile/profileUi";
 import {
   ACCOUNT_HELP_IMG,
@@ -69,6 +68,12 @@ import {
   accountBtnUpload,
   accountDangerCard,
   accountDangerInner,
+  accountDropdownCommand,
+  accountDropdownCommandEmpty,
+  accountDropdownCommandInput,
+  accountDropdownCommandItem,
+  accountDropdownCommandList,
+  accountDropdownPopover,
   accountHelpImage,
   accountHelpOverlay,
   accountHeroCard,
@@ -81,13 +86,23 @@ import {
   accountIconChip,
   accountInput,
   accountLabel,
+  accountLabelWithIcon,
   accountModalBtnCancel,
   accountModalBtnDanger,
   accountModalBtnPrimary,
   accountModalInput,
   accountModalMuted,
+  accountModalOverlay,
   accountModalPanel,
   accountModalTitle,
+  accountMfaBackLink,
+  accountMfaInfoBanner,
+  accountMfaMethodDesc,
+  accountMfaMethodOption,
+  accountMfaMethodTitle,
+  accountMfaOtpInput,
+  accountMfaSegmentBtn,
+  accountOtpSlot,
   accountPageAtmosphere,
   accountPageFogMid,
   accountPageGlowBottom,
@@ -298,15 +313,9 @@ export function AccountSettings() {
       return fallbackTimezones;
     }
   }, []);
-  const maxAllowedDob = useMemo(() => {
-    const date = new Date();
-    date.setFullYear(date.getFullYear() - 13);
-    return date.toISOString().split("T")[0];
-  }, []);
-
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [deactivateConfirmation, setDeactivateConfirmation] = useState("");
+  const [deactivateLoading, setDeactivateLoading] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   
   // Password change state
@@ -703,20 +712,23 @@ export function AccountSettings() {
     }
   };
 
-  const handleDeleteAccount = async () => {
-    if (deleteConfirmation !== "DELETE") return;
-    
-    setDeleteLoading(true);
+  const handleDeactivateAccount = async () => {
+    if (deactivateConfirmation !== "DEACTIVATE") return;
+
+    setDeactivateLoading(true);
     try {
-      await api.deleteAccount();
+      await api.deactivateAccount();
       await supabase.auth.signOut();
-      toast.success("Account deleted successfully");
+      toast.success("Account deactivated", {
+        description: "Sign in again anytime and use the activation email to restore access.",
+      });
       navigate("/login");
     } catch (error: any) {
-      toast.error(error.message || "Failed to delete account");
+      toast.error(error.message || "Failed to deactivate account");
     } finally {
-      setDeleteLoading(false);
-      setShowDeleteModal(false);
+      setDeactivateLoading(false);
+      setShowDeactivateModal(false);
+      setDeactivateConfirmation("");
     }
   };
 
@@ -1385,21 +1397,29 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   placeholder="Your phone number"
                   buttonClassName={accountPhoneButton}
                   inputClassName={accountPhoneInput}
+                  popoverClassName={accountDropdownPopover}
+                  commandClassName={accountDropdownCommand}
+                  commandInputClassName={accountDropdownCommandInput}
+                  commandListClassName={accountDropdownCommandList}
+                  commandItemClassName={accountDropdownCommandItem}
+                  commandEmptyClassName={accountDropdownCommandEmpty}
                 />
               </div>
 
               <div className="grid gap-5 md:grid-cols-2">
                 <div>
-                  <label className={accountLabel}>
-                    <Calendar className="w-4 h-4 inline mr-1" />
-                    Date of Birth
-                  </label>
-                  <input
-                    type="date"
+                  <SolaceDateOfBirthPicker
+                    id="account-date-of-birth"
+                    label="Date of Birth"
+                    labelClassName={accountLabelWithIcon}
                     value={profileData.dateOfBirth}
-                    onChange={(e) => setProfileData({...profileData, dateOfBirth: e.target.value})}
-                    max={maxAllowedDob}
-                    className={accountInput}
+                    onChange={(iso) =>
+                      setProfileData({ ...profileData, dateOfBirth: iso })
+                    }
+                    triggerClassName={accountInput}
+                    placeholder="MM/DD/YYYY"
+                    minAgeYears={13}
+                    showAgeHint
                   />
                 </div>
 
@@ -1422,15 +1442,27 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search timezone or city..." />
-                        <CommandList>
-                          <CommandEmpty>No timezone found.</CommandEmpty>
+                    <PopoverContent
+                      className={cn(
+                        accountDropdownPopover,
+                        "w-[--radix-popover-trigger-width]"
+                      )}
+                      align="start"
+                    >
+                      <Command className={accountDropdownCommand}>
+                        <CommandInput
+                          placeholder="Search timezone or city..."
+                          className={accountDropdownCommandInput}
+                        />
+                        <CommandList className={accountDropdownCommandList}>
+                          <CommandEmpty className={accountDropdownCommandEmpty}>
+                            No timezone found.
+                          </CommandEmpty>
                           <CommandGroup>
                             {availableTimezones.map((timezone) => (
                               <CommandItem
                                 key={timezone}
+                                className={accountDropdownCommandItem}
                                 value={`${timezone} ${formatTimezoneOptionLabel(timezone)}`}
                                 onSelect={() => {
                                   setProfileData((prev) => ({ ...prev, location: timezone }));
@@ -1570,20 +1602,20 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
 
               <div className={accountDangerInner}>
                 <div>
-                  <p className="font-medium text-[rgba(255,255,255,0.92)]">Delete account</p>
+                  <p className="font-medium text-[rgba(255,255,255,0.92)]">Deactivate account</p>
                   <p className="mt-1 text-sm text-[rgba(255,255,255,0.48)]">
-                    Permanently delete your account and all data
+                    Pause your account — you can reactivate anytime via email
                   </p>
                 </div>
                 <motion.button
                   type="button"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowDeleteModal(true)}
+                  onClick={() => setShowDeactivateModal(true)}
                   className={accountBtnDanger}
                 >
-                  <Trash2 className="h-4 w-4" aria-hidden />
-                  Delete
+                  <UserX className="h-4 w-4" aria-hidden />
+                  Deactivate
                 </motion.button>
               </div>
             </motion.section>
@@ -1708,7 +1740,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                     We use advanced encryption to keep your information private and secure.
                   </p>
                   <Link
-                    to="/privacy"
+                    to="/app/settings/privacy"
                     className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-fuchsia-300 transition hover:text-fuchsia-200"
                   >
                     Learn more
@@ -1721,13 +1753,13 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
         </div>
       </div>
 
-          {/* Delete Account Modal */}
-          {showDeleteModal && (
+          {/* Deactivate Account Modal */}
+          {showDeactivateModal && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
-              onClick={() => setShowDeleteModal(false)}
+              onClick={() => setShowDeactivateModal(false)}
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
@@ -1736,19 +1768,20 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                 className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d14] p-6 shadow-2xl transition-colors duration-300"
               >
                 <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-500" />
+                  <div className="w-16 h-16 bg-rose-500/15 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <AlertCircle className="w-8 h-8 text-rose-400" />
                   </div>
-                  <h3 className="text-xl font-bold text-zinc-100 mb-2">Delete Account?</h3>
+                  <h3 className="text-xl font-bold text-zinc-100 mb-2">Deactivate account?</h3>
                   <p className="text-zinc-400 mb-4">
-                    This action cannot be undone. All your data, including sessions, journals, and progress will be permanently deleted.
+                    You will be signed out immediately. Your data stays saved. Sign in later and use
+                    the activation email to restore access.
                   </p>
                   <input
                     type="text"
-                    value={deleteConfirmation}
-                    onChange={(e) => setDeleteConfirmation(e.target.value)}
-                    placeholder='Type "DELETE" to confirm'
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-zinc-100 focus:ring-2 focus:ring-red-500 outline-none transition-colors"
+                    value={deactivateConfirmation}
+                    onChange={(e) => setDeactivateConfirmation(e.target.value)}
+                    placeholder='Type "DEACTIVATE" to confirm'
+                    className={cn(accountInput, "text-center")}
                   />
                 </div>
 
@@ -1756,8 +1789,11 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => setShowDeleteModal(false)}
-                    className="flex-1 px-4 py-3 rounded-xl bg-gray-200 dark:bg-slate-800 hover:bg-gray-300 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 font-medium transition-colors"
+                    onClick={() => {
+                      setShowDeactivateModal(false);
+                      setDeactivateConfirmation("");
+                    }}
+                    className={accountModalBtnCancel}
                   >
                     Cancel
                   </motion.button>
@@ -1765,12 +1801,12 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={handleDeleteAccount}
-                    disabled={deleteConfirmation !== "DELETE" || deleteLoading}
-                    className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                    onClick={handleDeactivateAccount}
+                    disabled={deactivateConfirmation !== "DEACTIVATE" || deactivateLoading}
+                    className={cn(accountModalBtnDanger, "flex-1 flex items-center justify-center gap-2")}
                   >
-                    {deleteLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    Delete Account
+                    {deactivateLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Deactivate account
                   </motion.button>
                 </div>
               </motion.div>
@@ -1782,19 +1818,19 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
-                  onClick={() => {
-                    setShowMfaModal(false);
-                    setMfaStep('method');
-                  }}
+              className={accountModalOverlay}
+              onClick={() => {
+                setShowMfaModal(false);
+                setMfaStep('method');
+              }}
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d14] p-6 shadow-2xl transition-colors duration-300"
+                className={accountModalPanel}
               >
-                <h3 className="text-xl font-bold text-zinc-100 mb-6">
+                <h3 className={cn(accountModalTitle, "mb-6")}>
                   {mfaStep === 'method'
                     ? 'Choose 2FA Method'
                     : mfaStep === 'knowledgeSetup'
@@ -1809,14 +1845,10 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                     <button
                       type="button"
                       onClick={() => setMfaMethod('authenticator')}
-                      className={`w-full rounded-xl border p-4 text-left transition-colors ${
-                        mfaMethod === 'authenticator'
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                          : 'border-gray-200 dark:border-slate-700'
-                      }`}
+                      className={accountMfaMethodOption(mfaMethod === 'authenticator')}
                     >
-                      <p className="font-medium text-zinc-100">Authenticator app</p>
-                      <p className="text-sm text-zinc-400">
+                      <p className={accountMfaMethodTitle}>Authenticator app</p>
+                      <p className={accountMfaMethodDesc}>
                         Google Authenticator, Authy, Microsoft Authenticator
                       </p>
                     </button>
@@ -1824,16 +1856,12 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                     <button
                       type="button"
                       onClick={() => setMfaMethod('knowledge')}
-                      className={`w-full rounded-xl border p-4 text-left transition-colors ${
-                        mfaMethod === 'knowledge'
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                          : 'border-gray-200 dark:border-slate-700'
-                      }`}
+                      className={accountMfaMethodOption(mfaMethod === 'knowledge')}
                     >
-                      <p className="font-medium text-zinc-100">
+                      <p className={accountMfaMethodTitle}>
                         PIN (with security answer)
                       </p>
-                      <p className="text-sm text-zinc-400">
+                      <p className={accountMfaMethodDesc}>
                         Knowledge-based second factor
                       </p>
                     </button>
@@ -1841,16 +1869,12 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                     <button
                       type="button"
                       onClick={() => setMfaMethod('knowledge_email')}
-                      className={`w-full rounded-xl border p-4 text-left transition-colors ${
-                        mfaMethod === 'knowledge_email'
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                          : 'border-gray-200 dark:border-slate-700'
-                      }`}
+                      className={accountMfaMethodOption(mfaMethod === 'knowledge_email')}
                     >
-                      <p className="font-medium text-zinc-100">
+                      <p className={accountMfaMethodTitle}>
                         Email authentication code
                       </p>
-                      <p className="text-sm text-zinc-400">
+                      <p className={accountMfaMethodDesc}>
                         Use an email 6-digit code at login (no PIN required)
                       </p>
                     </button>
@@ -1866,7 +1890,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                         }
                       }}
                       disabled={mfaLoading}
-                      className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                      className={cn(accountModalBtnPrimary, "flex w-full items-center justify-center gap-2 disabled:opacity-50")}
                     >
                       {mfaLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                       Continue
@@ -1878,7 +1902,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   <div className="space-y-4">
                     {mfaMethod === 'knowledge_email' ? (
                       <>
-                        <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 text-sm text-blue-800 dark:text-blue-200">
+                        <div className={accountMfaInfoBanner}>
                           Email authentication code is enabled. At login, we&apos;ll email you a 6-digit code for verification.
                         </div>
 
@@ -1887,7 +1911,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                           whileTap={{ scale: 0.98 }}
                           onClick={handleSetupKnowledgeEmailMfa}
                           disabled={mfaLoading}
-                          className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                          className={cn(accountModalBtnPrimary, "flex w-full items-center justify-center gap-2 disabled:opacity-50")}
                         >
                           {mfaLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                           Enable Email Authentication Code
@@ -1896,7 +1920,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                         <button
                           type="button"
                           onClick={() => setMfaStep('method')}
-                          className="w-full py-2 text-sm text-zinc-400 hover:underline"
+                          className={accountMfaBackLink}
                         >
                           Back
                         </button>
@@ -1919,10 +1943,10 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                               }
                             >
                               <InputOTPGroup>
-                                <InputOTPSlot index={0} />
-                                <InputOTPSlot index={1} />
-                                <InputOTPSlot index={2} />
-                                <InputOTPSlot index={3} />
+                                <InputOTPSlot index={0} className={accountOtpSlot} />
+                                <InputOTPSlot index={1} className={accountOtpSlot} />
+                                <InputOTPSlot index={2} className={accountOtpSlot} />
+                                <InputOTPSlot index={3} className={accountOtpSlot} />
                               </InputOTPGroup>
                             </InputOTP>
                           </div>
@@ -1940,7 +1964,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                             ariaLabel="Security question"
                             placeholder="Select a security question"
                             variant="form"
-                            triggerClassName={accountInput}
+                            triggerClassName={cn(accountInput, "h-auto min-h-[56px]")}
                             options={genericSecurityQuestions.map((question) => ({
                               value: question,
                               label: question,
@@ -1968,7 +1992,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                           whileTap={{ scale: 0.98 }}
                           onClick={handleSetupKnowledgeMfa}
                           disabled={mfaLoading}
-                          className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                          className={cn(accountModalBtnPrimary, "flex w-full items-center justify-center gap-2 disabled:opacity-50")}
                         >
                           {mfaLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                           Save & Enable
@@ -1977,7 +2001,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                         <button
                           type="button"
                           onClick={() => setMfaStep('method')}
-                          className="w-full py-2 text-sm text-zinc-400 hover:underline"
+                          className={accountMfaBackLink}
                         >
                           Back
                         </button>
@@ -1989,19 +2013,19 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                 {mfaStep === 'enroll' && mfaData ? (
                   <div className="space-y-6">
                     <div className="text-center">
-                      <p className="text-sm text-zinc-400 mb-4">
+                      <p className={cn(accountModalMuted, "mb-4")}>
                         Scan this QR code with your authenticator app (like Google Authenticator or Authy)
                       </p>
-                      <div className="flex justify-center mb-4">
+                      <div className="mb-4 flex justify-center">
                         {mfaData.qr_code && (
                           <img 
                             src={mfaData.qr_code.startsWith('data:') ? mfaData.qr_code : `data:image/svg+xml;utf-8,${encodeURIComponent(mfaData.qr_code)}`} 
                             alt="QR Code" 
-                            className="w-48 h-48 bg-white p-2 rounded-lg" 
+                            className="h-48 w-48 rounded-xl bg-white p-3 ring-1 ring-white/20" 
                           />
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 break-all">
+                      <p className={cn(accountModalMuted, "break-all text-xs")}>
                         Secret: {mfaData.secret}
                       </p>
                     </div>
@@ -2010,14 +2034,14 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setMfaStep('verify')}
-                      className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium"
+                      className={cn(accountModalBtnPrimary, "w-full")}
                     >
                       Next
                     </motion.button>
                   </div>
                 ) : mfaStep === 'enroll' ? (
                   <div className="flex justify-center py-8">
-                    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                    <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
                   </div>
                 ) : null}
 
@@ -2030,10 +2054,12 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                       <input
                         type="text"
                         value={mfaCode}
-                        onChange={(e) => setMfaCode(e.target.value)}
+                        onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                         placeholder="000000"
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-zinc-100 focus:ring-2 focus:ring-blue-500 outline-none text-center text-2xl tracking-widest transition-colors"
+                        className={accountMfaOtpInput}
                         maxLength={6}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
                       />
                     </div>
 
@@ -2042,7 +2068,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                       whileTap={{ scale: 0.98 }}
                       onClick={handleVerifyMfa}
                       disabled={mfaLoading || mfaCode.length !== 6}
-                      className="w-full py-3 rounded-xl bg-blue-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                      className={cn(accountModalBtnPrimary, "flex w-full items-center justify-center gap-2 disabled:opacity-50")}
                     >
                       {mfaLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                       Verify & Enable
@@ -2057,19 +2083,19 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
+              className={accountModalOverlay}
               onClick={() => setShowDisableAuthenticatorModal(false)}
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d14] p-6 shadow-2xl transition-colors duration-300"
+                className={accountModalPanel}
               >
-                <h3 className="text-xl font-bold text-zinc-100 mb-2">
+                <h3 className={cn(accountModalTitle, "mb-2")}>
                   Disable Authenticator
                 </h3>
-                <p className="text-sm text-zinc-400 mb-4">
+                <p className={cn(accountModalMuted, "mb-4")}>
                   Enter your current 6-digit authenticator code to disable authenticator-based 2FA.
                 </p>
                 <input
@@ -2077,14 +2103,16 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   value={disableAuthenticatorCode}
                   onChange={(e) => setDisableAuthenticatorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="000000"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-zinc-100 focus:ring-2 focus:ring-blue-500 outline-none text-center text-2xl tracking-widest transition-colors"
+                  className={accountMfaOtpInput}
                   maxLength={6}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
                 />
                 <div className="mt-4 flex gap-3">
                   <button
                     type="button"
                     onClick={() => setShowDisableAuthenticatorModal(false)}
-                    className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300"
+                    className={cn(accountModalBtnCancel, "flex-1")}
                     disabled={mfaLoading}
                   >
                     Cancel
@@ -2092,7 +2120,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   <button
                     type="button"
                     onClick={handleConfirmDisableAuthenticator}
-                    className="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                    className={cn(accountModalBtnDanger, "flex items-center justify-center gap-2")}
                     disabled={mfaLoading || disableAuthenticatorCode.length !== 6}
                   >
                     {mfaLoading && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -2107,23 +2135,23 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
+              className={accountModalOverlay}
               onClick={() => setShowDisableKnowledgeModal(false)}
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d14] p-6 shadow-2xl transition-colors duration-300"
+                className={accountModalPanel}
               >
-                <h3 className="text-xl font-bold text-zinc-100 mb-2">
+                <h3 className={cn(accountModalTitle, "mb-2")}>
                   Disable Knowledge 2FA
                 </h3>
-                <p className="text-sm text-zinc-400 mb-4">
+                <p className={cn(accountModalMuted, "mb-4")}>
                   Disable using PIN/security answer, or use an email authentication code instead.
                 </p>
 
-                <div className="flex gap-2 mb-4">
+                <div className="mb-4 flex gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -2133,11 +2161,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                       setDisableKnowledgeEmailCodeSent(false);
                       setDisableKnowledgeEmailOtpKey((k) => k + 1);
                     }}
-                    className={`flex-1 py-2 rounded-xl border transition-colors ${
-                      !disableKnowledgeUseEmail
-                        ? "border-blue-500 bg-blue-50 text-blue-700"
-                        : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800"
-                    }`}
+                    className={accountMfaSegmentBtn(!disableKnowledgeUseEmail)}
                   >
                     PIN / Answer
                   </button>
@@ -2152,11 +2176,10 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                       setDisableKnowledgeEmailCodeSent(false);
                       setDisableKnowledgeEmailOtpKey((k) => k + 1);
                     }}
-                    className={`flex-1 py-2 rounded-xl border transition-colors ${
-                      disableKnowledgeUseEmail
-                        ? "border-blue-500 bg-blue-50 text-blue-700"
-                        : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800"
-                    }`}
+                    className={cn(
+                      accountMfaSegmentBtn(disableKnowledgeUseEmail),
+                      !knowledge2fa.emailCodeEnabled && "cursor-not-allowed opacity-40"
+                    )}
                     disabled={!knowledge2fa.emailCodeEnabled}
                   >
                     Email Code
@@ -2169,22 +2192,14 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                       <button
                         type="button"
                         onClick={() => setDisableKnowledgeUsePin(true)}
-                        className={`flex-1 py-2 rounded-xl border transition-colors ${
-                          disableKnowledgeUsePin
-                            ? "border-blue-500 bg-blue-50 text-blue-700"
-                            : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800"
-                        }`}
+                        className={accountMfaSegmentBtn(disableKnowledgeUsePin)}
                       >
                         PIN
                       </button>
                       <button
                         type="button"
                         onClick={() => setDisableKnowledgeUsePin(false)}
-                        className={`flex-1 py-2 rounded-xl border transition-colors ${
-                          !disableKnowledgeUsePin
-                            ? "border-blue-500 bg-blue-50 text-blue-700"
-                            : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800"
-                        }`}
+                        className={accountMfaSegmentBtn(!disableKnowledgeUsePin)}
                       >
                         Security Answer
                       </button>
@@ -2192,7 +2207,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
 
                     {disableKnowledgeUsePin ? (
                       <div className="space-y-2">
-                        <div className="text-xs text-muted-foreground">
+                        <div className={accountModalMuted}>
                           Enter your 4-digit PIN
                         </div>
                         <div className="flex justify-center">
@@ -2204,17 +2219,17 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                             }
                           >
                             <InputOTPGroup>
-                              <InputOTPSlot index={0} />
-                              <InputOTPSlot index={1} />
-                              <InputOTPSlot index={2} />
-                              <InputOTPSlot index={3} />
+                              <InputOTPSlot index={0} className={accountOtpSlot} />
+                              <InputOTPSlot index={1} className={accountOtpSlot} />
+                              <InputOTPSlot index={2} className={accountOtpSlot} />
+                              <InputOTPSlot index={3} className={accountOtpSlot} />
                             </InputOTPGroup>
                           </InputOTP>
                         </div>
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        <div className="text-xs text-muted-foreground">
+                        <div className={accountModalMuted}>
                           Enter your security answer
                         </div>
                         <input
@@ -2229,7 +2244,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <p className="text-xs text-muted-foreground">
+                    <p className={accountModalMuted}>
                       We&apos;ll email a 6-digit authentication code to your account email.
                     </p>
 
@@ -2237,7 +2252,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                       type="button"
                       onClick={handleRequestDisableKnowledgeEmailCode}
                       disabled={mfaLoading}
-                      className="w-full py-2 rounded-xl bg-blue-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                      className={cn(accountModalBtnPrimary, "flex w-full items-center justify-center gap-2 disabled:opacity-50")}
                     >
                       {disableKnowledgeEmailCodeSent ? "Resend code" : "Send code"}
                     </button>
@@ -2250,12 +2265,12 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                         onChange={(value) => setDisableKnowledgeEmailCode(value)}
                       >
                         <InputOTPGroup>
-                          <InputOTPSlot index={0} />
-                          <InputOTPSlot index={1} />
-                          <InputOTPSlot index={2} />
-                          <InputOTPSlot index={3} />
-                          <InputOTPSlot index={4} />
-                          <InputOTPSlot index={5} />
+                          <InputOTPSlot index={0} className={accountOtpSlot} />
+                          <InputOTPSlot index={1} className={accountOtpSlot} />
+                          <InputOTPSlot index={2} className={accountOtpSlot} />
+                          <InputOTPSlot index={3} className={accountOtpSlot} />
+                          <InputOTPSlot index={4} className={accountOtpSlot} />
+                          <InputOTPSlot index={5} className={accountOtpSlot} />
                         </InputOTPGroup>
                       </InputOTP>
                     </div>
@@ -2266,7 +2281,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   <button
                     type="button"
                     onClick={() => setShowDisableKnowledgeModal(false)}
-                    className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300"
+                    className={cn(accountModalBtnCancel, "flex-1")}
                     disabled={mfaLoading}
                   >
                     Cancel
@@ -2274,7 +2289,7 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                   <button
                     type="button"
                     onClick={handleConfirmDisableKnowledge}
-                    className="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                    className={cn(accountModalBtnDanger, "flex items-center justify-center gap-2")}
                     disabled={
                       mfaLoading ||
                       (!disableKnowledgeUseEmail

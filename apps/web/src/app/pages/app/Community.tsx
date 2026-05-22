@@ -65,6 +65,8 @@ type FeedPost = {
   isByCurrentUser?: boolean;
   /** Present when the author shows a name (not Anonymous) — opens view profile. */
   authorUserId?: string | null;
+  /** Author profile is private — show hover hint instead of a profile link. */
+  authorProfilePrivate?: boolean;
   content: string;
   category: string;
   createdAt: string;
@@ -462,6 +464,7 @@ export function Community() {
   const [filterMyPostsOnly, setFilterMyPostsOnly] = useState(false);
   const [filterBookmarkedOnly, setFilterBookmarkedOnly] = useState(false);
   const [showNewPostModal, setShowNewPostModal] = useState(false);
+  const [privateProfileModalOpen, setPrivateProfileModalOpen] = useState(false);
   const [newPostContent, setNewPostContent] = useState("");
   const [newPostCategory, setNewPostCategory] = useState("General Discussion");
   const [newPostTags, setNewPostTags] = useState("");
@@ -1470,6 +1473,15 @@ export function Community() {
                                   >
                                     {headerLeft}
                                   </Link>
+                                ) : post.authorProfilePrivate ? (
+                                  <button
+                                    type="button"
+                                    className="min-w-0 flex-1 cursor-pointer rounded-xl text-left outline-none ring-offset-2 ring-offset-[#050816] transition-colors hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-violet-500/50"
+                                    onClick={() => setPrivateProfileModalOpen(true)}
+                                    aria-label={`${post.author.name} — private account`}
+                                  >
+                                    {headerLeft}
+                                  </button>
                                 ) : (
                                   headerLeft
                                 )}
@@ -2328,6 +2340,47 @@ export function Community() {
           </div>
         </div>
       </div>
+
+      {privateProfileModalOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#030308]/80 p-4 backdrop-blur-xl"
+          onClick={() => setPrivateProfileModalOpen(false)}
+          role="presentation"
+        >
+          <motion.div
+            initial={{ scale: 0.96, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-[28px] border border-white/10 bg-[#0e0e18]/95 p-8 text-center shadow-[0_0_80px_-20px_rgba(139,92,246,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="private-profile-modal-title"
+          >
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-violet-400/25 bg-violet-500/15 shadow-[0_0_32px_-8px_rgba(139,92,246,0.45)]">
+              <Lock className="h-6 w-6 text-violet-200/90" aria-hidden />
+            </div>
+            <h3
+              id="private-profile-modal-title"
+              className="text-lg font-semibold tracking-tight text-white"
+            >
+              Private account
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-[rgba(255,255,255,0.55)]">
+              This account is private.
+            </p>
+            <button
+              type="button"
+              className="mt-6 w-full rounded-2xl bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-500 px-6 py-3 text-sm font-semibold text-white shadow-[0_0_36px_rgba(192,38,211,0.35)] transition-shadow hover:shadow-[0_0_48px_rgba(192,38,211,0.5)]"
+              onClick={() => setPrivateProfileModalOpen(false)}
+            >
+              Got it
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
 
       {showNewPostModal && (
         <motion.div

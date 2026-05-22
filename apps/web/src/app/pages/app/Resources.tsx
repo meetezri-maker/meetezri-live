@@ -8,9 +8,9 @@ import {
   Heart,
   TrendingUp,
   ArrowLeft,
-  Loader2,
   ExternalLink,
 } from "lucide-react";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import { Link, useNavigate } from "react-router-dom";
 import { WELLNESS_TOOL_CATEGORIES } from "@/lib/wellnessToolCategories";
 import { api } from "@/lib/api";
@@ -44,10 +44,75 @@ import {
   resourcesPageVignette,
   resourcesReadBtn,
   resourcesSearchInput,
-  secondarySourceLabel,
 } from "@/app/pages/app/resources-library/resourcesLibraryUi";
 
 type Article = ReadingLibraryArticle;
+
+const RESOURCE_CARD_SKELETON_COUNT = 6;
+
+function ResourcesSkeleton() {
+  return (
+    <motion.div
+      className={resourcesPageAtmosphere}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      aria-busy="true"
+      aria-label="Loading reading library"
+    >
+      <motion.div
+        className={resourcesPageGlowTop}
+        aria-hidden
+        animate={{ opacity: [0.55, 0.85, 0.55] }}
+        transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <div className={resourcesPageFogMid} aria-hidden />
+      <motion.div
+        className={resourcesPageVignette}
+        aria-hidden
+        animate={{ opacity: [0.85, 1, 0.85] }}
+        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+      />
+
+      <div className="relative z-10 mx-auto w-full max-w-[min(100%,1400px)] px-4 pb-10 pt-5 sm:px-6 sm:pb-12 lg:px-8 lg:pt-6">
+        <Skeleton className="min-h-[220px] w-full rounded-[1.75rem] bg-white/[0.06] sm:min-h-[260px] lg:min-h-[300px]" />
+
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Skeleton className="h-11 min-h-[44px] w-full flex-1 rounded-full bg-white/[0.06]" />
+          <Skeleton className="h-11 min-h-[44px] w-full rounded-full bg-white/[0.06] sm:w-52" />
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-5 pb-8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+          {Array.from({ length: RESOURCE_CARD_SKELETON_COUNT }).map((_, i) => (
+            <div
+              key={i}
+              className="flex h-full flex-col overflow-hidden rounded-[1.4rem] border border-white/[0.07] bg-[linear-gradient(180deg,rgba(16,16,36,0.6)_0%,rgba(9,9,22,0.75)_100%)]"
+            >
+              <Skeleton className="h-[148px] w-full rounded-none bg-white/[0.06]" />
+              <div className="flex flex-1 flex-col gap-3 p-4 sm:p-[1.125rem]">
+                <Skeleton className="h-5 w-[80%] rounded-md bg-white/[0.06]" />
+                <Skeleton className="h-4 w-full rounded-md bg-white/[0.06]" />
+                <Skeleton className="h-4 w-full rounded-md bg-white/[0.06]" />
+                <Skeleton className="h-4 w-2/3 rounded-md bg-white/[0.06]" />
+                <div className="mt-1 flex gap-2">
+                  <Skeleton className="h-3.5 w-16 rounded-md bg-white/[0.06]" />
+                  <Skeleton className="h-3.5 w-20 rounded-md bg-white/[0.06]" />
+                  <Skeleton className="h-5 w-14 rounded-md bg-white/[0.06]" />
+                </div>
+                <Skeleton className="mt-2 h-11 w-full rounded-xl bg-white/[0.06]" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <footer className="pt-2 text-center">
+          <Skeleton className="mx-auto h-4 w-56 rounded-md bg-white/[0.06]" />
+          <Skeleton className="mx-auto mt-2 h-3 w-72 rounded-md bg-white/[0.06]" />
+        </footer>
+      </div>
+    </motion.div>
+  );
+}
 
 export function Resources() {
   const navigate = useNavigate();
@@ -106,6 +171,10 @@ export function Resources() {
     navigate(`/app/settings/resources/article/${encodeURIComponent(article.id)}`);
   };
 
+  if (loading) {
+    return <ResourcesSkeleton />;
+  }
+
   return (
     <motion.div
       className={resourcesPageAtmosphere}
@@ -128,33 +197,6 @@ export function Resources() {
       />
 
       <div className="relative z-10 mx-auto w-full max-w-[min(100%,1400px)] px-4 pb-10 pt-5 sm:px-6 sm:pb-12 lg:px-8 lg:pt-6">
-        {loading ? (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0b18]/75 backdrop-blur-md"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            aria-busy="true"
-            aria-label="Loading reading library"
-          >
-            <div className="rounded-2xl border border-white/[0.08] bg-[linear-gradient(180deg,rgba(18,18,40,0.98)_0%,rgba(10,10,24,0.99)_100%)] px-5 py-4 shadow-[0_0_48px_-12px_rgba(139,92,246,0.35)]">
-              <motion.div
-                className="flex items-center gap-3"
-                animate={{ opacity: [0.85, 1, 0.85] }}
-                transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-              >
-                <Loader2 className="h-5 w-5 animate-spin text-violet-300" aria-hidden />
-                <motion.div
-                  animate={{ opacity: [0.7, 1, 0.7] }}
-                  transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                >
-                  <p className="text-sm font-semibold text-white">Loading resources</p>
-                  <p className="text-xs text-[rgba(255,255,255,0.48)]">Preparing your reading library…</p>
-                </motion.div>
-              </motion.div>
-            </div>
-          </motion.div>
-        ) : null}
-
         {/* 1. Cinematic hero */}
         <section className={resourcesHeroCard} aria-labelledby="reading-library-title">
           <img
@@ -248,7 +290,7 @@ export function Resources() {
         </div>
 
         {/* 3. Resource grid */}
-        {!loading && filteredArticles.length === 0 ? (
+        {filteredArticles.length === 0 ? (
           <motion.div
             className="mt-8 rounded-[1.4rem] border border-dashed border-white/[0.12] bg-[linear-gradient(180deg,rgba(16,16,36,0.6)_0%,rgba(9,9,22,0.75)_100%)] px-6 py-16 text-center"
             initial={{ opacity: 0, y: 12 }}
@@ -270,7 +312,7 @@ export function Resources() {
               Reset filters
             </button>
           </motion.div>
-        ) : !loading ? (
+        ) : (
           <div className="mt-6 grid grid-cols-1 gap-5 pb-8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
             {filteredArticles.map((article, index) => {
               const { Icon: CategoryIcon } = categoryVisualsForReading(article.category);
@@ -312,20 +354,16 @@ export function Resources() {
                       >
                         {formatCategoryLabel(article.category)}
                       </span>
-                      {extraTags.length > 0 ? (
-                        extraTags.slice(0, 1).map((tag) => (
-                          <span
-                            key={tag}
-                            className="w-fit rounded-lg border border-white/10 bg-black/30 px-2 py-0.5 text-[9px] font-semibold tracking-[0.12em] text-white/70 uppercase"
-                          >
-                            {tag}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="w-fit rounded-lg border border-white/10 bg-black/30 px-2 py-0.5 text-[9px] font-semibold tracking-[0.12em] text-white/65 uppercase">
-                          {secondarySourceLabel(article.source)}
-                        </span>
-                      )}
+                      {extraTags.length > 0
+                        ? extraTags.slice(0, 1).map((tag) => (
+                            <span
+                              key={tag}
+                              className="w-fit rounded-lg border border-white/10 bg-black/30 px-2 py-0.5 text-[9px] font-semibold tracking-[0.12em] text-white/70 uppercase"
+                            >
+                              {tag}
+                            </span>
+                          ))
+                        : null}
                     </div>
 
                     <div className="absolute top-3 right-3">
@@ -429,7 +467,7 @@ export function Resources() {
               );
             })}
           </div>
-        ) : null}
+        )}
 
         {/* 4. Footer */}
         <footer className="pt-2 text-center">

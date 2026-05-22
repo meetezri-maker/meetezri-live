@@ -1,8 +1,12 @@
 /**
  * Solace — locked cinematic wellness shell (member app)
  * Use with class "solace-app" on layout root.
+ * Theme: html[data-ezri-theme="dark"|"light"] — dark sanctuary is default.
  */
-.solace-app {
+
+/* ─── Dark theme (explicit — current sanctuary UI) ───────────────────────── */
+html[data-ezri-theme="dark"] .solace-app,
+html:not([data-ezri-theme]) .solace-app {
   --solace-bg: #07080f;
   --solace-bg-elevated: #0c0e18;
   --solace-panel: rgba(18, 20, 32, 0.78);
@@ -10,15 +14,13 @@
   --solace-border: rgba(255, 255, 255, 0.07);
   --solace-text: rgba(244, 244, 245, 0.96);
   --solace-muted: rgba(161, 161, 170, 0.88);
-  --solace-purple: #a78bfa;
+  --solace-purple: var(--accent, #a78bfa);
   --solace-cyan: #22d3ee;
   --solace-amber: #fbbf24;
   --solace-rose: #fb7185;
+  --solace-accent: var(--accent, #ec4899);
   --solace-glow-purple: 0 0 42px rgba(139, 92, 246, 0.22);
   --solace-glow-cyan: 0 0 36px rgba(34, 211, 238, 0.16);
-  --solace-sidebar-w: 248px;
-
-  /* Design system foundation (Phase 1) — billing + shared surfaces */
   --solace-ds-bg-deep: #050816;
   --solace-ds-bg: #070a14;
   --solace-ds-bg-raised: #0b1020;
@@ -29,9 +31,276 @@
   --solace-ds-glow-cyan: rgba(34, 211, 238, 0.18);
   --solace-ds-text: #f7f3ff;
   --solace-ds-text-muted: #a7a1b8;
+  --solace-ds-shadow-cinematic: 0 40px 100px -48px rgba(0, 0, 0, 0.85),
+    0 0 60px -24px rgba(88, 28, 135, 0.35);
+  --solace-page-bg: linear-gradient(165deg, #0a0b18 0%, #090a16 42%, #0c0a18 100%);
+  --solace-card-bg: linear-gradient(180deg, rgba(18, 18, 40, 0.95) 0%, rgba(10, 10, 24, 0.98) 100%);
+  --solace-card-border: rgba(255, 255, 255, 0.05);
+  --solace-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 0 40px rgba(168, 85, 247, 0.06), 0 24px 64px -36px rgba(0, 0, 0, 0.72);
+  --background: var(--solace-bg);
+  --surface: var(--solace-panel);
+  --surface-elevated: var(--solace-bg-elevated);
+  --card: var(--solace-ds-surface);
+  --card-border: var(--solace-border);
+  --text-primary: var(--solace-text);
+  --text-secondary: var(--solace-muted);
+  --text-muted: var(--solace-ds-text-muted);
+  --accent-primary: #22d3ee;
+  --accent-secondary: #a78bfa;
+  --accent-warm: #fbbf24;
+  --button-primary: linear-gradient(135deg, #7c3aed 0%, #c026d3 100%);
+  --input-bg: rgba(12, 14, 30, 0.92);
+  --input-border: rgba(255, 255, 255, 0.1);
+}
+
+/* ─── Light theme — pastel lavender wellness ─────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app,
+html[data-theme="light"] .solace-app {
+  --solace-bg: #fbf8ff;
+  --solace-bg-elevated: #ffffff;
+  --solace-panel: rgba(255, 255, 255, 0.88);
+  --solace-panel-soft: #fbf8ff;
+  --solace-border: #e7ddfb;
+  --solace-text: #101828;
+  --solace-muted: #475467;
+  --solace-purple: #a78bfa;
+  --solace-cyan: #4ecdc4;
+  --solace-amber: #fbbf24;
+  --solace-rose: #ec4899;
+  --solace-accent: var(--accent, #ec4899);
+  --solace-glow-purple: 0 0 36px var(--glow-violet, rgba(167, 139, 250, 0.18));
+  --solace-glow-cyan: 0 0 32px var(--glow-teal, rgba(78, 205, 196, 0.16));
+  --solace-glow-pink: 0 0 32px var(--glow-pink, rgba(236, 72, 153, 0.16));
+  --solace-ds-bg-deep: #f6f0ff;
+  --solace-ds-bg: #faf7ff;
+  --solace-ds-bg-raised: #ffffff;
+  --solace-ds-surface: #ffffff;
+  --solace-ds-border-glow: rgba(167, 139, 250, 0.34);
+  --solace-ds-glow-purple: rgba(167, 139, 250, 0.18);
+  --solace-ds-glow-pink: rgba(236, 72, 153, 0.16);
+  --solace-ds-glow-cyan: rgba(78, 205, 196, 0.16);
+  --solace-ds-text: #101828;
+  --solace-ds-text-muted: #667085;
+  --solace-ds-shadow-cinematic:
+    0 16px 40px -20px rgba(16, 24, 40, 0.08), 0 0 40px -12px rgba(167, 139, 250, 0.14),
+    0 0 28px -14px rgba(236, 72, 153, 0.1);
+  --solace-page-bg: linear-gradient(135deg, #ffffff 0%, #fbf8ff 35%, #f4ecff 70%, #eef9f8 100%);
+  --solace-card-bg: linear-gradient(145deg, #ffffff 0%, #f7f2ff 100%);
+  --solace-card-border: #e7ddfb;
+  --solace-card-shadow:
+    0 8px 28px -14px rgba(16, 24, 40, 0.1), 0 0 24px -12px rgba(167, 139, 250, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --background: var(--solace-bg);
+  --surface: #faf7ff;
+  --surface-elevated: var(--solace-bg-elevated);
+  --card: #ffffff;
+  --card-soft: #fbf8ff;
+  --card-lavender: #f6f0ff;
+  --card-border: var(--solace-border);
+  --text-primary: #101828;
+  --text-secondary: #475467;
+  --text-muted: #667085;
+  --text-soft: #7a728e;
+  --accent-primary: #4ecdc4;
+  --accent-secondary: #a78bfa;
+  --accent-warm: #fbbf24;
+  --button-primary: linear-gradient(135deg, #ec4899, #a855f7);
+  --button-secondary-bg: #f6f0ff;
+  --button-secondary-text: #5b21b6;
+  --button-secondary-border: #d8c7f7;
+  --input-bg: #ffffff;
+  --input-border: #ddd0fa;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-app-header,
+html[data-theme="light"] .solace-app .solace-app-header {
+  background: var(--topbar-bg, rgba(255, 255, 255, 0.78));
+  border-bottom: 1px solid var(--topbar-border, #e7ddfb);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 4px 24px rgba(167, 139, 250, 0.08);
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-app-header button,
+html[data-theme="light"] .solace-app .solace-app-header button {
+  color: var(--topbar-icon, #475467);
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-app-header button:hover,
+html[data-theme="light"] .solace-app .solace-app-header button:hover {
+  background: rgba(167, 139, 250, 0.1);
+  color: #101828;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-sidebar-nav,
+html[data-theme="light"] .solace-app .solace-sidebar-nav {
+  color: #667085;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-sidebar-nav:hover,
+html[data-theme="light"] .solace-app .solace-sidebar-nav:hover {
+  background: rgba(167, 139, 250, 0.08);
+  color: #475467;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-sidebar-nav--active,
+html[data-theme="light"] .solace-app .solace-sidebar-nav--active {
+  color: #4c1d95;
+  background: linear-gradient(
+    135deg,
+    rgba(167, 139, 250, 0.22) 0%,
+    rgba(78, 205, 196, 0.14) 100%
+  );
+  border: 1px solid rgba(167, 139, 250, 0.45);
+  box-shadow: 0 0 20px rgba(167, 139, 250, 0.16);
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-sidebar-nav--active svg,
+html[data-theme="light"] .solace-app .solace-sidebar-nav--active svg {
+  color: #7c3aed;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-sidebar-profile,
+html[data-theme="light"] .solace-app .solace-sidebar-profile {
+  border-color: var(--border, #e7ddfb);
+  background: linear-gradient(180deg, #ffffff 0%, #f7f2ff 100%);
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-sidebar-profile p,
+html[data-theme="light"] .solace-app .solace-sidebar-profile p {
+  color: #101828;
+}
+
+html[data-ezri-theme="light"] .solace-scroll,
+html[data-theme="light"] .solace-scroll {
+  scrollbar-color: rgba(167, 139, 250, 0.45) rgba(167, 139, 250, 0.08);
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-mobile-nav,
+html[data-theme="light"] .solace-app .solace-mobile-nav {
+  background: var(--sidebar-bg, rgba(255, 255, 255, 0.92));
+  border-top-color: var(--solace-border);
+  box-shadow: 0 -8px 32px rgba(167, 139, 250, 0.1);
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-mobile-nav-tab--active,
+html[data-theme="light"] .solace-app .solace-mobile-nav-tab--active {
+  border-color: rgba(167, 139, 250, 0.45);
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.18), rgba(78, 205, 196, 0.1));
+  color: #4c1d95;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-mobile-nav-tab,
+html[data-theme="light"] .solace-app .solace-mobile-nav-tab {
+  color: #667085;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-mobile-nav-label--active,
+html[data-theme="light"] .solace-app .solace-mobile-nav-label--active {
+  color: #101828;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-sidebar-shell,
+html[data-theme="light"] .solace-app .solace-sidebar-shell {
+  background: var(--sidebar-bg, rgba(255, 255, 255, 0.82));
+  border-color: var(--solace-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--solace-glow-purple), 0 12px 40px -18px rgba(16, 24, 40, 0.08);
+}
+
+html[data-ezri-theme="dark"] .solace-app .solace-sidebar-shell,
+html:not([data-ezri-theme]) .solace-app .solace-sidebar-shell {
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: var(--solace-glow-purple), 0 20px 60px -28px rgba(0, 0, 0, 0.75);
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-glass-card,
+html[data-theme="light"] .solace-app .solace-glass-card {
+  background: var(--rail-card-bg, linear-gradient(145deg, #ffffff, #f7f2ff));
+  border-color: var(--rail-card-border, #e7ddfb);
+  box-shadow:
+    0 0 0 1px rgba(167, 139, 250, 0.14),
+    0 0 32px -14px var(--solace-ds-glow-purple),
+    var(--solace-ds-shadow-cinematic),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-glass-card::before {
+  background: radial-gradient(
+    ellipse 80% 50% at 50% -20%,
+    rgba(167, 139, 250, 0.06),
+    transparent 55%
+  );
+}
+
+.solace-app {
+  --solace-sidebar-w: 248px;
   --solace-ds-radius-card: 28px;
   --solace-ds-radius-rail: 24px;
-  --solace-ds-shadow-cinematic: 0 40px 100px -48px rgba(0, 0, 0, 0.85), 0 0 60px -24px rgba(88, 28, 135, 0.35);
+}
+
+/* Opt-in surface: readable text on theme-aware backgrounds */
+.solace-app .solace-surface {
+  color: var(--solace-text);
+}
+
+.solace-app .solace-surface-muted {
+  color: var(--solace-muted);
+}
+
+/* Status tints — soft wellness backgrounds */
+html[data-ezri-theme="light"] .solace-app .solace-status-success {
+  background: #e9fbf9;
+  border-color: #99f6e4;
+  color: #0f766e;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-status-warning {
+  background: #fff7d6;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-status-error {
+  background: #ffe4e6;
+  border-color: #fecdd3;
+  color: #9f1239;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-status-info {
+  background: #f3ecff;
+  border-color: #e6daff;
+  color: #5b21b6;
+}
+
+html[data-ezri-theme="dark"] .solace-app .solace-status-success,
+html:not([data-ezri-theme]) .solace-app .solace-status-success {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(52, 211, 153, 0.25);
+  color: #6ee7b7;
+}
+
+html[data-ezri-theme="dark"] .solace-app .solace-status-warning,
+html:not([data-ezri-theme]) .solace-app .solace-status-warning {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(251, 191, 36, 0.25);
+  color: #fcd34d;
+}
+
+html[data-ezri-theme="dark"] .solace-app .solace-status-error,
+html:not([data-ezri-theme]) .solace-app .solace-status-error {
+  background: rgba(244, 63, 94, 0.12);
+  border-color: rgba(251, 113, 133, 0.25);
+  color: #fda4af;
+}
+
+html[data-ezri-theme="dark"] .solace-app .solace-status-info,
+html:not([data-ezri-theme]) .solace-app .solace-status-info {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(167, 139, 250, 0.25);
+  color: #c4b5fd;
 }
 
 /* Custom dark scrollbar (WebKit + thin standard) */
@@ -140,6 +409,13 @@
 }
 
 /* ─── Sonner — luxury wellness toast (auth + verify flows) ───────────────── */
+html[data-ezri-theme="light"] [data-sonner-toaster] [data-sonner-toast] {
+  border: 1px solid #e6daff !important;
+  background: #ffffff !important;
+  color: #0a0f1e !important;
+  box-shadow: 0 12px 40px -16px rgba(15, 23, 42, 0.12), 0 0 24px -12px rgba(167, 139, 250, 0.15) !important;
+}
+
 [data-sonner-toaster] [data-sonner-toast] {
   border-radius: 22px !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;

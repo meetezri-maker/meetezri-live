@@ -33,6 +33,10 @@ import { useNotifications } from "@/app/contexts/NotificationsContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  APPEARANCE_SETTINGS_VERSION,
+  applyThemeToDocument,
+} from "@/app/pages/app/appearance-settings/appearanceConstants";
 import { formatSubscriptionPlanLabel } from "@/app/pages/app/profile/profileUi";
 import {
   AlertDialog,
@@ -44,6 +48,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/app/components/ui/alert-dialog";
+import {
+  modalBodyText,
+  modalDestructiveButton,
+  modalSecondaryButton,
+  modalTitle,
+} from "@/lib/modalTheme";
 import {
   SETTINGS_HERO_IMG,
   SETTINGS_HELP_IMG,
@@ -197,17 +207,16 @@ export function SettingsHub() {
       if (key === "darkMode") {
         const currentSettings = readAppearanceSettings();
         const newTheme = currentSettings.theme === "dark" ? "light" : "dark";
-        const newSettings = { ...currentSettings, theme: newTheme };
+        const newSettings = {
+          ...currentSettings,
+          theme: newTheme,
+          appearanceVersion: APPEARANCE_SETTINGS_VERSION,
+        };
         localStorage.setItem(appearanceStorageKey, JSON.stringify(newSettings));
-
-        if (newTheme === "dark") {
-          document.documentElement.classList.add("dark");
-        } else {
-          document.documentElement.classList.remove("dark");
-        }
+        applyThemeToDocument(newTheme === "light" ? "light" : "dark");
 
         window.dispatchEvent(new CustomEvent("ezri-appearance-change", { detail: newSettings }));
-        toast.success(`Dark mode ${newTheme === "dark" ? "enabled" : "disabled"}`);
+        toast.success(newTheme === "dark" ? "Sanctuary theme restored" : "Light theme applied");
       } else {
         const currentPrefs = profile?.notification_preferences || {};
         const setting = quickSettings.find((s) => s.key === key);
@@ -244,7 +253,7 @@ export function SettingsHub() {
   const accountSections: SettingSection[] = [
     {
       id: "account",
-      title: "Account settings",
+      title: "Account Settings",
       description: "Manage your profile, email, and password",
       icon: User,
       tone: "violet",
@@ -252,7 +261,7 @@ export function SettingsHub() {
     },
     {
       id: "privacy",
-      title: "Privacy & security",
+      title: "Privacy & Security",
       description: "Control your data, privacy settings, and security",
       icon: Shield,
       tone: "pink",
@@ -285,7 +294,7 @@ export function SettingsHub() {
     },
     {
       id: "change-avatar",
-      title: "Change Solace avatar",
+      title: "Change Solace Avatar",
       description: "Switch to a different avatar for your talks",
       icon: Brain,
       tone: "blue",
@@ -293,7 +302,7 @@ export function SettingsHub() {
     },
     {
       id: "resources",
-      title: "Resources library",
+      title: "Resources Library",
       description: "Browse articles, videos, and wellness exercises",
       icon: BookOpen,
       tone: "violet",
@@ -304,7 +313,7 @@ export function SettingsHub() {
   const wellbeingSections: SettingSection[] = [
     {
       id: "emergency-contacts",
-      title: "Emergency contacts",
+      title: "Emergency Contacts",
       description: "Add trusted contacts who get notified",
       icon: Phone,
       tone: "rose",
@@ -312,7 +321,7 @@ export function SettingsHub() {
     },
     {
       id: "wellness-plan",
-      title: "Wellness plan",
+      title: "Wellness Plan",
       description: "Personalized wellness plan builder",
       icon: FileHeart,
       tone: "orange",
@@ -320,7 +329,7 @@ export function SettingsHub() {
     },
     {
       id: "safety-insights",
-      title: "Safety insights",
+      title: "Safety Insights",
       description: "Your safety score, patterns, recommendations",
       icon: TrendingUp,
       tone: "emerald",
@@ -328,7 +337,7 @@ export function SettingsHub() {
     },
     {
       id: "emergency-resources",
-      title: "Emergency resources",
+      title: "Emergency Resources",
       description: "International hotlines and local resources",
       icon: AlertCircle,
       tone: "rose",
@@ -339,7 +348,7 @@ export function SettingsHub() {
   const systemToolCards: SettingSection[] = [
     {
       id: "resource-analytics",
-      title: "Resource analytics",
+      title: "Resource Analytics",
       description: "Track which resources you use most",
       icon: BarChart3,
       tone: "violet",
@@ -347,7 +356,7 @@ export function SettingsHub() {
     },
     {
       id: "emergency-notifications",
-      title: "Emergency notifications",
+      title: "Emergency Notifications",
       description: "Safety-related notifications & alerts",
       icon: History,
       tone: "blue",
@@ -355,7 +364,7 @@ export function SettingsHub() {
     },
     {
       id: "cooldown-screen",
-      title: "Cooldown screen",
+      title: "Cooldown Screen",
       description: "Recovery exercises after tough talks",
       icon: Wind,
       tone: "cyan",
@@ -486,7 +495,7 @@ export function SettingsHub() {
                     <HelpCircle className="h-5 w-5" aria-hidden />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-[rgba(255,255,255,0.94)]">Help & support</p>
+                    <p className="font-semibold text-[rgba(255,255,255,0.94)]">Help & Support</p>
                     <p className="mt-0.5 text-xs text-[rgba(255,255,255,0.48)]">
                       Get help, contact support, and FAQs
                     </p>
@@ -607,7 +616,7 @@ export function SettingsHub() {
                     We use advanced encryption to keep your information private and secure.
                   </p>
                   <Link
-                    to="/privacy"
+                    to="/app/settings/privacy"
                     className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-violet-300 transition hover:text-violet-200"
                   >
                     Learn more
@@ -627,18 +636,29 @@ export function SettingsHub() {
           setShowLogoutModal(open);
         }}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Log out?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to log out of your account?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={logoutLoading}>Cancel</AlertDialogCancel>
+        <AlertDialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
+          <div className="p-6 pb-5">
+            <div className="flex items-start gap-4">
+              <div className={settingsIconChip("rose")}>
+                <LogOut className="h-5 w-5" aria-hidden />
+              </div>
+              <AlertDialogHeader className="min-w-0 flex-1 gap-1.5 text-left">
+                <AlertDialogTitle className={cn(modalTitle, "text-xl")}>
+                  Log out?
+                </AlertDialogTitle>
+                <AlertDialogDescription className={modalBodyText}>
+                  Are you sure you want to log out of your account? You can sign back in anytime.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+            </div>
+          </div>
+          <AlertDialogFooter className="flex-row justify-end gap-3 border-t border-white/[0.08] bg-black/20 px-6 py-4 sm:justify-end">
+            <AlertDialogCancel disabled={logoutLoading} className={modalSecondaryButton}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmLogout}
-              className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
+              className={modalDestructiveButton}
               disabled={logoutLoading}
             >
               {logoutLoading ? (

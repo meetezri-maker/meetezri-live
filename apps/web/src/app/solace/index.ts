@@ -43,3 +43,5 @@ export type {
   SolaceSelectProps,
   SolaceSelectVariant,
 } from "./SolaceSelect";
+export { SolaceDateOfBirthPicker } from "./SolaceDateOfBirthPicker";
+export type { SolaceDateOfBirthPickerProps } from "./SolaceDateOfBirthPicker";

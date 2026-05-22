@@ -4,6 +4,9 @@ import {
   getMeHandler,
   updateProfileHandler,
   deleteUserHandler,
+  deactivateAccountHandler,
+  requestAccountActivationHandler,
+  confirmAccountActivationHandler,
   exportUserDataHandler,
   getCreditsHandler,
   getRecentActivityHandler,
@@ -201,6 +204,27 @@ export async function userRoutes(fastify: FastifyInstance) {
       preHandler: [fastify.authenticate],
     },
     deleteUserHandler
+  );
+
+  fastify.post(
+    '/me/deactivate',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    deactivateAccountHandler
+  );
+
+  fastify.post(
+    '/activation/request',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    requestAccountActivationHandler
+  );
+
+  fastify.post(
+    '/activation/confirm',
+    confirmAccountActivationHandler
   );
 
   fastify.get(

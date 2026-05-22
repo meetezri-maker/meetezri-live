@@ -82,6 +82,13 @@ export interface PhoneInputProps {
   buttonClassName?: string
   inputClassName?: string
   placeholder?: string
+  /** Dark sanctuary styling for the country dropdown panel */
+  popoverClassName?: string
+  commandClassName?: string
+  commandInputClassName?: string
+  commandListClassName?: string
+  commandItemClassName?: string
+  commandEmptyClassName?: string
 }
 
 const MAX_PHONE_DIGITS = 12
@@ -115,6 +122,12 @@ export function PhoneInput({
   buttonClassName,
   inputClassName,
   placeholder,
+  popoverClassName,
+  commandClassName,
+  commandInputClassName,
+  commandListClassName,
+  commandItemClassName,
+  commandEmptyClassName,
 }: PhoneInputProps) {
   const [open, setOpen] = React.useState(false)
   
@@ -180,16 +193,25 @@ export function PhoneInput({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="z-[200] w-[300px] p-0" align="start">
-          <Command>
-            <CommandInput placeholder="Search country..." />
-            <CommandList>
-              <CommandEmpty>No country found.</CommandEmpty>
+        <PopoverContent
+          className={cn("z-[200] w-[300px] p-0", popoverClassName)}
+          align="start"
+        >
+          <Command className={commandClassName}>
+            <CommandInput
+              placeholder="Search country..."
+              className={commandInputClassName}
+            />
+            <CommandList className={commandListClassName}>
+              <CommandEmpty className={commandEmptyClassName}>
+                No country found.
+              </CommandEmpty>
               <CommandGroup>
                 {countries.map((country) => (
                   <CommandItem
                     key={country.code + country.value}
                     value={country.label} // Search by label
+                    className={commandItemClassName}
                     onSelect={() => handleCountrySelect(country.value)}
                   >
                     <Check

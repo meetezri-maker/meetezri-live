@@ -32,7 +32,7 @@ export function ResourceAnalyticsRail({
   emotionalEngagement,
 }: ResourceAnalyticsRailProps) {
   return (
-    <aside className="space-y-5 xl:space-y-6">
+    <aside className="min-w-0 space-y-5 xl:sticky xl:top-4 xl:self-start xl:space-y-6">
       {/* 1. Your Wellness Trends */}
       <section className={wellnessPlanRailCard}>
         <h2 className="font-serif text-lg font-light text-white">Your Wellness Trends</h2>

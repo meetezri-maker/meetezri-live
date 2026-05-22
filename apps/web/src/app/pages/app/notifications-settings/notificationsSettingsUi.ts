@@ -13,8 +13,7 @@ export const NOTIFICATIONS_FOREST_IMG = "/community/scene-forest.jpg";
 export const NOTIFICATIONS_WATER_IMG = "/community/scene-water.jpg";
 
 export const notificationsPageAtmosphere = cn(
-  settingsPageAtmosphere,
-  "bg-[linear-gradient(165deg,#0a0b18_0%,#090a16_42%,#0c0a18_100%)]"
+  settingsPageAtmosphere
 );
 
 export const notificationsPageGlowTop = settingsPageGlowTop;

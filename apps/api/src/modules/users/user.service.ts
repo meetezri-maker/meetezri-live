@@ -105,6 +105,14 @@ const KNOWLEDGE_RECOVERY_TTL_MS = 10 * 60 * 1000;
 const KNOWLEDGE_RECOVERY_RESEND_MS = 60 * 1000;
 const KNOWLEDGE_RECOVERY_MAX_ATTEMPTS = 5;
 
+const ACCOUNT_ACTIVATION_TTL_MS = 24 * 60 * 60 * 1000;
+const ACCOUNT_ACTIVATION_RESEND_MS = 60 * 1000;
+const accountActivationTokenMap = new Map<
+  string,
+  { userId: string; expiresAt: number }
+>();
+const accountActivationResendMap = new Map<string, number>();
+
 function hashSecret(secret: string, salt: string): string {
   return pbkdf2Sync(secret, salt, 120000, 32, 'sha256').toString('hex');
 }
@@ -1445,6 +1453,21 @@ export async function createCrisisEventFromDetection(input: {
   return event;
 }
 
+function mergeProfileJsonField(
+  existing: unknown,
+  incoming: unknown
+): Record<string, unknown> {
+  const base =
+    existing && typeof existing === 'object' && !Array.isArray(existing)
+      ? { ...(existing as Record<string, unknown>) }
+      : {};
+  const patch =
+    incoming && typeof incoming === 'object' && !Array.isArray(incoming)
+      ? (incoming as Record<string, unknown>)
+      : {};
+  return { ...base, ...patch };
+}
+
 export async function updateProfile(userId: string, data: UpdateProfileInput) {
   const {
     emergency_contact_name,
@@ -1454,6 +1477,28 @@ export async function updateProfile(userId: string, data: UpdateProfileInput) {
     brain_health_settings,
     ...profileForPrisma
   } = data;
+
+  if (
+    profileForPrisma.privacy_settings !== undefined ||
+    profileForPrisma.notification_preferences !== undefined
+  ) {
+    const existing = await prisma.profiles.findUnique({
+      where: { id: userId },
+      select: { privacy_settings: true, notification_preferences: true },
+    });
+    if (profileForPrisma.privacy_settings !== undefined) {
+      profileForPrisma.privacy_settings = mergeProfileJsonField(
+        existing?.privacy_settings,
+        profileForPrisma.privacy_settings
+      ) as UpdateProfileInput['privacy_settings'];
+    }
+    if (profileForPrisma.notification_preferences !== undefined) {
+      profileForPrisma.notification_preferences = mergeProfileJsonField(
+        existing?.notification_preferences,
+        profileForPrisma.notification_preferences
+      ) as UpdateProfileInput['notification_preferences'];
+    }
+  }
 
   console.log("Updating profile for user:", userId);
   console.log("Emergency Contact Data:", { emergency_contact_name, emergency_contact_phone, emergency_contact_relationship });
@@ -1576,6 +1621,113 @@ export async function completeOnboarding(userId: string, data: OnboardingInput) 
 
   invalidateUserProfileCache(userId);
   return getProfile(userId);
+}
+
+export async function deactivateAccount(userId: string) {
+  const profile = await prisma.profiles.findUnique({
+    where: { id: userId },
+    select: { account_status: true },
+  });
+  if (!profile) {
+    const err = new Error('Profile not found');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+  if (profile.account_status === 'inactive') {
+    return { account_status: 'inactive' as const, alreadyInactive: true };
+  }
+
+  await prisma.profiles.update({
+    where: { id: userId },
+    data: { account_status: 'inactive' },
+  });
+  invalidateUserProfileCache(userId);
+  return { account_status: 'inactive' as const };
+}
+
+export async function requestAccountActivation(userId: string, webBaseUrl: string) {
+  const profile = await prisma.profiles.findUnique({
+    where: { id: userId },
+    select: { account_status: true },
+  });
+  if (!profile) {
+    const err = new Error('Profile not found');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+  if (profile.account_status !== 'inactive') {
+    const err = new Error('Account is not deactivated');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const email = await getUserEmail(userId);
+  if (!email) {
+    const err = new Error('Email not found for account');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const now = Date.now();
+  const lastSent = accountActivationResendMap.get(userId);
+  if (lastSent && now - lastSent < ACCOUNT_ACTIVATION_RESEND_MS) {
+    const waitSeconds = Math.ceil((ACCOUNT_ACTIVATION_RESEND_MS - (now - lastSent)) / 1000);
+    const err = new Error(`Please wait ${waitSeconds}s before requesting another activation email`);
+    (err as any).statusCode = 429;
+    throw err;
+  }
+
+  const token = randomBytes(32).toString('hex');
+  accountActivationTokenMap.set(token, {
+    userId,
+    expiresAt: now + ACCOUNT_ACTIVATION_TTL_MS,
+  });
+  accountActivationResendMap.set(userId, now);
+
+  const activationUrl = `${webBaseUrl.replace(/\/$/, '')}/auth/activate-account?token=${encodeURIComponent(token)}`;
+  const subject = 'Activate your Solace account';
+  const html = `
+    <p>We received a request to reactivate your Solace account.</p>
+    <p><a href="${activationUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 20px;border-radius:999px;background:linear-gradient(90deg,#7C3AED,#EC4899);color:#fff;text-decoration:none;font-weight:600;">Activate my account</a></p>
+    <p>Or copy this link into your browser:</p>
+    <p style="word-break:break-all;color:#6b7280;">${activationUrl}</p>
+    <p>This link expires in 24 hours. If you did not request this, you can ignore this email.</p>
+  `;
+  const text = `Activate your Solace account: ${activationUrl}\n\nThis link expires in 24 hours.`;
+
+  await emailService.sendEmail(email, subject, html, text);
+  return { sent: true, email };
+}
+
+export async function confirmAccountActivation(token: string) {
+  const trimmed = String(token || '').trim();
+  if (!trimmed || trimmed.length < 32) {
+    const err = new Error('Invalid activation link');
+    (err as any).statusCode = 400;
+    throw err;
+  }
+
+  const record = accountActivationTokenMap.get(trimmed);
+  if (!record) {
+    const err = new Error('Activation link is invalid or has already been used');
+    (err as any).statusCode = 404;
+    throw err;
+  }
+
+  if (Date.now() > record.expiresAt) {
+    accountActivationTokenMap.delete(trimmed);
+    const err = new Error('Activation link has expired. Request a new one after signing in.');
+    (err as any).statusCode = 401;
+    throw err;
+  }
+
+  await prisma.profiles.update({
+    where: { id: record.userId },
+    data: { account_status: 'active' },
+  });
+  accountActivationTokenMap.delete(trimmed);
+  invalidateUserProfileCache(record.userId);
+  return { activated: true, account_status: 'active' as const };
 }
 
 export async function deleteUser(userId: string) {

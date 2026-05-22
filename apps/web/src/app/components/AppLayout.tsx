@@ -16,6 +16,13 @@ import { useNotifications } from "../contexts/NotificationsContext";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import {
+  applyAccentColorToDocument,
+  applyThemeToDocument,
+  resolveAppearanceTheme,
+  type AppearanceTheme,
+} from "@/app/pages/app/appearance-settings/appearanceConstants";
+import { modalDestructiveButton } from "@/lib/modalTheme";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -51,7 +58,7 @@ export function AppLayout() {
     const defaults = {
       backgroundStyle: "gradient",
       compactMode: false,
-      theme: "light",
+      theme: "dark",
       accentColor: "pink"
     };
 
@@ -86,14 +93,14 @@ export function AppLayout() {
         return {
           backgroundStyle: parsed.backgroundStyle || "gradient",
           compactMode: Boolean(parsed.compactMode),
-          theme: parsed.theme || "light",
-          accentColor: parsed.accentColor || "pink"
+          theme: resolveAppearanceTheme(parsed.theme, parsed.appearanceVersion),
+          accentColor: parsed.accentColor || "pink",
         };
       } catch {
         return defaults;
       }
     }
-    
+
     return defaults;
   });
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -110,58 +117,27 @@ export function AppLayout() {
         setAppearance({
           backgroundStyle: parsed.backgroundStyle || "gradient",
           compactMode: Boolean(parsed.compactMode),
-          theme: parsed.theme || "light",
-          accentColor: parsed.accentColor || "pink"
+          theme: resolveAppearanceTheme(parsed.theme, parsed.appearanceVersion),
+          accentColor: parsed.accentColor || "pink",
         });
       } catch {
         setAppearance({
           backgroundStyle: "gradient",
           compactMode: false,
-          theme: "light",
-          accentColor: "pink"
+          theme: "dark",
+          accentColor: "pink",
         });
       }
     }
   }, [appearanceStorageKey]);
 
-  // Apply theme class when appearance.theme changes
   useEffect(() => {
-    if (typeof document === "undefined") return;
-    const root = document.documentElement;
-
-    const cleanup = () => {
-      root.classList.remove("dark");
-    };
-
-    if (appearance.theme === "auto") {
-      if (typeof window === "undefined" || !window.matchMedia) {
-        root.classList.remove("dark");
-        return cleanup;
-      }
-      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      const applyTheme = (isDark: boolean) => {
-        if (isDark) root.classList.add("dark");
-        else root.classList.remove("dark");
-      };
-      applyTheme(mediaQuery.matches);
-      
-      const listener = (event: MediaQueryListEvent) => applyTheme(event.matches);
-      mediaQuery.addEventListener("change", listener);
-      return () => {
-        mediaQuery.removeEventListener("change", listener);
-        cleanup();
-      };
-    }
-
-    if (appearance.theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-    
-    // Do NOT return cleanup here. ThemeManager handles removal on route change.
-    // Returning cleanup causes flash when this component updates or re-renders.
+    applyThemeToDocument(appearance.theme as AppearanceTheme);
   }, [appearance.theme]);
+
+  useEffect(() => {
+    applyAccentColorToDocument(appearance.accentColor);
+  }, [appearance.accentColor]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -177,7 +153,10 @@ export function AppLayout() {
             : prev.backgroundStyle,
         compactMode:
           typeof detail.compactMode === "boolean" ? detail.compactMode : prev.compactMode,
-        theme: typeof detail.theme === "string" ? detail.theme : prev.theme,
+        theme:
+          typeof detail.theme === "string"
+            ? resolveAppearanceTheme(detail.theme, detail.appearanceVersion)
+            : prev.theme,
         accentColor:
           typeof detail.accentColor === "string" ? detail.accentColor : prev.accentColor,
       }));
@@ -236,7 +215,7 @@ export function AppLayout() {
       <motion.header
         initial={{ y: -100 }}
         animate={{ y: 0 }}
-        className="sticky top-0 z-40 border-b border-white/[0.08] bg-[color-mix(in_oklab,var(--solace-bg-elevated)_92%,transparent)] shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-xl"
+        className="solace-app-header sticky top-0 z-40 border-b border-[color:var(--solace-border)] bg-[color-mix(in_oklab,var(--solace-bg-elevated)_92%,transparent)] shadow-[var(--solace-ds-shadow-cinematic)] backdrop-blur-xl print:hidden"
       >
         <div
           className={`mx-auto flex items-center justify-between ${headerInnerClass} ${headerHeightClass}`}
@@ -264,7 +243,7 @@ export function AppLayout() {
                 type="button"
                 whileHover={{ scale: 1.06 }}
                 whileTap={{ scale: 0.94 }}
-                className="relative rounded-full p-2.5 text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
+                className="relative rounded-full p-2.5 text-[var(--solace-muted)] transition-colors hover:bg-[color-mix(in_srgb,var(--solace-text)_6%,transparent)] hover:text-[var(--solace-text)]"
               >
                 <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
@@ -278,7 +257,7 @@ export function AppLayout() {
                 type="button"
                 whileHover={{ scale: 1.06, rotate: 90 }}
                 whileTap={{ scale: 0.94 }}
-                className="rounded-full p-2.5 text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
+                className="rounded-full p-2.5 text-[var(--solace-muted)] transition-colors hover:bg-[color-mix(in_srgb,var(--solace-text)_6%,transparent)] hover:text-[var(--solace-text)]"
               >
                 <Settings className="h-5 w-5" />
               </motion.button>
@@ -299,18 +278,18 @@ export function AppLayout() {
       </motion.header>
 
       <main
-        className={`solace-scroll flex-1 min-h-0 overflow-y-auto overscroll-contain antialiased ${mainPaddingClass}`}
+        className={`solace-scroll flex-1 min-h-0 overflow-y-auto overscroll-contain antialiased print:!p-0 print:!pl-0 ${mainPaddingClass}`}
       >
         {isUnverified && (
-          <div className="m-4 rounded-xl border border-amber-500/25 bg-amber-950/35 p-4 shadow-[0_0_32px_rgba(245,158,11,0.12)]">
+          <div className="solace-status-warning m-4 rounded-xl border p-4">
             <div className="flex gap-3">
-              <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400" aria-hidden />
-              <p className="text-sm text-amber-100/90">
+              <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden />
+              <p className="text-sm">
                 Your email address is not verified. Please check your inbox for the verification link.
                 <button
                   type="button"
                   onClick={resendVerification}
-                  className="ml-2 font-medium text-amber-200 underline underline-offset-2 hover:text-white"
+                  className="ml-2 font-medium underline underline-offset-2 opacity-90 hover:opacity-100"
                 >
                   Resend verification email
                 </button>
@@ -325,9 +304,9 @@ export function AppLayout() {
 
       {/* Environmental sidebar — desktop / tablet */}
       <aside
-        className={`pointer-events-none fixed bottom-3 left-3 z-30 hidden w-[var(--solace-sidebar-w)] lg:block ${compact ? "top-[calc(3.5rem+0.5rem)]" : "top-[calc(4rem+0.5rem)]"}`}
+        className={`pointer-events-none fixed bottom-3 left-3 z-30 hidden w-[var(--solace-sidebar-w)] print:hidden lg:block ${compact ? "top-[calc(3.5rem+0.5rem)]" : "top-[calc(4rem+0.5rem)]"}`}
       >
-        <div className="pointer-events-auto flex h-full flex-col overflow-hidden rounded-2xl border border-white/[0.09] bg-[color-mix(in_oklab,var(--solace-panel)_96%,transparent)] shadow-[var(--solace-glow-purple),0_20px_60px_-28px_rgba(0,0,0,0.75)] backdrop-blur-xl">
+        <div className="solace-sidebar-shell pointer-events-auto flex h-full flex-col overflow-hidden rounded-2xl border bg-[color-mix(in_oklab,var(--solace-panel)_96%,transparent)] backdrop-blur-xl print:hidden">
           <SolaceSidebar />
         </div>
       </aside>
@@ -350,7 +329,7 @@ export function AppLayout() {
             <AlertDialogCancel disabled={logoutLoading}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmLogout}
-              className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
+              className={modalDestructiveButton}
               disabled={logoutLoading}
             >
               {logoutLoading ? (

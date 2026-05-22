@@ -96,16 +96,16 @@ export function SolaceSidebar() {
               whileHover={{ x: 2 }}
               transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
               className={cn(
-                "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-all duration-300",
+                "solace-sidebar-nav flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-all duration-300",
                 active
-                  ? "bg-gradient-to-r from-violet-500/20 to-fuchsia-500/10 text-[rgba(255,255,255,0.96)] shadow-[0_0_32px_rgba(139,92,246,0.22),inset_0_0_0_1px_rgba(167,139,250,0.32)]"
-                  : "text-[rgba(255,255,255,0.55)] hover:bg-white/[0.04] hover:text-[rgba(255,255,255,0.82)]"
+                  ? "solace-sidebar-nav--active bg-gradient-to-r from-violet-500/20 to-fuchsia-500/10 text-[var(--solace-text)] shadow-[0_0_32px_rgba(139,92,246,0.22),inset_0_0_0_1px_rgba(167,139,250,0.32)]"
+                  : "text-[var(--solace-muted)] hover:bg-[color-mix(in_srgb,var(--solace-text)_6%,transparent)] hover:text-[var(--solace-text)]"
               )}
             >
               <Icon
                 className={cn(
                   "h-[18px] w-[18px] shrink-0",
-                  active ? "text-violet-300" : "text-zinc-500"
+                  active ? "text-[color:var(--accent-secondary,#a78bfa)]" : "text-[var(--solace-muted)]"
                 )}
               />
               <span className="truncate">{item.label}</span>
@@ -115,7 +115,7 @@ export function SolaceSidebar() {
       })}
 
       <div className="mt-auto space-y-3 border-t border-white/[0.06] pt-3">
-        <div className="rounded-xl border border-white/[0.06] bg-[linear-gradient(180deg,rgba(18,18,40,0.55)_0%,rgba(10,10,24,0.75)_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_28px_-10px_rgba(139,92,246,0.15)]">
+        <div className="solace-sidebar-profile rounded-xl border border-[color:var(--solace-border)] bg-[var(--solace-card-bg)] p-3 shadow-[var(--solace-card-shadow)]">
           <div className="flex items-center gap-3">
             <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-violet-500/30 to-cyan-500/15">
               <img
@@ -127,13 +127,13 @@ export function SolaceSidebar() {
               />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-zinc-100">{firstName}</p>
+              <p className="truncate text-sm font-medium text-[var(--solace-text)]">{firstName}</p>
               {subscriptionPlan ? (
-                <span className="mt-0.5 inline-block rounded-full border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-violet-200/90">
+                <span className="mt-0.5 inline-block rounded-full border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-[color:var(--accent-secondary,#a78bfa)]">
                   {planLabel}
                 </span>
               ) : (
-                <p className="truncate text-[11px] text-zinc-500">{user?.email}</p>
+                <p className="truncate text-[11px] text-[var(--solace-muted)]">{user?.email}</p>
               )}
             </div>
           </div>
@@ -144,8 +144,8 @@ export function SolaceSidebar() {
             className="rounded-xl border border-white/[0.07] bg-black/28 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_0_24px_rgba(139,92,246,0.08)]"
             aria-label="Gentle reminder"
           >
-            <p className="text-xs font-medium tracking-tight text-zinc-100">Take a breath</p>
-            <p className="mt-0.5 text-[10px] leading-snug text-zinc-500">You&apos;ve got this.</p>
+            <p className="text-xs font-medium tracking-tight text-[var(--solace-text)]">Take a breath</p>
+            <p className="mt-0.5 text-[10px] leading-snug text-[var(--solace-muted)]">You&apos;ve got this.</p>
             <div
               className="mt-2.5 h-[3px] w-full overflow-hidden rounded-full bg-white/[0.06]"
               aria-hidden
@@ -175,7 +175,7 @@ export function SolaceSidebar() {
               className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_30%_85%,rgba(251,191,36,0.16),transparent_55%)]"
               aria-hidden
             />
-            <div className="relative px-3.5 py-3.5">
+            <div className="solace-on-dark relative px-3.5 py-3.5">
               <p className="text-[11px] font-medium tracking-wide text-[rgba(255,255,255,0.92)]">You matter here.</p>
               <p className="mt-1.5 text-[10px] leading-relaxed text-[rgba(255,255,255,0.62)]">
                 Your wellness journey is important. We&apos;re here with you, every step.

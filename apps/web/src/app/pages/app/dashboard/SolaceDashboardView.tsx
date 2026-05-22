@@ -151,7 +151,7 @@ function ReflectMetric({
       <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--solace-muted)]">
         {label}
       </p>
-      <p className="mt-2 text-sm text-zinc-200">{sub}</p>
+      <p className="mt-2 text-sm text-[var(--solace-muted)]">{sub}</p>
       <div className="mt-4">
         {bar ? (
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
@@ -197,7 +197,7 @@ function RightRailContent({
           className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050508]/40 via-transparent to-transparent"
           aria-hidden
         />
-        <div className="relative z-10 flex min-h-[172px] flex-col justify-center p-5 sm:p-6">
+        <div className="solace-on-dark relative z-10 flex min-h-[172px] flex-col justify-center p-5 sm:p-6">
           <span className="font-serif text-4xl leading-none text-violet-200/35" aria-hidden>
             “
           </span>
@@ -239,7 +239,7 @@ function RightRailContent({
                     <Icon className="h-[18px] w-[18px]" aria-hidden />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-zinc-100">{insight.title}</p>
+                    <p className="text-sm font-medium text-[var(--solace-text)]">{insight.title}</p>
                     <p className="mt-0.5 text-xs leading-relaxed text-[var(--solace-muted)]">
                       {insight.description}
                     </p>
@@ -269,7 +269,7 @@ function RightRailContent({
           />
           <div className="relative flex items-center gap-4">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-zinc-100">Brain health</p>
+              <p className="text-sm font-medium text-[var(--solace-text)]">Brain health</p>
               <p className="mt-1 text-xs leading-relaxed text-[var(--solace-muted)]">
                 Light exercises for clarity and nervous-system kindness.
               </p>
@@ -295,7 +295,7 @@ function RightRailContent({
           <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--solace-muted)]">
             Trial plan
           </p>
-          <p className="mt-2 text-sm text-zinc-200">
+          <p className="mt-2 text-sm text-[var(--solace-muted)]">
             Space to breathe in — explore what feels kind for you.
           </p>
           <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
@@ -353,8 +353,8 @@ export function SolaceDashboardView({
         />
 
         <div className="relative z-[1] mx-auto max-w-[1680px] px-3 pt-6 sm:px-5 sm:pt-8 lg:pt-10">
-          <p className="mb-5 text-center font-serif text-[15px] text-zinc-400 lg:hidden">
-            {greeting}, <span className="text-zinc-100">{firstName}</span>
+          <p className="mb-5 text-center font-serif text-[15px] text-[var(--solace-muted)] lg:hidden">
+            {greeting}, <span className="text-[var(--solace-text)]">{firstName}</span>
           </p>
 
           <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_min(100%,340px)] xl:items-start xl:gap-x-10 xl:gap-y-8">
@@ -368,7 +368,7 @@ export function SolaceDashboardView({
                 <SolacePanel glow="violet" className="overflow-hidden p-0">
                   <div className="relative min-h-[300px] md:min-h-[380px]">
                     <SolaceHeroAtmosphere backgroundSrc={DASHBOARD_IMAGES.heroAtmosphere} />
-                    <div className="relative z-[2] grid min-h-[300px] md:min-h-[380px] md:grid-cols-[42%_1fr]">
+                    <div className="solace-on-dark relative z-[2] grid min-h-[300px] md:min-h-[380px] md:grid-cols-[42%_1fr]">
                       <div className="relative min-h-[220px] md:min-h-0">
                         <div
                           className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#050508]/75 via-transparent to-transparent md:bg-[radial-gradient(ellipse_90%_100%_at_35%_50%,rgba(5,5,8,0.42)_0%,transparent_72%)]"
@@ -489,7 +489,7 @@ export function SolaceDashboardView({
               {/* Journey */}
               <section aria-label="Continue your journey">
                 <div className="mb-4">
-                  <h2 className="font-serif text-xl font-normal text-zinc-100">Continue your journey</h2>
+                  <h2 className="font-serif text-xl font-normal text-[var(--solace-text)]">Continue your journey</h2>
                   <p className="mt-1 text-sm text-[var(--solace-muted)]">
                     Landscapes for your nervous system — start gently.
                   </p>
@@ -507,7 +507,7 @@ export function SolaceDashboardView({
                         <div className="absolute bottom-4 right-4 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-black/40 text-white shadow-[0_0_26px_rgba(139,92,246,0.3)] backdrop-blur-sm transition-transform duration-500 group-hover:scale-105">
                           <Play className="h-4 w-4" fill="currentColor" aria-hidden />
                         </div>
-                        <div className="relative z-10 p-5">
+                        <div className="solace-on-dark relative z-10 p-5">
                           <h3 className="font-medium text-zinc-50">{card.title}</h3>
                           <p className="mt-1 text-sm text-zinc-300/95">
                             {card.duration} · {card.benefit}
@@ -524,7 +524,7 @@ export function SolaceDashboardView({
 
               {/* Quick actions */}
               <section aria-label="Quick actions">
-                <h2 className="font-serif text-xl font-normal text-zinc-100">Quick actions</h2>
+                <h2 className="font-serif text-xl font-normal text-[var(--solace-text)]">Quick actions</h2>
                 <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
                   {quickActions.map((action) => {
                     const Icon = action.icon;
@@ -538,7 +538,7 @@ export function SolaceDashboardView({
                           <div className="mb-2 inline-flex rounded-xl border border-white/[0.07] bg-white/[0.03] p-2 text-violet-200/90">
                             <Icon className="h-5 w-5" aria-hidden />
                           </div>
-                          <p className="text-sm font-medium text-zinc-100">{action.label}</p>
+                          <p className="text-sm font-medium text-[var(--solace-text)]">{action.label}</p>
                           <p className="mt-1 text-[11px] leading-snug text-[var(--solace-muted)]">
                             {action.description}
                           </p>
@@ -550,7 +550,7 @@ export function SolaceDashboardView({
               </section>
 
               <section aria-label="Rhythm" className="space-y-3">
-                <h2 className="font-serif text-xl font-normal text-zinc-100">Your rhythm</h2>
+                <h2 className="font-serif text-xl font-normal text-[var(--solace-text)]">Your rhythm</h2>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <ReflectMetric
                     label="Mindful presence"
@@ -584,7 +584,7 @@ export function SolaceDashboardView({
               <section aria-label="Recent moments">
                 <SolacePanel glow="none" soft className="p-5 sm:p-6">
                   <div className="mb-4 flex items-center justify-between gap-3">
-                    <h2 className="font-serif text-lg font-normal text-zinc-100">Recent moments</h2>
+                    <h2 className="font-serif text-lg font-normal text-[var(--solace-text)]">Recent moments</h2>
                     <Link
                       to="/app/recent-activity-history"
                       className="rounded-sm text-xs font-medium text-violet-300/90 hover:text-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40"
@@ -600,7 +600,7 @@ export function SolaceDashboardView({
                           <div className="flex items-start gap-2">
                             <FluentEmoji emoji={activity.emoji} size={22} className="shrink-0" />
                             <div>
-                              <p className="text-sm text-zinc-200">{activity.text}</p>
+                              <p className="text-sm text-[var(--solace-text)]">{activity.text}</p>
                               <p className="mt-0.5 text-[11px] text-[var(--solace-muted)]">
                                 {activity.time}
                               </p>
@@ -685,10 +685,10 @@ function SnapStatus({
           <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--solace-muted)]">
             {label}
           </span>
-          <Icon className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+          <Icon className="h-4 w-4 shrink-0 text-[var(--solace-muted)]" aria-hidden />
         </div>
-        <div className="text-lg font-medium tracking-tight text-zinc-100">{value}</div>
-        <p className="mt-auto pt-2 text-[10px] text-zinc-500 transition-colors group-hover:text-zinc-400">
+        <div className="text-lg font-medium tracking-tight text-[var(--solace-text)]">{value}</div>
+        <p className="mt-auto pt-2 text-[10px] text-[var(--solace-muted)] transition-colors group-hover:text-[var(--solace-text)]">
           {hint}
         </p>
       </SolacePanel>

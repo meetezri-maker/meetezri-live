@@ -32,7 +32,7 @@ export function CrisisResourcesCallout({ className }: CrisisResourcesCalloutProp
             id="emergency-resources-callout-heading"
             className="text-lg font-semibold leading-snug tracking-tight text-white sm:text-xl"
           >
-            Helpful Resources — Available 24/7
+            Helpful Resources Available 24/7
           </h2>
         </div>
 

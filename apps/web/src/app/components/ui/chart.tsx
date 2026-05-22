@@ -6,7 +6,10 @@ import * as RechartsPrimitive from "recharts";
 import { cn } from "./utils";
 
 // Format: { THEME_NAME: CSS_SELECTOR }
-const THEMES = { light: "", dark: ".dark" } as const;
+const THEMES = {
+  light: 'html[data-ezri-theme="light"]',
+  dark: 'html[data-ezri-theme="dark"], html:not([data-ezri-theme])',
+} as const;
 
 export type ChartConfig = {
   [k in string]: {
