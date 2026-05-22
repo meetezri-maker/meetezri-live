@@ -97,6 +97,7 @@ import {
 import {
   DEBUG_JORDAN_EXPRESSION_TEST,
   DEBUG_JORDAN_BEHAVIOR_TIMING,
+  DEBUG_JORDAN_BEHAVIOR_VISIBLE_VERIFY,
   DEBUG_JORDAN_LISTENING_MORPH_TEST,
   DEBUG_JORDAN_PHONEMES,
   DEBUG_JORDAN_STRONG_EXPRESSION_VERIFY,
@@ -875,6 +876,38 @@ function scaleJordanSpeakingBehaviorContribution(
     headTilt: contribution.headTilt * scale,
     turnEndReleaseActive: contribution.turnEndReleaseActive,
     softProcessingPauseActive: contribution.softProcessingPauseActive,
+  };
+}
+
+function applyJordanVisibleVerifyIdleContribution(
+  contribution: JordanIdleBehaviorContribution,
+): JordanIdleBehaviorContribution {
+  return {
+    ...contribution,
+    eyeUp: Math.max(contribution.eyeUp, 0.05),
+    brow: Math.max(contribution.brow, 0.1),
+    smileLeft: Math.max(contribution.smileLeft, 0.14),
+    smileRight: Math.max(contribution.smileRight, 0.14),
+    cheekLeft: Math.max(contribution.cheekLeft, 0.1),
+    cheekRight: Math.max(contribution.cheekRight, 0.1),
+    headYaw: Math.max(Math.abs(contribution.headYaw), 0.012),
+    headTilt: Math.max(Math.abs(contribution.headTilt), 0.012),
+  };
+}
+
+function applyJordanVisibleVerifyListeningContribution(
+  contribution: JordanListeningBehaviorContribution,
+): JordanListeningBehaviorContribution {
+  return {
+    ...contribution,
+    eyeUp: Math.max(contribution.eyeUp, 0.05),
+    brow: Math.max(contribution.brow, 0.1),
+    smileLeft: Math.max(contribution.smileLeft, 0.14),
+    smileRight: Math.max(contribution.smileRight, 0.14),
+    cheekLeft: Math.max(contribution.cheekLeft, 0.1),
+    cheekRight: Math.max(contribution.cheekRight, 0.1),
+    headYaw: Math.max(Math.abs(contribution.headYaw), 0.012),
+    headTilt: Math.max(Math.abs(contribution.headTilt), 0.012),
   };
 }
 
@@ -1905,6 +1938,7 @@ function ThreeAvatar({
   );
   const jordanBehaviorTimingNextUpdateRef = useRef(0);
   const lastJordanBehaviorTimingLogRef = useRef(0);
+  const lastJordanBehaviorAuditLogRef = useRef(0);
   const jordanSpeakingEnergyRef = useRef(0);
   const jordanEyeFocusTargetRef = useRef<JordanEyeFocusState>({
     up: 0,
@@ -2308,6 +2342,7 @@ function ThreeAvatar({
     jordanBehaviorTimingStateRef.current = createJordanBehaviorTimingState();
     jordanBehaviorTimingNextUpdateRef.current = 0;
     lastJordanBehaviorTimingLogRef.current = 0;
+    lastJordanBehaviorAuditLogRef.current = 0;
     jordanSpeakingEnergyRef.current = 0;
     jordanEyeFocusTargetRef.current = { up: 0, down: 0, asym: 0, yaw: 0, holding: true, holdMs: 0 };
     jordanEyeNextRefocusRef.current = 0;
@@ -3843,7 +3878,7 @@ function ThreeAvatar({
                   const jordanIdleStillnessActive =
                     jordanIdleSchedulerEligible &&
                     jordanIdleConsumedEvents.some((event) => event.type === "idle_stillness");
-                  const jordanIdleBehaviorContribution =
+                  let jordanIdleBehaviorContribution =
                     jordanIdleSchedulerEligible && !jordanIdleStillnessActive
                       ? scaleJordanIdleBehaviorContribution(
                           resolveJordanIdleBehaviorContribution(
@@ -3858,7 +3893,7 @@ function ThreeAvatar({
                     jordanListeningConsumedEvents.some(
                       (event) => event.type === "soft_processing_pause"
                     );
-                  const jordanListeningBehaviorContribution =
+                  let jordanListeningBehaviorContribution =
                     jordanListeningSchedulerEligible
                       ? scaleJordanListeningBehaviorContribution(
                           resolveJordanListeningBehaviorContribution(
@@ -3869,6 +3904,26 @@ function ThreeAvatar({
                           )
                         )
                       : { ...EMPTY_JORDAN_LISTENING_BEHAVIOR_CONTRIBUTION };
+                  const jordanBehaviorVisibleVerifyActive =
+                    DEBUG_JORDAN_BEHAVIOR_VISIBLE_VERIFY &&
+                    useRfv2Morphs &&
+                    !speaking &&
+                    (presenceState === "idle" || presenceState === "listening");
+                  if (jordanBehaviorVisibleVerifyActive && presenceState === "idle") {
+                    jordanIdleBehaviorContribution =
+                      applyJordanVisibleVerifyIdleContribution(
+                        jordanIdleBehaviorContribution
+                      );
+                  }
+                  if (
+                    jordanBehaviorVisibleVerifyActive &&
+                    presenceState === "listening"
+                  ) {
+                    jordanListeningBehaviorContribution =
+                      applyJordanVisibleVerifyListeningContribution(
+                        jordanListeningBehaviorContribution
+                      );
+                  }
                   const jordanSpeakingBehaviorContribution =
                     jordanSpeakingSchedulerEligible || jordanTurnEndReleaseEvents.length > 0
                       ? scaleJordanSpeakingBehaviorContribution(
@@ -4732,30 +4787,38 @@ function ThreeAvatar({
                       : presenceState === "speaking"
                         ? JORDAN_SPEAKING_BEHAVIOR_TUNING.headSupportTiltRange[1]
                       : JORDAN_HEAD_PRESENCE_TUNING.idleTiltMax;
-                  const schedulerHeadYawTarget = THREE.MathUtils.clamp(
+                  const schedulerHeadYawRaw =
                     jordanHeadPresenceTargetRef.current.yaw +
-                      jordanIdleBehaviorContribution.headYaw +
-                      jordanListeningBehaviorContribution.headYaw +
-                      jordanSpeakingBehaviorContribution.headYaw,
+                    jordanIdleBehaviorContribution.headYaw +
+                    jordanListeningBehaviorContribution.headYaw +
+                    jordanSpeakingBehaviorContribution.headYaw;
+                  const schedulerHeadTiltRaw =
+                    jordanHeadPresenceTargetRef.current.tilt +
+                    jordanIdleBehaviorContribution.headTilt +
+                    jordanListeningBehaviorContribution.headTilt +
+                    jordanSpeakingBehaviorContribution.headTilt;
+                  const schedulerHeadYawTarget = THREE.MathUtils.clamp(
+                    schedulerHeadYawRaw,
                     -schedulerHeadYawLimit,
                     schedulerHeadYawLimit
                   );
                   const schedulerHeadTiltTarget = THREE.MathUtils.clamp(
-                    jordanHeadPresenceTargetRef.current.tilt +
-                      jordanIdleBehaviorContribution.headTilt +
-                      jordanListeningBehaviorContribution.headTilt +
-                      jordanSpeakingBehaviorContribution.headTilt,
+                    schedulerHeadTiltRaw,
                     -schedulerHeadTiltLimit,
                     schedulerHeadTiltLimit
                   );
+                  const previousAppliedHeadYaw =
+                    jordanHeadPresenceAppliedRef.current.yaw;
+                  const previousAppliedHeadTilt =
+                    jordanHeadPresenceAppliedRef.current.tilt;
                   const appliedHeadYaw = THREE.MathUtils.damp(
-                    jordanHeadPresenceAppliedRef.current.yaw,
+                    previousAppliedHeadYaw,
                     schedulerHeadYawTarget,
                     JORDAN_HEAD_PRESENCE_TUNING.blendSpeed,
                     dt
                   );
                   const appliedHeadTilt = THREE.MathUtils.damp(
-                    jordanHeadPresenceAppliedRef.current.tilt,
+                    previousAppliedHeadTilt,
                     schedulerHeadTiltTarget,
                     JORDAN_HEAD_PRESENCE_TUNING.blendSpeed,
                     dt
@@ -4765,6 +4828,11 @@ function ThreeAvatar({
                     tilt: appliedHeadTilt,
                   };
 
+                  const jordanBehaviorHeadBoneApplied: Array<{
+                    name: string;
+                    yawDelta: number;
+                    tiltDelta: number;
+                  }> = [];
                   if (jordanIdlePresenceBonesRef.current.length > 0) {
                     jordanIdlePresenceBonesRef.current.forEach((bone, index) => {
                       const defaults = faceBoneDefaultsRef.current.get(bone.uuid);
@@ -4777,6 +4845,11 @@ function ThreeAvatar({
                       bone.rotation.x = defaults.x;
                       bone.rotation.y = defaults.y + appliedHeadYaw * weight;
                       bone.rotation.z = defaults.z + appliedHeadTilt * weight;
+                      jordanBehaviorHeadBoneApplied.push({
+                        name: bone.name,
+                        yawDelta: bone.rotation.y - defaults.y,
+                        tiltDelta: bone.rotation.z - defaults.z,
+                      });
                     });
                   }
 
@@ -5102,6 +5175,247 @@ function ThreeAvatar({
                       });
                     }
                   });
+
+                  if (
+                    process.env.NODE_ENV === "development" &&
+                    (DEBUG_JORDAN_BEHAVIOR_TIMING ||
+                      DEBUG_JORDAN_BEHAVIOR_VISIBLE_VERIFY) &&
+                    now - lastJordanBehaviorAuditLogRef.current > 1400
+                  ) {
+                    lastJordanBehaviorAuditLogRef.current = now;
+                    const allSchedulerEvents = [
+                      ...jordanSchedulerActiveEvents,
+                      ...jordanBehaviorTimingStateRef.current.queuedEvents,
+                    ].filter((event) => !event.interrupted);
+                    const activeConsumedEvents = [
+                      ...jordanIdleConsumedEvents,
+                      ...jordanListeningConsumedEvents,
+                      ...jordanSpeakingConsumedEvents,
+                    ];
+                    const channelActive = (
+                      channel:
+                        | "brow"
+                        | "mouth"
+                        | "cheek"
+                        | "eye"
+                        | "head"
+                    ) =>
+                      activeConsumedEvents.some((event) =>
+                        jordanMotionChannelIsActive(event, channel, now)
+                      );
+                    const eventEmittedFor = (
+                      channel:
+                        | "brow"
+                        | "mouth"
+                        | "cheek"
+                        | "eye"
+                        | "head"
+                    ) =>
+                      allSchedulerEvents.some((event) =>
+                        event.channels?.some(
+                          (motionChannel) => motionChannel.channel === channel
+                        )
+                      );
+                    const morphAudit = (name: JordanMorphName) => {
+                      const diagnostics = expressionAuthorityDiagnostics.get(name);
+                      const bindings = jordanMorphBindingsRef.current.get(name) ?? [];
+                      const appliedAverage =
+                        bindings.length > 0
+                          ? bindings.reduce((sum, binding) => {
+                              const influences = binding.mesh.morphTargetInfluences;
+                              return sum + (influences?.[binding.index] ?? 0);
+                            }, 0) / bindings.length
+                          : null;
+                      const previous =
+                        diagnostics?.previousSmoothedValue ??
+                        jordanMorphValuesRef.current.get(name) ??
+                        0;
+                      const finalValue =
+                        appliedAverage ?? jordanMorphValuesRef.current.get(name) ?? 0;
+                      return {
+                        targetRequested: diagnostics?.requestedTargetValue ?? null,
+                        targetAfterCap: diagnostics?.valueAfterClamp ?? null,
+                        cap: diagnostics?.clampLimit ?? getJordanExpressionCap(name),
+                        targetCapped:
+                          diagnostics
+                            ? Math.abs(
+                                diagnostics.requestedTargetValue -
+                                  diagnostics.valueAfterClamp
+                              ) > 0.0005
+                            : false,
+                        smoothedValueChanged:
+                          Math.abs(finalValue - previous) > 0.0005,
+                        previousSmoothedValue: previous,
+                        finalMorphValue: finalValue,
+                        bindingCount: bindings.length,
+                        finalMorphApplied: bindings.length > 0 && appliedAverage !== null,
+                      };
+                    };
+                    const combineMorphs = (names: JordanMorphName[]) => {
+                      const audits = names.map((name) => [name, morphAudit(name)] as const);
+                      return {
+                        contributionAddedToTarget: audits.some(
+                          ([, audit]) => (audit.targetAfterCap ?? 0) > 0.0005
+                        ),
+                        targetCapped: audits.some(([, audit]) => audit.targetCapped),
+                        smoothedValueChanged: audits.some(
+                          ([, audit]) => audit.smoothedValueChanged
+                        ),
+                        finalApplied: audits.some(([, audit]) => audit.finalMorphApplied),
+                        morphs: Object.fromEntries(audits),
+                      };
+                    };
+                    const browContribution =
+                      jordanIdleBehaviorContribution.brow +
+                      jordanListeningBehaviorContribution.brow +
+                      jordanSpeakingBehaviorContribution.brow;
+                    const smileContribution =
+                      jordanIdleBehaviorContribution.smileLeft +
+                      jordanIdleBehaviorContribution.smileRight +
+                      jordanListeningBehaviorContribution.smileLeft +
+                      jordanListeningBehaviorContribution.smileRight +
+                      jordanSpeakingBehaviorContribution.smileLeft +
+                      jordanSpeakingBehaviorContribution.smileRight;
+                    const cheekContribution =
+                      jordanIdleBehaviorContribution.cheekLeft +
+                      jordanIdleBehaviorContribution.cheekRight +
+                      jordanListeningBehaviorContribution.cheekLeft +
+                      jordanListeningBehaviorContribution.cheekRight +
+                      jordanSpeakingBehaviorContribution.cheekLeft +
+                      jordanSpeakingBehaviorContribution.cheekRight;
+                    const eyeContribution =
+                      schedulerEyeUp + schedulerEyeDown + Math.abs(schedulerEyeAsym);
+                    const headContribution =
+                      Math.abs(
+                        jordanIdleBehaviorContribution.headYaw +
+                          jordanListeningBehaviorContribution.headYaw +
+                          jordanSpeakingBehaviorContribution.headYaw
+                      ) +
+                      Math.abs(
+                        jordanIdleBehaviorContribution.headTilt +
+                          jordanListeningBehaviorContribution.headTilt +
+                          jordanSpeakingBehaviorContribution.headTilt
+                      );
+                    console.log("[Jordan Behavior Timing Audit] channel wiring:", {
+                      presenceState,
+                      visibleVerifyActive: jordanBehaviorVisibleVerifyActive,
+                      scheduler: {
+                        selectedIntent: jordanSchedulerDebug?.selectedIntent,
+                        newEvents: jordanSchedulerDebug?.newEvents?.map((event) => ({
+                          type: event.type,
+                          state: event.state,
+                          channels: event.channels?.map((channel) => channel.channel),
+                        })),
+                        activeEvents: jordanSchedulerActiveEvents.map((event) => ({
+                          type: event.type,
+                          state: event.state,
+                          channels: event.channels?.map((channel) => ({
+                            channel: channel.channel,
+                            active: jordanMotionChannelIsActive(
+                              event,
+                              channel.channel,
+                              now
+                            ),
+                            startsAtMs: Math.round(channel.startsAtMs),
+                            endsAtMs: Math.round(channel.endsAtMs),
+                          })),
+                        })),
+                        consumedEvents: activeConsumedEvents.map((event) => ({
+                          type: event.type,
+                          state: event.state,
+                        })),
+                        ignoredEvents: [
+                          ...jordanIdleIgnoredEvents,
+                          ...jordanListeningIgnoredEvents,
+                          ...jordanSpeakingIgnoredEvents,
+                        ].map((event) => ({
+                          type: event.type,
+                          state: event.state,
+                        })),
+                      },
+                      brow: {
+                        schedulerEventEmitted: eventEmittedFor("brow"),
+                        eventChannelActive: channelActive("brow"),
+                        contributionCalculated: Math.abs(browContribution) > 0.0005,
+                        contribution: browContribution,
+                        ...combineMorphs(["eyebrows"]),
+                      },
+                      mouthSmile: {
+                        schedulerEventEmitted:
+                          eventEmittedFor("mouth") || eventEmittedFor("cheek"),
+                        eventChannelActive:
+                          channelActive("mouth") || channelActive("cheek"),
+                        contributionCalculated:
+                          Math.abs(smileContribution + cheekContribution) > 0.0005,
+                        smileContribution,
+                        cheekContribution,
+                        ...combineMorphs([
+                          "mouthSmileLeft",
+                          "mouthSmileRight",
+                          "cheekSquintLeft",
+                          "cheekSquintRight",
+                        ]),
+                      },
+                      eye: {
+                        schedulerEventEmitted: eventEmittedFor("eye"),
+                        eventChannelActive: channelActive("eye"),
+                        contributionCalculated: Math.abs(eyeContribution) > 0.0005,
+                        contribution: {
+                          up: schedulerEyeUp,
+                          down: schedulerEyeDown,
+                          asym: schedulerEyeAsym,
+                        },
+                        ...combineMorphs([
+                          "eyeLookUpLeft",
+                          "eyeLookUpRight",
+                          "eyeLookDownLeft",
+                          "eyeLookDownRight",
+                        ]),
+                      },
+                      head: {
+                        schedulerEventEmitted: eventEmittedFor("head"),
+                        eventChannelActive: channelActive("head"),
+                        contributionCalculated: headContribution > 0.0005,
+                        contribution: {
+                          yaw:
+                            jordanIdleBehaviorContribution.headYaw +
+                            jordanListeningBehaviorContribution.headYaw +
+                            jordanSpeakingBehaviorContribution.headYaw,
+                          tilt:
+                            jordanIdleBehaviorContribution.headTilt +
+                            jordanListeningBehaviorContribution.headTilt +
+                            jordanSpeakingBehaviorContribution.headTilt,
+                        },
+                        contributionAddedToTarget:
+                          Math.abs(schedulerHeadYawRaw) > 0.0005 ||
+                          Math.abs(schedulerHeadTiltRaw) > 0.0005,
+                        targetRequested: {
+                          yaw: schedulerHeadYawRaw,
+                          tilt: schedulerHeadTiltRaw,
+                        },
+                        targetAfterCap: {
+                          yaw: schedulerHeadYawTarget,
+                          tilt: schedulerHeadTiltTarget,
+                        },
+                        targetCapped:
+                          Math.abs(schedulerHeadYawRaw - schedulerHeadYawTarget) >
+                            0.0005 ||
+                          Math.abs(schedulerHeadTiltRaw - schedulerHeadTiltTarget) >
+                            0.0005,
+                        smoothedValueChanged:
+                          Math.abs(appliedHeadYaw - previousAppliedHeadYaw) >
+                            0.0005 ||
+                          Math.abs(appliedHeadTilt - previousAppliedHeadTilt) >
+                            0.0005,
+                        finalBoneValueApplied:
+                          jordanBehaviorHeadBoneApplied.length > 0,
+                        bonesFound: jordanIdlePresenceBonesRef.current.length,
+                        appliedBones: jordanBehaviorHeadBoneApplied,
+                      },
+                      note:
+                        "Blink is intentionally excluded; scheduler still does not write morphs/bones directly.",
+                    });
+                  }
 
                   if (
                     process.env.NODE_ENV === "development" &&

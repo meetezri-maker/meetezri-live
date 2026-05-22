@@ -347,6 +347,7 @@ export const JORDAN_PROCEDURAL_BLINK_TUNING = JORDAN_RFV2_BLINK_TUNING;
 // Existing blink, eye focus, expression, head/neck, viseme, and session systems remain authoritative.
 // Phase 2 scheduler work can consume this config to coordinate FaceTime-like timing safely.
 export const DEBUG_JORDAN_BEHAVIOR_TIMING = false;
+export const DEBUG_JORDAN_BEHAVIOR_VISIBLE_VERIFY = false;
 export const DEBUG_JORDAN_PERSONALITY_TIMING = false;
 export const ENABLE_JORDAN_PERSONALITY_TIMING = false;
 
