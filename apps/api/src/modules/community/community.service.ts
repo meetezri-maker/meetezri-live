@@ -38,6 +38,12 @@ function resolveCommunityAvatarUrl(
   return avatarUrl || null;
 }
 
+/** True when privacy settings hide the community profile from other members. */
+function isCommunityProfilePrivateForOthers(ps: PrivacyJson): boolean {
+  const visibility = ps?.profileVisibility;
+  return visibility === 'private' || visibility === 'friends';
+}
+
 async function ensureCommunityPostLikesTable(): Promise<void> {
   await prisma.$executeRaw`
     CREATE TABLE IF NOT EXISTS public.community_post_likes (
@@ -377,16 +383,17 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
       snap?.author_avatar_url !== undefined
         ? snap.author_avatar_url
         : resolveCommunityAvatarUrl(profile?.avatar_url, profile?.privacy_settings);
-    // Community profile link: show when the author is not posting anonymously.
-    // We intentionally ignore `profileVisibility` here — that setting controls general
-    // profile search/discovery, not community-specific visibility. The correct signal
-    // for community is `showDisplayNameInCommunity`: if the user is showing their name
-    // in community posts, they are implicitly discoverable within the community.
-    const showDisplayName = (profile?.privacy_settings as PrivacyJson)?.showDisplayNameInCommunity;
+    const authorPrivacy = profile?.privacy_settings as PrivacyJson;
+    const showDisplayName = authorPrivacy?.showDisplayNameInCommunity;
+    const profilePrivateForOthers = isCommunityProfilePrivateForOthers(authorPrivacy);
     const authorUserId =
-      p.user_id === userId || showDisplayName !== false
+      p.user_id === userId
         ? p.user_id
-        : null;
+        : showDisplayName !== false && !profilePrivateForOthers
+          ? p.user_id
+          : null;
+    const authorProfilePrivate =
+      p.user_id !== userId && profilePrivateForOthers && showDisplayName !== false;
 
     return {
       id: p.id,
@@ -399,6 +406,8 @@ export async function getCommunityPostsForUser(userId: string, limit = 30) {
       isByCurrentUser: p.user_id === userId,
       /** Set when the author is not anonymous and allows profile discovery — use for “view profile” links. */
       authorUserId,
+      /** Name visible in feed but profile page is private for other members. */
+      authorProfilePrivate,
       content: p.content,
       category,
       createdAt: p.created_at.toISOString(),
@@ -565,11 +574,12 @@ export async function getCommunityMemberPublicProfile(
 
   const isSelf = viewerUserId === memberUserId;
   if (!isSelf) {
-    // Gate community profile access on whether the user shows their name in community.
-    // `profileVisibility` is intentionally NOT used here — it controls general search/discovery
-    // and was previously defaulting to "private" due to a UI bug, causing accidental lockouts.
-    // If the user posts anonymously (showDisplayNameInCommunity === false), block profile access.
-    // If not set (undefined/null) or explicitly true, allow access — user is visible in community.
+    if (isCommunityProfilePrivateForOthers(ps)) {
+      const err = new Error('This account is private');
+      (err as any).statusCode = 403;
+      (err as any).code = 'PROFILE_PRIVATE';
+      throw err;
+    }
     if (ps?.showDisplayNameInCommunity === false) {
       const err = new Error('This profile is not visible in the community');
       (err as any).statusCode = 404;

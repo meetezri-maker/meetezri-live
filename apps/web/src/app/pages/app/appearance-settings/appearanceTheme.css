@@ -1,0 +1,16 @@
+/* Accent color orbs — gradient via CSS variables (survives high-contrast mode) */
+.appearance-accent-orb {
+  background: linear-gradient(
+    135deg,
+    var(--appearance-orb-from, #ec4899) 0%,
+    var(--appearance-orb-to, #db2777) 100%
+  );
+}
+
+.high-contrast .appearance-accent-orb.hc-preserve-color {
+  background: linear-gradient(
+    135deg,
+    var(--appearance-orb-from, #ec4899) 0%,
+    var(--appearance-orb-to, #db2777) 100%
+  ) !important;
+}

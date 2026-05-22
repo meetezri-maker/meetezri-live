@@ -30,7 +30,7 @@ export function InsightActivityWheel({ items, total }: InsightActivityWheelProps
   return (
     <div className="flex items-center gap-4 sm:gap-5">
       <div className="min-w-0 flex-1 space-y-2.5">
-        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">
+        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--solace-muted)]">
           Activity overview
         </p>
 
@@ -40,7 +40,7 @@ export function InsightActivityWheel({ items, total }: InsightActivityWheelProps
             return (
               <li key={item.name}>
                 <div className="mb-0.5 flex items-center justify-between gap-2">
-                  <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-500">
+                  <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] text-[var(--solace-muted)]">
                     <span
                       className="h-2 w-2 shrink-0 rounded-full"
                       style={{ backgroundColor: item.color }}
@@ -48,11 +48,11 @@ export function InsightActivityWheel({ items, total }: InsightActivityWheelProps
                     />
                     <span className="truncate">{item.name}</span>
                   </span>
-                  <span className="shrink-0 text-[10px] tabular-nums text-zinc-500">{pct}%</span>
+                  <span className="shrink-0 text-[10px] tabular-nums text-[var(--solace-muted)]">{pct}%</span>
                 </div>
                 <p
                   className={cn(
-                    "pl-3.5 font-serif leading-none tracking-tight text-zinc-50",
+                    "pl-3.5 font-serif leading-none tracking-tight text-[var(--solace-text)]",
                     index === 0
                       ? "text-[1.65rem] sm:text-[1.85rem]"
                       : "text-[1.35rem] sm:text-[1.5rem]",

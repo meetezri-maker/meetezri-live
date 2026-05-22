@@ -4,6 +4,7 @@
   --font-size: 16px;
   --text-line-height: 1.5;
   --text-letter-spacing: 0em;
+  --text-word-spacing: 0em;
   --background: #fafafa;
   --foreground: #1a1a2e;
   --card: #ffffff;
@@ -80,15 +81,156 @@
   --sidebar-ring: oklch(0.439 0 0);
 }
 
+/* ─── Solace explicit themes (data-ezri-theme — not .dark class) ─────────── */
+
+html[data-ezri-theme="dark"],
+html:not([data-ezri-theme]) {
+  --background: #07080f;
+  --foreground: rgba(244, 244, 245, 0.96);
+  --card: rgba(15, 18, 32, 0.92);
+  --card-foreground: #f7f3ff;
+  --popover: rgba(12, 14, 24, 0.96);
+  --popover-foreground: rgba(244, 244, 245, 0.96);
+  --primary: var(--accent, #ec4899);
+  --primary-foreground: #ffffff;
+  --secondary: rgba(139, 92, 246, 0.2);
+  --secondary-foreground: #e9d5ff;
+  --muted: rgba(22, 24, 38, 0.75);
+  --muted-foreground: #a7a1b8;
+  --accent: var(--accent, #a78bfa);
+  --accent-foreground: #ffffff;
+  --destructive: #f87171;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.1);
+  --input-background: rgba(12, 14, 30, 0.92);
+  --switch-background: rgba(255, 255, 255, 0.15);
+  --ring: rgba(167, 139, 250, 0.45);
+  --chart-1: #22d3ee;
+  --chart-2: #a78bfa;
+  --chart-3: #ec4899;
+  --chart-4: #fbbf24;
+  --chart-5: #4ade80;
+  --sidebar: rgba(18, 20, 32, 0.95);
+  --sidebar-foreground: rgba(244, 244, 245, 0.96);
+  --sidebar-primary: #a78bfa;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(139, 92, 246, 0.15);
+  --sidebar-accent-foreground: #e9d5ff;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: rgba(167, 139, 250, 0.35);
+}
+
+html[data-ezri-theme="light"],
+html[data-theme="light"] {
+  --background: var(--bg, #fbf8ff);
+  --foreground: var(--text-primary, #101828);
+  --card: var(--card, #ffffff);
+  --card-foreground: var(--text-primary, #101828);
+  --popover: var(--surface-elevated, #ffffff);
+  --popover-foreground: var(--text-primary, #101828);
+  --primary: var(--accent-violet, #a78bfa);
+  --primary-foreground: #ffffff;
+  --secondary: var(--card-lavender, #f6f0ff);
+  --secondary-foreground: #5b21b6;
+  --muted: var(--card-soft, #fbf8ff);
+  --muted-foreground: var(--text-muted, #667085);
+  --accent: var(--accent-teal, #4ecdc4);
+  --accent-foreground: var(--text-primary, #101828);
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: var(--border, #e7ddfb);
+  --input: var(--input-border, #ddd0fa);
+  --input-background: var(--input-bg, #ffffff);
+  --switch-background: #ddd0fa;
+  --ring: var(--input-focus-glow, rgba(167, 139, 250, 0.18));
+  --chart-1: #4ecdc4;
+  --chart-2: #a78bfa;
+  --chart-3: #ec4899;
+  --chart-4: #fbbf24;
+  --chart-5: #22c55e;
+  --sidebar: var(--sidebar-bg, rgba(255, 255, 255, 0.82));
+  --sidebar-foreground: var(--text-primary, #101828);
+  --sidebar-primary: #7c3aed;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--card-lavender, #f6f0ff);
+  --sidebar-accent-foreground: #5b21b6;
+  --sidebar-border: var(--border, #e7ddfb);
+  --sidebar-ring: rgba(167, 139, 250, 0.35);
+}
+
+/* ─── Light theme: Recharts readability ─── */
+
+html[data-ezri-theme="light"] .recharts-wrapper text,
+html[data-ezri-theme="light"] .recharts-wrapper tspan,
+html[data-theme="light"] .recharts-wrapper text,
+html[data-theme="light"] .recharts-wrapper tspan {
+  fill: #667085 !important;
+}
+
+html[data-ezri-theme="light"] .recharts-cartesian-axis-tick-value,
+html[data-ezri-theme="light"] .recharts-text,
+html[data-ezri-theme="light"] .recharts-label,
+html[data-theme="light"] .recharts-cartesian-axis-tick-value,
+html[data-theme="light"] .recharts-text,
+html[data-theme="light"] .recharts-label {
+  fill: #7a728e !important;
+}
+
+html[data-ezri-theme="light"] .recharts-cartesian-axis-line,
+html[data-ezri-theme="light"] .recharts-cartesian-axis > line,
+html[data-theme="light"] .recharts-cartesian-axis-line,
+html[data-theme="light"] .recharts-cartesian-axis > line {
+  stroke: #e7ddfb !important;
+}
+
+html[data-ezri-theme="light"] .recharts-cartesian-axis-tick > line,
+html[data-theme="light"] .recharts-cartesian-axis-tick > line {
+  stroke: #e7ddfb !important;
+}
+
+html[data-ezri-theme="light"] .recharts-cartesian-grid-horizontal line,
+html[data-ezri-theme="light"] .recharts-cartesian-grid-vertical line,
+html[data-theme="light"] .recharts-cartesian-grid-horizontal line,
+html[data-theme="light"] .recharts-cartesian-grid-vertical line {
+  stroke: #efe7ff !important;
+}
+
+html[data-ezri-theme="light"] .recharts-default-tooltip,
+html[data-theme="light"] .recharts-default-tooltip {
+  background: #ffffff !important;
+  border: 1px solid #e7ddfb !important;
+  color: #101828 !important;
+}
+
+html[data-ezri-theme="light"] .recharts-tooltip-label,
+html[data-theme="light"] .recharts-tooltip-label {
+  color: #101828 !important;
+}
+
+html[data-ezri-theme="light"] .recharts-tooltip-item,
+html[data-theme="light"] .recharts-tooltip-item {
+  color: #475467 !important;
+}
+
 /* ─── Dark mode: Recharts SVG text & tooltip overrides ─── */
 
-/* All SVG text inside charts */
+html[data-ezri-theme="dark"] .recharts-wrapper text,
+html[data-ezri-theme="dark"] .recharts-wrapper tspan,
+html:not([data-ezri-theme]) .recharts-wrapper text,
+html:not([data-ezri-theme]) .recharts-wrapper tspan,
 .dark .recharts-wrapper text,
 .dark .recharts-wrapper tspan {
   fill: oklch(0.82 0 0) !important;
 }
 
 /* Axis tick labels specifically */
+html[data-ezri-theme="dark"] .recharts-cartesian-axis-tick-value,
+html[data-ezri-theme="dark"] .recharts-text,
+html[data-ezri-theme="dark"] .recharts-label,
+html:not([data-ezri-theme]) .recharts-cartesian-axis-tick-value,
+html:not([data-ezri-theme]) .recharts-text,
+html:not([data-ezri-theme]) .recharts-label,
 .dark .recharts-cartesian-axis-tick-value,
 .dark .recharts-text,
 .dark .recharts-label {
@@ -551,15 +693,142 @@
   border-color: #fff !important;
 }
 
-/* Custom motion toggle buttons used in settings pages */
-.high-contrast button[class*="w-14"][class*="h-8"][class*="rounded-full"] {
+/* Accessibility settings toggles (track uses span thumb, not div) */
+.high-contrast button.a11y-toggle {
   border: 2px solid #fff !important;
+  background: #000 !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.high-contrast button.a11y-toggle[aria-checked="true"] {
+  background: #fff !important;
+}
+
+.high-contrast button.a11y-toggle .a11y-toggle-thumb {
+  background: #fff !important;
+  border: 2px solid #000 !important;
+  box-shadow: none !important;
+}
+
+.high-contrast button.a11y-toggle[aria-checked="true"] .a11y-toggle-thumb {
+  background: #000 !important;
+  border-color: #fff !important;
+}
+
+/* Accessibility segmented controls */
+.high-contrast .a11y-segment-track {
+  border: 1px solid #fff !important;
   background: #000 !important;
 }
 
-.high-contrast button[class*="w-14"][class*="h-8"][class*="rounded-full"] > div {
+.high-contrast button.a11y-segment-btn {
+  border: 1px solid #fff !important;
+  background: #000 !important;
+  background-image: none !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+.high-contrast button.a11y-segment-btn[aria-pressed="true"] {
   background: #fff !important;
-  border: 1px solid #000 !important;
+  color: #000 !important;
+}
+
+.high-contrast button.a11y-segment-btn[aria-pressed="true"] svg {
+  color: #000 !important;
+}
+
+.high-contrast button.a11y-btn-ghost {
+  border: 1px solid #fff !important;
+  background: #000 !important;
+  color: #fff !important;
+}
+
+/* Text spacing (letter-spacing + word-spacing) and line height */
+html.a11y-ls-compact {
+  --text-letter-spacing: -0.05em;
+  --text-word-spacing: 0em;
+}
+
+html.a11y-ls-normal {
+  --text-letter-spacing: 0em;
+  --text-word-spacing: 0em;
+}
+
+html.a11y-ls-relaxed {
+  --text-letter-spacing: 0.12em;
+  --text-word-spacing: 0.2em;
+}
+
+html.a11y-lh-tight {
+  --text-line-height: 1.35;
+}
+
+html.a11y-lh-normal {
+  --text-line-height: 1.5;
+}
+
+html.a11y-lh-loose {
+  --text-line-height: 1.9;
+}
+
+html[class*="a11y-ls-"] body,
+html[class*="a11y-ls-"] #root {
+  letter-spacing: var(--text-letter-spacing) !important;
+  word-spacing: var(--text-word-spacing) !important;
+}
+
+html[class*="a11y-ls-"] #root :where(
+  p,
+  li,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  label,
+  td,
+  th,
+  blockquote,
+  figcaption,
+  span,
+  a,
+  div,
+  input,
+  textarea,
+  button
+) {
+  letter-spacing: inherit !important;
+  word-spacing: inherit !important;
+}
+
+html[class*="a11y-ls-"] #root button.a11y-toggle,
+html[class*="a11y-ls-"] #root button.a11y-segment-btn,
+html[class*="a11y-ls-"] #root svg,
+html[class*="a11y-ls-"] #root [class*="lucide"] {
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+}
+
+html[class*="a11y-ls-"] #root [class*="tracking-"] {
+  letter-spacing: var(--text-letter-spacing) !important;
+}
+
+html.a11y-lh-tight body,
+html.a11y-lh-tight #root :where(p, li, h1, h2, h3, h4, h5, h6, label, td, th) {
+  line-height: var(--text-line-height) !important;
+}
+
+html.a11y-lh-normal body,
+html.a11y-lh-normal #root :where(p, li, h1, h2, h3, h4, h5, h6, label, td, th) {
+  line-height: var(--text-line-height) !important;
+}
+
+html.a11y-lh-loose body,
+html.a11y-lh-loose #root :where(p, li, h1, h2, h3, h4, h5, h6, label, td, th) {
+  line-height: var(--text-line-height) !important;
 }
 
 /* Preserve intended colors for appearance color/theme previews. */
@@ -657,6 +926,16 @@
   padding-inline: 1rem;
 }
 
+.dyslexia-font body,
+.dyslexia-font {
+  font-family: "Atkinson Hyperlegible", "Lexend", Verdana, "Comic Sans MS", sans-serif !important;
+}
+
+.calm-transitions:not(.reduced-motion) * {
+  transition-duration: 280ms !important;
+  transition-timing-function: ease-out !important;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -707,6 +986,13 @@
     @apply bg-background text-foreground;
     line-height: var(--text-line-height);
     letter-spacing: var(--text-letter-spacing);
+    word-spacing: var(--text-word-spacing);
+  }
+
+  p {
+    line-height: var(--text-line-height);
+    letter-spacing: var(--text-letter-spacing);
+    word-spacing: var(--text-word-spacing);
   }
 
   /**

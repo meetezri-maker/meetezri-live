@@ -48,4 +48,6 @@ export const TALK_ENV_STUDIO = pickSolaceCinematicImage("env-studio");
 
 export const TALK_ENV_CANDLE = pickSolaceCinematicImage("env-candle");
 
+/** Calm mountains at twilight — "Need help?" cards on settings rails */
+export const SOLACE_SUPPORT_CARD_IMG = "/solace/safety-support-calm-mountains.jpg";
 

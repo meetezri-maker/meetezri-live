@@ -32,7 +32,11 @@ import {
 import {
   EMERGENCY_HERO_IMG,
   EMERGENCY_RAIL_IMG,
+  CRISIS_ALONE_BANNER_IMG,
   crisisAloneBanner,
+  crisisAloneBannerContent,
+  crisisAloneBannerImage,
+  crisisAloneBannerOverlay,
   crisisArticleRow,
   crisisContactRow,
   crisisDangerCard,
@@ -698,19 +702,31 @@ export function CrisisResources() {
 
             {/* 6. You Are Not Alone banner */}
             <section className={crisisAloneBanner} aria-labelledby="not-alone-heading">
-              <div className="flex items-start gap-4">
-                <div className={crisisRailHeartWrap}>
-                  <Heart className="h-7 w-7 text-fuchsia-100/95" aria-hidden />
-                </div>
-                <div>
-                  <h2 id="not-alone-heading" className="text-lg font-semibold text-white sm:text-xl">
-                    You Are Not Alone
-                  </h2>
-                  <p className="mt-2 text-sm leading-relaxed text-[rgba(255,255,255,0.72)]">
-                    Reaching out for help is a sign of strength, not weakness. These resources are
-                    here for you 24/7. Your life matters, and there are people who care and want to
-                    help.
-                  </p>
+              <img
+                src={CRISIS_ALONE_BANNER_IMG}
+                alt=""
+                className={crisisAloneBannerImage}
+                width={1200}
+                height={400}
+                loading="lazy"
+                decoding="async"
+              />
+              <div className={crisisAloneBannerOverlay} aria-hidden />
+              <div className={crisisAloneBannerContent}>
+                <div className="flex items-start gap-4">
+                  <div className={crisisRailHeartWrap}>
+                    <Heart className="h-7 w-7 text-fuchsia-100/95" aria-hidden />
+                  </div>
+                  <div>
+                    <h2 id="not-alone-heading" className="text-lg font-semibold text-white sm:text-xl">
+                      You Are Not Alone
+                    </h2>
+                    <p className="mt-2 text-sm leading-relaxed text-[rgba(255,255,255,0.72)]">
+                      Reaching out for help is a sign of strength, not weakness. These resources are
+                      here for you 24/7. Your life matters, and there are people who care and want to
+                      help.
+                    </p>
+                  </div>
                 </div>
               </div>
             </section>

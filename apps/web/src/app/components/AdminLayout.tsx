@@ -51,6 +51,7 @@ import {
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { BrandLogo } from "./BrandLogo";
+import { modalDestructiveButton } from "@/lib/modalTheme";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -550,10 +551,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmLogout}
-              className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
-            >
+            <AlertDialogAction onClick={confirmLogout} className={modalDestructiveButton}>
               Log Out
             </AlertDialogAction>
           </AlertDialogFooter>

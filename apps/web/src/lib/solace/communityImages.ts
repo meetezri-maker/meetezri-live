@@ -1,3 +1,5 @@
+import { SOLACE_SUPPORT_CARD_IMG } from "@/lib/solace/referenceImagery";
+
 /** Static assets under `public/community/` for the Community page. */
 export const COMMUNITY_IMAGES = {
   /** Hero — gathering by the lake at twilight */
@@ -8,7 +10,8 @@ export const COMMUNITY_IMAGES = {
   togetherness: "/community/3.png",
   /** Legacy JPEG scenes — post card backdrops */
   sceneWater: "/community/scene-water.jpg",
-  sceneBedroom: "/community/scene-bedroom.jpg",
+  /** Legacy key — calm support scene (replaces bedroom photo) */
+  sceneBedroom: SOLACE_SUPPORT_CARD_IMG,
   sceneForest: "/community/scene-forest.jpg",
   sceneStars: "/community/scene-stars.jpg",
   /** Find-your-circle card backdrops */

@@ -484,6 +484,64 @@ export function ResourceAnalyticsPage() {
       <motion.div className={wellnessPlanPageVignette} aria-hidden />
 
       <div className="relative z-10 mx-auto w-full max-w-[1500px] px-4 py-7 sm:px-7 sm:py-9">
+        <div className="mb-6 flex flex-col gap-4 sm:mb-7 sm:flex-row sm:items-center sm:justify-between">
+          <Link to="/app/settings" className={wellnessPlanBackLink}>
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+            Back to Settings
+          </Link>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end sm:gap-3">
+            <label className="sr-only" htmlFor="ra-time-filter">
+              Date range
+            </label>
+            <div className="flex min-h-[44px] items-center gap-2 rounded-full border border-white/[0.1] bg-black/35 px-3 backdrop-blur-md">
+              <Calendar className="h-4 w-4 shrink-0 text-[rgba(255,255,255,0.45)]" aria-hidden />
+              <SolaceSelect
+                id="ra-time-filter"
+                value={timeFilter}
+                onValueChange={(v) => setTimeFilter(v as typeof timeFilter)}
+                ariaLabel="Date range"
+                variant="compact"
+                size="sm"
+                disabled={isLoading}
+                triggerClassName="min-h-[44px] border-0 bg-transparent px-0 py-0 text-sm text-[rgba(255,255,255,0.88)] shadow-none hover:bg-transparent"
+                options={[
+                  { value: '7d', label: 'Last 7 days' },
+                  { value: '30d', label: 'Last 30 days' },
+                  { value: '90d', label: 'Last 90 days' },
+                  { value: 'all', label: 'All time' },
+                ]}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className={cn(wellnessPlanBtnGhost, 'min-h-[44px] min-w-[44px] px-4')}
+              aria-label="Refresh analytics"
+            >
+              <RefreshCw
+                className={cn('h-4 w-4', isFetching && 'animate-spin')}
+                aria-hidden
+              />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={interactions.length === 0}
+              className={cn(
+                'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white',
+                'bg-[linear-gradient(135deg,#7c3aed_0%,#db2777_55%,#ec4899_100%)]',
+                'border border-white/10 shadow-[0_0_32px_-8px_rgba(168,85,247,0.55)]',
+                'transition-all hover:brightness-110 disabled:opacity-45'
+              )}
+            >
+              <Download className="h-4 w-4" aria-hidden />
+              Export insights
+            </button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] xl:gap-7">
           {/* Main column ~72% */}
           <div className="min-w-0 space-y-7">
@@ -504,13 +562,8 @@ export function ResourceAnalyticsPage() {
               <div className={wellnessPlanHeroOverlayPurple} aria-hidden />
               <motion.div className={wellnessPlanHeroOverlayWarmth} aria-hidden />
 
-              <div className="relative flex min-h-[240px] flex-col p-5 sm:min-h-[260px] sm:p-7 lg:min-h-[280px]">
-                <Link to="/app/settings" className={wellnessPlanBackLink}>
-                  <ArrowLeft className="h-4 w-4" aria-hidden />
-                  Back to Settings
-                </Link>
-
-                <div className="mt-5 flex flex-1 flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="relative flex min-h-[240px] flex-col justify-center p-5 sm:min-h-[260px] sm:p-7 lg:min-h-[280px]">
+                <div className="flex flex-1 flex-col justify-end">
                   <div className="flex flex-wrap items-start gap-4">
                     <div className={wellnessPlanIconChip('pink')}>
                       <BarChart3 className="h-7 w-7 text-fuchsia-200" aria-hidden />
@@ -521,61 +574,6 @@ export function ResourceAnalyticsPage() {
                         Understanding what support resources helped you most.
                       </p>
                     </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                    <label className="sr-only" htmlFor="ra-time-filter">
-                      Date range
-                    </label>
-                    <div className="flex min-h-[44px] items-center gap-2 rounded-full border border-white/[0.1] bg-black/35 px-3 backdrop-blur-md">
-                      <Calendar className="h-4 w-4 shrink-0 text-[rgba(255,255,255,0.45)]" aria-hidden />
-                      <SolaceSelect
-                        id="ra-time-filter"
-                        value={timeFilter}
-                        onValueChange={(v) => setTimeFilter(v as typeof timeFilter)}
-                        ariaLabel="Date range"
-                        variant="compact"
-                        size="sm"
-                        disabled={isLoading}
-                        triggerClassName="min-h-[44px] border-0 bg-transparent px-0 py-0 text-sm text-[rgba(255,255,255,0.88)] shadow-none hover:bg-transparent"
-                        options={[
-                          { value: '7d', label: 'Last 7 days' },
-                          { value: '30d', label: 'Last 30 days' },
-                          { value: '90d', label: 'Last 90 days' },
-                          { value: 'all', label: 'All time' },
-                        ]}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => refetch()}
-                      disabled={isFetching}
-                      className={cn(
-                        wellnessPlanBtnGhost,
-                        'min-h-[44px] min-w-[44px] px-4'
-                      )}
-                      aria-label="Refresh analytics"
-                    >
-                      <RefreshCw
-                        className={cn('h-4 w-4', isFetching && 'animate-spin')}
-                        aria-hidden
-                      />
-                      <span className="hidden sm:inline">Refresh</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleExport}
-                      disabled={interactions.length === 0}
-                      className={cn(
-                        'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white',
-                        'bg-[linear-gradient(135deg,#7c3aed_0%,#db2777_55%,#ec4899_100%)]',
-                        'border border-white/10 shadow-[0_0_32px_-8px_rgba(168,85,247,0.55)]',
-                        'transition-all hover:brightness-110 disabled:opacity-45'
-                      )}
-                    >
-                      <Download className="h-4 w-4" aria-hidden />
-                      Export insights
-                    </button>
                   </div>
                 </div>
               </div>

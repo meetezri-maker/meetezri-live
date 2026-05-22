@@ -1,24 +1,21 @@
 import { cn } from "@/lib/utils";
-import { settingsIconChip } from "@/app/pages/app/settings-hub/settingsUi";
+import { SOLACE_SUPPORT_CARD_IMG } from "@/lib/solace/referenceImagery";
+import { settingsIconChip } from "@/app/pages/app/settings-hub/settingsIconChip";
+import {
+  solaceCard,
+  solacePageAtmosphere,
+  solacePageFogMid,
+  solacePageGlowTop,
+} from "@/app/solace/solacePageChrome";
 
 export const ACCOUNT_HERO_IMG = "/community/hero-lake.jpg";
-export const ACCOUNT_HELP_IMG = "/community/scene-bedroom.jpg";
+export const ACCOUNT_HELP_IMG = SOLACE_SUPPORT_CARD_IMG;
 
-/** Matte navy sanctuary base — not flat black */
-export const accountPageAtmosphere = cn(
-  "relative overflow-hidden pb-6",
-  "bg-[linear-gradient(165deg,#0b0d1c_0%,#090a16_38%,#0c0a18_72%,#080910_100%)]"
-);
+export const accountPageAtmosphere = cn(solacePageAtmosphere, "overflow-hidden pb-6");
 
-export const accountPageGlowTop = cn(
-  "pointer-events-none absolute -top-48 right-[-8%] h-[32rem] w-[32rem] rounded-full",
-  "bg-[radial-gradient(circle,rgba(139,92,246,0.2)_0%,rgba(192,132,252,0.08)_35%,transparent_68%)] blur-3xl"
-);
+export const accountPageGlowTop = solacePageGlowTop;
 
-export const accountPageFogMid = cn(
-  "pointer-events-none absolute left-1/2 top-[12%] h-[36rem] w-[min(100%,58rem)] -translate-x-1/2 rounded-full",
-  "bg-[radial-gradient(ellipse_80%_55%_at_50%_40%,rgba(76,29,149,0.14)_0%,rgba(34,211,238,0.04)_45%,transparent_72%)] blur-3xl"
-);
+export const accountPageFogMid = solacePageFogMid;
 
 export const accountPageGlowBottom = cn(
   "pointer-events-none absolute bottom-[-6rem] left-[8%] h-96 w-96 rounded-full",
@@ -37,12 +34,12 @@ export const accountPageNoise = cn(
 
 /** Layered cinematic surface — corner ambient light */
 export const accountCinematicSurface = cn(
-  "relative overflow-hidden rounded-[inherit] border border-white/[0.06]",
-  "bg-[linear-gradient(180deg,rgba(15,16,32,0.95)_0%,rgba(8,9,20,0.98)_100%)]",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-28px_56px_-28px_rgba(0,0,0,0.4),0_0_48px_-12px_rgba(139,92,246,0.12),0_28px_72px_-40px_rgba(0,0,0,0.78)]",
+  solaceCard,
+  "relative overflow-hidden rounded-[inherit]",
   "before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit]",
   "before:bg-[radial-gradient(ellipse_55%_45%_at_0%_0%,rgba(139,92,246,0.1)_0%,transparent_55%),radial-gradient(ellipse_50%_40%_at_100%_100%,rgba(236,72,153,0.07)_0%,transparent_50%)]",
-  "after:pointer-events-none after:absolute after:inset-x-0 after:top-0 after:h-px after:bg-gradient-to-r after:from-transparent after:via-white/10 after:to-transparent"
+  "[html[data-ezri-theme=light]_&]:before:opacity-40",
+  "after:pointer-events-none after:absolute after:inset-x-0 after:top-0 after:h-px after:bg-gradient-to-r after:from-transparent after:via-[color:var(--solace-border)] after:to-transparent"
 );
 
 export const accountCard = accountCinematicSurface;
@@ -78,6 +75,12 @@ export const accountLabel = cn(
   "text-[rgba(255,255,255,0.42)]"
 );
 
+/** Label row with visible lucide icon (DOB, etc.) */
+export const accountLabelWithIcon = cn(
+  accountLabel,
+  "flex items-center gap-2 normal-case tracking-[0.08em]"
+);
+
 export const accountInput = cn(
   "w-full rounded-2xl border border-white/[0.09] px-4 py-4",
   "bg-[rgba(15,18,38,0.9)] text-[rgba(255,255,255,0.95)]",
@@ -98,6 +101,31 @@ export const accountPhoneButton = cn(
 );
 
 export const accountPhoneInput = accountInput;
+
+/** Dark sanctuary popover + command list (phone country, timezone, etc.) */
+export const accountDropdownPopover = cn(
+  "z-[200] border border-white/[0.1] bg-[#090b12]/[0.98] p-0",
+  "shadow-[0_28px_60px_-12px_rgba(0,0,0,0.9),0_0_40px_rgba(139,92,246,0.12)] backdrop-blur-xl"
+);
+
+export const accountDropdownCommand = "bg-transparent text-zinc-200";
+
+export const accountDropdownCommandInput = cn(
+  "h-10 border-0 border-b border-white/10 bg-transparent text-sm text-zinc-100",
+  "placeholder:text-zinc-500",
+  "[&_[cmdk-input-wrapper]]:border-white/10",
+  "[&_[cmdk-input-wrapper]_svg]:text-zinc-500"
+);
+
+export const accountDropdownCommandList = "max-h-[min(280px,50vh)]";
+
+export const accountDropdownCommandItem = cn(
+  "rounded-lg text-zinc-200",
+  "data-[selected=true]:bg-violet-500/20 data-[selected=true]:text-violet-50",
+  "aria-selected:bg-violet-500/20 aria-selected:text-violet-50"
+);
+
+export const accountDropdownCommandEmpty = "py-6 text-center text-sm text-zinc-500";
 
 export const accountHeroCard = cn(
   accountCinematicSurface,
@@ -251,7 +279,7 @@ export const accountRailProfileGlow = cn(
 );
 
 export const accountHelpImage = cn(
-  "absolute inset-0 size-full object-cover object-center",
+  "absolute inset-0 size-full object-cover object-[center_42%]",
   "brightness-[0.5] contrast-[0.95] saturate-[1.08]"
 );
 
@@ -289,3 +317,55 @@ export const accountModalBtnCancel = accountBtnGhost;
 export const accountModalBtnPrimary = cn(accountBtnPrimary, "rounded-2xl px-4 py-3");
 
 export const accountModalBtnDanger = cn(accountBtnDanger, "flex-1 rounded-2xl px-4 py-3");
+
+export const accountModalOverlay = cn(
+  "fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-md"
+);
+
+/** 2FA method tiles in enroll / disable modals */
+export function accountMfaMethodOption(selected: boolean) {
+  return cn(
+    "w-full rounded-2xl border p-4 text-left transition-all duration-300",
+    selected
+      ? "border-violet-400/45 bg-[linear-gradient(135deg,rgba(139,92,246,0.2)_0%,rgba(236,72,153,0.09)_100%)] shadow-[0_0_32px_-10px_rgba(139,92,246,0.4),inset_0_1px_0_rgba(255,255,255,0.09)]"
+      : "border-white/[0.08] bg-[rgba(15,18,38,0.72)] hover:border-violet-400/22 hover:bg-violet-500/[0.07]"
+  );
+}
+
+export const accountMfaMethodTitle = "font-medium text-[rgba(255,255,255,0.94)]";
+
+export const accountMfaMethodDesc = "mt-1 text-sm text-[rgba(255,255,255,0.52)]";
+
+export const accountMfaInfoBanner = cn(
+  "rounded-2xl border border-violet-400/22 p-3.5 text-sm leading-relaxed",
+  "bg-[linear-gradient(135deg,rgba(139,92,246,0.14)_0%,rgba(15,18,38,0.92)_100%)]",
+  "text-violet-100/90"
+);
+
+/** Segmented control (PIN vs email, etc.) */
+export function accountMfaSegmentBtn(selected: boolean) {
+  return cn(
+    "flex-1 rounded-xl border py-2.5 text-sm font-medium transition-all duration-300",
+    selected
+      ? "border-violet-400/40 bg-violet-500/20 text-violet-100 shadow-[0_0_20px_-10px_rgba(139,92,246,0.35)]"
+      : "border-white/[0.08] bg-[rgba(15,18,38,0.55)] text-[rgba(255,255,255,0.55)] hover:border-violet-400/18 hover:text-[rgba(255,255,255,0.78)]"
+  );
+}
+
+export const accountMfaBackLink = cn(
+  "w-full py-2 text-sm font-medium text-violet-300/70 transition-colors hover:text-violet-100"
+);
+
+export const accountMfaOtpInput = cn(
+  accountInput,
+  "text-center text-2xl tracking-[0.35em] tabular-nums"
+);
+
+export const accountOtpSlot = cn(
+  "relative flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.1]",
+  "bg-[rgba(15,18,38,0.92)] text-lg font-semibold text-white",
+  "shadow-[inset_0_2px_8px_rgba(0,0,0,0.35)]",
+  "first:rounded-l-xl first:border-l last:rounded-r-xl",
+  "data-[active=true]:z-10 data-[active=true]:border-violet-400/45",
+  "data-[active=true]:ring-2 data-[active=true]:ring-violet-500/25"
+);

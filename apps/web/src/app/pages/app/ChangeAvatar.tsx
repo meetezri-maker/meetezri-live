@@ -26,6 +26,7 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/app/components/ui/skeleton";
 import {
   CHANGE_AVATAR_HERO_IMG,
   changeAvatarBackLink,
@@ -135,6 +136,118 @@ interface AvatarPortraitProps {
   name: string;
   sizeClass?: string;
   ringClass?: string;
+}
+
+const COMPANION_CARD_SKELETON_COUNT = 4;
+
+function ChangeAvatarSkeleton() {
+  return (
+    <motion.div
+      className={changeAvatarPageAtmosphere}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35 }}
+      aria-busy="true"
+      aria-label="Loading companions"
+    >
+      <div className={changeAvatarPageGlowTop} aria-hidden />
+      <motion.div className={changeAvatarPageFogMid} aria-hidden />
+      <div className={changeAvatarPageVignette} aria-hidden />
+
+      <div className="relative z-10 mx-auto w-full max-w-[1500px] px-4 py-7 sm:px-7 sm:py-9">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] xl:gap-7">
+          <div className="min-w-0 space-y-6">
+            <header>
+              <Skeleton className="h-5 w-36 rounded-md bg-white/[0.06]" />
+              <Skeleton className="mt-4 h-9 w-64 max-w-full rounded-md bg-white/[0.06]" />
+              <Skeleton className="mt-2 h-4 w-80 max-w-full rounded-md bg-white/[0.06]" />
+            </header>
+
+            <Skeleton className="min-h-[220px] w-full rounded-[1.75rem] bg-white/[0.06] sm:min-h-[235px] lg:min-h-[250px]" />
+
+            <div>
+              <div className="flex items-start gap-3">
+                <Skeleton className="h-11 w-11 shrink-0 rounded-xl bg-white/[0.06]" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-7 w-56 rounded-md bg-white/[0.06]" />
+                  <Skeleton className="h-4 w-full max-w-md rounded-md bg-white/[0.06]" />
+                  <Skeleton className="h-4 w-[80%] max-w-sm rounded-md bg-white/[0.06]" />
+                </div>
+              </div>
+
+              <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
+                {Array.from({ length: COMPANION_CARD_SKELETON_COUNT }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="overflow-hidden rounded-[1.625rem] border border-white/[0.07] bg-[linear-gradient(160deg,rgba(18,18,42,0.6)_0%,rgba(10,10,26,0.75)_100%)] p-5 sm:p-6"
+                  >
+                    <div className="flex items-start gap-4">
+                      <Skeleton className="h-[72px] w-[72px] shrink-0 rounded-full bg-white/[0.06]" />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <Skeleton className="h-5 w-32 rounded-md bg-white/[0.06]" />
+                        <Skeleton className="h-4 w-28 rounded-md bg-white/[0.06]" />
+                        <div className="flex gap-3">
+                          <Skeleton className="h-3.5 w-12 rounded-md bg-white/[0.06]" />
+                          <Skeleton className="h-3.5 w-16 rounded-md bg-white/[0.06]" />
+                        </div>
+                      </div>
+                    </div>
+                    <Skeleton className="mt-4 h-3 w-20 rounded-md bg-white/[0.06]" />
+                    <Skeleton className="mt-2 h-4 w-full rounded-md bg-white/[0.06]" />
+                    <div className="mt-3 flex gap-2">
+                      <Skeleton className="h-6 w-24 rounded-full bg-white/[0.06]" />
+                      <Skeleton className="h-6 w-20 rounded-full bg-white/[0.06]" />
+                    </div>
+                    <Skeleton className="mt-3 h-4 w-full rounded-md bg-white/[0.06]" />
+                    <Skeleton className="mt-2 h-4 w-[85%] rounded-md bg-white/[0.06]" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <footer className="space-y-3 pb-2 pt-2 text-center">
+              <Skeleton className="mx-auto h-3 w-72 rounded-md bg-white/[0.06]" />
+              <Skeleton className="mx-auto h-4 w-56 rounded-md bg-white/[0.06]" />
+              <Skeleton className="mx-auto h-3 w-64 rounded-md bg-white/[0.06]" />
+            </footer>
+          </div>
+
+          <aside className="w-full shrink-0 space-y-4">
+            <div className="rounded-[1.5rem] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(16,16,36,0.6)_0%,rgba(9,9,22,0.75)_100%)] p-5 sm:p-6">
+              <Skeleton className="h-3 w-28 rounded-md bg-white/[0.06]" />
+              <Skeleton className="mt-3 h-4 w-40 rounded-md bg-white/[0.06]" />
+              <Skeleton className="mt-2 h-3 w-full rounded-md bg-white/[0.06]" />
+              <ul className="mt-5 space-y-3">
+                {[0, 1, 2].map((i) => (
+                  <li key={i} className="flex gap-3 rounded-xl border border-white/[0.06] p-3">
+                    <Skeleton className="h-9 w-9 shrink-0 rounded-lg bg-white/[0.06]" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Skeleton className="h-4 w-24 rounded-md bg-white/[0.06]" />
+                      <Skeleton className="h-3 w-full rounded-md bg-white/[0.06]" />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="rounded-[1.5rem] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(16,16,36,0.6)_0%,rgba(9,9,22,0.75)_100%)] p-5 sm:p-6">
+              <Skeleton className="h-3 w-36 rounded-md bg-white/[0.06]" />
+              <div className="mt-4 flex flex-col items-center">
+                <Skeleton className="h-20 w-20 rounded-full bg-white/[0.06]" />
+                <Skeleton className="mt-3 h-5 w-28 rounded-md bg-white/[0.06]" />
+                <Skeleton className="mt-2 h-5 w-20 rounded-full bg-white/[0.06]" />
+                <div className="mt-3 flex gap-2">
+                  <Skeleton className="h-6 w-20 rounded-full bg-white/[0.06]" />
+                  <Skeleton className="h-6 w-24 rounded-full bg-white/[0.06]" />
+                </div>
+                <Skeleton className="mt-3 h-3 w-full rounded-md bg-white/[0.06]" />
+                <Skeleton className="mt-4 h-10 w-full rounded-full bg-white/[0.06]" />
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </motion.div>
+  );
 }
 
 function AvatarPortrait({ imageUrl, name, sizeClass = "h-20 w-20", ringClass }: AvatarPortraitProps) {
@@ -297,21 +410,8 @@ export function ChangeAvatar() {
     }
   };
 
-  if (avatarsLoading || aiAvatars.length === 0) {
-    return (
-      <motion.div
-        className={changeAvatarPageAtmosphere}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-      >
-        <div className={changeAvatarPageGlowTop} aria-hidden />
-        <div className={changeAvatarPageFogMid} aria-hidden />
-        <motion.div className="relative z-10 flex min-h-[50vh] flex-col items-center justify-center gap-3">
-          <RefreshCw className="h-10 w-10 animate-spin text-violet-400/80" aria-hidden />
-          <p className="text-sm text-[rgba(255,255,255,0.5)]">Loading companions…</p>
-        </motion.div>
-      </motion.div>
-    );
+  if (avatarsLoading) {
+    return <ChangeAvatarSkeleton />;
   }
 
   const canSwitch = selectedAvatarId !== currentAvatarId;
@@ -386,10 +486,6 @@ export function ChangeAvatar() {
                           </div>
                         ) : null}
                         <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-[rgba(255,255,255,0.48)]">
-                          <span className="inline-flex items-center gap-1.5">
-                            <Star className="h-3.5 w-3.5 text-amber-300/90" fill="currentColor" aria-hidden />
-                            <span className="font-semibold text-white/90">{currentAvatar.rating}</span>
-                          </span>
                           <span className="inline-flex items-center gap-1.5">
                             <Users className="h-3.5 w-3.5" aria-hidden />
                             {currentAvatar.totalUsers.toLocaleString()} users
@@ -486,10 +582,6 @@ export function ChangeAvatar() {
                               {avatar.gender} • {avatar.ageRange} years
                             </p>
                             <motion.div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[rgba(255,255,255,0.45)]">
-                              <span className="inline-flex items-center gap-1">
-                                <Star className="h-3.5 w-3.5 text-amber-300/90" fill="currentColor" aria-hidden />
-                                <span className="font-semibold text-white/85">{avatar.rating}</span>
-                              </span>
                               <span className="inline-flex items-center gap-1">
                                 <Users className="h-3.5 w-3.5" aria-hidden />
                                 {avatar.totalUsers.toLocaleString()} users
@@ -607,7 +699,7 @@ export function ChangeAvatar() {
           {/* Right rail */}
           <aside className="w-full shrink-0 space-y-4 xl:sticky xl:top-4 xl:self-start">
             <div className={changeAvatarRailCard}>
-              <p className={changeAvatarSectionLabel}>Avatar helps you…</p>
+              <p className={changeAvatarSectionLabel}>Solace helps you…</p>
               <h2 className="mt-2 text-sm font-semibold text-white">Choose with intention</h2>
               <p className="mt-1 text-xs text-[rgba(255,255,255,0.45)]">
                 Your companion shapes how Solace meets you in every session.

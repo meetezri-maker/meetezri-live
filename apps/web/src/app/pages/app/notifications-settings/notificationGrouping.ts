@@ -46,6 +46,25 @@ export function matchesCategory(n: Notification, category: NotificationCategory)
   return getNotificationCategory(n) === category;
 }
 
+/** Security, safety, and support notifications shown when quiet mode is on. */
+export function isEssentialNotification(n: Notification): boolean {
+  const category = getNotificationCategory(n);
+  if (category === "Security" || category === "Support") return true;
+
+  const type = (n.type || "").toLowerCase();
+  if (type === "safety" || type === "alert") return true;
+
+  const metadata = n.metadata as Record<string, unknown> | null | undefined;
+  if (metadata?.priority === "critical" || metadata?.crisis === true) return true;
+
+  return false;
+}
+
+export function matchesQuietMode(n: Notification, quietMode: boolean): boolean {
+  if (!quietMode) return true;
+  return isEssentialNotification(n);
+}
+
 export function matchesSearch(n: Notification, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;

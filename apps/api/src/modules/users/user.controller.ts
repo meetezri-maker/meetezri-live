@@ -849,6 +849,68 @@ export async function deleteUserHandler(
   }
 }
 
+export async function deactivateAccountHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  try {
+    const result = await userService.deactivateAccount(user.sub);
+    return reply.code(200).send({
+      message: 'Account deactivated successfully',
+      account_status: result.account_status,
+    });
+  } catch (error: any) {
+    const statusCode = error?.statusCode ?? 500;
+    request.log.error({ error }, 'Deactivate account failed');
+    return reply.code(statusCode).send({
+      message: error?.message || 'Failed to deactivate account',
+    });
+  }
+}
+
+export async function requestAccountActivationHandler(
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const user = request.user as UserPayload;
+  const { webBaseUrl } = getWebBaseUrlFromRequest(request);
+  try {
+    const result = await userService.requestAccountActivation(user.sub, webBaseUrl);
+    return reply.code(200).send({
+      message: 'Activation email sent',
+      sent: result.sent,
+      email: result.email,
+    });
+  } catch (error: any) {
+    const statusCode = error?.statusCode ?? 500;
+    request.log.error({ error }, 'Request account activation failed');
+    return reply.code(statusCode).send({
+      message: error?.message || 'Failed to send activation email',
+    });
+  }
+}
+
+export async function confirmAccountActivationHandler(
+  request: FastifyRequest<{ Body: { token?: string } }>,
+  reply: FastifyReply
+) {
+  const token = request.body?.token;
+  try {
+    const result = await userService.confirmAccountActivation(String(token || ''));
+    return reply.code(200).send({
+      message: 'Account activated successfully',
+      account_status: result.account_status,
+    });
+  } catch (error: any) {
+    const statusCode = error?.statusCode ?? 500;
+    request.log.error({ error }, 'Confirm account activation failed');
+    return reply.code(statusCode).send({
+      message: error?.message || 'Failed to activate account',
+    });
+  }
+}
+
 export async function exportUserDataHandler(
   request: FastifyRequest,
   reply: FastifyReply

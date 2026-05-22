@@ -25,12 +25,12 @@ import {
 import { Link } from "react-router-dom";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
-import { TALK_ENV_CANDLE } from "@/lib/solace/referenceImagery";
+import { SOLACE_SUPPORT_CARD_IMG, TALK_ENV_CANDLE } from "@/lib/solace/referenceImagery";
 
 const HERO_IMG = "/community/hero-lake.jpg";
 const BANNER_IMG = "/community/scene-water.jpg";
 const COMFORT_IMG = TALK_ENV_CANDLE;
-const LANTERN_IMG = "/community/scene-bedroom.jpg";
+const LANTERN_IMG = SOLACE_SUPPORT_CARD_IMG;
 const FOREST_IMG = "/community/scene-forest.jpg";
 const STARS_IMG = "/community/scene-stars.jpg";
 
@@ -831,7 +831,11 @@ export function SupportRightRail() {
 
       <div className={cn(glassAccent("hover:border-fuchsia-400/15"), "overflow-hidden p-0")}>
         <div className="relative h-32">
-          <img src={LANTERN_IMG} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img
+            src={LANTERN_IMG}
+            alt="Calm mountain landscape at dusk with soft twilight light"
+            className="absolute inset-0 h-full w-full object-cover object-[center_42%]"
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-[#0a0c14] via-[#0a0c14]/50 to-transparent" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_80%,rgba(251,146,60,0.2),transparent_60%)]" />
         </div>

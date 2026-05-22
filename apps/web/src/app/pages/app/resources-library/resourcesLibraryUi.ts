@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { solaceInputSurface } from "@/app/solace/solacePageChrome";
 import {
   settingsPageAtmosphere,
   settingsPageFogMid,
@@ -9,8 +10,7 @@ import {
 export const RESOURCES_HERO_IMG = "/community/hero-lake.jpg";
 
 export const resourcesPageAtmosphere = cn(
-  settingsPageAtmosphere,
-  "bg-[linear-gradient(165deg,#0a0b18_0%,#090a16_42%,#0c0a18_100%)]"
+  settingsPageAtmosphere
 );
 
 export const resourcesPageGlowTop = settingsPageGlowTop;
@@ -44,28 +44,25 @@ export const resourcesHeroGlowWarmth = cn(
 );
 
 export const resourcesBackLink = cn(
-  "inline-flex min-h-[40px] items-center gap-2 text-xs font-medium tracking-[0.08em] text-violet-300/70",
-  "transition-colors hover:text-violet-200/95"
+  "inline-flex min-h-[40px] items-center gap-2 text-xs font-medium tracking-[0.08em] text-[color:var(--accent-secondary,#a78bfa)]/70",
+  "transition-colors hover:text-[color:var(--accent-secondary,#a78bfa)]"
 );
 
 export const resourcesHeroTitle = cn(
-  "font-serif text-[clamp(2rem,4.2vw,3.15rem)] font-light leading-[1.06] tracking-tight text-white"
+  "font-serif text-[clamp(2rem,4.2vw,3.15rem)] font-light leading-[1.06] tracking-tight text-[var(--solace-text)]"
 );
 
-export const resourcesHeroSubtitle = "mt-2 max-w-2xl text-sm leading-relaxed text-[rgba(255,255,255,0.52)] sm:text-[0.95rem]";
+export const resourcesHeroSubtitle =
+  "mt-2 max-w-2xl text-sm leading-relaxed text-[var(--solace-muted)] sm:text-[0.95rem]";
 
 export const resourcesSearchInput = cn(
-  "w-full min-h-[44px] rounded-full border border-white/[0.1] bg-[rgba(12,14,30,0.88)]",
-  "pl-11 pr-4 text-sm text-[rgba(255,255,255,0.92)] placeholder:text-[rgba(255,255,255,0.38)]",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
-  "transition-all duration-300 focus:border-violet-400/35 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+  solaceInputSurface,
+  "w-full min-h-[44px] pl-11 pr-4 text-sm shadow-[var(--solace-card-shadow)]"
 );
 
 export const resourcesSelect = cn(
-  "min-h-[44px] w-full appearance-none rounded-full border border-white/[0.1] bg-[rgba(12,14,30,0.92)]",
-  "px-4 py-2.5 pr-9 text-sm font-medium text-[rgba(255,255,255,0.9)] sm:w-52",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
-  "transition-all duration-300 focus:border-violet-400/35 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+  solaceInputSurface,
+  "min-h-[44px] w-full px-4 py-2.5 pr-9 text-sm font-medium sm:w-52 shadow-[var(--solace-card-shadow)]"
 );
 
 export const resourcesCardShell = cn(
@@ -186,6 +183,26 @@ export function formatCategoryLabel(category: string): string {
   return category.replace(/\s+/g, " ").toUpperCase();
 }
 
-export function secondarySourceLabel(source: "api" | "builtin"): string {
-  return source === "builtin" ? "EZRI" : "YOUR TEAM";
-}
+export const resourcesArticleShell = cn(
+  "overflow-hidden rounded-[1.4rem] border border-white/[0.07]",
+  "bg-[linear-gradient(180deg,rgba(16,16,36,0.98)_0%,rgba(9,9,22,0.99)_100%)]",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_40px_-16px_rgba(139,92,246,0.12),0_20px_56px_-32px_rgba(0,0,0,0.75)]"
+);
+
+export const resourcesArticleTitle = cn(
+  "font-serif text-[clamp(1.65rem,3.5vw,2.35rem)] font-light leading-[1.1] tracking-tight text-[var(--solace-text)]"
+);
+
+export const resourcesArticleBodyText =
+  "text-[0.95rem] leading-relaxed text-[var(--solace-muted)] sm:text-base";
+
+export const resourcesArticleStepShell = cn(
+  "flex gap-4 rounded-xl border border-white/[0.08] p-4 sm:p-5",
+  "bg-[rgba(255,255,255,0.03)]"
+);
+
+export const resourcesArticleStepNumber = cn(
+  "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white",
+  "bg-[linear-gradient(135deg,#7C3AED_0%,#C026D3_100%)]",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_0_24px_-8px_rgba(168,85,247,0.45)]"
+);
