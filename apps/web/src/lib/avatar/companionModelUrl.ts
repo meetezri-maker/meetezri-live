@@ -123,6 +123,7 @@ export function normalizeCompanionId(
   const k = (avatarLabel ?? "").trim().toLowerCase();
   if (k === "alex" || k === "alex rivera") return "alex";
   if (
+    k === "sara" ||
     k === "sara mitchell" ||
     k === "sarah" ||
     k === "sarah mitchell"
@@ -146,7 +147,7 @@ export function resolveCompanionModelUrl(
     case "alex":
       return avatarAssetFile("Alex.glb");
     case "sarah":
-      return avatarAssetFile("Sara Mitchell.glb");
+      return "/avatars/Sara%20Mitchell-.glb";
     case "maya":
       return avatarAssetFile("maya chen.glb");
     case "jordan":

@@ -84,6 +84,7 @@ import {
 import { resolveEzriWsVoiceForCompanion } from "@/lib/ezri/voiceForCompanion";
 import { normalizeAudioSource, toObjectUrl } from "@/lib/ezri/audio";
 import {
+  normalizeCompanionId,
   companionSessionUsesRfv2Morphs,
   companionSessionUses3dModel,
   resolveCompanionModelUrl,
@@ -95,6 +96,7 @@ import {
 } from "@/lib/avatar/companionViewTuning";
 import {
   DEBUG_JORDAN_EXPRESSION_TEST,
+  DEBUG_JORDAN_BEHAVIOR_TIMING,
   DEBUG_JORDAN_LISTENING_MORPH_TEST,
   DEBUG_JORDAN_PHONEMES,
   DEBUG_JORDAN_STRONG_EXPRESSION_VERIFY,
@@ -106,6 +108,8 @@ import {
   JORDAN_EXPRESSION_CAPS,
   JORDAN_EXPRESSION_PRESETS,
   JORDAN_EXPRESSION_PRESET_TUNING,
+  JORDAN_EMOTIONAL_MODULATION_TUNING,
+  JORDAN_FINAL_HUMANIZATION_TUNING,
   JORDAN_HEAD_PRESENCE_TUNING,
   JORDAN_HEAD_OFFSET_X,
   JORDAN_HEAD_OFFSET_Y,
@@ -120,8 +124,15 @@ import {
   JORDAN_RFV2_LISTENING_MORPH_TEST_SEQUENCE,
   JORDAN_RFV2_MORPH_AUDIT_NAMES,
   JORDAN_RFV2_REQUIRED_DRIVER_MORPHS,
+  JORDAN_SPEAKING_BEHAVIOR_TUNING,
   type JordanMorphName,
 } from "@/lib/avatar/jordanRfv2Config";
+import {
+  createJordanBehaviorTimingState,
+  updateJordanBehaviorTimingScheduler,
+  type JordanBehaviorTimingEvent,
+  type JordanBehaviorTimingState,
+} from "@/lib/avatar/jordanBehaviorTimingScheduler";
 import {
   findActiveJordanPhoneme,
   hasInvalidJordanPhonemeTimestamps,
@@ -146,9 +157,341 @@ import type {
   AvatarRenderMode,
   MorphBinding,
 } from "@/lib/avatar/avatarMorphTypes";
+import { SARA_AVATAR_DEFINITION } from "@/lib/avatar/configs/saraConfig";
+import type {
+  AvatarCameraConfig,
+  AvatarGltfTransformConfig,
+  Vector3Object,
+  Vector3Config,
+} from "@/lib/avatar/avatarConfigTypes";
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+
+type FixedAvatarViewportConfig = {
+  avatarId: string;
+  debugLabel: string;
+  camera: AvatarCameraConfig;
+  gltfTransform: AvatarGltfTransformConfig;
+};
+
+const DEBUG_SARA_FRAMING = true;
+const SARA_VISUAL_ANCHOR_MESH_NAMES = new Set([
+  "Face",
+  "Character",
+  "Character.002",
+]);
+const SARA_OVERSIZED_SHELL_MESH_NAMES = new Set([
+  "model_19",
+  "model_19.001",
+  "Object_2",
+  "Object_0",
+]);
+
+function isSaraFixedViewportConfig(
+  config: FixedAvatarViewportConfig | null | undefined
+): config is FixedAvatarViewportConfig {
+  return config?.avatarId === "sara";
+}
+
+function isVector3Object(value: Vector3Config): value is Vector3Object {
+  return !Array.isArray(value) && "x" in value && "y" in value && "z" in value;
+}
+
+function vector3FromConfig(
+  value: Vector3Config | undefined,
+  fallback: readonly [number, number, number]
+): THREE.Vector3 {
+  if (value && isVector3Object(value)) {
+    return new THREE.Vector3(value.x, value.y, value.z);
+  }
+  if (value) {
+    return new THREE.Vector3(value[0], value[1], value[2]);
+  }
+  return new THREE.Vector3(fallback[0], fallback[1], fallback[2]);
+}
+
+function applyVector3Config(
+  target: THREE.Vector3 | THREE.Euler,
+  value: Vector3Config | undefined,
+  fallback: readonly [number, number, number]
+) {
+  const next = vector3FromConfig(value, fallback);
+  target.set(next.x, next.y, next.z);
+}
+
+function applyScaleConfig(
+  target: THREE.Object3D,
+  value: AvatarGltfTransformConfig["scale"],
+  fallbackScalar: number
+) {
+  if (typeof value === "number") {
+    target.scale.setScalar(value);
+    return;
+  }
+  applyVector3Config(target.scale, value, [
+    fallbackScalar,
+    fallbackScalar,
+    fallbackScalar,
+  ]);
+}
+
+function isSaraVisualAnchorMesh(child: THREE.Object3D): boolean {
+  const mesh = child as THREE.Mesh;
+  return SARA_VISUAL_ANCHOR_MESH_NAMES.has(child.name || "") ||
+    SARA_VISUAL_ANCHOR_MESH_NAMES.has(mesh.geometry?.name || "");
+}
+
+function isSaraOversizedShellMesh(child: THREE.Object3D): boolean {
+  const mesh = child as THREE.Mesh;
+  return SARA_OVERSIZED_SHELL_MESH_NAMES.has(child.name || "") ||
+    SARA_OVERSIZED_SHELL_MESH_NAMES.has(mesh.geometry?.name || "");
+}
+
+function meshDiagnosticCategory(name: string): string | null {
+  const normalized = name.toLowerCase();
+  if (normalized.includes("face")) return "face";
+  if (normalized.includes("body")) return "body";
+  if (normalized.includes("top")) return "top";
+  if (normalized.includes("bottom")) return "bottom";
+  if (normalized.includes("footwear") || normalized.includes("shoe")) return "footwear";
+  if (normalized.includes("hair")) return "hair";
+  if (normalized.includes("eye")) return "eyes";
+  if (normalized.includes("teeth") || normalized.includes("tooth")) return "teeth";
+  if (normalized.includes("tongue")) return "tongue";
+  if (normalized.includes("head")) return "head";
+  if (normalized.includes("skin")) return "skin";
+  return null;
+}
+
+type SaraObjectBoundsDiagnostic = {
+  name: string;
+  type: string;
+  parentName: string;
+  visible: boolean;
+  isMesh: boolean;
+  isSkinnedMesh: boolean;
+  isBone: boolean;
+  isRenderableMesh: boolean;
+  childCount: number;
+  worldPosition?: number[];
+  worldScale?: number[];
+  localBoundingBox?: {
+    min: number[];
+    max: number[];
+  };
+  min: number[];
+  max: number[];
+  center: number[];
+  size: number[];
+  maxDimension: number;
+  volume: number;
+  nonZero: boolean;
+};
+
+function serializableBox(box: THREE.Box3) {
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  return {
+    min: box.min.toArray(),
+    max: box.max.toArray(),
+    center: center.toArray(),
+    size: size.toArray(),
+  };
+}
+
+function computeSaraVisibleRenderMeshBounds(root: THREE.Object3D): {
+  box: THREE.Box3;
+  meshCount: number;
+  meshNames: string[];
+  meshBounds: SaraObjectBoundsDiagnostic[];
+} {
+  const visibleBox = new THREE.Box3();
+  let hasBounds = false;
+  const meshNames: string[] = [];
+  const meshBounds: SaraObjectBoundsDiagnostic[] = [];
+
+  root.traverse((child) => {
+    const isMesh = Boolean((child as THREE.Mesh).isMesh);
+    const isSkinnedMesh = Boolean((child as THREE.SkinnedMesh).isSkinnedMesh);
+    if (!child.visible || (!isMesh && !isSkinnedMesh)) return;
+
+    const mesh = child as THREE.Mesh | THREE.SkinnedMesh;
+    const geometry = mesh.geometry as THREE.BufferGeometry | undefined;
+    const positionAttribute = geometry?.attributes?.position;
+    if (!geometry || !positionAttribute) return;
+
+    if (!geometry.boundingBox) {
+      geometry.computeBoundingBox();
+    }
+
+    child.updateWorldMatrix(true, false);
+    const childBox = new THREE.Box3().expandByObject(child);
+    if (childBox.isEmpty()) return;
+
+    const size = childBox.getSize(new THREE.Vector3());
+    const center = childBox.getCenter(new THREE.Vector3());
+    const worldPosition = child.getWorldPosition(new THREE.Vector3());
+    const worldScale = child.getWorldScale(new THREE.Vector3());
+    const maxDimension = Math.max(size.x, size.y, size.z);
+    const volume = size.x * size.y * size.z;
+    const localBoundingBox = geometry.boundingBox
+      ? {
+          min: geometry.boundingBox.min.toArray(),
+          max: geometry.boundingBox.max.toArray(),
+        }
+      : undefined;
+    meshNames.push(child.name || "(unnamed mesh)");
+    meshBounds.push({
+      name: child.name || "(unnamed mesh)",
+      type: child.type,
+      parentName: child.parent?.name || "(no parent)",
+      visible: child.visible,
+      isMesh,
+      isSkinnedMesh,
+      isBone: Boolean((child as THREE.Bone).isBone),
+      isRenderableMesh: true,
+      childCount: child.children.length,
+      worldPosition: worldPosition.toArray(),
+      worldScale: worldScale.toArray(),
+      localBoundingBox,
+      min: childBox.min.toArray(),
+      max: childBox.max.toArray(),
+      center: center.toArray(),
+      size: size.toArray(),
+      maxDimension,
+      volume,
+      nonZero: size.x > 0 && size.y > 0 && size.z > 0,
+    });
+
+    if (!hasBounds) {
+      visibleBox.copy(childBox);
+      hasBounds = true;
+    } else {
+      visibleBox.union(childBox);
+    }
+  });
+
+  return { box: visibleBox, meshCount: meshNames.length, meshNames, meshBounds };
+}
+
+function computeSaraVisualAnchorBounds(root: THREE.Object3D): {
+  box: THREE.Box3;
+  meshCount: number;
+  meshNames: string[];
+  meshBounds: SaraObjectBoundsDiagnostic[];
+} {
+  const anchorBox = new THREE.Box3();
+  let hasBounds = false;
+  const meshNames: string[] = [];
+  const meshBounds: SaraObjectBoundsDiagnostic[] = [];
+
+  root.traverse((child) => {
+    const isMesh = Boolean((child as THREE.Mesh).isMesh);
+    const isSkinnedMesh = Boolean((child as THREE.SkinnedMesh).isSkinnedMesh);
+    if (
+      !child.visible ||
+      (!isMesh && !isSkinnedMesh) ||
+      !isSaraVisualAnchorMesh(child)
+    ) {
+      return;
+    }
+
+    const mesh = child as THREE.Mesh | THREE.SkinnedMesh;
+    const geometry = mesh.geometry as THREE.BufferGeometry | undefined;
+    const positionAttribute = geometry?.attributes?.position;
+    if (!geometry || !positionAttribute) return;
+
+    if (!geometry.boundingBox) {
+      geometry.computeBoundingBox();
+    }
+
+    child.updateWorldMatrix(true, false);
+    const childBox = new THREE.Box3().expandByObject(child);
+    if (childBox.isEmpty()) return;
+
+    const size = childBox.getSize(new THREE.Vector3());
+    const center = childBox.getCenter(new THREE.Vector3());
+    const worldPosition = child.getWorldPosition(new THREE.Vector3());
+    const worldScale = child.getWorldScale(new THREE.Vector3());
+    const maxDimension = Math.max(size.x, size.y, size.z);
+    const volume = size.x * size.y * size.z;
+    const localBoundingBox = geometry.boundingBox
+      ? {
+          min: geometry.boundingBox.min.toArray(),
+          max: geometry.boundingBox.max.toArray(),
+        }
+      : undefined;
+    meshNames.push(child.name || "(unnamed mesh)");
+    meshBounds.push({
+      name: child.name || "(unnamed mesh)",
+      type: child.type,
+      parentName: child.parent?.name || "(no parent)",
+      visible: child.visible,
+      isMesh,
+      isSkinnedMesh,
+      isBone: Boolean((child as THREE.Bone).isBone),
+      isRenderableMesh: true,
+      childCount: child.children.length,
+      worldPosition: worldPosition.toArray(),
+      worldScale: worldScale.toArray(),
+      localBoundingBox,
+      min: childBox.min.toArray(),
+      max: childBox.max.toArray(),
+      center: center.toArray(),
+      size: size.toArray(),
+      maxDimension,
+      volume,
+      nonZero: size.x > 0 && size.y > 0 && size.z > 0,
+    });
+
+    if (!hasBounds) {
+      anchorBox.copy(childBox);
+      hasBounds = true;
+    } else {
+      anchorBox.union(childBox);
+    }
+  });
+
+  return { box: anchorBox, meshCount: meshNames.length, meshNames, meshBounds };
+}
+
+function computeSaraTopObjectBounds(
+  root: THREE.Object3D,
+  limit = 20
+): SaraObjectBoundsDiagnostic[] {
+  const diagnostics: SaraObjectBoundsDiagnostic[] = [];
+  root.traverse((child) => {
+    const childBox = new THREE.Box3().setFromObject(child);
+    if (childBox.isEmpty()) return;
+    const size = childBox.getSize(new THREE.Vector3());
+    const center = childBox.getCenter(new THREE.Vector3());
+    const maxDimension = Math.max(size.x, size.y, size.z);
+    const isMesh = Boolean((child as THREE.Mesh).isMesh);
+    const isSkinnedMesh = Boolean((child as THREE.SkinnedMesh).isSkinnedMesh);
+    diagnostics.push({
+      name: child.name || "(unnamed object)",
+      type: child.type,
+      parentName: child.parent?.name || "(no parent)",
+      visible: child.visible,
+      isMesh,
+      isSkinnedMesh,
+      isBone: Boolean((child as THREE.Bone).isBone),
+      isRenderableMesh: isMesh || isSkinnedMesh,
+      childCount: child.children.length,
+      min: childBox.min.toArray(),
+      max: childBox.max.toArray(),
+      center: center.toArray(),
+      size: size.toArray(),
+      maxDimension,
+      volume: size.x * size.y * size.z,
+      nonZero: size.x > 0 && size.y > 0 && size.z > 0,
+    });
+  });
+  return diagnostics
+    .sort((a, b) => b.maxDimension - a.maxDimension)
+    .slice(0, limit);
+}
 
 // Crisis keyword popup (public, user-facing).
 const CRISIS_KEYWORD_MODAL_ENABLED = false;
@@ -298,6 +641,9 @@ function getSpeechOpennessAt(text: string, idx: number): number {
 
 type JordanPresenceState = "speaking" | "listening" | "thinking" | "idle";
 type JordanExpressionPresetName = "calmIdle" | "attentiveListening" | "warmSpeaking";
+type JordanEmotionalModulationMode = keyof typeof JORDAN_EMOTIONAL_MODULATION_TUNING;
+type JordanEmotionalModulationProfile =
+  (typeof JORDAN_EMOTIONAL_MODULATION_TUNING)[JordanEmotionalModulationMode];
 type JordanEyeFocusState = {
   up: number;
   down: number;
@@ -320,6 +666,53 @@ type JordanListeningFaceTarget = {
   cheekRight: number;
   headTilt: number;
   holdMs: number;
+};
+type JordanIdleBehaviorContribution = {
+  eyeUp: number;
+  eyeDown: number;
+  eyeAsym: number;
+  brow: number;
+  visemeRest: number;
+  smileLeft: number;
+  smileRight: number;
+  cheekLeft: number;
+  cheekRight: number;
+  headYaw: number;
+  headTilt: number;
+};
+type JordanListeningBehaviorContribution = {
+  eyeUp: number;
+  eyeDown: number;
+  eyeAsym: number;
+  brow: number;
+  smileLeft: number;
+  smileRight: number;
+  cheekLeft: number;
+  cheekRight: number;
+  frownLeft: number;
+  frownRight: number;
+  sad: number;
+  headYaw: number;
+  headTilt: number;
+  smileMultiplier: number;
+  emotionalLatencyScale: number;
+};
+type JordanSpeakingBehaviorContribution = {
+  cheekLeft: number;
+  cheekRight: number;
+  brow: number;
+  smileLeft: number;
+  smileRight: number;
+  frownLeft: number;
+  frownRight: number;
+  sad: number;
+  eyeUp: number;
+  eyeDown: number;
+  eyeAsym: number;
+  headYaw: number;
+  headTilt: number;
+  turnEndReleaseActive: boolean;
+  softProcessingPauseActive: boolean;
 };
 
 type JordanBlinkType = "full" | "partial" | "slow" | "double";
@@ -372,6 +765,118 @@ const EMPTY_JORDAN_LISTENING_FACE_TARGET: JordanListeningFaceTarget = {
   headTilt: 0,
   holdMs: 0,
 };
+const EMPTY_JORDAN_IDLE_BEHAVIOR_CONTRIBUTION: JordanIdleBehaviorContribution = {
+  eyeUp: 0,
+  eyeDown: 0,
+  eyeAsym: 0,
+  brow: 0,
+  visemeRest: 0,
+  smileLeft: 0,
+  smileRight: 0,
+  cheekLeft: 0,
+  cheekRight: 0,
+  headYaw: 0,
+  headTilt: 0,
+};
+const EMPTY_JORDAN_LISTENING_BEHAVIOR_CONTRIBUTION: JordanListeningBehaviorContribution = {
+  eyeUp: 0,
+  eyeDown: 0,
+  eyeAsym: 0,
+  brow: 0,
+  smileLeft: 0,
+  smileRight: 0,
+  cheekLeft: 0,
+  cheekRight: 0,
+  frownLeft: 0,
+  frownRight: 0,
+  sad: 0,
+  headYaw: 0,
+  headTilt: 0,
+  smileMultiplier: 1,
+  emotionalLatencyScale: 1,
+};
+const EMPTY_JORDAN_SPEAKING_BEHAVIOR_CONTRIBUTION: JordanSpeakingBehaviorContribution = {
+  cheekLeft: 0,
+  cheekRight: 0,
+  brow: 0,
+  smileLeft: 0,
+  smileRight: 0,
+  frownLeft: 0,
+  frownRight: 0,
+  sad: 0,
+  eyeUp: 0,
+  eyeDown: 0,
+  eyeAsym: 0,
+  headYaw: 0,
+  headTilt: 0,
+  turnEndReleaseActive: false,
+  softProcessingPauseActive: false,
+};
+
+function scaleJordanIdleBehaviorContribution(
+  contribution: JordanIdleBehaviorContribution,
+): JordanIdleBehaviorContribution {
+  const scale = JORDAN_FINAL_HUMANIZATION_TUNING.subtletyMultiplier.idle;
+  return {
+    eyeUp: contribution.eyeUp * scale,
+    eyeDown: contribution.eyeDown * scale,
+    eyeAsym: contribution.eyeAsym * scale,
+    brow: contribution.brow * scale,
+    visemeRest: contribution.visemeRest * scale,
+    smileLeft: contribution.smileLeft * scale,
+    smileRight: contribution.smileRight * scale,
+    cheekLeft: contribution.cheekLeft * scale,
+    cheekRight: contribution.cheekRight * scale,
+    headYaw: contribution.headYaw * scale,
+    headTilt: contribution.headTilt * scale,
+  };
+}
+
+function scaleJordanListeningBehaviorContribution(
+  contribution: JordanListeningBehaviorContribution,
+): JordanListeningBehaviorContribution {
+  const scale = JORDAN_FINAL_HUMANIZATION_TUNING.subtletyMultiplier.listening;
+  return {
+    eyeUp: contribution.eyeUp * scale,
+    eyeDown: contribution.eyeDown * scale,
+    eyeAsym: contribution.eyeAsym * scale,
+    brow: contribution.brow * scale,
+    smileLeft: contribution.smileLeft * scale,
+    smileRight: contribution.smileRight * scale,
+    cheekLeft: contribution.cheekLeft * scale,
+    cheekRight: contribution.cheekRight * scale,
+    frownLeft: contribution.frownLeft * scale,
+    frownRight: contribution.frownRight * scale,
+    sad: contribution.sad * scale,
+    headYaw: contribution.headYaw * scale,
+    headTilt: contribution.headTilt * scale,
+    smileMultiplier: contribution.smileMultiplier,
+    emotionalLatencyScale: contribution.emotionalLatencyScale,
+  };
+}
+
+function scaleJordanSpeakingBehaviorContribution(
+  contribution: JordanSpeakingBehaviorContribution,
+): JordanSpeakingBehaviorContribution {
+  const scale = JORDAN_FINAL_HUMANIZATION_TUNING.subtletyMultiplier.speaking;
+  return {
+    cheekLeft: contribution.cheekLeft * scale,
+    cheekRight: contribution.cheekRight * scale,
+    brow: contribution.brow * scale,
+    smileLeft: contribution.smileLeft * scale,
+    smileRight: contribution.smileRight * scale,
+    frownLeft: contribution.frownLeft * scale,
+    frownRight: contribution.frownRight * scale,
+    sad: contribution.sad * scale,
+    eyeUp: contribution.eyeUp * scale,
+    eyeDown: contribution.eyeDown * scale,
+    eyeAsym: contribution.eyeAsym * scale,
+    headYaw: contribution.headYaw * scale,
+    headTilt: contribution.headTilt * scale,
+    turnEndReleaseActive: contribution.turnEndReleaseActive,
+    softProcessingPauseActive: contribution.softProcessingPauseActive,
+  };
+}
 
 function avatarModeLabel(mode: AvatarRenderMode): string {
   return mode;
@@ -512,6 +1017,736 @@ function resolveJordanPresenceState({
   return "idle";
 }
 
+const JORDAN_IDLE_SCHEDULER_CONSUMED_EVENT_TYPES = new Set<
+  JordanBehaviorTimingEvent["type"]
+>([
+  "idle_stillness",
+  "idle_micro_adjust",
+  "eye_refocus",
+  "brow_soft_lift",
+  "micro_head_tilt",
+  "long_pause_stillness",
+  "processing_pause",
+]);
+const JORDAN_LISTENING_SCHEDULER_CONSUMED_EVENT_TYPES = new Set<
+  JordanBehaviorTimingEvent["type"]
+>([
+  "listening_ack",
+  "listening_soft_smile",
+  "empathy_soften",
+  "eye_refocus",
+  "brow_soft_lift",
+  "brow_concern",
+  "micro_head_tilt",
+  "micro_head_shake",
+  "soft_processing_pause",
+  "user_sentence_end",
+  "user_pause_ack",
+  "long_pause_stillness",
+  "processing_pause",
+  "anticipation_focus",
+  "emotional_emphasis",
+  "pre_speech_focus",
+]);
+const JORDAN_SPEAKING_SCHEDULER_CONSUMED_EVENT_TYPES = new Set<
+  JordanBehaviorTimingEvent["type"]
+>([
+  "eye_refocus",
+  "brow_soft_lift",
+  "micro_head_tilt",
+  "turn_end_release",
+  "soft_processing_pause",
+  "speaking_emphasis",
+  "speaking_soften",
+  "speaking_settle",
+  "jordan_sentence_end",
+  "turn_taking_settle",
+  "post_speech_release",
+  "pre_speech_focus",
+  "anticipation_focus",
+  "emotional_emphasis",
+]);
+
+function hashJordanBehaviorEventId(id: string): number {
+  let hash = 0;
+  for (let index = 0; index < id.length; index += 1) {
+    hash = (hash * 31 + id.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function eventDirection(event: JordanBehaviorTimingEvent, salt = 0): 1 | -1 {
+  return ((hashJordanBehaviorEventId(event.id) + salt) % 2 === 0 ? 1 : -1);
+}
+
+function strongestJordanIdleEvent(
+  events: JordanBehaviorTimingEvent[],
+  type: JordanBehaviorTimingEvent["type"],
+): JordanBehaviorTimingEvent | null {
+  return events
+    .filter((event) => event.type === type)
+    .sort((a, b) => b.intensity * b.weight - a.intensity * a.weight)[0] ?? null;
+}
+
+function jordanMotionChannelIsActive(
+  event: JordanBehaviorTimingEvent,
+  channel: NonNullable<JordanBehaviorTimingEvent["channels"]>[number]["channel"],
+  nowMs: number,
+): boolean {
+  if (!event.channels || event.channels.length === 0) {
+    return true;
+  }
+
+  return event.channels.some((motionChannel) => {
+    if (motionChannel.channel !== channel) {
+      return false;
+    }
+
+    const interruptedAtMs =
+      typeof motionChannel.metadata?.interruptedAtMs === "number"
+        ? motionChannel.metadata.interruptedAtMs
+        : null;
+
+    if (motionChannel.interrupted && interruptedAtMs !== null && nowMs >= interruptedAtMs) {
+      return false;
+    }
+
+    return motionChannel.startsAtMs <= nowMs && motionChannel.endsAtMs >= nowMs;
+  });
+}
+
+function strongestJordanChannelEvent(
+  events: JordanBehaviorTimingEvent[],
+  type: JordanBehaviorTimingEvent["type"],
+  channel: NonNullable<JordanBehaviorTimingEvent["channels"]>[number]["channel"],
+  nowMs: number,
+): JordanBehaviorTimingEvent | null {
+  return events
+    .filter(
+      (event) =>
+        event.type === type && jordanMotionChannelIsActive(event, channel, nowMs)
+    )
+    .sort((a, b) => b.intensity * b.weight - a.intensity * a.weight)[0] ?? null;
+}
+
+function strongestJordanChannelEventOfTypes(
+  events: JordanBehaviorTimingEvent[],
+  types: JordanBehaviorTimingEvent["type"][],
+  channel: NonNullable<JordanBehaviorTimingEvent["channels"]>[number]["channel"],
+  nowMs: number,
+): JordanBehaviorTimingEvent | null {
+  return events
+    .filter(
+      (event) =>
+        types.includes(event.type) &&
+        jordanMotionChannelIsActive(event, channel, nowMs)
+    )
+    .sort((a, b) => b.intensity * b.weight - a.intensity * a.weight)[0] ?? null;
+}
+
+function jordanBehaviorEventRamp(
+  event: JordanBehaviorTimingEvent,
+  nowMs: number,
+  offsetMs: number,
+  riseMs: number,
+): number {
+  return THREE.MathUtils.clamp(
+    (nowMs - event.startsAtMs - offsetMs) / Math.max(riseMs, 1),
+    0,
+    1
+  );
+}
+
+function hasConcernedJordanListeningSentiment(sentimentLabel: string): boolean {
+  const normalized = sentimentLabel.toLowerCase();
+  return (
+    normalized.includes("sad") ||
+    normalized.includes("negative") ||
+    normalized.includes("crisis") ||
+    normalized.includes("anxious") ||
+    normalized.includes("stress") ||
+    normalized.includes("stressed") ||
+    normalized.includes("worried")
+  );
+}
+
+function normalizeJordanEmotionalModulationMode(
+  sentimentLabel: string,
+  presenceState: JordanPresenceState,
+): JordanEmotionalModulationMode {
+  if (presenceState === "thinking") {
+    return "thinking";
+  }
+
+  const normalized = sentimentLabel.toLowerCase();
+
+  if (
+    normalized.includes("happy") ||
+    normalized.includes("positive") ||
+    normalized.includes("warm") ||
+    normalized.includes("supportive") ||
+    normalized.includes("hopeful") ||
+    normalized.includes("joy")
+  ) {
+    return "happy";
+  }
+
+  if (
+    normalized.includes("anxious") ||
+    normalized.includes("worried") ||
+    normalized.includes("stress") ||
+    normalized.includes("stressed")
+  ) {
+    return "anxious";
+  }
+
+  if (
+    normalized.includes("sad") ||
+    normalized.includes("negative") ||
+    normalized.includes("crisis") ||
+    normalized.includes("serious") ||
+    normalized.includes("down")
+  ) {
+    return "sad";
+  }
+
+  return "neutral";
+}
+
+function getJordanEmotionalModulationProfile(
+  mode: JordanEmotionalModulationMode,
+): JordanEmotionalModulationProfile {
+  return JORDAN_EMOTIONAL_MODULATION_TUNING[mode];
+}
+
+function extractJordanSentimentCompound(sentiment: unknown): number | undefined {
+  if (!sentiment || typeof sentiment !== "object") {
+    return undefined;
+  }
+
+  const record = sentiment as Record<string, unknown>;
+  const candidates = [
+    record.compound,
+    record.score,
+    record.polarity,
+    record.value,
+  ];
+  const numeric = candidates.find((value) => typeof value === "number");
+
+  return typeof numeric === "number" ? numeric : undefined;
+}
+
+function resolveJordanIdleBehaviorContribution(
+  events: JordanBehaviorTimingEvent[],
+  nowMs: number,
+  modulationProfile: JordanEmotionalModulationProfile,
+): JordanIdleBehaviorContribution {
+  const contribution = { ...EMPTY_JORDAN_IDLE_BEHAVIOR_CONTRIBUTION };
+  const eyeEvent = strongestJordanChannelEventOfTypes(
+    events,
+    ["eye_refocus", "processing_pause", "long_pause_stillness"],
+    "eye",
+    nowMs
+  );
+  const browEvent = strongestJordanChannelEvent(events, "brow_soft_lift", "brow", nowMs);
+  const mouthEvent = strongestJordanChannelEvent(events, "idle_micro_adjust", "mouth", nowMs);
+  const cheekEvent = strongestJordanChannelEvent(events, "idle_micro_adjust", "cheek", nowMs);
+  const headEvent = strongestJordanChannelEvent(events, "micro_head_tilt", "head", nowMs);
+
+  if (eyeEvent) {
+    const eyeAmount =
+      THREE.MathUtils.clamp(eyeEvent.intensity, 0.008, 0.025) *
+      modulationProfile.eyeEngagementMultiplier;
+    if (eventDirection(eyeEvent) > 0) {
+      contribution.eyeUp = eyeAmount;
+    } else {
+      contribution.eyeDown = eyeAmount;
+    }
+    contribution.eyeAsym = eyeAmount * 0.16 * eventDirection(eyeEvent, 7);
+  }
+
+  if (browEvent) {
+    contribution.brow = THREE.MathUtils.clamp(browEvent.intensity, 0.012, 0.04);
+  }
+
+  if (mouthEvent) {
+    const mouthAmount = THREE.MathUtils.clamp(mouthEvent.intensity, 0.02, 0.08);
+    contribution.visemeRest = THREE.MathUtils.clamp(mouthAmount * 0.31, 0.005, 0.025);
+    contribution.smileLeft =
+      THREE.MathUtils.clamp(mouthAmount * 0.26, 0.005, 0.025) *
+      modulationProfile.smileMultiplier *
+      (eventDirection(mouthEvent, 3) > 0 ? 1 : 0.72);
+    contribution.smileRight =
+      THREE.MathUtils.clamp(mouthAmount * 0.26, 0.005, 0.025) *
+      modulationProfile.smileMultiplier *
+      (eventDirection(mouthEvent, 3) > 0 ? 0.72 : 1);
+  }
+
+  if (cheekEvent) {
+    const cheekAmount = THREE.MathUtils.clamp(cheekEvent.intensity, 0.02, 0.08);
+    contribution.cheekLeft =
+      THREE.MathUtils.clamp(cheekAmount * 0.18, 0.004, 0.018) *
+      modulationProfile.cheekWarmthMultiplier *
+      (eventDirection(cheekEvent, 11) > 0 ? 1 : 0.76);
+    contribution.cheekRight =
+      THREE.MathUtils.clamp(cheekAmount * 0.18, 0.004, 0.018) *
+      modulationProfile.cheekWarmthMultiplier *
+      (eventDirection(cheekEvent, 11) > 0 ? 0.76 : 1);
+  }
+
+  if (headEvent) {
+    contribution.headYaw =
+      THREE.MathUtils.clamp(headEvent.intensity * 0.62, 0.003, 0.009) *
+      eventDirection(headEvent, 17);
+    contribution.headTilt =
+      THREE.MathUtils.clamp(headEvent.intensity * 0.38, 0.002, 0.006) *
+      eventDirection(headEvent, 23);
+  }
+
+  contribution.eyeUp = THREE.MathUtils.clamp(contribution.eyeUp, 0, 0.025);
+  contribution.eyeDown = THREE.MathUtils.clamp(
+    contribution.eyeDown +
+      ((modulationProfile as { thinkingDownBiasMultiplier?: number })
+        .thinkingDownBiasMultiplier
+        ? 0.006 *
+          ((modulationProfile as { thinkingDownBiasMultiplier?: number })
+            .thinkingDownBiasMultiplier ?? 1)
+        : 0),
+    0,
+    0.03
+  );
+  contribution.smileLeft = THREE.MathUtils.clamp(contribution.smileLeft, 0, 0.025);
+  contribution.smileRight = THREE.MathUtils.clamp(contribution.smileRight, 0, 0.025);
+  contribution.cheekLeft = THREE.MathUtils.clamp(contribution.cheekLeft, 0, 0.018);
+  contribution.cheekRight = THREE.MathUtils.clamp(contribution.cheekRight, 0, 0.018);
+
+  return contribution;
+}
+
+function resolveJordanListeningBehaviorContribution(
+  events: JordanBehaviorTimingEvent[],
+  nowMs: number,
+  sentimentLabel: string,
+  modulationProfile: JordanEmotionalModulationProfile,
+): JordanListeningBehaviorContribution {
+  const contribution = { ...EMPTY_JORDAN_LISTENING_BEHAVIOR_CONTRIBUTION };
+  const concernedSentiment = hasConcernedJordanListeningSentiment(sentimentLabel);
+  const concernScale =
+    (modulationProfile as { concernMultiplier?: number }).concernMultiplier ?? 1;
+  const smileScale = (concernedSentiment ? 0.35 : 1) * modulationProfile.smileMultiplier;
+
+  const ackTypes: JordanBehaviorTimingEvent["type"][] = [
+    "listening_ack",
+    "user_sentence_end",
+    "user_pause_ack",
+  ];
+  const ackBrowEvent = strongestJordanChannelEventOfTypes(events, ackTypes, "brow", nowMs);
+  if (ackBrowEvent) {
+    const browRamp = jordanBehaviorEventRamp(ackBrowEvent, nowMs, 0, 220);
+    contribution.brow = Math.max(
+      contribution.brow,
+      THREE.MathUtils.clamp(ackBrowEvent.intensity * 1.1, 0.02, 0.07) * browRamp
+    );
+  }
+
+  const ackMouthEvent = strongestJordanChannelEventOfTypes(events, ackTypes, "mouth", nowMs);
+  if (ackMouthEvent) {
+    const smileRamp = jordanBehaviorEventRamp(ackMouthEvent, nowMs, 140, 260);
+    const smile = THREE.MathUtils.clamp(ackMouthEvent.intensity * 0.85, 0.02, 0.06) * smileRamp * smileScale;
+    contribution.smileLeft = Math.max(contribution.smileLeft, smile * (eventDirection(ackMouthEvent, 5) > 0 ? 1 : 0.82));
+    contribution.smileRight = Math.max(contribution.smileRight, smile * (eventDirection(ackMouthEvent, 5) > 0 ? 0.82 : 1));
+  }
+
+  const ackCheekEvent = strongestJordanChannelEventOfTypes(events, ackTypes, "cheek", nowMs);
+  if (ackCheekEvent) {
+    const smileRamp = jordanBehaviorEventRamp(ackCheekEvent, nowMs, 140, 260);
+    const cheek =
+      THREE.MathUtils.clamp(ackCheekEvent.intensity * 0.7, 0.015, 0.05) *
+      smileRamp *
+      modulationProfile.cheekWarmthMultiplier;
+    contribution.cheekLeft = Math.max(contribution.cheekLeft, cheek);
+    contribution.cheekRight = Math.max(contribution.cheekRight, cheek * 0.92);
+  }
+
+  const ackHeadEvent = strongestJordanChannelEventOfTypes(events, ackTypes, "head", nowMs);
+  if (ackHeadEvent) {
+    const headRamp = jordanBehaviorEventRamp(ackHeadEvent, nowMs, 220, 320);
+    contribution.headTilt += THREE.MathUtils.clamp(ackHeadEvent.intensity * 0.16, 0.003, 0.01) * headRamp * eventDirection(ackHeadEvent, 9);
+  }
+
+  const softSmileEvent = strongestJordanChannelEvent(events, "listening_soft_smile", "mouth", nowMs);
+  if (softSmileEvent) {
+    const smileRamp = jordanBehaviorEventRamp(softSmileEvent, nowMs, 120, 340);
+    const smile = THREE.MathUtils.clamp(softSmileEvent.intensity, 0.015, 0.055) * smileRamp * smileScale;
+    contribution.smileLeft = Math.max(contribution.smileLeft, smile * 0.95);
+    contribution.smileRight = Math.max(contribution.smileRight, smile);
+  }
+
+  const softSmileCheekEvent = strongestJordanChannelEvent(events, "listening_soft_smile", "cheek", nowMs);
+  if (softSmileCheekEvent) {
+    const smileRamp = jordanBehaviorEventRamp(softSmileCheekEvent, nowMs, 120, 340);
+    const cheek = THREE.MathUtils.clamp(softSmileCheekEvent.intensity * 0.82, 0.012, 0.045) * smileRamp;
+    contribution.cheekLeft = Math.max(contribution.cheekLeft, cheek * 0.92);
+    contribution.cheekRight = Math.max(contribution.cheekRight, cheek);
+  }
+
+  const empathyEvent = strongestJordanChannelEventOfTypes(
+    events,
+    ["empathy_soften", "emotional_emphasis"],
+    "brow",
+    nowMs
+  );
+  const concernEvent = strongestJordanChannelEventOfTypes(
+    events,
+    ["brow_concern", "emotional_emphasis"],
+    "brow",
+    nowMs
+  );
+  const strongestConcernEvent =
+    empathyEvent && concernEvent
+      ? empathyEvent.intensity >= concernEvent.intensity
+        ? empathyEvent
+        : concernEvent
+      : empathyEvent ?? concernEvent;
+  if (strongestConcernEvent) {
+    const browRamp = jordanBehaviorEventRamp(strongestConcernEvent, nowMs, 0, 260);
+    const concernRamp = jordanBehaviorEventRamp(strongestConcernEvent, nowMs, 120, 360);
+    contribution.brow = Math.max(
+      contribution.brow,
+      THREE.MathUtils.clamp(strongestConcernEvent.intensity * 1.15, 0.02, 0.07) *
+        browRamp *
+        concernScale
+    );
+    void concernRamp;
+    contribution.emotionalLatencyScale = concernedSentiment ? 1.25 : 1;
+  }
+
+  const concernMouthEvent =
+    strongestJordanChannelEventOfTypes(
+      events,
+      ["empathy_soften", "emotional_emphasis"],
+      "mouth",
+      nowMs
+    ) ??
+    strongestJordanChannelEventOfTypes(
+      events,
+      ["brow_concern", "emotional_emphasis"],
+      "mouth",
+      nowMs
+    );
+  if (concernMouthEvent && (concernedSentiment || concernMouthEvent.type === "empathy_soften")) {
+    const concernRamp = jordanBehaviorEventRamp(concernMouthEvent, nowMs, 120, 360);
+    contribution.frownLeft = Math.max(
+      contribution.frownLeft,
+      THREE.MathUtils.clamp(concernMouthEvent.intensity, 0.02, 0.07) *
+        concernRamp *
+        concernScale
+    );
+    contribution.frownRight = Math.max(
+      contribution.frownRight,
+      THREE.MathUtils.clamp(concernMouthEvent.intensity * 0.92, 0.02, 0.07) *
+        concernRamp *
+        concernScale
+    );
+    contribution.sad = Math.max(
+      contribution.sad,
+      THREE.MathUtils.clamp(concernMouthEvent.intensity * 1.7, 0.04, 0.12) *
+        concernRamp *
+        concernScale
+    );
+    contribution.smileMultiplier = Math.min(contribution.smileMultiplier, concernedSentiment ? 0.35 : 0.55);
+  }
+
+  const browLiftEvent = strongestJordanChannelEvent(events, "brow_soft_lift", "brow", nowMs);
+  if (browLiftEvent) {
+    contribution.brow = Math.max(
+      contribution.brow,
+      THREE.MathUtils.clamp(browLiftEvent.intensity, 0.015, 0.06) *
+        jordanBehaviorEventRamp(browLiftEvent, nowMs, 0, 220)
+    );
+  }
+
+  const eyeEvent = strongestJordanChannelEventOfTypes(
+    events,
+    ["eye_refocus", "anticipation_focus", "pre_speech_focus"],
+    "eye",
+    nowMs
+  );
+  if (eyeEvent) {
+    const eyeAmount =
+      THREE.MathUtils.clamp(eyeEvent.intensity, 0.008, 0.028) *
+      jordanBehaviorEventRamp(eyeEvent, nowMs, 180, 260) *
+      modulationProfile.eyeEngagementMultiplier;
+    if (eventDirection(eyeEvent, 13) > 0) {
+      contribution.eyeUp = Math.max(contribution.eyeUp, eyeAmount);
+    } else {
+      contribution.eyeDown = Math.max(contribution.eyeDown, eyeAmount);
+    }
+    contribution.eyeAsym = eyeAmount * 0.12 * eventDirection(eyeEvent, 19);
+  }
+
+  const pauseEvent = strongestJordanChannelEventOfTypes(
+    events,
+    ["soft_processing_pause", "processing_pause", "long_pause_stillness"],
+    "eye",
+    nowMs
+  );
+  if (pauseEvent) {
+    const pauseRamp = jordanBehaviorEventRamp(pauseEvent, nowMs, 0, 420);
+    contribution.eyeDown = Math.max(
+      contribution.eyeDown,
+      0.01 *
+        pauseRamp *
+        (((modulationProfile as { thinkingDownBiasMultiplier?: number })
+          .thinkingDownBiasMultiplier ?? 1))
+    );
+    contribution.brow = Math.max(contribution.brow, 0.018 * pauseRamp);
+    contribution.smileMultiplier = Math.min(contribution.smileMultiplier, 0.72);
+  }
+
+  const headTiltEvent = strongestJordanChannelEvent(events, "micro_head_tilt", "head", nowMs);
+  if (headTiltEvent) {
+    const headRamp = jordanBehaviorEventRamp(headTiltEvent, nowMs, 180, 360);
+    contribution.headTilt +=
+      THREE.MathUtils.clamp(headTiltEvent.intensity * 0.58, 0.003, 0.01) *
+      headRamp *
+      eventDirection(headTiltEvent, 29);
+    contribution.headYaw +=
+      THREE.MathUtils.clamp(headTiltEvent.intensity * 0.42, 0.003, 0.008) *
+      headRamp *
+      eventDirection(headTiltEvent, 31);
+  }
+
+  const headShakeEvent = strongestJordanChannelEvent(events, "micro_head_shake", "head", nowMs);
+  if (headShakeEvent) {
+    contribution.headYaw +=
+      THREE.MathUtils.clamp(headShakeEvent.intensity * 0.34, 0.003, 0.008) *
+      jordanBehaviorEventRamp(headShakeEvent, nowMs, 120, 340) *
+      eventDirection(headShakeEvent, 37);
+  }
+
+  contribution.brow = THREE.MathUtils.clamp(contribution.brow, 0, 0.08);
+  contribution.smileLeft = THREE.MathUtils.clamp(contribution.smileLeft, 0, 0.06);
+  contribution.smileRight = THREE.MathUtils.clamp(contribution.smileRight, 0, 0.06);
+  contribution.cheekLeft = THREE.MathUtils.clamp(contribution.cheekLeft, 0, 0.05);
+  contribution.cheekRight = THREE.MathUtils.clamp(contribution.cheekRight, 0, 0.05);
+  contribution.frownLeft = THREE.MathUtils.clamp(contribution.frownLeft, 0, 0.07);
+  contribution.frownRight = THREE.MathUtils.clamp(contribution.frownRight, 0, 0.07);
+  contribution.sad = THREE.MathUtils.clamp(contribution.sad, 0, 0.12);
+  contribution.headYaw = THREE.MathUtils.clamp(contribution.headYaw, -0.01, 0.01);
+  contribution.headTilt = THREE.MathUtils.clamp(contribution.headTilt, -0.01, 0.01);
+
+  return contribution;
+}
+
+function resolveJordanSpeakingBehaviorContribution({
+  events,
+  releaseEvents,
+  nowMs,
+  sentimentLabel,
+  speechEnergy,
+  modulationProfile,
+}: {
+  events: JordanBehaviorTimingEvent[];
+  releaseEvents: JordanBehaviorTimingEvent[];
+  nowMs: number;
+  sentimentLabel: string;
+  speechEnergy: number;
+  modulationProfile: JordanEmotionalModulationProfile;
+}): JordanSpeakingBehaviorContribution {
+  const contribution = { ...EMPTY_JORDAN_SPEAKING_BEHAVIOR_CONTRIBUTION };
+  const concernedSentiment = hasConcernedJordanListeningSentiment(sentimentLabel);
+  const positiveSentiment = sentimentLabel.toLowerCase().includes("positive") ||
+    sentimentLabel.toLowerCase().includes("happy");
+  const energy = THREE.MathUtils.clamp(speechEnergy, 0, 1);
+  const energyCurve = Math.pow(energy, 0.85);
+  const rangeByEnergy = (range: readonly [number, number], scale = 1) =>
+    THREE.MathUtils.clamp(
+      THREE.MathUtils.lerp(range[0], range[1], energyCurve) * scale,
+      0,
+      JORDAN_SPEAKING_BEHAVIOR_TUNING.maxSpeakingSupport
+    );
+
+  contribution.cheekLeft = rangeByEnergy(JORDAN_SPEAKING_BEHAVIOR_TUNING.cheekEnergyRange, 0.92);
+  contribution.cheekRight = rangeByEnergy(JORDAN_SPEAKING_BEHAVIOR_TUNING.cheekEnergyRange, 1.02);
+  contribution.cheekLeft *= modulationProfile.cheekWarmthMultiplier;
+  contribution.cheekRight *= modulationProfile.cheekWarmthMultiplier;
+  contribution.brow = rangeByEnergy(
+    JORDAN_SPEAKING_BEHAVIOR_TUNING.browEnergyRange,
+    concernedSentiment ? 0.72 : positiveSentiment ? 1.05 : 0.88
+  );
+  contribution.brow *=
+    (modulationProfile as { concernMultiplier?: number }).concernMultiplier ?? 1;
+
+  if (positiveSentiment) {
+    contribution.smileLeft =
+      rangeByEnergy(JORDAN_SPEAKING_BEHAVIOR_TUNING.smileEnergyRange, 0.92) *
+      modulationProfile.smileMultiplier;
+    contribution.smileRight =
+      rangeByEnergy(JORDAN_SPEAKING_BEHAVIOR_TUNING.smileEnergyRange, 1.02) *
+      modulationProfile.smileMultiplier;
+  } else if (concernedSentiment) {
+    contribution.frownLeft = rangeByEnergy(JORDAN_SPEAKING_BEHAVIOR_TUNING.frownEnergyRange, 0.95);
+    contribution.frownRight = rangeByEnergy(JORDAN_SPEAKING_BEHAVIOR_TUNING.frownEnergyRange, 0.9);
+    contribution.frownLeft *=
+      (modulationProfile as { concernMultiplier?: number }).concernMultiplier ?? 1;
+    contribution.frownRight *=
+      (modulationProfile as { concernMultiplier?: number }).concernMultiplier ?? 1;
+    contribution.sad = THREE.MathUtils.clamp(
+      (0.04 + energyCurve * 0.05) *
+        ((modulationProfile as { concernMultiplier?: number }).concernMultiplier ?? 1),
+      0,
+      0.12
+    );
+  } else {
+    contribution.smileLeft =
+      rangeByEnergy(JORDAN_SPEAKING_BEHAVIOR_TUNING.smileEnergyRange, 0.35) *
+      modulationProfile.smileMultiplier;
+    contribution.smileRight =
+      rangeByEnergy(JORDAN_SPEAKING_BEHAVIOR_TUNING.smileEnergyRange, 0.42) *
+      modulationProfile.smileMultiplier;
+  }
+
+  const emphasisEvent = strongestJordanChannelEventOfTypes(
+    events,
+    ["speaking_emphasis", "emotional_emphasis", "pre_speech_focus"],
+    "brow",
+    nowMs
+  );
+  if (emphasisEvent) {
+    const ramp = jordanBehaviorEventRamp(emphasisEvent, nowMs, 0, 220);
+    contribution.brow = Math.max(
+      contribution.brow,
+      THREE.MathUtils.clamp(emphasisEvent.intensity, 0.012, 0.06) * ramp
+    );
+  }
+
+  const emphasisHeadEvent = strongestJordanChannelEvent(events, "speaking_emphasis", "head", nowMs);
+  if (emphasisHeadEvent) {
+    const ramp = jordanBehaviorEventRamp(emphasisHeadEvent, nowMs, 120, 280);
+    contribution.headTilt +=
+      THREE.MathUtils.clamp(
+        emphasisHeadEvent.intensity * 0.28,
+        JORDAN_SPEAKING_BEHAVIOR_TUNING.headSupportTiltRange[0],
+        JORDAN_SPEAKING_BEHAVIOR_TUNING.headSupportTiltRange[1]
+      ) *
+      ramp *
+      eventDirection(emphasisHeadEvent, 41);
+  }
+
+  const softenEvent = strongestJordanChannelEvent(events, "speaking_soften", "mouth", nowMs);
+  if (softenEvent) {
+    const ramp = jordanBehaviorEventRamp(softenEvent, nowMs, 120, 320);
+    const smile = THREE.MathUtils.clamp(softenEvent.intensity * 0.7, 0.01, 0.045) * ramp;
+    contribution.smileLeft = Math.max(contribution.smileLeft, smile * 0.9);
+    contribution.smileRight = Math.max(contribution.smileRight, smile);
+  }
+
+  const softenCheekEvent = strongestJordanChannelEvent(events, "speaking_soften", "cheek", nowMs);
+  if (softenCheekEvent) {
+    const ramp = jordanBehaviorEventRamp(softenCheekEvent, nowMs, 160, 340);
+    const cheek = THREE.MathUtils.clamp(softenCheekEvent.intensity * 0.58, 0.008, 0.04) * ramp;
+    contribution.cheekLeft = Math.max(contribution.cheekLeft, cheek * 0.8);
+    contribution.cheekRight = Math.max(contribution.cheekRight, cheek * 0.86);
+  }
+
+  const eyeEvent = strongestJordanChannelEventOfTypes(
+    events,
+    ["eye_refocus", "anticipation_focus", "pre_speech_focus"],
+    "eye",
+    nowMs
+  );
+  if (eyeEvent) {
+    const eyeAmount =
+      THREE.MathUtils.clamp(
+        eyeEvent.intensity,
+        JORDAN_SPEAKING_BEHAVIOR_TUNING.eyeRefocusRange[0],
+        JORDAN_SPEAKING_BEHAVIOR_TUNING.eyeRefocusRange[1]
+      ) *
+      jordanBehaviorEventRamp(eyeEvent, nowMs, 180, 300) *
+      modulationProfile.eyeEngagementMultiplier;
+    if (eventDirection(eyeEvent, 43) > 0) {
+      contribution.eyeUp = eyeAmount;
+    } else {
+      contribution.eyeDown = eyeAmount;
+    }
+    contribution.eyeAsym = eyeAmount * 0.1 * eventDirection(eyeEvent, 47);
+  }
+
+  const headEvent = strongestJordanChannelEvent(events, "micro_head_tilt", "head", nowMs);
+  if (headEvent) {
+    const ramp = jordanBehaviorEventRamp(headEvent, nowMs, 180, 320);
+    contribution.headYaw +=
+      THREE.MathUtils.clamp(
+        headEvent.intensity * 0.34,
+        JORDAN_SPEAKING_BEHAVIOR_TUNING.headSupportYawRange[0],
+        JORDAN_SPEAKING_BEHAVIOR_TUNING.headSupportYawRange[1]
+      ) *
+      ramp *
+      eventDirection(headEvent, 53);
+    contribution.headTilt +=
+      THREE.MathUtils.clamp(
+        headEvent.intensity * 0.24,
+        JORDAN_SPEAKING_BEHAVIOR_TUNING.headSupportTiltRange[0],
+        JORDAN_SPEAKING_BEHAVIOR_TUNING.headSupportTiltRange[1]
+      ) *
+      ramp *
+      eventDirection(headEvent, 59);
+  }
+
+  const pauseEvent = strongestJordanChannelEventOfTypes(
+    events,
+    ["soft_processing_pause", "processing_pause"],
+    "eye",
+    nowMs
+  );
+  const settleEvent = strongestJordanChannelEventOfTypes(
+    events,
+    ["speaking_settle", "jordan_sentence_end", "turn_taking_settle"],
+    "eye",
+    nowMs
+  );
+  const releaseEvent = strongestJordanChannelEventOfTypes(
+    releaseEvents,
+    ["turn_end_release", "post_speech_release", "jordan_sentence_end"],
+    "eye",
+    nowMs
+  );
+  const settlingEvent = releaseEvent ?? settleEvent ?? pauseEvent;
+  if (settlingEvent) {
+    const settleRamp = jordanBehaviorEventRamp(settlingEvent, nowMs, 0, 420);
+    contribution.softProcessingPauseActive =
+      settlingEvent.type === "soft_processing_pause" || settlingEvent.type === "speaking_settle";
+    contribution.turnEndReleaseActive = settlingEvent.type === "turn_end_release";
+    contribution.eyeDown = Math.max(
+      contribution.eyeDown,
+      0.01 *
+        settleRamp *
+        (((modulationProfile as { thinkingDownBiasMultiplier?: number })
+          .thinkingDownBiasMultiplier ?? 1))
+    );
+    contribution.brow *= 1 - 0.35 * settleRamp;
+    contribution.smileLeft *= 1 - 0.45 * settleRamp;
+    contribution.smileRight *= 1 - 0.45 * settleRamp;
+    contribution.cheekLeft *= 1 - 0.35 * settleRamp;
+    contribution.cheekRight *= 1 - 0.35 * settleRamp;
+    contribution.headYaw += 0.002 * settleRamp * eventDirection(settlingEvent, 61);
+    contribution.headTilt += 0.002 * settleRamp * eventDirection(settlingEvent, 67);
+  }
+
+  contribution.cheekLeft = THREE.MathUtils.clamp(contribution.cheekLeft, 0, 0.07);
+  contribution.cheekRight = THREE.MathUtils.clamp(contribution.cheekRight, 0, 0.07);
+  contribution.brow = THREE.MathUtils.clamp(contribution.brow, 0, 0.06);
+  contribution.smileLeft = THREE.MathUtils.clamp(contribution.smileLeft, 0, 0.055);
+  contribution.smileRight = THREE.MathUtils.clamp(contribution.smileRight, 0, 0.055);
+  contribution.frownLeft = THREE.MathUtils.clamp(contribution.frownLeft, 0, 0.055);
+  contribution.frownRight = THREE.MathUtils.clamp(contribution.frownRight, 0, 0.055);
+  contribution.headYaw = THREE.MathUtils.clamp(contribution.headYaw, -0.007, 0.007);
+  contribution.headTilt = THREE.MathUtils.clamp(contribution.headTilt, -0.006, 0.006);
+
+  return contribution;
+}
+
 const SHOW_ROOM = false;
 /** 2D-only session view (everyone except Sarah): PNG portrait, no GLB — e.g. Alex, Jordan, Maya. */
 function StaticSessionPortrait({
@@ -543,8 +1778,18 @@ function ThreeAvatar({
   speechPulse,
   speechText,
   speechCharIndex,
+  latestUserTextRef,
+  latestJordanTextRef,
+  userSpeechStartedAtMsRef,
+  userLastSpeechAtMsRef,
+  jordanSpeechStartedAtMsRef,
+  jordanLastSpeechAtMsRef,
+  sentimentCompoundRef,
+  rawAvatarLabel,
+  activeAvatarId,
   modelUrl,
   viewTuning,
+  fixedViewportConfig,
   useRfv2Morphs,
   avatarPhonemeTimelineRef,
   avatarAudioCurrentTimeRef,
@@ -557,10 +1802,20 @@ function ThreeAvatar({
   speechPulse: number;
   speechText: string;
   speechCharIndex: number;
+  latestUserTextRef: MutableRefObject<string>;
+  latestJordanTextRef: MutableRefObject<string>;
+  userSpeechStartedAtMsRef: MutableRefObject<number>;
+  userLastSpeechAtMsRef: MutableRefObject<number>;
+  jordanSpeechStartedAtMsRef: MutableRefObject<number>;
+  jordanLastSpeechAtMsRef: MutableRefObject<number>;
+  sentimentCompoundRef: MutableRefObject<number | undefined>;
+  rawAvatarLabel: string | undefined;
+  activeAvatarId: string | null;
   /** Resolved GLB URL for the selected companion (see `resolveCompanionModelUrl`). */
   modelUrl: string;
   /** Framing + mouth strength for this companion’s GLB (see `getCompanionViewTuning`). */
   viewTuning: CompanionViewTuning;
+  fixedViewportConfig?: FixedAvatarViewportConfig | null;
   useRfv2Morphs: boolean;
   avatarPhonemeTimelineRef: MutableRefObject<AvatarPhonemeTimeline | null>;
   avatarAudioCurrentTimeRef: MutableRefObject<number>;
@@ -645,6 +1900,12 @@ function ThreeAvatar({
   const lastJordanMorphInfluenceRef = useRef<number>(0);
   const loggedJordanTimelineKeyRef = useRef<string>("");
   const jordanPresenceStateRef = useRef<JordanPresenceState>("idle");
+  const jordanBehaviorTimingStateRef = useRef<JordanBehaviorTimingState>(
+    createJordanBehaviorTimingState()
+  );
+  const jordanBehaviorTimingNextUpdateRef = useRef(0);
+  const lastJordanBehaviorTimingLogRef = useRef(0);
+  const jordanSpeakingEnergyRef = useRef(0);
   const jordanEyeFocusTargetRef = useRef<JordanEyeFocusState>({
     up: 0,
     down: 0,
@@ -1044,6 +2305,10 @@ function ThreeAvatar({
     lastJordanMorphInfluenceRef.current = 0;
     loggedJordanTimelineKeyRef.current = "";
     jordanPresenceStateRef.current = "idle";
+    jordanBehaviorTimingStateRef.current = createJordanBehaviorTimingState();
+    jordanBehaviorTimingNextUpdateRef.current = 0;
+    lastJordanBehaviorTimingLogRef.current = 0;
+    jordanSpeakingEnergyRef.current = 0;
     jordanEyeFocusTargetRef.current = { up: 0, down: 0, asym: 0, yaw: 0, holding: true, holdMs: 0 };
     jordanEyeNextRefocusRef.current = 0;
     lastJordanEyeFocusLogRef.current = 0;
@@ -1103,7 +2368,31 @@ function ThreeAvatar({
         if (cancelled) return;
         const gltfScene = gltf.scene;
         modelRef.current = gltfScene;
-        if (useRfv2Morphs) {
+        const hasFixedViewportConfig =
+          !useRfv2Morphs && fixedViewportConfig?.camera.mode === "fixed";
+        const isSaraViewport = isSaraFixedViewportConfig(fixedViewportConfig);
+        console.info("[Avatar Runtime Config]", {
+          activeAvatarId,
+          fixedConfigAvatarId: fixedViewportConfig?.avatarId ?? null,
+          modelUrl,
+          useRfv2Morphs,
+          hasFixedViewportConfig,
+          cameraConfig: fixedViewportConfig?.camera ?? null,
+          gltfTransformConfig: fixedViewportConfig?.gltfTransform ?? null,
+        });
+        if (hasFixedViewportConfig) {
+          applyVector3Config(gltfScene.position, fixedViewportConfig.gltfTransform.position, [
+            0,
+            0,
+            0,
+          ]);
+          applyVector3Config(gltfScene.rotation, fixedViewportConfig.gltfTransform.rotation, [
+            0,
+            0,
+            0,
+          ]);
+          applyScaleConfig(gltfScene, fixedViewportConfig.gltfTransform.scale, 1);
+        } else if (useRfv2Morphs) {
           gltfScene.position.set(0, -1.65, 0); // move avatar down shaz
           gltfScene.rotation.set(0, 0, 0);
           gltfScene.scale.set(1.35, 1.35, 1.35);
@@ -1133,6 +2422,7 @@ function ThreeAvatar({
         const activeMorphTargets = new Set<string>();
         const transformCorrections: string[] = [];
         const bodyMeshes: THREE.SkinnedMesh[] = [];
+        const saraMeshDiagnostics: Array<Record<string, unknown>> = [];
         let rfv2MorphPrimitiveIndex = 0;
         const rfv2StaticBodyGroup = useRfv2Morphs ? new THREE.Group() : null;
         if (rfv2StaticBodyGroup) {
@@ -1146,6 +2436,50 @@ function ThreeAvatar({
 
         gltfScene.traverse((child: any) => {
           child.visible = true;
+          if (isSaraViewport && DEBUG_SARA_FRAMING) {
+            const mesh = child as THREE.Mesh;
+            const skinnedMesh = child as THREE.SkinnedMesh;
+            const geometry = mesh.geometry as THREE.BufferGeometry | undefined;
+            const positionAttr = geometry?.getAttribute?.("position");
+            const materials = (mesh.isMesh || skinnedMesh.isSkinnedMesh)
+              ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material])
+                  .filter(Boolean)
+                  .map((material: any) => ({
+                    name: material.name || "(unnamed material)",
+                    transparent:
+                      typeof material.transparent === "boolean" ? material.transparent : null,
+                    opacity: typeof material.opacity === "number" ? material.opacity : null,
+                    side: typeof material.side === "number" ? material.side : null,
+                    depthWrite:
+                      typeof material.depthWrite === "boolean" ? material.depthWrite : null,
+                    depthTest:
+                      typeof material.depthTest === "boolean" ? material.depthTest : null,
+                    color: material.color?.getHexString?.() ?? null,
+                    map: material.map?.name || material.map?.source?.data?.src || null,
+                  }))
+              : [];
+            const world = new THREE.Vector3();
+            const worldScale = new THREE.Vector3();
+            child.getWorldPosition(world);
+            child.getWorldScale(worldScale);
+            saraMeshDiagnostics.push({
+              name: child.name || "(unnamed object)",
+              type: child.type,
+              visible: child.visible,
+              parentName: child.parent?.name || "(no parent)",
+              isMesh: Boolean(mesh.isMesh),
+              isSkinnedMesh: Boolean(skinnedMesh.isSkinnedMesh),
+              materials,
+              vertexCount:
+                typeof positionAttr?.count === "number" ? positionAttr.count : null,
+              morphTargetDictionary:
+                mesh.morphTargetDictionary
+                  ? Object.keys(mesh.morphTargetDictionary)
+                  : [],
+              worldPosition: world.toArray(),
+              worldScale: worldScale.toArray(),
+            });
+          }
           if (useRfv2Morphs && isRfv2HeadRootName(child.name || "")) {
             child.position.x += JORDAN_HEAD_OFFSET_X;
             child.position.y += JORDAN_HEAD_OFFSET_Y;
@@ -1168,10 +2502,20 @@ function ThreeAvatar({
             child.renderOrder = 10;
             const materials = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).filter(Boolean);
             materials.forEach((material: any) => {
+              if (isSaraViewport && DEBUG_SARA_FRAMING) {
+                material.opacity = 1;
+                material.transparent = false;
+                material.side = THREE.DoubleSide;
+              }
               material.depthTest = true;
               material.depthWrite = true;
               material.needsUpdate = true;
             });
+            if (isSaraViewport && DEBUG_SARA_FRAMING && isSaraOversizedShellMesh(child)) {
+              child.visible = false;
+              child.frustumCulled = true;
+              transformCorrections.push(`sara.hideOversizedShell:${child.name || mesh.geometry?.name || "unnamed"}`);
+            }
             if (useRfv2Morphs && isRfv2BodyMeshName(child.name || "")) {
               const staticMaterials = materials.map((material: any) => {
                 const clone = material.clone ? material.clone() : material;
@@ -1466,15 +2810,15 @@ function ThreeAvatar({
         // Apply legacy viewport/export corrections on an outer wrapper. Jordan
         // keeps the imported GLB root at identity and is framed from skinned
         // mesh bounds only.
-        if (!useRfv2Morphs && viewTuning.modelRotationX) {
+        if (!useRfv2Morphs && !hasFixedViewportConfig && viewTuning.modelRotationX) {
           avatarRoot.rotation.x = viewTuning.modelRotationX;
           transformCorrections.push("root.rotation.x");
         }
-        if (!useRfv2Morphs && viewTuning.modelRotationY) {
+        if (!useRfv2Morphs && !hasFixedViewportConfig && viewTuning.modelRotationY) {
           avatarRoot.rotation.y = viewTuning.modelRotationY;
           transformCorrections.push("root.rotation.y");
         }
-        if (!useRfv2Morphs && viewTuning.modelRotationZ) {
+        if (!useRfv2Morphs && !hasFixedViewportConfig && viewTuning.modelRotationZ) {
           avatarRoot.rotation.z = viewTuning.modelRotationZ;
           transformCorrections.push("root.rotation.z");
         }
@@ -1497,6 +2841,90 @@ function ThreeAvatar({
           camera.lookAt(0, 0.65, 0);
           transformCorrections.push("jordan.gltf.fixedDemoTransform");
           transformCorrections.push("jordan.camera.fixedDemoView");
+        } else if (hasFixedViewportConfig) {
+          baseScaleRef.current = 1;
+          const fixedCamera = fixedViewportConfig.camera;
+          const cameraPosition = vector3FromConfig(fixedCamera.position, [0, 0.6, 3.2]);
+          const cameraLookAt = vector3FromConfig(fixedCamera.lookAt, [0, 0.7, 0]);
+          camera.fov = fixedCamera.fov ?? 14;
+          camera.near = 0.01;
+          camera.far = 100;
+          camera.position.copy(cameraPosition);
+          camera.lookAt(cameraLookAt);
+          camera.userData.fixedLookAt = cameraLookAt.toArray();
+          transformCorrections.push(`${fixedViewportConfig.debugLabel}.gltf.fixedTransform`);
+          transformCorrections.push(`${fixedViewportConfig.debugLabel}.camera.fixedView`);
+          if (isSaraViewport && DEBUG_SARA_FRAMING) {
+            gltfScene.updateMatrixWorld(true);
+            avatarRoot.updateMatrixWorld(true);
+            const saraVisibleBounds = computeSaraVisibleRenderMeshBounds(gltfScene);
+            const saraVisualAnchorBounds = computeSaraVisualAnchorBounds(gltfScene);
+            const saraTallestRenderMesh = [...saraVisibleBounds.meshBounds].sort(
+              (a, b) => b.size[1] - a.size[1]
+            )[0] ?? null;
+            console.group("[Sara Render Mesh Bounds]");
+            console.table(
+              saraVisibleBounds.meshBounds.map((entry) => ({
+                name: entry.name,
+                worldPosition: entry.worldPosition,
+                worldScale: entry.worldScale,
+                localMin: entry.localBoundingBox?.min ?? null,
+                localMax: entry.localBoundingBox?.max ?? null,
+                worldBoundingSize: entry.size,
+              }))
+            );
+            console.warn(
+              "[Sara Render Mesh Bounds] tallest render mesh:",
+              saraTallestRenderMesh
+            );
+            console.warn(
+              "[Sara Render Mesh Bounds] visual anchor bounds:",
+              saraVisualAnchorBounds
+            );
+            console.groupEnd();
+            const saraCameraBox = saraVisualAnchorBounds.box.isEmpty()
+              ? saraVisibleBounds.box
+              : saraVisualAnchorBounds.box;
+            const saraCenter = saraCameraBox.getCenter(new THREE.Vector3());
+            const saraSize = saraCameraBox.getSize(new THREE.Vector3());
+            let saraDebugBox = saraCameraBox;
+            let saraDebugCenter = saraCenter;
+            const frameDim = Math.max(saraSize.x, saraSize.y, saraSize.z, 0.001);
+            const helperDim = Math.max(frameDim, 0.1);
+            camera.fov = 35;
+            camera.near = 0.0001;
+            camera.far = 100;
+            camera.position.set(saraCenter.x, saraCenter.y, saraCenter.z + frameDim * 2.2);
+            camera.lookAt(saraCenter);
+            camera.userData.fixedLookAt = saraCenter.toArray();
+            camera.updateProjectionMatrix();
+            transformCorrections.push("sara.model19.visualAnchorCamera");
+
+            const visibleBoundsHelper = new THREE.Box3Helper(saraDebugBox, 0x00ff88);
+            visibleBoundsHelper.name = "SaraDebugModel19VisualAnchorBounds";
+            scene.add(visibleBoundsHelper);
+            const axesHelper = new THREE.AxesHelper(helperDim * 0.35);
+            axesHelper.name = "SaraDebugRootAxes";
+            gltfScene.add(axesHelper);
+            const lookAtMarker = new THREE.Mesh(
+              new THREE.SphereGeometry(helperDim * 0.025, 16, 16),
+              new THREE.MeshBasicMaterial({ color: 0xff3366 })
+            );
+            lookAtMarker.name = "SaraDebugCameraLookAt";
+            lookAtMarker.position.copy(saraDebugCenter);
+            scene.add(lookAtMarker);
+            const saraHemi = new THREE.HemisphereLight(0xffffff, 0x334455, 1.6);
+            saraHemi.name = "SaraDebugHemisphereLight";
+            scene.add(saraHemi);
+            const saraPoint = new THREE.PointLight(0xffffff, 2.2, helperDim * 8);
+            saraPoint.name = "SaraDebugPointLight";
+            saraPoint.position.set(
+              saraDebugCenter.x,
+              saraDebugCenter.y + helperDim * 0.5,
+              saraDebugCenter.z + helperDim * 1.5
+            );
+            scene.add(saraPoint);
+          }
         } else {
 
           // Center and frame model
@@ -1617,6 +3045,165 @@ function ThreeAvatar({
 
             }
           });
+          if (isSaraViewport && DEBUG_SARA_FRAMING) {
+            const saraMeshBoxes: Array<{
+              name: string;
+              category: string | null;
+              visible: boolean;
+              min: number[];
+              max: number[];
+              center: number[];
+              size: number[];
+              volume: number;
+              nonZero: boolean;
+            }> = [];
+            const saraMeshNames: string[] = [];
+            const saraCategoryCounts: Record<string, number> = {
+              face: 0,
+              body: 0,
+              top: 0,
+              bottom: 0,
+              footwear: 0,
+              hair: 0,
+              eyes: 0,
+              teeth: 0,
+              tongue: 0,
+              head: 0,
+              skin: 0,
+            };
+            let saraVisibleMeshCount = 0;
+            let saraHiddenMeshCount = 0;
+            gltfScene.traverse((child: THREE.Object3D) => {
+              const isMesh =
+                (child as THREE.Mesh).isMesh ||
+                (child as THREE.SkinnedMesh).isSkinnedMesh;
+              if (!isMesh) return;
+              const name = child.name || "(unnamed mesh)";
+              saraMeshNames.push(name);
+              if (child.visible) saraVisibleMeshCount += 1;
+              else saraHiddenMeshCount += 1;
+              const category = meshDiagnosticCategory(name);
+              if (category && category in saraCategoryCounts) {
+                saraCategoryCounts[category] += 1;
+              }
+              const meshBox = new THREE.Box3().setFromObject(child);
+              const meshCenter = meshBox.getCenter(new THREE.Vector3());
+              const meshSize = meshBox.getSize(new THREE.Vector3());
+              const volume = meshSize.x * meshSize.y * meshSize.z;
+              saraMeshBoxes.push({
+                name,
+                category,
+                visible: child.visible,
+                min: meshBox.min.toArray(),
+                max: meshBox.max.toArray(),
+                center: meshCenter.toArray(),
+                size: meshSize.toArray(),
+                volume,
+                nonZero: meshSize.x > 0 && meshSize.y > 0 && meshSize.z > 0,
+              });
+            });
+            const sortedSaraMeshNames = [...saraMeshNames].sort((a, b) =>
+              a.localeCompare(b)
+            );
+            const topSaraMeshesByBounds = [...saraMeshBoxes]
+              .filter((entry) => entry.nonZero)
+              .sort((a, b) => b.volume - a.volume)
+              .slice(0, 10);
+            const saraFullBox = new THREE.Box3().setFromObject(gltfScene);
+            const saraVisibleBounds = computeSaraVisibleRenderMeshBounds(gltfScene);
+            const saraVisualAnchorBounds = computeSaraVisualAnchorBounds(gltfScene);
+            const saraTopObjectBounds = computeSaraTopObjectBounds(gltfScene, 20);
+            const saraFullBounds = serializableBox(saraFullBox);
+            const saraVisibleBoundsBox = saraVisibleBounds.box.isEmpty()
+              ? null
+              : serializableBox(saraVisibleBounds.box);
+            const saraVisualAnchorBoundsBox = saraVisualAnchorBounds.box.isEmpty()
+              ? null
+              : serializableBox(saraVisualAnchorBounds.box);
+            const saraDiagnostics = {
+              route: {
+                activeAvatarId,
+                fixedConfigAvatarId: fixedViewportConfig?.avatarId ?? null,
+                modelUrl,
+                useRfv2Morphs,
+                hasFixedViewportConfig,
+                cameraConfig: fixedViewportConfig?.camera ?? null,
+                gltfTransformConfig: fixedViewportConfig?.gltfTransform ?? null,
+              },
+              hierarchy: saraMeshDiagnostics,
+              visibleMeshCount: saraVisibleMeshCount,
+              hiddenMeshCount: saraHiddenMeshCount,
+              meshNames: sortedSaraMeshNames,
+              categoryCounts: saraCategoryCounts,
+              nonZeroBoundingMeshes: saraMeshBoxes.filter((entry) => entry.nonZero),
+              topMeshesByBounds: topSaraMeshesByBounds,
+              topObjectsByBounds: saraTopObjectBounds,
+              fullBounds: saraFullBounds,
+              visibleRenderMeshBounds: saraVisibleBoundsBox,
+              visualAnchorBounds: saraVisualAnchorBoundsBox,
+              visualAnchorBoundsSource: {
+                meshCount: saraVisualAnchorBounds.meshCount,
+                meshNames: saraVisualAnchorBounds.meshNames.sort((a, b) => a.localeCompare(b)),
+                meshBounds: saraVisualAnchorBounds.meshBounds,
+              },
+              visibleRenderMeshBoundsSource: {
+                meshCount: saraVisibleBounds.meshCount,
+                meshNames: saraVisibleBounds.meshNames.sort((a, b) => a.localeCompare(b)),
+                meshBounds: saraVisibleBounds.meshBounds,
+              },
+            };
+            (window as any).saraMeshDiagnostics = saraDiagnostics;
+            console.group("[Sara Route]");
+            console.log({
+              rawAvatar: rawAvatarLabel,
+              normalizedAvatarId: activeAvatarId,
+              activeAvatarId,
+              modelUrl,
+              uses3d: true,
+              useRfv2Morphs,
+              hasFixedViewportConfig,
+              cameraConfig: fixedViewportConfig?.camera ?? null,
+              gltfTransformConfig: fixedViewportConfig?.gltfTransform ?? null,
+            });
+            console.groupEnd();
+            console.group("[Sara Mesh Diagnostics]");
+            console.log("[Sara Mesh Diagnostics] hierarchy:", saraMeshDiagnostics);
+            console.log("[Sara Mesh Diagnostics] visible mesh count:", saraVisibleMeshCount);
+            console.log("[Sara Mesh Diagnostics] hidden mesh count:", saraHiddenMeshCount);
+            console.log("[Sara Mesh Diagnostics] mesh names:", sortedSaraMeshNames);
+            console.log("[Sara Mesh Diagnostics] category counts:", saraCategoryCounts);
+            console.log(
+              "[Sara Mesh Diagnostics] non-zero bounding meshes:",
+              saraDiagnostics.nonZeroBoundingMeshes
+            );
+            console.log(
+              "[Sara Mesh Diagnostics] top 10 largest meshes:",
+              topSaraMeshesByBounds
+            );
+            console.log(
+              "[Sara Mesh Diagnostics] top 20 largest objects/bones/groups:",
+              saraTopObjectBounds
+            );
+            console.log("[Sara Full Bounds]", saraFullBounds);
+            console.log("[Sara Visible Bounds]", saraVisibleBoundsBox);
+            console.log("[Sara Visual Anchor Bounds]", saraVisualAnchorBoundsBox);
+            console.log(
+              "[Sara Visual Anchor Bounds] source render meshes:",
+              saraDiagnostics.visualAnchorBoundsSource
+            );
+            console.log(
+              "[Sara Visible Bounds] source render meshes:",
+              saraDiagnostics.visibleRenderMeshBoundsSource
+            );
+            console.log("[Sara Rotation]", {
+              rotation: [
+                gltfScene.rotation.x,
+                gltfScene.rotation.y,
+                gltfScene.rotation.z,
+              ],
+            });
+            console.groupEnd();
+          }
           (window as any).avatarMeshDiagnostics = finalMeshDiagnostics;
           console.group("[Avatar] Diagnostics");
           console.log("[Avatar] active avatar mode:", avatarModeLabel(avatarMode));
@@ -1638,6 +3225,32 @@ function ThreeAvatar({
           console.log("[Avatar] skinned body mesh count:", bodyMeshes.length);
           console.log("[Avatar] final camera fixed Jordan view:", useRfv2Morphs);
           console.log("[Avatar] final camera position:", camera.position.toArray());
+          if (hasFixedViewportConfig) {
+            console.group(`[${fixedViewportConfig.debugLabel}] Fixed viewport debug`);
+            console.log(`[${fixedViewportConfig.debugLabel}] loaded model URL:`, modelUrl);
+            console.log(
+              `[${fixedViewportConfig.debugLabel}] gltfScene bounding box:`,
+              describeBox(gltfScene)
+            );
+            console.log(
+              `[${fixedViewportConfig.debugLabel}] avatarRoot bounding box:`,
+              describeBox(avatarRoot)
+            );
+            console.log(`[${fixedViewportConfig.debugLabel}] root position:`, gltfScene.position.toArray());
+            console.log(`[${fixedViewportConfig.debugLabel}] root rotation:`, [
+              gltfScene.rotation.x,
+              gltfScene.rotation.y,
+              gltfScene.rotation.z,
+            ]);
+            console.log(`[${fixedViewportConfig.debugLabel}] root scale:`, gltfScene.scale.toArray());
+            console.log(`[${fixedViewportConfig.debugLabel}] camera position:`, camera.position.toArray());
+            console.log(
+              `[${fixedViewportConfig.debugLabel}] camera lookAt:`,
+              camera.userData.fixedLookAt ?? null
+            );
+            console.log(`[${fixedViewportConfig.debugLabel}] camera fov:`, camera.fov);
+            console.groupEnd();
+          }
           console.log("[Avatar] visible meshes:", diagnosticVisibleMeshes);
           console.log("[Avatar] hidden meshes:", diagnosticHiddenMeshes);
           console.log(
@@ -1848,7 +3461,9 @@ function ThreeAvatar({
                     thinking: isThinkingRef.current,
                   });
                   jordanPresenceStateRef.current = presenceState;
-                  if (previousJordanBlinkSpeakingRef.current && !speaking) {
+                  const jordanSpeechJustEnded = previousJordanBlinkSpeakingRef.current && !speaking;
+                  const jordanSpeechJustStarted = !previousJordanBlinkSpeakingRef.current && speaking;
+                  if (jordanSpeechJustEnded) {
                     lastJordanSpeechEndAtRef.current = performance.now();
                     scheduleSpeechEndBlink();
                   }
@@ -2030,11 +3645,25 @@ function ThreeAvatar({
           
                   const sentiment = timeline?.sentiment ?? "";
                   const sentimentLabel = getSentimentLabel(sentiment);
+                  const jordanEmotionalModulationMode =
+                    normalizeJordanEmotionalModulationMode(
+                      sentimentLabel,
+                      presenceState
+                    );
+                  const jordanEmotionalModulationProfile =
+                    getJordanEmotionalModulationProfile(jordanEmotionalModulationMode);
                   const speechEnergy = THREE.MathUtils.clamp(
                     (activeViseme && activeViseme !== "viseme_rest" ? 0.5 : 0) +
                       audioNorm * 0.5,
                     0,
                     1
+                  );
+                  const speechEnergyAlpha =
+                    1 - Math.exp(-JORDAN_SPEAKING_BEHAVIOR_TUNING.speechEnergySmoothingSpeed * dt);
+                  jordanSpeakingEnergyRef.current = THREE.MathUtils.lerp(
+                    jordanSpeakingEnergyRef.current,
+                    speaking ? speechEnergy : 0,
+                    speechEnergyAlpha
                   );
                   const speakingSupportAlpha = speaking ? speechEnergy : 0;
                   const positiveSentiment = isPositiveSentiment(sentiment);
@@ -2122,6 +3751,137 @@ function ThreeAvatar({
                     listeningFaceActive && !jordanListeningFaceWasActiveRef.current;
                   const randomInRange = (range: readonly [number, number]) =>
                     range[0] + Math.random() * (range[1] - range[0]);
+                  const jordanIdleSchedulerEligible =
+                    useRfv2Morphs &&
+                    presenceState === "idle" &&
+                    !speaking &&
+                    !isListeningRef.current &&
+                    !isThinkingRef.current;
+                  const jordanListeningSchedulerEligible =
+                    useRfv2Morphs &&
+                    presenceState === "listening" &&
+                    !speaking;
+                  const jordanSpeakingSchedulerEligible =
+                    useRfv2Morphs &&
+                    presenceState === "speaking" &&
+                    speaking;
+                  let jordanSchedulerDebug:
+                    | ReturnType<typeof updateJordanBehaviorTimingScheduler>["debug"]
+                    | undefined;
+                  if (now >= jordanBehaviorTimingNextUpdateRef.current) {
+                    const jordanSchedulerResult = updateJordanBehaviorTimingScheduler({
+                      state: jordanBehaviorTimingStateRef.current,
+                      nowMs: now,
+                      presenceState,
+                      sentimentLabel,
+                      isSpeaking: speaking,
+                      userIsSpeaking: isListeningRef.current,
+                      latestUserText: latestUserTextRef.current,
+                      latestJordanText: latestJordanTextRef.current || speechText,
+                      userSpeechStartedAtMs: userSpeechStartedAtMsRef.current || undefined,
+                      userLastSpeechAtMs: userLastSpeechAtMsRef.current || undefined,
+                      jordanSpeechStartedAtMs:
+                        jordanSpeechStartedAtMsRef.current || undefined,
+                      jordanLastSpeechAtMs: jordanLastSpeechAtMsRef.current || undefined,
+                      speechJustStarted: jordanSpeechJustStarted,
+                      speechJustEnded: jordanSpeechJustEnded,
+                      userPauseDurationMs: userLastSpeechAtMsRef.current
+                        ? now - userLastSpeechAtMsRef.current
+                        : undefined,
+                      sentimentCompound: sentimentCompoundRef.current,
+                    });
+                    jordanSchedulerDebug = jordanSchedulerResult.debug;
+                    jordanBehaviorTimingNextUpdateRef.current = now + 220;
+                  }
+                  const jordanSchedulerActiveEvents =
+                    jordanBehaviorTimingStateRef.current.activeEvents.filter(
+                      (event) =>
+                        !event.interrupted &&
+                        event.startsAtMs <= now &&
+                        event.endsAtMs > now
+                    );
+                  const jordanIdleSchedulerActiveEvents = jordanSchedulerActiveEvents.filter(
+                    (event) => event.state === "idle"
+                  );
+                  const jordanListeningSchedulerActiveEvents =
+                    jordanSchedulerActiveEvents.filter((event) => event.state === "listening");
+                  const jordanSpeakingSchedulerActiveEvents =
+                    jordanSchedulerActiveEvents.filter((event) => event.state === "speaking");
+                  const jordanTurnEndReleaseEvents = jordanSchedulerActiveEvents.filter(
+                    (event) => event.type === "turn_end_release"
+                  );
+                  const jordanIdleConsumedEvents = jordanIdleSchedulerEligible
+                    ? jordanIdleSchedulerActiveEvents.filter((event) =>
+                        JORDAN_IDLE_SCHEDULER_CONSUMED_EVENT_TYPES.has(
+                          event.type
+                        )
+                      )
+                    : [];
+                  const jordanIdleIgnoredEvents = jordanIdleSchedulerActiveEvents.filter(
+                    (event) =>
+                      !JORDAN_IDLE_SCHEDULER_CONSUMED_EVENT_TYPES.has(event.type)
+                  );
+                  const jordanListeningConsumedEvents = jordanListeningSchedulerEligible
+                    ? jordanListeningSchedulerActiveEvents.filter((event) =>
+                        JORDAN_LISTENING_SCHEDULER_CONSUMED_EVENT_TYPES.has(event.type)
+                      )
+                    : [];
+                  const jordanListeningIgnoredEvents =
+                    jordanListeningSchedulerActiveEvents.filter(
+                      (event) =>
+                        !JORDAN_LISTENING_SCHEDULER_CONSUMED_EVENT_TYPES.has(event.type)
+                    );
+                  const jordanSpeakingConsumedEvents = jordanSpeakingSchedulerEligible
+                    ? jordanSpeakingSchedulerActiveEvents.filter((event) =>
+                        JORDAN_SPEAKING_SCHEDULER_CONSUMED_EVENT_TYPES.has(event.type)
+                      )
+                    : [];
+                  const jordanSpeakingIgnoredEvents = jordanSpeakingSchedulerActiveEvents.filter(
+                    (event) =>
+                      !JORDAN_SPEAKING_SCHEDULER_CONSUMED_EVENT_TYPES.has(event.type)
+                  );
+                  const jordanIdleStillnessActive =
+                    jordanIdleSchedulerEligible &&
+                    jordanIdleConsumedEvents.some((event) => event.type === "idle_stillness");
+                  const jordanIdleBehaviorContribution =
+                    jordanIdleSchedulerEligible && !jordanIdleStillnessActive
+                      ? scaleJordanIdleBehaviorContribution(
+                          resolveJordanIdleBehaviorContribution(
+                            jordanIdleConsumedEvents,
+                            now,
+                            jordanEmotionalModulationProfile
+                          )
+                        )
+                      : { ...EMPTY_JORDAN_IDLE_BEHAVIOR_CONTRIBUTION };
+                  const jordanListeningStillnessActive =
+                    jordanListeningSchedulerEligible &&
+                    jordanListeningConsumedEvents.some(
+                      (event) => event.type === "soft_processing_pause"
+                    );
+                  const jordanListeningBehaviorContribution =
+                    jordanListeningSchedulerEligible
+                      ? scaleJordanListeningBehaviorContribution(
+                          resolveJordanListeningBehaviorContribution(
+                            jordanListeningConsumedEvents,
+                            now,
+                            sentimentLabel,
+                            jordanEmotionalModulationProfile
+                          )
+                        )
+                      : { ...EMPTY_JORDAN_LISTENING_BEHAVIOR_CONTRIBUTION };
+                  const jordanSpeakingBehaviorContribution =
+                    jordanSpeakingSchedulerEligible || jordanTurnEndReleaseEvents.length > 0
+                      ? scaleJordanSpeakingBehaviorContribution(
+                          resolveJordanSpeakingBehaviorContribution({
+                            events: jordanSpeakingConsumedEvents,
+                            releaseEvents: jordanTurnEndReleaseEvents,
+                            nowMs: now,
+                            sentimentLabel,
+                            speechEnergy: jordanSpeakingEnergyRef.current,
+                            modulationProfile: jordanEmotionalModulationProfile,
+                          })
+                        )
+                      : { ...EMPTY_JORDAN_SPEAKING_BEHAVIOR_CONTRIBUTION };
                   const idleBrowSuppressionReason = DEBUG_JORDAN_EXPRESSION_TEST
                     ? "expression-test"
                     : DEBUG_JORDAN_STRONG_EXPRESSION_VERIFY
@@ -2131,9 +3891,11 @@ function ThreeAvatar({
                         : presenceState === "listening"
                           ? "listening"
                           : presenceState === "thinking"
-                            ? "thinking"
-                            : presenceState !== "idle"
-                              ? presenceState
+                          ? "thinking"
+                          : presenceState !== "idle"
+                            ? presenceState
+                            : jordanIdleStillnessActive
+                              ? "behavior-stillness"
                               : null;
                   const idleBrowActive =
                     useRfv2Morphs &&
@@ -2178,6 +3940,7 @@ function ThreeAvatar({
                   );
                   if (
                     listeningFaceActive &&
+                    !jordanListeningStillnessActive &&
                     (listeningFaceBecameActive || now >= jordanListeningFaceNextTargetRef.current)
                   ) {
                     const holdMs = randomInRange(JORDAN_LISTENING_FACE_TUNING.targetHoldMs);
@@ -2244,7 +4007,7 @@ function ThreeAvatar({
                       holdMs,
                     };
                     jordanListeningFaceNextTargetRef.current = now + holdMs;
-                  } else if (!listeningFaceActive) {
+                  } else if (!listeningFaceActive || jordanListeningStillnessActive) {
                     jordanListeningFaceTargetRef.current = {
                       ...EMPTY_JORDAN_LISTENING_FACE_TARGET,
                     };
@@ -2347,30 +4110,48 @@ function ThreeAvatar({
                     const preset = JORDAN_EXPRESSION_PRESETS.calmIdle;
                     queuePresetTarget(
                       "viseme_rest",
-                      Math.max(targets.get("viseme_rest") ?? 0, rangeMid(preset.visemeRest))
+                      Math.max(
+                        targets.get("viseme_rest") ?? 0,
+                        rangeMid(preset.visemeRest) + jordanIdleBehaviorContribution.visemeRest
+                      )
                     );
                     queuePresetTarget("sad", 0);
                     queuePresetTarget("mouthFrownLeft", 0);
                     queuePresetTarget("mouthFrownRight", 0);
                     queuePresetTarget(
                       "mouthSmileLeft",
-                      Math.max(rangeMid(preset.mouthSmileLeft) * leftPresetScale, idleSmileTarget * 0.04)
+                      Math.max(
+                        rangeMid(preset.mouthSmileLeft) * leftPresetScale,
+                        idleSmileTarget * 0.04
+                      ) + jordanIdleBehaviorContribution.smileLeft
                     );
                     queuePresetTarget(
                       "mouthSmileRight",
-                      Math.max(rangeMid(preset.mouthSmileRight) * rightPresetScale, idleSmileTarget * 0.045)
+                      Math.max(
+                        rangeMid(preset.mouthSmileRight) * rightPresetScale,
+                        idleSmileTarget * 0.045
+                      ) + jordanIdleBehaviorContribution.smileRight
                     );
                     queuePresetTarget(
                       "cheekSquintLeft",
-                      Math.max(rangeMid(preset.cheekSquintLeft) * leftPresetScale, idleCheekTarget * 0.45)
+                      Math.max(
+                        rangeMid(preset.cheekSquintLeft) * leftPresetScale,
+                        idleCheekTarget * 0.45
+                      ) + jordanIdleBehaviorContribution.cheekLeft
                     );
                     queuePresetTarget(
                       "cheekSquintRight",
-                      Math.max(rangeMid(preset.cheekSquintRight) * rightPresetScale, idleCheekTarget * 0.45)
+                      Math.max(
+                        rangeMid(preset.cheekSquintRight) * rightPresetScale,
+                        idleCheekTarget * 0.45
+                      ) + jordanIdleBehaviorContribution.cheekRight
                     );
                     queuePresetTarget(
                       "eyebrows",
-                      Math.max(rangeMid(preset.eyebrows), jordanIdleBrowAppliedRef.current)
+                      Math.max(
+                        rangeMid(preset.eyebrows),
+                        jordanIdleBrowAppliedRef.current + jordanIdleBehaviorContribution.brow
+                      )
                     );
                     queuePresetTarget("eyeLookDownLeft", rangeMid(preset.eyeLookDownLeft));
                     queuePresetTarget("eyeLookDownRight", rangeMid(preset.eyeLookDownRight));
@@ -2378,43 +4159,79 @@ function ThreeAvatar({
                     queuePresetTarget("eyeLookUpRight", rangeMid(preset.eyeLookUpRight));
                   } else if (activeExpressionPreset === "attentiveListening") {
                     const preset = JORDAN_EXPRESSION_PRESETS.attentiveListening;
-                    const smileScale = sadSentiment
-                      ? JORDAN_EXPRESSION_PRESET_TUNING.sadSmileReduction
-                      : JORDAN_EXPRESSION_PRESET_TUNING.sentimentSmileMultiplier;
+                    const smileScale =
+                      (sadSentiment
+                        ? JORDAN_EXPRESSION_PRESET_TUNING.sadSmileReduction
+                        : JORDAN_EXPRESSION_PRESET_TUNING.sentimentSmileMultiplier) *
+                      jordanListeningBehaviorContribution.smileMultiplier;
                     queuePresetTarget(
                       "viseme_rest",
                       Math.max(targets.get("viseme_rest") ?? 0, rangeMid(preset.visemeRest))
                     );
                     queuePresetTarget(
                       "mouthSmileLeft",
-                      Math.max(rangeMid(preset.mouthSmileLeft) * smileScale * leftPresetScale, nextListeningFaceApplied.smileLeft)
+                      Math.max(
+                        rangeMid(preset.mouthSmileLeft) * smileScale * leftPresetScale,
+                        nextListeningFaceApplied.smileLeft + jordanListeningBehaviorContribution.smileLeft
+                      )
                     );
                     queuePresetTarget(
                       "mouthSmileRight",
-                      Math.max(rangeMid(preset.mouthSmileRight) * smileScale * rightPresetScale, nextListeningFaceApplied.smileRight)
+                      Math.max(
+                        rangeMid(preset.mouthSmileRight) * smileScale * rightPresetScale,
+                        nextListeningFaceApplied.smileRight + jordanListeningBehaviorContribution.smileRight
+                      )
                     );
                     queuePresetTarget(
                       "cheekSquintLeft",
-                      Math.max(rangeMid(preset.cheekSquintLeft) * leftPresetScale, nextListeningFaceApplied.cheekLeft)
+                      Math.max(
+                        rangeMid(preset.cheekSquintLeft) * leftPresetScale,
+                        nextListeningFaceApplied.cheekLeft + jordanListeningBehaviorContribution.cheekLeft
+                      )
                     );
                     queuePresetTarget(
                       "cheekSquintRight",
-                      Math.max(rangeMid(preset.cheekSquintRight) * rightPresetScale, nextListeningFaceApplied.cheekRight)
+                      Math.max(
+                        rangeMid(preset.cheekSquintRight) * rightPresetScale,
+                        nextListeningFaceApplied.cheekRight + jordanListeningBehaviorContribution.cheekRight
+                      )
                     );
                     queuePresetTarget(
                       "eyebrows",
                       sadSentiment
-                        ? rangeByEnergy([0.06, 0.12], 0.55)
-                        : Math.max(rangeMid(preset.eyebrows), nextListeningFaceApplied.brow)
+                        ? Math.max(
+                            rangeByEnergy([0.06, 0.12], 0.55),
+                            jordanListeningBehaviorContribution.brow
+                          )
+                        : Math.max(
+                            rangeMid(preset.eyebrows),
+                            nextListeningFaceApplied.brow + jordanListeningBehaviorContribution.brow
+                          )
                     );
-                    queuePresetTarget("sad", sadSentiment ? rangeByEnergy([0.1, 0.22], 0.45) : 0);
+                    queuePresetTarget(
+                      "sad",
+                      Math.max(
+                        sadSentiment ? rangeByEnergy([0.1, 0.22], 0.45) : 0,
+                        jordanListeningBehaviorContribution.sad
+                      )
+                    );
                     queuePresetTarget(
                       "mouthFrownLeft",
-                      sadSentiment ? Math.max(rangeByEnergy([0.045, 0.1], 0.45), nextListeningFaceApplied.frownLeft) : 0
+                      Math.max(
+                        sadSentiment
+                          ? Math.max(rangeByEnergy([0.045, 0.1], 0.45), nextListeningFaceApplied.frownLeft)
+                          : 0,
+                        jordanListeningBehaviorContribution.frownLeft
+                      )
                     );
                     queuePresetTarget(
                       "mouthFrownRight",
-                      sadSentiment ? Math.max(rangeByEnergy([0.045, 0.1], 0.45), nextListeningFaceApplied.frownRight) : 0
+                      Math.max(
+                        sadSentiment
+                          ? Math.max(rangeByEnergy([0.045, 0.1], 0.45), nextListeningFaceApplied.frownRight)
+                          : 0,
+                        jordanListeningBehaviorContribution.frownRight
+                      )
                     );
                     queuePresetTarget("eyeLookDownLeft", rangeMid(preset.eyeLookDownLeft));
                     queuePresetTarget("eyeLookDownRight", rangeMid(preset.eyeLookDownRight));
@@ -2427,37 +4244,69 @@ function ThreeAvatar({
                       JORDAN_EXPRESSION_PRESET_TUNING.speechEnergyCheekMultiplier;
                     queuePresetTarget(
                       "cheekSquintLeft",
-                      rangeByEnergy(preset.cheekSquintLeft, speechSupport) * leftPresetScale
+                      Math.max(
+                        rangeByEnergy(preset.cheekSquintLeft, speechSupport) * leftPresetScale,
+                        jordanSpeakingBehaviorContribution.cheekLeft
+                      )
                     );
                     queuePresetTarget(
                       "cheekSquintRight",
-                      rangeByEnergy(preset.cheekSquintRight, speechSupport) * rightPresetScale
+                      Math.max(
+                        rangeByEnergy(preset.cheekSquintRight, speechSupport) * rightPresetScale,
+                        jordanSpeakingBehaviorContribution.cheekRight
+                      )
                     );
                     queuePresetTarget(
                       "eyebrows",
-                      Math.max(rangeByEnergy(preset.eyebrows, speechSupport), browOverlay)
+                      Math.max(
+                        rangeByEnergy(preset.eyebrows, speechSupport),
+                        browOverlay,
+                        jordanSpeakingBehaviorContribution.brow
+                      )
                     );
                     queuePresetTarget(
                       "mouthSmileLeft",
                       positiveSentiment
-                        ? rangeByEnergy(preset.mouthSmileLeft, speechSupport) * leftPresetScale
-                        : 0
+                        ? Math.max(
+                            rangeByEnergy(preset.mouthSmileLeft, speechSupport) * leftPresetScale,
+                            jordanSpeakingBehaviorContribution.smileLeft
+                          )
+                        : jordanSpeakingBehaviorContribution.smileLeft
                     );
                     queuePresetTarget(
                       "mouthSmileRight",
                       positiveSentiment
-                        ? rangeByEnergy(preset.mouthSmileRight, speechSupport) * rightPresetScale
-                        : 0
+                        ? Math.max(
+                            rangeByEnergy(preset.mouthSmileRight, speechSupport) * rightPresetScale,
+                            jordanSpeakingBehaviorContribution.smileRight
+                          )
+                        : jordanSpeakingBehaviorContribution.smileRight
                     );
                     queuePresetTarget(
                       "mouthFrownLeft",
-                      sadSentiment ? rangeByEnergy(preset.mouthFrownLeft, speechSupport) * leftPresetScale : 0
+                      sadSentiment
+                        ? Math.max(
+                            rangeByEnergy(preset.mouthFrownLeft, speechSupport) * leftPresetScale,
+                            jordanSpeakingBehaviorContribution.frownLeft
+                          )
+                        : jordanSpeakingBehaviorContribution.frownLeft
                     );
                     queuePresetTarget(
                       "mouthFrownRight",
-                      sadSentiment ? rangeByEnergy(preset.mouthFrownRight, speechSupport) * rightPresetScale : 0
+                      sadSentiment
+                        ? Math.max(
+                            rangeByEnergy(preset.mouthFrownRight, speechSupport) * rightPresetScale,
+                            jordanSpeakingBehaviorContribution.frownRight
+                          )
+                        : jordanSpeakingBehaviorContribution.frownRight
                     );
-                    queuePresetTarget("sad", sadSentiment ? rangeByEnergy(preset.sad, speechSupport) : 0);
+                    queuePresetTarget(
+                      "sad",
+                      Math.max(
+                        sadSentiment ? rangeByEnergy(preset.sad, speechSupport) : 0,
+                        jordanSpeakingBehaviorContribution.sad
+                      )
+                    );
                   } else {
                     queuePresetTarget("sad", sadOverlay);
                     queuePresetTarget("mouthSmileLeft", cornerSupport * jordanEyeAsymmetryRef.current.mouthLeft);
@@ -2555,7 +4404,12 @@ function ThreeAvatar({
                     : 0;
                   setJordanExpressionTarget("jawOpen", jawSupport);
           
-                  if (now >= jordanEyeNextRefocusRef.current) {
+                  if (
+                    !jordanIdleStillnessActive &&
+                    !jordanListeningStillnessActive &&
+                    !jordanSpeakingBehaviorContribution.softProcessingPauseActive &&
+                    now >= jordanEyeNextRefocusRef.current
+                  ) {
                     const holdRange =
                       presenceState === "listening"
                         ? JORDAN_EYE_FOCUS_TUNING.listeningHoldMs
@@ -2572,13 +4426,30 @@ function ThreeAvatar({
                           : presenceState === "speaking"
                             ? JORDAN_EYE_FOCUS_TUNING.speakingEyeMax
                             : JORDAN_EYE_FOCUS_TUNING.idleEyeMax;
-                    const holdMs = holdRange[0] + Math.random() * (holdRange[1] - holdRange[0]);
+                    const holdMs =
+                      (holdRange[0] + Math.random() * (holdRange[1] - holdRange[0])) *
+                      jordanEmotionalModulationProfile.stillnessMultiplier;
                     const holdMostlyStill =
                       presenceState === "listening"
-                        ? Math.random() < 0.76
+                        ? Math.random() <
+                          THREE.MathUtils.clamp(
+                            0.76 * jordanEmotionalModulationProfile.stillnessMultiplier,
+                            0.48,
+                            0.9
+                          )
                         : presenceState === "speaking"
-                          ? Math.random() < 0.68
-                          : Math.random() < 0.48;
+                          ? Math.random() <
+                            THREE.MathUtils.clamp(
+                              0.68 * jordanEmotionalModulationProfile.stillnessMultiplier,
+                              0.42,
+                              0.88
+                            )
+                          : Math.random() <
+                            THREE.MathUtils.clamp(
+                              0.48 * jordanEmotionalModulationProfile.stillnessMultiplier,
+                              0.35,
+                              0.86
+                            );
                     const movementScale =
                       presenceState === "listening"
                         ? 0.42
@@ -2587,13 +4458,21 @@ function ThreeAvatar({
                           : presenceState === "thinking"
                             ? 0.72
                             : 1;
+                    const modulatedMovementScale =
+                      movementScale *
+                      jordanEmotionalModulationProfile.eyeEngagementMultiplier;
                     const downwardBias =
                       presenceState === "thinking"
-                        ? JORDAN_EYE_FOCUS_TUNING.thinkingDownBias
+                        ? JORDAN_EYE_FOCUS_TUNING.thinkingDownBias *
+                          ((jordanEmotionalModulationProfile as {
+                            thinkingDownBiasMultiplier?: number;
+                          }).thinkingDownBiasMultiplier ?? 1)
                         : sadSentiment
-                          ? 0.008
+                          ? 0.008 * jordanEmotionalModulationProfile.stillnessMultiplier
                           : 0;
-                    const drift = (0.006 + Math.random() * eyeMax * 0.55) * movementScale;
+                    const drift =
+                      (0.006 + Math.random() * eyeMax * 0.55) *
+                      modulatedMovementScale;
                     const up = holdMostlyStill
                       ? 0
                       : THREE.MathUtils.clamp(
@@ -2626,7 +4505,7 @@ function ThreeAvatar({
                             (Math.random() - 0.5) *
                               2 *
                               JORDAN_EYE_FOCUS_TUNING.horizontalHeadYawMax *
-                              movementScale,
+                              modulatedMovementScale,
                             -JORDAN_EYE_FOCUS_TUNING.horizontalHeadYawMax,
                             JORDAN_EYE_FOCUS_TUNING.horizontalHeadYawMax
                           ),
@@ -2658,21 +4537,49 @@ function ThreeAvatar({
                     gazeMax
                   );
                   const gazeAsym = gazeTarget.asym;
+                  const schedulerEyeUp =
+                    jordanIdleBehaviorContribution.eyeUp +
+                    jordanListeningBehaviorContribution.eyeUp +
+                    jordanSpeakingBehaviorContribution.eyeUp;
+                  const schedulerEyeDown =
+                    jordanIdleBehaviorContribution.eyeDown +
+                    jordanListeningBehaviorContribution.eyeDown +
+                    jordanSpeakingBehaviorContribution.eyeDown;
+                  const schedulerEyeAsym =
+                    jordanIdleBehaviorContribution.eyeAsym +
+                    jordanListeningBehaviorContribution.eyeAsym +
+                    jordanSpeakingBehaviorContribution.eyeAsym;
                   setJordanExpressionTarget(
                     "eyeLookUpLeft",
-                    THREE.MathUtils.clamp(gazeUp + gazeAsym, 0, gazeMax)
+                    THREE.MathUtils.clamp(
+                      gazeUp + schedulerEyeUp + gazeAsym + schedulerEyeAsym,
+                      0,
+                      gazeMax
+                    )
                   );
                   setJordanExpressionTarget(
                     "eyeLookUpRight",
-                    THREE.MathUtils.clamp(gazeUp - gazeAsym, 0, gazeMax)
+                    THREE.MathUtils.clamp(
+                      gazeUp + schedulerEyeUp - gazeAsym - schedulerEyeAsym,
+                      0,
+                      gazeMax
+                    )
                   );
                   setJordanExpressionTarget(
                     "eyeLookDownLeft",
-                    THREE.MathUtils.clamp(gazeDown - gazeAsym, 0, gazeMax)
+                    THREE.MathUtils.clamp(
+                      gazeDown + schedulerEyeDown - gazeAsym - schedulerEyeAsym,
+                      0,
+                      gazeMax
+                    )
                   );
                   setJordanExpressionTarget(
                     "eyeLookDownRight",
-                    THREE.MathUtils.clamp(gazeDown + gazeAsym, 0, gazeMax)
+                    THREE.MathUtils.clamp(
+                      gazeDown + schedulerEyeDown + gazeAsym + schedulerEyeAsym,
+                      0,
+                      gazeMax
+                    )
                   );
 
                   if (
@@ -2750,21 +4657,30 @@ function ThreeAvatar({
 
                   const headPresenceAllowed =
                     useRfv2Morphs &&
-                    (presenceState === "idle" || presenceState === "listening");
-                  const headPresenceSuppressedBySpeaking = presenceState === "speaking";
+                    (presenceState === "idle" ||
+                      presenceState === "listening" ||
+                      presenceState === "speaking");
+                  const headPresenceSuppressedBySpeaking =
+                    presenceState === "speaking" && !jordanSpeakingSchedulerEligible;
                   const headPresenceSuppressedByThinking = presenceState === "thinking";
                   if (
                     headPresenceAllowed &&
+                    !jordanIdleStillnessActive &&
+                    !jordanListeningStillnessActive &&
                     jordanIdlePresenceBonesRef.current.length > 0 &&
                     now >= jordanHeadPresenceNextTargetRef.current
                   ) {
                     const yawMax =
                       presenceState === "listening"
                         ? JORDAN_HEAD_PRESENCE_TUNING.listeningYawMax
+                        : presenceState === "speaking"
+                          ? JORDAN_SPEAKING_BEHAVIOR_TUNING.headSupportYawRange[1]
                         : JORDAN_HEAD_PRESENCE_TUNING.idleYawMax;
                     const tiltMax =
                       presenceState === "listening"
                         ? JORDAN_HEAD_PRESENCE_TUNING.listeningTiltMax
+                        : presenceState === "speaking"
+                          ? JORDAN_SPEAKING_BEHAVIOR_TUNING.headSupportTiltRange[1]
                         : JORDAN_HEAD_PRESENCE_TUNING.idleTiltMax;
                     const attentiveBias = presenceState === "listening" ? 0.0015 : 0;
                     const eyeFocusYaw = THREE.MathUtils.clamp(
@@ -2804,15 +4720,43 @@ function ThreeAvatar({
                     jordanHeadPresenceNextTargetRef.current = now + JORDAN_HEAD_PRESENCE_TUNING.minTargetHoldMs;
                   }
 
+                  const schedulerHeadYawLimit =
+                    presenceState === "listening"
+                      ? JORDAN_HEAD_PRESENCE_TUNING.listeningYawMax
+                      : presenceState === "speaking"
+                        ? JORDAN_SPEAKING_BEHAVIOR_TUNING.headSupportYawRange[1]
+                      : JORDAN_HEAD_PRESENCE_TUNING.idleYawMax;
+                  const schedulerHeadTiltLimit =
+                    presenceState === "listening"
+                      ? JORDAN_HEAD_PRESENCE_TUNING.listeningTiltMax
+                      : presenceState === "speaking"
+                        ? JORDAN_SPEAKING_BEHAVIOR_TUNING.headSupportTiltRange[1]
+                      : JORDAN_HEAD_PRESENCE_TUNING.idleTiltMax;
+                  const schedulerHeadYawTarget = THREE.MathUtils.clamp(
+                    jordanHeadPresenceTargetRef.current.yaw +
+                      jordanIdleBehaviorContribution.headYaw +
+                      jordanListeningBehaviorContribution.headYaw +
+                      jordanSpeakingBehaviorContribution.headYaw,
+                    -schedulerHeadYawLimit,
+                    schedulerHeadYawLimit
+                  );
+                  const schedulerHeadTiltTarget = THREE.MathUtils.clamp(
+                    jordanHeadPresenceTargetRef.current.tilt +
+                      jordanIdleBehaviorContribution.headTilt +
+                      jordanListeningBehaviorContribution.headTilt +
+                      jordanSpeakingBehaviorContribution.headTilt,
+                    -schedulerHeadTiltLimit,
+                    schedulerHeadTiltLimit
+                  );
                   const appliedHeadYaw = THREE.MathUtils.damp(
                     jordanHeadPresenceAppliedRef.current.yaw,
-                    jordanHeadPresenceTargetRef.current.yaw,
+                    schedulerHeadYawTarget,
                     JORDAN_HEAD_PRESENCE_TUNING.blendSpeed,
                     dt
                   );
                   const appliedHeadTilt = THREE.MathUtils.damp(
                     jordanHeadPresenceAppliedRef.current.tilt,
-                    jordanHeadPresenceTargetRef.current.tilt,
+                    schedulerHeadTiltTarget,
                     JORDAN_HEAD_PRESENCE_TUNING.blendSpeed,
                     dt
                   );
@@ -2850,6 +4794,229 @@ function ThreeAvatar({
                       appliedTilt: jordanHeadPresenceAppliedRef.current.tilt,
                       suppressedBySpeaking: headPresenceSuppressedBySpeaking,
                       suppressedByThinking: headPresenceSuppressedByThinking,
+                    });
+                  }
+
+                  if (
+                    process.env.NODE_ENV === "development" &&
+                    DEBUG_JORDAN_BEHAVIOR_TIMING &&
+                    now - lastJordanBehaviorTimingLogRef.current > 1800
+                  ) {
+                    lastJordanBehaviorTimingLogRef.current = now;
+                    console.log("[Jordan Behavior Timing] orchestration:", {
+                      presenceState,
+                      sentimentLabel,
+                      rawSentimentLabel: sentiment,
+                      emotionalModulation: {
+                        mode: jordanEmotionalModulationMode,
+                        profile: jordanEmotionalModulationProfile,
+                        delayMultiplier:
+                          jordanEmotionalModulationProfile.reactionDelayMultiplier,
+                        stillnessMultiplier:
+                          jordanEmotionalModulationProfile.stillnessMultiplier,
+                        expressionMultipliers: {
+                          cheekWarmth:
+                            jordanEmotionalModulationProfile.cheekWarmthMultiplier,
+                          smile: jordanEmotionalModulationProfile.smileMultiplier,
+                          concern:
+                            (jordanEmotionalModulationProfile as {
+                              concernMultiplier?: number;
+                            }).concernMultiplier ?? 1,
+                        },
+                        eyeMultiplier:
+                          jordanEmotionalModulationProfile.eyeEngagementMultiplier,
+                        blinkMetadata: {
+                          delayMultiplier:
+                            jordanEmotionalModulationProfile.blinkDelayMultiplier,
+                          runtimeBlinkUnchanged: true,
+                        },
+                        reactionProbabilityChanges:
+                          jordanSchedulerDebug?.reactionProbabilityChanges,
+                      },
+                      activeSchedulerEvents: jordanSchedulerActiveEvents.map((event) => ({
+                        id: event.id,
+                        state: event.state,
+                        type: event.type,
+                        startsAtMs: Math.round(event.startsAtMs),
+                        endsAtMs: Math.round(event.endsAtMs),
+                        holdUntilMs: Math.round(event.holdUntilMs),
+                        intensity: event.intensity,
+                        weight: event.weight,
+                        channels: event.channels?.map((channel) => ({
+                          channel: channel.channel,
+                          startsAtMs: Math.round(channel.startsAtMs),
+                          endsAtMs: Math.round(channel.endsAtMs),
+                          intensity: channel.intensity,
+                          active:
+                            channel.startsAtMs <= now &&
+                            channel.endsAtMs >= now &&
+                            !(
+                              channel.interrupted &&
+                              typeof channel.metadata?.interruptedAtMs === "number" &&
+                              now >= channel.metadata.interruptedAtMs
+                            ),
+                          interrupted: channel.interrupted ?? false,
+                          offsetMs: channel.metadata?.offsetMs,
+                        })),
+                      })),
+                      motionIndependence: {
+                        selectedChannels: jordanSchedulerDebug?.selectedChannels,
+                        skippedChannels: jordanSchedulerDebug?.skippedChannels,
+                        noReactionDecision: jordanSchedulerDebug?.noReactionDecision,
+                        maxChannelsPerEvent: jordanSchedulerDebug?.maxChannelsPerEvent,
+                        interruptionVarianceMs:
+                          jordanSchedulerDebug?.interruptionVarianceMs,
+                        activeChannelStatus: jordanSchedulerActiveEvents.flatMap(
+                          (event) =>
+                            event.channels?.map((channel) => ({
+                              eventType: event.type,
+                              channel: channel.channel,
+                              active:
+                                channel.startsAtMs <= now &&
+                                channel.endsAtMs >= now,
+                              interrupted: channel.interrupted ?? false,
+                            })) ?? []
+                        ),
+                      },
+                      finalHumanization: {
+                        targetRatio: {
+                          stillness:
+                            JORDAN_FINAL_HUMANIZATION_TUNING.targetStillnessRatio,
+                          microBehavior:
+                            JORDAN_FINAL_HUMANIZATION_TUNING.targetMicroBehaviorRatio,
+                          reaction:
+                            JORDAN_FINAL_HUMANIZATION_TUNING.targetReactionRatio,
+                        },
+                        rollingRatio: jordanSchedulerDebug?.humanization.rollingRatio,
+                        eventCountInWindow:
+                          jordanSchedulerDebug?.humanization.eventCountInWindow,
+                        maxEventsPerWindow:
+                          jordanSchedulerDebug?.humanization.maxEventsPerWindow,
+                        repeatedIntentCount:
+                          jordanSchedulerDebug?.humanization.repeatedIntentCount,
+                        skippedReason:
+                          jordanSchedulerDebug?.humanization.skippedReason,
+                        overactivityPreventionActive:
+                          jordanSchedulerDebug?.humanization
+                            .overactivityPreventionActive,
+                        minimumStillnessUntilMs:
+                          jordanSchedulerDebug?.humanization.minimumStillnessUntilMs,
+                        subtletyMultiplier:
+                          JORDAN_FINAL_HUMANIZATION_TUNING.subtletyMultiplier[
+                            presenceState
+                          ],
+                      },
+                      conversationalAwareness: {
+                        beat: jordanSchedulerDebug?.conversationalBeat?.beat,
+                        selectedAwarenessEvent:
+                          jordanSchedulerDebug?.conversationalBeat
+                            ?.selectedAwarenessIntent,
+                        skippedReason:
+                          jordanSchedulerDebug?.conversationalBeat?.skippedReason,
+                        userPauseDurationMs:
+                          jordanSchedulerDebug?.conversationalBeat
+                            ?.userPauseDurationMs,
+                        latestUserTextEndsSentence:
+                          jordanSchedulerDebug?.conversationalBeat
+                            ?.latestUserTextEndsSentence,
+                        latestJordanTextEndsSentence:
+                          jordanSchedulerDebug?.conversationalBeat
+                            ?.latestJordanTextEndsSentence,
+                        speechJustStarted:
+                          jordanSchedulerDebug?.conversationalBeat
+                            ?.speechJustStarted,
+                        speechJustEnded:
+                          jordanSchedulerDebug?.conversationalBeat
+                            ?.speechJustEnded,
+                        sentimentCompound:
+                          jordanSchedulerDebug?.conversationalBeat
+                            ?.sentimentCompound,
+                        missingSignals:
+                          jordanSchedulerDebug?.conversationalBeat?.missingSignals,
+                      },
+                      consumedIdleEvents: jordanIdleConsumedEvents.map((event) => event.type),
+                      consumedListeningEvents: jordanListeningConsumedEvents.map((event) => event.type),
+                      consumedSpeakingEvents: jordanSpeakingConsumedEvents.map((event) => event.type),
+                      ignoredEvents: [
+                        ...jordanIdleIgnoredEvents.map((event) => event.type),
+                        ...jordanListeningIgnoredEvents.map((event) => event.type),
+                        ...jordanSpeakingIgnoredEvents.map((event) => event.type),
+                      ],
+                      idleStillnessActive: jordanIdleStillnessActive,
+                      listeningStillnessActive: jordanListeningStillnessActive,
+                      emotionalLatencyApplied:
+                        jordanListeningBehaviorContribution.emotionalLatencyScale,
+                      idleEyeContribution: {
+                        up: jordanIdleBehaviorContribution.eyeUp,
+                        down: jordanIdleBehaviorContribution.eyeDown,
+                        asym: jordanIdleBehaviorContribution.eyeAsym,
+                      },
+                      idleBrowContribution: jordanIdleBehaviorContribution.brow,
+                      idleMouthRestContribution: {
+                        visemeRest: jordanIdleBehaviorContribution.visemeRest,
+                        smileLeft: jordanIdleBehaviorContribution.smileLeft,
+                        smileRight: jordanIdleBehaviorContribution.smileRight,
+                        cheekLeft: jordanIdleBehaviorContribution.cheekLeft,
+                        cheekRight: jordanIdleBehaviorContribution.cheekRight,
+                      },
+                      idleHeadContribution: {
+                        yaw: jordanIdleBehaviorContribution.headYaw,
+                        tilt: jordanIdleBehaviorContribution.headTilt,
+                      },
+                      listeningAckContribution: {
+                        brow: jordanListeningBehaviorContribution.brow,
+                        smileLeft: jordanListeningBehaviorContribution.smileLeft,
+                        smileRight: jordanListeningBehaviorContribution.smileRight,
+                        cheekLeft: jordanListeningBehaviorContribution.cheekLeft,
+                        cheekRight: jordanListeningBehaviorContribution.cheekRight,
+                      },
+                      listeningConcernContribution: {
+                        frownLeft: jordanListeningBehaviorContribution.frownLeft,
+                        frownRight: jordanListeningBehaviorContribution.frownRight,
+                        sad: jordanListeningBehaviorContribution.sad,
+                        smileMultiplier: jordanListeningBehaviorContribution.smileMultiplier,
+                      },
+                      listeningEyeContribution: {
+                        up: jordanListeningBehaviorContribution.eyeUp,
+                        down: jordanListeningBehaviorContribution.eyeDown,
+                        asym: jordanListeningBehaviorContribution.eyeAsym,
+                      },
+                      listeningHeadContribution: {
+                        yaw: jordanListeningBehaviorContribution.headYaw,
+                        tilt: jordanListeningBehaviorContribution.headTilt,
+                      },
+                      speaking: {
+                        speechEnergy: jordanSpeakingEnergyRef.current,
+                        cheekContribution: {
+                          left: jordanSpeakingBehaviorContribution.cheekLeft,
+                          right: jordanSpeakingBehaviorContribution.cheekRight,
+                        },
+                        browContribution: jordanSpeakingBehaviorContribution.brow,
+                        smileFrownContribution: {
+                          smileLeft: jordanSpeakingBehaviorContribution.smileLeft,
+                          smileRight: jordanSpeakingBehaviorContribution.smileRight,
+                          frownLeft: jordanSpeakingBehaviorContribution.frownLeft,
+                          frownRight: jordanSpeakingBehaviorContribution.frownRight,
+                          sad: jordanSpeakingBehaviorContribution.sad,
+                        },
+                        eyeContribution: {
+                          up: jordanSpeakingBehaviorContribution.eyeUp,
+                          down: jordanSpeakingBehaviorContribution.eyeDown,
+                          asym: jordanSpeakingBehaviorContribution.eyeAsym,
+                        },
+                        headContribution: {
+                          yaw: jordanSpeakingBehaviorContribution.headYaw,
+                          tilt: jordanSpeakingBehaviorContribution.headTilt,
+                        },
+                        turnEndReleaseTriggered:
+                          jordanSpeakingBehaviorContribution.turnEndReleaseActive,
+                        softProcessingPauseActive:
+                          jordanSpeakingBehaviorContribution.softProcessingPauseActive,
+                        timestampedLipSyncUnchanged: true,
+                      },
+                      lipSyncUnchanged: true,
+                      cameraAndSaraUnchanged: true,
+                      schedulerWritesMorphsDirectly: false,
                     });
                   }
 
@@ -3922,7 +6089,7 @@ if (!useRfv2Morphs) {
 
           blinkFnRef.current = null;
         };
-      }, [modelUrl, viewTuning, useRfv2Morphs]);
+      }, [modelUrl, viewTuning, fixedViewportConfig, useRfv2Morphs]);
 
     useEffect(() => {
       if (!isSpeaking) {
@@ -4243,6 +6410,11 @@ export default ThreeAvatar;
       [companionAvatarLabel]
     );
 
+    const companionCanonicalId = useMemo(
+      () => normalizeCompanionId(companionAvatarLabel),
+      [companionAvatarLabel]
+    );
+
     const companionModelUrl = useMemo(
       () => resolveCompanionModelUrl(companionAvatarLabel),
       [companionAvatarLabel]
@@ -4257,6 +6429,41 @@ export default ThreeAvatar;
       () => getCompanionViewTuning(companionAvatarLabel),
       [companionAvatarLabel]
     );
+
+    const companionFixedViewportConfig = useMemo<FixedAvatarViewportConfig | null>(
+      () =>
+        companionCanonicalId === "sarah"
+          ? {
+              debugLabel: "Sara",
+              avatarId: SARA_AVATAR_DEFINITION.id,
+              camera: SARA_AVATAR_DEFINITION.camera,
+              gltfTransform: SARA_AVATAR_DEFINITION.gltfTransform,
+            }
+          : null,
+      [companionCanonicalId]
+    );
+
+    useEffect(() => {
+      if (companionCanonicalId !== "sarah") return;
+      console.log("[Sara Route]", {
+        rawAvatar: companionAvatarLabel,
+        normalizedAvatarId: companionCanonicalId,
+        activeAvatarId: companionCanonicalId,
+        modelUrl: companionModelUrl,
+        uses3d: sessionUsesCompanion3d,
+        useRfv2Morphs: sessionUsesRfv2Morphs,
+        hasFixedViewportConfig: Boolean(companionFixedViewportConfig),
+        cameraConfig: companionFixedViewportConfig?.camera ?? null,
+        gltfTransformConfig: companionFixedViewportConfig?.gltfTransform ?? null,
+      });
+    }, [
+      companionAvatarLabel,
+      companionCanonicalId,
+      companionFixedViewportConfig,
+      companionModelUrl,
+      sessionUsesCompanion3d,
+      sessionUsesRfv2Morphs,
+    ]);
 
     /** Same id as WebSocket `voice=` — must be sent on REST speak/chat too or TTS often defaults to one (female) voice. */
     const ezriTtsVoiceId = useMemo(
@@ -4799,6 +7006,13 @@ export default ThreeAvatar;
     const [isListening, setIsListening] = useState(false);
     const [sttRestartTrigger, setSttRestartTrigger] = useState(0);
     const [liveUserSpeech, setLiveUserSpeech] = useState("");
+    const latestUserTextRef = useRef("");
+    const latestJordanTextRef = useRef("");
+    const userSpeechStartedAtMsRef = useRef(0);
+    const userLastSpeechAtMsRef = useRef(0);
+    const jordanSpeechStartedAtMsRef = useRef(0);
+    const jordanLastSpeechAtMsRef = useRef(0);
+    const sentimentCompoundRef = useRef<number | undefined>(undefined);
     useEffect(() => {
       const el = transcriptListRef.current;
       if (!el) return;
@@ -5375,6 +7589,7 @@ export default ThreeAvatar;
 
     const appendAssistantFinal = (text: string) => {
       if (!text.trim()) return;
+      latestJordanTextRef.current = text.trim();
       setTranscript((prev) => [
         ...prev,
         { role: "assistant", content: text, timestamp: Date.now() },
@@ -5900,6 +8115,7 @@ export default ThreeAvatar;
       recognition.onstart = () => {
         console.log("Speech recognition started");
         lastSpeechStartRef.current = Date.now();
+        userSpeechStartedAtMsRef.current = performance.now();
         setIsListening(true);
         isRecognitionActiveRef.current = true;
         toast.info("Microphone Active");
@@ -5957,6 +8173,8 @@ export default ThreeAvatar;
           // Only show text that is at least 3 characters (filters out noise like "um").
           if (subtitleDebounceRef.current) clearTimeout(subtitleDebounceRef.current);
           if (trimmed.length >= 3) {
+            latestUserTextRef.current = trimmed;
+            userLastSpeechAtMsRef.current = performance.now();
             subtitleDebounceRef.current = setTimeout(() => {
               setLiveUserSpeech(trimmed);
               subtitleDebounceRef.current = null;
@@ -6004,6 +8222,8 @@ export default ThreeAvatar;
           lastInterimTextRef.current = "";
 
           const lowerTrimmed = textForUtterance.toLowerCase();
+          latestUserTextRef.current = textForUtterance;
+          userLastSpeechAtMsRef.current = performance.now();
           const wsLive = wsClientRef.current;
           const sttProv = String(ezriConfig?.defaults?.sttProvider ?? "").toLowerCase();
           // Mic PCM → server VAD/STT already turns speech into `{ type: "transcription" }` + replies.
@@ -6243,6 +8463,8 @@ export default ThreeAvatar;
 
           // Show the transcribed text as subtitle briefly before clearing.
           setLiveUserSpeech(text);
+          latestUserTextRef.current = text;
+          userLastSpeechAtMsRef.current = performance.now();
 
           // Apply barge-in filtering (covers inter-chunk gaps where isEzriSpeaking is briefly false).
           if (ezriWsAudioPipelineActive()) {
@@ -6649,6 +8871,8 @@ export default ThreeAvatar;
             if (dropOldResponsesRef.current > 0) return;
             const t = text.trim();
             if (!t) return;
+            latestUserTextRef.current = t;
+            userLastSpeechAtMsRef.current = performance.now();
             setTranscript((prev) => mergeUserTranscriptAppend(prev, t));
           },
           onTtsDone: () => {
@@ -6671,6 +8895,7 @@ export default ThreeAvatar;
 
             wsTtsDoneReceivedRef.current = true;
             wsTtsStreamingRef.current = false;
+            jordanLastSpeechAtMsRef.current = performance.now();
 
             // If the server claims TTS finished but we never received any audio frames, use REST speak fallback.
             if (wsAudioSeenTurnRef.current !== wsActiveTurnRef.current && wsPendingFallbackTextRef.current.trim()) {
@@ -6692,6 +8917,7 @@ export default ThreeAvatar;
             // Always pause local STT as soon as the server commits to TTS (Ezri Avatar app.js parity).
             wsTtsDoneReceivedRef.current = false;
             wsTtsStreamingRef.current = true;
+            jordanSpeechStartedAtMsRef.current = performance.now();
             pauseStt();
             // While discarding a dead turn's audio, don't update thinking/buffer state from stray "speaking" steps.
             if (suppressIncomingAudioRef.current) return;
@@ -6701,6 +8927,8 @@ export default ThreeAvatar;
           onAvatarData: (data) => {
             // Phonemes + sentiment from backend, emitted before each TTS audio chunk.
             avatarPendingDataRef.current = data;
+            latestJordanTextRef.current = data.sentence ?? latestJordanTextRef.current;
+            sentimentCompoundRef.current = extractJordanSentimentCompound(data.sentiment);
             if (process.env.NODE_ENV === "development") {
               console.debug("[Ezri] avatar_data:", data.sentence, data.sentiment, data.phonemes);
             }
@@ -7401,8 +9629,11 @@ export default ThreeAvatar;
                 >
                   {sessionUsesCompanion3d ? (
                     <ThreeAvatar
+                      rawAvatarLabel={companionAvatarLabel}
+                      activeAvatarId={companionCanonicalId}
                       modelUrl={companionModelUrl}
                       viewTuning={companionViewTuning}
+                      fixedViewportConfig={companionFixedViewportConfig}
                       useRfv2Morphs={sessionUsesRfv2Morphs}
                       isSpeaking={isEzriSpeaking}
                       isListening={isListening}
@@ -7414,6 +9645,13 @@ export default ThreeAvatar;
                       speechPulse={speechPulse}
                       speechText={speechText}
                       speechCharIndex={speechCharIndex}
+                      latestUserTextRef={latestUserTextRef}
+                      latestJordanTextRef={latestJordanTextRef}
+                      userSpeechStartedAtMsRef={userSpeechStartedAtMsRef}
+                      userLastSpeechAtMsRef={userLastSpeechAtMsRef}
+                      jordanSpeechStartedAtMsRef={jordanSpeechStartedAtMsRef}
+                      jordanLastSpeechAtMsRef={jordanLastSpeechAtMsRef}
+                      sentimentCompoundRef={sentimentCompoundRef}
                     />
                   ) : (
                     <StaticSessionPortrait
