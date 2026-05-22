@@ -36,31 +36,18 @@ import type { PlanTier, UserSubscription, UsageRecord } from "../../utils/subscr
 import { cn } from "@/lib/utils";
 import { SolaceSelect } from "@/app/solace";
 import {
-  billingBody,
   billingCard,
-  billingChip,
-  billingDialogContent,
-  billingGhostButton,
-  billingHeroImage,
+  billingGhostBtn,
+  billingHeroOverlay,
   billingHeroOverlayBottom,
-  billingHeroOverlayReadability,
-  billingHeroScrimBottom,
-  billingHeroScrimDark,
   billingHeroSection,
-  billingLabel,
-  billingLoadingShell,
-  billingModalPanel,
+  billingHeroTitle,
   billingPageAtmosphere,
   billingPageFogMid,
   billingPageGlowTop,
-  billingPageVignette,
-  billingPanel,
-  billingPaygCapsule,
-  billingPlanCard,
-  billingPlanCardCurrent,
-  billingPlanCardDefault,
-  billingTitle,
-  billingValue,
+  billingPageSubtitle,
+  billingPageTitle,
+  billingRailCard,
 } from "@/app/pages/app/billing/billingUi";
 
 const PAYG_CAPSULES = [25, 50, 100, 200] as const;
@@ -124,7 +111,7 @@ function GlowRing({
           cy={size / 2}
           r={r}
           fill="none"
-          className="stroke-[color-mix(in_srgb,var(--solace-text)_12%,transparent)]"
+          stroke="rgba(255,255,255,0.07)"
           strokeWidth={strokeWidth}
         />
         <motion.circle
@@ -143,10 +130,10 @@ function GlowRing({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center px-3 text-center">
-        <p className={cn(billingLabel, "text-[10px] tracking-[0.26em]")}>{eyebrow}</p>
-        <p className={cn("mt-1 text-xl sm:text-2xl", billingTitle)}>{centerPrimary}</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-zinc-500">{eyebrow}</p>
+        <p className="mt-1 font-serif text-xl font-light tracking-tight text-zinc-50 sm:text-2xl">{centerPrimary}</p>
         {centerSecondary ? (
-          <p className="mt-1 max-w-[12rem] text-[11px] leading-relaxed text-[var(--solace-muted)]">{centerSecondary}</p>
+          <p className="mt-1 max-w-[12rem] text-[11px] leading-relaxed text-zinc-500">{centerSecondary}</p>
         ) : null}
       </div>
     </div>
@@ -588,7 +575,10 @@ export function Billing() {
     setShowPAYGModal(true);
   };
 
-  const panel = billingPanel;
+  const panel = cn(
+    billingCard,
+    "rounded-3xl border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+  );
 
   const paymentMethodLabel = useMemo(() => {
     const pm = subscriptionSource?.payment_method;
@@ -601,12 +591,12 @@ export function Billing() {
 
   if (isLoading) {
     return (
-      <div className={billingLoadingShell}>
-        <div className={billingPageGlowTop} aria-hidden />
+      <div className="relative min-h-[50vh] overflow-hidden bg-[#07080f] px-4 py-12">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_50%_at_50%_0%,rgba(109,40,217,0.18),transparent_55%)]" />
         <div className="relative mx-auto max-w-[1500px] animate-pulse space-y-8">
-          <div className="h-8 max-w-xs rounded-lg bg-[color-mix(in_srgb,var(--solace-text)_8%,transparent)]" />
-          <div className="h-56 rounded-3xl bg-[color-mix(in_srgb,var(--solace-text)_6%,transparent)]" />
-          <div className="h-36 rounded-3xl bg-[color-mix(in_srgb,var(--solace-text)_4%,transparent)]" />
+          <div className="h-8 max-w-xs rounded-lg bg-white/[0.05]" />
+          <div className="h-56 rounded-3xl bg-white/[0.04]" />
+          <div className="h-36 rounded-3xl bg-white/[0.03]" />
         </div>
       </div>
     );
@@ -617,7 +607,7 @@ export function Billing() {
 
   const minutesRailBlock = (
     <div className={cn("p-6", panel)}>
-      <p className={cn(billingLabel, "text-center text-[10px] tracking-[0.28em]")}>Minutes usage</p>
+      <p className="text-center text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">Minutes usage</p>
       <div className="mt-5">
         <GlowRing
           progress={accountProgress}
@@ -631,24 +621,24 @@ export function Billing() {
           ariaLabel={`Minutes: ${accountUsed} of ${accountTotal} used, about ${accountProgressRounded} percent`}
         />
       </div>
-      <div className="mt-6 space-y-2 border-t border-[color:var(--solace-border)] pt-5 text-center text-sm text-[var(--solace-muted)]">
+      <div className="mt-6 space-y-2 border-t border-white/[0.06] pt-5 text-center text-sm text-zinc-400">
         <p>
           Total remaining{" "}
-          <span className={billingValue}>{accountRemaining.toLocaleString()} min</span>
+          <span className="font-medium text-zinc-100">{accountRemaining.toLocaleString()} min</span>
         </p>
         <p>
           Subscription balance{" "}
-          <span className={billingValue}>
+          <span className="font-medium text-zinc-100">
             {userSubscription.creditsRemaining.toLocaleString()} min
           </span>
         </p>
         <p>
           Pay-as-you-go{" "}
-          <span className={billingValue}>
+          <span className="font-medium text-zinc-100">
             {userSubscription.payAsYouGoCredits.toLocaleString()} min
           </span>
         </p>
-        <p className="mt-2 text-[11px] text-[var(--solace-muted)]">
+        <p className="mt-2 text-[11px] text-zinc-500">
           {accountProgressRounded}% used ({accountUsed.toLocaleString()} of {accountTotal.toLocaleString()} min
           total capacity).
         </p>
@@ -667,12 +657,11 @@ export function Billing() {
 
   return (
     <>
-      <div className={cn(billingPageAtmosphere, "relative min-h-full overflow-x-hidden pb-20 pt-6 sm:pt-6")}>
+      <div className={cn(billingPageAtmosphere, "relative mx-auto max-w-[1500px] [--void:var(--card-muted,#f8f3ff)]")}>
         <div className={billingPageGlowTop} aria-hidden />
         <div className={billingPageFogMid} aria-hidden />
-        <div className={billingPageVignette} aria-hidden />
 
-        <div className="relative z-[1] mx-auto max-w-[1500px] px-4 sm:px-6 lg:px-8">
+        <div className="relative z-10">
           {searchParams.get("success") && (
             <motion.div
               initial={{ opacity: 0, y: -6 }}
@@ -687,23 +676,21 @@ export function Billing() {
 
           <header className="mb-10 flex flex-row items-start justify-between gap-3 border-b border-[color:var(--solace-border)] pb-8 sm:items-center sm:gap-6">
             <div className="min-w-0 flex-1 space-y-3">
-              <p className={cn(billingLabel, "text-[10px] tracking-[0.38em] text-[color:var(--accent-secondary,#a78bfa)]")}>
-                Account
-              </p>
-              <h1 className={cn("text-3xl sm:text-4xl", billingTitle)}>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.38em] text-[color:var(--accent-violet,#a78bfa)]">Account</p>
+              <h1 className={billingPageTitle}>
                 Billing &{" "}
-                <span className="bg-gradient-to-r from-violet-600 via-fuchsia-600 to-cyan-600 bg-clip-text text-transparent [html[data-ezri-theme=dark]_&]:from-violet-200 [html[data-ezri-theme=dark]_&]:via-fuchsia-200 [html[data-ezri-theme=dark]_&]:to-cyan-100">
+                <span className="bg-gradient-to-r from-violet-600 via-fuchsia-600 to-teal-600 bg-clip-text text-transparent">
                   Subscription
                 </span>
               </h1>
-              <p className={cn("max-w-lg leading-relaxed", billingBody)}>
+              <p className={billingPageSubtitle}>
                 Manage your plan, view usage, and purchase additional minutes.
               </p>
             </div>
             <button
               type="button"
               onClick={scrollToHistory}
-              className={cn(billingGhostButton, "h-11 shrink-0")}
+              className={billingGhostBtn}
             >
               <History className="size-4" aria-hidden />
               Billing history
@@ -718,28 +705,24 @@ export function Billing() {
                 <img
                   src={HERO_SCENERY_SRC}
                   alt=""
-                  className={billingHeroImage}
+                  className="absolute inset-0 size-full object-cover"
                   width={1600}
                   height={1000}
                   loading="eager"
                   decoding="async"
                 />
-                <div className={billingHeroOverlayReadability} aria-hidden />
-                <div className={cn(billingHeroScrimDark, "absolute inset-0 [html[data-ezri-theme=dark]_&]:block [html[data-ezri-theme=light]_&]:hidden")} aria-hidden />
-                <div className={billingHeroOverlayBottom} aria-hidden />
-                <div className={cn(billingHeroScrimBottom, "absolute inset-0")} aria-hidden />
+                <div className={cn(billingHeroOverlay, "pointer-events-none absolute inset-0 z-[1]")} aria-hidden />
+                <div className={cn(billingHeroOverlayBottom, "pointer-events-none absolute inset-0 z-[1]")} aria-hidden />
 
-                <div className="relative z-10 flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-end lg:justify-between lg:p-10">
+                <div className="solace-on-dark relative z-10 flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:items-end lg:justify-between lg:p-10">
                   <div className="max-w-xl space-y-5">
-                    <p className={cn(billingLabel, "text-[10px] tracking-[0.32em] text-[color:var(--accent-secondary,#a78bfa)]")}>
-                      Current plan
-                    </p>
-                    <h2 id="current-plan-title" className={cn("text-2xl sm:text-3xl lg:text-[1.85rem]", billingTitle)}>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-violet-200/80">Current plan</p>
+                    <h2 id="current-plan-title" className={billingHeroTitle}>
                       {currentPlan.displayName}
                     </h2>
-                    <p className={cn("leading-relaxed", billingBody)}>{heroRenewalLead}</p>
+                    <p className="text-sm leading-relaxed text-zinc-300">{heroRenewalLead}</p>
                     {billingEndIsValid ? (
-                      <p className={cn("text-sm", billingValue)}>
+                      <p className="text-sm font-medium text-zinc-100">
                         {billingEndDate!.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
                       </p>
                     ) : null}
@@ -759,7 +742,7 @@ export function Billing() {
                           variant="outline"
                           onClick={handleCancelSubscription}
                           disabled={isActionLocked}
-                          className="h-11 min-h-[44px] rounded-full border-[color:var(--solace-border)] bg-[var(--solace-ds-surface)] text-[var(--solace-text)] backdrop-blur-sm hover:bg-[color-mix(in_srgb,var(--solace-text)_6%,var(--solace-ds-surface))]"
+                          className="h-11 min-h-[44px] rounded-full border-white/20 bg-black/35 text-zinc-100 backdrop-blur-sm hover:bg-black/50"
                         >
                           Cancel plan
                         </Button>
@@ -774,9 +757,12 @@ export function Billing() {
                       { k: "Extra minute", v: currentPlan.payAsYouGoRate != null ? `$${currentPlan.payAsYouGoRate}` : "—" },
                       { k: "Included tools", v: String(currentPlan.features.length) },
                     ].map((chip) => (
-                      <div key={chip.k} className={billingChip}>
-                        <dt className={cn(billingLabel, "text-[9px] tracking-[0.16em]")}>{chip.k}</dt>
-                        <dd className={cn("mt-1.5 text-sm", billingValue)}>{chip.v}</dd>
+                      <div
+                        key={chip.k}
+                        className="rounded-2xl border border-white/10 bg-black/45 px-3 py-3 backdrop-blur-md sm:py-3.5"
+                      >
+                        <dt className="text-[9px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{chip.k}</dt>
+                        <dd className="mt-1.5 text-sm font-medium text-zinc-100">{chip.v}</dd>
                       </div>
                     ))}
                   </dl>
@@ -788,7 +774,7 @@ export function Billing() {
 
               {/* 3 Manage your plan */}
               <section aria-labelledby="manage-plan-heading" className="space-y-5">
-                <h2 id="manage-plan-heading" className={cn("text-xl sm:text-2xl", billingTitle)}>
+                <h2 id="manage-plan-heading" className="font-serif text-xl font-light text-zinc-50 sm:text-2xl">
                   Manage your plan
                 </h2>
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -802,8 +788,9 @@ export function Billing() {
                       <article
                         key={planId}
                         className={cn(
-                          billingPlanCard,
-                          isCurrent ? billingPlanCardCurrent : billingPlanCardDefault
+                          "relative flex flex-col overflow-hidden rounded-3xl border p-6 sm:p-7",
+                          "bg-gradient-to-b from-white/[0.06] to-white/[0.02]",
+                          isCurrent ? "border-fuchsia-400/45 shadow-[0_0_40px_rgba(192,132,252,0.15)]" : "border-white/[0.07]"
                         )}
                       >
                         {isCurrent && (
@@ -814,15 +801,13 @@ export function Billing() {
                         <div className={cn("mb-4 inline-flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br text-white", plan.gradient)}>
                           <Icon className="size-5" aria-hidden />
                         </div>
-                        <h3 className={cn("font-medium", billingValue)}>{plan.displayName}</h3>
-                        <p className={cn("mt-2 text-2xl font-light", billingValue)}>
+                        <h3 className="font-medium text-zinc-50">{plan.displayName}</h3>
+                        <p className="mt-2 text-2xl font-light text-zinc-100">
                           ${plan.price}
-                          <span className="text-sm font-normal text-[var(--solace-muted)]">/mo</span>
+                          <span className="text-sm font-normal text-zinc-500">/mo</span>
                         </p>
-                        <p className="mt-1 text-xs text-[var(--solace-muted)]">
-                          {plan.credits} min/mo · extra ${plan.payAsYouGoRate ?? "—"}/min
-                        </p>
-                        <ul className="mt-5 flex-1 space-y-2.5 text-[13px] leading-snug text-[var(--solace-muted)]">
+                        <p className="mt-1 text-xs text-zinc-500">{plan.credits} min/mo · extra ${plan.payAsYouGoRate ?? "—"}/min</p>
+                        <ul className="mt-5 flex-1 space-y-2.5 text-[13px] leading-snug text-zinc-400">
                           {plan.features.map((f) => (
                             <li key={f} className="flex gap-2">
                               <Check className="mt-0.5 size-3.5 shrink-0 text-violet-400/90" aria-hidden />
@@ -833,11 +818,11 @@ export function Billing() {
                         <div className="mt-7">
                           {planId === "trial" ? (
                             isCurrent ? (
-                              <Button disabled className="h-11 min-h-[44px] w-full rounded-full bg-[color-mix(in_srgb,var(--solace-text)_8%,transparent)] text-[var(--solace-muted)]">
+                              <Button disabled className="h-11 min-h-[44px] w-full rounded-full bg-white/[0.08] text-zinc-400">
                                 Current plan
                               </Button>
                             ) : (
-                              <Button disabled variant="outline" className="h-11 min-h-[44px] w-full rounded-full border-[color:var(--solace-border)]">
+                              <Button disabled variant="outline" className="h-11 min-h-[44px] w-full rounded-full border-white/10">
                                 Trial
                               </Button>
                             )
@@ -867,7 +852,7 @@ export function Billing() {
                           ) : (
                             /* pro */
                             isCurrent ? (
-                              <Button disabled className="h-11 min-h-[44px] w-full rounded-full bg-[color-mix(in_srgb,var(--solace-text)_8%,transparent)] text-[var(--solace-muted)]">
+                              <Button disabled className="h-11 min-h-[44px] w-full rounded-full bg-white/[0.08] text-zinc-400">
                                 Current plan
                               </Button>
                             ) : (
@@ -891,7 +876,7 @@ export function Billing() {
                     );
                   })}
                 </div>
-                <p className="text-center text-[11px] leading-relaxed text-[var(--solace-muted)]">
+                <p className="text-center text-[11px] leading-relaxed text-zinc-600">
                   All plans include bank-level encryption, companion-aware support, and your privacy always.
                 </p>
               </section>
@@ -905,10 +890,10 @@ export function Billing() {
                         <Zap className="size-6" aria-hidden />
                       </div>
                       <div>
-                        <h2 id="more-minutes-heading" className="font-serif text-xl font-light text-[var(--solace-text)]">
+                        <h2 id="more-minutes-heading" className="font-serif text-xl font-light text-zinc-50">
                           Need more minutes?
                         </h2>
-                        <p className="mt-1 text-sm text-[var(--solace-muted)]">Purchase additional minutes at any time.</p>
+                        <p className="mt-1 text-sm text-zinc-500">Purchase additional minutes at any time.</p>
                       </div>
                     </div>
                     <Button
@@ -928,9 +913,9 @@ export function Billing() {
                           type="button"
                           onClick={() => openPaygWithMins(m)}
                           disabled={isActionLocked}
-                          className={cn(billingPaygCapsule, "disabled:opacity-40")}
+                          className="min-h-[44px] rounded-2xl border border-white/[0.08] bg-black/30 px-4 py-3 text-left transition hover:border-violet-400/30 hover:bg-white/[0.04] disabled:opacity-40"
                         >
-                          <p className="text-lg font-medium text-[var(--solace-text)]">{m} min</p>
+                          <p className="text-lg font-medium text-zinc-100">{m} min</p>
                           <p className="text-sm text-violet-200/90">${price.toFixed(2)}</p>
                         </button>
                       );
@@ -942,7 +927,7 @@ export function Billing() {
               {/* 5 Billing history & invoices */}
               <section ref={historyTableRef} id="billing-history" className="scroll-mt-24 space-y-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                  <h2 className="font-serif text-xl font-light text-[var(--solace-text)] sm:text-2xl">Billing history & invoices</h2>
+                  <h2 className="font-serif text-xl font-light text-zinc-50 sm:text-2xl">Billing history & invoices</h2>
                   {invoices.length > 0 ? (
                     <button
                       type="button"
@@ -956,13 +941,13 @@ export function Billing() {
 
                 <div className={cn("overflow-hidden", panel)}>
                   {sortedInvoices.length === 0 ? (
-                    <p className="p-8 text-sm text-[var(--solace-muted)]">No invoices yet. When payments process, they will appear here.</p>
+                    <p className="p-8 text-sm text-zinc-500">No invoices yet. When payments process, they will appear here.</p>
                   ) : (
                     <>
                       <div className="hidden overflow-x-auto md:block">
                         <table className="w-full min-w-[640px] text-left text-sm">
                           <thead>
-                            <tr className="border-b border-[color:var(--solace-border)] text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--solace-muted)]">
+                            <tr className="border-b border-white/[0.08] text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
                               <th className="px-6 py-4 font-medium">Date</th>
                               <th className="px-4 py-4 font-medium">Description</th>
                               <th className="px-4 py-4 font-medium">Amount</th>
@@ -975,26 +960,21 @@ export function Billing() {
                               const st = String(invoice.status ?? "").toLowerCase();
                               const paid = st === "paid" || st === "complete";
                               return (
-                                <tr
-                                  key={invoice.id}
-                                  className="border-b border-[color:var(--solace-border)] last:border-0 hover:bg-[color-mix(in_srgb,var(--solace-text)_4%,transparent)]"
-                                >
-                                  <td className="whitespace-nowrap px-6 py-4 text-[var(--solace-muted)]">
+                                <tr key={invoice.id} className="border-b border-white/[0.05] last:border-0 hover:bg-white/[0.02]">
+                                  <td className="whitespace-nowrap px-6 py-4 text-zinc-400">
                                     {invoice.created ? new Date(invoice.created).toLocaleDateString(undefined, { dateStyle: "medium" }) : "—"}
                                   </td>
-                                  <td className="max-w-[240px] truncate px-4 py-4 text-[var(--solace-text)]">
+                                  <td className="max-w-[240px] truncate px-4 py-4 text-zinc-200">
                                     {invoice.description || "Solace subscription"}
                                   </td>
-                                  <td className="whitespace-nowrap px-4 py-4 tabular-nums text-[var(--solace-text)]">
+                                  <td className="whitespace-nowrap px-4 py-4 tabular-nums text-zinc-200">
                                     ${Number(invoice.amount_due).toFixed(2)}
                                   </td>
                                   <td className="px-4 py-4">
                                     <span
                                       className={cn(
                                         "inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize",
-                                        paid
-                                          ? "bg-emerald-500/15 text-emerald-700 [html[data-ezri-theme=dark]_&]:text-emerald-200/95"
-                                          : "bg-[color-mix(in_srgb,var(--solace-text)_6%,transparent)] text-[var(--solace-muted)]"
+                                        paid ? "bg-emerald-500/15 text-emerald-200/95" : "bg-white/[0.06] text-zinc-400"
                                       )}
                                     >
                                       {invoice.status || "—"}
@@ -1007,7 +987,7 @@ export function Billing() {
                                           type="button"
                                           size="icon"
                                           variant="ghost"
-                                          className="size-10 min-h-[44px] min-w-[44px] rounded-full text-[color:var(--accent-secondary,#a78bfa)] hover:bg-[color-mix(in_srgb,var(--accent-secondary,#a78bfa)_10%,transparent)] hover:text-[var(--solace-text)]"
+                                          className="size-10 min-h-[44px] min-w-[44px] rounded-full text-violet-300/90 hover:bg-white/[0.06] hover:text-violet-200"
                                           onClick={() =>
                                             window.open(invoice.hosted_invoice_url, "_blank", "noopener,noreferrer")
                                           }
@@ -1021,7 +1001,7 @@ export function Billing() {
                                           type="button"
                                           size="icon"
                                           variant="ghost"
-                                          className="size-10 min-h-[44px] min-w-[44px] rounded-full text-[color:var(--accent-secondary,#a78bfa)] hover:bg-[color-mix(in_srgb,var(--accent-secondary,#a78bfa)_10%,transparent)] hover:text-[var(--solace-text)]"
+                                          className="size-10 min-h-[44px] min-w-[44px] rounded-full text-violet-300/90 hover:bg-white/[0.06] hover:text-violet-200"
                                           onClick={() => window.open(invoice.invoice_pdf, "_blank", "noopener,noreferrer")}
                                           aria-label="Download invoice PDF"
                                         >
@@ -1045,20 +1025,18 @@ export function Billing() {
                             <li key={invoice.id} className="p-4">
                               <div className="flex items-start justify-between gap-3">
                                 <div>
-                                  <p className="font-medium text-[var(--solace-text)]">{invoice.description || "Solace subscription"}</p>
-                                  <p className="mt-1 text-xs text-[var(--solace-muted)]">
+                                  <p className="font-medium text-zinc-100">{invoice.description || "Solace subscription"}</p>
+                                  <p className="mt-1 text-xs text-zinc-500">
                                     {invoice.created ? new Date(invoice.created).toLocaleDateString(undefined, { dateStyle: "medium" }) : ""}
                                   </p>
                                 </div>
-                                <span className="shrink-0 text-sm tabular-nums text-[var(--solace-text)]">${Number(invoice.amount_due).toFixed(2)}</span>
+                                <span className="shrink-0 text-sm tabular-nums text-zinc-200">${Number(invoice.amount_due).toFixed(2)}</span>
                               </div>
                               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                                 <span
                                   className={cn(
                                     "rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize",
-                                    paid
-                                      ? "bg-emerald-500/15 text-emerald-700 [html[data-ezri-theme=dark]_&]:text-emerald-200/95"
-                                      : "bg-[color-mix(in_srgb,var(--solace-text)_6%,transparent)] text-[var(--solace-muted)]"
+                                    paid ? "bg-emerald-500/15 text-emerald-200/95" : "bg-white/[0.06] text-zinc-400"
                                   )}
                                 >
                                   {invoice.status || "—"}
@@ -1069,7 +1047,7 @@ export function Billing() {
                                       type="button"
                                       size="sm"
                                       variant="outline"
-                                      className={cn(billingGhostButton, "h-11 rounded-full")}
+                                      className="h-11 min-h-[44px] rounded-full border-white/12"
                                       onClick={() =>
                                         window.open(invoice.hosted_invoice_url, "_blank", "noopener,noreferrer")
                                       }
@@ -1082,7 +1060,7 @@ export function Billing() {
                                       type="button"
                                       size="sm"
                                       variant="outline"
-                                      className={cn(billingGhostButton, "h-11 rounded-full")}
+                                      className="h-11 min-h-[44px] rounded-full border-white/12"
                                       onClick={() => window.open(invoice.invoice_pdf, "_blank", "noopener,noreferrer")}
                                     >
                                       PDF
@@ -1095,7 +1073,7 @@ export function Billing() {
                         })}
                       </ul>
 
-                      <div className="border-t border-[color:var(--solace-border)] bg-[color-mix(in_srgb,var(--solace-text)_4%,var(--solace-ds-surface))] px-4 py-4 sm:px-6">
+                      <div className="border-t border-white/[0.06] bg-black/25 px-4 py-4 sm:px-6">
                         <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-center gap-3">
                             <label htmlFor="billing-invoice-page-size" className="sr-only">
@@ -1123,11 +1101,11 @@ export function Billing() {
                               aria-label="Previous page"
                               onClick={() => setInvoicePage((p) => Math.max(1, p - 1))}
                               disabled={invoicePagination.safePage <= 1}
-                              className={cn(billingGhostButton, "size-11 min-w-[44px] px-0 disabled:cursor-not-allowed disabled:opacity-30")}
+                              className="inline-flex size-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-200 transition hover:border-violet-400/25 hover:bg-white/[0.07] disabled:cursor-not-allowed disabled:opacity-30"
                             >
                               <ChevronLeft className="size-5" />
                             </button>
-                            <span className="min-w-[8.5rem] text-center text-xs tabular-nums text-[var(--solace-muted)] sm:text-sm">
+                            <span className="min-w-[8.5rem] text-center text-xs tabular-nums text-zinc-500 sm:text-sm">
                               {invoicePagination.from}–{invoicePagination.to} of {invoicePagination.total}
                             </span>
                             <button
@@ -1137,7 +1115,7 @@ export function Billing() {
                                 setInvoicePage((p) => Math.min(invoicePagination.totalPages, p + 1))
                               }
                               disabled={invoicePagination.safePage >= invoicePagination.totalPages}
-                              className={cn(billingGhostButton, "size-11 min-w-[44px] px-0 disabled:cursor-not-allowed disabled:opacity-30")}
+                              className="inline-flex size-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-200 transition hover:border-violet-400/25 hover:bg-white/[0.07] disabled:cursor-not-allowed disabled:opacity-30"
                             >
                               <ChevronRight className="size-5" />
                             </button>
@@ -1150,25 +1128,27 @@ export function Billing() {
               </section>
 
               {/* 6 Privacy banner */}
-              <footer className={cn(billingHeroSection, "relative overflow-hidden rounded-3xl")}>
+              <footer className="relative overflow-hidden rounded-3xl border border-white/[0.08]">
                 <img
                   src={HERO_SCENERY_SRC}
                   alt=""
-                  className={billingHeroImage}
+                  className="absolute inset-0 size-full object-cover"
                   width={900}
                   height={600}
                   loading="lazy"
                   decoding="async"
                 />
-                <div className={billingHeroOverlayReadability} aria-hidden />
-                <div className={billingHeroOverlayBottom} aria-hidden />
+                <div
+                  className="absolute inset-0 bg-gradient-to-r from-[#07080f]/97 via-[#07080f]/88 to-[#07080f]/55"
+                  aria-hidden
+                />
                 <div className="relative flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:gap-6 sm:p-8">
-                  <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--solace-border)] bg-[var(--solace-ds-surface)] text-[color:var(--accent-secondary,#a78bfa)]">
+                  <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/50 text-violet-200">
                     <Lock className="size-6" aria-hidden />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-medium text-[var(--solace-text)]">Your privacy and peace of mind are our priority.</p>
-                    <p className="mt-1 text-sm leading-relaxed text-[var(--solace-muted)]">
+                    <p className="font-medium text-zinc-100">Your privacy and peace of mind are our priority.</p>
+                    <p className="mt-1 text-sm leading-relaxed text-zinc-500">
                       Your data is encrypted, secure, and never shared.{" "}
                       <Link to="/privacy" className="text-violet-300/90 underline-offset-2 hover:text-violet-200 hover:underline">
                         Read our Privacy Policy
@@ -1186,16 +1166,16 @@ export function Billing() {
 
               {/* 2 Payment method */}
               <div className={cn("p-6", panel)}>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--solace-muted)]">Payment method</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">Payment method</p>
                 <div className="mt-5 flex items-center gap-4">
-                  <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--solace-text)_6%,transparent)] text-[var(--solace-muted)]">
+                  <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-zinc-300">
                     <CreditCard className="size-6" aria-hidden />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-[var(--solace-text)]">
+                    <p className="truncate text-sm font-medium text-zinc-100">
                       {paymentMethodLabel ?? "Card on file"}
                     </p>
-                    <p className="text-xs text-[var(--solace-muted)]">Full card details are managed securely in Stripe.</p>
+                    <p className="text-xs text-zinc-500">Full card details are managed securely in Stripe.</p>
                   </div>
                 </div>
                 <Button
@@ -1204,7 +1184,7 @@ export function Billing() {
                   onClick={handleManageBilling}
                   isLoading={processingAction === "manage_billing"}
                   disabled={isActionLocked}
-                  className="mt-4 h-11 min-h-[44px] w-full rounded-full text-sm text-[color:var(--accent-secondary,#a78bfa)] hover:bg-[color-mix(in_srgb,var(--accent-secondary,#a78bfa)_8%,transparent)] hover:text-[var(--solace-text)]"
+                  className="mt-4 h-11 min-h-[44px] w-full rounded-full text-sm text-violet-300/90 hover:bg-white/[0.05] hover:text-violet-100"
                 >
                   Update payment method
                 </Button>
@@ -1212,17 +1192,17 @@ export function Billing() {
 
               {/* 3 Upcoming renewal */}
               <div className={cn("p-6", panel)}>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--solace-muted)]">Upcoming renewal</p>
-                <p className="mt-4 font-serif text-xl font-light text-[var(--solace-text)]">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">Upcoming renewal</p>
+                <p className="mt-4 font-serif text-xl font-light text-zinc-50">
                   {billingEndIsValid ? billingEndDate!.toLocaleDateString(undefined, { dateStyle: "long" }) : "—"}
                 </p>
-                <p className="mt-2 text-xs leading-relaxed text-[var(--solace-muted)]">{heroRenewalLead}</p>
+                <p className="mt-2 text-xs leading-relaxed text-zinc-500">{heroRenewalLead}</p>
                 {googleCalendarRenewalUrl ? (
                   <a
                     href={googleCalendarRenewalUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={cn(billingGhostButton, "mt-4 h-11 w-full")}
+                    className="mt-4 flex h-11 min-h-[44px] w-full items-center justify-center rounded-full border border-white/12 text-sm text-zinc-200 transition hover:border-cyan-400/35"
                   >
                     Add to calendar
                   </a>
@@ -1231,27 +1211,27 @@ export function Billing() {
 
               {/* 4 Billing preferences */}
               <div className={cn("p-6", panel)}>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--solace-muted)]">Billing preferences</p>
-                <ul className="mt-4 space-y-0 divide-y divide-[color:var(--solace-border)]">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">Billing preferences</p>
+                <ul className="mt-4 space-y-0 divide-y divide-white/[0.06]">
                   <li className="flex items-center justify-between gap-2 py-3 text-sm">
-                    <span className="text-[var(--solace-muted)]">Billing cycle</span>
-                    <span className="flex items-center gap-1 font-medium text-[var(--solace-text)]">
+                    <span className="text-zinc-400">Billing cycle</span>
+                    <span className="flex items-center gap-1 font-medium text-zinc-100">
                       {formatBillingCycle(subscriptionSource?.billing_cycle)}
-                      <ChevronRight className="size-4 text-[var(--solace-muted)]" aria-hidden />
+                      <ChevronRight className="size-4 text-zinc-600" aria-hidden />
                     </span>
                   </li>
                   <li className="flex items-center justify-between gap-2 py-3 text-sm">
-                    <span className="text-[var(--solace-muted)]">Email receipts</span>
-                    <span className="flex items-center gap-1 text-[var(--solace-muted)]">
+                    <span className="text-zinc-400">Email receipts</span>
+                    <span className="flex items-center gap-1 text-zinc-300">
                       {emailReceiptsLabel}
-                      <ChevronRight className="size-4 text-[var(--solace-muted)]" aria-hidden />
+                      <ChevronRight className="size-4 text-zinc-600" aria-hidden />
                     </span>
                   </li>
                   <li className="flex items-center justify-between gap-2 py-3 text-sm">
-                    <span className="text-[var(--solace-muted)]">Auto renewal</span>
-                    <span className="flex items-center gap-1 font-medium text-[var(--solace-text)]">
+                    <span className="text-zinc-400">Auto renewal</span>
+                    <span className="flex items-center gap-1 font-medium text-zinc-100">
                       {autoRenewalLabel}
-                      <ChevronRight className="size-4 text-[var(--solace-muted)]" aria-hidden />
+                      <ChevronRight className="size-4 text-zinc-600" aria-hidden />
                     </span>
                   </li>
                 </ul>
@@ -1260,7 +1240,7 @@ export function Billing() {
                   onClick={handleManageBilling}
                   isLoading={processingAction === "manage_billing"}
                   disabled={isActionLocked}
-                  className={cn(billingGhostButton, "mt-4 h-11 w-full text-sm")}
+                  className="mt-4 h-11 min-h-[44px] w-full rounded-full border border-white/12 bg-white/[0.04] text-sm text-zinc-100 hover:bg-white/[0.07]"
                 >
                   Update preferences
                 </Button>
@@ -1277,11 +1257,13 @@ export function Billing() {
                   loading="lazy"
                   decoding="async"
                 />
-                <div className={billingHeroOverlayReadability} aria-hidden />
-                <div className={billingHeroOverlayBottom} aria-hidden />
+                <div
+                  className="absolute inset-0 bg-gradient-to-br from-[#07080f]/97 via-[#07080f]/90 to-[#07080f]/65"
+                  aria-hidden
+                />
                 <MessageCircle className="relative size-5 text-violet-300/90" aria-hidden />
-                <p className="relative mt-3 text-sm font-medium text-[var(--solace-text)]">Need help?</p>
-                <p className="relative mt-2 max-w-[14rem] text-xs leading-relaxed text-[var(--solace-muted)]">
+                <p className="relative mt-3 text-sm font-medium text-zinc-100">Need help?</p>
+                <p className="relative mt-2 max-w-[14rem] text-xs leading-relaxed text-zinc-500">
                   We&apos;re here for you. Our support team is always ready to help.
                 </p>
                 <Link
@@ -1310,15 +1292,15 @@ export function Billing() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.96, opacity: 0 }}
               onClick={(e: MouseEvent<HTMLDivElement>) => e.stopPropagation()}
-              className={billingModalPanel}
+              className={cn(billingCard, "w-full max-w-md overflow-hidden rounded-3xl p-7")}
               role="dialog"
               aria-modal="true"
               aria-labelledby="payg-title"
             >
-              <h3 id="payg-title" className="text-center font-serif text-xl font-light text-[var(--solace-text)]">
+              <h3 id="payg-title" className="text-center font-serif text-xl font-light text-zinc-50">
                 Buy minutes
               </h3>
-              <p className="mt-2 text-center text-xs text-[var(--solace-muted)]">
+              <p className="mt-2 text-center text-xs text-zinc-500">
                 ${currentPlan.payAsYouGoRate}/min · your plan rate
               </p>
               <div className="mt-6 grid grid-cols-2 gap-2" role="group" aria-label="Select minutes">
@@ -1332,12 +1314,12 @@ export function Billing() {
                       "min-h-[44px] rounded-xl border px-3 py-3 text-left text-sm transition",
                       paygMinutes === mins
                         ? "border-fuchsia-400/45 bg-fuchsia-500/12 text-fuchsia-50"
-                        : "border-[color:var(--solace-border)] bg-[var(--solace-ds-surface)] hover:border-[color:var(--solace-ds-border-glow)]",
+                        : "border-white/10 bg-white/[0.03] hover:border-violet-400/25",
                       isActionLocked && "opacity-50"
                     )}
                   >
                     <span className="font-medium">{mins} min</span>
-                    <span className="mt-1 block text-xs text-[var(--solace-muted)]">
+                    <span className="mt-1 block text-xs text-zinc-500">
                       ${((currentPlan.payAsYouGoRate ?? 0) * mins).toFixed(2)}
                     </span>
                   </button>
@@ -1348,7 +1330,7 @@ export function Billing() {
                   type="button"
                   variant="outline"
                   onClick={() => setShowPAYGModal(false)}
-                  className={cn(billingGhostButton, "h-11 flex-1")}
+                  className="h-11 min-h-[44px] flex-1 rounded-full border-white/12"
                   disabled={isActionLocked}
                 >
                   Close
@@ -1369,16 +1351,16 @@ export function Billing() {
       </AnimatePresence>
 
       <Dialog open={showCancelModal} onOpenChange={setShowCancelModal}>
-        <DialogContent className={billingDialogContent}>
+        <DialogContent className={cn(billingCard, "sm:max-w-md text-[var(--solace-text)]")}>
           <DialogHeader>
             <div className="mb-1 flex items-center gap-3">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-rose-500/15 text-rose-300">
                 <AlertTriangle className="size-5" aria-hidden />
               </div>
-              <DialogTitle className="text-lg text-[var(--solace-text)]">Cancel subscription?</DialogTitle>
+              <DialogTitle className="text-lg text-zinc-50">Cancel subscription?</DialogTitle>
             </div>
-            <DialogDescription className="pt-1 text-sm leading-relaxed text-[var(--solace-muted)]">
-              Are you sure you want to cancel your <span className="font-medium text-[var(--solace-text)]">{currentPlan.name}</span>{" "}
+            <DialogDescription className="pt-1 text-sm leading-relaxed text-zinc-400">
+              Are you sure you want to cancel your <span className="font-medium text-zinc-200">{currentPlan.name}</span>{" "}
               subscription?
               <br />
               <br />
@@ -1387,7 +1369,7 @@ export function Billing() {
                 <>
                   {" "}
                   on{" "}
-                  <span className="font-medium text-[var(--solace-text)]">
+                  <span className="font-medium text-zinc-200">
                     {billingEndDate!.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
                   </span>
                 </>
@@ -1401,7 +1383,7 @@ export function Billing() {
               variant="outline"
               onClick={() => setShowCancelModal(false)}
               disabled={processingAction === "cancel_subscription"}
-              className={cn(billingGhostButton, "rounded-full")}
+              className="rounded-full border-white/12"
             >
               Keep subscription
             </Button>

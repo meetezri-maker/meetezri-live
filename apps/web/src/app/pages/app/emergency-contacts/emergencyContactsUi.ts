@@ -1,5 +1,4 @@
 import { cn } from "@/lib/utils";
-import { solaceInputSurface } from "@/app/solace/solacePageChrome";
 import {
   settingsCard,
   settingsIconChip,
@@ -22,14 +21,18 @@ export const emergencyPageVignette = settingsPageVignette;
 
 export const emergencyGlassCard = cn(
   settingsCard,
-  "rounded-[1.75rem] border-white/[0.06]",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_0_48px_-16px_rgba(139,92,246,0.14),0_28px_72px_-40px_rgba(0,0,0,0.75)]"
+  "light-theme-card light-theme-card-hover rounded-[1.75rem] border-white/[0.06]",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_0_48px_-16px_rgba(139,92,246,0.14),0_28px_72px_-40px_rgba(0,0,0,0.75)]",
+  "[html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
+  "[html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
 );
 
 export const emergencyRailCard = cn(
   emergencyGlassCard,
-  "rounded-3xl p-5 sm:p-6",
-  "shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_40px_-14px_rgba(139,92,246,0.18),0_24px_64px_-36px_rgba(0,0,0,0.72)]"
+  "solace-rail-card rounded-3xl p-5 sm:p-6",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_40px_-14px_rgba(139,92,246,0.18),0_24px_64px_-36px_rgba(0,0,0,0.72)]",
+  "[html[data-ezri-theme=light]_&]:bg-[var(--rail-card-bg)]",
+  "[html[data-theme=light]_&]:bg-[var(--rail-card-bg)]"
 );
 
 export const emergencyHeroCard = cn(
@@ -45,7 +48,9 @@ export const emergencyHeroImage = cn(
 
 export const emergencyHeroOverlayLeft = cn(
   "absolute inset-0",
-  "bg-gradient-to-r from-[#0a0b18] via-[#0a0b18]/78 to-[#0a0b18]/20 lg:from-[#0a0b18]/96 lg:via-[#0a0b18]/55 lg:to-transparent"
+  "bg-gradient-to-r from-[#0a0b18] via-[#0a0b18]/78 to-[#0a0b18]/20 lg:from-[#0a0b18]/96 lg:via-[#0a0b18]/55 lg:to-transparent",
+  "[html[data-ezri-theme=light]_&]:bg-[var(--hero-overlay-readability)]",
+  "[html[data-theme=light]_&]:bg-[var(--hero-overlay-readability)]"
 );
 
 export const emergencyHeroOverlayPurple = cn(
@@ -194,15 +199,15 @@ export const emergencyModalBody = cn(
   "text-sm leading-relaxed text-[rgba(255,255,255,0.52)]"
 );
 
-/** Serious warm amber notice — not yellow/white alert */
+/** Important notice — purple sanctuary tone (matches modal shell) */
 export const emergencyModalAmberNotice = cn(
-  "space-y-2 rounded-2xl border border-amber-400/22 p-4",
-  "bg-[linear-gradient(165deg,rgba(69,45,12,0.35)_0%,rgba(24,18,12,0.55)_100%)]",
-  "shadow-[inset_0_1px_0_rgba(251,191,36,0.08),0_0_28px_-14px_rgba(251,191,36,0.12)]"
+  "space-y-2 rounded-2xl border border-violet-400/22 p-4",
+  "bg-[linear-gradient(165deg,rgba(76,29,149,0.32)_0%,rgba(18,12,32,0.58)_100%)]",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_28px_-14px_rgba(139,92,246,0.2)]"
 );
 
 export const emergencyModalAmberTitle = cn(
-  "flex items-center gap-2 text-sm font-semibold text-amber-100/95"
+  "flex items-center gap-2 text-sm font-semibold text-violet-100/95"
 );
 
 /** Pink safety consent checkbox card */
@@ -232,32 +237,34 @@ export const emergencyModalNoteItem = cn(
   "flex gap-2.5 text-sm leading-relaxed text-[rgba(255,255,255,0.48)]"
 );
 
+/** Explicit dark inputs — modals portal outside `.solace-app` (CSS vars fall back to light) */
 export const emergencyModalField = cn(
-  solaceInputSurface,
-  "flex min-h-[48px] items-center gap-2.5 rounded-2xl px-3.5 shadow-[var(--solace-card-shadow)]",
-  "transition-all duration-300 focus-within:ring-2 focus-within:ring-[color:var(--accent-secondary,#a78bfa)]/25"
+  "flex min-h-[48px] items-center gap-2.5 rounded-2xl border border-violet-400/22 px-3.5",
+  "bg-[rgba(10,12,28,0.72)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
+  "transition-all duration-300 focus-within:border-violet-400/38 focus-within:bg-[rgba(14,16,34,0.85)]",
+  "focus-within:ring-2 focus-within:ring-violet-400/20"
 );
 
 export const emergencyModalInput = cn(
-  "flex-1 bg-transparent text-sm text-[var(--solace-text)] outline-none",
-  "placeholder:text-[var(--solace-muted)]"
+  "flex-1 bg-transparent text-sm text-white/92 outline-none",
+  "placeholder:text-violet-300/40"
 );
 
-export const emergencyModalLabel = "mb-2 block text-sm font-medium text-[var(--solace-text)]";
+export const emergencyModalLabel = "mb-2 block text-sm font-medium text-white/88";
 
-export const emergencyModalFieldHint = "mb-2 text-xs text-[var(--solace-muted)]";
+export const emergencyModalFieldHint = "mb-2 text-xs text-violet-200/52";
 
 export const emergencyModalPhoneButton = cn(
-  solaceInputSurface,
-  "h-12 min-h-[48px] w-[120px] shrink-0 justify-between rounded-2xl px-3 sm:w-[140px]",
-  "text-[var(--solace-text)] shadow-[var(--solace-card-shadow)]",
-  "hover:border-[color:var(--solace-ds-border-glow)] hover:bg-[color-mix(in_srgb,var(--accent-secondary,#a78bfa)_8%,var(--input-bg))]"
+  "h-12 min-h-[48px] w-[120px] shrink-0 justify-between rounded-2xl border border-violet-400/22 px-3 sm:w-[140px]",
+  "bg-[rgba(10,12,28,0.72)] text-white/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
+  "transition-all duration-300 hover:border-violet-400/35 hover:bg-[rgba(14,16,34,0.82)]"
 );
 
 export const emergencyModalPhoneInput = cn(
-  solaceInputSurface,
-  "h-12 min-h-[48px] flex-1 rounded-2xl text-[var(--solace-text)] shadow-[var(--solace-card-shadow)]",
-  "placeholder:text-[var(--solace-muted)]"
+  "h-12 min-h-[48px] flex-1 rounded-2xl border border-violet-400/22 bg-[rgba(10,12,28,0.72)]",
+  "text-white/92 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
+  "placeholder:text-violet-300/40",
+  "transition-all duration-300 focus:border-violet-400/38 focus:ring-2 focus:ring-violet-400/20"
 );
 
 export const emergencyModalFormStack = "space-y-[18px]";
@@ -281,9 +288,9 @@ export const emergencyModalBtnPrimary = cn(
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_0_32px_-6px_rgba(168,85,247,0.45)]",
   "transition-all duration-300 hover:enabled:brightness-110",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/40",
-  "disabled:cursor-not-allowed disabled:border disabled:border-white/[0.06]",
-  "disabled:bg-[linear-gradient(135deg,rgba(48,32,78,0.65)_0%,rgba(42,24,52,0.6)_100%)]",
-  "disabled:text-[rgba(255,255,255,0.38)] disabled:shadow-none disabled:saturate-[0.7]"
+  "disabled:cursor-not-allowed disabled:border disabled:border-violet-400/18",
+  "disabled:bg-[linear-gradient(135deg,rgba(76,29,149,0.42)_0%,rgba(88,28,135,0.38)_55%,rgba(76,5,95,0.35)_100%)]",
+  "disabled:text-[rgba(255,255,255,0.52)] disabled:shadow-[0_0_20px_-10px_rgba(139,92,246,0.2)] disabled:saturate-[0.85]"
 );
 
 export const emergencyModalBtnSave = emergencyModalBtnPrimary;

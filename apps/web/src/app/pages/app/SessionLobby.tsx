@@ -328,11 +328,11 @@ export function SessionLobby() {
       setSelectedAvatar(tempSelectedAvatar);
       setSelectedEnvironment(tempSelectedEnvironment);
       setShowCustomizeModal(false);
-      toast.success("Session settings updated");
+      toast.success("Talking settings updated");
       setIsSavingCustomize(false);
     } catch (err) {
       console.error(err);
-      toast.error("Could not save session preferences");
+      toast.error("Could not save Talking preferences");
       setIsSavingCustomize(false);
     }
   };

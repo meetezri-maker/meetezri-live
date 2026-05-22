@@ -44,6 +44,10 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/queries";
 import { SolaceSupportStrip } from "@/app/solace";
+import {
+  solaceHeroOverlayReadability,
+  solacePageAtmosphere,
+} from "@/app/solace/solacePageChrome";
 import type { HelpPath, LoadItem, MentalClimate } from "./brainHealthPersistedTypes";
 import {
   CHOICES_BY_STEP,
@@ -797,8 +801,11 @@ export function BrainHealthPage() {
   return (
     <div
       className={cn(
+        solacePageAtmosphere,
         "relative min-h-full pb-6 transition-[filter,background-color] duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]",
         "bg-gradient-to-b from-[#05060d] via-[#070a14] to-[#03040a]",
+        "[html[data-ezri-theme=light]_&]:bg-[var(--bg-gradient)]",
+        "[html[data-theme=light]_&]:bg-[var(--bg-gradient)]",
         selectedPath === "slow_down" && "[filter:saturate(0.95)_brightness(0.98)]"
       )}
     >
@@ -850,7 +857,7 @@ export function BrainHealthPage() {
           <div className="min-w-0 space-y-8 xl:space-y-10">
             {/* Guided hero */}
             <section
-              className="relative overflow-hidden rounded-[1.35rem] border border-violet-500/15 bg-[#0c1020]/55 shadow-[0_32px_90px_-40px_rgba(0,0,0,0.85),0_0_48px_-12px_rgba(139,92,246,0.15)] sm:rounded-[1.5rem]"
+              className="light-theme-card light-theme-card-hover relative overflow-hidden rounded-[1.35rem] border border-violet-500/15 bg-[var(--solace-card-bg)] shadow-[0_32px_90px_-40px_rgba(0,0,0,0.85),0_0_48px_-12px_rgba(139,92,246,0.15)] sm:rounded-[1.5rem] [html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)] [html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
               aria-labelledby="guided-hero-heading"
             >
               <img
@@ -861,7 +868,10 @@ export function BrainHealthPage() {
                 decoding="async"
               />
               <div
-                className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0c14]/32 via-[#0a0c14]/10 to-transparent"
+                className={cn(
+                  solaceHeroOverlayReadability,
+                  "pointer-events-none absolute inset-0 z-[1] bg-gradient-to-r from-[#0a0c14]/32 via-[#0a0c14]/10 to-transparent"
+                )}
                 aria-hidden
               />
 
@@ -1364,7 +1374,7 @@ export function BrainHealthPage() {
       </div>
 
       <Dialog open={howItWorksOpen} onOpenChange={setHowItWorksOpen}>
-        <DialogContent className="max-w-md border-white/10 bg-[#0c0e18] text-zinc-100 shadow-[0_0_60px_rgba(0,0,0,0.65)]">
+        <DialogContent className="light-theme-card max-w-md border-white/10 bg-[var(--solace-card-bg)] text-[var(--solace-text)] shadow-[0_0_60px_rgba(0,0,0,0.65)] [html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)] [html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]">
           <DialogHeader>
             <DialogTitle className="text-zinc-50">How Brain Health works</DialogTitle>
             <DialogDescription className="text-zinc-400">

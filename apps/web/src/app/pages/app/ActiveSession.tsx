@@ -9416,9 +9416,9 @@ export default ThreeAvatar;
         } catch (e) {
           console.error("Failed to refresh profile after session end:", e);
         }
-        toast.success("Session ended successfully");
+        toast.success("Talking ended successfully");
       } catch (error) {
-        console.error("Failed to end session:", error);
+        console.error("Failed to End Talking:", error);
         toast.error("Failed to save session data");
       } finally {
         setIsUploading(false);
@@ -9457,7 +9457,7 @@ export default ThreeAvatar;
           });
         }
       } catch (e) {
-        console.error("End session navigation failed:", e);
+        console.error("End Talking navigation failed:", e);
         setIsEndingSession(false);
       }
     };
@@ -9514,11 +9514,11 @@ export default ThreeAvatar;
         setPermissionsGranted(false);
         window.location.reload();
       }, 100);
-      toast.info("Resetting Session...");
+      toast.info("Resetting Talking...");
     };
 
     const glassPanel =
-      "rounded-2xl border border-white/[0.032] bg-white/[0.01] backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.06)]";
+      "rounded-2xl border border-white/10 bg-[#0A0F1E]/45 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.25)]";
     /** Control strip: no bar — only circular buttons (no drop shadow). */
     const glassControlDock =
       "bg-transparent shadow-none backdrop-blur-none ring-0 outline-none border-0";
@@ -9528,30 +9528,29 @@ export default ThreeAvatar;
     /** Muted / end: no drop shadow; slight red tint on hover via background only. */
     const glassControlBtnDanger =
       "rounded-full border-0 text-white shadow-none ring-0 outline-none backdrop-blur-xl transition-[background-color] hover:shadow-none [background-color:rgba(255,255,255,0.12)] hover:[background-color:rgba(255,255,255,0.18)]";
-    /** One scale for every side: outer shell (all modes) + header corner + panel offsets from the room edge. */
-    const stageShellPadding = "p-4 sm:p-5 md:p-6";
-    /** One rounded token for outer shell + inner clip layer (keeps 3D clipped; chrome shares same box). */
-    const stageRoundClass = isFullscreen
-      ? "rounded-none"
-      : "rounded-[1.75rem] sm:rounded-[2.5rem] md:rounded-[3rem]";
+    /** Edge-to-edge stage inside the app main pane (reference layout — no inset “card”). */
+    const stageShellPadding = isFullscreen ? "p-0" : "p-0";
+    const stageRoundClass = isFullscreen ? "rounded-none" : "rounded-none";
     const stageSidePanelInsetL =
-      "top-20 sm:top-22 md:top-24 start-4 sm:start-5 md:start-6";
+      "top-4 sm:top-5 md:top-6 start-3 sm:start-4 md:start-5";
+    /** Right rail: controls + widgets in one column (avoids header overlapping connection card). */
     const stageSidePanelInsetR =
-      "top-20 sm:top-22 md:top-24 end-4 sm:end-5 md:end-6";
-    /** Same horizontal inset as side rails so header controls line up with panel edges */
-    const stageHeaderInset =
-      "top-0 end-0 pt-4 pe-4 sm:pt-5 sm:pe-5 md:pt-6 md:pe-6";
-    /** Wider left rail (2× previous 18rem cap) for greeting + transcript. */
+      "top-3 sm:top-4 md:top-5 end-3 sm:end-4 md:end-5";
+    /** Left rail: greeting + transcript. */
     const stageRailWidthLeftClass =
-      "w-full max-w-[min(36rem,calc(100%-1.25rem))] sm:max-w-[min(36rem,calc(100%-1.5rem))] md:w-[36rem] md:max-w-none shrink-0";
+      "w-full max-w-[min(24rem,calc(100%-1.5rem))] sm:max-w-[min(24rem,calc(100%-2rem))] md:w-[24rem] md:max-w-none shrink-0";
     const stageRailWidthRightClass =
       "w-[min(18rem,calc(100%-1.25rem))] sm:w-[min(18rem,calc(100%-1.5rem))] md:w-72 shrink-0";
     const stageBottomBar = "bottom-4 sm:bottom-5 md:bottom-6";
 
+    /** Fills immersive AppLayout main (full width, no sidebar inset). */
+    const sessionViewportClass =
+      "relative h-full min-h-0 w-full flex-1 overflow-hidden text-white transition-[background-color] duration-500";
+
     return (
       <div
         ref={sessionContainerRef}
-        className="relative h-screen overflow-hidden text-white transition-[background-color] duration-500"
+        className={sessionViewportClass}
         style={{ backgroundColor: sessionBackdropLayers.rootBg }}
       >
         {/* Immediate takeover while ending — avoids flash of session UI after confirm closes */}
@@ -9559,10 +9558,10 @@ export default ThreeAvatar;
           <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#07041C]/95 backdrop-blur-md px-6">
             <Loader2 className="h-12 w-12 text-purple-400 animate-spin mb-4" />
             <p className="text-lg font-semibold text-white text-center">
-              Ending session…
+              Ending Talking
             </p>
             <p className="text-sm text-gray-400 mt-2 text-center max-w-sm">
-              Hang on — we&apos;re saving your session and taking you to the lobby.
+              Hang on — we&apos;re saving your Talk and taking you to the lobby.
             </p>
           </div>
         )}
@@ -9570,7 +9569,7 @@ export default ThreeAvatar;
         {/* Main stage: curved frame on outer shell; flat in fullscreen — equal padding on all sides for every mode */}
         <div className={`absolute inset-0 z-0 box-border ${stageShellPadding}`}>
           <div
-            className={`relative h-full w-full overflow-hidden ${stageRoundClass} shadow-[0_24px_80px_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/[0.08]`}
+            className={`relative h-full w-full overflow-hidden ${stageRoundClass}`}
           >
             <div className={`absolute inset-0 overflow-hidden ${stageRoundClass}`}>
               {/* Mood atmosphere — z-0 behind companion; same clip as rounded stage */}
@@ -9700,7 +9699,7 @@ export default ThreeAvatar;
             {/* Session chrome — inside the rounded stage so left/right insets match the room edge symmetrically */}
             {/* Left: greeting + live transcript */}
             <aside
-              aria-label="Session greeting and transcript"
+              aria-label="Talking greeting and transcript"
               className={`pointer-events-none absolute ${stageSidePanelInsetL} z-30 flex max-h-[min(100dvh-5rem,100%)] ${stageRailWidthLeftClass} flex-col gap-0 overflow-x-hidden overflow-y-auto overscroll-contain pb-2`}
             >
               <div
@@ -9723,7 +9722,7 @@ export default ThreeAvatar;
                   <div
                     lang="en"
                     ref={transcriptListRef}
-                    className="flex h-[16.5rem] shrink-0 flex-col gap-2 overflow-y-auto rounded-xl border border-white/[0.028] bg-black/[0.05] px-3 py-2 text-sm sm:h-[17.5rem] [scrollbar-width:thin] [scrollbar-color:rgba(78,205,196,0.65)_rgba(255,255,255,0.06)] [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-white/[0.06] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[#4ECDC4]/55 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb:hover]:bg-[#4ECDC4]/80"
+                    className="flex h-[16.5rem] shrink-0 flex-col gap-2 overflow-y-auto rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm sm:h-[17.5rem] [scrollbar-width:thin] [scrollbar-color:rgba(78,205,196,0.65)_rgba(255,255,255,0.06)] [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-white/[0.06] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[#4ECDC4]/55 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb:hover]:bg-[#4ECDC4]/80"
                   >
                     {transcript.length === 0 && !liveUserSpeech.trim() ? (
                       <p className="text-xs text-white/50">
@@ -9760,11 +9759,12 @@ export default ThreeAvatar;
               </div>
             </aside>
 
-            {/* Top bar — same inline-end inset as right rail (not full shell padding) */}
-            <header
-              className={`pointer-events-none absolute z-[48] flex justify-end ${stageHeaderInset}`}
+            {/* Right rail — session controls, then connection / snapshot / feelings (single column, no overlap) */}
+            <aside
+              aria-label="Talking controls and stats"
+              className={`pointer-events-none absolute ${stageSidePanelInsetR} z-[48] ${stageRailWidthRightClass} flex max-h-[calc(100%-6.5rem)] flex-col gap-3 overflow-x-hidden overflow-y-auto overscroll-contain pb-28 [scrollbar-width:thin] [scrollbar-color:rgba(78,205,196,0.45)_rgba(255,255,255,0.06)]`}
             >
-              <div className="pointer-events-auto flex shrink-0 items-center gap-2 md:gap-3">
+              <div className="pointer-events-auto flex shrink-0 items-center justify-end gap-2 md:gap-3">
                 <motion.button
                   type="button"
                   whileHover={{ scale: 1.02 }}
@@ -9808,16 +9808,13 @@ export default ThreeAvatar;
                   </div>
                 )}
               </div>
-            </header>
 
-            {/* Right-side session stats (connection + session snapshot + moods) */}
-            <aside
-              id="session-widgets-panel"
-              className={`absolute ${stageSidePanelInsetR} z-[48] ${stageRailWidthRightClass} flex-col gap-3 ${sessionStatsOpen ? "flex" : "hidden"
-                }`}
-              aria-hidden={!sessionStatsOpen}
-            >
-              <div className={`${glassPanel} flex items-center gap-3 px-3 py-2.5`}>
+              <div
+                id="session-widgets-panel"
+                className={`pointer-events-auto flex flex-col gap-3 ${sessionStatsOpen ? "" : "hidden"}`}
+                aria-hidden={!sessionStatsOpen}
+              >
+              <div className={`${glassPanel} shrink-0 flex items-center gap-3 px-3 py-2.5`}>
                 {ezriWsStatus === "connected" ? (
                   <Wifi className="size-8 shrink-0 text-emerald-300" aria-hidden />
                 ) : ezriWsStatus === "connecting" ||
@@ -9847,9 +9844,9 @@ export default ThreeAvatar;
                 </div>
               </div>
 
-              <div className={`${glassPanel} p-3`}>
+              <div className={`${glassPanel} shrink-0 p-3`}>
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold text-white">Session snapshot</span>
+                  <span className="text-sm font-semibold text-white">Talking snapshot</span>
                   <span className="flex items-center gap-1 text-xs text-emerald-300">
                     <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
                     Live
@@ -9882,7 +9879,7 @@ export default ThreeAvatar;
                 </ul>
               </div>
 
-              <div className={`${glassPanel} p-4`}>
+              <div className={`${glassPanel} shrink-0 p-4`}>
                 <div className="mb-3 flex items-center gap-2">
                   <Smile className="size-4 shrink-0 text-amber-200" aria-hidden />
                   <span className="text-sm font-semibold text-white">Feelings</span>
@@ -9971,6 +9968,7 @@ export default ThreeAvatar;
                     ) : null}
                   </>
                 )}
+              </div>
               </div>
             </aside>
 
@@ -10072,7 +10070,7 @@ export default ThreeAvatar;
                     whileTap={{ scale: 0.94 }}
                     onClick={() => setShowEndConfirm(true)}
                     className={`flex size-12 items-center justify-center rounded-full md:size-14 ${glassControlBtnDanger}`}
-                    aria-label="End session"
+                    aria-label="End Talking"
                   >
                     <PhoneOff className="size-6 text-white md:size-7" />
                   </motion.button>
@@ -10390,7 +10388,7 @@ export default ThreeAvatar;
                     <Clock className="w-10 h-10 text-white" />
                   </motion.div>
                   <h3 className="text-3xl font-bold text-white mb-2">
-                    Session Paused
+                    Talking Paused
                   </h3>
                   <p className="text-gray-300 text-lg">
                     You've used all your included minutes for this month.
@@ -10463,7 +10461,7 @@ export default ThreeAvatar;
                   onClick={() => navigate("/app/dashboard")}
                   className="w-full px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
                 >
-                  End Session & Return to Dashboard
+                  End Talking & Return to Dashboard
                 </button>
               </motion.div>
             </motion.div>
@@ -10476,7 +10474,7 @@ export default ThreeAvatar;
           minutesRemaining={remainingWholeMinutes ?? 0}
         />
 
-        {/* End Session Confirm */}
+        {/* End Talking Confirm */}
         <AnimatePresence>
           {showEndConfirm && (
             <motion.div
@@ -10498,14 +10496,14 @@ export default ThreeAvatar;
                     <PhoneOff className="w-8 h-8 text-red-400" />
                   </div>
                   <h3 className="text-xl font-bold text-white mb-2">
-                    End Session?
+                    End Talking?
                   </h3>
                   <p className="text-gray-300">
                     Are you sure you want to end your video session with{" "}
                     {currentAvatar.name}?
                   </p>
                   <p className="text-sm text-gray-400 mt-2">
-                    Session duration: {formatTime(sessionTime)}
+                    Talking duration: {formatTime(sessionTime)}
                   </p>
                 </div>
 
@@ -10516,7 +10514,7 @@ export default ThreeAvatar;
                     onClick={() => setShowEndConfirm(false)}
                     className="flex-1 px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium"
                   >
-                    Continue Session
+                    Continue Talking
                   </motion.button>
 
                   <motion.button
@@ -10530,7 +10528,7 @@ export default ThreeAvatar;
                     {isUploading ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : null}
-                    {isUploading ? "Ending..." : "End Session"}
+                    {isUploading ? "Ending..." : "End Talking"}
                   </motion.button>
                 </div>
               </motion.div>
@@ -10698,7 +10696,7 @@ export default ThreeAvatar;
                     onClick={() => navigate("/app/dashboard")}
                     className="w-full px-4 sm:px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-colors"
                   >
-                    End Session & Return to Dashboard
+                    End Talking & Return to Dashboard
                   </button>
                 </div>
               </motion.div>

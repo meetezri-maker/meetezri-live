@@ -1,0 +1,459 @@
+/**
+ * Solace light theme — global pastel lavender system (colors + states only).
+ * Scoped: html[data-theme="light"] and html[data-ezri-theme="light"].
+ * Dark theme untouched.
+ */
+
+/* ─── Reinforce tokens on .solace-app ─────────────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app,
+html[data-theme="light"] .solace-app {
+  --solace-bg: var(--bg, #fbf8ff);
+  --solace-bg-elevated: var(--surface, #ffffff);
+  --solace-panel: var(--card, rgba(255, 255, 255, 0.86));
+  --solace-panel-soft: var(--surface-soft, #fbf8ff);
+  --solace-border: var(--border, #e7ddfb);
+  --solace-text: var(--text-primary, #101828);
+  --solace-muted: var(--text-secondary, #475467);
+  --solace-ds-surface: var(--surface, #ffffff);
+  --solace-ds-text: var(--text-primary, #101828);
+  --solace-ds-text-muted: var(--text-muted, #667085);
+  --solace-ds-border-glow: rgba(167, 139, 250, 0.34);
+  --solace-card-bg: var(--card, rgba(255, 255, 255, 0.86));
+  --solace-card-border: rgba(167, 139, 250, 0.28);
+  --solace-card-shadow:
+    0 18px 45px rgba(88, 28, 135, 0.08), 0 0 24px rgba(167, 139, 250, 0.1);
+  --solace-page-bg: var(--bg-gradient);
+  --solace-ds-shadow-cinematic:
+    0 18px 45px rgba(88, 28, 135, 0.08), 0 0 32px rgba(167, 139, 250, 0.14),
+    0 0 20px rgba(236, 72, 153, 0.08);
+  --rail-card-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(246, 240, 255, 0.84));
+  --rail-card-border: rgba(167, 139, 250, 0.3);
+  color: var(--text-primary) !important;
+}
+
+/* ─── Premium light cards ──────────────────────────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app .light-theme-card,
+html[data-theme="light"] .solace-app .light-theme-card {
+  background: var(--card, rgba(255, 255, 255, 0.86)) !important;
+  border: 1px solid var(--solace-card-border, rgba(167, 139, 250, 0.28)) !important;
+  box-shadow: var(--solace-card-shadow) !important;
+  color: var(--text-primary) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-panel,
+html[data-theme="light"] .solace-app .solace-panel {
+  background: var(--card, rgba(255, 255, 255, 0.86)) !important;
+  border: 1px solid rgba(167, 139, 250, 0.28) !important;
+  box-shadow: var(--solace-card-shadow) !important;
+  color: var(--text-primary) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-panel[class*="bg-[var(--solace-panel-soft)"],
+html[data-theme="light"] .solace-app .solace-panel[class*="bg-[var(--solace-panel-soft)"] {
+  background: var(--surface-soft, #fbf8ff) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-panel::before,
+html[data-theme="light"] .solace-app .light-theme-card::before {
+  background: radial-gradient(
+    ellipse 85% 55% at 50% -15%,
+    rgba(167, 139, 250, 0.12),
+    transparent 58%
+  ) !important;
+  opacity: 1 !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-rail-card,
+html[data-theme="light"] .solace-app .solace-rail-card {
+  background: var(--rail-card-bg) !important;
+  border: 1px solid var(--rail-card-border) !important;
+  box-shadow:
+    0 18px 45px rgba(88, 28, 135, 0.08),
+    0 0 28px rgba(167, 139, 250, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+  color: var(--text-primary) !important;
+}
+
+/* ─── Hover glow (interactive cards) ───────────────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app .light-theme-card-hover,
+html[data-theme="light"] .solace-app .light-theme-card-hover {
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s ease,
+    border-color 0.35s ease;
+}
+
+html[data-ezri-theme="light"] .solace-app .light-theme-card-hover:hover,
+html[data-theme="light"] .solace-app a:hover .light-theme-card,
+html[data-theme="light"] .solace-app a:hover .solace-panel.light-theme-card-hover,
+html[data-theme="light"] .solace-app button:hover .light-theme-card,
+html[data-theme="light"] .solace-app .light-theme-card-hover:hover {
+  border-color: rgba(167, 139, 250, 0.55) !important;
+  box-shadow:
+    0 20px 55px rgba(88, 28, 135, 0.12),
+    0 0 34px rgba(167, 139, 250, 0.22),
+    0 0 22px rgba(236, 72, 153, 0.12) !important;
+  transform: translateY(-2px);
+}
+
+html[data-ezri-theme="light"] .solace-app .light-theme-card-hover--teal:hover,
+html[data-theme="light"] .solace-app .light-theme-card-hover--teal:hover {
+  border-color: rgba(78, 205, 196, 0.5) !important;
+  box-shadow:
+    0 20px 55px rgba(15, 118, 110, 0.1),
+    0 0 34px rgba(78, 205, 196, 0.22),
+    0 0 18px rgba(78, 205, 196, 0.12) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .light-theme-card-hover--pink:hover,
+html[data-theme="light"] .solace-app .light-theme-card-hover--pink:hover {
+  border-color: rgba(236, 72, 153, 0.45) !important;
+  box-shadow:
+    0 20px 55px rgba(190, 24, 93, 0.1),
+    0 0 34px rgba(236, 72, 153, 0.2),
+    0 0 22px rgba(167, 139, 250, 0.14) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .light-theme-card-hover--gold:hover,
+html[data-theme="light"] .solace-app .light-theme-card-hover--gold:hover {
+  border-color: rgba(251, 191, 36, 0.5) !important;
+  box-shadow:
+    0 20px 55px rgba(180, 83, 9, 0.08),
+    0 0 34px rgba(251, 191, 36, 0.22),
+    0 0 18px rgba(251, 191, 36, 0.12) !important;
+}
+
+/* ─── Typography: headings + body ────────────────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app h1,
+html[data-ezri-theme="light"] .solace-app h2,
+html[data-ezri-theme="light"] .solace-app h3,
+html[data-ezri-theme="light"] .solace-app h4,
+html[data-theme="light"] .solace-app h1,
+html[data-theme="light"] .solace-app h2,
+html[data-theme="light"] .solace-app h3,
+html[data-theme="light"] .solace-app h4 {
+  color: var(--text-primary) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app p,
+html[data-theme="light"] .solace-app p {
+  color: inherit;
+}
+
+/* ─── Moonlight / gray text → readable tokens ──────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app [class*="text-zinc-1"],
+html[data-ezri-theme="light"] .solace-app [class*="text-zinc-2"],
+html[data-ezri-theme="light"] .solace-app [class*="text-zinc-3"],
+html[data-ezri-theme="light"] .solace-app .text-zinc-50,
+html[data-ezri-theme="light"] .solace-app .text-zinc-100,
+html[data-ezri-theme="light"] .solace-app .text-zinc-200,
+html[data-theme="light"] .solace-app [class*="text-zinc-1"],
+html[data-theme="light"] .solace-app [class*="text-zinc-2"],
+html[data-theme="light"] .solace-app [class*="text-zinc-3"],
+html[data-theme="light"] .solace-app .text-zinc-50,
+html[data-theme="light"] .solace-app .text-zinc-100,
+html[data-theme="light"] .solace-app .text-zinc-200 {
+  color: var(--text-primary) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app [class*="text-zinc-4"],
+html[data-ezri-theme="light"] .solace-app [class*="text-zinc-5"],
+html[data-ezri-theme="light"] .solace-app [class*="text-zinc-6"],
+html[data-ezri-theme="light"] .solace-app [class*="text-zinc-7"],
+html[data-theme="light"] .solace-app [class*="text-zinc-4"],
+html[data-theme="light"] .solace-app [class*="text-zinc-5"],
+html[data-theme="light"] .solace-app [class*="text-zinc-6"],
+html[data-theme="light"] .solace-app [class*="text-zinc-7"] {
+  color: var(--text-muted) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app [class*="text-gray-5"],
+html[data-ezri-theme="light"] .solace-app [class*="text-gray-4"],
+html[data-ezri-theme="light"] .solace-app [class*="text-slate-5"],
+html[data-ezri-theme="light"] .solace-app [class*="text-slate-4"],
+html[data-ezri-theme="light"] .solace-app [class*="text-neutral-4"],
+html[data-theme="light"] .solace-app [class*="text-gray-5"],
+html[data-theme="light"] .solace-app [class*="text-gray-4"],
+html[data-theme="light"] .solace-app [class*="text-slate-5"],
+html[data-theme="light"] .solace-app [class*="text-slate-4"],
+html[data-theme="light"] .solace-app [class*="text-neutral-4"] {
+  color: var(--text-muted) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app [class*="text-gray-1"],
+html[data-ezri-theme="light"] .solace-app [class*="text-gray-2"],
+html[data-ezri-theme="light"] .solace-app [class*="text-slate-1"],
+html[data-ezri-theme="light"] .solace-app [class*="text-slate-2"],
+html[data-theme="light"] .solace-app [class*="text-gray-1"],
+html[data-theme="light"] .solace-app [class*="text-gray-2"],
+html[data-theme="light"] .solace-app [class*="text-slate-1"],
+html[data-theme="light"] .solace-app [class*="text-slate-2"] {
+  color: var(--text-primary) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app [class*="--solace-text"]:not(.solace-sidebar-nav):not(.solace-sidebar-nav--active),
+html[data-theme="light"] .solace-app [class*="--solace-text"]:not(.solace-sidebar-nav):not(.solace-sidebar-nav--active) {
+  color: var(--text-primary) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app [class*="--solace-muted"]:not(.solace-sidebar-nav),
+html[data-theme="light"] .solace-app [class*="--solace-muted"]:not(.solace-sidebar-nav) {
+  color: var(--text-muted) !important;
+}
+
+/* ─── Cinematic dark regions keep moonlit copy ─────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app .solace-on-dark,
+html[data-ezri-theme="light"] .solace-app .solace-on-dark *,
+html[data-theme="light"] .solace-app .solace-on-dark,
+html[data-theme="light"] .solace-app .solace-on-dark * {
+  color: inherit;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-on-dark .text-white,
+html[data-ezri-theme="light"] .solace-app .solace-on-dark .text-zinc-50,
+html[data-ezri-theme="light"] .solace-app .solace-on-dark .text-zinc-100,
+html[data-ezri-theme="light"] .solace-app .solace-on-dark .text-zinc-200,
+html[data-ezri-theme="light"] .solace-app .solace-on-dark [class*="text-zinc-"],
+html[data-theme="light"] .solace-app .solace-on-dark .text-white,
+html[data-theme="light"] .solace-app .solace-on-dark .text-zinc-50,
+html[data-theme="light"] .solace-app .solace-on-dark .text-zinc-100,
+html[data-theme="light"] .solace-app .solace-on-dark .text-zinc-200,
+html[data-theme="light"] .solace-app .solace-on-dark [class*="text-zinc-"] {
+  color: rgb(250 250 250) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-on-dark [class*="text-violet-2"],
+html[data-theme="light"] .solace-app .solace-on-dark [class*="text-violet-2"] {
+  color: rgb(221 214 254) !important;
+}
+
+/* Gradient CTAs keep white label */
+html[data-ezri-theme="light"] .solace-app .solace-btn-primary,
+html[data-ezri-theme="light"] .solace-app [class*="from-violet-6"] .text-white,
+html[data-ezri-theme="light"] .solace-app [class*="from-fuchsia-6"] .text-white,
+html[data-ezri-theme="light"] .solace-app [class*="from-pink"] .text-white,
+html[data-ezri-theme="light"] .solace-app [class*="from-emerald-5"] .text-white,
+html[data-ezri-theme="light"] .solace-app button[class*="from-violet"],
+html[data-ezri-theme="light"] .solace-app button[class*="from-fuchsia"],
+html[data-ezri-theme="light"] .solace-app button[class*="from-pink"],
+html[data-ezri-theme="light"] .solace-app button[class*="from-emerald-5"],
+html[data-ezri-theme="light"] .solace-app a[class*="from-violet"] .text-white,
+html[data-theme="light"] .solace-app .solace-btn-primary,
+html[data-theme="light"] .solace-app button[class*="from-violet"],
+html[data-theme="light"] .solace-app button[class*="from-fuchsia"],
+html[data-theme="light"] .solace-app button[class*="from-pink"] {
+  color: var(--text-inverse, #ffffff) !important;
+}
+
+/* ─── Sidebar (light) ──────────────────────────────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app .solace-sidebar-shell,
+html[data-theme="light"] .solace-app .solace-sidebar-shell {
+  background: rgba(255, 255, 255, 0.84) !important;
+  border: 1px solid #e7ddfb !important;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 0 24px rgba(167, 139, 250, 0.18), 0 12px 40px -18px rgba(16, 24, 40, 0.08) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app .solace-sidebar-nav--active,
+html[data-theme="light"] .solace-app .solace-sidebar-nav--active {
+  color: #4c1d95 !important;
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.22), rgba(78, 205, 196, 0.12)) !important;
+  border: 1px solid rgba(167, 139, 250, 0.45) !important;
+  box-shadow: 0 0 24px rgba(167, 139, 250, 0.18) !important;
+}
+
+/* ─── Glass / rail cards ───────────────────────────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app .solace-glass-card,
+html[data-theme="light"] .solace-app .solace-glass-card {
+  background: var(--rail-card-bg) !important;
+  border: 1px solid var(--rail-card-border) !important;
+  box-shadow:
+    0 18px 45px rgba(88, 28, 135, 0.08),
+    0 0 28px rgba(167, 139, 250, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+  color: var(--text-primary) !important;
+}
+
+/* ─── Dead gray / black fills on light ─────────────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app [class*="bg-black/"],
+html[data-theme="light"] .solace-app [class*="bg-black/"] {
+  background-color: var(--surface-lavender, #f5eeff) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app [class*="bg-[#0"],
+html[data-ezri-theme="light"] .solace-app [class*="bg-[#1"],
+html[data-ezri-theme="light"] .solace-app [class*="bg-[#2"],
+html[data-theme="light"] .solace-app [class*="bg-[#0"],
+html[data-theme="light"] .solace-app [class*="bg-[#1"],
+html[data-theme="light"] .solace-app [class*="bg-[#2"] {
+  background-color: var(--card, rgba(255, 255, 255, 0.86)) !important;
+}
+
+/* ─── Landing (public) ─────────────────────────────────────────────────────── */
+html[data-ezri-theme="light"] .solace-landing,
+html[data-theme="light"] .solace-landing {
+  --solace-ds-bg-deep: #f6f0ff;
+  --solace-ds-bg: #fbf8ff;
+  --solace-ds-bg-raised: #ffffff;
+  --solace-ds-surface: rgba(255, 255, 255, 0.88);
+  --solace-ds-text: #101828;
+  --solace-ds-text-muted: #667085;
+  --solace-ds-border-glow: rgba(167, 139, 250, 0.32);
+  --solace-ds-glow-purple: rgba(167, 139, 250, 0.24);
+  --solace-ds-shadow-cinematic: 0 18px 45px rgba(88, 28, 135, 0.08), 0 0 32px rgba(167, 139, 250, 0.12);
+  color: #101828;
+  background: var(--bg-gradient, linear-gradient(135deg, #ffffff 0%, #fbf8ff 38%, #f3ecff 72%, #ecfdfb 100%));
+}
+
+html[data-ezri-theme="light"] .solace-landing .landing-glass,
+html[data-theme="light"] .solace-landing .landing-glass {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border: 1px solid rgba(167, 139, 250, 0.28) !important;
+  box-shadow: 0 18px 45px rgba(88, 28, 135, 0.08), 0 0 24px rgba(167, 139, 250, 0.1) !important;
+  color: #101828 !important;
+}
+
+html[data-ezri-theme="light"] .solace-landing .landing-glass:hover,
+html[data-theme="light"] .solace-landing .landing-glass:hover {
+  border-color: rgba(167, 139, 250, 0.55) !important;
+  box-shadow:
+    0 20px 55px rgba(88, 28, 135, 0.12),
+    0 0 34px rgba(167, 139, 250, 0.22),
+    0 0 22px rgba(236, 72, 153, 0.1) !important;
+}
+
+html[data-ezri-theme="light"] .solace-landing .text-white,
+html[data-ezri-theme="light"] .solace-landing [class*="text-zinc-"],
+html[data-theme="light"] .solace-landing .text-white,
+html[data-theme="light"] .solace-landing [class*="text-zinc-"] {
+  color: #101828 !important;
+}
+
+html[data-ezri-theme="light"] .solace-landing .solace-on-dark .text-white,
+html[data-theme="light"] .solace-landing .solace-on-dark .text-white {
+  color: #ffffff !important;
+}
+
+/* ─── Auth shells (login / signup / verify) ─────────────────────────────────── */
+html[data-ezri-theme="light"] .solace-login-page,
+html[data-theme="light"] .solace-login-page {
+  background: var(--bg-gradient) !important;
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-login-page .solace-on-dark,
+html[data-theme="light"] .solace-login-page .solace-on-dark {
+  color: #f4f4f8;
+}
+
+html[data-ezri-theme="light"] .solace-login-page [class*="text-white"]:not(.solace-on-dark *):not([class*="from-"]):not([class*="bg-gradient"]),
+html[data-theme="light"] .solace-login-page [class*="text-white"]:not(.solace-on-dark *):not([class*="from-"]):not([class*="bg-gradient"]) {
+  color: var(--text-primary, #101828) !important;
+}
+
+html[data-ezri-theme="light"] .solace-login-page [class*="border-white/"],
+html[data-theme="light"] .solace-login-page [class*="border-white/"] {
+  border-color: var(--border, #e7ddfb) !important;
+}
+
+html[data-ezri-theme="light"] .solace-login-page [class*="bg-white/"],
+html[data-theme="light"] .solace-login-page [class*="bg-white/"] {
+  background-color: rgba(255, 255, 255, 0.72) !important;
+}
+
+html[data-ezri-theme="light"] .solace-login-page input,
+html[data-theme="light"] .solace-login-page textarea,
+html[data-ezri-theme="light"] .solace-login-page select,
+html[data-theme="light"] .solace-login-page input,
+html[data-theme="light"] .solace-login-page textarea,
+html[data-theme="light"] .solace-login-page select {
+  background: #ffffff !important;
+  border-color: #ddd0fa !important;
+  color: #101828 !important;
+}
+
+/* ─── Canvas pages (Mood, Journal, Habits) ─────────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app .solace-canvas-bg,
+html[data-theme="light"] .solace-app .solace-canvas-bg {
+  background: var(--bg-gradient) !important;
+  color: var(--text-primary) !important;
+}
+
+/* ─── Slate copy on light surfaces ─────────────────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app .text-slate-100,
+html[data-ezri-theme="light"] .solace-app .text-slate-200,
+html[data-ezri-theme="light"] .solace-app [class*="text-slate-1"],
+html[data-ezri-theme="light"] .solace-app [class*="text-slate-2"],
+html[data-theme="light"] .solace-app .text-slate-100,
+html[data-theme="light"] .solace-app .text-slate-200,
+html[data-theme="light"] .solace-app [class*="text-slate-1"],
+html[data-theme="light"] .solace-app [class*="text-slate-2"] {
+  color: var(--text-primary) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app [class*="text-slate-4"],
+html[data-ezri-theme="light"] .solace-app [class*="text-slate-5"],
+html[data-theme="light"] .solace-app [class*="text-slate-4"],
+html[data-theme="light"] .solace-app [class*="text-slate-5"] {
+  color: var(--text-muted) !important;
+}
+
+/* ─── Page atmosphere: dark radial / linear stacks ─────────────────────────── */
+html[data-ezri-theme="light"] .solace-app [class*="linear-gradient(180deg,#08"],
+html[data-ezri-theme="light"] .solace-app [class*="linear-gradient(180deg,#07"],
+html[data-ezri-theme="light"] .solace-app [class*="linear-gradient(180deg,#06"],
+html[data-ezri-theme="light"] .solace-app [class*="linear-gradient(180deg,#05"],
+html[data-theme="light"] .solace-app [class*="linear-gradient(180deg,#08"],
+html[data-theme="light"] .solace-app [class*="linear-gradient(180deg,#07"],
+html[data-theme="light"] .solace-app [class*="linear-gradient(180deg,#06"],
+html[data-theme="light"] .solace-app [class*="linear-gradient(180deg,#05"] {
+  background: var(--bg-gradient) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app [class*="bg-[radial-gradient"][class*="#08"],
+html[data-ezri-theme="light"] .solace-app [class*="bg-[radial-gradient"][class*="#07"],
+html[data-ezri-theme="light"] .solace-app [class*="bg-[radial-gradient"][class*="#06"],
+html[data-theme="light"] .solace-app [class*="bg-[radial-gradient"][class*="#08"],
+html[data-theme="light"] .solace-app [class*="bg-[radial-gradient"][class*="#07"],
+html[data-theme="light"] .solace-app [class*="bg-[radial-gradient"][class*="#06"] {
+  background: var(--bg-gradient) !important;
+}
+
+/* ─── Interactive cards without explicit hover class ─────────────────────────── */
+html[data-ezri-theme="light"] .solace-app a[class*="rounded-2xl"]:hover,
+html[data-ezri-theme="light"] .solace-app a[class*="rounded-3xl"]:hover,
+html[data-ezri-theme="light"] .solace-app button[class*="rounded-2xl"]:not(.solace-btn-primary):hover,
+html[data-theme="light"] .solace-app a[class*="rounded-2xl"]:hover,
+html[data-theme="light"] .solace-app a[class*="rounded-3xl"]:hover,
+html[data-theme="light"] .solace-app button[class*="rounded-2xl"]:not(.solace-btn-primary):hover {
+  border-color: rgba(167, 139, 250, 0.45) !important;
+  box-shadow:
+    0 16px 48px rgba(88, 28, 135, 0.1),
+    0 0 28px rgba(167, 139, 250, 0.16) !important;
+}
+
+/* ─── Modals / overlays (member app) ───────────────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app [class*="bg-[#030308]"],
+html[data-ezri-theme="light"] .solace-app [class*="bg-[#0e0e18]"],
+html[data-theme="light"] .solace-app [class*="bg-[#030308]"],
+html[data-theme="light"] .solace-app [class*="bg-[#0e0e18]"] {
+  background-color: rgba(251, 248, 255, 0.92) !important;
+}
+
+html[data-ezri-theme="light"] .solace-app [role="dialog"],
+html[data-theme="light"] .solace-app [role="dialog"] {
+  background: var(--card-solid, #ffffff) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+  box-shadow:
+    0 24px 60px rgba(88, 28, 135, 0.12),
+    0 0 32px rgba(167, 139, 250, 0.14) !important;
+}
+
+/* ─── Brain Health / Wellness tools page shell ───────────────────────────────── */
+html[data-ezri-theme="light"] .solace-app [class*="bg-[#080512]"],
+html[data-theme="light"] .solace-app [class*="bg-[#080512]"] {
+  background: var(--bg-gradient) !important;
+  color: var(--text-primary) !important;
+}

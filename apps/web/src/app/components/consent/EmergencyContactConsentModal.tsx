@@ -134,7 +134,7 @@ export function EmergencyContactConsentModal({
 
               <section className={emergencyModalAmberNotice} role="note">
                 <h3 className={emergencyModalAmberTitle}>
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-300/90" aria-hidden />
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-violet-300/85" aria-hidden />
                   {promptConfig.emergencyOnlyHeading}
                 </h3>
                 <p className={emergencyModalBody}>{promptConfig.emergencyOnlyBody}</p>

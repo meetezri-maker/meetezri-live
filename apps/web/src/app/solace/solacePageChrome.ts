@@ -28,8 +28,15 @@ export const solacePageVignette = cn(
 );
 
 export const solaceCard = cn(
-  "rounded-[1.25rem] border border-[color:var(--solace-card-border)] backdrop-blur-xl",
-  "bg-[var(--solace-card-bg)] shadow-[var(--solace-card-shadow)]"
+  "light-theme-card light-theme-card-hover rounded-[1.25rem] border border-[color:var(--solace-card-border)] backdrop-blur-xl",
+  "bg-[var(--solace-card-bg)] shadow-[var(--solace-card-shadow)] text-[var(--solace-text)]"
+);
+
+/** Right rail / insight panels — pastel gradient surface */
+export const solaceRailCard = cn(
+  "solace-rail-card light-theme-card light-theme-card-hover rounded-[1.25rem] border backdrop-blur-xl",
+  "border-[color:var(--rail-card-border,var(--solace-card-border))] bg-[var(--rail-card-bg)]",
+  "text-[var(--solace-text)] shadow-[var(--solace-card-shadow)]"
 );
 
 export const solaceHeroSection = cn(
@@ -45,7 +52,8 @@ export const solaceHeroImage = cn(
 export const solaceHeroOverlayReadability = cn(
   "pointer-events-none absolute inset-0 z-[1]",
   "bg-[linear-gradient(90deg,rgba(10,11,24,0.62)_0%,rgba(10,11,24,0.28)_40%,transparent_62%)]",
-  "[html[data-ezri-theme=light]_&]:bg-[linear-gradient(90deg,rgba(255,255,255,0.82)_0%,rgba(246,240,255,0.55)_100%)]"
+  "[html[data-ezri-theme=light]_&]:bg-[var(--hero-overlay-readability)]",
+  "[html[data-theme=light]_&]:bg-[var(--hero-overlay-readability)]"
 );
 
 export const solaceHeroOverlayBottom = cn(
@@ -76,23 +84,27 @@ export const solaceRowLink = cn(
 );
 
 export const solaceBtnPrimary = cn(
-  "inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white",
+  "solace-btn-primary inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-[var(--text-inverse,#ffffff)]",
   "bg-[var(--button-primary)]",
-  "shadow-[0_8px_24px_-8px_rgba(124,58,237,0.35)]",
-  "transition-all duration-300 hover:shadow-[0_10px_28px_-6px_rgba(124,58,237,0.4)]"
+  "shadow-[0_8px_24px_-8px_rgba(236,72,153,0.28),0_0_20px_-6px_rgba(167,139,250,0.22)]",
+  "transition-all duration-300 hover:shadow-[0_10px_28px_-6px_rgba(236,72,153,0.35),0_0_28px_-4px_rgba(167,139,250,0.28)]"
+);
+
+export const solaceBtnSecondary = cn(
+  "inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold",
+  "border-[color:var(--button-secondary-border,#d8c7f7)] bg-[var(--button-secondary-bg,#f6f0ff)] text-[color:var(--button-secondary-text,#5b21b6)]",
+  "transition-all duration-300 hover:border-[color:var(--solace-ds-border-glow)] hover:shadow-[0_0_20px_-8px_rgba(167,139,250,0.18)]"
 );
 
 export const solaceQuickCard = cn(
-  "flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-2xl border border-[color:var(--solace-border)] p-3",
-  "bg-[var(--solace-ds-surface)] shadow-[var(--solace-card-shadow)]",
-  "transition-all duration-300 hover:border-[color:var(--solace-ds-border-glow)] hover:shadow-[0_0_24px_-8px_rgba(139,92,246,0.2)]",
+  "light-theme-card light-theme-card-hover flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-2xl border border-[color:var(--solace-border)] p-3",
+  "bg-[var(--solace-ds-surface)] text-[var(--solace-text)] shadow-[var(--solace-card-shadow)]",
   "active:scale-[0.98]"
 );
 
 export const solaceCompactToolCard = cn(
-  "group flex min-h-[100px] flex-col justify-between rounded-2xl border border-[color:var(--solace-border)] p-4",
-  "bg-[var(--solace-ds-surface)] shadow-[var(--solace-card-shadow)]",
-  "transition-all duration-300 hover:border-[color:var(--solace-ds-border-glow)] hover:shadow-[0_0_28px_-10px_rgba(139,92,246,0.18)]"
+  "light-theme-card light-theme-card-hover group flex min-h-[100px] flex-col justify-between rounded-2xl border border-[color:var(--solace-border)] p-4",
+  "bg-[var(--solace-ds-surface)] text-[var(--solace-text)] shadow-[var(--solace-card-shadow)]"
 );
 
 /** Opt-in: standard card/row text inherits theme tokens inside .solace-app */

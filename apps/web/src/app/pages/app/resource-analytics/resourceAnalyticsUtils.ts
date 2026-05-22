@@ -66,10 +66,55 @@ export function formatComparisonLine(
   return `${arrow} ${comparison.pct}% vs ${periodLabel}`;
 }
 
+const ENGAGEMENT_TYPES = new Set(['call', 'text', 'visit', 'share', 'copy']);
+
 function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
   return x;
+}
+
+/** Local calendar date key — avoids UTC drift in daily buckets. */
+export function localDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function isEngagementInteraction(ix: ResourceInteraction): boolean {
+  return ENGAGEMENT_TYPES.has(ix.interactionType);
+}
+
+/** Share of interactions that led to call, visit, text, copy, or share. */
+export function computeSupportResponseRate(interactions: ResourceInteraction[]): number {
+  if (interactions.length === 0) return 0;
+  const engagements = interactions.filter(isEngagementInteraction).length;
+  return (engagements / interactions.length) * 100;
+}
+
+export function mergeInteractionSets(
+  server: ResourceInteraction[],
+  local: ResourceInteraction[]
+): ResourceInteraction[] {
+  const seen = new Set<string>();
+  const merged: ResourceInteraction[] = [];
+
+  const add = (ix: ResourceInteraction) => {
+    const key = ix.id.startsWith('interaction_')
+      ? `${ix.resourceId}|${ix.interactionType}|${ix.timestamp}`
+      : ix.id;
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(ix);
+  };
+
+  server.forEach(add);
+  local.forEach(add);
+
+  return merged.sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
 }
 
 function formatDayLabel(d: Date): string {
@@ -90,7 +135,7 @@ export function buildDailyBuckets(
   const endDay = startOfDay(end);
 
   while (cursor <= endDay) {
-    const key = cursor.toISOString().slice(0, 10);
+    const key = localDateKey(cursor);
     buckets.push({
       dateKey: key,
       label: formatDayLabel(cursor),
@@ -105,14 +150,12 @@ export function buildDailyBuckets(
 
   interactions.forEach((ix) => {
     const day = startOfDay(new Date(ix.timestamp));
-    const key = day.toISOString().slice(0, 10);
+    const key = localDateKey(day);
     const bucket = bucketMap.get(key);
     if (!bucket) return;
     bucket.interactions += 1;
     if (ix.interactionType === 'view') bucket.views += 1;
-    else if (['call', 'text', 'visit', 'share', 'copy'].includes(ix.interactionType)) {
-      bucket.engagements += 1;
-    }
+    else if (isEngagementInteraction(ix)) bucket.engagements += 1;
   });
 
   return buckets;
@@ -128,7 +171,7 @@ export function aggregateBucketsWeekly(buckets: DailyBucket[]): DailyBucket[] {
     const weekStart = startOfDay(d);
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
 
-    const key = weekStart.toISOString().slice(0, 10);
+    const key = localDateKey(weekStart);
     if (!current || current.dateKey !== key) {
       current = {
         dateKey: key,
@@ -187,7 +230,7 @@ export function getTopReachOutDays(
   const byDay = new Map<string, { label: string; count: number }>();
   interactions.forEach((ix) => {
     const d = startOfDay(new Date(ix.timestamp));
-    const key = d.toISOString().slice(0, 10);
+    const key = localDateKey(d);
     const existing = byDay.get(key);
     if (existing) existing.count += 1;
     else byDay.set(key, { label: formatDayLabel(d), count: 1 });
@@ -199,34 +242,56 @@ export function getTopReachOutDays(
     .map((d) => d.label);
 }
 
-export function getEngagementLevel(totalInteractions: number): {
+export function getEngagementLevel(
+  eventCount: number,
+  supportResponseRate: number
+): {
   label: string;
   percent: number;
 } {
-  if (totalInteractions === 0) return { label: 'Getting started', percent: 0 };
-  if (totalInteractions < 5) return { label: 'Building momentum', percent: 28 };
-  if (totalInteractions < 15) return { label: 'Steady engagement', percent: 55 };
-  if (totalInteractions < 30) return { label: 'High engagement', percent: 78 };
-  return { label: 'High engagement', percent: 92 };
+  if (eventCount === 0) return { label: 'Getting started', percent: 0 };
+
+  const percent = Math.round(
+    Math.min(100, Math.max(12, supportResponseRate * 0.55 + Math.min(eventCount * 4, 40)))
+  );
+
+  if (eventCount < 5) return { label: 'Building momentum', percent };
+  if (eventCount < 15) return { label: 'Steady engagement', percent };
+  if (eventCount < 30) return { label: 'High engagement', percent };
+  return { label: 'High engagement', percent: Math.max(percent, 78) };
 }
 
-export function getSupportConsistencyDays(interactions: ResourceInteraction[]): number {
-  const now = new Date();
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+export function getActiveDaysInPeriod(
+  interactions: ResourceInteraction[],
+  start: Date,
+  end: Date
+): number {
   const days = new Set<string>();
   interactions.forEach((ix) => {
     const d = new Date(ix.timestamp);
-    if (d >= weekAgo) {
-      days.add(startOfDay(d).toISOString().slice(0, 10));
+    if (d >= start && d <= end) {
+      days.add(localDateKey(startOfDay(d)));
     }
   });
   return days.size;
 }
 
-export function getEmotionalEngagementLabel(avgEffectiveness: number): string {
-  if (avgEffectiveness === 0) return 'Not enough data yet';
-  if (avgEffectiveness >= 70) return 'Strong';
-  if (avgEffectiveness >= 40) return 'Growing';
+export function getEmotionalEngagementLabel(
+  interactions: ResourceInteraction[],
+  supportResponseRate: number
+): string {
+  if (interactions.length === 0) return 'Not enough data yet';
+
+  const resourceIds = new Set(interactions.map((i) => i.resourceId));
+  const engagements = interactions.filter(isEngagementInteraction).length;
+
+  let score = supportResponseRate * 0.55;
+  score += Math.min(resourceIds.size * 12, 36);
+  score += Math.min(engagements * 6, 30);
+  score = Math.round(Math.min(100, score));
+
+  if (score >= 70) return 'Strong';
+  if (score >= 40) return 'Growing';
   return 'Emerging';
 }
 

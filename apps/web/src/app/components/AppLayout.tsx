@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { Link, useNavigate, Outlet } from "react-router-dom";
+import { Link, useNavigate, Outlet, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
 import { 
   Bell,
@@ -39,8 +39,12 @@ import {
  */
 export function AppLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { signOut, user, profile } = useAuth();
   const { unreadCount } = useNotifications();
+
+  /** Talk It Out session: no sidebar / bottom nav; main is edge-to-edge under the header. */
+  const isActiveSessionRoute = location.pathname.startsWith("/app/active-session");
 
   const appearanceStorageKey = useMemo(() => {
     if (typeof window === "undefined") return "ezri_appearance_settings";
@@ -173,9 +177,11 @@ export function AppLayout() {
   const headerHeightClass = compact ? "h-14" : "h-16";
   const headerInnerClass = compact ? "px-3 sm:px-4" : "px-4 sm:px-6";
   /** Mobile bottom nav fills <lg; Solace sidebar is lg+ only — avoids duplicated nav stacks (tablet). */
-  const mainPaddingClass = compact
-    ? "pb-[5.25rem] lg:pb-5 lg:pl-[280px]"
-    : "pb-[5.75rem] lg:pb-8 lg:pl-[280px]";
+  const mainPaddingClass = isActiveSessionRoute
+    ? "overflow-hidden p-0 pb-0 lg:pl-0"
+    : compact
+      ? "pb-[5.25rem] lg:pb-5 lg:pl-[280px]"
+      : "pb-[5.75rem] lg:pb-8 lg:pl-[280px]";
 
   // Prefer backend-derived verification (source of truth), fall back to Supabase session flags.
   // Supabase user metadata can remain stale in the client session after verification.
@@ -215,7 +221,7 @@ export function AppLayout() {
       <motion.header
         initial={{ y: -100 }}
         animate={{ y: 0 }}
-        className="solace-app-header sticky top-0 z-40 border-b border-[color:var(--solace-border)] bg-[color-mix(in_oklab,var(--solace-bg-elevated)_92%,transparent)] shadow-[var(--solace-ds-shadow-cinematic)] backdrop-blur-xl print:hidden"
+        className="solace-app-header sticky top-0 z-40 border-b border-[color:var(--solace-border)] bg-[color-mix(in_oklab,var(--solace-bg-elevated)_92%,transparent)] shadow-[var(--solace-ds-shadow-cinematic)] backdrop-blur-xl"
       >
         <div
           className={`mx-auto flex items-center justify-between ${headerInnerClass} ${headerHeightClass}`}
@@ -278,7 +284,11 @@ export function AppLayout() {
       </motion.header>
 
       <main
-        className={`solace-scroll flex-1 min-h-0 overflow-y-auto overscroll-contain antialiased print:!p-0 print:!pl-0 ${mainPaddingClass}`}
+        className={`flex-1 min-h-0 antialiased ${mainPaddingClass} ${
+          isActiveSessionRoute
+            ? "flex flex-col overflow-hidden"
+            : "solace-scroll overflow-y-auto overscroll-contain"
+        }`}
       >
         {isUnverified && (
           <div className="solace-status-warning m-4 rounded-xl border p-4">
@@ -300,16 +310,18 @@ export function AppLayout() {
         <Outlet />
       </main>
 
-      <MobileBottomNav compact={compact} />
+      {!isActiveSessionRoute ? <MobileBottomNav compact={compact} /> : null}
 
       {/* Environmental sidebar — desktop / tablet */}
-      <aside
-        className={`pointer-events-none fixed bottom-3 left-3 z-30 hidden w-[var(--solace-sidebar-w)] print:hidden lg:block ${compact ? "top-[calc(3.5rem+0.5rem)]" : "top-[calc(4rem+0.5rem)]"}`}
-      >
-        <div className="solace-sidebar-shell pointer-events-auto flex h-full flex-col overflow-hidden rounded-2xl border bg-[color-mix(in_oklab,var(--solace-panel)_96%,transparent)] backdrop-blur-xl print:hidden">
-          <SolaceSidebar />
-        </div>
-      </aside>
+      {!isActiveSessionRoute ? (
+        <aside
+          className={`pointer-events-none fixed bottom-3 left-3 z-30 hidden w-[var(--solace-sidebar-w)] lg:block ${compact ? "top-[calc(3.5rem+0.5rem)]" : "top-[calc(4rem+0.5rem)]"}`}
+        >
+          <div className="solace-sidebar-shell pointer-events-auto flex h-full flex-col overflow-hidden rounded-2xl border bg-[color-mix(in_oklab,var(--solace-panel)_96%,transparent)] backdrop-blur-xl">
+            <SolaceSidebar />
+          </div>
+        </aside>
+      ) : null}
 
       <AlertDialog
         open={showLogoutModal}

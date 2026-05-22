@@ -65,16 +65,18 @@ import {
   aggregateBucketsWeekly,
   buildDailyBuckets,
   comparePeriods,
+  computeSupportResponseRate,
   effectivenessToStars,
   formatComparisonLine,
+  getActiveDaysInPeriod,
   getEmotionalEngagementLabel,
   getEngagementLevel,
   getMostActivePeriod,
   getResourceTypeColor,
   getResourceTypeForId,
   getResourceTypeLabel,
-  getSupportConsistencyDays,
   getTopReachOutDays,
+  mergeInteractionSets,
   sparklineFromBuckets,
   type ChartInterval,
 } from './resource-analytics/resourceAnalyticsUtils';
@@ -242,8 +244,7 @@ export function ResourceAnalyticsPage() {
 
   const interactions = useMemo(() => {
     if (!(isSuccess || isError)) return [];
-    if (serverInteractions.length > 0) return serverInteractions;
-    return localInteractionsFiltered;
+    return mergeInteractionSets(serverInteractions, localInteractionsFiltered);
   }, [serverInteractions, localInteractionsFiltered, isSuccess, isError]);
 
   const { recentHalfInteractions, priorHalfInteractions } = useMemo(() => {
@@ -346,26 +347,25 @@ export function ResourceAnalyticsPage() {
     [priorHalfAnalytics]
   );
 
+  const supportResponseRate = useMemo(
+    () => computeSupportResponseRate(interactions),
+    [interactions]
+  );
+
   const avgCtr = useMemo(() => {
-    const resources = Object.values(analytics).filter((a) => a.totalViews > 0);
-    if (resources.length === 0) return '0';
-    const totalCTR = resources.reduce((sum, a) => sum + (a.totalClicks / a.totalViews) * 100, 0);
-    return (totalCTR / resources.length).toFixed(1);
-  }, [analytics]);
+    if (interactions.length === 0) return '0';
+    return supportResponseRate.toFixed(1);
+  }, [interactions.length, supportResponseRate]);
 
-  const recentAvgCtr = useMemo(() => {
-    const resources = Object.values(recentHalfAnalytics).filter((a) => a.totalViews > 0);
-    if (resources.length === 0) return 0;
-    const totalCTR = resources.reduce((sum, a) => sum + (a.totalClicks / a.totalViews) * 100, 0);
-    return totalCTR / resources.length;
-  }, [recentHalfAnalytics]);
+  const recentAvgCtr = useMemo(
+    () => computeSupportResponseRate(recentHalfInteractions),
+    [recentHalfInteractions]
+  );
 
-  const priorAvgCtr = useMemo(() => {
-    const resources = Object.values(priorHalfAnalytics).filter((a) => a.totalViews > 0);
-    if (resources.length === 0) return 0;
-    const totalCTR = resources.reduce((sum, a) => sum + (a.totalClicks / a.totalViews) * 100, 0);
-    return totalCTR / resources.length;
-  }, [priorHalfAnalytics]);
+  const priorAvgCtr = useMemo(
+    () => computeSupportResponseRate(priorHalfInteractions),
+    [priorHalfInteractions]
+  );
 
   const resourcesExplored = Object.keys(analytics).length;
   const recentResourcesExplored = Object.keys(recentHalfAnalytics).length;
@@ -405,34 +405,25 @@ export function ResourceAnalyticsPage() {
     ]
   );
 
-  const engagement = useMemo(() => getEngagementLevel(totalInteractions), [totalInteractions]);
+  const engagement = useMemo(
+    () => getEngagementLevel(interactions.length, supportResponseRate),
+    [interactions.length, supportResponseRate]
+  );
 
-  const avgEffectiveness = useMemo(() => {
-    if (mostUsed.length === 0) return 0;
-    const sum = mostUsed.reduce(
-      (acc, r) => acc + getResourceEffectivenessScore(r.resourceId, interactions),
-      0
-    );
-    return Math.round(sum / mostUsed.length);
-  }, [mostUsed, interactions]);
+  const activeDaysInPeriod = useMemo(
+    () => getActiveDaysInPeriod(interactions, periodBounds.start, periodBounds.end),
+    [interactions, periodBounds.start, periodBounds.end]
+  );
+
+  const emotionalEngagement = useMemo(
+    () => getEmotionalEngagementLabel(interactions, supportResponseRate),
+    [interactions, supportResponseRate]
+  );
 
   const topCategory = useMemo(() => {
     const entries = Object.entries(byType).sort(([, a], [, b]) => b - a);
     if (entries.length === 0) return 'Not enough data yet';
     return getResourceTypeLabel(entries[0][0]);
-  }, [byType]);
-
-  const categoryRows = useMemo(() => {
-    const total = Object.values(byType).reduce((s, c) => s + c, 0);
-    if (total === 0) return [];
-    return Object.entries(byType)
-      .sort(([, a], [, b]) => b - a)
-      .map(([type, count]) => ({
-        type,
-        label: getResourceTypeLabel(type),
-        pct: Math.round((count / total) * 100),
-        color: getResourceTypeColor(type),
-      }));
   }, [byType]);
 
   const mostActivePeriod = useMemo(() => getMostActivePeriod(interactions), [interactions]);
@@ -736,7 +727,7 @@ export function ResourceAnalyticsPage() {
                       </p>
                     </div>
                     <Link
-                      to="/app/emergency-resources"
+                      to="/app/settings/resources "
                       className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-fuchsia-300/80 transition-colors hover:text-fuchsia-200"
                     >
                       View all resources
@@ -856,57 +847,6 @@ export function ResourceAnalyticsPage() {
                     </div>
                   )}
                 </section>
-
-                {/* 5. Resource Categories */}
-                <section>
-                  <h2 className="font-serif text-xl font-light text-white">Resource Categories</h2>
-                  <p className="mt-1 text-sm text-[rgba(255,255,255,0.48)]">
-                    Where you focus most to support your wellbeing.
-                  </p>
-                  {categoryRows.length === 0 ? (
-                    <SolaceGlassCard className="mt-4 p-6">
-                      <p className="text-sm text-[rgba(255,255,255,0.45)]">No category data yet</p>
-                    </SolaceGlassCard>
-                  ) : (
-                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                      {categoryRows.map((row) => (
-                        <div
-                          key={row.type}
-                          className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3.5"
-                        >
-                          <div className="mb-2 flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <div
-                                className={cn(
-                                  'flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br',
-                                  row.color
-                                )}
-                              >
-                                <BookOpen className="h-4 w-4 text-white/90" aria-hidden />
-                              </div>
-                              <span className="text-sm font-medium text-[rgba(255,255,255,0.82)]">
-                                {row.label}
-                              </span>
-                            </div>
-                            <span className="text-sm font-semibold tabular-nums text-white">
-                              {row.pct}%
-                            </span>
-                          </div>
-                          <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
-                            <div
-                              className={cn('h-full rounded-full bg-gradient-to-r', row.color)}
-                              style={{ width: `${row.pct}%` }}
-                              role="progressbar"
-                              aria-valuenow={row.pct}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </section>
               </>
             )}
 
@@ -946,8 +886,9 @@ export function ResourceAnalyticsPage() {
             engagementLabel={engagement.label}
             engagementPercent={engagement.percent}
             mostUsedCategory={topCategory}
-            supportConsistencyDays={getSupportConsistencyDays(interactions)}
-            emotionalEngagement={getEmotionalEngagementLabel(avgEffectiveness)}
+            activeDaysInPeriod={activeDaysInPeriod}
+            periodLabel={TIME_FILTER_LABELS[timeFilter]}
+            emotionalEngagement={emotionalEngagement}
           />
         </div>
       </div>

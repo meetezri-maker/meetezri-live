@@ -4933,7 +4933,7 @@ export function ActiveSession() {
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#07041C]/95 backdrop-blur-md px-6">
           <Loader2 className="h-12 w-12 text-purple-400 animate-spin mb-4" />
           <p className="text-lg font-semibold text-white text-center">
-            Ending session…
+            Ending Talking
           </p>
           <p className="text-sm text-gray-400 mt-2 text-center max-w-sm">
             Hang on — we&apos;re saving your session and taking you to the lobby.

@@ -51,33 +51,20 @@ import { PREDEFINED_GOALS } from '@/app/features/goals/seedGoals';
 import type { GoalCategory } from '@/app/features/goals/types';
 import { SolaceSelect } from '@/app/solace';
 import {
-  achievementsBackLink,
-  achievementsBody,
   achievementsCard,
-  achievementsEmblemLocked,
-  achievementsEmblemUnlocked,
-  achievementsFeaturedBanner,
-  achievementsFilterActive,
-  achievementsFilterInactive,
-  achievementsGhostButton,
-  achievementsHeroImage,
+  achievementsEmptyState,
+  achievementsHeroOverlay,
   achievementsHeroOverlayBottom,
-  achievementsHeroOverlayReadability,
   achievementsHeroSection,
-  achievementsInputSurface,
-  achievementsJourneySection,
-  achievementsLabel,
+  achievementsHeroSubtitle,
+  achievementsHeroTitle,
+  achievementsMilestoneCard,
   achievementsPageAtmosphere,
   achievementsPageFogMid,
   achievementsPageGlowTop,
   achievementsPageVignette,
-  achievementsPanel,
+  achievementsSectionPanel,
   achievementsStatStrip,
-  achievementsTitle,
-  achievementsTrophyCard,
-  achievementsTrophyCardLocked,
-  achievementsTrophyCardUnlocked,
-  achievementsValue,
 } from '@/app/pages/app/achievements/achievementsUi';
 
 interface Achievement {
@@ -675,7 +662,8 @@ export function Achievements() {
 
   const pointsToNext = Math.max(0, nextPointsMilestone - stats.totalPoints);
 
-  const unlockedEmblemClass = achievementsEmblemUnlocked;
+  const unlockedEmblemClass =
+    'border-white/10 bg-gradient-to-br from-white/[0.07] to-black/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]';
 
   const iconMap: Record<string, LucideIcon> = {
     footprints: Target,
@@ -1176,15 +1164,15 @@ export function Achievements() {
 
   return (
     <>
-      <div className={cn(achievementsPageAtmosphere, 'min-h-full pb-12')}>
+      <div className={cn(achievementsPageAtmosphere, 'relative min-h-full pb-12')}>
         <div className={achievementsPageGlowTop} aria-hidden />
         <div className={achievementsPageFogMid} aria-hidden />
         <div className={achievementsPageVignette} aria-hidden />
-        <div className="relative z-[1] mx-auto max-w-[1580px] px-4 pb-10 pt-6 sm:px-6 lg:px-8 lg:pt-8">
+        <div className="relative z-10 mx-auto max-w-[1580px] px-4 pb-10 pt-6 sm:px-6 lg:px-8 lg:pt-8">
           <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
             <Link
               to="/app/settings"
-              className={achievementsBackLink}
+              className="inline-flex min-h-[44px] min-w-0 items-center gap-2 text-sm font-medium text-zinc-400 transition-colors hover:text-zinc-100"
             >
               <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
               Back to Settings
@@ -1192,7 +1180,7 @@ export function Achievements() {
             <button
               type="button"
               onClick={() => setShowCreateModal(true)}
-              className={cn(achievementsGhostButton, 'w-fit')}
+              className="inline-flex min-h-[44px] w-fit items-center justify-center rounded-full border border-white/12 bg-white/[0.06] px-5 text-sm font-semibold text-zinc-100 transition hover:border-fuchsia-400/25 hover:bg-white/[0.09]"
             >
               Add personal milestone
             </button>
@@ -1205,25 +1193,17 @@ export function Achievements() {
                 <img
                   src={ACHIEVEMENTS_IMAGES.hero}
                   alt="Glowing lotus on a moonlit lake with mountains at twilight"
-                  className={cn(achievementsHeroImage, 'object-[58%_50%]')}
+                  className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[58%_50%]"
                   width={1600}
                   height={520}
                   loading="eager"
                   decoding="async"
                 />
-                <div className={achievementsHeroOverlayReadability} aria-hidden />
-                <div className={achievementsHeroOverlayBottom} aria-hidden />
-                <div className="relative z-10 flex min-h-[280px] flex-col justify-center px-6 py-10 sm:min-h-[320px] sm:px-10 sm:py-12 lg:min-h-[340px] lg:px-12">
-                  <h1
-                    className={cn(
-                      'max-w-xl text-4xl tracking-tight sm:text-[2.75rem] sm:leading-tight',
-                      achievementsTitle,
-                      '[html[data-ezri-theme=dark]_&]:[text-shadow:0_2px_24px_rgba(0,0,0,0.55)]'
-                    )}
-                  >
-                    Achievements
-                  </h1>
-                  <p className={cn('mt-4 max-w-md text-[15px] leading-relaxed', achievementsBody)}>
+                <div className={cn(achievementsHeroOverlay, 'pointer-events-none absolute inset-0 z-[1]')} aria-hidden />
+                <div className={cn(achievementsHeroOverlayBottom, 'pointer-events-none absolute inset-0 z-[1]')} aria-hidden />
+                <div className="solace-on-dark relative z-10 flex min-h-[280px] flex-col justify-center px-6 py-10 sm:min-h-[320px] sm:px-10 sm:py-12 lg:min-h-[340px] lg:px-12">
+                  <h1 className={achievementsHeroTitle}>Achievements</h1>
+                  <p className={achievementsHeroSubtitle}>
                     Celebrate your growth and the milestones that shape your best self.
                   </p>
                 </div>
@@ -1231,18 +1211,18 @@ export function Achievements() {
 
               {/* Progress summary strip */}
               <section className={achievementsStatStrip}>
-                <div className="grid grid-cols-2 divide-y divide-[color:var(--solace-border)] sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+                <div className="grid grid-cols-2 divide-y divide-white/[0.06] sm:grid-cols-4 sm:divide-x sm:divide-y-0">
                   <div className="flex min-h-[72px] items-center gap-3 px-3 py-3 sm:min-h-[76px] sm:px-4 sm:py-3">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/10 ring-1 ring-amber-400/20">
                       <Award className="h-4 w-4 text-amber-200/90" aria-hidden />
                     </div>
                     <div className="min-w-0">
-                      <p className={cn(achievementsLabel, 'text-[10px]')}>Unlocked</p>
-                      <p className={cn('truncate', achievementsValue)}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Unlocked</p>
+                      <p className="truncate font-serif text-lg text-white sm:text-xl">
                         {stats.unlockedCount}
-                        <span className="text-[var(--solace-muted)]">/{stats.totalCount}</span>
+                        <span className="text-zinc-500">/{stats.totalCount}</span>
                       </p>
-                      <div className="mt-1 h-0.5 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--solace-text)_8%,transparent)]">
+                      <div className="mt-1 h-0.5 overflow-hidden rounded-full bg-white/[0.08]">
                         <div
                           className="h-full rounded-full bg-gradient-to-r from-amber-400/90 to-orange-500/90"
                           style={{ width: `${unlockPct}%` }}
@@ -1255,8 +1235,8 @@ export function Achievements() {
                       <Star className="h-4 w-4 text-fuchsia-200/90" aria-hidden />
                     </div>
                     <div>
-                      <p className={cn(achievementsLabel, 'text-[10px]')}>Total points</p>
-                      <p className={achievementsValue}>{stats.totalPoints.toLocaleString()}</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Total points</p>
+                      <p className="font-serif text-lg text-white sm:text-xl">{stats.totalPoints.toLocaleString()}</p>
                     </div>
                   </div>
                   <div className="flex min-h-[72px] items-center gap-3 px-3 py-3 sm:min-h-[76px] sm:px-4 sm:py-3">
@@ -1264,14 +1244,14 @@ export function Achievements() {
                       <Flame className="h-4 w-4 text-emerald-200/90" aria-hidden />
                     </div>
                     <div>
-                      <p className={cn(achievementsLabel, 'text-[10px]')}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
                         Current streak
                       </p>
-                      <p className={achievementsValue}>
+                      <p className="font-serif text-lg text-white sm:text-xl">
                         {stats.currentStreak}
-                        <span className="text-sm font-sans font-normal text-[var(--solace-muted)]"> days</span>
+                        <span className="text-sm font-sans font-normal text-zinc-500"> days</span>
                       </p>
-                      <p className="text-[11px] text-[var(--solace-muted)]">Keep going!</p>
+                      <p className="text-[11px] text-zinc-500">Keep going!</p>
                     </div>
                   </div>
                   <div className="flex min-h-[72px] items-center gap-3 px-3 py-3 sm:min-h-[76px] sm:px-4 sm:py-3">
@@ -1279,12 +1259,12 @@ export function Achievements() {
                       <Crown className="h-4 w-4 text-sky-200/90" aria-hidden />
                     </div>
                     <div>
-                      <p className={cn(achievementsLabel, 'text-[10px]')}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
                         Longest streak
                       </p>
-                      <p className={achievementsValue}>
+                      <p className="font-serif text-lg text-white sm:text-xl">
                         {stats.longestStreak}
-                        <span className="text-sm font-sans font-normal text-[var(--solace-muted)]"> days</span>
+                        <span className="text-sm font-sans font-normal text-zinc-500"> days</span>
                       </p>
                     </div>
                   </div>
@@ -1304,7 +1284,9 @@ export function Achievements() {
                       onClick={() => setSelectedCategory(category.id)}
                       className={cn(
                         'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-medium transition-colors sm:px-3 sm:py-1.5',
-                        isActive ? achievementsFilterActive : achievementsFilterInactive
+                        isActive
+                          ? 'border-fuchsia-400/30 bg-fuchsia-950/40 text-white shadow-[0_0_20px_-8px_rgba(168,85,247,0.35)]'
+                          : 'border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:border-white/15 hover:bg-white/[0.05] hover:text-zinc-200'
                       )}
                     >
                       <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
@@ -1315,7 +1297,7 @@ export function Achievements() {
               </div>
 
               {/* Recently unlocked */}
-              <section className={cn(achievementsFeaturedBanner, 'relative overflow-hidden p-6 sm:p-7')}>
+              <section className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[linear-gradient(120deg,rgba(251,191,36,0.06),rgba(88,28,135,0.08),#0a0f1a)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md sm:p-7">
                 {recentUnlocked ? (
                   <>
                     <VaultParticles className="opacity-35" />
@@ -1323,7 +1305,7 @@ export function Achievements() {
                       <div className="flex justify-center lg:justify-start">
                         <div className="relative flex h-32 w-32 items-center justify-center sm:h-36 sm:w-36">
                           <div className="absolute inset-0 rotate-45 rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-400/15 via-fuchsia-900/20 to-violet-950/50" />
-                          <div className="absolute inset-2.5 rotate-45 rounded-xl border border-[color:var(--solace-border)] bg-[color-mix(in_srgb,var(--solace-text)_6%,var(--solace-ds-surface))]" />
+                          <div className="absolute inset-2.5 rotate-45 rounded-xl border border-white/10 bg-black/35" />
                           <FeaturedIcon
                             className="relative z-10 h-12 w-12 text-amber-100/95"
                             aria-hidden
@@ -1334,18 +1316,18 @@ export function Achievements() {
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200/85">
                           Recently Unlocked
                         </p>
-                        <h2 className="font-serif text-2xl font-semibold text-[var(--solace-text)] sm:text-3xl">{recentUnlocked.title}</h2>
-                        <p className="text-sm leading-relaxed text-[var(--solace-muted)]">{recentUnlocked.description}</p>
+                        <h2 className="font-serif text-2xl font-semibold text-white sm:text-3xl">{recentUnlocked.title}</h2>
+                        <p className="text-sm leading-relaxed text-zinc-400">{recentUnlocked.description}</p>
                       </div>
                       <div className="flex flex-col items-center gap-4 lg:items-end">
-                        <p className="text-center text-xs text-[var(--solace-muted)] lg:text-right">
+                        <p className="text-center text-xs text-zinc-500 lg:text-right">
                           {formatUnlockDate(recentUnlocked) ? (
                             <>
-                              <span className="block text-[var(--solace-muted)]">Unlocked</span>
-                              <span className="text-[var(--solace-muted)]">{formatUnlockDate(recentUnlocked)}</span>
+                              <span className="block text-zinc-500">Unlocked</span>
+                              <span className="text-zinc-300">{formatUnlockDate(recentUnlocked)}</span>
                             </>
                           ) : (
-                            <span className="text-[var(--solace-muted)]">Earned on your journey</span>
+                            <span className="text-zinc-500">Earned on your journey</span>
                           )}
                         </p>
                         <button
@@ -1360,10 +1342,10 @@ export function Achievements() {
                   </>
                 ) : (
                   <div className="relative z-10 py-6 text-center">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--solace-muted)]">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
                       Recently Unlocked
                     </p>
-                    <p className="mx-auto mt-3 max-w-md text-sm text-[var(--solace-muted)]">
+                    <p className="mx-auto mt-3 max-w-md text-sm text-zinc-400">
                       When you unlock your next milestone, it will take center stage here—quietly celebrating what you
                       have earned.
                     </p>
@@ -1374,8 +1356,8 @@ export function Achievements() {
               <section className="space-y-5">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <h2 className="font-serif text-2xl font-semibold text-[var(--solace-text)] sm:text-3xl">Your achievements</h2>
-                    <p className="mt-1 text-sm text-[var(--solace-muted)]">
+                    <h2 className="font-serif text-2xl font-semibold text-white sm:text-3xl">Your achievements</h2>
+                    <p className="mt-1 text-sm text-zinc-500">
                       {filteredAchievements.length} visible · {stats.unlockedCount} of {stats.totalCount} unlocked
                       overall
                     </p>
@@ -1400,11 +1382,11 @@ export function Achievements() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: Math.min(index * 0.04, 0.24) }}
                         className={cn(
-                          achievementsTrophyCard,
-                          'group relative rounded-2xl',
-                          isUnlocked ? achievementsTrophyCardUnlocked : achievementsTrophyCardLocked,
-                          isSelected &&
-                            'ring-2 ring-fuchsia-400/30 ring-offset-2 ring-offset-[var(--solace-bg)]'
+                          'group relative flex min-h-[280px] flex-col overflow-hidden rounded-2xl border bg-[var(--solace-card-bg)] text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-md transition',
+                          isUnlocked
+                            ? 'border-emerald-400/12 hover:border-emerald-400/22'
+                            : 'border-white/[0.06] hover:border-white/12',
+                          isSelected && 'ring-2 ring-fuchsia-400/30 ring-offset-2 ring-offset-[#05070d]'
                         )}
                       >
                         <button
@@ -1423,43 +1405,43 @@ export function Achievements() {
                               'relative flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-2xl border transition',
                               isUnlocked
                                 ? unlockedEmblemClass
-                                : achievementsEmblemLocked
+                                : 'border-white/[0.06] bg-black/50 opacity-75 saturate-[0.7]'
                             )}
                           >
                             <Icon
                               className={cn(
                                 'h-9 w-9',
                                 isUnlocked
-                                  ? 'text-[var(--solace-text)] drop-shadow-[0_0_10px_rgba(167,139,250,0.2)]'
-                                  : 'text-[var(--solace-muted)]'
+                                  ? 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]'
+                                  : 'text-zinc-500'
                               )}
                               aria-hidden
                             />
                             {!isUnlocked ? (
-                              <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--solace-bg)_55%,transparent)]">
-                                <Lock className="h-5 w-5 text-[var(--solace-muted)]" aria-hidden />
+                              <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/40">
+                                <Lock className="h-5 w-5 text-zinc-500" aria-hidden />
                               </div>
                             ) : null}
                           </div>
 
                           <div className="min-w-0 space-y-1.5 px-0.5">
-                            <h3 className="line-clamp-2 text-center text-[15px] font-semibold leading-snug text-[var(--solace-text)]">
+                            <h3 className="line-clamp-2 text-center text-[15px] font-semibold leading-snug text-white">
                               {achievement.title}
                             </h3>
-                            <p className="line-clamp-2 text-center text-xs leading-relaxed text-[var(--solace-muted)]">
+                            <p className="line-clamp-2 text-center text-xs leading-relaxed text-zinc-500">
                               {achievement.description}
                             </p>
                           </div>
 
                           {showProgressBar ? (
                             <div className="w-full space-y-1 px-1">
-                              <div className="flex justify-between text-[10px] text-[var(--solace-muted)]">
+                              <div className="flex justify-between text-[10px] text-zinc-500">
                                 <span>Progress</span>
-                                <span className="tabular-nums text-[var(--solace-muted)]">
+                                <span className="tabular-nums text-zinc-400">
                                   {achievement.progress}/{total}
                                 </span>
                               </div>
-                              <div className="h-1 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--solace-text)_8%,transparent)]">
+                              <div className="h-1 overflow-hidden rounded-full bg-white/[0.06]">
                                 <motion.div
                                   initial={{ width: 0 }}
                                   animate={{ width: `${pct}%` }}
@@ -1470,7 +1452,7 @@ export function Achievements() {
                             </div>
                           ) : null}
 
-                          <div className="mt-auto flex w-full flex-col items-center gap-1 border-t border-[color:var(--solace-border)] pt-3 text-[11px] text-[var(--solace-muted)]">
+                          <div className="mt-auto flex w-full flex-col items-center gap-1 border-t border-white/[0.06] pt-3 text-[11px] text-zinc-500">
                             {isUnlocked ? (
                               <>
                                 <span className="inline-flex items-center gap-1 text-emerald-300/90">
@@ -1478,20 +1460,20 @@ export function Achievements() {
                                   Unlocked
                                 </span>
                                 {formatUnlockDate(achievement) ? (
-                                  <span className="text-[var(--solace-muted)]">{formatUnlockDate(achievement)}</span>
+                                  <span className="text-zinc-500">{formatUnlockDate(achievement)}</span>
                                 ) : null}
                                 {achievement.points > 0 ? (
-                                  <span className="text-[var(--solace-muted)]">+{achievement.points} pts</span>
+                                  <span className="text-zinc-600">+{achievement.points} pts</span>
                                 ) : null}
                               </>
                             ) : (
                               <>
-                                <span className="inline-flex items-center gap-1 text-[var(--solace-muted)]">
+                                <span className="inline-flex items-center gap-1 text-zinc-500">
                                   <Lock className="h-3.5 w-3.5" aria-hidden />
                                   Locked
                                 </span>
                                 {achievement.points > 0 ? (
-                                  <span className="text-[var(--solace-muted)]">+{achievement.points} pts on unlock</span>
+                                  <span className="text-zinc-600">+{achievement.points} pts on unlock</span>
                                 ) : null}
                               </>
                             )}
@@ -1507,7 +1489,7 @@ export function Achievements() {
                     <button
                       type="button"
                       onClick={() => setShowAllAchievements((v) => !v)}
-                      className={cn(achievementsGhostButton, 'px-6')}
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/12 bg-white/[0.04] px-6 text-sm font-medium text-zinc-200 transition hover:border-fuchsia-400/25 hover:bg-white/[0.07]"
                     >
                       {showAllAchievements ? 'Show fewer achievements' : 'Show More Achievements'}
                     </button>
@@ -1516,10 +1498,10 @@ export function Achievements() {
               </section>
 
           {filteredAchievements.length === 0 ? (
-            <div className={cn(achievementsCard, 'rounded-3xl border-dashed py-16 text-center')}>
+            <div className="rounded-3xl border border-dashed border-white/[0.12] bg-[var(--solace-card-bg)] py-16 text-center backdrop-blur-xl">
               <Trophy className="mx-auto mb-4 h-14 w-14 text-fuchsia-400/35" aria-hidden />
-              <h3 className="font-serif text-xl font-semibold text-[var(--solace-text)]">No trophies in this view</h3>
-              <p className="mx-auto mt-2 max-w-md text-sm text-[var(--solace-muted)]">
+              <h3 className="font-serif text-xl font-semibold text-white">No trophies in this view</h3>
+              <p className="mx-auto mt-2 max-w-md text-sm text-zinc-400">
                 Adjust your filters—or keep showing up in Talk It Out, Mood, and Journal. Your next unlock is already
                 forming.
               </p>
@@ -1527,29 +1509,29 @@ export function Achievements() {
           ) : null}
 
           {/* Achievement Journey */}
-              <section className={achievementsJourneySection}>
+          <section className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[linear-gradient(125deg,rgba(10,14,24,0.96),rgba(24,12,40,0.45))] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_20px_60px_-40px_rgba(0,0,0,0.75)] backdrop-blur-xl sm:p-8">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(251,191,36,0.06),transparent_42%)]" />
-            <h2 className="relative font-serif text-xl font-semibold text-[var(--solace-text)] sm:text-2xl">Achievement Journey</h2>
-            <p className="relative mt-1 max-w-2xl text-sm leading-relaxed text-[var(--solace-muted)]">
+            <h2 className="relative font-serif text-xl font-semibold text-white sm:text-2xl">Achievement Journey</h2>
+            <p className="relative mt-1 max-w-2xl text-sm leading-relaxed text-zinc-400">
               A gentle arc from your first brave step to the future you are building — one unlock at a time.
             </p>
 
             {selectedAchievement ? (
-              <div className={cn(achievementsCard, 'relative mt-5 rounded-2xl px-4 py-3')}>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--solace-muted)]">Journey focus</p>
-                <p className="mt-1 text-sm font-semibold text-[var(--solace-text)]">{selectedAchievement.title}</p>
-                <p className="mt-1 text-xs leading-relaxed text-[var(--solace-muted)]">
+              <div className="relative mt-5 rounded-2xl border border-white/[0.08] bg-black/35 px-4 py-3 backdrop-blur-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">Journey focus</p>
+                <p className="mt-1 text-sm font-semibold text-white">{selectedAchievement.title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-400">
                   {selectedAchievement.unlocked ? (
                     <>
                       Earned and held — the path ahead stays lit through{' '}
-                      <span className="text-[var(--solace-muted)]">{journeyNodes[journeyHighlightIndex]?.label ?? 'today'}</span>.
+                      <span className="text-zinc-300">{journeyNodes[journeyHighlightIndex]?.label ?? 'today'}</span>.
                     </>
                   ) : (
                     <>
                       Still unfolding: you are oriented toward{' '}
-                      <span className="text-[var(--solace-muted)]">{journeyNodes[journeyHighlightIndex]?.label ?? 'the next step'}</span>
+                      <span className="text-zinc-300">{journeyNodes[journeyHighlightIndex]?.label ?? 'the next step'}</span>
                       {' '}
-                      <span className="tabular-nums text-[var(--solace-muted)]">
+                      <span className="tabular-nums text-zinc-500">
                         ({selectedAchievement.progress}/{Math.max(1, selectedAchievement.total)} toward unlock).
                       </span>
                     </>
@@ -1597,9 +1579,7 @@ export function Achievements() {
                             passed &&
                               !active &&
                               'border-cyan-400/28 bg-cyan-500/8 text-cyan-100/90 shadow-[0_0_14px_-8px_rgba(34,211,238,0.25)]',
-                            !passed &&
-                              !active &&
-                              'border-[color:var(--solace-border)] bg-[var(--solace-ds-surface)] text-[var(--solace-muted)]'
+                            !passed && !active && 'border-white/[0.09] bg-white/[0.03] text-zinc-500'
                           )}
                         >
                           <JIcon className="h-5 w-5" aria-hidden />
@@ -1608,12 +1588,12 @@ export function Achievements() {
                       <p
                         className={cn(
                           'text-[11px] font-semibold uppercase tracking-wide',
-                          active ? 'text-fuchsia-200/95' : 'text-[var(--solace-muted)]'
+                          active ? 'text-fuchsia-200/95' : 'text-zinc-500'
                         )}
                       >
                         {node.label}
                       </p>
-                      <p className="mt-1 text-[10px] leading-snug text-[var(--solace-muted)]">{node.sub}</p>
+                      <p className="mt-1 text-[10px] leading-snug text-zinc-600">{node.sub}</p>
                     </div>
                   );
                 })}
@@ -1622,11 +1602,11 @@ export function Achievements() {
           </section>
 
           {/* Daily check-ins: goals sync to the goals API; personal achievements stay on this page only */}
-          <div className={cn(achievementsPanel, 'space-y-6')}>
+          <div className="space-y-6 rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] backdrop-blur-xl sm:p-6">
             {personalTrackItems.length === 0 ? (
               <>
-                <h2 className="text-lg font-semibold text-[var(--solace-text)]">Daily rhythm</h2>
-                <p className="text-sm text-[var(--solace-muted)]">
+                <h2 className="text-lg font-semibold text-white">Daily rhythm</h2>
+                <p className="text-sm text-zinc-400">
                   Add a personal goal or personal achievement first—then return here to check in once a day.
                 </p>
               </>
@@ -1634,8 +1614,8 @@ export function Achievements() {
 
             {personalGoalsSynced.length > 0 ? (
               <div>
-                <h2 className="text-lg font-semibold text-[var(--solace-text)]">Daily goal check-in</h2>
-                <p className="mb-4 text-sm text-[var(--solace-muted)]">
+                <h2 className="text-lg font-semibold text-white">Daily goal check-in</h2>
+                <p className="mb-4 text-sm text-zinc-400">
                   These items sync with your personal goals planner (one check-in per item each day).
                 </p>
                 <div className="space-y-4">
@@ -1651,11 +1631,11 @@ export function Achievements() {
                     return (
                       <div
                         key={goal.id}
-                        className={cn(achievementsCard, 'flex flex-col gap-4 rounded-2xl p-4')}
+                        className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-black/25 p-4"
                       >
                         <div>
-                          <p className="font-semibold text-[var(--solace-text)]">{goal.title}</p>
-                          <p className="mt-0.5 text-xs text-[var(--solace-muted)]">
+                          <p className="font-semibold text-white">{goal.title}</p>
+                          <p className="mt-0.5 text-xs text-zinc-400">
                             {goal.goalType ? goalTypeLabels[goal.goalType] : 'Personal Goal'} · Progress{' '}
                             {goal.progress}/{goal.total}
                             {goal.goalCategory ? ` · ${goal.goalCategory}` : ''}
@@ -1663,23 +1643,23 @@ export function Achievements() {
                         </div>
 
                         {(goal.whyItMatters || goal.targetOutcome || goal.actionSteps) && (
-                          <div className={cn(achievementsCard, 'space-y-1.5 rounded-xl p-3 text-sm text-[var(--solace-muted)]')}>
-                            <p className="text-xs font-medium text-[var(--solace-muted)]">From your goal</p>
+                          <div className="space-y-1.5 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-300">
+                            <p className="text-xs font-medium text-zinc-500">From your goal</p>
                             {goal.whyItMatters ? (
                               <p>
-                                <span className="font-medium text-[var(--solace-text)]">Why it matters: </span>
+                                <span className="font-medium text-white">Why it matters: </span>
                                 {goal.whyItMatters}
                               </p>
                             ) : null}
                             {goal.targetOutcome ? (
                               <p>
-                                <span className="font-medium text-[var(--solace-text)]">Target outcome: </span>
+                                <span className="font-medium text-white">Target outcome: </span>
                                 {goal.targetOutcome}
                               </p>
                             ) : null}
                             {goal.actionSteps ? (
                               <p>
-                                <span className="font-medium text-[var(--solace-text)]">Action steps: </span>
+                                <span className="font-medium text-white">Action steps: </span>
                                 {goal.actionSteps}
                               </p>
                             ) : null}
@@ -1689,7 +1669,7 @@ export function Achievements() {
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                           {goal.goalType === 'money_management' && (
                             <div className="space-y-1.5">
-                              <Label htmlFor={`amt-${goal.id}`} className="text-[var(--solace-muted)]">
+                              <Label htmlFor={`amt-${goal.id}`} className="text-zinc-300">
                                 Amount added today ($)
                               </Label>
                               <input
@@ -1700,12 +1680,12 @@ export function Achievements() {
                                 onChange={(e) => patchFields({ amount: e.target.value })}
                                 placeholder="0"
                                 disabled={checkedToday}
-                                className={cn(achievementsInputSurface, 'rounded-lg disabled:opacity-60')}
+                                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white disabled:opacity-60"
                               />
                             </div>
                           )}
                           <div className="space-y-1.5 md:col-span-2">
-                            <Label htmlFor={`mood-${goal.id}`} className="text-[var(--solace-muted)]">
+                            <Label htmlFor={`mood-${goal.id}`} className="text-zinc-300">
                               Emotion tag
                             </Label>
                             <SolaceSelect
@@ -1728,13 +1708,13 @@ export function Achievements() {
                               ]}
                             />
                             {goal.moodTag ? (
-                              <p className="text-xs text-[var(--solace-muted)]">
+                              <p className="text-xs text-zinc-500">
                                 Default on your goal: {goal.moodTag} (when left blank)
                               </p>
                             ) : null}
                           </div>
                           <div className="md:col-span-2 space-y-1.5">
-                            <Label htmlFor={`refl-${goal.id}`} className="text-[var(--solace-muted)]">
+                            <Label htmlFor={`refl-${goal.id}`} className="text-zinc-300">
                               Reflection
                             </Label>
                             <Textarea
@@ -1744,11 +1724,11 @@ export function Achievements() {
                               placeholder="What stood out today?"
                               disabled={checkedToday}
                               rows={3}
-                              className={cn(achievementsInputSurface, 'min-h-[80px]')}
+                              className="min-h-[80px] border-white/15 bg-black/40 text-white"
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor={`chal-${goal.id}`} className="text-[var(--solace-muted)]">
+                            <Label htmlFor={`chal-${goal.id}`} className="text-zinc-300">
                               Challenges faced
                             </Label>
                             <Textarea
@@ -1758,11 +1738,11 @@ export function Achievements() {
                               placeholder="Optional"
                               disabled={checkedToday}
                               rows={3}
-                              className={achievementsInputSurface}
+                              className="border-white/15 bg-black/40 text-white"
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor={`wins-${goal.id}`} className="text-[var(--solace-muted)]">
+                            <Label htmlFor={`wins-${goal.id}`} className="text-zinc-300">
                               Wins
                             </Label>
                             <Textarea
@@ -1772,11 +1752,11 @@ export function Achievements() {
                               placeholder="Optional"
                               disabled={checkedToday}
                               rows={3}
-                              className={achievementsInputSurface}
+                              className="border-white/15 bg-black/40 text-white"
                             />
                           </div>
                           <div className="md:col-span-2 space-y-1.5">
-                            <Label htmlFor={`notes-${goal.id}`} className="text-[var(--solace-muted)]">
+                            <Label htmlFor={`notes-${goal.id}`} className="text-zinc-300">
                               Notes for this check-in
                             </Label>
                             <Textarea
@@ -1786,7 +1766,7 @@ export function Achievements() {
                               placeholder="Optional"
                               disabled={checkedToday}
                               rows={2}
-                              className={achievementsInputSurface}
+                              className="border-white/15 bg-black/40 text-white"
                             />
                           </div>
                         </div>
@@ -1798,7 +1778,7 @@ export function Achievements() {
                             checkedToday ||
                             (goal.goalType === 'money_management' && !(Number(inputState.amount) > 0))
                           }
-                          className="self-start rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-sm font-medium text-[var(--solace-text)] disabled:cursor-not-allowed disabled:opacity-50"
+                          className="self-start rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {checkedToday ? 'Checked today' : 'Daily check-in'}
                         </button>
@@ -1811,8 +1791,8 @@ export function Achievements() {
 
             {personalAchievementsOnly.length > 0 ? (
               <div>
-                <h2 className="text-lg font-semibold text-[var(--solace-text)]">Daily achievements</h2>
-                <p className="mb-4 text-sm text-[var(--solace-muted)]">
+                <h2 className="text-lg font-semibold text-white">Daily achievements</h2>
+                <p className="mb-4 text-sm text-zinc-400">
                   Streak items you keep only on this page (no goals API sync).
                 </p>
                 <div className="space-y-3">
@@ -1822,11 +1802,11 @@ export function Achievements() {
                     return (
                       <div
                         key={goal.id}
-                        className={cn(achievementsCard, 'flex flex-col gap-3 rounded-2xl p-3 sm:flex-row sm:items-center sm:justify-between')}
+                        className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/25 p-3 sm:flex-row sm:items-center sm:justify-between"
                       >
                         <div className="w-full">
-                          <p className="font-semibold text-[var(--solace-text)]">{goal.title}</p>
-                          <p className="text-xs text-[var(--solace-muted)]">
+                          <p className="font-semibold text-white">{goal.title}</p>
+                          <p className="text-xs text-zinc-400">
                             Personal achievement · {goal.progress}/{goal.total}
                           </p>
                           <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -1847,7 +1827,7 @@ export function Achievements() {
                                 }
                                 placeholder="Amount added today ($)"
                                 disabled={checkedToday}
-                                className={cn(achievementsInputSurface, 'rounded-lg disabled:opacity-60')}
+                                className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white disabled:opacity-60"
                               />
                             )}
                             <input
@@ -1865,7 +1845,7 @@ export function Achievements() {
                               }
                               placeholder="Note (optional)"
                               disabled={checkedToday}
-                              className={cn(achievementsInputSurface, 'rounded-lg disabled:opacity-60')}
+                              className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white disabled:opacity-60"
                             />
                           </div>
                         </div>
@@ -1876,7 +1856,7 @@ export function Achievements() {
                             checkedToday ||
                             (goal.goalType === 'money_management' && !(Number(inputState.amount) > 0))
                           }
-                          className="rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-2 text-sm font-medium text-[var(--solace-text)] disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {checkedToday ? 'Checked today' : 'Daily achievements'}
                         </button>
@@ -1888,17 +1868,17 @@ export function Achievements() {
             ) : null}
           </div>
 
-          <div className={cn(achievementsPanel, 'space-y-4')}>
+          <div className="space-y-4 rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] backdrop-blur-xl sm:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="font-serif text-lg font-semibold text-[var(--solace-text)]">30-day reflection export</h2>
-                <p className="text-sm text-[var(--solace-muted)]">A quiet text snapshot of your personal goal check-ins.</p>
+                <h2 className="font-serif text-lg font-semibold text-white">30-day reflection export</h2>
+                <p className="text-sm text-zinc-400">A quiet text snapshot of your personal goal check-ins.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={generateThirtyDayReport}
-                  className="rounded-full bg-gradient-to-r from-indigo-600 to-fuchsia-700 px-4 py-2 text-sm font-semibold text-[var(--solace-text)] shadow-[0_0_20px_rgba(99,102,241,0.35)]"
+                  className="rounded-full bg-gradient-to-r from-indigo-600 to-fuchsia-700 px-4 py-2 text-sm font-semibold text-white shadow-[0_0_20px_rgba(99,102,241,0.35)]"
                 >
                   Generate
                 </button>
@@ -1906,7 +1886,7 @@ export function Achievements() {
                   type="button"
                   onClick={copyReport}
                   disabled={!reportText}
-                  className={cn(achievementsGhostButton, 'rounded-full px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50')}
+                  className="rounded-full border border-white/15 bg-white/[0.05] px-4 py-2 text-sm font-medium text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Copy
                 </button>
@@ -1916,24 +1896,17 @@ export function Achievements() {
               value={reportText}
               readOnly
               placeholder="Generate to view your last 30 days summary."
-              className={cn(achievementsInputSurface, 'min-h-40')}
+              className="min-h-40 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-zinc-200"
             />
           </div>
             </div>
 
             <aside className="min-w-0 space-y-5 xl:sticky xl:top-4 xl:self-start">
-              <div className={cn(achievementsCard, 'rounded-3xl p-6 text-center')}>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--solace-muted)]">Your Progress</p>
+              <div className="rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Your Progress</p>
                 <div className="relative mx-auto mt-4 size-36 overflow-hidden sm:size-40">
                   <svg className="size-full -rotate-90" viewBox="0 0 100 100" aria-hidden>
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="40"
-                      fill="none"
-                      className="stroke-[color-mix(in_srgb,var(--solace-text)_12%,transparent)]"
-                      strokeWidth="8"
-                    />
+                    <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8" />
                     <circle
                       cx="50"
                       cy="50"
@@ -1952,35 +1925,35 @@ export function Achievements() {
                     </defs>
                   </svg>
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
-                    <p className="font-serif text-xl font-semibold leading-none tabular-nums text-[var(--solace-text)] sm:text-2xl">
+                    <p className="font-serif text-xl font-semibold leading-none tabular-nums text-white sm:text-2xl">
                       {overallCompletionPct}%
                     </p>
-                    <p className="mt-1 max-w-[4.5rem] text-[9px] font-medium uppercase leading-tight tracking-wide text-[var(--solace-muted)] sm:max-w-[5rem] sm:text-[10px]">
+                    <p className="mt-1 max-w-[4.5rem] text-[9px] font-medium uppercase leading-tight tracking-wide text-zinc-500 sm:max-w-[5rem] sm:text-[10px]">
                       Overall completion
                     </p>
                   </div>
                 </div>
-                <p className="mt-4 text-xs text-[var(--solace-muted)]">
+                <p className="mt-4 text-xs text-zinc-400">
                   {stats.unlockedCount} of {stats.totalCount} achievements unlocked
                 </p>
               </div>
 
-              <div className={cn(achievementsCard, 'rounded-3xl p-5')}>
+              <div className="rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
                 <div className="flex items-center gap-3">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-fuchsia-500/12 ring-1 ring-fuchsia-400/22">
                     <Diamond className="h-5 w-5 text-fuchsia-200/95" aria-hidden />
                   </div>
                   <div className="min-w-0 text-left">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--solace-muted)]">Achievement Points</p>
-                    <p className="font-serif text-xl text-[var(--solace-text)] sm:text-2xl">{stats.totalPoints.toLocaleString()}</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Achievement Points</p>
+                    <p className="font-serif text-xl text-white sm:text-2xl">{stats.totalPoints.toLocaleString()}</p>
                   </div>
                 </div>
-                <p className="mt-3 text-xs text-[var(--solace-muted)]">
+                <p className="mt-3 text-xs text-zinc-500">
                   {pointsToNext > 0
                     ? `${pointsToNext.toLocaleString()} pts to the next reward`
                     : 'You are at this reward threshold'}
                 </p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--solace-text)_8%,transparent)]">
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-fuchsia-500/90 to-cyan-400/90"
                     style={{
@@ -1991,28 +1964,28 @@ export function Achievements() {
                     }}
                   />
                 </div>
-                <p className="mt-1.5 text-[10px] text-[var(--solace-muted)]">
+                <p className="mt-1.5 text-[10px] text-zinc-600">
                   Next reward · {nextPointsMilestone.toLocaleString()} pts
                 </p>
               </div>
 
-              <div className={cn(achievementsCard, 'rounded-3xl border-orange-400/15 p-5')}>
+              <div className="rounded-3xl border border-orange-400/15 bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-xl">
                 <div className="flex items-start gap-3">
                   <Flame
                     className="mt-0.5 h-6 w-6 shrink-0 text-amber-300/90"
                     aria-hidden
                   />
                   <div className="min-w-0 text-left">
-                    <p className="font-serif text-base font-semibold text-[var(--solace-text)]">Keep Going!</p>
-                    <p className="mt-2 text-sm font-medium leading-relaxed text-[var(--solace-muted)]">
+                    <p className="font-serif text-base font-semibold text-white">Keep Going!</p>
+                    <p className="mt-2 text-sm font-medium leading-relaxed text-zinc-300">
                       Consistency is the key to transformation.
                     </p>
-                    <p className="mt-2 text-xs leading-relaxed text-[var(--solace-muted)]">
+                    <p className="mt-2 text-xs leading-relaxed text-zinc-500">
                       {nextClosestAchievement ? (
                         <>
                           Next milestone in reach:{' '}
-                          <span className="text-[var(--solace-muted)]">{nextClosestAchievement.title}</span>
-                          <span className="tabular-nums text-[var(--solace-muted)]">
+                          <span className="text-zinc-400">{nextClosestAchievement.title}</span>
+                          <span className="tabular-nums text-zinc-600">
                             {' '}
                             ({nextClosestAchievement.progress}/{Math.max(1, nextClosestAchievement.total)}).
                           </span>
@@ -2025,13 +1998,13 @@ export function Achievements() {
                 </div>
               </div>
 
-              <div className={cn(achievementsCard, 'relative overflow-hidden rounded-3xl p-5')}>
+              <div className="relative overflow-hidden rounded-3xl border border-white/[0.08] bg-[var(--solace-card-bg)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_85%_0%,rgba(251,191,36,0.08),transparent_48%)]" />
                 <div className="relative flex items-start gap-3">
                   <Headphones className="mt-0.5 h-6 w-6 shrink-0 text-cyan-200/80" aria-hidden />
                   <div className="min-w-0 flex-1 text-left">
-                    <p className="font-serif text-base font-semibold text-[var(--solace-text)]">Need Help?</p>
-                    <p className="mt-1 text-sm leading-relaxed text-[var(--solace-muted)]">
+                    <p className="font-serif text-base font-semibold text-white">Need Help?</p>
+                    <p className="mt-1 text-sm leading-relaxed text-zinc-400">
                       We&apos;re here to support your journey, always.
                     </p>
                   </div>

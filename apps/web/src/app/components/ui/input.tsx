@@ -3,10 +3,15 @@ import { Eye, EyeOff } from "lucide-react"
 
 import { cn } from "./utils"
 
-const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
-  ({ className, type, ...props }, ref) => {
+export interface InputProps extends React.ComponentProps<"input"> {
+  /** When false, password fields render without the built-in visibility toggle (use for custom toggles). */
+  showPasswordToggle?: boolean
+}
+
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, showPasswordToggle = true, ...props }, ref) => {
     const [showPassword, setShowPassword] = React.useState(false)
-    const isPassword = type === "password"
+    const isPassword = type === "password" && showPasswordToggle
 
     if (isPassword) {
       return (

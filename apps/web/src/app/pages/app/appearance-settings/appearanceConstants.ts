@@ -69,25 +69,43 @@ export function applySemanticThemeTokens(theme: AppearanceTheme) {
 
   if (theme === "light") {
     root.style.setProperty("--bg", "#fbf8ff");
+    root.style.setProperty("--bg-soft", "#f7f2ff");
     root.style.setProperty(
       "--bg-gradient",
-      "linear-gradient(135deg, #ffffff 0%, #fbf8ff 35%, #f4ecff 70%, #eef9f8 100%)"
+      "linear-gradient(135deg, #ffffff 0%, #fbf8ff 38%, #f3ecff 72%, #ecfdfb 100%)"
     );
-    root.style.setProperty("--surface", "#faf7ff");
+    root.style.setProperty("--surface", "#ffffff");
+    root.style.setProperty("--surface-soft", "#fbf8ff");
+    root.style.setProperty("--surface-lavender", "#f5eeff");
+    root.style.setProperty("--surface-pink", "#fff1f7");
+    root.style.setProperty("--surface-teal", "#ecfdfb");
+    root.style.setProperty("--surface-gold", "#fff8dd");
     root.style.setProperty("--surface-elevated", "#ffffff");
-    root.style.setProperty("--card", "#ffffff");
+    root.style.setProperty("--card", "rgba(255, 255, 255, 0.86)");
+    root.style.setProperty("--card-solid", "#ffffff");
+    root.style.setProperty("--card-muted", "#f8f3ff");
     root.style.setProperty("--card-soft", "#fbf8ff");
     root.style.setProperty("--card-lavender", "#f6f0ff");
     root.style.setProperty("--text-primary", "#101828");
     root.style.setProperty("--text-secondary", "#475467");
     root.style.setProperty("--text-muted", "#667085");
     root.style.setProperty("--text-soft", "#7a728e");
+    root.style.setProperty("--text-inverse", "#ffffff");
     root.style.setProperty("--border", "#e7ddfb");
     root.style.setProperty("--border-strong", "#d8c7f7");
-    root.style.setProperty("--glow-pink", "rgba(236, 72, 153, 0.16)");
-    root.style.setProperty("--glow-violet", "rgba(167, 139, 250, 0.18)");
-    root.style.setProperty("--glow-teal", "rgba(78, 205, 196, 0.16)");
-    root.style.setProperty("--glow-gold", "rgba(251, 191, 36, 0.16)");
+    root.style.setProperty("--glow-pink", "rgba(236, 72, 153, 0.22)");
+    root.style.setProperty("--glow-violet", "rgba(167, 139, 250, 0.24)");
+    root.style.setProperty("--glow-teal", "rgba(78, 205, 196, 0.2)");
+    root.style.setProperty("--glow-gold", "rgba(251, 191, 36, 0.2)");
+    root.style.setProperty(
+      "--rail-card-bg",
+      "linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(246, 240, 255, 0.84))"
+    );
+    root.style.setProperty("--rail-card-border", "rgba(167, 139, 250, 0.3)");
+    root.style.setProperty(
+      "--hero-overlay-readability",
+      "linear-gradient(90deg, rgba(255, 255, 255, 0.86) 0%, rgba(246, 240, 255, 0.58) 55%, rgba(10, 15, 30, 0.28) 100%)"
+    );
     root.style.setProperty("--accent-primary", "#4ecdc4");
     root.style.setProperty("--accent-secondary", "#a78bfa");
     root.style.setProperty("--accent-warm", "#fbbf24");

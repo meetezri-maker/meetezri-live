@@ -386,6 +386,7 @@ function LoginAuthPanel({
                         />
                         <Input
                         type={showPassword ? "text" : "password"}
+                        showPasswordToggle={false}
                         placeholder="Enter your password"
                         autoComplete="current-password"
                         className={cn(glassInput, "pr-11")}

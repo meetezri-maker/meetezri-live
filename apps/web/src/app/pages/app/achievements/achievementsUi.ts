@@ -1,9 +1,6 @@
 import { cn } from "@/lib/utils";
 import {
-  solaceBtnPrimary,
   solaceCard,
-  solaceGlassPanel,
-  solaceHeroImage,
   solaceHeroOverlayBottom,
   solaceHeroOverlayReadability,
   solaceHeroSection,
@@ -11,93 +8,63 @@ import {
   solacePageFogMid,
   solacePageGlowTop,
   solacePageVignette,
-  solaceSectionTitle,
+  solaceRailCard,
 } from "@/app/solace/solacePageChrome";
 
 export const achievementsPageAtmosphere = solacePageAtmosphere;
-
-export const achievementsPageGlowTop = cn(
-  solacePageGlowTop,
-  "bg-[radial-gradient(circle,rgba(167,139,250,0.18)_0%,rgba(236,72,153,0.06)_42%,transparent_68%)]"
-);
-
+export const achievementsPageGlowTop = solacePageGlowTop;
 export const achievementsPageFogMid = solacePageFogMid;
 export const achievementsPageVignette = solacePageVignette;
 
-export const achievementsCard = solaceCard;
-export const achievementsPanel = cn(solaceGlassPanel, "rounded-3xl");
-export const achievementsStatStrip = cn(solaceCard, "rounded-2xl p-1 shadow-[var(--solace-card-shadow)]");
+export const achievementsCard = cn(
+  solaceCard,
+  "rounded-2xl border-white/[0.07]",
+  "[html[data-ezri-theme=light]_&]:border-[color:var(--border)]",
+  "[html[data-theme=light]_&]:border-[color:var(--border)]"
+);
+
+export const achievementsRailCard = cn(solaceRailCard, "rounded-3xl p-5 sm:p-6");
 
 export const achievementsHeroSection = cn(
   solaceHeroSection,
-  "rounded-3xl shadow-[var(--solace-ds-shadow-cinematic)]"
+  "rounded-3xl border-white/[0.07]",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_24px_80px_-48px_rgba(0,0,0,0.85)]",
+  "[html[data-ezri-theme=light]_&]:shadow-[var(--solace-card-shadow)]",
+  "[html[data-theme=light]_&]:shadow-[var(--solace-card-shadow)]"
 );
 
-export const achievementsHeroImage = solaceHeroImage;
-export const achievementsHeroOverlayReadability = solaceHeroOverlayReadability;
+export const achievementsHeroOverlay = solaceHeroOverlayReadability;
 export const achievementsHeroOverlayBottom = solaceHeroOverlayBottom;
 
-export const achievementsLabel = solaceSectionTitle;
-
-export const achievementsTitle = "font-serif font-semibold text-[var(--solace-text)]";
-export const achievementsBody = "text-sm text-[var(--solace-muted)]";
-export const achievementsValue = "font-serif text-lg text-[var(--solace-text)] sm:text-xl";
-
-export const achievementsGhostButton = cn(
-  "inline-flex min-h-[44px] items-center justify-center rounded-full border border-[color:var(--solace-border)]",
-  "bg-[color-mix(in_srgb,var(--solace-text)_6%,transparent)] px-5 text-sm font-semibold text-[var(--solace-text)]",
-  "transition hover:border-[color:var(--solace-ds-border-glow)] hover:bg-[color-mix(in_srgb,var(--solace-text)_9%,transparent)]"
+export const achievementsHeroTitle = cn(
+  "max-w-xl font-serif text-4xl font-semibold tracking-tight sm:text-[2.75rem] sm:leading-tight",
+  "text-white [text-shadow:0_2px_24px_rgba(0,0,0,0.55)]",
+  "[html[data-ezri-theme=light]_&]:text-[var(--text-primary)] [html[data-ezri-theme=light]_&]:[text-shadow:none]",
+  "[html[data-theme=light]_&]:text-[var(--text-primary)] [html[data-theme=light]_&]:[text-shadow:none]"
 );
 
-export const achievementsBackLink = cn(
-  "inline-flex min-h-[44px] min-w-0 items-center gap-2 text-sm font-medium text-[var(--solace-muted)]",
-  "transition-colors hover:text-[var(--solace-text)]"
+export const achievementsHeroSubtitle = cn(
+  "mt-4 max-w-md text-[15px] leading-relaxed text-zinc-200/95 [text-shadow:0_1px_16px_rgba(0,0,0,0.45)]",
+  "[html[data-ezri-theme=light]_&]:text-[var(--text-secondary)] [html[data-ezri-theme=light]_&]:[text-shadow:none]",
+  "[html[data-theme=light]_&]:text-[var(--text-secondary)] [html[data-theme=light]_&]:[text-shadow:none]"
 );
 
-export const achievementsFilterActive = cn(
-  "border-[color:var(--solace-ds-border-glow)] bg-[color-mix(in_srgb,var(--accent-secondary,#a78bfa)_14%,var(--solace-ds-surface))]",
-  "text-[var(--solace-text)] shadow-[0_0_20px_-8px_rgba(167,139,250,0.35)]"
-);
-
-export const achievementsFilterInactive = cn(
-  "border-[color:var(--solace-border)] bg-[var(--solace-ds-surface)] text-[var(--solace-muted)]",
-  "hover:border-[color:var(--solace-ds-border-glow)] hover:bg-[color-mix(in_srgb,var(--accent-secondary,#a78bfa)_6%,var(--solace-ds-surface))] hover:text-[var(--solace-text)]"
-);
-
-export const achievementsFeaturedBanner = cn(
+export const achievementsStatStrip = cn(
   achievementsCard,
-  "bg-[linear-gradient(120deg,color-mix(in_srgb,var(--accent-warm,#fbbf24)_10%,var(--solace-ds-surface)),color-mix(in_srgb,var(--accent-secondary,#a78bfa)_12%,var(--solace-ds-surface)),var(--solace-ds-surface))]"
+  "p-1 sm:p-0"
 );
 
-export const achievementsJourneySection = cn(
+export const achievementsMilestoneCard = cn(
   achievementsCard,
-  "rounded-3xl p-6 sm:p-8"
+  "light-theme-card-hover group relative flex min-h-[280px] flex-col overflow-hidden text-center backdrop-blur-md transition"
 );
 
-export const achievementsTrophyCard = cn(
+export const achievementsEmptyState = cn(
   achievementsCard,
-  "flex min-h-[280px] flex-col overflow-hidden text-center transition"
+  "rounded-3xl border-dashed py-16 text-center backdrop-blur-xl"
 );
 
-export const achievementsTrophyCardLocked = "border-[color:var(--solace-border)] opacity-75 saturate-[0.85]";
-
-export const achievementsTrophyCardUnlocked = cn(
-  "border-[color:var(--solace-ds-border-glow)]",
-  "bg-[color-mix(in_srgb,var(--accent-secondary,#a78bfa)_8%,var(--solace-ds-surface))]"
+export const achievementsSectionPanel = cn(
+  achievementsCard,
+  "space-y-6 rounded-3xl p-5 backdrop-blur-xl sm:p-6"
 );
-
-export const achievementsEmblemUnlocked = cn(
-  "border-[color:var(--solace-border)] bg-[color-mix(in_srgb,var(--solace-text)_8%,var(--solace-ds-surface))]",
-  "shadow-[var(--solace-card-shadow)]"
-);
-
-export const achievementsEmblemLocked = cn(
-  "border-[color:var(--solace-border)] bg-[color-mix(in_srgb,var(--solace-text)_4%,transparent)] opacity-75"
-);
-
-export const achievementsInputSurface = cn(
-  "w-full rounded-2xl border border-[color:var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm text-[var(--solace-text)]",
-  "placeholder:text-[var(--solace-muted)]"
-);
-
-export const achievementsPrimaryGradientBtn = solaceBtnPrimary;

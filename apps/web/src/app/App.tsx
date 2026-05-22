@@ -477,9 +477,11 @@ export default function App() {
                 <Route
                   path="/app/active-session"
                   element={
-                    <Suspense fallback={<PageLoader />}>
-                      <ActiveSession />
-                    </Suspense>
+                    <div className="flex min-h-0 flex-1 flex-col">
+                      <Suspense fallback={<PageLoader />}>
+                        <ActiveSession />
+                      </Suspense>
+                    </div>
                   }
                 />
                 <Route path="/app/settings/privacy" element={<PrivacySettings />} />

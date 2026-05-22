@@ -57,40 +57,39 @@ html:not([data-ezri-theme]) .solace-app {
 /* ─── Light theme — pastel lavender wellness ─────────────────────────────── */
 html[data-ezri-theme="light"] .solace-app,
 html[data-theme="light"] .solace-app {
-  --solace-bg: #fbf8ff;
-  --solace-bg-elevated: #ffffff;
-  --solace-panel: rgba(255, 255, 255, 0.88);
-  --solace-panel-soft: #fbf8ff;
-  --solace-border: #e7ddfb;
-  --solace-text: #101828;
-  --solace-muted: #475467;
+  --solace-bg: var(--bg, #fbf8ff);
+  --solace-bg-elevated: var(--surface, #ffffff);
+  --solace-panel: var(--card, rgba(255, 255, 255, 0.86));
+  --solace-panel-soft: var(--surface-soft, #fbf8ff);
+  --solace-border: var(--border, #e7ddfb);
+  --solace-text: var(--text-primary, #101828);
+  --solace-muted: var(--text-secondary, #475467);
   --solace-purple: #a78bfa;
   --solace-cyan: #4ecdc4;
   --solace-amber: #fbbf24;
   --solace-rose: #ec4899;
   --solace-accent: var(--accent, #ec4899);
-  --solace-glow-purple: 0 0 36px var(--glow-violet, rgba(167, 139, 250, 0.18));
-  --solace-glow-cyan: 0 0 32px var(--glow-teal, rgba(78, 205, 196, 0.16));
-  --solace-glow-pink: 0 0 32px var(--glow-pink, rgba(236, 72, 153, 0.16));
+  --solace-glow-purple: 0 0 36px var(--glow-violet, rgba(167, 139, 250, 0.24));
+  --solace-glow-cyan: 0 0 32px var(--glow-teal, rgba(78, 205, 196, 0.2));
+  --solace-glow-pink: 0 0 32px var(--glow-pink, rgba(236, 72, 153, 0.22));
   --solace-ds-bg-deep: #f6f0ff;
   --solace-ds-bg: #faf7ff;
   --solace-ds-bg-raised: #ffffff;
-  --solace-ds-surface: #ffffff;
+  --solace-ds-surface: var(--surface, #ffffff);
   --solace-ds-border-glow: rgba(167, 139, 250, 0.34);
-  --solace-ds-glow-purple: rgba(167, 139, 250, 0.18);
-  --solace-ds-glow-pink: rgba(236, 72, 153, 0.16);
-  --solace-ds-glow-cyan: rgba(78, 205, 196, 0.16);
-  --solace-ds-text: #101828;
-  --solace-ds-text-muted: #667085;
+  --solace-ds-glow-purple: rgba(167, 139, 250, 0.24);
+  --solace-ds-glow-pink: rgba(236, 72, 153, 0.22);
+  --solace-ds-glow-cyan: rgba(78, 205, 196, 0.2);
+  --solace-ds-text: var(--text-primary, #101828);
+  --solace-ds-text-muted: var(--text-muted, #667085);
   --solace-ds-shadow-cinematic:
-    0 16px 40px -20px rgba(16, 24, 40, 0.08), 0 0 40px -12px rgba(167, 139, 250, 0.14),
-    0 0 28px -14px rgba(236, 72, 153, 0.1);
-  --solace-page-bg: linear-gradient(135deg, #ffffff 0%, #fbf8ff 35%, #f4ecff 70%, #eef9f8 100%);
-  --solace-card-bg: linear-gradient(145deg, #ffffff 0%, #f7f2ff 100%);
-  --solace-card-border: #e7ddfb;
+    0 18px 45px rgba(88, 28, 135, 0.08), 0 0 32px rgba(167, 139, 250, 0.14),
+    0 0 20px rgba(236, 72, 153, 0.08);
+  --solace-page-bg: var(--bg-gradient);
+  --solace-card-bg: var(--card, rgba(255, 255, 255, 0.86));
+  --solace-card-border: rgba(167, 139, 250, 0.28);
   --solace-card-shadow:
-    0 8px 28px -14px rgba(16, 24, 40, 0.1), 0 0 24px -12px rgba(167, 139, 250, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    0 18px 45px rgba(88, 28, 135, 0.08), 0 0 24px rgba(167, 139, 250, 0.1);
   --background: var(--solace-bg);
   --surface: #faf7ff;
   --surface-elevated: var(--solace-bg-elevated);
@@ -218,13 +217,13 @@ html:not([data-ezri-theme]) .solace-app .solace-sidebar-shell {
 
 html[data-ezri-theme="light"] .solace-app .solace-glass-card,
 html[data-theme="light"] .solace-app .solace-glass-card {
-  background: var(--rail-card-bg, linear-gradient(145deg, #ffffff, #f7f2ff));
-  border-color: var(--rail-card-border, #e7ddfb);
+  background: var(--rail-card-bg) !important;
+  border: 1px solid var(--rail-card-border) !important;
   box-shadow:
-    0 0 0 1px rgba(167, 139, 250, 0.14),
-    0 0 32px -14px var(--solace-ds-glow-purple),
-    var(--solace-ds-shadow-cinematic),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    0 18px 45px rgba(88, 28, 135, 0.08),
+    0 0 28px rgba(167, 139, 250, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+  color: var(--text-primary) !important;
 }
 
 html[data-ezri-theme="light"] .solace-app .solace-glass-card::before {

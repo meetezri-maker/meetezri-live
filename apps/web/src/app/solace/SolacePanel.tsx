@@ -25,11 +25,12 @@ export function SolacePanel({ children, className, glow = "none", soft }: Solace
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-[var(--solace-border)]",
+        "solace-panel light-theme-card light-theme-card-hover relative overflow-hidden rounded-2xl border border-[var(--solace-border)]",
         soft ? "bg-[var(--solace-panel-soft)]" : "bg-[var(--solace-panel)]",
-        "backdrop-blur-md",
+        "text-[var(--solace-text)] backdrop-blur-md",
         glowClass[glow],
         "before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(ellipse_at_top,rgba(139,92,246,0.07),transparent_55%)]",
+        "[html[data-ezri-theme=light]_&]:before:bg-[radial-gradient(ellipse_at_top,rgba(167,139,250,0.1),transparent_55%)]",
         className
       )}
     >

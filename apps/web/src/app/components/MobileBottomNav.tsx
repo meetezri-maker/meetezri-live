@@ -23,7 +23,7 @@ export function MobileBottomNav({ compact = false }: MobileBottomNavProps) {
     <motion.div
       initial={{ y: 100 }}
       animate={{ y: 0 }}
-      className="solace-mobile-nav solace-app fixed bottom-0 left-0 right-0 z-50 border-t border-[color:var(--solace-border)] bg-[color-mix(in_srgb,var(--solace-bg)_88%,transparent)] shadow-[var(--solace-ds-shadow-cinematic)] backdrop-blur-xl safe-area-pb print:hidden lg:hidden"
+      className="solace-mobile-nav solace-app fixed bottom-0 left-0 right-0 z-50 border-t border-[color:var(--solace-border)] bg-[color-mix(in_srgb,var(--solace-bg)_88%,transparent)] shadow-[var(--solace-ds-shadow-cinematic)] backdrop-blur-xl safe-area-pb lg:hidden"
     >
       <div className={`flex items-stretch justify-around px-1 ${compact ? "py-1.5" : "py-2"}`}>
         {navItems.map((item) => {
