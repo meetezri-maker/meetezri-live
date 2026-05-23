@@ -6,6 +6,7 @@ import type { EzriWsStatus } from "@/lib/ezri/realtimeClient";
 import type { SessionBackdropLayers, SessionBackdropPreference } from "@/lib/sessionBackdropPresets";
 import type { SafetyResource, SafetyState } from "@/app/types/safety";
 import { CRISIS_KEYWORD_MODAL_ENABLED } from "../constants";
+import type { LiveUserSpeechStore } from "../hooks/useLiveUserSpeechStore";
 import type { TranscriptLine } from "../utils/transcript";
 import type { FixedAvatarViewportConfig } from "./ThreeAvatar";
 import { CrisisKeywordModal } from "./CrisisKeywordModal";
@@ -47,9 +48,9 @@ export interface ActiveSessionViewProps {
   mouthAudioLevelRef: MutableRefObject<number>;
   avatarPhonemeTimelineRef: MutableRefObject<AvatarPhonemeTimeline | null>;
   avatarAudioCurrentTimeRef: MutableRefObject<number>;
-  speechPulse: number;
-  speechText: string;
-  speechCharIndex: number;
+  speechTextRef: MutableRefObject<string>;
+  speechCharIndexRef: MutableRefObject<number>;
+  speechPulseRef: MutableRefObject<number>;
   latestUserTextRef: MutableRefObject<string>;
   latestJordanTextRef: MutableRefObject<string>;
   userSpeechStartedAtMsRef: MutableRefObject<number>;
@@ -63,7 +64,7 @@ export interface ActiveSessionViewProps {
   viewerFirstName: string;
   transcriptListRef: RefObject<HTMLDivElement>;
   transcript: TranscriptLine[];
-  liveUserSpeech: string;
+  liveUserSpeech: LiveUserSpeechStore;
   isMuted: boolean;
   companionName: string;
   sttProvider: string | undefined;
@@ -163,9 +164,9 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
     mouthAudioLevelRef,
     avatarPhonemeTimelineRef,
     avatarAudioCurrentTimeRef,
-    speechPulse,
-    speechText,
-    speechCharIndex,
+    speechTextRef,
+    speechCharIndexRef,
+    speechPulseRef,
     latestUserTextRef,
     latestJordanTextRef,
     userSpeechStartedAtMsRef,
@@ -281,9 +282,9 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
             mouthAudioLevelRef={mouthAudioLevelRef}
             avatarPhonemeTimelineRef={avatarPhonemeTimelineRef}
             avatarAudioCurrentTimeRef={avatarAudioCurrentTimeRef}
-            speechPulse={speechPulse}
-            speechText={speechText}
-            speechCharIndex={speechCharIndex}
+            speechTextRef={speechTextRef}
+            speechCharIndexRef={speechCharIndexRef}
+            speechPulseRef={speechPulseRef}
             latestUserTextRef={latestUserTextRef}
             latestJordanTextRef={latestJordanTextRef}
             userSpeechStartedAtMsRef={userSpeechStartedAtMsRef}
