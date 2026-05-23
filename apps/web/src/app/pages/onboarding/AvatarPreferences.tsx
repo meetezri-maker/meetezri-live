@@ -29,7 +29,10 @@ import {
   FormItem,
   FormMessage,
 } from "../../components/ui/form";
-import { companionCardImageUrl } from "@/lib/avatar/companionModelUrl";
+import {
+  companionCardImageUrl,
+  companionRoundPortraitImgClass,
+} from "@/lib/avatar/companionModelUrl";
 import {
   ONBOARDING_COMPANION_SELECTION_BG,
   TALK_ENV_CANDLE,
@@ -37,6 +40,13 @@ import {
   TALK_ENV_LAKE,
   TALK_ENV_STUDIO,
 } from "@/lib/solace/referenceImagery";
+import {
+  DEFAULT_SELECTABLE_COMPANION_NAME,
+  isCompanionComingSoon,
+  isSessionEnvironmentComingSoon,
+  resolveCompanionForProfileSave,
+} from "@/lib/avatar/companionAvailability";
+import { ComingSoonOverlay } from "@/components/ui/ComingSoonOverlay";
 import { cn } from "@/lib/utils";
 const SOLACE_LOGO_SRC = "/logos/logo white.png";
 const ONBOARDING_NAV_H = "4.75rem";
@@ -276,25 +286,33 @@ interface CompanionCardProps {
 }
 
 function CompanionCard({ avatar, isSelected, onSelect, delay = 0 }: CompanionCardProps) {
+  const comingSoon = isCompanionComingSoon(avatar.name);
   return (
     <motion.button
       type="button"
-      onClick={onSelect}
+      disabled={comingSoon}
+      onClick={() => {
+        if (!comingSoon) onSelect();
+      }}
       aria-pressed={isSelected}
+      aria-disabled={comingSoon}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.45, ease: "easeOut" }}
-      whileHover={{ y: -3 }}
-      whileTap={{ scale: 0.995 }}
+      whileHover={comingSoon ? undefined : { y: -3 }}
+      whileTap={comingSoon ? undefined : { scale: 0.995 }}
       className={cn(
         "group relative w-full overflow-hidden rounded-[24px] border p-6 text-left backdrop-blur-xl",
         "transition-[border-color,box-shadow,background-color,transform] duration-300",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4FD8]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[#070816]",
-        isSelected
+        comingSoon
+          ? "cursor-not-allowed border-white/[0.08] bg-[#0A0B1E]/55 opacity-90"
+          : isSelected
           ? "border-[#FF4FD8]/55 bg-[linear-gradient(155deg,rgba(177,77,255,0.16)_0%,rgba(255,79,216,0.1)_42%,rgba(10,11,30,0.78)_100%)] shadow-[0_0_56px_-10px_rgba(255,79,216,0.55),0_0_0_1px_rgba(255,79,216,0.2),inset_0_1px_0_rgba(255,255,255,0.08)]"
           : "border-[#8A4FFF]/22 bg-[linear-gradient(160deg,rgba(138,79,255,0.06)_0%,rgba(10,11,30,0.62)_100%)] hover:border-[#B14DFF]/38 hover:bg-[#12132e]/68 hover:shadow-[0_0_40px_-14px_rgba(177,77,255,0.4)]",
       )}
     >
+      {comingSoon ? <ComingSoonOverlay className="rounded-[24px]" /> : null}
       {isSelected ? (
         <motion.span
           initial={{ scale: 0, opacity: 0 }}
@@ -341,7 +359,10 @@ function CompanionCard({ avatar, isSelected, onSelect, delay = 0 }: CompanionCar
             <img
               src={avatar.imageUrl}
               alt=""
-              className="relative h-[clamp(110px,28vw,128px)] w-[clamp(110px,28vw,128px)] rounded-full object-cover object-top ring-2 ring-white/[0.12]"
+              className={cn(
+                "relative h-[clamp(110px,28vw,128px)] w-[clamp(110px,28vw,128px)] rounded-full ring-2 ring-white/[0.12]",
+                companionRoundPortraitImgClass,
+              )}
               width={128}
               height={128}
             />
@@ -416,6 +437,7 @@ function CompanionCard({ avatar, isSelected, onSelect, delay = 0 }: CompanionCar
 }
 
 interface SessionBackgroundThumbProps {
+  value: string;
   label: string;
   image: string;
   isSelected: boolean;
@@ -423,25 +445,34 @@ interface SessionBackgroundThumbProps {
 }
 
 function SessionBackgroundThumb({
+  value,
   label,
   image,
   isSelected,
   onSelect,
 }: SessionBackgroundThumbProps) {
+  const comingSoon = isSessionEnvironmentComingSoon(value);
   return (
     <motion.button
       type="button"
-      onClick={onSelect}
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.99 }}
+      disabled={comingSoon}
+      onClick={() => {
+        if (!comingSoon) onSelect();
+      }}
+      aria-disabled={comingSoon}
+      whileHover={comingSoon ? undefined : { y: -2 }}
+      whileTap={comingSoon ? undefined : { scale: 0.99 }}
       className={cn(
         "group relative shrink-0 overflow-hidden rounded-xl border text-left transition-[border-color,box-shadow] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4FD8]/40",
         "w-[min(148px,42vw)] rounded-2xl sm:w-[min(168px,18vw)]",
-        isSelected
+        comingSoon
+          ? "cursor-not-allowed border-white/[0.06] opacity-90"
+          : isSelected
           ? "border-[#FF4FD8]/55 shadow-[0_0_28px_-6px_rgba(255,79,216,0.55)]"
           : "border-white/[0.08] hover:border-[#B14DFF]/35 hover:shadow-[0_0_20px_-8px_rgba(177,77,255,0.4)]",
       )}
     >
+      {comingSoon ? <ComingSoonOverlay className="rounded-2xl" /> : null}
       <span className="relative block aspect-[4/3] overflow-hidden">
         <img
           src={image}
@@ -520,7 +551,16 @@ export function OnboardingAvatarPreferences() {
   const selectedAvatar = form.watch("selectedAvatar");
 
   const onSubmit = (values: AvatarPreferencesValues) => {
-    updateData(values);
+    const selectedAvatar = resolveCompanionForProfileSave(
+      values.selectedAvatar,
+      normalizeOnboardingAvatarName(data.selectedAvatar) ||
+        DEFAULT_SELECTABLE_COMPANION_NAME,
+    );
+    updateData({
+      ...values,
+      selectedAvatar,
+      selectedEnvironment: values.selectedEnvironment || "",
+    });
     navigate("/onboarding/safety-consent");
   };
 
@@ -656,9 +696,13 @@ export function OnboardingAvatarPreferences() {
                           {sessionEnvironments.map((env) => (
                             <SessionBackgroundThumb
                               key={env.value}
+                              value={env.value}
                               label={env.label}
                               image={env.image}
-                              isSelected={field.value === env.value}
+                              isSelected={
+                                !isSessionEnvironmentComingSoon(env.value) &&
+                                field.value === env.value
+                              }
                               onSelect={() => field.onChange(env.value)}
                             />
                           ))}
@@ -711,7 +755,7 @@ export function OnboardingAvatarPreferences() {
 
                   <motion.button
                     type="submit"
-                    disabled={!selectedAvatar}
+                    disabled={!selectedAvatar || isCompanionComingSoon(selectedAvatar)}
                     whileHover={{ y: -1 }}
                     whileTap={{ scale: 0.99 }}
                     className={cn(

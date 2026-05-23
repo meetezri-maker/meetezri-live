@@ -6515,6 +6515,15 @@ export default ThreeAvatar;
     const videoRef = useRef<HTMLVideoElement>(null);
     const [stream, setStream] = useState<MediaStream | null>(null);
     const [isUploading, setIsUploading] = useState(false);
+    const ezriWarmupReadyRef = useRef(false);
+    const pendingMediaEntryRef = useRef(false);
+    const prePermissionAudioQueueRef = useRef<
+      { subtitle: string; audio: unknown; avatarData: EzriAvatarData | null }[]
+    >([]);
+    const prePermissionTranscriptRef = useRef<
+      { role: "user" | "assistant"; content: string }[]
+    >([]);
+    const [pendingMediaEntry, setPendingMediaEntry] = useState(false);
 
     const requestMediaAccess = useCallback(async () => {
       type DOMErr = { name?: string; message?: string; constraint?: string };
@@ -6600,8 +6609,8 @@ export default ThreeAvatar;
 
       setStream(combinedStream);
       if (videoRef.current) videoRef.current.srcObject = combinedStream;
-      setPermissionsGranted(true);
-      setShowPermissionRequest(false);
+      pendingMediaEntryRef.current = true;
+      setPendingMediaEntry(true);
 
       // Unlock AudioContext inside this user-gesture so Firefox allows audio.play() later.
       if (!audioUnlockedRef.current) {
@@ -6647,10 +6656,7 @@ export default ThreeAvatar;
           const saved = localStorage.getItem(permissionStorageKey);
 
           if (saved === "true") {
-            setPermissionsGranted(true);
-            setShowPermissionRequest(false);
-
-            // silently restore previously granted devices
+            // silently restore previously granted devices; finalizeSessionEntry runs after warmup
             await requestMediaAccess();
           } else {
             setShowPermissionRequest(true);
@@ -6889,6 +6895,11 @@ export default ThreeAvatar;
     const [permissionsGranted, setPermissionsGranted] = useState(false);
     const [permissionStateInitialized, setPermissionStateInitialized] =
       useState(false);
+    /** Pipeline warmup while the permission modal is visible (Ezri Avatar app.js parity). */
+    const [ezriWarmupStatus, setEzriWarmupStatus] = useState<"idle" | "warming" | "ready">("idle");
+    const permissionsGrantedRef = useRef(false);
+    const flushWsAudioQueueRef = useRef<() => void>(() => {});
+
     const [transcript, setTranscript] = useState<
       { role: string; content: string; timestamp: number }[]
     >([]);
@@ -6917,6 +6928,10 @@ export default ThreeAvatar;
       wsTtsStreamingRef.current ||
       wsIsPlaybackActiveRef.current ||
       wsAudioQueueRef.current.length > 0;
+
+    useEffect(() => {
+      permissionsGrantedRef.current = permissionsGranted;
+    }, [permissionsGranted]);
 
     const transcriptRef = useRef<
       { role: string; content: string; timestamp: number }[]
@@ -7107,7 +7122,10 @@ export default ThreeAvatar;
     };
 
     /** Pass `delayMs: 0` after barge-in so the mic opens immediately — long delays clip the user's first words. */
-    const resumeStt = (delayMs = 150) => {
+    const resumeStt = (
+      delayMs = 150,
+      opts?: { ignoreSpeakingGate?: boolean },
+    ) => {
       suppressSttRef.current = false;
       // Short delay to let speaker echo decay after normal TTS (not needed right after client barge-in).
       window.setTimeout(() => {
@@ -7116,7 +7134,7 @@ export default ThreeAvatar;
           isSessionEndingRef.current ||
           isSessionPausedRef.current ||
           isMutedRef.current ||
-          isEzriSpeakingRef.current
+          (!opts?.ignoreSpeakingGate && isEzriSpeakingRef.current)
         ) {
           return;
         }
@@ -7596,6 +7614,96 @@ export default ThreeAvatar;
       ]);
     };
 
+    const sendPlaybackDoneAck = (
+      cooldownMs = 1500,
+      bypassDebounce = false,
+    ) => {
+      const now = Date.now();
+      if (!bypassDebounce && now - lastPlaybackDoneAtRef.current < 2000) {
+        resumeStt(0, { ignoreSpeakingGate: true });
+        return;
+      }
+      lastPlaybackDoneAtRef.current = now;
+      if (playbackDoneCooldownTimerRef.current !== null) {
+        window.clearTimeout(playbackDoneCooldownTimerRef.current);
+        playbackDoneCooldownTimerRef.current = null;
+      }
+      playbackDoneCooldownTimerRef.current = window.setTimeout(() => {
+        playbackDoneCooldownTimerRef.current = null;
+        try {
+          wsClientRef.current?.sendPlaybackDone();
+        } catch {
+          /* ignore */
+        }
+        resumeStt(0, { ignoreSpeakingGate: true });
+      }, cooldownMs);
+    };
+
+    const playNextWsQueue = () => {
+      if (suppressIncomingAudioRef.current) {
+        wsAudioQueueRef.current = [];
+        wsIsPlaybackActiveRef.current = false;
+        return;
+      }
+      if (wsIsPlaybackActiveRef.current) return;
+      const next = wsAudioQueueRef.current.shift();
+      if (!next) {
+        if (wsTtsDoneReceivedRef.current) {
+          sendPlaybackDoneAck(150, true);
+          wsTtsDoneReceivedRef.current = false;
+        }
+        return;
+      }
+      wsIsPlaybackActiveRef.current = true;
+      void playEzriAudio(next.subtitle, next.audio, {
+        partOfWsStreamingTurn: true,
+        avatarData: next.avatarData,
+        onDone: () => {
+          wsIsPlaybackActiveRef.current = false;
+          playNextWsQueue();
+        },
+      });
+    };
+
+    flushWsAudioQueueRef.current = playNextWsQueue;
+
+    const finalizeSessionEntry = useCallback(() => {
+      if (!pendingMediaEntryRef.current) return;
+      if (!ezriWarmupReadyRef.current) return;
+      setPermissionsGranted(true);
+      setShowPermissionRequest(false);
+      setPendingMediaEntry(false);
+      pendingMediaEntryRef.current = false;
+      permissionsGrantedRef.current = true;
+
+      for (const line of prePermissionTranscriptRef.current) {
+        if (line.role === "assistant") {
+          appendAssistantFinal(line.content);
+        } else if (line.content.trim()) {
+          setTranscript((prev) => mergeUserTranscriptAppend(prev, line.content));
+        }
+      }
+      prePermissionTranscriptRef.current = [];
+
+      const queued = prePermissionAudioQueueRef.current.splice(0);
+      if (queued.length > 0) {
+        wsAudioQueueRef.current.push(...queued);
+        playNextWsQueue();
+      } else if (
+        wsTtsDoneReceivedRef.current &&
+        !wsIsPlaybackActiveRef.current &&
+        wsAudioQueueRef.current.length === 0
+      ) {
+        sendPlaybackDoneAck(300, true);
+        wsTtsDoneReceivedRef.current = false;
+      }
+    }, []);
+
+    useEffect(() => {
+      if (!pendingMediaEntry || ezriWarmupStatus !== "ready") return;
+      finalizeSessionEntry();
+    }, [pendingMediaEntry, ezriWarmupStatus, finalizeSessionEntry]);
+
     const requestBargeInInterrupt = (source: string) => {
       const now = Date.now();
       // speech_final may arrive shortly after speech_interim; still treat as one user action.
@@ -7623,18 +7731,17 @@ export default ThreeAvatar;
         restAbortControllerRef.current = null;
       }
 
-      // ── Step 4: Stop audio and clear queue (local only — no delayed WS ACK yet).
-      stopPlaybackAndCooldown({ sendPlaybackDone: false });
-
-      // Many backends expect interrupt first (cancel synthesis), then playback_done ACK.
+      // ── Step 4: Stop local playback; interrupt server; delayed playback_done (echo cooldown).
       const ws = wsClientRef.current;
       if (ws && ws.getStatus() === "connected") {
         ws.sendInterrupt(source);
       }
-      if (ws && ws.getStatus() === "connected") {
-        const ok = ws.sendPlaybackDone();
-        if (ok) lastPlaybackDoneAtRef.current = Date.now();
-      }
+      const wasPlaying = ezriWsAudioPipelineActive();
+      stopPlaybackAndCooldown({
+        sendPlaybackDone: wasPlaying,
+        cooldownMs: wasPlaying ? 400 : 0,
+        bypassPlaybackDoneDebounce: true,
+      });
 
       suppressSttRef.current = false;
       const SpeechRecognitionCtor =
@@ -7654,7 +7761,7 @@ export default ThreeAvatar;
         setIsListening(false);
         setSttRestartTrigger((t) => t + 1);
       } else {
-        resumeStt(0);
+        resumeStt(0, { ignoreSpeakingGate: true });
       }
 
       // ── Safety net 1: on mobile (where pauseStt aborts recognition), verify STT
@@ -7884,7 +7991,7 @@ export default ThreeAvatar;
                 eventType: "keyword_detection",
                 keywords: analysis.matchedKeywords,
                 aiConfidence: Math.round(analysis.confidence * 100),
-                notes: `Auto-detected in active session (${analysis.suggestedState})`,
+                notes: `Auto-detected in active talking  (${analysis.suggestedState})`,
               })
               .catch((error) => {
                 console.error("Failed to report crisis event:", error);
@@ -8118,7 +8225,6 @@ export default ThreeAvatar;
         userSpeechStartedAtMsRef.current = performance.now();
         setIsListening(true);
         isRecognitionActiveRef.current = true;
-        toast.info("Microphone Active");
       };
 
       recognition.onsoundstart = () => {
@@ -8246,11 +8352,6 @@ export default ThreeAvatar;
             "Current Step:",
             scriptStepRef.current
           );
-          toast.success(`Heard: "${textForUtterance}"`, {
-            id: "ezri-speech-final",
-            duration: 2000,
-          });
-
           setTranscript((prev) => mergeUserTranscriptAppend(prev, textForUtterance));
 
           if (speechTimeoutRef.current)
@@ -8795,6 +8896,25 @@ export default ThreeAvatar;
 
     const [ezriWsStatus, setEzriWsStatus] = useState<EzriWsStatus>("disconnected");
     const [isEzriThinking, setIsEzriThinking] = useState(false);
+
+    useEffect(() => {
+      if (ezriWsStatus === "connected" && ezriWarmupStatus === "idle") {
+        setEzriWarmupStatus("warming");
+      }
+    }, [ezriWsStatus, ezriWarmupStatus]);
+
+    useEffect(() => {
+      if (ezriWsStatus !== "connected" || ezriWarmupStatus === "ready") return;
+      const fallbackMs = 35_000;
+      const t = window.setTimeout(() => {
+        if (!ezriWarmupReadyRef.current) {
+          ezriWarmupReadyRef.current = true;
+          setEzriWarmupStatus("ready");
+        }
+      }, fallbackMs);
+      return () => window.clearTimeout(t);
+    }, [ezriWsStatus, ezriWarmupStatus]);
+
     const wsClientRef = useRef<EzriRealtimeClient | null>(null);
     const wsAssistantBufferRef = useRef<string>("");
     const wsLastFinalTextRef = useRef<string>("");
@@ -8826,9 +8946,7 @@ export default ThreeAvatar;
     useEffect(() => {
       if (!ezriConfig) return;
       if (hasSessionEnded) return;
-      // Do not open realtime (or let the server attach this session) until the user
-      // has completed our “Allow Access” flow and we hold a real MediaStream.
-      if (!permissionsGranted) return;
+      // Connect + warmup while the permission modal is visible (Ezri Avatar app.js parity).
 
       const client =
         wsClientRef.current ||
@@ -8858,7 +8976,14 @@ export default ThreeAvatar;
             }
 
             if (full) {
-              appendAssistantFinal(full);
+              if (!permissionsGrantedRef.current) {
+                prePermissionTranscriptRef.current.push({
+                  role: "assistant",
+                  content: full,
+                });
+              } else {
+                appendAssistantFinal(full);
+              }
               // Store for potential fallback ONLY if the server never sends audio.
               wsPendingFallbackTextRef.current = full;
             }
@@ -8873,12 +8998,22 @@ export default ThreeAvatar;
             if (!t) return;
             latestUserTextRef.current = t;
             userLastSpeechAtMsRef.current = performance.now();
+            if (!permissionsGrantedRef.current) {
+              prePermissionTranscriptRef.current.push({ role: "user", content: t });
+              return;
+            }
             setTranscript((prev) => mergeUserTranscriptAppend(prev, t));
           },
           onTtsDone: () => {
-            // tts_done from an interrupted turn — ignore entirely.
+            // Greeting may finish before mic permission — defer playback_done until audio plays.
+            if (!permissionsGrantedRef.current) {
+              wsTtsDoneReceivedRef.current = true;
+              wsTtsStreamingRef.current = false;
+              return;
+            }
+            // tts_done from an interrupted turn — mark done so queue cannot stall (app.js parity).
             if (suppressIncomingAudioRef.current) {
-              wsTtsDoneReceivedRef.current = false;
+              wsTtsDoneReceivedRef.current = true;
               wsTtsStreamingRef.current = false;
               return;
             }
@@ -8903,14 +9038,14 @@ export default ThreeAvatar;
               wsPendingFallbackTextRef.current = "";
               void speakViaEzriTts(t);
             }
-            // If audio finished before tts_done arrives, finalize immediately.
-            if (!wsIsPlaybackActiveRef.current && wsAudioQueueRef.current.length === 0) {
-              try {
-                wsClientRef.current?.sendPlaybackDone();
-              } catch { }
+            // If audio finished before tts_done arrives, finalize after playback catches up.
+            if (
+              !wsIsPlaybackActiveRef.current &&
+              wsAudioQueueRef.current.length === 0 &&
+              prePermissionAudioQueueRef.current.length === 0
+            ) {
+              sendPlaybackDoneAck(150, true);
               wsTtsDoneReceivedRef.current = false;
-              // Audio ended before tts_done — onended skipped resumeStt; open mic now.
-              resumeStt();
             }
           },
           onSpeakingStart: () => {
@@ -8958,7 +9093,18 @@ export default ThreeAvatar;
               return;
             }
 
-            stopPlaybackAndCooldown({ sendPlaybackDone: true });
+            stopPlaybackAndCooldown({
+              sendPlaybackDone: true,
+              bypassPlaybackDoneDebounce: true,
+            });
+          },
+          onWarmupStart: () => {
+            ezriWarmupReadyRef.current = false;
+            setEzriWarmupStatus("warming");
+          },
+          onWarmupDone: () => {
+            ezriWarmupReadyRef.current = true;
+            setEzriWarmupStatus("ready");
           },
           onAudio: (audio) => {
             // Drop audio from the old turn — any chunk arriving while suppressed
@@ -8971,47 +9117,26 @@ export default ThreeAvatar;
 
             const buffered = wsAssistantBufferRef.current.trim();
             const subtitle = buffered || wsLastFinalTextRef.current.trim() || "…";
+            const chunk = {
+              subtitle,
+              audio,
+              avatarData: avatarPendingDataRef.current,
+            };
+            avatarPendingDataRef.current = null;
+
+            if (!permissionsGrantedRef.current) {
+              prePermissionAudioQueueRef.current.push(chunk);
+              return;
+            }
+
             wsAudioSeenTurnRef.current = wsActiveTurnRef.current;
             wsPendingFallbackTextRef.current = "";
             if (wsSpeakFallbackTimerRef.current) {
               window.clearTimeout(wsSpeakFallbackTimerRef.current);
               wsSpeakFallbackTimerRef.current = null;
             }
-            wsAudioQueueRef.current.push({
-              subtitle,
-              audio,
-              avatarData: avatarPendingDataRef.current,
-            });
-            avatarPendingDataRef.current = null;
-            const playNext = () => {
-              // Drop queued chunk if suppression was re-enabled mid-queue.
-              if (suppressIncomingAudioRef.current) {
-                wsAudioQueueRef.current = [];
-                wsIsPlaybackActiveRef.current = false;
-                return;
-              }
-              if (wsIsPlaybackActiveRef.current) return;
-              const next = wsAudioQueueRef.current.shift();
-              if (!next) {
-                if (wsTtsDoneReceivedRef.current) {
-                  try {
-                    wsClientRef.current?.sendPlaybackDone();
-                  } catch { }
-                  wsTtsDoneReceivedRef.current = false;
-                }
-                return;
-              }
-              wsIsPlaybackActiveRef.current = true;
-              void playEzriAudio(next.subtitle, next.audio, {
-                partOfWsStreamingTurn: true,
-                avatarData: next.avatarData,
-                onDone: () => {
-                  wsIsPlaybackActiveRef.current = false;
-                  playNext();
-                },
-              });
-            };
-            playNext();
+            wsAudioQueueRef.current.push(chunk);
+            flushWsAudioQueueRef.current();
             setIsEzriThinking(false);
             isEzriThinkingRef.current = false;
             pendingUserTextRef.current = "";
@@ -9055,7 +9180,6 @@ export default ThreeAvatar;
       hasSessionEnded,
       companionAvatarLabel,
       ezriTtsVoiceId,
-      permissionsGranted,
     ]);
 
     // ── WebSocket keep-alive ping (prevents HF Space nginx 60-second idle timeout) ──
@@ -9104,7 +9228,8 @@ export default ThreeAvatar;
           if (
             isMutedRef.current ||
             isSessionPausedRef.current ||
-            isSessionEndingRef.current
+            isSessionEndingRef.current ||
+            !ezriWarmupReadyRef.current
           )
             return;
           const ws = wsClientRef.current;
@@ -9725,9 +9850,26 @@ export default ThreeAvatar;
                     className="flex h-[16.5rem] shrink-0 flex-col gap-2 overflow-y-auto rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-sm sm:h-[17.5rem] [scrollbar-width:thin] [scrollbar-color:rgba(78,205,196,0.65)_rgba(255,255,255,0.06)] [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-white/[0.06] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[#4ECDC4]/55 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb:hover]:bg-[#4ECDC4]/80"
                   >
                     {transcript.length === 0 && !liveUserSpeech.trim() ? (
-                      <p className="text-xs text-white/50">
-                        Nothing yet — your conversation will appear here.
-                      </p>
+                      <div className="space-y-2">
+                        <p className="text-xs text-white/50">
+                          Nothing yet — your conversation will appear here.
+                        </p>
+                        {isMuted ? (
+                          <p className="rounded-lg border border-red-400/40 bg-red-500/15 px-2 py-1.5 text-xs text-red-200">
+                            Microphone is muted — tap the mic button below to unmute so
+                            {currentAvatar.name} can hear you.
+                          </p>
+                        ) : null}
+                        {!isMuted &&
+                        ezriConfig?.defaults.sttProvider !== "browser" &&
+                        ezriWsStatus === "connected" &&
+                        permissionsGranted ? (
+                          <p className="text-xs text-white/45">
+                            Listening via server audio — speak after {currentAvatar.name}{" "}
+                            finishes talking.
+                          </p>
+                        ) : null}
+                      </div>
                     ) : null}
                     {transcript.length > 0
                       ? transcript.slice(-80).map((line, i) => {
@@ -10251,10 +10393,38 @@ export default ThreeAvatar;
                     <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
                     <p className="text-sm text-blue-200">
                       <span className="font-semibold">Your privacy matters:</span>{" "}
-                      Your video is only used during the session and is never
+                      Your video is only used during the Talking and is never
                       recorded or stored. You can disable your camera at any time.
                     </p>
                   </div>
+                </div>
+
+                <div className="mb-6 rounded-xl border border-purple-500/25 bg-purple-500/10 px-4 py-3">
+                  {pendingMediaEntry && ezriWarmupStatus !== "ready" ? (
+                    <div className="flex items-center justify-center gap-2 text-sm text-purple-100">
+                      <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+                      <span>Almost ready — finishing Talking setup…</span>
+                    </div>
+                  ) : ezriWarmupStatus === "ready" ? (
+                    <div className="flex items-center justify-center gap-2 text-sm text-emerald-300">
+                      <Check className="size-4 shrink-0" aria-hidden />
+                      <span>Session ready — allow access when you&apos;re set</span>
+                    </div>
+                  ) : ezriWsStatus === "connecting" || ezriWsStatus === "reconnecting" ? (
+                    <div className="flex items-center justify-center gap-2 text-sm text-purple-100">
+                      <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+                      <span>Connecting to Solace…</span>
+                    </div>
+                  ) : ezriWarmupStatus === "warming" || ezriWsStatus === "connected" ? (
+                    <div className="flex items-center justify-center gap-2 text-sm text-purple-100">
+                      <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+                      <span>Preparing your session (warming up AI)…</span>
+                    </div>
+                  ) : (
+                    <p className="text-center text-sm text-gray-400">
+                      Session setup will begin automatically.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex gap-3">
@@ -10272,13 +10442,23 @@ export default ThreeAvatar;
                   </motion.button>
 
                   <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={{ scale: pendingMediaEntry ? 1 : 1.02 }}
+                    whileTap={{ scale: pendingMediaEntry ? 1 : 0.98 }}
                     onClick={requestMediaAccess}
-                    className="flex-1 px-6 py-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold flex items-center justify-center gap-2 shadow-lg shadow-purple-500/50"
+                    disabled={pendingMediaEntry}
+                    className="flex-1 px-6 py-4 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold flex items-center justify-center gap-2 shadow-lg shadow-purple-500/50 disabled:cursor-wait disabled:opacity-80"
                   >
-                    <Check className="w-5 h-5" />
-                    Allow Access
+                    {pendingMediaEntry ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" aria-hidden />
+                        Setting up…
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-5 h-5" />
+                        Allow Access
+                      </>
+                    )}
                   </motion.button>
                 </div>
 

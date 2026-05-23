@@ -2,6 +2,11 @@ import React, { createContext, useContext, useState } from 'react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/app/contexts/AuthContext';
+import {
+  DEFAULT_SELECTABLE_COMPANION_NAME,
+  resolveCompanionForProfileSave,
+  resolveEnvironmentForProfileSave,
+} from '@/lib/avatar/companionAvailability';
 
 interface OnboardingData {
   storageVersion?: number;
@@ -159,8 +164,14 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         in_therapy: finalData.inTherapy,
         on_medication: finalData.onMedication,
         selected_triggers: finalData.selectedTriggers,
-        selected_avatar: finalData.selectedAvatar,
-        selected_environment: finalData.selectedEnvironment,
+        selected_avatar: resolveCompanionForProfileSave(
+          finalData.selectedAvatar ?? "",
+          DEFAULT_SELECTABLE_COMPANION_NAME,
+        ),
+        selected_environment: resolveEnvironmentForProfileSave(
+          finalData.selectedEnvironment ?? "",
+          "minimal",
+        ),
         avatar_url: finalData.avatar_url,
         emergency_contact_name: finalData.emergencyContactName,
         emergency_contact_phone: finalData.emergencyContactPhone,

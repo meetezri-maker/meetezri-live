@@ -19,9 +19,12 @@ import { DEFAULT_AI_COMPANIONS, matchDefaultCompanionByAvatarName } from "@meete
 import {
   companionCardImageUrl,
   effectiveAvatarImageUrlFromDb,
+  companionRoundPortraitImgClass,
   tryResolveCompanionPortraitUrl,
 } from "@/lib/avatar/companionModelUrl";
 import { findLobbyAvatar, isPlaceholderAvatarName } from "@/lib/avatar/lobbyAvatars";
+import { isCompanionComingSoon } from "@/lib/avatar/companionAvailability";
+import { ComingSoonOverlay } from "@/components/ui/ComingSoonOverlay";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -258,7 +261,8 @@ function AvatarPortrait({ imageUrl, name, sizeClass = "h-20 w-20", ringClass }: 
         alt=""
         className={cn(
           sizeClass,
-          "shrink-0 rounded-full object-cover",
+          "shrink-0 rounded-full",
+          companionRoundPortraitImgClass,
           ringClass ?? "ring-2 ring-violet-400/25 shadow-[0_0_28px_-6px_rgba(139,92,246,0.45)]"
         )}
       />
@@ -387,6 +391,10 @@ export function ChangeAvatar() {
 
   const handleConfirmChange = async () => {
     if (!selectedAvatar || isSaving) return;
+    if (isCompanionComingSoon(selectedAvatar.name)) {
+      toast.info("This companion is coming soon");
+      return;
+    }
     setIsSaving(true);
     try {
       await api.updateProfile({ selected_avatar: selectedAvatar.name });
@@ -533,23 +541,29 @@ export function ChangeAvatar() {
                 {aiAvatars.map((avatar) => {
                   const isCurrent = avatar.id === currentAvatarId;
                   const isSelected = avatar.id === selectedAvatarId;
+                  const comingSoon = isCompanionComingSoon(avatar.name);
+                  const isDisabled = isCurrent || comingSoon;
 
                   return (
                     <motion.button
                       key={avatar.id}
                       type="button"
-                      whileHover={isCurrent ? undefined : { y: -2 }}
-                      whileTap={isCurrent ? undefined : { scale: 0.99 }}
-                      onClick={() => !isCurrent && setSelectedAvatarId(avatar.id)}
-                      disabled={isCurrent}
+                      whileHover={isDisabled ? undefined : { y: -2 }}
+                      whileTap={isDisabled ? undefined : { scale: 0.99 }}
+                      onClick={() => {
+                        if (!isDisabled) setSelectedAvatarId(avatar.id);
+                      }}
+                      disabled={isDisabled}
                       className={cn(
                         changeAvatarCompanionCard,
                         isCurrent && changeAvatarCompanionCardCurrent,
-                        isSelected && !isCurrent && changeAvatarCompanionCardSelected
+                        isSelected && !isCurrent && changeAvatarCompanionCardSelected,
+                        comingSoon && "cursor-not-allowed opacity-90",
                       )}
                       aria-pressed={isSelected}
-                      aria-disabled={isCurrent}
+                      aria-disabled={isDisabled}
                     >
+                      {comingSoon ? <ComingSoonOverlay className="rounded-[inherit]" /> : null}
                       {isCurrent ? (
                         <span className="absolute right-4 top-4 z-10 inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200/95">
                           <CheckCircle className="h-3 w-3" aria-hidden />

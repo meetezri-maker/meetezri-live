@@ -19,6 +19,9 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { Button } from "@/app/components/ui/button";
+import { companionRoundPortraitImgClass } from "@/lib/avatar/companionModelUrl";
+import { isSessionEnvironmentComingSoon } from "@/lib/avatar/companionAvailability";
+import { ComingSoonOverlay } from "@/components/ui/ComingSoonOverlay";
 import { cn } from "@/lib/utils";
 import {
   TALK_IT_OUT_ENVIRONMENT_THUMBS,
@@ -446,7 +449,11 @@ export function TalkItOutLobbyLayout({
                       >
                         <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full border border-white/[0.08] bg-black/40">
                           {session.avatarImage ? (
-                            <img src={session.avatarImage} alt="" className="h-full w-full object-cover object-top" />
+                            <img
+                              src={session.avatarImage}
+                              alt=""
+                              className={cn("h-full w-full", companionRoundPortraitImgClass)}
+                            />
                           ) : (
                             <div className="flex h-full w-full items-center justify-center">
                               <User className="h-5 w-5 text-zinc-500" aria-hidden />
@@ -520,7 +527,7 @@ export function TalkItOutLobbyLayout({
                     <img
                       src={heroPortraitSrc}
                       alt={companionAlt || companionDisplayName}
-                      className="h-full w-full object-cover object-center"
+                      className={cn("h-full w-full", companionRoundPortraitImgClass)}
                       loading="lazy"
                       decoding="async"
                       onError={(event) => {
@@ -548,18 +555,27 @@ export function TalkItOutLobbyLayout({
                 <div className="mt-5 grid grid-cols-4 gap-2">
                   {TALK_IT_OUT_ENVIRONMENT_THUMBS.map((env) => {
                     const active = selectedEnvironment === env.value;
+                    const comingSoon = isSessionEnvironmentComingSoon(env.value);
                     return (
                       <button
                         key={env.label}
                         type="button"
                         aria-pressed={active}
-                        onClick={() => onEnvironmentSelect(env.value)}
-                        title={env.label}
+                        disabled={comingSoon}
+                        onClick={() => {
+                          if (!comingSoon) onEnvironmentSelect(env.value);
+                        }}
+                        title={comingSoon ? `${env.label} — Coming soon` : env.label}
                         className={cn(
-                          "group overflow-hidden rounded-lg border bg-black/30 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
-                          active ? "border-violet-400/55 ring-1 ring-violet-400/25" : "border-white/[0.06]"
+                          "group relative overflow-hidden rounded-lg border bg-black/30 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
+                          comingSoon
+                            ? "cursor-not-allowed border-white/[0.05] opacity-90"
+                            : active
+                              ? "border-violet-400/55 ring-1 ring-violet-400/25"
+                              : "border-white/[0.06]",
                         )}
                       >
+                        {comingSoon ? <ComingSoonOverlay className="rounded-lg" /> : null}
                         <span className="relative block aspect-[4/5] overflow-hidden">
                           <img src={env.image} alt="" className="h-full w-full object-cover opacity-95 transition-opacity group-hover:opacity-100" />
                           <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />

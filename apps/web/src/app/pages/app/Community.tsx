@@ -59,6 +59,8 @@ import {
   sentimentSignalsFromTexts,
 } from "@/lib/communityPulse";
 import { CommunitySharePostModal } from "@/app/pages/app/community/CommunitySharePostModal";
+import { CommunityPostShareChart } from "@/app/pages/app/community/CommunityPostShareChart";
+import { communityPostShareFromContent } from "@/lib/communityPostShare";
 
 type FeedPost = {
   id: string;
@@ -1384,6 +1386,9 @@ export function Community() {
                     const proofLine = emotionalSocialProofLine(post);
                     const moodTag = primaryEmotionalTag(post);
                     const postSceneSrc = communityPostSceneForId(post.id);
+                    const postBodyForShare =
+                      editingPostId === post.id ? editDraft : post.content;
+                    const postShareVisual = communityPostShareFromContent(postBodyForShare);
                     const timeLabel = (() => {
                       try {
                         return formatDistanceToNow(parseISO(post.createdAt), { addSuffix: true });
@@ -1446,24 +1451,45 @@ export function Community() {
                             className="relative overflow-hidden rounded-2xl border border-white/[0.08] shadow-[0_20px_55px_-38px_rgba(0,0,0,0.8)] transition-colors duration-300 hover:border-violet-400/25"
                           >
                             <div
-                              className="pointer-events-none absolute inset-y-0 right-0 hidden w-[min(44%,240px)] sm:block"
-                              aria-hidden
+                              className={cn(
+                                "absolute inset-y-0 right-0 hidden w-[min(48%,280px)] overflow-hidden sm:block",
+                                postShareVisual ? "z-20" : "pointer-events-none",
+                              )}
+                              aria-hidden={!postShareVisual}
                             >
-                              <img
-                                src={postSceneSrc}
-                                alt=""
-                                loading="lazy"
-                                decoding="async"
-                                width={480}
-                                height={320}
-                                className="h-full w-full object-cover object-center"
-                              />
-                              <div className="absolute inset-0 bg-gradient-to-l from-[#050816] via-[#050816]/82 to-transparent" />
-                              <div className="absolute inset-0 bg-gradient-to-t from-[#050816]/40 via-transparent to-transparent" />
+                              {postShareVisual ? (
+                                <CommunityPostShareChart
+                                  visual={postShareVisual}
+                                  chartId={post.id}
+                                  className="h-full"
+                                />
+                              ) : (
+                                <>
+                                  <img
+                                    src={postSceneSrc}
+                                    alt=""
+                                    loading="lazy"
+                                    decoding="async"
+                                    width={480}
+                                    height={320}
+                                    className="h-full w-full object-cover object-center"
+                                  />
+                                  <div className="absolute inset-0 bg-gradient-to-l from-[#050816] via-[#050816]/82 to-transparent" />
+                                  <div className="absolute inset-0 bg-gradient-to-t from-[#050816]/40 via-transparent to-transparent" />
+                                </>
+                              )}
                             </div>
-                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#070a14]/88 via-[#050816]/82 to-[#050816]/94 sm:bg-gradient-to-r sm:from-[#050816]/92 sm:via-[#050816]/88 sm:to-[#050816]/55" aria-hidden />
+                            <div
+                              className={cn(
+                                "pointer-events-none absolute inset-0 bg-gradient-to-b from-[#070a14]/88 via-[#050816]/82 to-[#050816]/94",
+                                postShareVisual
+                                  ? "sm:right-[min(48%,280px)] sm:bg-gradient-to-r sm:from-[#050816]/92 sm:via-[#050816]/88 sm:to-transparent"
+                                  : "sm:bg-gradient-to-r sm:from-[#050816]/92 sm:via-[#050816]/88 sm:to-[#050816]/55",
+                              )}
+                              aria-hidden
+                            />
 
-                            <div className="relative z-10 px-4 pb-3 pt-3.5 sm:pr-[min(46%,252px)] sm:px-4">
+                            <div className="relative z-10 px-4 pb-3 pt-3.5 sm:pr-[min(50%,292px)] sm:px-4">
                               <div className="flex items-start justify-between gap-2">
                                 {post.authorUserId ? (
                                   <Link
@@ -1561,6 +1587,15 @@ export function Community() {
                                   <EmojiText emojiSize={20}>{post.content}</EmojiText>
                                 </p>
                               )}
+
+                              {postShareVisual ? (
+                                <div className="mt-4 overflow-hidden rounded-xl border border-violet-400/20 bg-black/30 shadow-[0_0_28px_-8px_rgba(168,85,247,0.45)] sm:hidden">
+                                  <CommunityPostShareChart
+                                    visual={postShareVisual}
+                                    chartId={`${post.id}-mobile`}
+                                  />
+                                </div>
+                              ) : null}
 
                               {extraTags.length > 0 ? (
                                 <div className="mt-2 flex flex-wrap gap-1.5">
