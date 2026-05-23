@@ -1,0 +1,154 @@
+import { memo, type MutableRefObject } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import type { AvatarPhonemeTimeline } from "@/lib/avatar/avatarMorphTypes";
+import type { CompanionViewTuning } from "@/lib/avatar/companionViewTuning";
+import type { SessionBackdropLayers } from "@/lib/sessionBackdropPresets";
+import { ThreeAvatar, type FixedAvatarViewportConfig } from "./ThreeAvatar";
+import { StaticSessionPortrait } from "./StaticSessionPortrait";
+import { SessionBackdrop } from "./SessionBackdrop";
+
+export interface SessionStageProps {
+  stageRoundClass: string;
+  sessionBackdropLayers: SessionBackdropLayers;
+  isEzriSpeaking: boolean;
+  sessionUsesCompanion3d: boolean;
+  companionAvatarLabel: string | undefined;
+  companionCanonicalId: string | null;
+  companionModelUrl: string;
+  companionViewTuning: CompanionViewTuning;
+  companionFixedViewportConfig: FixedAvatarViewportConfig | null | undefined;
+  sessionUsesRfv2Morphs: boolean;
+  isListening: boolean;
+  isEzriThinking: boolean;
+  mouthAudioLevelRef: MutableRefObject<number>;
+  avatarPhonemeTimelineRef: MutableRefObject<AvatarPhonemeTimeline | null>;
+  avatarAudioCurrentTimeRef: MutableRefObject<number>;
+  speechPulse: number;
+  speechText: string;
+  speechCharIndex: number;
+  latestUserTextRef: MutableRefObject<string>;
+  latestJordanTextRef: MutableRefObject<string>;
+  userSpeechStartedAtMsRef: MutableRefObject<number>;
+  userLastSpeechAtMsRef: MutableRefObject<number>;
+  jordanSpeechStartedAtMsRef: MutableRefObject<number>;
+  jordanLastSpeechAtMsRef: MutableRefObject<number>;
+  sentimentCompoundRef: MutableRefObject<number | undefined>;
+  companionPortraitUrl: string;
+}
+
+export const SessionStage = memo(function SessionStage({
+  stageRoundClass,
+  sessionBackdropLayers,
+  isEzriSpeaking,
+  sessionUsesCompanion3d,
+  companionAvatarLabel,
+  companionCanonicalId,
+  companionModelUrl,
+  companionViewTuning,
+  companionFixedViewportConfig,
+  sessionUsesRfv2Morphs,
+  isListening,
+  isEzriThinking,
+  mouthAudioLevelRef,
+  avatarPhonemeTimelineRef,
+  avatarAudioCurrentTimeRef,
+  speechPulse,
+  speechText,
+  speechCharIndex,
+  latestUserTextRef,
+  latestJordanTextRef,
+  userSpeechStartedAtMsRef,
+  userLastSpeechAtMsRef,
+  jordanSpeechStartedAtMsRef,
+  jordanLastSpeechAtMsRef,
+  sentimentCompoundRef,
+  companionPortraitUrl,
+}: SessionStageProps) {
+  return (
+    <div className={`absolute inset-0 overflow-hidden ${stageRoundClass}`}>
+      <SessionBackdrop sessionBackdropLayers={sessionBackdropLayers} />
+      <div className="relative z-[1] h-full min-h-0 w-full">
+        <AnimatePresence>
+          {isEzriSpeaking && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="pointer-events-none absolute inset-0 z-[1]"
+              style={{ background: sessionBackdropLayers.speakingWash }}
+            />
+          )}
+        </AnimatePresence>
+        <div
+          className="relative z-[2] h-full w-full [-webkit-mask-image:radial-gradient(ellipse_118%_96%_at_50%_32%,#fff_0%,#fff_45%,rgba(255,255,255,0.55)_68%,transparent_84%)] [mask-image:radial-gradient(ellipse_118%_96%_at_50%_32%,#fff_0%,#fff_45%,rgba(255,255,255,0.55)_68%,transparent_84%)] [mask-repeat:no-repeat] [mask-size:100%_100%] [mask-position:center]"
+        >
+          {sessionUsesCompanion3d ? (
+            <ThreeAvatar
+              rawAvatarLabel={companionAvatarLabel}
+              activeAvatarId={companionCanonicalId}
+              modelUrl={companionModelUrl}
+              viewTuning={companionViewTuning}
+              fixedViewportConfig={companionFixedViewportConfig}
+              useRfv2Morphs={sessionUsesRfv2Morphs}
+              isSpeaking={isEzriSpeaking}
+              isListening={isListening}
+              isThinking={isEzriThinking}
+              audioLevel={0}
+              mouthAudioLevelRef={mouthAudioLevelRef}
+              avatarPhonemeTimelineRef={avatarPhonemeTimelineRef}
+              avatarAudioCurrentTimeRef={avatarAudioCurrentTimeRef}
+              speechPulse={speechPulse}
+              speechText={speechText}
+              speechCharIndex={speechCharIndex}
+              latestUserTextRef={latestUserTextRef}
+              latestJordanTextRef={latestJordanTextRef}
+              userSpeechStartedAtMsRef={userSpeechStartedAtMsRef}
+              userLastSpeechAtMsRef={userLastSpeechAtMsRef}
+              jordanSpeechStartedAtMsRef={jordanSpeechStartedAtMsRef}
+              jordanLastSpeechAtMsRef={jordanLastSpeechAtMsRef}
+              sentimentCompoundRef={sentimentCompoundRef}
+            />
+          ) : (
+            <StaticSessionPortrait
+              imageUrl={companionPortraitUrl}
+              isSpeaking={isEzriSpeaking}
+            />
+          )}
+        </div>
+        {isEzriSpeaking && (
+          <motion.div
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-[3]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div
+              className="absolute inset-x-0 bottom-0 h-16 md:h-[4.5rem]"
+              style={{
+                background: sessionBackdropLayers.speakingBottomVignette,
+              }}
+            />
+            <div className="absolute bottom-[6.25rem] left-1/2 flex -translate-x-1/2 items-end gap-1.5 sm:bottom-[6.75rem] md:bottom-[7.25rem] md:gap-2">
+              {[...Array(5)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  className="w-0.5 rounded-full opacity-[0.92] md:w-1"
+                  style={{
+                    backgroundColor: sessionBackdropLayers.voiceBar,
+                  }}
+                  animate={{ height: [10, 30, 15, 25, 10] }}
+                  transition={{
+                    duration: 1,
+                    repeat: Infinity,
+                    delay: i * 0.1,
+                    ease: "easeInOut",
+                  }}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </div>
+    </div>
+  );
+});
