@@ -14,9 +14,4 @@ export { SafetyBoundaryBanner, type SafetyBoundaryBannerProps } from "./SafetyBo
 export { CrisisKeywordModal, type CrisisKeywordModalProps } from "./CrisisKeywordModal";
 export { SafetyResourcesModal, type SafetyResourcesModalProps } from "./SafetyResourcesModal";
 export { StaticSessionPortrait, type StaticSessionPortraitProps } from "./StaticSessionPortrait";
-export {
-  ThreeAvatar,
-  getSpeechOpennessAt,
-  extractJordanSentimentCompound,
-  type FixedAvatarViewportConfig,
-} from "./ThreeAvatar";
+export type { FixedAvatarViewportConfig } from "./ThreeAvatar";

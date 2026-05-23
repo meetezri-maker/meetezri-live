@@ -49,13 +49,14 @@ import { SARA_AVATAR_DEFINITION } from "@/lib/avatar/configs/saraConfig";
 import type { AvatarPhonemeTimeline } from "@/lib/avatar/avatarMorphTypes";
 import { normalizeAvatarPhonemeTimeline } from "@/lib/avatar/phonemeToViseme";
 import * as THREE from "three";
+import { ActiveSessionView } from "./components";
+import type { FixedAvatarViewportConfig } from "./components/ThreeAvatar";
 import {
-  ActiveSessionView,
   extractJordanSentimentCompound,
   getSpeechOpennessAt,
-  type FixedAvatarViewportConfig,
-} from "./components";
+} from "./utils/speech";
 import { EZRI_PCM_BUFFER_SIZE } from "./constants";
+import { useLiveUserSpeechStore } from "./hooks/useLiveUserSpeechStore";
 import { moodEmojiForLabel } from "./utils/moodEmoji";
 import {
   mergeUserTranscriptAppend,
@@ -578,7 +579,7 @@ export function ActiveSession() {
 
   const [isListening, setIsListening] = useState(false);
   const [sttRestartTrigger, setSttRestartTrigger] = useState(0);
-  const [liveUserSpeech, setLiveUserSpeech] = useState("");
+  const liveUserSpeechStore = useLiveUserSpeechStore();
   const latestUserTextRef = useRef("");
   const latestJordanTextRef = useRef("");
   const userSpeechStartedAtMsRef = useRef(0);
@@ -586,14 +587,25 @@ export function ActiveSession() {
   const jordanSpeechStartedAtMsRef = useRef(0);
   const jordanLastSpeechAtMsRef = useRef(0);
   const sentimentCompoundRef = useRef<number | undefined>(undefined);
-  useEffect(() => {
+  const scrollTranscriptToBottom = useCallback(() => {
     const el = transcriptListRef.current;
     if (!el) return;
-    const id = requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
       el.scrollTop = el.scrollHeight;
     });
-    return () => cancelAnimationFrame(id);
-  }, [transcript, liveUserSpeech]);
+  }, []);
+
+  useEffect(() => {
+    scrollTranscriptToBottom();
+  }, [transcript, scrollTranscriptToBottom]);
+
+  const setLiveUserSpeech = useCallback(
+    (text: string) => {
+      liveUserSpeechStore.set(text);
+      scrollTranscriptToBottom();
+    },
+    [liveUserSpeechStore, scrollTranscriptToBottom],
+  );
   const subtitleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -609,9 +621,10 @@ export function ActiveSession() {
   const audioLevelForWatchdogRef = useRef(0);
   const lastSilentMicWarnAtRef = useRef(0);
 
-  const [speechPulse, setSpeechPulse] = useState(0);
-  const [speechText, setSpeechText] = useState("");
-  const [speechCharIndex, setSpeechCharIndex] = useState(0);
+  /** Lip-sync timing — refs only so the 40ms speech driver does not re-render the tree. */
+  const speechTextRef = useRef("");
+  const speechCharIndexRef = useRef(0);
+  const speechPulseRef = useRef(0);
   const playbackAudioContextRef = useRef<AudioContext | null>(null);
   const audioUnlockedRef = useRef(false);
   const ttsAnalyserRafRef = useRef<number | null>(null);
@@ -814,8 +827,8 @@ export function ActiveSession() {
     setIsEzriSpeaking(false);
     isEzriSpeakingRef.current = false;
     ezriPlaybackTextRef.current = "";
-    setSpeechText("");
-    setSpeechCharIndex(0);
+    speechTextRef.current = "";
+    speechCharIndexRef.current = 0;
   };
 
   const driveSpeechAnimationForText = (text: string, durationMs: number) => {
@@ -833,7 +846,7 @@ export function ActiveSession() {
       const elapsed = performance.now() - startAt;
       const progress = THREE.MathUtils.clamp(elapsed / effectiveDurationMs, 0, 1);
       const idx = Math.min(text.length - 1, Math.max(0, Math.floor(progress * text.length)));
-      setSpeechCharIndex(idx);
+      speechCharIndexRef.current = idx;
       if (!ttsMouthTapOkRef.current) {
         const o = getSpeechOpennessAt(text, idx);
         mouthAudioLevelRef.current = 26 + o * 118;
@@ -851,7 +864,7 @@ export function ActiveSession() {
         const shouldPulse = vowelOrBreak || plosive;
         const minGap = plosive && !vowelOrBreak ? 95 : 72;
         if (shouldPulse && performance.now() - lastPulseAt > minGap) {
-          setSpeechPulse((v) => v + 1);
+          speechPulseRef.current += 1;
           lastPulseAt = performance.now();
         }
       }
@@ -901,8 +914,8 @@ export function ActiveSession() {
 
     stopAudioAndSpeechDriver();
     ezriPlaybackTextRef.current = text;
-    setSpeechText(text);
-    setSpeechCharIndex(0);
+    speechTextRef.current = text;
+    speechCharIndexRef.current = 0;
     setIsEzriSpeaking(true);
     isEzriSpeakingRef.current = true;
     setLiveUserSpeech("");
@@ -1021,7 +1034,7 @@ export function ActiveSession() {
       if (seq !== audioPlaySeqRef.current) return;
       stopAudioAndSpeechDriver();
       maybeResumeMicAfterEzriPlayback(opts?.partOfWsStreamingTurn);
-      setSpeechPulse((v) => v + 1);
+      speechPulseRef.current += 1;
       // Do NOT call recognition.start() here.
       // Recognition auto-restart is handled centrally by recognition.onend.
       opts?.onDone?.();
@@ -3126,7 +3139,7 @@ export function ActiveSession() {
       .webkitSpeechRecognition,
   );
 
-  const toggleFullscreen = async () => {
+  const toggleFullscreen = useCallback(async () => {
     if (!sessionContainerRef.current) return;
     try {
       if (!document.fullscreenElement) {
@@ -3140,7 +3153,7 @@ export function ActiveSession() {
       console.warn("Fullscreen failed:", e);
       toast.error("Fullscreen is not supported or was denied.");
     }
-  };
+  }, []);
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -3295,9 +3308,9 @@ export function ActiveSession() {
       mouthAudioLevelRef={mouthAudioLevelRef}
       avatarPhonemeTimelineRef={avatarPhonemeTimelineRef}
       avatarAudioCurrentTimeRef={avatarAudioCurrentTimeRef}
-      speechPulse={speechPulse}
-      speechText={speechText}
-      speechCharIndex={speechCharIndex}
+      speechTextRef={speechTextRef}
+      speechCharIndexRef={speechCharIndexRef}
+      speechPulseRef={speechPulseRef}
       latestUserTextRef={latestUserTextRef}
       latestJordanTextRef={latestJordanTextRef}
       userSpeechStartedAtMsRef={userSpeechStartedAtMsRef}
@@ -3311,7 +3324,7 @@ export function ActiveSession() {
       viewerFirstName={viewerFirstName}
       transcriptListRef={transcriptListRef}
       transcript={transcript}
-      liveUserSpeech={liveUserSpeech}
+      liveUserSpeech={liveUserSpeechStore}
       isMuted={isMuted}
       companionName={currentAvatar.name}
       sttProvider={ezriConfig?.defaults.sttProvider}

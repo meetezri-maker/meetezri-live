@@ -1,4 +1,5 @@
 import {
+  memo,
   useState,
   useEffect,
   useLayoutEffect,
@@ -78,6 +79,7 @@ import type {
 import type { CompanionViewTuning } from "@/lib/avatar/companionViewTuning";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { getSpeechOpennessAt } from "../utils/speech";
 
 export type FixedAvatarViewportConfig = {
   avatarId: string;
@@ -529,25 +531,6 @@ function isLowerEyelidBoneName(name: string): boolean {
     n.includes("lowerlash") ||
     n.includes("lasheslower")
   );
-}
-
-export function getSpeechOpennessAt(text: string, idx: number): number {
-  if (!text || idx < 0 || idx >= text.length) return 0.1;
-  const window = text.slice(Math.max(0, idx - 1), Math.min(text.length, idx + 4)).toLowerCase();
-  let score = 0;
-
-  for (const ch of window) {
-    if ("aeiou".includes(ch)) score += 1.0;
-    else if ("yw".includes(ch)) score += 0.55;
-    else if ("fvszxj".includes(ch)) score += 0.45;
-    else if ("rlntdkg".includes(ch)) score += 0.35;
-    else if ("bmp".includes(ch)) score -= 0.5; // bilabials tend to close lips
-    else if (ch === " " || ch === "," || ch === "." || ch === "!" || ch === "?") score -= 0.35;
-  }
-
-  const normalized = (score + 1.5) / 4.5;
-  // Cap vowel score so the envelope can open clearly without pegging max all the time.
-  return THREE.MathUtils.clamp(normalized, 0.02, 0.92);
 }
 
 type JordanPresenceState = "speaking" | "listening" | "thinking" | "idle";
@@ -1130,23 +1113,6 @@ function getJordanEmotionalModulationProfile(
   return JORDAN_EMOTIONAL_MODULATION_TUNING[mode];
 }
 
-export function extractJordanSentimentCompound(sentiment: unknown): number | undefined {
-  if (!sentiment || typeof sentiment !== "object") {
-    return undefined;
-  }
-
-  const record = sentiment as Record<string, unknown>;
-  const candidates = [
-    record.compound,
-    record.score,
-    record.polarity,
-    record.value,
-  ];
-  const numeric = candidates.find((value) => typeof value === "number");
-
-  return typeof numeric === "number" ? numeric : undefined;
-}
-
 function resolveJordanIdleBehaviorContribution(
   events: JordanBehaviorTimingEvent[],
   nowMs: number,
@@ -1660,16 +1626,15 @@ function resolveJordanSpeakingBehaviorContribution({
 
 const SHOW_ROOM = false;
 
-export function ThreeAvatar({
+function ThreeAvatarComponent({
   isSpeaking,
   isListening,
   isThinking,
-  audioLevel,
   /** Per-frame mouth driver (mic or TTS RMS). State props lag behind RAF; ref does not. */
   mouthAudioLevelRef,
-  speechPulse,
-  speechText,
-  speechCharIndex,
+  speechTextRef,
+  speechCharIndexRef,
+  speechPulseRef,
   latestUserTextRef,
   latestJordanTextRef,
   userSpeechStartedAtMsRef,
@@ -1689,11 +1654,10 @@ export function ThreeAvatar({
   isSpeaking: boolean;
   isListening: boolean;
   isThinking: boolean;
-  audioLevel: number;
   mouthAudioLevelRef: MutableRefObject<number>;
-  speechPulse: number;
-  speechText: string;
-  speechCharIndex: number;
+  speechTextRef: MutableRefObject<string>;
+  speechCharIndexRef: MutableRefObject<number>;
+  speechPulseRef: MutableRefObject<number>;
   latestUserTextRef: MutableRefObject<string>;
   latestJordanTextRef: MutableRefObject<string>;
   userSpeechStartedAtMsRef: MutableRefObject<number>;
@@ -1724,7 +1688,7 @@ export function ThreeAvatar({
   const isSpeakingRef = useRef(isSpeaking);
   const isListeningRef = useRef(isListening);
   const isThinkingRef = useRef(isThinking);
-  const audioLevelRef = useRef(audioLevel);
+  const lastSpeechPulseSeenRef = useRef(0);
   useEffect(() => {
     isSpeakingRef.current = isSpeaking;
   }, [isSpeaking]);
@@ -1734,9 +1698,6 @@ export function ThreeAvatar({
   useEffect(() => {
     isThinkingRef.current = isThinking;
   }, [isThinking]);
-  useEffect(() => {
-    audioLevelRef.current = audioLevel;
-  }, [audioLevel]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Different morphs respond very differently. On many rigs a generic "mouth"
   // morph balloons the lower lip if overdriven; "jaw/open" is usually safer to boost.
@@ -3669,7 +3630,7 @@ export function ThreeAvatar({
                       isSpeaking: speaking,
                       userIsSpeaking: isListeningRef.current,
                       latestUserText: latestUserTextRef.current,
-                      latestJordanText: latestJordanTextRef.current || speechText,
+                      latestJordanText: latestJordanTextRef.current || speechTextRef.current,
                       userSpeechStartedAtMs: userSpeechStartedAtMsRef.current || undefined,
                       userLastSpeechAtMs: userLastSpeechAtMsRef.current || undefined,
                       jordanSpeechStartedAtMs:
@@ -5989,52 +5950,45 @@ if (!useRfv2Morphs) {
         mouthBaseRef.current = 0;
         mouthPulseRef.current = 0;
         lastBoundaryAtRef.current = 0;
-        return;
-      }
-
-      // Boundary-driven talk cycle: balance visible motion vs. “stuck wide open”.
-      const openness = getSpeechOpennessAt(speechText, speechCharIndex);
-      mouthBaseRef.current = Math.max(
-        mouthBaseRef.current,
-        openness * 0.095 + 0.028
-      );
-      mouthPulseRef.current = Math.max(
-        mouthPulseRef.current,
-        openness * 0.72 + 0.1
-      );
-      lastBoundaryAtRef.current = performance.now();
-    }, [speechPulse, isSpeaking]);
-
-    useEffect(() => {
-      // Fallback: if no boundary events fire (browser-dependent), still animate lightly.
-      if (!isSpeaking) {
-        mouthTargetRef.current = 0;
-        mouthBaseRef.current = 0;
-        mouthPulseRef.current = 0;
+        lastSpeechPulseSeenRef.current = speechPulseRef.current;
         return;
       }
 
       let rafId: number | null = null;
       const start = performance.now();
+      lastSpeechPulseSeenRef.current = speechPulseRef.current;
 
       const tick = () => {
-        if (!isSpeaking) return;
+        if (!isSpeakingRef.current) return;
+
+        const pulse = speechPulseRef.current;
+        if (pulse !== lastSpeechPulseSeenRef.current) {
+          lastSpeechPulseSeenRef.current = pulse;
+          const text = speechTextRef.current;
+          const charIndex = speechCharIndexRef.current;
+          const openness = getSpeechOpennessAt(text, charIndex);
+          mouthBaseRef.current = Math.max(
+            mouthBaseRef.current,
+            openness * 0.095 + 0.028,
+          );
+          mouthPulseRef.current = Math.max(
+            mouthPulseRef.current,
+            openness * 0.72 + 0.1,
+          );
+          lastBoundaryAtRef.current = performance.now();
+        }
 
         const elapsed = (performance.now() - start) / 1000;
         const sinceBoundary = performance.now() - lastBoundaryAtRef.current;
-
-        // If boundary timings are available, avoid synthetic fake speech.
-        if (sinceBoundary < 260) {
-          rafId = requestAnimationFrame(tick);
-          return;
+        if (sinceBoundary >= 260) {
+          const audioLevelNow = mouthAudioLevelRef.current;
+          const fallback =
+            Math.max(0, Math.sin(elapsed * 7.2)) * 0.065 +
+            Math.max(0, Math.sin(elapsed * 11.9 + 0.5)) * 0.038 +
+            THREE.MathUtils.clamp(audioLevelNow / 300, 0, 0.038);
+          mouthBaseRef.current = Math.max(mouthBaseRef.current, fallback);
         }
 
-        // Boundary unsupported: tiny fallback so avatar is not frozen.
-        const fallback =
-          Math.max(0, Math.sin(elapsed * 7.2)) * 0.065 +
-          Math.max(0, Math.sin(elapsed * 11.9 + 0.5)) * 0.038 +
-          THREE.MathUtils.clamp(audioLevel / 300, 0, 0.038);
-        mouthBaseRef.current = Math.max(mouthBaseRef.current, fallback);
         rafId = requestAnimationFrame(tick);
       };
 
@@ -6042,7 +5996,7 @@ if (!useRfv2Morphs) {
       return () => {
         if (rafId) cancelAnimationFrame(rafId);
       };
-    }, [isSpeaking, audioLevel, speechText, speechCharIndex]);
+    }, [isSpeaking, speechCharIndexRef, speechPulseRef, speechTextRef, mouthAudioLevelRef]);
     return (
       <div className="relative w-full h-full">
         {avatarLoadState === "loading" && (
@@ -6081,3 +6035,5 @@ if (!useRfv2Morphs) {
       </div>
     );
   }
+
+export const ThreeAvatar = memo(ThreeAvatarComponent);
