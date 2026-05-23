@@ -10,3 +10,4 @@ export * from "./utils/moodEmoji";
 export * from "./utils/sessionFormat";
 export * from "./utils/transcript";
 export * from "./utils/speech";
+export * from "./utils/sttMode";
