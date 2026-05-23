@@ -161,3 +161,14 @@ export function resolveCompanionModelUrl(
 export function companionCardImageUrl(fileName: string): string {
   return avatarAssetFile(fileName);
 }
+
+/** Rectangular picker card — tall frame so bust PNGs show full head (not cropped at crown). */
+export const companionCardPortraitFrameClass =
+  "relative w-full shrink-0 overflow-hidden bg-gradient-to-b from-zinc-800/45 via-zinc-900/65 to-black/70 aspect-[3/4] min-h-[9.25rem] sm:min-h-[10.75rem]";
+
+/** Focus slightly above vertical center — lobby PNGs place faces below the file top. */
+export const companionCardPortraitImgClass =
+  "size-full object-cover object-[50%_5%]";
+
+/** Circular avatars (onboarding, change-avatar, chips). */
+export const companionRoundPortraitImgClass = "object-cover object-[50%_12%]";

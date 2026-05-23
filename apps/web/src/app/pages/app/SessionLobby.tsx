@@ -23,9 +23,19 @@ import { preloadAvatarModel } from "@/lib/avatar/preloadAvatarModel";
 import {
   companionSessionUses3dModel,
   resolveCompanionModelUrl,
+  companionCardPortraitFrameClass,
+  companionCardPortraitImgClass,
   resolveCompanionPortraitUrl,
 } from "@/lib/avatar/companionModelUrl";
 import { LOBBY_AVATARS, lobbyAvatarByName, lobbyAvatarsFromApiRows } from "@/lib/avatar/lobbyAvatars";
+import {
+  DEFAULT_SELECTABLE_COMPANION_NAME,
+  isCompanionComingSoon,
+  isSessionEnvironmentComingSoon,
+  resolveCompanionForProfileSave,
+  resolveEnvironmentForProfileSave,
+} from "@/lib/avatar/companionAvailability";
+import { ComingSoonOverlay } from "@/components/ui/ComingSoonOverlay";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { TalkItOutLobbyLayout } from "./talk-it-out/TalkItOutLobbyLayout";
 import { cn } from "@/lib/utils";
@@ -94,7 +104,9 @@ export function SessionLobby() {
   const [isSavingCustomize, setIsSavingCustomize] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState(profile?.selected_voice || "Voice 1");
-  const [selectedAvatar, setSelectedAvatar] = useState(profile?.selected_avatar || "Alex");
+  const [selectedAvatar, setSelectedAvatar] = useState(
+    profile?.selected_avatar || DEFAULT_SELECTABLE_COMPANION_NAME,
+  );
   const [selectedEnvironment, setSelectedEnvironment] = useState(
     profile?.selected_environment || "minimal"
   );
@@ -318,15 +330,25 @@ export function SessionLobby() {
     if (isSavingCustomize) return;
     setIsSavingCustomize(true);
     try {
+      const avatarToSave = resolveCompanionForProfileSave(
+        tempSelectedAvatar,
+        selectedAvatar,
+      );
+      const environmentToSave = resolveEnvironmentForProfileSave(
+        tempSelectedEnvironment,
+        selectedEnvironment,
+      );
       await api.updateProfile({
         selected_voice: tempSelectedVoice,
-        selected_avatar: tempSelectedAvatar,
-        selected_environment: tempSelectedEnvironment
+        selected_avatar: avatarToSave,
+        selected_environment: environmentToSave,
       });
       await refreshProfile();
       setSelectedVoice(tempSelectedVoice);
-      setSelectedAvatar(tempSelectedAvatar);
-      setSelectedEnvironment(tempSelectedEnvironment);
+      setSelectedAvatar(avatarToSave);
+      setSelectedEnvironment(environmentToSave);
+      setTempSelectedAvatar(avatarToSave);
+      setTempSelectedEnvironment(environmentToSave);
       setShowCustomizeModal(false);
       toast.success("Talking settings updated");
       setIsSavingCustomize(false);
@@ -747,6 +769,10 @@ export function SessionLobby() {
 
   const persistEnvironmentSelection = useCallback(
     async (value: string) => {
+      if (isSessionEnvironmentComingSoon(value)) {
+        toast.info("Session backgrounds are coming soon");
+        return;
+      }
       setSelectedEnvironment(value);
       setTempSelectedEnvironment(value);
       try {
@@ -757,7 +783,7 @@ export function SessionLobby() {
         toast.error("Could not update environment");
       }
     },
-    [refreshProfile]
+    [refreshProfile],
   );
 
   const openScheduleFlow = useCallback(() => {
@@ -1159,6 +1185,7 @@ export function SessionLobby() {
                         <div className="grid grid-cols-2 items-stretch gap-3">
                           {avatars.map((avatar, index) => {
                             const isSelected = tempSelectedAvatar === avatar.name;
+                            const comingSoon = isCompanionComingSoon(avatar.name);
                             const traits =
                               avatar.personality?.trim() ||
                               avatar.description?.trim() ||
@@ -1170,23 +1197,30 @@ export function SessionLobby() {
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.3 + index * 0.05 }}
-                              whileHover={{ scale: 1.01 }}
-                              whileTap={{ scale: 0.99 }}
-                              onClick={() => setTempSelectedAvatar(avatar.name)}
+                              whileHover={comingSoon ? undefined : { scale: 1.01 }}
+                              whileTap={comingSoon ? undefined : { scale: 0.99 }}
+                              disabled={comingSoon}
+                              onClick={() => {
+                                if (!comingSoon) setTempSelectedAvatar(avatar.name);
+                              }}
                               aria-pressed={isSelected}
+                              aria-disabled={comingSoon}
                               className={cn(
                                 "group relative flex h-full w-full flex-col overflow-hidden rounded-[1rem] border p-0 text-left transition-[border-color,box-shadow,transform] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
-                                isSelected
+                                comingSoon
+                                  ? "cursor-not-allowed border-white/[0.06] bg-black/30 opacity-90"
+                                  : isSelected
                                   ? "border-violet-400/55 shadow-[0_0_28px_rgba(139,92,246,0.28)] ring-1 ring-violet-400/25"
                                   : "border-white/[0.08] bg-black/22 hover:border-violet-400/28"
                               )}
                             >
-                              <span className="relative h-28 w-full shrink-0 overflow-hidden bg-black/40 sm:h-[7.5rem]">
+                              {comingSoon ? <ComingSoonOverlay /> : null}
+                              <span className={companionCardPortraitFrameClass}>
                                 {avatar.cardImage ? (
                                   <img
                                     src={avatar.cardImage}
                                     alt=""
-                                    className="h-full w-full object-cover object-top"
+                                    className={companionCardPortraitImgClass}
                                     loading="lazy"
                                     decoding="async"
                                   />
@@ -1229,6 +1263,7 @@ export function SessionLobby() {
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                           {SESSION_ENVIRONMENTS.map((env, index) => {
                             const isSelected = tempSelectedEnvironment === env.value;
+                            const comingSoon = isSessionEnvironmentComingSoon(env.value);
                             return (
                             <motion.button
                               key={env.value}
@@ -1236,17 +1271,24 @@ export function SessionLobby() {
                               initial={{ opacity: 0, scale: 0.95 }}
                               animate={{ opacity: 1, scale: 1 }}
                               transition={{ delay: 0.05 * index }}
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                              onClick={() => setTempSelectedEnvironment(env.value)}
+                              whileHover={comingSoon ? undefined : { scale: 1.02 }}
+                              whileTap={comingSoon ? undefined : { scale: 0.98 }}
+                              disabled={comingSoon}
+                              onClick={() => {
+                                if (!comingSoon) setTempSelectedEnvironment(env.value);
+                              }}
                               aria-pressed={isSelected}
+                              aria-disabled={comingSoon}
                               className={cn(
-                                "overflow-hidden rounded-xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
-                                isSelected
+                                "relative overflow-hidden rounded-xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45",
+                                comingSoon
+                                  ? "cursor-not-allowed border-white/[0.06] opacity-90"
+                                  : isSelected
                                   ? "border-violet-400/55 ring-1 ring-violet-400/25"
                                   : "border-white/[0.08] hover:border-violet-400/30"
                               )}
                             >
+                              {comingSoon ? <ComingSoonOverlay /> : null}
                               <div
                                 className={cn(
                                   "flex h-20 items-center justify-center bg-gradient-to-br",

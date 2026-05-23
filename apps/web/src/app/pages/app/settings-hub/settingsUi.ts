@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { SOLACE_SUPPORT_CARD_IMG } from "@/lib/solace/referenceImagery";
+import { accountBtnPrimary } from "@/app/pages/app/account-settings/accountSettingsUi";
 import {
-  solaceBtnPrimary,
   solaceCard,
   solaceCompactToolCard,
   solaceHeroImage,
@@ -35,6 +35,6 @@ export const settingsHeroOverlayBottom = solaceHeroOverlayBottom;
 export const settingsHeroOverlayAccent = solaceHeroOverlayAccent;
 export const settingsSectionTitle = solaceSectionTitle;
 export const settingsRowLink = solaceRowLink;
-export const settingsBtnPrimary = solaceBtnPrimary;
+export const settingsBtnPrimary = accountBtnPrimary;
 export const settingsQuickCard = solaceQuickCard;
 export const settingsCompactToolCard = solaceCompactToolCard;
