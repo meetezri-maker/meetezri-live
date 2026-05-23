@@ -65,6 +65,7 @@ import {
   USER_SAME_SPEECH_BURST_MS,
 } from "./utils/transcript";
 import { getConnectionQualityColor } from "./utils/sessionFormat";
+import { usesBrowserStt, usesServerPcmStt } from "./utils/sttMode";
 import { usePipDrag } from "./hooks/usePipDrag";
 
 export function ActiveSession() {
@@ -668,20 +669,18 @@ export function ActiveSession() {
   // triggers hardware audio-capture errors that permanently break the recognizer.
   // On desktop Chrome/Firefox/Edge, recognition can safely run while audio plays.
   const isMobileBrowser = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const browserSttActive = usesBrowserStt(ezriConfig?.defaults?.sttProvider);
+  const serverPcmSttActive = usesServerPcmStt(ezriConfig?.defaults?.sttProvider);
 
+  /** Ezri_Avatar app.js: abort browser SpeechRecognition while Ezri speaks; resume after playback_done. */
   const pauseStt = () => {
-    // Mobile: abort mic + suppress onend auto-restart â€” concurrent capture + playback breaks many devices.
-    // Desktop: MUST NOT set suppressSttRef. While true, recognition.onend bails without restarting;
-    // sessions often end midâ€“TTS (timeouts), leaving no mic until resumeStt() â€” users lose the first
-    // words right after interrupt. Desktop keeps streaming; overlap with Ezri audio is gated by
-    // ezriWsAudioPipelineActive(), shouldInterruptForSpeech, and shouldIgnoreEchoBargeIn().
-    if (isMobileBrowser) {
-      suppressSttRef.current = true;
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch (_) { }
-      }
+    if (!browserSttActive) return;
+    if (!recognitionRef.current || suppressSttRef.current) return;
+    suppressSttRef.current = true;
+    try {
+      recognitionRef.current.abort();
+    } catch (_) {
+      /* already stopped */
     }
   };
 
@@ -690,6 +689,7 @@ export function ActiveSession() {
     delayMs = 150,
     opts?: { ignoreSpeakingGate?: boolean },
   ) => {
+    if (!browserSttActive) return;
     suppressSttRef.current = false;
     // Short delay to let speaker echo decay after normal TTS (not needed right after client barge-in).
     window.setTimeout(() => {
@@ -1742,9 +1742,12 @@ export function ActiveSession() {
     }
   }, [permissionStorageKey, permissionStateInitialized]);
 
-  // â”€â”€ Speech recognition â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Browser Speech recognition (stt_provider=browser only; Ezri_Avatar app.js parity) â”€â”€
   useEffect(() => {
     if (!permissionsGranted || !stream) return;
+    if (!browserSttActive) {
+      return;
+    }
 
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
@@ -1762,7 +1765,8 @@ export function ActiveSession() {
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
     recognition.continuous = true;
-    recognition.interimResults = true;
+    // Reference app.js: finals only — avoids duplicate/noisy interim barge-in while Ezri speaks.
+    recognition.interimResults = false;
     recognition.lang = "en-US";
 
     // Tracks whether the last error before onend was fatal (broken recognizer).
@@ -1821,32 +1825,8 @@ export function ActiveSession() {
         }
 
         if (!isFinal) {
-        console.log("Interim:", trimmed);
-        if (ezriWsAudioPipelineActive()) {
           return;
         }
-        // Debounce interim subtitle updates: wait 120ms for recognition to settle
-        // before rendering, so rapid per-word rewrites don't cause visible flickering.
-        // Only show text that is at least 3 characters (filters out noise like "um").
-        if (subtitleDebounceRef.current) clearTimeout(subtitleDebounceRef.current);
-        if (trimmed.length >= 3) {
-          latestUserTextRef.current = trimmed;
-          userLastSpeechAtMsRef.current = performance.now();
-          subtitleDebounceRef.current = setTimeout(() => {
-            setLiveUserSpeech(trimmed);
-            subtitleDebounceRef.current = null;
-          }, 120);
-        }
-        const now = Date.now();
-        if (
-          trimmed !== lastInterimTextRef.current ||
-          now - lastInterimToastAtRef.current > 450
-        ) {
-          lastInterimTextRef.current = trimmed;
-          lastInterimToastAtRef.current = now;
-        }
-        return;
-      }
 
         if (subtitleDebounceRef.current) {
           clearTimeout(subtitleDebounceRef.current);
@@ -1881,22 +1861,6 @@ export function ActiveSession() {
         const lowerTrimmed = textForUtterance.toLowerCase();
         latestUserTextRef.current = textForUtterance;
         userLastSpeechAtMsRef.current = performance.now();
-        const wsLive = wsClientRef.current;
-        const sttProv = String(ezriConfig?.defaults?.sttProvider ?? "").toLowerCase();
-        // Mic PCM â†’ server VAD/STT already turns speech into `{ type: "transcription" }` + replies.
-        // Browser Web Speech must NOT also `sendChat` or every line is processed twice (two assistant answers).
-        const serverOwnsUserTurn =
-          wsLive?.getStatus() === "connected" && sttProv !== "browser";
-
-        if (serverOwnsUserTurn) {
-          if (import.meta.env.DEV) {
-            console.log(
-              "[STT] Skipping client sendChat + duplicate YOU line â€” server PCM/STT owns this utterance.",
-            );
-          }
-          return;
-        }
-
         console.log(
           "Heard (Final):",
           lowerTrimmed,
@@ -1950,10 +1914,14 @@ export function ActiveSession() {
       if (suppressSttRef.current) return;
 
       if (sttErrored) {
-        // Fatal error â€” destroy and recreate the recognizer from scratch.
-        console.warn("[STT] Fatal error detected in onend â€” destroying recognizer, will recreate.");
+        // Fatal error — recreate recognizer (Ezri_Avatar app.js: 1000ms backoff).
+        console.warn("[STT] Fatal error detected in onend — destroying recognizer, will recreate.");
         recognitionRef.current = null;
-        setSttRestartTrigger((t) => t + 1);
+        window.setTimeout(() => {
+          if (!isSessionEndingRef.current) {
+            setSttRestartTrigger((t) => t + 1);
+          }
+        }, 1000);
         return;
       }
 
@@ -2018,12 +1986,19 @@ export function ActiveSession() {
       isRecognitionActiveRef.current = false;
       recognitionRef.current = null;
     };
-  }, [permissionsGranted, stream, sttRestartTrigger, ezriConfig?.defaults?.sttProvider, ezriConfig?.apiBase]);
+  }, [
+    permissionsGranted,
+    stream,
+    sttRestartTrigger,
+    browserSttActive,
+    ezriConfig?.apiBase,
+  ]);
 
-  // â”€â”€ Server STT via MediaRecorder (Firefox / non-Chrome fallback) â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Server STT via MediaRecorder (browser STT mode + no Web Speech API) â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!permissionsGranted) return;
     if (!stream) return;
+    if (!browserSttActive) return;
 
     // Only activate when the browser does NOT support SpeechRecognition.
     const hasBrowserStt = !!(
@@ -2227,11 +2202,12 @@ export function ActiveSession() {
       mediaRecorderActiveRef.current = false;
       setIsListening(false);
     };
-  }, [permissionsGranted, stream, ezriConfig]);
+  }, [permissionsGranted, stream, browserSttActive, ezriConfig?.apiBase]);
 
-  // â”€â”€ Watchdog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Watchdog (browser SpeechRecognition only — RunPod uses PCM, not recognition) â”€â”€
   useEffect(() => {
     if (!permissionsGranted) return;
+    if (!browserSttActive) return;
 
     const watchdog = setInterval(() => {
       if (
@@ -2273,7 +2249,7 @@ export function ActiveSession() {
     }, 5000);
 
     return () => clearInterval(watchdog);
-  }, [permissionsGranted, isListening]);
+  }, [permissionsGranted, isListening, browserSttActive]);
 
   // â”€â”€ Mic-level barge-in (always when TTS pipeline active) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Mobile: Web Speech is aborted during TTS â€” mic level is the main path.
@@ -2757,7 +2733,7 @@ export function ActiveSession() {
   useEffect(() => {
     if (!permissionsGranted || !stream || ezriWsStatus !== "connected") return;
     if (hasSessionEnded || isSessionPaused) return;
-    if (ezriConfig?.defaults.sttProvider === "browser") return;
+    if (!serverPcmSttActive) return;
 
     const SAMPLE_RATE = 16000;
 
@@ -2796,6 +2772,7 @@ export function ActiveSession() {
 
       source.connect(processor);
       processor.connect(audioCtx.destination);
+      setIsListening(true);
       console.log("[PCM] Streaming started at", SAMPLE_RATE, "Hz, buffer", EZRI_PCM_BUFFER_SIZE);
 
       onVisibility = () => {
@@ -2819,9 +2796,17 @@ export function ActiveSession() {
         source?.disconnect();
         audioCtx?.close();
       } catch { }
+      setIsListening(false);
       console.log("[PCM] Streaming stopped");
     };
-  }, [permissionsGranted, stream, ezriWsStatus, hasSessionEnded, isSessionPaused]);
+  }, [
+    permissionsGranted,
+    stream,
+    ezriWsStatus,
+    hasSessionEnded,
+    isSessionPaused,
+    serverPcmSttActive,
+  ]);
 
   const currentAvatar = {
     name: config?.avatar || "Maya Chen",
