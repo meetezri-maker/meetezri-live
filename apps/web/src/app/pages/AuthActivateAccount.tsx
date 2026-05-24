@@ -77,7 +77,7 @@ export function AuthActivateAccount() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[#0a0b18] px-4 py-12">
       <div className="mb-8">
-        <BrandLogo heightClass="h-10" />
+        <BrandLogo heightClass="h-10" variant="onDark" />
       </div>
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#12141f] p-8 text-center shadow-2xl">
         {status === "loading" ? (

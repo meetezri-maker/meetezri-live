@@ -8,6 +8,11 @@ type EmailTemplatePayload = {
 
 type TemplateAudience = 'trial' | 'plan';
 
+const SOLACE_EMAIL_BRAND = {
+  brandName: 'Solace',
+  logoLetter: 'S',
+} as const;
+
 type TemplateLayoutOptions = {
   preheader: string;
   eyebrow: string;
@@ -23,6 +28,8 @@ type TemplateLayoutOptions = {
   footerNote: string;
   audience?: TemplateAudience;
   spotlight?: string;
+  brandName?: string;
+  logoLetter?: string;
 };
 
 type DefaultTemplateRecord = {
@@ -187,6 +194,8 @@ export class EmailService {
     footerNote,
     audience = 'trial',
     spotlight,
+    brandName = 'MeetEzri',
+    logoLetter = 'E',
   }: TemplateLayoutOptions) {
     const theme = getTheme(audience);
     const greetingHtml = greeting
@@ -328,10 +337,10 @@ export class EmailService {
                             <table role="presentation" cellpadding="0" cellspacing="0">
                               <tr>
                                 <td style="height:52px;width:52px;border-radius:18px;background:${theme.logoCore};box-shadow:0 0 0 10px ${theme.logoRing};text-align:center;font-size:22px;font-weight:700;color:#ffffff;">
-                                  E
+                                  ${escapeHtml(logoLetter)}
                                 </td>
                                 <td style="padding-left:16px;">
-                                  <div style="font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:${theme.mutedText};font-weight:700;">MeetEzri</div>
+                                  <div style="font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:${theme.mutedText};font-weight:700;">${escapeHtml(brandName)}</div>
                                   <div style="margin-top:4px;font-size:18px;line-height:24px;color:${theme.headline};font-weight:700;">Calm support for every step</div>
                                 </td>
                               </tr>
@@ -359,7 +368,7 @@ export class EmailService {
                       <p class="footer-copy" style="margin:0;font-size:13px;line-height:22px;color:${theme.mutedText};">${escapeHtml(
                         footerNote
                       )}</p>
-                      <p class="footer-copy" style="margin:12px 0 0;font-size:12px;line-height:20px;color:${theme.mutedText};opacity:0.82;">MeetEzri · Calm support, beautifully delivered</p>
+                      <p class="footer-copy" style="margin:12px 0 0;font-size:12px;line-height:20px;color:${theme.mutedText};opacity:0.82;">${escapeHtml(brandName)} · Calm support, beautifully delivered</p>
                     </td>
                   </tr>
                 </table>
@@ -383,22 +392,23 @@ export class EmailService {
     const safeFirstName = firstName?.trim() || 'there';
     const subject =
       audience === 'plan'
-        ? 'Confirm your email to start your MeetEzri plan'
-        : 'Confirm your email - MeetEzri';
+        ? 'Confirm your email to start your Solace plan'
+        : 'Confirm your email - Solace';
     return {
       subject,
       html: this.renderTemplate({
+        ...SOLACE_EMAIL_BRAND,
         preheader:
           audience === 'plan'
-            ? 'Confirm your email to unlock your paid MeetEzri experience.'
-            : 'Confirm your email to unlock your MeetEzri experience.',
-        eyebrow: audience === 'plan' ? 'Premium Access' : 'Welcome to MeetEzri',
+            ? 'Confirm your email to unlock your paid Solace experience.'
+            : 'Confirm your email to unlock your Solace experience.',
+        eyebrow: audience === 'plan' ? 'Premium Access' : 'Welcome to Solace',
         title: 'Let’s confirm your email',
         greeting: `Hi ${safeFirstName},`,
         intro:
           audience === 'plan'
             ? 'Your plan is almost ready. Confirm your email address so we can securely activate your premium access, onboarding, and personalized support.'
-            : 'You are one step away from starting your calm, supportive MeetEzri experience. Confirm your email address so we can securely activate your account.',
+            : 'You are one step away from starting your calm, supportive Solace experience. Confirm your email address so we can securely activate your account.',
         audience,
         spotlight:
           audience === 'plan'
@@ -417,21 +427,21 @@ export class EmailService {
         ctaUrl: verificationLink,
         ctaHint: 'This link opens in a new tab for a smoother signup flow.',
         supportingText:
-          'If you did not create a MeetEzri account, you can safely ignore this message.',
+          'If you did not create a Solace account, you can safely ignore this message.',
         footerNote:
-          'For your security, only use links from official MeetEzri emails.',
+          'For your security, only use links from official Solace emails.',
       }),
       text: [
         `Hi ${safeFirstName},`,
         '',
-        audience === 'plan' ? 'Welcome to your MeetEzri plan.' : 'Welcome to MeetEzri.',
+        audience === 'plan' ? 'Welcome to your Solace plan.' : 'Welcome to Solace.',
         audience === 'plan'
           ? 'Please confirm your email address to activate your plan and continue onboarding.'
           : 'Please confirm your email address to activate your account and continue onboarding.',
         '',
         `Confirm your email: ${verificationLink}`,
         '',
-        'If you did not create a MeetEzri account, you can ignore this email.',
+        'If you did not create a Solace account, you can ignore this email.',
       ].join('\n'),
     };
   }
@@ -445,22 +455,23 @@ export class EmailService {
   }): EmailTemplatePayload {
     const subject =
       audience === 'plan'
-        ? 'Verify your email to continue your MeetEzri plan'
-        : 'Verify your email - MeetEzri';
+        ? 'Verify your email to continue your Solace plan'
+        : 'Verify your email - Solace';
     return {
       subject,
       html: this.renderTemplate({
+        ...SOLACE_EMAIL_BRAND,
         preheader:
           audience === 'plan'
-            ? 'Finish verifying your email to continue your MeetEzri plan.'
-            : 'Finish verifying your email to keep your MeetEzri access secure.',
+            ? 'Finish verifying your email to continue your Solace plan.'
+            : 'Finish verifying your email to keep your Solace access secure.',
         eyebrow: audience === 'plan' ? 'Plan Activation' : 'Account Security',
         title: 'Verify your email',
         greeting: 'Hi there,',
         intro:
           audience === 'plan'
-            ? 'We received a request to resend your verification email. Confirm your address below so your MeetEzri plan stays ready for onboarding and secure account access.'
-            : 'We received a request to resend your verification email. Use the button below to confirm your address and keep your MeetEzri account secure.',
+            ? 'We received a request to resend your verification email. Confirm your address below so your Solace plan stays ready for onboarding and secure account access.'
+            : 'We received a request to resend your verification email. Use the button below to confirm your address and keep your Solace account secure.',
         audience,
         spotlight:
           audience === 'plan'
@@ -481,14 +492,14 @@ export class EmailService {
         supportingText:
           'If you did not request this email, no action is needed and your account remains safe.',
         footerNote:
-          'Verification links are sent only when requested from your MeetEzri account.',
+          'Verification links are sent only when requested from your Solace account.',
       }),
       text: [
         'Hi there,',
         '',
         audience === 'plan'
-          ? 'Please verify your MeetEzri email address to continue your plan.'
-          : 'Please verify your MeetEzri email address using the secure link below.',
+          ? 'Please verify your Solace email address to continue your plan.'
+          : 'Please verify your Solace email address using the secure link below.',
         '',
         `Verify your email: ${verificationLink}`,
         '',
@@ -686,7 +697,7 @@ export class EmailService {
     return [
       {
         name: 'welcome_verification_trial',
-        subject: 'Confirm your email - MeetEzri',
+        subject: 'Confirm your email - Solace',
         body: this.buildWelcomeVerificationEmail({
           firstName: '{{first_name}}',
           verificationLink: '{{verification_link}}',
@@ -696,7 +707,7 @@ export class EmailService {
       },
       {
         name: 'welcome_verification_plan',
-        subject: 'Confirm your email to start your MeetEzri plan',
+        subject: 'Confirm your email to start your Solace plan',
         body: this.buildWelcomeVerificationEmail({
           firstName: '{{first_name}}',
           verificationLink: '{{verification_link}}',
@@ -706,7 +717,7 @@ export class EmailService {
       },
       {
         name: 'verification_reminder_trial',
-        subject: 'Verify your email - MeetEzri',
+        subject: 'Verify your email - Solace',
         body: this.buildVerificationReminderEmail({
           verificationLink: '{{verification_link}}',
           audience: 'trial',
@@ -715,7 +726,7 @@ export class EmailService {
       },
       {
         name: 'verification_reminder_plan',
-        subject: 'Verify your email to continue your MeetEzri plan',
+        subject: 'Verify your email to continue your Solace plan',
         body: this.buildVerificationReminderEmail({
           verificationLink: '{{verification_link}}',
           audience: 'plan',

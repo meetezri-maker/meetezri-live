@@ -11,8 +11,18 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
-import { isIsoDobString, profileAgeStorageToDisplayYears } from "@/lib/profileAge";
+import {
+  birthIsoToAgeYears,
+  isIsoDobString,
+  MIN_ACCOUNT_AGE_YEARS,
+  minAccountAgeMessage,
+  profileAgeStorageToDisplayYears,
+} from "@/lib/profileAge";
 import { resolveVerificationRedirectForFlow } from "@/lib/verificationRedirect";
+import {
+  resetAppMainScrollAfterProfileEdit,
+  scrollElementInAppMain,
+} from "@/lib/scrollAppMain";
 import { Skeleton } from "../../components/ui/skeleton";
 
 import { useForm } from "react-hook-form";
@@ -79,24 +89,9 @@ const toCropArea = (value: unknown): CropArea | null => {
 };
 const PILL = profilePill;
 
-const goalsOptions = [
-  { value: "feel-calm-in-control", label: "Feel Calm & In Control", emoji: "🧘" },
-  { value: "boost-mood-daily-energy", label: "Boost Mood & Daily Energy", emoji: "✨" },
-  { value: "sleep-recovery", label: "Sleep & Recovery", emoji: "😴" },
-  { value: "build-confidence-self-trust", label: "Build Confidence & Self Trust", emoji: "💪" },
-  { value: "strengthen-relationships", label: "Strengthen Relationships", emoji: "❤️" },
-  { value: "navigate-life-changes", label: "Navigate Life Changes", emoji: "🧭" },
-  { value: "work-life-balance", label: "Work-Life Balance", emoji: "⚖️" },
-  { value: "career-growth-advancement", label: "Career Growth & Advancement", emoji: "📈" },
-  { value: "business-entrepreneurship", label: "Business & Entrepreneurship", emoji: "🚀" },
-  { value: "time-management-productivity", label: "Time Management & Productivity", emoji: "⏱️" },
-  { value: "financial-wellness", label: "Financial Wellness", emoji: "💰" },
-  { value: "health-fitness-body-goals", label: "Health, Fitness & Body Goals", emoji: "🏃" },
-  { value: "daily-habits-discipline", label: "Daily Habits & Discipline", emoji: "📅" },
-  { value: "mindfulness-presence", label: "Mindfulness & Presence", emoji: "🌿" },
-  { value: "personal-goal-life-direction", label: "Personal Goal & Life Direction", emoji: "🎯" },
-  { value: "faith-purpose-inner-grounding", label: "Faith, Purpose & Inner Grounding", emoji: "🙏" },
-];
+import { wellnessGoalProfileOptions } from "@/lib/wellnessGoals";
+
+const goalsOptions = wellnessGoalProfileOptions;
 
 const triggersOptions = [
   { value: "crowds", label: "Crowds" },
@@ -175,7 +170,20 @@ const profileSchema = z.object({
     .or(z.literal(""))
     .refine((v) => !v || /^\+[\d\s\-().]+$/.test(v), "Select a country from the dropdown first")
     .refine((v) => !v || countPhoneDigits(v) === MAX_PHONE_DIGITS, "Enter exactly 12 digits total (country code + number)"),
-  birthday: z.string().optional(),
+  birthday: z
+    .string()
+    .optional()
+    .refine((v) => {
+      const trimmed = (v ?? "").trim();
+      if (!trimmed) return true;
+      if (isIsoDobString(trimmed)) {
+        const years = birthIsoToAgeYears(trimmed);
+        return years !== undefined && years >= MIN_ACCOUNT_AGE_YEARS;
+      }
+      const asYears = Number.parseInt(trimmed, 10);
+      if (Number.isFinite(asYears)) return asYears >= MIN_ACCOUNT_AGE_YEARS;
+      return true;
+    }, minAccountAgeMessage),
   pronouns: z.string().optional(),
   location: z.string().optional(),
   in_therapy: z.string().optional(),
@@ -408,7 +416,8 @@ export function UserProfile() {
   }, [rawProfile, joinedAt]);
 
   const scrollToProfileField = (key: string) => {
-    document.getElementById(`profile-field-${key}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const el = document.getElementById(`profile-field-${key}`);
+    if (el) scrollElementInAppMain(el);
   };
 
   const communityAvatarPublic =
@@ -601,8 +610,23 @@ export function UserProfile() {
       });
       toast.success("Profile updated!");
       setIsEditing(false);
-    } catch { toast.error("Failed to update profile"); }
-    finally { setIsSaving(false); }
+      requestAnimationFrame(() => {
+        resetAppMainScrollAfterProfileEdit();
+      });
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Failed to update profile";
+      const isAgeError =
+        /must be at least\s*18/i.test(message) ||
+        /18\+/i.test(message) ||
+        /18\s*years/i.test(message);
+      if (isAgeError) {
+        form.setError("birthday", { type: "manual", message });
+        scrollToProfileField("birthday");
+      } else {
+        toast.error(message || "Failed to update profile");
+      }
+    } finally { setIsSaving(false); }
   };
 
   const handleResendVerification = async () => {

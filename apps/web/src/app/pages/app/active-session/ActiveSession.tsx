@@ -1605,7 +1605,7 @@ export function ActiveSession() {
       }
 
       if (!ezriApi || !ezriConfig) {
-        throw new Error("Ezri is not configured (missing env).");
+        throw new Error("Solace is not configured (missing env).");
       }
 
       // Abort any previously in-flight REST request.

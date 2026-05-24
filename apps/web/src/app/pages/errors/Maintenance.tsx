@@ -65,7 +65,7 @@ export function Maintenance() {
             transition={{ delay: 0.3 }}
             className="text-lg text-gray-600 mb-8"
           >
-            Ezri is currently undergoing scheduled maintenance to improve your experience. 
+            Solace is currently undergoing scheduled maintenance to improve your experience. 
             We'll be back online shortly!
           </motion.p>
         </motion.div>

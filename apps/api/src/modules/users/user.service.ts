@@ -683,6 +683,61 @@ export async function getSignupTypeFromAuthMeta(authUserId: string): Promise<'tr
   }
 }
 
+/** Build display name from Supabase auth user_metadata (signup form, OAuth, etc.). */
+export async function getFullNameFromAuthMeta(authUserId: string): Promise<string | null> {
+  try {
+    const authUser = await prisma.users.findUnique({
+      where: { id: authUserId },
+      select: { raw_user_meta_data: true },
+    });
+
+    const meta = authUser?.raw_user_meta_data as Record<string, unknown> | null | undefined;
+    if (!meta || typeof meta !== 'object') return null;
+
+    const fullName =
+      typeof meta.full_name === 'string' ? meta.full_name.trim() : '';
+    if (fullName.length > 1) return fullName;
+
+    const first =
+      typeof meta.first_name === 'string' ? meta.first_name.trim() : '';
+    const last =
+      typeof meta.last_name === 'string' ? meta.last_name.trim() : '';
+    const combined = `${first} ${last}`.trim();
+    if (combined.length > 1) return combined;
+
+    const name = typeof meta.name === 'string' ? meta.name.trim() : '';
+    if (name.length > 1) return name;
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function isEmailLocalPartDisplayName(
+  fullName: string | null | undefined,
+  email: string
+): boolean {
+  const current = (fullName ?? '').trim();
+  if (!current) return true;
+  const local = email.split('@')[0]?.trim().toLowerCase() ?? '';
+  if (!local) return false;
+  return current.toLowerCase() === local;
+}
+
+/**
+ * When a profile was seeded with the email local-part, replace it with the name
+ * the user entered at signup (stored in auth metadata).
+ */
+export async function getProfileNameBackfillFromAuth(
+  userId: string,
+  email: string,
+  existingFullName: string | null | undefined
+): Promise<string | null> {
+  if (!isEmailLocalPartDisplayName(existingFullName, email)) return null;
+  return getFullNameFromAuthMeta(userId);
+}
+
 function normalizeSignupType(raw: any): 'trial' | 'plan' | null {
   if (raw === 'trial' || raw === 'plan') return raw;
   return null;
@@ -732,7 +787,7 @@ export async function createProfile(
       },
       update: {
         email,
-        full_name: fullName || email.split('@')[0],
+        ...(fullName ? { full_name: fullName } : {}),
         onboarding_completed: false,
         onboarding_completed_at: null,
         ...(resolvedSignupType ? { signup_type: resolvedSignupType } : {}),
@@ -753,7 +808,7 @@ export async function createProfile(
       },
       update: {
         email,
-        full_name: fullName || email.split('@')[0],
+        ...(fullName ? { full_name: fullName } : {}),
       },
     });
   }
@@ -804,7 +859,7 @@ export async function createProfileForPaidSignup(
       },
       update: {
         email,
-        full_name: fullName || email.split('@')[0],
+        ...(fullName ? { full_name: fullName } : {}),
         onboarding_completed: false,
         onboarding_completed_at: null,
         ...(resolvedSignupType ? { signup_type: resolvedSignupType } : {}),
@@ -825,7 +880,7 @@ export async function createProfileForPaidSignup(
       },
       update: {
         email,
-        full_name: fullName || email.split('@')[0],
+        ...(fullName ? { full_name: fullName } : {}),
       },
     });
   }

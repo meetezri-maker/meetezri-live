@@ -41,10 +41,11 @@ import {
 } from "@/app/components/ui/form";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { BRAND_LOGO_ON_DARK_BG } from "@/app/components/BrandLogo";
 
 /** Environment plate only — calm mountains/lake, not a UI screenshot. */
 const SAFETY_SUPPORT_BG = "/solace/safety-support-calm-mountains.jpg";
-const SOLACE_LOGO_SRC = "/logos/logo white.png";
+const SOLACE_LOGO_SRC = BRAND_LOGO_ON_DARK_BG;
 const ONBOARDING_NAV_H = "4.5rem";
 const CURRENT_STEP = 6;
 const TOTAL_STEPS = 8;
@@ -107,9 +108,9 @@ const ezriCannotItems = [
 ] as const;
 
 const acknowledgementItems = [
-  "Ezri provides support and companionship, not medical treatment",
+  "Solace provides support and companionship, not medical treatment",
   "You are responsible for seeking immediate help when needed",
-  "Ezri may adjust conversations and show resources based on safety concerns",
+  "Solace may adjust conversations and show resources based on safety concerns",
 ] as const;
 
 function SafetySupportSceneBackdrop() {
@@ -234,7 +235,7 @@ function SafetySupportTopBar({ progressPercent, onBack }: SafetySupportTopBarPro
             </button>
             <img src={SOLACE_LOGO_SRC} alt="Solace" className="h-8 w-auto object-contain" />
             <span className="h-5 w-px shrink-0 bg-white/15" aria-hidden />
-            <span className="text-sm font-medium tracking-wide text-white/90">Ezri</span>
+            <span className="text-sm font-medium tracking-wide text-white/90">Solace</span>
           </motion.div>
           <p className="shrink-0 text-xs text-violet-200/65">
             Step {CURRENT_STEP} of {TOTAL_STEPS}
@@ -273,7 +274,7 @@ function SafetySupportTopBar({ progressPercent, onBack }: SafetySupportTopBarPro
           </button>
           <img src={SOLACE_LOGO_SRC} alt="Solace" className="h-9 w-auto object-contain" />
           <span className="h-6 w-px bg-white/15" aria-hidden />
-          <span className="text-[15px] font-medium tracking-wide text-white/92">Ezri</span>
+          <span className="text-[15px] font-medium tracking-wide text-white/92">Solace</span>
         </motion.div>
 
         <motion.div className="px-2">
@@ -391,7 +392,7 @@ export function OnboardingSafetyConsent() {
               />
             </h1>
             <p className="mt-2 text-[clamp(1rem,1.9vw,1.2rem)] leading-relaxed text-violet-200/72">
-              Understanding how Ezri keeps you safe
+              Understanding how Solace keeps you safe
             </p>
           </header>
 
@@ -451,7 +452,7 @@ export function OnboardingSafetyConsent() {
                     </h2>
                   </div>
                   <p className="text-[14px] leading-relaxed text-violet-100/72 sm:text-[15px]">
-                    Ezri is a conversational support system designed to provide companionship and
+                    Solace is a conversational support system designed to provide companionship and
                     wellness support.{" "}
                     <strong className="font-semibold text-[#FF4E91]">It is not a medical service</strong>{" "}
                     and does not replace professional or emergency care.
@@ -481,7 +482,7 @@ export function OnboardingSafetyConsent() {
                     />
                   </GlowingOrb>
                   <h3 className="pt-1.5 text-[15px] font-semibold leading-snug text-white/92 sm:text-base">
-                    If Ezri Detects High Emotional Risk:
+                    If Solace Detects High Emotional Risk:
                   </h3>
                 </div>
                 <ul className="space-y-3">
@@ -530,7 +531,7 @@ export function OnboardingSafetyConsent() {
                   </h3>
                 </motion.div>
                 <p className="text-[13px] leading-relaxed text-violet-100/68 sm:text-[14px]">
-                  You may add a trusted contact in your settings. If enabled, Ezri may send them an
+                  You may add a trusted contact in your settings. If enabled, Solace may send them an
                   informational notification during high-risk situations.
                 </p>
                 <div className="mt-4 flex items-start gap-2.5 rounded-[18px] border border-violet-500/15 bg-[#120f28]/65 px-4 py-3 backdrop-blur-md">
@@ -546,7 +547,7 @@ export function OnboardingSafetyConsent() {
               </motion.section>
             </div>
 
-            {/* Ezri Cannot card */}
+            {/* Solace Cannot card */}
             <motion.section
               className={cn(glassCardClass, "p-5 sm:p-6 md:p-7")}
               initial={{ opacity: 0, y: 12 }}
@@ -560,7 +561,7 @@ export function OnboardingSafetyConsent() {
                 >
                   <Phone className="h-5 w-5 text-cyan-300" strokeWidth={1.75} aria-hidden />
                 </GlowingOrb>
-                <h3 className="text-[15px] font-semibold text-white/92 sm:text-base">Ezri Cannot:</h3>
+                <h3 className="text-[15px] font-semibold text-white/92 sm:text-base">Solace Cannot:</h3>
               </div>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-4">
                 {ezriCannotItems.map((item, index) => {
@@ -752,7 +753,7 @@ export function OnboardingSafetyConsent() {
                   Your safety matters to us.
                 </p>
                 <p className="max-w-[min(420px,92vw)] text-[12px] leading-relaxed text-violet-200/48">
-                  Ezri is here to support you with care and compassion.
+                  Solace is here to support you with care and compassion.
                 </p>
               </div>
             </motion.footer>

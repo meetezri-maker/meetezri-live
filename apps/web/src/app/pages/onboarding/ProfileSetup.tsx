@@ -30,10 +30,12 @@ import { PhoneInput } from "../../components/ui/phone-input";
 import { Input } from "../../components/ui/input";
 import { normalizeStoredPhoneForInput } from "@/lib/normalizeStoredPhone";
 import { cn } from "@/lib/utils";
+import { BRAND_LOGO_ON_DARK_BG } from "@/app/components/BrandLogo";
+import { ONBOARDING_PROFILE_SETUP_BG } from "@/lib/solace/referenceImagery";
 import { SolaceSelect } from "@/app/solace";
 
-const PROFILE_SETUP_BG = "/solace/profile-setup-twilight-valley.jpg";
-const SOLACE_LOGO_SRC = "/logos/logo white.png";
+const PROFILE_SETUP_BG = ONBOARDING_PROFILE_SETUP_BG;
+const SOLACE_LOGO_SRC = BRAND_LOGO_ON_DARK_BG;
 const ONBOARDING_NAV_H = "4.5rem";
 const CURRENT_STEP = 2;
 const TOTAL_STEPS = 8;
@@ -96,7 +98,7 @@ function ProfileSetupSceneBackdrop() {
       <img
         src={PROFILE_SETUP_BG}
         alt=""
-        className="absolute inset-0 h-full w-full object-cover object-[center_42%]"
+        className="absolute inset-0 h-full w-full object-cover object-[center_42%] brightness-[0.55] contrast-[1.04] saturate-[1.06]"
         width={2400}
         height={1350}
       />
@@ -195,7 +197,7 @@ function ProfileSetupTopBar({ progressPercent }: ProfileSetupTopBarProps) {
               className="h-8 w-auto object-contain"
             />
             <span className="h-5 w-px shrink-0 bg-white/15" aria-hidden />
-            <span className="text-sm font-medium tracking-wide text-white/90">Ezri</span>
+            <span className="text-sm font-medium tracking-wide text-white/90">Solace</span>
           </motion.div>
           <p className="shrink-0 text-xs text-violet-200/65">
             Step {CURRENT_STEP} of {TOTAL_STEPS}
@@ -230,7 +232,7 @@ function ProfileSetupTopBar({ progressPercent }: ProfileSetupTopBarProps) {
             className="h-9 w-auto object-contain"
           />
           <span className="h-6 w-px bg-white/15" aria-hidden />
-          <span className="text-[15px] font-medium tracking-wide text-white/92">Ezri</span>
+          <span className="text-[15px] font-medium tracking-wide text-white/92">Solace</span>
         </div>
 
         <div className="px-2">
@@ -469,7 +471,7 @@ export function OnboardingProfileSetup() {
             </h1>
             <p className="mt-2 text-[clamp(0.95rem,1.8vw,1.1rem)] leading-relaxed text-violet-200/72">
               Help us personalize your{" "}
-              <span className="font-medium text-[#FF4E91]">Ezri</span> experience
+              <span className="font-medium text-[#FF4E91]">Solace</span> experience
             </p>
           </header>
 
@@ -681,7 +683,7 @@ export function OnboardingProfileSetup() {
                           <Input
                             type="number"
                             min="1"
-                            placeholder="25"
+                            placeholder="18"
                             className={onboardingInputClass}
                             {...field}
                           />

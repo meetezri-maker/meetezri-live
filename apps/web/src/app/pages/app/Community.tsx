@@ -151,6 +151,8 @@ function splitIconFromComment(content: string): { icon: string | null; text: str
 
 type Overview = {
   members: number;
+  /** Distinct members who have published at least one community post. */
+  uniquePosters?: number;
   posts: number;
   groups: number;
   comments: number;
@@ -714,16 +716,35 @@ export function Community() {
       .toUpperCase() || "?";
 
   const handleLikePost = async (postId: string) => {
+    const previous = postsData.find((p) => p.id === postId);
+    if (!previous) return;
+
+    const optimisticLiked = !previous.likedByMe;
+    const optimisticLikes = Math.max(0, previous.likes + (optimisticLiked ? 1 : -1));
+
+    setPostsData((prev) =>
+      prev.map((p) =>
+        p.id === postId ? { ...p, likes: optimisticLikes, likedByMe: optimisticLiked } : p,
+      ),
+    );
+
     try {
       const res = (await api.likeCommunityPost(postId)) as { likes: number; likedByMe: boolean };
       setPostsData((prev) =>
         prev.map((p) =>
-          p.id === postId ? { ...p, likes: res.likes, likedByMe: res.likedByMe } : p
-        )
+          p.id === postId ? { ...p, likes: res.likes, likedByMe: res.likedByMe } : p,
+        ),
       );
       void loadMeta();
-    } catch {
-      toast.error("Could not update like");
+    } catch (e) {
+      setPostsData((prev) =>
+        prev.map((p) =>
+          p.id === postId
+            ? { ...p, likes: previous.likes, likedByMe: previous.likedByMe }
+            : p,
+        ),
+      );
+      toast.error(e instanceof Error ? e.message : "Could not update like");
     }
   };
 
@@ -974,14 +995,29 @@ export function Community() {
     }
   };
 
+  const uniquePostersFromFeed = useMemo(() => {
+    const ids = new Set<string>();
+    for (const post of postsData) {
+      if (post.authorUserId) ids.add(post.authorUserId);
+    }
+    return ids.size;
+  }, [postsData]);
+
   const stats = overview
     ? {
         members: overview.members,
+        uniquePosters: Math.max(overview.uniquePosters ?? 0, uniquePostersFromFeed),
         posts: overview.posts,
         groups: overview.groups,
         activeNow: overview.activeNow,
       }
-    : { members: 0, posts: 0, groups: 0, activeNow: 0 };
+    : {
+        members: 0,
+        uniquePosters: uniquePostersFromFeed,
+        posts: 0,
+        groups: 0,
+        activeNow: 0,
+      };
 
   const communityPulse = useMemo(
     () => computeCommunityPulse(overview, postsData, commentsByPostId),
@@ -1101,26 +1137,25 @@ export function Community() {
                   Share your thoughts, listen with kindness and grow together.
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex -space-x-2">
-                    {postsData.slice(0, 5).map((p) => (
-                      <div
-                        key={p.id}
-                        className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-[#050816]"
-                      >
-                        {p.author.avatarUrl ? (
-                          <img src={p.author.avatarUrl} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-600/85 to-indigo-900 text-[11px] font-semibold text-white">
-                            {initials(p.author.name)}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                  <div
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-violet-400/30 bg-violet-500/15 text-violet-100 shadow-[0_0_24px_rgba(168,85,247,0.28)]"
+                    aria-hidden
+                  >
+                    <Users className="h-5 w-5" />
                   </div>
-                  <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-violet-100/85">
-                    {stats.members > 0
-                      ? `${stats.members.toLocaleString()} people here for you today.`
-                      : "People are here for you today."}
+                  <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-violet-100/90">
+                    {stats.uniquePosters > 0 ? (
+                      <>
+                        <span className="font-semibold tabular-nums text-white">
+                          {stats.uniquePosters.toLocaleString()}
+                        </span>{" "}
+                        {stats.uniquePosters === 1
+                          ? "person has shared in Community"
+                          : "people have shared in Community"}
+                      </>
+                    ) : (
+                      "Be the first to share in Community"
+                    )}
                   </span>
                 </div>
               </div>
@@ -2197,16 +2232,21 @@ export function Community() {
 
               <CinematicEnter delay={0.1}>
                 <div className="rounded-[26px] border border-white/10 bg-[rgba(15,18,32,0.82)] p-6 backdrop-blur-xl">
-                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-violet-200/70">Active Now</h3>
-                  {stats.activeNow > 0 ? (
-                    <span className="inline-flex rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-xs font-medium text-violet-100/85">
-                      {stats.activeNow.toLocaleString()} online
-                    </span>
-                  ) : null}
+                  <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-violet-200/70">
+                    Active Now
+                  </h3>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-4xl font-semibold tabular-nums tracking-tight text-white">
+                      {stats.activeNow.toLocaleString()}
+                    </p>
+                    <p className="text-sm font-medium text-fuchsia-200/80">
+                      {stats.activeNow === 1 ? "member online" : "members online"}
+                    </p>
+                  </div>
                   <p className="mt-3 text-sm leading-relaxed text-[#A7A1B8]">
                     {stats.activeNow > 0
-                      ? "People supporting each other right now."
-                      : "People are supporting each other right now."}
+                      ? "Members active in Community in the last 15 minutes."
+                      : "You're here — check in or post to let others know you're part of the space."}
                   </p>
                 </div>
               </CinematicEnter>

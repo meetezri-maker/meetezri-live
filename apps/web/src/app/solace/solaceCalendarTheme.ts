@@ -11,7 +11,7 @@ export const solaceCalendarClassNames = {
   month: "flex flex-col gap-4",
   caption: "flex justify-center pt-1 relative items-center w-full",
   caption_label: "text-sm font-medium text-zinc-100",
-  nav: "flex items-center gap-1",
+  nav: "hidden",
   nav_button: cn(
     "inline-flex size-7 items-center justify-center rounded-lg border border-white/10",
     "bg-white/[0.04] text-zinc-300 transition-colors hover:bg-violet-500/15 hover:text-violet-100"

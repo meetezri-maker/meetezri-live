@@ -36,6 +36,10 @@ export const ONBOARDING_WELCOME_BG = "/solace/login-environment.jpg";
 
 
 
+/** Twilight lake sanctuary — profile setup onboarding (environment only, no UI) */
+export const ONBOARDING_PROFILE_SETUP_BG =
+  "/solace/emotional-focus-twilight-sanctuary.jpg";
+
 /** Alpine sunrise above cloud sea — signup cinematic panel (environment only, no UI) */
 
 export const SIGNUP_HERO_BG = "/solace/companion-selection-calm-mountain.jpg";

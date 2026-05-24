@@ -5,17 +5,14 @@ import { DEFAULT_AI_COMPANIONS } from "@meetezri/shared";
 import {
   ArrowRight,
   ArrowLeft,
-  Sparkles,
   Volume2,
   Heart,
-  Star,
   Check,
   Lightbulb,
   Mic,
   Users,
   Flower2,
   Mountain,
-  Gem,
   Circle,
 } from "lucide-react";
 import { useOnboarding } from "@/app/contexts/OnboardingContext";
@@ -33,13 +30,8 @@ import {
   companionCardImageUrl,
   companionRoundPortraitImgClass,
 } from "@/lib/avatar/companionModelUrl";
-import {
-  ONBOARDING_COMPANION_SELECTION_BG,
-  TALK_ENV_CANDLE,
-  TALK_ENV_FOREST,
-  TALK_ENV_LAKE,
-  TALK_ENV_STUDIO,
-} from "@/lib/solace/referenceImagery";
+import { ONBOARDING_COMPANION_SELECTION_BG } from "@/lib/solace/referenceImagery";
+import { TALK_IT_OUT_ENVIRONMENT_THUMBS } from "@/lib/solace/talkItOutImages";
 import {
   DEFAULT_SELECTABLE_COMPANION_NAME,
   isCompanionComingSoon,
@@ -48,7 +40,9 @@ import {
 } from "@/lib/avatar/companionAvailability";
 import { ComingSoonOverlay } from "@/components/ui/ComingSoonOverlay";
 import { cn } from "@/lib/utils";
-const SOLACE_LOGO_SRC = "/logos/logo white.png";
+import { BRAND_LOGO_ON_DARK_BG } from "@/app/components/BrandLogo";
+
+const SOLACE_LOGO_SRC = BRAND_LOGO_ON_DARK_BG;
 const ONBOARDING_NAV_H = "4.75rem";
 const CURRENT_STEP = 5;
 const TOTAL_STEPS = 8;
@@ -83,7 +77,6 @@ interface AIAvatar {
   imageUrl?: string;
   voiceType: string;
   accentType: string;
-  rating: number;
 }
 
 const avatarPreferencesSchema = z.object({
@@ -92,34 +85,6 @@ const avatarPreferencesSchema = z.object({
 });
 
 type AvatarPreferencesValues = z.infer<typeof avatarPreferencesSchema>;
-
-const sessionEnvironments = [
-  {
-    value: "beach",
-    label: "Beach Sunset",
-    image: TALK_ENV_CANDLE,
-  },
-  {
-    value: "forest",
-    label: "Peaceful Forest",
-    image: TALK_ENV_FOREST,
-  },
-  {
-    value: "mountains",
-    label: "Mountain View",
-    image: TALK_ENV_LAKE,
-  },
-  {
-    value: "space",
-    label: "Starry Night",
-    image: "/community/scene-stars.jpg",
-  },
-  {
-    value: "minimal",
-    label: "Minimal Studio",
-    image: TALK_ENV_STUDIO,
-  },
-] as const;
 
 function CompanionSelectionSceneBackdrop() {
   return (
@@ -211,7 +176,7 @@ function CompanionSelectionTopBar({ progressPercent, onBack }: CompanionSelectio
             </button>
             <img src={SOLACE_LOGO_SRC} alt="Solace" className="h-8 w-auto object-contain" />
             <span className="h-5 w-px shrink-0 bg-white/15" aria-hidden />
-            <span className="text-sm font-medium tracking-wide text-white/90">Ezri</span>
+            <span className="text-sm font-medium tracking-wide text-white/90">Solace</span>
           </div>
           <p className="shrink-0 text-xs text-violet-200/65">
             Step {CURRENT_STEP} of {TOTAL_STEPS}
@@ -250,7 +215,7 @@ function CompanionSelectionTopBar({ progressPercent, onBack }: CompanionSelectio
           </button>
           <img src={SOLACE_LOGO_SRC} alt="Solace" className="h-9 w-auto object-contain" />
           <span className="h-6 w-px bg-white/15" aria-hidden />
-          <span className="text-[15px] font-medium tracking-wide text-white/92">Ezri</span>
+          <span className="text-[15px] font-medium tracking-wide text-white/92">Solace</span>
         </motion.div>
 
         <motion.div className="px-2">
@@ -378,16 +343,6 @@ function CompanionCard({ avatar, isSelected, onSelect, delay = 0 }: CompanionCar
           <p className="mt-0.5 text-[13px] text-violet-200/58">
             {avatar.gender} • {avatar.ageRange} years
           </p>
-          <motion.div className="mt-2.5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[12px] sm:justify-start">
-            <span className="inline-flex items-center gap-1.5 text-violet-200/72">
-              <Star className="h-3.5 w-3.5 text-amber-300/90" fill="currentColor" aria-hidden />
-              <span className="font-semibold text-white/90">{avatar.rating}</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-violet-200/58">
-              <Users className="h-3.5 w-3.5 text-violet-300/70" aria-hidden />
-              <span>0 users</span>
-            </span>
-          </motion.div>
         </motion.div>
       </motion.div>
 
@@ -543,7 +498,6 @@ export function OnboardingAvatarPreferences() {
         imageUrl: companionCardImageUrl(c.portraitPng),
         voiceType: c.voice_type,
         accentType: c.accent_type,
-        rating: c.rating,
       })),
     [],
   );
@@ -586,12 +540,8 @@ export function OnboardingAvatarPreferences() {
           <header className="mb-7 text-center sm:mb-8">
             <h1 className="solace-login-serif text-[clamp(2.625rem,5vw,3.875rem)] font-medium leading-[1.06] drop-shadow-[0_0_32px_rgba(255,79,216,0.15),0_2px_28px_rgba(0,0,0,0.45)]">
               <span className="block text-[#FDFDFD]">Choose Your</span>
-              <span className="mt-1 inline-flex items-center justify-center gap-2">
-                <span className="bg-gradient-to-r from-[#FF4FD8] via-[#E879F9] to-[#B14DFF] bg-clip-text text-transparent drop-shadow-[0_0_24px_rgba(255,79,216,0.35)]">
-                  Solace Companion
-                </span>
-                <Sparkles className="h-5 w-5 shrink-0 text-[#FF4FD8] drop-shadow-[0_0_12px_rgba(255,79,216,0.55)] sm:h-6 sm:w-6" aria-hidden />
-                <Sparkles className="h-4 w-4 shrink-0 text-[#FF4FD8]/80 drop-shadow-[0_0_10px_rgba(255,79,216,0.45)] sm:h-5 sm:w-5" aria-hidden />
+              <span className="mt-1 block bg-gradient-to-r from-[#FF4FD8] via-[#E879F9] to-[#B14DFF] bg-clip-text text-transparent drop-shadow-[0_0_24px_rgba(255,79,216,0.35)]">
+                Solace Companion
               </span>
             </h1>
             <p className="mx-auto mt-3 max-w-[min(640px,92vw)] text-[clamp(1rem,1.9vw,1.25rem)] leading-relaxed text-violet-200/68">
@@ -601,40 +551,10 @@ export function OnboardingAvatarPreferences() {
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6 sm:gap-7">
-              <motion.div
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.06, duration: 0.5 }}
-                className="flex min-h-[110px] items-center gap-4 rounded-[24px] border border-[#FF4FD8]/30 bg-[#0A0B1E]/55 px-5 py-5 backdrop-blur-2xl shadow-[0_0_0_1px_rgba(177,77,255,0.14),0_0_48px_-12px_rgba(255,79,216,0.32),inset_0_1px_0_rgba(255,255,255,0.06)] sm:gap-5 sm:px-7 sm:py-6"
-              >
-                <motion.span
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#B14DFF]/40 bg-gradient-to-br from-[#FF4FD8]/18 to-[#8A4FFF]/22 shadow-[0_0_28px_-4px_rgba(177,77,255,0.55)] sm:h-[52px] sm:w-[52px]"
-                  animate={{
-                    boxShadow: [
-                      "0 0 24px -4px rgba(255,79,216,0.45)",
-                      "0 0 32px -2px rgba(255,79,216,0.65)",
-                      "0 0 24px -4px rgba(255,79,216,0.45)",
-                    ],
-                  }}
-                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                >
-                  <Gem className="h-5 w-5 text-[#E879F9] drop-shadow-[0_0_10px_rgba(255,79,216,0.55)] sm:h-[22px] sm:w-[22px]" aria-hidden />
-                </motion.span>
-                <div className="min-w-0">
-                  <p className="text-[15px] font-semibold leading-snug text-white/92 sm:text-base">
-                    AI-Powered Video Therapy Talk it out
-                  </p>
-                  <p className="mt-1 text-[13px] leading-relaxed text-violet-200/58">
-                    Your chosen AI companion will appear as a realistic 3D avatar during video
-                    sessions. All conversations are voice-based for a natural, human-like experience.
-                  </p>
-                </div>
-              </motion.div>
-
               <motion.section
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1, duration: 0.5 }}
+                transition={{ delay: 0.06, duration: 0.5 }}
               >
                 <SectionHeading
                   icon={<Flower2 className="h-4 w-4 text-[#FF4FD8]" aria-hidden />}
@@ -674,8 +594,8 @@ export function OnboardingAvatarPreferences() {
               >
                 <SectionHeading
                   icon={<Mountain className="h-4 w-4 text-[#FF4FD8]" aria-hidden />}
-                  title="Session Background"
-                  subtitle="Choose a calming background for your video sessions"
+                  title="Talking Environment"
+                  subtitle="Choose a calming background for your talk sessions"
                 />
 
                 <FormField
@@ -685,7 +605,7 @@ export function OnboardingAvatarPreferences() {
                     <FormItem>
                       <FormControl>
                         <motion.div
-                          className="-mx-1 flex gap-3 overflow-x-auto pb-1 pt-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:grid md:grid-cols-5 md:gap-3 md:overflow-visible"
+                          className="-mx-1 flex gap-3 overflow-x-auto pb-1 pt-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:grid md:grid-cols-4 md:gap-3 md:overflow-visible"
                           initial="hidden"
                           animate="visible"
                           variants={{
@@ -693,7 +613,7 @@ export function OnboardingAvatarPreferences() {
                             visible: { transition: { staggerChildren: 0.04 } },
                           }}
                         >
-                          {sessionEnvironments.map((env) => (
+                          {TALK_IT_OUT_ENVIRONMENT_THUMBS.map((env) => (
                             <SessionBackgroundThumb
                               key={env.value}
                               value={env.value}
@@ -725,7 +645,7 @@ export function OnboardingAvatarPreferences() {
                 </span>
                 <p className="text-[13px] leading-relaxed text-violet-100/72">
                   <span className="font-medium text-violet-100/88">Tip:</span> You can change your
-                  Solace avatar and session preferences anytime in your settings.
+                  Solace avatar and talk preferences anytime in your settings.
                 </p>
               </motion.div>
 
