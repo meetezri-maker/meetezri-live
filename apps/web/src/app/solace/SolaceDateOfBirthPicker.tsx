@@ -220,7 +220,6 @@ export function SolaceDateOfBirthPicker({
         </PopoverAnchor>
         <PopoverContent
           className={solaceCalendarPopoverClass}
-          motion="fade"
           side="bottom"
           align="start"
           sideOffset={6}

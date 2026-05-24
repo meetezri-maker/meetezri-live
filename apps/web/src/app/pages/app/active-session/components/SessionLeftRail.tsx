@@ -16,9 +16,14 @@ export interface SessionLeftRailProps {
   transcript: TranscriptLine[];
   liveUserSpeech: LiveUserSpeechStore;
   isMuted: boolean;
+  isSessionPaused: boolean;
+  isSoundOff: boolean;
+  isEzriSpeaking: boolean;
+  isEzriThinking: boolean;
   companionName: string;
   sttProvider: string | undefined;
   ezriWsStatus: EzriWsStatus;
+  ezriWarmupStatus: "idle" | "warming" | "ready";
   permissionsGranted: boolean;
 }
 
@@ -32,9 +37,14 @@ function SessionLeftRailComponent({
   transcript,
   liveUserSpeech,
   isMuted,
+  isSessionPaused,
+  isSoundOff,
+  isEzriSpeaking,
+  isEzriThinking,
   companionName,
   sttProvider,
   ezriWsStatus,
+  ezriWarmupStatus,
   permissionsGranted,
 }: SessionLeftRailProps) {
   return (
@@ -60,9 +70,14 @@ function SessionLeftRailComponent({
           transcript={transcript}
           liveUserSpeech={liveUserSpeech}
           isMuted={isMuted}
+          isSessionPaused={isSessionPaused}
+          isSoundOff={isSoundOff}
+          isEzriSpeaking={isEzriSpeaking}
+          isEzriThinking={isEzriThinking}
           companionName={companionName}
           sttProvider={sttProvider}
           ezriWsStatus={ezriWsStatus}
+          ezriWarmupStatus={ezriWarmupStatus}
           permissionsGranted={permissionsGranted}
         />
       </div>

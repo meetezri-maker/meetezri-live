@@ -154,7 +154,6 @@ export function SolaceSelect({
       </SelectTrigger>
       <SelectContent
         position="popper"
-        motion="fade"
         side="bottom"
         align="start"
         sideOffset={6}

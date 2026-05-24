@@ -936,6 +936,19 @@ html.a11y-lh-loose #root :where(p, li, h1, h2, h3, h4, h5, h6, label, td, th) {
   transition-timing-function: ease-out !important;
 }
 
+/* Radix floating UI positions menus via transform on the popper wrapper — tweening that
+   looks like a diagonal slide from the top of the page (calendars, selects, dropdowns). */
+.calm-transitions:not(.reduced-motion) [data-radix-popper-content-wrapper],
+.calm-transitions:not(.reduced-motion) [data-slot="popover-content"],
+.calm-transitions:not(.reduced-motion) [data-slot="select-content"],
+.calm-transitions:not(.reduced-motion) [data-slot="dropdown-menu-content"],
+.calm-transitions:not(.reduced-motion) [data-slot="dialog-content"],
+.calm-transitions:not(.reduced-motion) [data-slot="dialog-overlay"],
+.calm-transitions:not(.reduced-motion) [data-slot="alert-dialog-content"],
+.calm-transitions:not(.reduced-motion) [data-slot="alert-dialog-overlay"] {
+  transition: none !important;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
