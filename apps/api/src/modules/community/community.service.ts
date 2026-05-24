@@ -55,6 +55,53 @@ async function ensureCommunityPostLikesTable(): Promise<void> {
   `;
 }
 
+async function ensureCommunityPresenceTable(): Promise<void> {
+  await prisma.$executeRaw`
+    CREATE TABLE IF NOT EXISTS public.community_presence (
+      user_id uuid PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
+      last_seen_at timestamptz NOT NULL DEFAULT timezone('utc'::text, now())
+    )
+  `;
+}
+
+const COMMUNITY_ACTIVE_WINDOW_MS = 15 * 60 * 1000;
+
+async function recordCommunityPresence(userId: string): Promise<void> {
+  await ensureCommunityPresenceTable();
+  await prisma.$executeRaw`
+    INSERT INTO public.community_presence (user_id, last_seen_at)
+    VALUES (${userId}::uuid, timezone('utc'::text, now()))
+    ON CONFLICT (user_id) DO UPDATE
+    SET last_seen_at = timezone('utc'::text, now())
+  `;
+}
+
+async function countActiveCommunityUsers(): Promise<number> {
+  await ensureAllCommunityTables();
+  const since = new Date(Date.now() - COMMUNITY_ACTIVE_WINDOW_MS);
+  const rows = await prisma.$queryRaw<Array<{ c: bigint }>>`
+    WITH active AS (
+      SELECT user_id AS id
+      FROM public.community_presence
+      WHERE last_seen_at >= ${since}
+      UNION
+      SELECT user_id AS id
+      FROM public.community_posts
+      WHERE deleted_at IS NULL AND created_at >= ${since}
+      UNION
+      SELECT user_id AS id
+      FROM public.community_comments
+      WHERE created_at >= ${since}
+      UNION
+      SELECT user_id AS id
+      FROM public.community_post_likes
+      WHERE liked_at >= ${since}
+    )
+    SELECT COUNT(DISTINCT id)::bigint AS c FROM active
+  `;
+  return Number(rows[0]?.c ?? 0);
+}
+
 async function ensureCommunityPostViewsTable(): Promise<void> {
   await prisma.$executeRaw`
     CREATE TABLE IF NOT EXISTS public.community_post_views (
@@ -74,6 +121,7 @@ function ensureAllCommunityTables(): Promise<void> {
     ensureCommunityPostViewsTable(),
     ensureCommunityPostLikesTable(),
     ensureCommunityPostAuthorSnapshotsTable(),
+    ensureCommunityPresenceTable(),
   ]).then(() => undefined);
   return _tablesEnsuredPromise;
 }
@@ -102,22 +150,30 @@ async function ensureCommunityPostAuthorSnapshotsTable(): Promise<void> {
 }
 
 
-export async function getCommunityOverview() {
+export async function getCommunityOverview(viewerUserId?: string) {
+  if (viewerUserId) {
+    await recordCommunityPresence(viewerUserId).catch(() => undefined);
+  }
+
   if (
     communityOverviewCacheValue &&
     Date.now() - communityOverviewCacheValue.timestamp < COMMUNITY_CACHE_TTL
   ) {
-    return communityOverviewCacheValue.data;
+    const cached = communityOverviewCacheValue.data;
+    if (viewerUserId) {
+      const activeNow = await countActiveCommunityUsers().catch(() => cached.activeNow ?? 0);
+      return { ...cached, activeNow };
+    }
+    return cached;
   }
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
 
   const [
     groupCount,
     postCount,
     commentCount,
     distinctMembers,
-    recentPosts,
+    distinctPosters,
     likeAggregate,
     recentPosts7d,
     recentPostContents,
@@ -132,9 +188,8 @@ export async function getCommunityOverview() {
     }),
     prisma.community_posts.findMany({
       where: { deleted_at: null },
-      orderBy: { created_at: 'desc' },
-      take: 80,
-      select: { created_at: true },
+      select: { user_id: true },
+      distinct: ['user_id'],
     }),
     prisma.community_posts.aggregate({
       where: { deleted_at: null },
@@ -158,7 +213,7 @@ export async function getCommunityOverview() {
   ]);
 
   const totalLikes = likeAggregate._sum.likes_count ?? 0;
-  const activeNow = recentPosts.filter((p) => p.created_at.getTime() >= thirtyMinutesAgo).length;
+  const activeNow = await countActiveCommunityUsers().catch(() => 0);
   const pulseSignals = sentimentSignalsFromTexts([
     ...recentPostContents.map((p) => p.content),
     ...recentCommentContents.map((c) => c.content),
@@ -201,6 +256,7 @@ export async function getCommunityOverview() {
 
   const data = {
     members: distinctMembers.length,
+    uniquePosters: distinctPosters.length,
     posts: postCount,
     groups: groupCount,
     comments: commentCount,
@@ -251,6 +307,8 @@ export async function getCommunityGroupsForUser(userId: string) {
 }
 
 export async function getCommunityPostsForUser(userId: string, limit = 30) {
+  await recordCommunityPresence(userId).catch(() => undefined);
+
   const posts = await prisma.community_posts.findMany({
     where: { deleted_at: null },
     orderBy: { created_at: 'desc' },
@@ -660,12 +718,10 @@ export async function togglePostLike(userId: string, postId: string) {
     throw err;
   }
 
-  await ensureCommunityPostLikesTable();
+  await ensureAllCommunityTables();
+  await recordCommunityPresence(userId).catch(() => undefined);
 
-  let likedByMe = false;
-  let likesTotal = 0;
-
-  await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const existing = await tx.$queryRaw<Array<{ one: number }>>`
       SELECT 1 AS one
       FROM public.community_post_likes
@@ -677,29 +733,40 @@ export async function togglePostLike(userId: string, postId: string) {
         DELETE FROM public.community_post_likes
         WHERE post_id = ${postId}::uuid AND user_id = ${userId}::uuid
       `;
-      likedByMe = false;
     } else {
       await tx.$executeRaw`
         INSERT INTO public.community_post_likes (post_id, user_id)
         VALUES (${postId}::uuid, ${userId}::uuid)
+        ON CONFLICT (post_id, user_id) DO NOTHING
       `;
-      likedByMe = true;
     }
     const countRows = await tx.$queryRaw<Array<{ c: bigint }>>`
       SELECT COUNT(*)::bigint AS c
       FROM public.community_post_likes
       WHERE post_id = ${postId}::uuid
     `;
-    likesTotal = Number(countRows[0]?.c ?? 0);
-    await tx.community_posts.update({
-      where: { id: postId },
-      data: { likes_count: likesTotal },
-    });
+    const likesTotal = Number(countRows[0]?.c ?? 0);
+    const meRows = await tx.$queryRaw<Array<{ one: number }>>`
+      SELECT 1 AS one
+      FROM public.community_post_likes
+      WHERE post_id = ${postId}::uuid AND user_id = ${userId}::uuid
+      LIMIT 1
+    `;
+    return { likes: likesTotal, likedByMe: meRows.length > 0 };
   });
+
+  try {
+    await prisma.community_posts.update({
+      where: { id: postId },
+      data: { likes_count: result.likes },
+    });
+  } catch {
+    /* likes_count is denormalized; feed reads from community_post_likes */
+  }
 
   clearCommunityLocalCaches();
   invalidateCommunityCaches();
-  return { likes: likesTotal, likedByMe };
+  return result;
 }
 
 export async function addPostComment(userId: string, postId: string, content: string) {

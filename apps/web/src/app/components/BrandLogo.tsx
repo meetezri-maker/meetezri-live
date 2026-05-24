@@ -1,13 +1,18 @@
 /**
  * Brand mark used across the app.
- * - If the admin has uploaded a custom logo via /admin/branding-customization,
- *   that logo (stored in localStorage "ezri_branding") is shown for all themes.
- * - Otherwise falls back to the static white logo in public/logos.
+ * - Custom logo from admin branding (localStorage "ezri_branding") overrides defaults.
+ * - Static assets: `logo black.png` = white wordmark for dark backgrounds;
+ *   `logo white.png` = dark wordmark for light backgrounds (filenames are legacy).
  */
 import { useState, useEffect } from "react";
 
 const LS_KEY = "ezri_branding";
-const DEFAULT_LOGO_SRC = "/logos/logo black.png";
+
+/** White/light wordmark — use on dark pages (login, signup, onboarding, app shell). */
+export const BRAND_LOGO_ON_DARK_BG = "/logos/logo black.png";
+
+/** Dark wordmark — use on light pages (marketing nav on white, admin). */
+export const BRAND_LOGO_ON_LIGHT_BG = "/logos/logo white.png";
 
 function readCustomLogoUrl(): string {
   try {
@@ -20,28 +25,27 @@ function readCustomLogoUrl(): string {
   }
 }
 
+export type BrandLogoVariant = "onDark" | "onLight";
+
 interface BrandLogoProps {
   heightClass?: string;
   className?: string;
-  /** `light` = white mark for dark backgrounds; `dark` = default black mark */
-  variant?: "light" | "dark";
+  /** `onDark` = light wordmark on dark backgrounds; `onLight` = dark wordmark on light backgrounds */
+  variant?: BrandLogoVariant;
 }
 
 export function BrandLogo({
   heightClass = "h-24",
   className = "",
-  variant = "dark",
+  variant = "onLight",
 }: BrandLogoProps) {
   const [customLogoUrl, setCustomLogoUrl] = useState<string>("");
 
   useEffect(() => {
-    // Read on mount
     setCustomLogoUrl(readCustomLogoUrl());
 
-    // React to branding updates from the admin page (same tab)
     const handleUpdate = () => setCustomLogoUrl(readCustomLogoUrl());
     window.addEventListener("ezri-branding-updated", handleUpdate);
-    // React to updates from other tabs
     window.addEventListener("storage", handleUpdate);
 
     return () => {
@@ -51,7 +55,7 @@ export function BrandLogo({
   }, []);
 
   const defaultSrc =
-    variant === "light" ? "/logos/logo white.png" : DEFAULT_LOGO_SRC;
+    variant === "onDark" ? BRAND_LOGO_ON_DARK_BG : BRAND_LOGO_ON_LIGHT_BG;
   const logoSrc = customLogoUrl || defaultSrc;
 
   return (

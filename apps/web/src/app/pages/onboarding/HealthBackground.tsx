@@ -44,10 +44,11 @@ import {
   FormMessage,
 } from "../../components/ui/form";
 import { cn } from "@/lib/utils";
+import { BRAND_LOGO_ON_DARK_BG } from "@/app/components/BrandLogo";
 
 /** Pure calm alpine mountain / lake environment — not a UI screenshot. */
 const HEALTH_BACKGROUND_BG = "/solace/health-background-calm-mountains.jpg";
-const SOLACE_LOGO_SRC = "/logos/logo white.png";
+const SOLACE_LOGO_SRC = BRAND_LOGO_ON_DARK_BG;
 const ONBOARDING_NAV_H = "4.5rem";
 const CURRENT_STEP = 4;
 const TOTAL_STEPS = 8;
@@ -329,7 +330,7 @@ function HealthBackgroundTopBar({ progressPercent, onBack }: HealthBackgroundTop
             </button>
             <img src={SOLACE_LOGO_SRC} alt="Solace" className="h-8 w-auto object-contain" />
             <span className="h-5 w-px shrink-0 bg-white/15" aria-hidden />
-            <span className="text-sm font-medium tracking-wide text-white/90">Ezri</span>
+            <span className="text-sm font-medium tracking-wide text-white/90">Solace</span>
           </motion.div>
           <p className="shrink-0 text-xs text-violet-200/65">
             Step {CURRENT_STEP} of {TOTAL_STEPS}
@@ -368,7 +369,7 @@ function HealthBackgroundTopBar({ progressPercent, onBack }: HealthBackgroundTop
           </button>
           <img src={SOLACE_LOGO_SRC} alt="Solace" className="h-9 w-auto object-contain" />
           <span className="h-6 w-px bg-white/15" aria-hidden />
-          <span className="text-[15px] font-medium tracking-wide text-white/92">Ezri</span>
+          <span className="text-[15px] font-medium tracking-wide text-white/92">Solace</span>
         </div>
 
         <motion.div className="px-2">

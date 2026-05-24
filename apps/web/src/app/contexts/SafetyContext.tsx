@@ -125,7 +125,7 @@ export function SafetyProvider({ children }: SafetyProviderProps) {
   const getStateDescription = useCallback((): string => {
     const descriptions: Record<SafetyState, string> = {
       NORMAL: 'Normal conversation flow',
-      ELEVATED_CONCERN: 'Emotional distress detected - Ezri is providing extra support',
+      ELEVATED_CONCERN: 'Emotional distress detected - Solace is providing extra support',
       HIGH_RISK: 'High emotional risk - Support resources available',
       SAFETY_MODE: 'Safety protocols active - Please reach out for immediate support',
       COOLDOWN: 'Stabilizing after high-risk interaction',

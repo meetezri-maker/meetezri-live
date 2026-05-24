@@ -465,10 +465,26 @@ export async function getMeHandler(
   reply: FastifyReply
 ) {
   const user = request.user as UserPayload;
-  const profile = await userService.getProfile(user.sub);
+  let profile = await userService.getProfile(user.sub);
 
   if (!profile) {
     return reply.code(404).send({ message: 'Profile not found' });
+  }
+
+  const email = user.email ?? profile.email;
+  if (email) {
+    try {
+      const backfilledName = await userService.getProfileNameBackfillFromAuth(
+        user.sub,
+        email,
+        profile.full_name
+      );
+      if (backfilledName) {
+        profile = await userService.updateProfile(user.sub, { full_name: backfilledName });
+      }
+    } catch (e) {
+      request.log.warn({ e }, 'Failed to backfill full_name on getMe');
+    }
   }
 
   return sanitizeSelfProfileResponse(profile as any);
@@ -480,77 +496,45 @@ export async function initProfileHandler(
 ) {
   const user = request.user as UserPayload;
   request.log.info({ user }, 'Initializing profile for user');
-  
+
+  let email = user.email;
+  if (!email) {
+    email = (await userService.getUserEmail(user.sub)) ?? undefined;
+  }
+
   const existingProfile = await userService.getProfile(user.sub);
   if (existingProfile) {
-    // Ensure flow type exists for deterministic trial vs plan routing.
-    if (!existingProfile.signup_type) {
+    let profile = existingProfile;
+
+    if (!profile.signup_type) {
       try {
         const signupType = await userService.getSignupTypeFromAuthMeta(user.sub);
         if (signupType) {
           await userService.setSignupTypeForProfile(user.sub, signupType);
+          profile = (await userService.getProfile(user.sub)) ?? profile;
         }
       } catch (e) {
         request.log.warn({ e }, 'Failed to backfill signup_type on initProfile');
       }
-      const refreshedProfile = await userService.getProfile(user.sub);
-      return sanitizeSelfProfileResponse(refreshedProfile as any);
     }
-    return sanitizeSelfProfileResponse(existingProfile as any);
-  }
 
-  let email = user.email;
-
-  // If email is missing in JWT, try to fetch from auth.users via prisma
-  if (!email) {
-    try {
-      // Accessing prisma via the userService's imported prisma instance if possible, 
-      // or we can add a helper in userService to get user email.
-      // For now, let's assume we can rely on the service to handle "missing email" logic 
-      // or we modify the service.
-      // Better approach: Let's assume the email MIGHT be in the user object but just in case
-      // we can try to fetch the user record.
-      // Since I don't have direct access to prisma here (it's in service), 
-      // I'll add a method to userService to get email by ID.
-      
-      // Actually, let's just handle it in the controller by checking if we can get it.
-      // But wait, I need to import prisma to query it.
-      // Instead, I'll pass undefined to createProfile and let it handle or fail.
-      // But createProfile needs email.
-      
-      // Let's modify the controller to just fail if email is missing for now, 
-      // but log it clearly. 
-      // If the user says "Profile not found", it means they hit 404 on getMe.
-      // Then they hit initProfile.
-      
-      // If user.email is undefined, we return 400.
-      // The user is seeing "Profile not found" which is the 404 from getMe.
-      // This means initProfile MIGHT NOT EVEN BE CALLED or failing silently in frontend?
-      // No, the user provided the log:
-      // {"message":"Profile not found"} http://localhost:3001/api/users/me
-      
-      // This means the browser is showing the response from the FAILED request.
-      // It DOES NOT mean initProfile wasn't called.
-      // It means the user is looking at the failed request response.
-      
-      // If initProfile WAS called, it should have succeeded or failed.
-      // If it succeeded, the app should have proceeded.
-      
-      // Hypothesis: initProfile is failing with 400 because email is missing.
-      // So let's try to get the email from the DB if it's missing.
-      
-      // I will add a `getUserEmail` to userService and use it here.
-    } catch (e) {
-      // ignore
+    const profileEmail = email ?? profile.email;
+    if (profileEmail) {
+      try {
+        const backfilledName = await userService.getProfileNameBackfillFromAuth(
+          user.sub,
+          profileEmail,
+          profile.full_name
+        );
+        if (backfilledName) {
+          profile = await userService.updateProfile(user.sub, { full_name: backfilledName });
+        }
+      } catch (e) {
+        request.log.warn({ e }, 'Failed to backfill full_name on initProfile');
+      }
     }
-  }
 
-  if (!email) {
-    // Attempt to fetch email from DB as a fallback
-    const userEmail = await userService.getUserEmail(user.sub);
-    if (userEmail) {
-      email = userEmail;
-    }
+    return sanitizeSelfProfileResponse(profile as any);
   }
 
   if (!email) {
@@ -559,7 +543,14 @@ export async function initProfileHandler(
   }
 
   try {
-    const profile = await userService.createProfile(user.sub, email, undefined, undefined, 'app');
+    const fullName = await userService.getFullNameFromAuthMeta(user.sub);
+    const profile = await userService.createProfile(
+      user.sub,
+      email,
+      fullName ?? undefined,
+      undefined,
+      'app'
+    );
     request.log.info({ profile }, 'Profile initialized successfully');
     return sanitizeSelfProfileResponse(profile as any);
   } catch (error) {

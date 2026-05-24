@@ -82,7 +82,7 @@ interface LoginBrandEmblemProps {
 function LoginBrandEmblem({ className }: LoginBrandEmblemProps) {
   return (
     <div className={cn("flex justify-center", className)}>
-      <BrandLogo heightClass="h-10" />
+      <BrandLogo heightClass="h-10" variant="onDark" />
     </div>
   );
 }

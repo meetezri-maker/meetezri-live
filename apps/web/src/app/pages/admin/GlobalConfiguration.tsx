@@ -61,8 +61,8 @@ export function GlobalConfiguration() {
           name: "Application Name",
           description: "Display name for the application",
           type: "text",
-          value: "Ezri Mental Health",
-          defaultValue: "Ezri Mental Health",
+          value: "Solace Mental Health",
+          defaultValue: "Solace Mental Health",
         },
         {
           id: "app.environment",

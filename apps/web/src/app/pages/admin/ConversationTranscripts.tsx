@@ -740,7 +740,7 @@ ${transcript.adminNotes}
 
 ---
 Exported on: ${new Date().toLocaleString()}
-Ezri Mental Health Platform - Admin Dashboard
+Solace Mental Health Platform - Admin Dashboard
 `;
 
     const blob = new Blob([content], { type: 'text/plain' });

@@ -6,11 +6,12 @@ interface UserPayload {
 }
 
 export async function getOverviewHandler(
-  _request: FastifyRequest,
+  request: FastifyRequest,
   reply: FastifyReply
 ) {
+  const user = request.user as UserPayload;
   try {
-    return await communityService.getCommunityOverview();
+    return await communityService.getCommunityOverview(user.sub);
   } catch {
     return reply.code(500).send({ message: 'Failed to load community overview' });
   }
