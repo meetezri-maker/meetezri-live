@@ -240,9 +240,9 @@ export const INFLUENCE_CHIPS: InfluenceChip[] = [
 
   { value: "relationships", label: "Relationships", image: INFLUENCE_CHECKIN_IMAGES.relationships, Icon: Heart },
 
-  { value: "social_energy", label: "Social Energy", image: INFLUENCE_CHECKIN_IMAGES.social_energy, Icon: Zap },
+  { value: "social_energy", label: "Social Life", image: INFLUENCE_CHECKIN_IMAGES.social_energy, Icon: Zap },
 
-  { value: "gratitude", label: "Gratitude", image: INFLUENCE_CHECKIN_IMAGES.gratitude, Icon: Sparkles },
+  { value: "gratitude", label: "Hobby", image: INFLUENCE_CHECKIN_IMAGES.gratitude, Icon: Sparkles },
 
 ];
 

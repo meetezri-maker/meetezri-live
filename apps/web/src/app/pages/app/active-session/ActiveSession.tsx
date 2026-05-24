@@ -55,7 +55,7 @@ import {
   extractJordanSentimentCompound,
   getSpeechOpennessAt,
 } from "./utils/speech";
-import { EZRI_PCM_BUFFER_SIZE } from "./constants";
+import { CRISIS_KEYWORD_MODAL_ENABLED, EZRI_PCM_BUFFER_SIZE } from "./constants";
 import { useLiveUserSpeechStore } from "./hooks/useLiveUserSpeechStore";
 import { moodEmojiForLabel } from "./utils/moodEmoji";
 import {
