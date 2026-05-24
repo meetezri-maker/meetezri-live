@@ -246,6 +246,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
   } = props;
 
   const displayName = form.watch("name") || "Your name";
+  const profileInitial = (displayName.trim()[0] || "?").toUpperCase();
   const planPill = formatSubscriptionPlanLabel(planLabel);
 
   return (
@@ -353,7 +354,9 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                         {profileImage ? (
                           <img src={profileImage} alt="" className="h-full w-full object-cover" />
                         ) : (
-                          <span className="flex h-full w-full items-center justify-center bg-zinc-800 text-4xl">👤</span>
+                          <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-500/30 to-cyan-500/15 text-3xl font-semibold text-white sm:text-4xl">
+                            {profileInitial}
+                          </span>
                         )}
                       </button>
                       <button
@@ -680,7 +683,6 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                         profileDropdownPopover,
                                         "w-[--radix-popover-trigger-width]"
                                       )}
-                                      motion="fade"
                                       side="bottom"
                                       align="start"
                                       sideOffset={8}

@@ -1447,7 +1447,6 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                         accountDropdownPopover,
                         "w-[--radix-popover-trigger-width]"
                       )}
-                      motion="fade"
                       side="bottom"
                       align="start"
                       sideOffset={8}

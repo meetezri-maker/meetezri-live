@@ -197,7 +197,6 @@ export function PhoneInput({
             "z-[200] w-[300px] overflow-visible rounded-xl p-1 pb-0",
             popoverClassName,
           )}
-          motion="fade"
           side="bottom"
           align="start"
           sideOffset={8}

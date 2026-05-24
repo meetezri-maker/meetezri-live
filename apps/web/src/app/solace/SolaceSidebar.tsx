@@ -23,7 +23,6 @@ import { useMemo } from "react";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { formatSubscriptionPlanLabel } from "@/app/pages/app/profile/profileUi";
 import { cn } from "@/lib/utils";
-import { DASHBOARD_IMAGES } from "@/lib/solace/dashboardImages";
 
 interface NavItem {
   path: string;
@@ -69,11 +68,16 @@ export function SolaceSidebar() {
     return (path: string) => activeItem?.path === path;
   }, [location.pathname]);
 
-  const firstName = profile?.full_name?.split(" ")[0] || "Friend";
-  const profileAvatarSrc =
+  const displayName =
+    (typeof profile?.full_name === "string" && profile.full_name.trim()) ||
+    user?.email?.split("@")[0] ||
+    "Friend";
+  const firstName = displayName.split(" ")[0] || "Friend";
+  const profileAvatarUrl =
     typeof profile?.avatar_url === "string" && profile.avatar_url.trim()
       ? profile.avatar_url.trim()
-      : DASHBOARD_IMAGES.userAvatar;
+      : null;
+  const profileInitial = (displayName[0] || "?").toUpperCase();
   const subscriptionPlan =
     typeof profile?.subscription_plan === "string" ? profile.subscription_plan : undefined;
   const planLabel = formatSubscriptionPlanLabel(subscriptionPlan);
@@ -118,13 +122,22 @@ export function SolaceSidebar() {
         <div className="solace-sidebar-profile rounded-xl border border-white/[0.06] bg-[linear-gradient(180deg,rgba(18,18,40,0.55)_0%,rgba(10,10,24,0.75)_100%)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_28px_-10px_rgba(139,92,246,0.15)]">
           <div className="flex items-center gap-3">
             <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-violet-500/30 to-cyan-500/15">
-              <img
-                src={profileAvatarSrc}
-                alt=""
-                className="h-full w-full object-cover"
-                loading="lazy"
-                decoding="async"
-              />
+              {profileAvatarUrl ? (
+                <img
+                  src={profileAvatarUrl}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
+              ) : (
+                <div
+                  className="flex h-full w-full items-center justify-center text-sm font-semibold text-white"
+                  aria-hidden
+                >
+                  {profileInitial}
+                </div>
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-zinc-100">{firstName}</p>

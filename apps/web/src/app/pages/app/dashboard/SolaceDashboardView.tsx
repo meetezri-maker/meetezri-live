@@ -476,14 +476,16 @@ export function SolaceDashboardView({
                         {formatTime(creditsRemainingSeconds)}
                       </span>
                     }
-                    hint={`${userPlan} · ${creditsTotalMinutes} min total`}
+                    hint={
+                      creditsRemainingLow <= 50
+                        ? "Your remaining time is getting low."
+                        : `${userPlan} · ${creditsTotalMinutes} min total`
+                    }
+                    hintClassName={
+                      creditsRemainingLow <= 50 ? "text-amber-200/70" : undefined
+                    }
                   />
                 </div>
-                {creditsRemainingLow <= 50 && (
-                  <p className="mt-2 text-center text-[12px] text-amber-200/70 md:text-left">
-                    A soft nudge: your remaining time is getting low.
-                  </p>
-                )}
               </section>
 
               {/* Journey */}
@@ -647,13 +649,15 @@ function SnapStatus({
   label,
   value,
   hint,
+  hintClassName,
 }: {
   to: string;
   glow: "violet" | "amber" | "cyan" | "rose";
   icon: LucideIcon;
   label: string;
   value: ReactNode;
-  hint: string;
+  hint: ReactNode;
+  hintClassName?: string;
 }) {
   const glowCls =
     glow === "violet"
@@ -688,7 +692,12 @@ function SnapStatus({
           <Icon className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
         </div>
         <div className="text-lg font-medium tracking-tight text-zinc-100">{value}</div>
-        <p className="mt-auto pt-2 text-[10px] text-zinc-500 transition-colors group-hover:text-zinc-400">
+        <p
+          className={cn(
+            "mt-auto pt-2 text-[10px] transition-colors group-hover:text-zinc-400",
+            hintClassName ?? "text-zinc-500"
+          )}
+        >
           {hint}
         </p>
       </SolacePanel>

@@ -69,6 +69,7 @@ export interface ActiveSessionViewProps {
   companionName: string;
   sttProvider: string | undefined;
   ezriWsStatus: EzriWsStatus;
+  ezriWarmupStatus: "idle" | "warming" | "ready";
   permissionsGranted: boolean;
   sessionStatsOpen: boolean;
   onToggleSessionStats: () => void;
@@ -103,7 +104,6 @@ export interface ActiveSessionViewProps {
   onPipPointerUp: (e: React.PointerEvent<HTMLDivElement>) => void;
   showPermissionRequest: boolean;
   pendingMediaEntry: boolean;
-  ezriWarmupStatus: "idle" | "warming" | "ready";
   hasBrowserSpeechRecognition: boolean;
   onPermissionCancel: () => void;
   onAllowAccess: () => void;
@@ -185,6 +185,7 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
     companionName,
     sttProvider,
     ezriWsStatus,
+    ezriWarmupStatus,
     permissionsGranted,
     sessionStatsOpen,
     onToggleSessionStats,
@@ -219,7 +220,6 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
     onPipPointerUp,
     showPermissionRequest,
     pendingMediaEntry,
-    ezriWarmupStatus,
     hasBrowserSpeechRecognition,
     onPermissionCancel,
     onAllowAccess,
@@ -305,9 +305,14 @@ function ActiveSessionViewComponent(props: ActiveSessionViewProps) {
             transcript={transcript}
             liveUserSpeech={liveUserSpeech}
             isMuted={isMuted}
+            isSessionPaused={isSessionPaused}
+            isSoundOff={isSoundOff}
+            isEzriSpeaking={isEzriSpeaking}
+            isEzriThinking={isEzriThinking}
             companionName={companionName}
             sttProvider={sttProvider}
             ezriWsStatus={ezriWsStatus}
+            ezriWarmupStatus={ezriWarmupStatus}
             permissionsGranted={permissionsGranted}
           />
 
