@@ -575,7 +575,7 @@ export function SettingsHub() {
                     <ChevronRight className="h-4 w-4 text-[rgba(255,255,255,0.35)]" />
                   </span>
                 </Link>
-                <Link to="/app/billing" className={cn(settingsBtnPrimary, "mt-3")}>
+                <Link to="/app/billing" className={cn(settingsBtnPrimary, "mt-3 w-full")}>
                   Manage Plan
                 </Link>
               </div>
@@ -594,7 +594,7 @@ export function SettingsHub() {
               <div className="relative p-5 pt-0">
                 <h2 className="text-sm font-semibold text-[rgba(255,255,255,0.92)]">Need help?</h2>
                 <p className="mt-1.5 text-sm text-[rgba(255,255,255,0.55)]">We&apos;re here for you</p>
-                <Link to="/app/settings/help-support" className={cn(settingsBtnPrimary, "mt-4")}>
+                <Link to="/app/settings/help-support" className={cn(settingsBtnPrimary, "mt-4 w-full")}>
                   Contact support
                 </Link>
               </div>

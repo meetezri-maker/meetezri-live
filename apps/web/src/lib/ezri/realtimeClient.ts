@@ -35,6 +35,10 @@ export type EzriRealtimeClientHandlers = {
   onAudio?: (audio: EzriAudioSource) => void;
   onTtsDone?: () => void;
   onInterrupt?: () => void;
+  /** Backend pipeline warmup started (block mic / PCM until {@link onWarmupDone}). */
+  onWarmupStart?: () => void;
+  /** Backend pipeline warmup finished — safe to accept user speech. */
+  onWarmupDone?: () => void;
   /** Fired when the backend commits to speaking (step: speaking) — BEFORE first audio byte.
    *  Use to pause browser STT as early as possible to prevent mis-detection of echo. */
   onSpeakingStart?: () => void;
@@ -211,6 +215,16 @@ export class EzriRealtimeClient {
 
       if (errType === "interrupt") {
         this.handlers.onInterrupt?.();
+        return;
+      }
+
+      if (errType === "warmup_start") {
+        this.handlers.onWarmupStart?.();
+        return;
+      }
+
+      if (errType === "warmup_done") {
+        this.handlers.onWarmupDone?.();
         return;
       }
 
