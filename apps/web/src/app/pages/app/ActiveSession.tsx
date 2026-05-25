@@ -116,7 +116,9 @@ import {
   JORDAN_HEAD_OFFSET_X,
   JORDAN_HEAD_OFFSET_Y,
   JORDAN_IDLE_BROW_TUNING,
+  JORDAN_IDLE_SMILE_WARMTH_MULTIPLIER,
   JORDAN_LISTENING_FACE_TUNING,
+  JORDAN_LISTENING_SMILE_WARMTH_MULTIPLIER,
   JORDAN_MORPH_NAME_SET,
   JORDAN_MORPH_NAMES,
   JORDAN_RFV2_EXPRESSION_TEST_SEQUENCE,
@@ -126,6 +128,7 @@ import {
   JORDAN_RFV2_LISTENING_MORPH_TEST_SEQUENCE,
   JORDAN_RFV2_MORPH_AUDIT_NAMES,
   JORDAN_RFV2_REQUIRED_DRIVER_MORPHS,
+  JORDAN_SMILE_WARMTH_TUNING,
   JORDAN_SPEAKING_BEHAVIOR_TUNING,
   type JordanMorphName,
 } from "@/lib/avatar/jordanRfv2Config";
@@ -160,6 +163,7 @@ import type {
   MorphBinding,
 } from "@/lib/avatar/avatarMorphTypes";
 import { SARA_AVATAR_DEFINITION } from "@/lib/avatar/configs/saraConfig";
+import { applySaraRuntimeFix } from "@/lib/avatar/saraRuntimeFix";
 import type {
   AvatarCameraConfig,
   AvatarGltfTransformConfig,
@@ -175,17 +179,15 @@ type FixedAvatarViewportConfig = {
   debugLabel: string;
   camera: AvatarCameraConfig;
   gltfTransform: AvatarGltfTransformConfig;
+  visualAnchor?: typeof SARA_AVATAR_DEFINITION.visualAnchor;
 };
 
-const DEBUG_SARA_FRAMING = true;
-const SARA_VISUAL_ANCHOR_MESH_NAMES = new Set([
-  "Face",
-  "Character",
-  "Character.002",
-]);
+const DEBUG_SARA_FRAMING = false;
+const DEBUG_SARA_VISIBILITY_AUDIT = true;
+const SARA_VISUAL_ANCHOR_MESH_NAMES = new Set(
+  SARA_AVATAR_DEFINITION.visualAnchor?.preferredMeshNames ?? []
+);
 const SARA_OVERSIZED_SHELL_MESH_NAMES = new Set([
-  "model_19",
-  "model_19.001",
   "Object_2",
   "Object_0",
 ]);
@@ -299,6 +301,308 @@ function serializableBox(box: THREE.Box3) {
     max: box.max.toArray(),
     center: center.toArray(),
     size: size.toArray(),
+  };
+}
+
+function serializableObjectBox(object: THREE.Object3D) {
+  const box = new THREE.Box3().setFromObject(object);
+  return box.isEmpty() ? null : serializableBox(box);
+}
+
+function isFiniteNumber(value: number): boolean {
+  return Number.isFinite(value) && !Number.isNaN(value);
+}
+
+function isFiniteVector3(value: THREE.Vector3): boolean {
+  return isFiniteNumber(value.x) && isFiniteNumber(value.y) && isFiniteNumber(value.z);
+}
+
+function isFiniteQuaternion(value: THREE.Quaternion): boolean {
+  return (
+    isFiniteNumber(value.x) &&
+    isFiniteNumber(value.y) &&
+    isFiniteNumber(value.z) &&
+    isFiniteNumber(value.w)
+  );
+}
+
+function isFiniteMatrix4(value: THREE.Matrix4): boolean {
+  return value.elements.every(isFiniteNumber);
+}
+
+function hasInvalidPositionAttribute(positionAttribute: THREE.BufferAttribute): boolean {
+  const array = positionAttribute.array;
+  for (let i = 0; i < array.length; i += 1) {
+    if (!isFiniteNumber(Number(array[i]))) return true;
+  }
+  return false;
+}
+
+function saraMeshMarkerColor(index: number): number {
+  const colors = [
+    0xff00ff,
+    0x00ffff,
+    0xffff00,
+    0x00ff66,
+    0xff6600,
+    0x6699ff,
+  ];
+  return colors[index % colors.length];
+}
+
+function isSaraAuditHelperObject(object: THREE.Object3D): boolean {
+  const name = object.name || "";
+  return (
+    name.startsWith("SaraVisibilityAudit") ||
+    name.startsWith("SaraMeshCenterMarker_")
+  );
+}
+
+function objectContainsDescendant(root: THREE.Object3D, target: THREE.Object3D): boolean {
+  let contains = false;
+  root.traverse((child) => {
+    if (child === target) contains = true;
+  });
+  return contains;
+}
+
+function collectSaraVisibilityAudit(
+  gltfScene: THREE.Object3D,
+  avatarRoot: THREE.Object3D,
+  scene: THREE.Scene,
+  camera: THREE.PerspectiveCamera,
+  modelUrl: string,
+  cameraLookAt: THREE.Vector3 | null
+) {
+  const meshDiagnostics: Array<Record<string, unknown>> = [];
+  const meshNames: string[] = [];
+  const invalidGeometryMeshes: string[] = [];
+  const tinyScaleMeshes: string[] = [];
+  const invalidScaleMeshes: string[] = [];
+  const brokenSkeletonMeshes: string[] = [];
+  const outsideCameraPlanesMeshes: string[] = [];
+  const meshCenters: Array<Record<string, unknown>> = [];
+  const cameraDistanceToMeshes: Array<Record<string, unknown>> = [];
+  let visibleMeshCount = 0;
+  let skinnedMeshCount = 0;
+
+  gltfScene.traverse((child: THREE.Object3D) => {
+    if (isSaraAuditHelperObject(child)) return;
+    const isMesh =
+      (child as THREE.Mesh).isMesh ||
+      (child as THREE.SkinnedMesh).isSkinnedMesh;
+    if (!isMesh) return;
+
+    const mesh = child as THREE.Mesh | THREE.SkinnedMesh;
+    const worldPosition = child.getWorldPosition(new THREE.Vector3());
+    const worldScale = child.getWorldScale(new THREE.Vector3());
+    const originalLocalScale = Array.isArray(child.userData.saraAuditOriginalLocalScale)
+      ? child.userData.saraAuditOriginalLocalScale as number[]
+      : null;
+    const worldQuaternion = child.getWorldQuaternion(new THREE.Quaternion());
+    const meshBox = new THREE.Box3().setFromObject(child);
+    const meshCenter = meshBox.isEmpty()
+      ? worldPosition.clone()
+      : meshBox.getCenter(new THREE.Vector3());
+    const meshSize = meshBox.isEmpty()
+      ? new THREE.Vector3()
+      : meshBox.getSize(new THREE.Vector3());
+    const distanceFromCamera = camera.position.distanceTo(meshCenter);
+    const geometry = mesh.geometry as THREE.BufferGeometry | undefined;
+    const positionAttribute = geometry?.getAttribute?.("position") as
+      | THREE.BufferAttribute
+      | undefined;
+    if (geometry && !geometry.boundingBox) geometry.computeBoundingBox();
+    const geometryBox = geometry?.boundingBox ?? null;
+    const geometrySize = geometryBox?.getSize(new THREE.Vector3()) ?? null;
+    const hasGeometry = Boolean(geometry);
+    const hasPositionAttribute = Boolean(positionAttribute);
+    const vertexCount = positionAttribute?.count ?? 0;
+    const geometryNearZero =
+      !geometrySize ||
+      geometrySize.length() < 0.0001 ||
+      Math.max(geometrySize.x, geometrySize.y, geometrySize.z) < 0.0001;
+    const geometryInvalid =
+      !hasGeometry ||
+      !hasPositionAttribute ||
+      vertexCount <= 0 ||
+      geometryNearZero ||
+      !isFiniteVector3(meshSize) ||
+      !isFiniteVector3(meshCenter) ||
+      (positionAttribute ? hasInvalidPositionAttribute(positionAttribute) : true);
+    const scaleValues = [worldScale.x, worldScale.y, worldScale.z];
+    const originalScaleValues = originalLocalScale ?? scaleValues;
+    const invalidScale =
+      !isFiniteVector3(worldScale) ||
+      originalScaleValues.some((value) => !isFiniteNumber(value) || value === 0 || value < 0);
+    const tinyScale =
+      !invalidScale && originalScaleValues.some((value) => Math.abs(value) < 0.0001);
+    const outsideCameraPlanes =
+      distanceFromCamera < camera.near || distanceFromCamera > camera.far;
+    const skeleton = (mesh as THREE.SkinnedMesh).skeleton;
+    const skeletonBones = skeleton?.bones ?? [];
+    const skeletonTransformsInvalid = skeletonBones.some((bone) => {
+      const boneWorldPosition = bone.getWorldPosition(new THREE.Vector3());
+      const boneWorldScale = bone.getWorldScale(new THREE.Vector3());
+      const boneWorldQuaternion = bone.getWorldQuaternion(new THREE.Quaternion());
+      return (
+        !isFiniteVector3(boneWorldPosition) ||
+        !isFiniteVector3(boneWorldScale) ||
+        !isFiniteQuaternion(boneWorldQuaternion)
+      );
+    });
+    const brokenSkeleton =
+      (mesh as THREE.SkinnedMesh).isSkinnedMesh &&
+      (!skeleton ||
+        skeletonBones.length === 0 ||
+        !isFiniteMatrix4((mesh as THREE.SkinnedMesh).bindMatrix) ||
+        !isFiniteMatrix4((mesh as THREE.SkinnedMesh).bindMatrixInverse) ||
+        skeletonTransformsInvalid);
+    const materials = (Array.isArray(mesh.material) ? mesh.material : [mesh.material])
+      .filter(Boolean)
+      .map((material: any) => ({
+        name: material.name || "(unnamed material)",
+        type: material.type || material.constructor?.name || "(unknown material)",
+        opacity: typeof material.opacity === "number" ? material.opacity : null,
+        transparent:
+          typeof material.transparent === "boolean" ? material.transparent : null,
+        visible: typeof material.visible === "boolean" ? material.visible : null,
+        side: typeof material.side === "number" ? material.side : null,
+        color: material.color?.getHexString?.() ?? null,
+        depthTest: typeof material.depthTest === "boolean" ? material.depthTest : null,
+        depthWrite:
+          typeof material.depthWrite === "boolean" ? material.depthWrite : null,
+        colorWrite:
+          typeof material.colorWrite === "boolean" ? material.colorWrite : null,
+        alphaTest: typeof material.alphaTest === "number" ? material.alphaTest : null,
+      }));
+
+    meshNames.push(child.name || "(unnamed mesh)");
+    if (child.visible) visibleMeshCount += 1;
+    if ((child as THREE.SkinnedMesh).isSkinnedMesh) skinnedMeshCount += 1;
+    if (geometryInvalid) invalidGeometryMeshes.push(child.name || "(unnamed mesh)");
+    if (tinyScale) tinyScaleMeshes.push(child.name || "(unnamed mesh)");
+    if (invalidScale) invalidScaleMeshes.push(child.name || "(unnamed mesh)");
+    if (brokenSkeleton) brokenSkeletonMeshes.push(child.name || "(unnamed mesh)");
+    if (outsideCameraPlanes) outsideCameraPlanesMeshes.push(child.name || "(unnamed mesh)");
+    meshCenters.push({
+      name: child.name || "(unnamed mesh)",
+      center: meshCenter.toArray(),
+    });
+    cameraDistanceToMeshes.push({
+      name: child.name || "(unnamed mesh)",
+      distance: distanceFromCamera,
+      insideNearFar: !outsideCameraPlanes,
+    });
+
+    meshDiagnostics.push({
+      name: child.name || "(unnamed mesh)",
+      type: (child as THREE.SkinnedMesh).isSkinnedMesh ? "SkinnedMesh" : "Mesh",
+      parentName: child.parent?.name || "(no parent)",
+      visible: child.visible,
+      frustumCulled: child.frustumCulled,
+      geometryExists: hasGeometry,
+      geometryVertexCount: vertexCount,
+      geometryBoundingBox: geometryBox ? serializableBox(geometryBox) : null,
+      geometryInvalid,
+      renderOrder: child.renderOrder,
+      castShadow: (child as THREE.Mesh).castShadow,
+      receiveShadow: (child as THREE.Mesh).receiveShadow,
+      worldPosition: worldPosition.toArray(),
+      worldScale: worldScale.toArray(),
+      originalLocalScale,
+      worldQuaternion: worldQuaternion.toArray(),
+      bounds: meshBox.isEmpty() ? null : serializableBox(meshBox),
+      boundsSize: meshSize.toArray(),
+      distanceFromCamera,
+      outsideCameraPlanes,
+      skeleton: (mesh as THREE.SkinnedMesh).isSkinnedMesh
+        ? {
+            exists: Boolean(skeleton),
+            bonesCount: skeletonBones.length,
+            bindMatrixValid: isFiniteMatrix4((mesh as THREE.SkinnedMesh).bindMatrix),
+            bindMatrixInverseValid: isFiniteMatrix4(
+              (mesh as THREE.SkinnedMesh).bindMatrixInverse
+            ),
+            boneWorldTransformsValid: !skeletonTransformsInvalid,
+            broken: brokenSkeleton,
+          }
+        : null,
+      materials,
+    });
+  });
+
+  const likelyRootCauses: string[] = [];
+  if (meshNames.length === 0) likelyRootCauses.push("mesh not attached or GLB has no render meshes");
+  if (invalidGeometryMeshes.length > 0) likelyRootCauses.push("invalid geometry");
+  if (tinyScaleMeshes.length > 0) likelyRootCauses.push("microscopic mesh scale");
+  if (invalidScaleMeshes.length > 0) likelyRootCauses.push("invalid or negative mesh scale");
+  if (brokenSkeletonMeshes.length > 0) likelyRootCauses.push("broken skeleton/skinning");
+  if (outsideCameraPlanesMeshes.length === meshNames.length && meshNames.length > 0) {
+    likelyRootCauses.push("meshes outside camera near/far planes");
+  }
+  const allTransparent = meshDiagnostics.length > 0 &&
+    meshDiagnostics.every((entry) => {
+      const materials = entry.materials as Array<{ opacity: number | null; transparent: boolean | null; visible: boolean | null }>;
+      return materials.length > 0 && materials.every((material) =>
+        material.visible === false ||
+        material.opacity === 0 ||
+        material.transparent === true
+      );
+    });
+  if (allTransparent) likelyRootCauses.push("transparent or hidden material");
+
+  return {
+    modelUrl,
+    sceneAdded:
+      scene.children.includes(avatarRoot) &&
+      objectContainsDescendant(avatarRoot, gltfScene),
+    gltfSceneChildren: gltfScene.children.map((child) => child.name || child.type),
+    rootCount: gltfScene.children.length,
+    avatarRootChildrenCount: avatarRoot.children.length,
+    visibleMeshCount,
+    skinnedMeshCount,
+    invalidGeometryMeshes,
+    tinyScaleMeshes,
+    invalidScaleMeshes,
+    brokenSkeletonMeshes,
+    outsideCameraPlanesMeshes,
+    meshCenters,
+    cameraDistanceToMeshes,
+    emergencyMaterialEnabled: false,
+    emergencyScaleEnabled: false,
+    forceVisibleEnabled: Boolean(SARA_AVATAR_DEFINITION.runtimeFix?.forceVisible),
+    forceBasicMaterialEnabled: Boolean(SARA_AVATAR_DEFINITION.runtimeFix?.forceBasicMaterial),
+    autoFrameEnabled: Boolean(SARA_AVATAR_DEFINITION.runtimeFix?.debugAutoFrameCamera),
+    wireframeEnabled: Boolean(SARA_AVATAR_DEFINITION.runtimeFix?.wireframe),
+    likelyRootCause:
+      likelyRootCauses.length > 0 ? likelyRootCauses : ["no obvious mesh visibility cause in audit data"],
+    saraMeshNames: meshNames.sort((a, b) => a.localeCompare(b)),
+    meshes: meshDiagnostics,
+    gltfSceneTransform: {
+      position: gltfScene.position.toArray(),
+      rotation: [gltfScene.rotation.x, gltfScene.rotation.y, gltfScene.rotation.z],
+      scale: gltfScene.scale.toArray(),
+      worldPosition: gltfScene.getWorldPosition(new THREE.Vector3()).toArray(),
+      worldScale: gltfScene.getWorldScale(new THREE.Vector3()).toArray(),
+    },
+    avatarRootTransform: {
+      position: avatarRoot.position.toArray(),
+      rotation: [avatarRoot.rotation.x, avatarRoot.rotation.y, avatarRoot.rotation.z],
+      scale: avatarRoot.scale.toArray(),
+    },
+    bounds: {
+      gltfScene: serializableObjectBox(gltfScene),
+      avatarRoot: serializableObjectBox(avatarRoot),
+    },
+    camera: {
+      position: camera.position.toArray(),
+      lookAt: cameraLookAt?.toArray() ?? camera.userData.fixedLookAt ?? null,
+      fov: camera.fov,
+      near: camera.near,
+      far: camera.far,
+    },
+    meshDiagnostics,
   };
 }
 
@@ -2416,7 +2720,15 @@ function ThreeAvatar({
           cameraConfig: fixedViewportConfig?.camera ?? null,
           gltfTransformConfig: fixedViewportConfig?.gltfTransform ?? null,
         });
-        if (hasFixedViewportConfig) {
+        if (isSaraViewport && DEBUG_SARA_VISIBILITY_AUDIT) {
+          console.info("[Sara Visibility Audit] GLB load success:", {
+            modelUrl,
+            sceneName: gltfScene.name || "(unnamed scene)",
+            childNames: gltfScene.children.map((child) => child.name || child.type),
+            rootCount: gltfScene.children.length,
+          });
+        }
+        if (hasFixedViewportConfig && !isSaraViewport) {
           applyVector3Config(gltfScene.position, fixedViewportConfig.gltfTransform.position, [
             0,
             0,
@@ -2428,6 +2740,10 @@ function ThreeAvatar({
             0,
           ]);
           applyScaleConfig(gltfScene, fixedViewportConfig.gltfTransform.scale, 1);
+        } else if (hasFixedViewportConfig && isSaraViewport) {
+          gltfScene.position.set(0, 0, 0);
+          gltfScene.rotation.set(0, 0, 0);
+          gltfScene.scale.set(1, 1, 1);
         } else if (useRfv2Morphs) {
           gltfScene.position.set(0, -1.65, 0); // move avatar down shaz
           gltfScene.rotation.set(0, 0, 0);
@@ -2527,8 +2843,8 @@ function ThreeAvatar({
           }
           if ((child as THREE.Mesh).isMesh || (child as THREE.SkinnedMesh).isSkinnedMesh) {
             const mesh = child as THREE.Mesh;
-            child.castShadow = true;
-            child.receiveShadow = true;
+            child.castShadow = !isSaraViewport;
+            child.receiveShadow = !isSaraViewport;
             // Skinned meshes have stale bounding spheres after the model is
             // repositioned/scaled, causing Three.js frustum culling to
             // incorrectly discard them (head and other parts disappear).
@@ -2538,13 +2854,18 @@ function ThreeAvatar({
             child.renderOrder = 10;
             const materials = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).filter(Boolean);
             materials.forEach((material: any) => {
-              if (isSaraViewport && DEBUG_SARA_FRAMING) {
+              if (
+                isSaraViewport &&
+                (DEBUG_SARA_FRAMING || DEBUG_SARA_VISIBILITY_AUDIT)
+              ) {
+                material.visible = true;
                 material.opacity = 1;
                 material.transparent = false;
                 material.side = THREE.DoubleSide;
               }
               material.depthTest = true;
               material.depthWrite = true;
+              material.visible = true;
               material.needsUpdate = true;
             });
             if (isSaraViewport && DEBUG_SARA_FRAMING && isSaraOversizedShellMesh(child)) {
@@ -2858,8 +3179,34 @@ function ThreeAvatar({
           avatarRoot.rotation.z = viewTuning.modelRotationZ;
           transformCorrections.push("root.rotation.z");
         }
-        avatarRoot.add(gltfScene);
+        if (isSaraViewport) {
+          applySaraRuntimeFix({
+            gltfScene,
+            avatarRoot,
+            camera,
+            scene,
+            config: SARA_AVATAR_DEFINITION,
+            modelUrl,
+            debug: DEBUG_SARA_VISIBILITY_AUDIT,
+          });
+          transformCorrections.push("sara.runtimeFix.applySaraRuntimeFix");
+        } else {
+          avatarRoot.add(gltfScene);
+        }
         scene.add(avatarRoot);
+        if (isSaraViewport && DEBUG_SARA_VISIBILITY_AUDIT) {
+          const saraOriginMarker = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08, 24, 24),
+            new THREE.MeshBasicMaterial({
+              color: 0xff0000,
+              depthTest: false,
+              depthWrite: false,
+            })
+          );
+          saraOriginMarker.name = "SaraVisibilityAuditOriginMarker";
+          saraOriginMarker.renderOrder = 999;
+          gltfScene.add(saraOriginMarker);
+        }
         gltfScene.updateMatrixWorld(true);
         avatarRoot.updateMatrixWorld(true);
         roomGroup.updateMatrixWorld(true);
@@ -3005,6 +3352,73 @@ function ThreeAvatar({
           camera.lookAt(lookAt);
         }
         camera.updateProjectionMatrix();
+        gltfScene.updateMatrixWorld(true);
+        avatarRoot.updateMatrixWorld(true);
+
+        if (isSaraViewport && DEBUG_SARA_VISIBILITY_AUDIT) {
+          const markerGroup = new THREE.Group();
+          markerGroup.name = "SaraVisibilityAuditMeshCenterMarkers";
+          let markerIndex = 0;
+          gltfScene.traverse((child: THREE.Object3D) => {
+            if (isSaraAuditHelperObject(child)) return;
+            const isMesh =
+              (child as THREE.Mesh).isMesh ||
+              (child as THREE.SkinnedMesh).isSkinnedMesh;
+            if (!isMesh || !child.visible) return;
+            const meshBox = new THREE.Box3().setFromObject(child);
+            if (meshBox.isEmpty()) return;
+            const meshCenter = meshBox.getCenter(new THREE.Vector3());
+            const localCenter = gltfScene.worldToLocal(meshCenter.clone());
+            const marker = new THREE.Mesh(
+              new THREE.SphereGeometry(0.06, 16, 16),
+              new THREE.MeshBasicMaterial({
+                color: saraMeshMarkerColor(markerIndex),
+                depthTest: false,
+                depthWrite: false,
+              })
+            );
+            marker.name = `SaraMeshCenterMarker_${child.name || markerIndex}`;
+            marker.position.copy(localCenter);
+            marker.renderOrder = 1000 + markerIndex;
+            markerGroup.add(marker);
+            markerIndex += 1;
+          });
+          gltfScene.add(markerGroup);
+          gltfScene.updateMatrixWorld(true);
+          avatarRoot.updateMatrixWorld(true);
+
+          const saraAuditLookAt = camera.userData.fixedLookAt
+            ? new THREE.Vector3().fromArray(camera.userData.fixedLookAt)
+            : null;
+          const saraVisibilityAudit = collectSaraVisibilityAudit(
+            gltfScene,
+            avatarRoot,
+            scene,
+            camera,
+            modelUrl,
+            saraAuditLookAt
+          );
+          (window as any).saraVisibilityAudit = saraVisibilityAudit;
+          console.group("[Sara Visibility Audit]");
+          console.log(saraVisibilityAudit);
+          console.groupEnd();
+          console.group("[Sara Mesh Visibility Audit]");
+          console.log({
+            visibleMeshCount: saraVisibilityAudit.visibleMeshCount,
+            skinnedMeshCount: saraVisibilityAudit.skinnedMeshCount,
+            invalidGeometryMeshes: saraVisibilityAudit.invalidGeometryMeshes,
+            tinyScaleMeshes: saraVisibilityAudit.tinyScaleMeshes,
+            invalidScaleMeshes: saraVisibilityAudit.invalidScaleMeshes,
+            brokenSkeletonMeshes: saraVisibilityAudit.brokenSkeletonMeshes,
+            meshCenters: saraVisibilityAudit.meshCenters,
+            cameraDistanceToMeshes: saraVisibilityAudit.cameraDistanceToMeshes,
+            emergencyMaterialEnabled: saraVisibilityAudit.emergencyMaterialEnabled,
+            emergencyScaleEnabled: saraVisibilityAudit.emergencyScaleEnabled,
+            wireframeEnabled: saraVisibilityAudit.wireframeEnabled,
+            likelyRootCause: saraVisibilityAudit.likelyRootCause,
+          });
+          console.groupEnd();
+        }
 
         if (process.env.NODE_ENV === "development") {
           avatarRoot.updateMatrixWorld(true);
@@ -3379,6 +3793,12 @@ function ThreeAvatar({
       },
       undefined,
       (error) => {
+        if (isSaraFixedViewportConfig(fixedViewportConfig) && DEBUG_SARA_VISIBILITY_AUDIT) {
+          console.error("[Sara Visibility Audit] GLB load failed:", {
+            modelUrl,
+            error,
+          });
+        }
         console.error("[Avatar] Failed to load GLB:", error);
         if (!cancelled) setAvatarLoadState("error");
       }
@@ -4151,6 +4571,41 @@ function ThreeAvatar({
                     THREE.MathUtils.lerp(range[0], range[1], 0.5);
                   const rangeByEnergy = (range: readonly [number, number], energy: number) =>
                     THREE.MathUtils.lerp(range[0], range[1], THREE.MathUtils.clamp(energy, 0, 1));
+                  const warmthDrift = (
+                    min: number,
+                    phaseA: number,
+                    phaseB: number
+                  ) =>
+                    THREE.MathUtils.clamp(
+                      0.72 +
+                        Math.sin(now * 0.00017 + phaseA) * 0.2 +
+                        Math.sin(now * 0.000041 + phaseB) * 0.14,
+                      min,
+                      1
+                    );
+                  const smileWarmthAsymmetry = THREE.MathUtils.clamp(
+                    Math.sin(now * 0.00011 + 3.1) * 0.06 +
+                      Math.sin(now * 0.000037 + 0.4) * 0.035,
+                    -JORDAN_SMILE_WARMTH_TUNING.asymmetryAmount[1],
+                    JORDAN_SMILE_WARMTH_TUNING.asymmetryAmount[1]
+                  );
+                  const idleWarmthDrift = warmthDrift(
+                    JORDAN_SMILE_WARMTH_TUNING.idleWarmthDriftRange[0],
+                    0.3,
+                    2.1
+                  );
+                  const listeningWarmthDrift = warmthDrift(
+                    JORDAN_SMILE_WARMTH_TUNING.listeningWarmthDriftRange[0],
+                    1.2,
+                    2.8
+                  );
+                  const idleSmileWarmthScale =
+                    JORDAN_IDLE_SMILE_WARMTH_MULTIPLIER * idleWarmthDrift;
+                  const listeningSmileWarmthScale =
+                    JORDAN_LISTENING_SMILE_WARMTH_MULTIPLIER * listeningWarmthDrift;
+                  const warmthLeftScale = 1 - smileWarmthAsymmetry * 0.5;
+                  const warmthRightScale = 1 + smileWarmthAsymmetry * 0.5;
+                  let jordanSmileWarmthDiagnostics: Record<string, unknown> | null = null;
                   const queuePresetTarget = (name: JordanMorphName, value: number) => {
                     if (presetSuppressedByDebug) return;
                     const contribution = THREE.MathUtils.clamp(
@@ -4174,34 +4629,68 @@ function ThreeAvatar({
                     queuePresetTarget("sad", 0);
                     queuePresetTarget("mouthFrownLeft", 0);
                     queuePresetTarget("mouthFrownRight", 0);
-                    queuePresetTarget(
-                      "mouthSmileLeft",
+                    const idleSmileLeftWarmth = THREE.MathUtils.clamp(
                       Math.max(
-                        rangeMid(preset.mouthSmileLeft) * leftPresetScale,
-                        idleSmileTarget * 0.04
-                      ) + jordanIdleBehaviorContribution.smileLeft
+                        rangeMid(preset.mouthSmileLeft) *
+                          idleSmileWarmthScale *
+                          leftPresetScale *
+                          warmthLeftScale,
+                        idleSmileTarget * 0.04 * idleSmileWarmthScale
+                      ) + jordanIdleBehaviorContribution.smileLeft,
+                      JORDAN_SMILE_WARMTH_TUNING.idleSmileRange[0],
+                      JORDAN_SMILE_WARMTH_TUNING.idleSmileRange[1]
                     );
-                    queuePresetTarget(
-                      "mouthSmileRight",
+                    const idleSmileRightWarmth = THREE.MathUtils.clamp(
                       Math.max(
-                        rangeMid(preset.mouthSmileRight) * rightPresetScale,
-                        idleSmileTarget * 0.045
-                      ) + jordanIdleBehaviorContribution.smileRight
+                        rangeMid(preset.mouthSmileRight) *
+                          idleSmileWarmthScale *
+                          rightPresetScale *
+                          warmthRightScale,
+                        idleSmileTarget * 0.045 * idleSmileWarmthScale
+                      ) + jordanIdleBehaviorContribution.smileRight,
+                      JORDAN_SMILE_WARMTH_TUNING.idleSmileRange[0],
+                      JORDAN_SMILE_WARMTH_TUNING.idleSmileRange[1]
                     );
-                    queuePresetTarget(
-                      "cheekSquintLeft",
+                    const idleCheekLeftWarmth = THREE.MathUtils.clamp(
                       Math.max(
-                        rangeMid(preset.cheekSquintLeft) * leftPresetScale,
-                        idleCheekTarget * 0.45
-                      ) + jordanIdleBehaviorContribution.cheekLeft
+                        rangeMid(preset.cheekSquintLeft) *
+                          idleSmileWarmthScale *
+                          leftPresetScale *
+                          warmthLeftScale,
+                        idleCheekTarget * 0.45 * idleSmileWarmthScale
+                      ) + jordanIdleBehaviorContribution.cheekLeft,
+                      JORDAN_SMILE_WARMTH_TUNING.cheekRange[0],
+                      JORDAN_SMILE_WARMTH_TUNING.cheekRange[1]
                     );
-                    queuePresetTarget(
-                      "cheekSquintRight",
+                    const idleCheekRightWarmth = THREE.MathUtils.clamp(
                       Math.max(
-                        rangeMid(preset.cheekSquintRight) * rightPresetScale,
-                        idleCheekTarget * 0.45
-                      ) + jordanIdleBehaviorContribution.cheekRight
+                        rangeMid(preset.cheekSquintRight) *
+                          idleSmileWarmthScale *
+                          rightPresetScale *
+                          warmthRightScale,
+                        idleCheekTarget * 0.45 * idleSmileWarmthScale
+                      ) + jordanIdleBehaviorContribution.cheekRight,
+                      JORDAN_SMILE_WARMTH_TUNING.cheekRange[0],
+                      JORDAN_SMILE_WARMTH_TUNING.cheekRange[1]
                     );
+                    queuePresetTarget("mouthSmileLeft", idleSmileLeftWarmth);
+                    queuePresetTarget("mouthSmileRight", idleSmileRightWarmth);
+                    queuePresetTarget("cheekSquintLeft", idleCheekLeftWarmth);
+                    queuePresetTarget("cheekSquintRight", idleCheekRightWarmth);
+                    jordanSmileWarmthDiagnostics = {
+                      state: "idle",
+                      multiplier: JORDAN_IDLE_SMILE_WARMTH_MULTIPLIER,
+                      drift: idleWarmthDrift,
+                      smileContribution: {
+                        left: jordanIdleBehaviorContribution.smileLeft,
+                        right: jordanIdleBehaviorContribution.smileRight,
+                      },
+                      asymmetryOffset: smileWarmthAsymmetry,
+                      finalClampedSmile: {
+                        left: idleSmileLeftWarmth,
+                        right: idleSmileRightWarmth,
+                      },
+                    };
                     queuePresetTarget(
                       "eyebrows",
                       Math.max(
@@ -4220,38 +4709,85 @@ function ThreeAvatar({
                         ? JORDAN_EXPRESSION_PRESET_TUNING.sadSmileReduction
                         : JORDAN_EXPRESSION_PRESET_TUNING.sentimentSmileMultiplier) *
                       jordanListeningBehaviorContribution.smileMultiplier;
+                    const listeningSmileMin = sadSentiment
+                      ? 0
+                      : JORDAN_SMILE_WARMTH_TUNING.listeningSmileRange[0];
+                    const listeningSmileLeftWarmth = THREE.MathUtils.clamp(
+                      Math.max(
+                        rangeMid(preset.mouthSmileLeft) *
+                          smileScale *
+                          listeningSmileWarmthScale *
+                          leftPresetScale *
+                          warmthLeftScale,
+                        (nextListeningFaceApplied.smileLeft +
+                          jordanListeningBehaviorContribution.smileLeft) *
+                          listeningSmileWarmthScale
+                      ),
+                      listeningSmileMin,
+                      JORDAN_SMILE_WARMTH_TUNING.listeningSmileRange[1]
+                    );
+                    const listeningSmileRightWarmth = THREE.MathUtils.clamp(
+                      Math.max(
+                        rangeMid(preset.mouthSmileRight) *
+                          smileScale *
+                          listeningSmileWarmthScale *
+                          rightPresetScale *
+                          warmthRightScale,
+                        (nextListeningFaceApplied.smileRight +
+                          jordanListeningBehaviorContribution.smileRight) *
+                          listeningSmileWarmthScale
+                      ),
+                      listeningSmileMin,
+                      JORDAN_SMILE_WARMTH_TUNING.listeningSmileRange[1]
+                    );
+                    const listeningCheekLeftWarmth = THREE.MathUtils.clamp(
+                      Math.max(
+                        rangeMid(preset.cheekSquintLeft) *
+                          listeningSmileWarmthScale *
+                          leftPresetScale *
+                          warmthLeftScale,
+                        (nextListeningFaceApplied.cheekLeft +
+                          jordanListeningBehaviorContribution.cheekLeft) *
+                          listeningSmileWarmthScale
+                      ),
+                      JORDAN_SMILE_WARMTH_TUNING.cheekRange[0],
+                      JORDAN_SMILE_WARMTH_TUNING.cheekRange[1]
+                    );
+                    const listeningCheekRightWarmth = THREE.MathUtils.clamp(
+                      Math.max(
+                        rangeMid(preset.cheekSquintRight) *
+                          listeningSmileWarmthScale *
+                          rightPresetScale *
+                          warmthRightScale,
+                        (nextListeningFaceApplied.cheekRight +
+                          jordanListeningBehaviorContribution.cheekRight) *
+                          listeningSmileWarmthScale
+                      ),
+                      JORDAN_SMILE_WARMTH_TUNING.cheekRange[0],
+                      JORDAN_SMILE_WARMTH_TUNING.cheekRange[1]
+                    );
                     queuePresetTarget(
                       "viseme_rest",
                       Math.max(targets.get("viseme_rest") ?? 0, rangeMid(preset.visemeRest))
                     );
-                    queuePresetTarget(
-                      "mouthSmileLeft",
-                      Math.max(
-                        rangeMid(preset.mouthSmileLeft) * smileScale * leftPresetScale,
-                        nextListeningFaceApplied.smileLeft + jordanListeningBehaviorContribution.smileLeft
-                      )
-                    );
-                    queuePresetTarget(
-                      "mouthSmileRight",
-                      Math.max(
-                        rangeMid(preset.mouthSmileRight) * smileScale * rightPresetScale,
-                        nextListeningFaceApplied.smileRight + jordanListeningBehaviorContribution.smileRight
-                      )
-                    );
-                    queuePresetTarget(
-                      "cheekSquintLeft",
-                      Math.max(
-                        rangeMid(preset.cheekSquintLeft) * leftPresetScale,
-                        nextListeningFaceApplied.cheekLeft + jordanListeningBehaviorContribution.cheekLeft
-                      )
-                    );
-                    queuePresetTarget(
-                      "cheekSquintRight",
-                      Math.max(
-                        rangeMid(preset.cheekSquintRight) * rightPresetScale,
-                        nextListeningFaceApplied.cheekRight + jordanListeningBehaviorContribution.cheekRight
-                      )
-                    );
+                    queuePresetTarget("mouthSmileLeft", listeningSmileLeftWarmth);
+                    queuePresetTarget("mouthSmileRight", listeningSmileRightWarmth);
+                    queuePresetTarget("cheekSquintLeft", listeningCheekLeftWarmth);
+                    queuePresetTarget("cheekSquintRight", listeningCheekRightWarmth);
+                    jordanSmileWarmthDiagnostics = {
+                      state: "listening",
+                      multiplier: JORDAN_LISTENING_SMILE_WARMTH_MULTIPLIER,
+                      drift: listeningWarmthDrift,
+                      smileContribution: {
+                        left: jordanListeningBehaviorContribution.smileLeft,
+                        right: jordanListeningBehaviorContribution.smileRight,
+                      },
+                      asymmetryOffset: smileWarmthAsymmetry,
+                      finalClampedSmile: {
+                        left: listeningSmileLeftWarmth,
+                        right: listeningSmileRightWarmth,
+                      },
+                    };
                     queuePresetTarget(
                       "eyebrows",
                       sadSentiment
@@ -4443,6 +4979,9 @@ function ThreeAvatar({
                       },
                       olderDirectExpressionSystems: "routed-into-preset-layer",
                       eyeFocusPriority: "eye-look morphs are applied after presets",
+                      smileWarmth: DEBUG_JORDAN_BEHAVIOR_TIMING
+                        ? jordanSmileWarmthDiagnostics
+                        : undefined,
                       presetSuppressedByDebug,
                     });
                   }
@@ -6753,6 +7292,7 @@ export default ThreeAvatar;
               avatarId: SARA_AVATAR_DEFINITION.id,
               camera: SARA_AVATAR_DEFINITION.camera,
               gltfTransform: SARA_AVATAR_DEFINITION.gltfTransform,
+              visualAnchor: SARA_AVATAR_DEFINITION.visualAnchor,
             }
           : null,
       [companionCanonicalId]
@@ -6760,24 +7300,19 @@ export default ThreeAvatar;
 
     useEffect(() => {
       if (companionCanonicalId !== "sarah") return;
-      console.log("[Sara Route]", {
-        rawAvatar: companionAvatarLabel,
-        normalizedAvatarId: companionCanonicalId,
+      if (process.env.NODE_ENV !== "development") return;
+      console.log("[Sara Runtime Config]", {
         activeAvatarId: companionCanonicalId,
         modelUrl: companionModelUrl,
-        uses3d: sessionUsesCompanion3d,
-        useRfv2Morphs: sessionUsesRfv2Morphs,
-        hasFixedViewportConfig: Boolean(companionFixedViewportConfig),
         cameraConfig: companionFixedViewportConfig?.camera ?? null,
         gltfTransformConfig: companionFixedViewportConfig?.gltfTransform ?? null,
+        debugSaraFraming: DEBUG_SARA_FRAMING,
+        visualAnchor: companionFixedViewportConfig?.visualAnchor ?? null,
       });
     }, [
-      companionAvatarLabel,
       companionCanonicalId,
       companionFixedViewportConfig,
       companionModelUrl,
-      sessionUsesCompanion3d,
-      sessionUsesRfv2Morphs,
     ]);
 
     /** Same id as WebSocket `voice=` — must be sent on REST speak/chat too or TTS often defaults to one (female) voice. */

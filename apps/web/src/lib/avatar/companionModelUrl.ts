@@ -1,4 +1,5 @@
 import { DEFAULT_AVATAR_MODEL_URL, getVitePublicBaseUrl } from "./avatarModelUrl";
+import { SARA_AVATAR_DEFINITION } from "./configs/saraConfig";
 
 /**
  * Use DB `image_url` only when it is a real URL or path to an image file.
@@ -147,11 +148,11 @@ export function resolveCompanionModelUrl(
     case "alex":
       return avatarAssetFile("Alex.glb");
     case "sarah":
-      return "/avatars/Sara%20Mitchell-.glb";
+      return SARA_AVATAR_DEFINITION.model.url;
     case "maya":
       return avatarAssetFile("maya chen.glb");
     case "jordan":
-      return "/avatars/jordanTaylor.glb";
+      return "/avatars/saraMitchell.glb";
     default:
       return DEFAULT_AVATAR_MODEL_URL;
   }

@@ -38,6 +38,24 @@ export type AvatarGltfTransformConfig = {
   readonly notes?: string;
 };
 
+export type AvatarVisualAnchorConfig = {
+  readonly preferredMeshNames?: readonly string[];
+  readonly enabledForProductionCamera?: boolean;
+  readonly notes?: string;
+};
+
+export type AvatarRuntimeFixConfig = {
+  readonly enabled?: boolean;
+  readonly forceVisible?: boolean;
+  readonly forceBasicMaterial?: boolean;
+  readonly wireframe?: boolean;
+  readonly normalizeVisibleMeshes?: boolean;
+  readonly targetHeight?: number;
+  readonly preferredMeshNames?: readonly string[];
+  readonly debug?: boolean;
+  readonly debugAutoFrameCamera?: boolean;
+};
+
 export type AvatarMorphConfig = {
   readonly names?: readonly string[];
   readonly nameSet?: ReadonlySet<string>;
@@ -116,6 +134,8 @@ export type AvatarDefinition = {
   readonly model: AvatarModelConfig;
   readonly camera: AvatarCameraConfig;
   readonly gltfTransform: AvatarGltfTransformConfig;
+  readonly visualAnchor?: AvatarVisualAnchorConfig;
+  readonly runtimeFix?: AvatarRuntimeFixConfig;
   readonly morphs: AvatarMorphConfig;
   readonly expressions: AvatarExpressionConfig;
   readonly blink: AvatarBlinkConfig;

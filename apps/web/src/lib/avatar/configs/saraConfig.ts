@@ -248,32 +248,52 @@ export const SARA_HEAD_PRESENCE_TUNING = {
  * Preparation-only Sara avatar config.
  *
  * Sara is prepared as a future morph-driven avatar but is not wired into the
- * live renderer yet. Camera/focus values are conservative starting placeholders
- * and still require visual tuning against the uploaded GLB.
+ * live facial renderer yet. Camera/focus values are conservative starting
+ * placeholders and still require visual tuning against the chosen GLB.
+ *
+ * The current Sara asset still has multiple roots/coordinate spaces. Best
+ * long-term fix is a clean GLB re-export with one normalized avatar root.
+ * Current config is a runtime stabilization layer, not a permanent asset fix.
  */
 export const SARA_AVATAR_DEFINITION = {
   id: "sara",
   displayName: "Sara",
   status: "scaffold-incomplete",
   model: {
-    url: "/avatars/Sara%20Mitchell-.glb",
+    url: "/avatars/Sara%20Mitchell--.glb",
     renderMode: "rfv2Morph",
     preload: false,
   },
   camera: {
-    mode: "fixed",
-    fov: 35,
-    position: [0, 1.2, 8],
-    lookAt: [0, 1.0, 0],
+  mode: "fixed",
+  fov: 30,
+  position: [0, 1.6, 5.5],
+  lookAt: [0, 1.2, 0],
+},
+
+gltfTransform: {
+  position: [0, -0.2, 0],
+  scale: [8, 8, 8],
+  rotation: [0, 0, 0],
+},
+  visualAnchor: {
+    preferredMeshNames: ["model_19", "model_19.001"],
+    enabledForProductionCamera: false,
     notes:
-      "Sara fixed viewport config. DEBUG_SARA_FRAMING may temporarily override this camera for bounds diagnosis.",
+      "Temporary debug-only visual anchor until Sara is re-exported as one normalized root.",
   },
-  gltfTransform: {
-    position: [0, -1.0, 0],
-    scale: [0.25, 0.25, 0.25],
-    rotation: [0, 0, 0],
-    notes:
-      "Sara fixed transform config. Keep neutral rotation because the GLB main visual mesh is already upright.",
+  // Sara runtime stabilization layer. Long-term fix: clean one-root GLB export.
+  // Disable forceBasicMaterial after Sara's original materials render correctly.
+  runtimeFix: {
+    enabled: true,
+    forceVisible: true,
+    forceBasicMaterial: true,
+    wireframe: false,
+    normalizeVisibleMeshes: true,
+    targetHeight: 1.8,
+    preferredMeshNames: ["model_19", "model_19.001"],
+    debug: true,
+    debugAutoFrameCamera: false,
   },
   morphs: {
     names: SARA_MORPH_NAMES,

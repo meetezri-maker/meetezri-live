@@ -298,6 +298,18 @@ export const JORDAN_EXPRESSION_PRESETS = {
   },
 } as const;
 
+export const JORDAN_IDLE_SMILE_WARMTH_MULTIPLIER = 0.65;
+export const JORDAN_LISTENING_SMILE_WARMTH_MULTIPLIER = 0.65;
+
+export const JORDAN_SMILE_WARMTH_TUNING = {
+  idleSmileRange: [0.015, 0.055],
+  listeningSmileRange: [0.025, 0.085],
+  cheekRange: [0.01, 0.05],
+  idleWarmthDriftRange: [0.45, 1],
+  listeningWarmthDriftRange: [0.62, 1],
+  asymmetryAmount: [0.025, 0.09],
+} as const;
+
 export const JORDAN_EXPRESSION_PRESET_TUNING = {
   blendSpeed: 1.4,
   speakingBlendSpeed: 2.2,
