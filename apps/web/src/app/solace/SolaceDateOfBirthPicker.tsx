@@ -2,7 +2,12 @@ import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
 import { format, isValid, parseISO, subYears } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Calendar } from "@/app/components/ui/calendar";
-import { Popover, PopoverAnchor, PopoverContent } from "@/app/components/ui/popover";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/app/components/ui/popover";
 import { cn } from "@/lib/utils";
 import {
   birthIsoToAgeYears,
@@ -201,21 +206,22 @@ export function SolaceDateOfBirthPicker({
                 showFieldError && "border-rose-400/40 ring-2 ring-rose-500/20"
               )}
             />
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => setOpen((prev) => !prev)}
-              className={cn(
-                "absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg",
-                "text-violet-300/80 transition-colors",
-                "hover:bg-violet-500/15 hover:text-violet-200",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/35"
-              )}
-              aria-label="Open calendar"
-              aria-expanded={open}
-            >
-              <CalendarIcon className="h-4 w-4 shrink-0" aria-hidden />
-            </button>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                disabled={disabled}
+                className={cn(
+                  "absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg",
+                  "text-violet-300/80 transition-colors",
+                  "hover:bg-violet-500/15 hover:text-violet-200",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/35"
+                )}
+                aria-label={open ? "Close calendar" : "Open calendar"}
+                aria-expanded={open}
+              >
+                <CalendarIcon className="h-4 w-4 shrink-0" aria-hidden />
+              </button>
+            </PopoverTrigger>
           </div>
         </PopoverAnchor>
         <PopoverContent
