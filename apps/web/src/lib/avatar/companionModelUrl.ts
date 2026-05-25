@@ -148,11 +148,11 @@ export function resolveCompanionModelUrl(
     case "alex":
       return avatarAssetFile("Alex.glb");
     case "sarah":
-      return SARA_AVATAR_DEFINITION.model.url;
+     return "/avatars/SaraMitchell.glb";
     case "maya":
       return avatarAssetFile("maya chen.glb");
     case "jordan":
-      return "/avatars/saraMitchell.glb";
+      return "/avatars/jordanTaylor.glb";
     default:
       return DEFAULT_AVATAR_MODEL_URL;
   }
