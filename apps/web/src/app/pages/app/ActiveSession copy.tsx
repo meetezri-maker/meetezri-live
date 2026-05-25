@@ -6687,7 +6687,7 @@ export default ThreeAvatar;
                     Camera & Microphone Access
                   </h3>
                   <p className="text-gray-300 leading-relaxed">
-                    To have a video session with {currentAvatar.name}, we need
+                    To have a video talking with {currentAvatar.name}, we need
                     permission to access your camera and microphone.
                   </p>
                 </div>
