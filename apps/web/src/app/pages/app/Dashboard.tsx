@@ -177,6 +177,11 @@ export function Dashboard() {
     return "📝";
   };
 
+  const normalizeSessionActivityText = (text: string, type: string) => {
+    if (type !== "session") return text;
+    return text.replace(/\bsession\b/gi, "talking");
+  };
+
   const activityFeed = (() => {
     const rows = Array.isArray(activityRaw)
       ? (activityRaw as Array<{
@@ -197,7 +202,7 @@ export function Dashboard() {
       return {
         id: row.id,
         type: row.type,
-        text: row.text,
+        text: normalizeSessionActivityText(row.text, row.type),
         time: timeOk ? formatDistanceToNow(created!, { addSuffix: true }) : "Recently",
         emoji:
           row.type === "mood" && row.mood ? getMoodEmoji(row.mood) : emojiForActivityType(row.type),

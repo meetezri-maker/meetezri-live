@@ -127,6 +127,7 @@ export function RecentActivityHistory() {
     () =>
       items.map((row) => ({
         ...row,
+        text: row.type === "session" ? row.text.replace(/\bsession\b/gi, "talking") : row.text,
         emoji: getEmoji(row.type, row.mood),
         relativeTime: formatDistanceToNow(new Date(row.created_at), { addSuffix: true }),
       })),
