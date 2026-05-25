@@ -235,6 +235,11 @@ export class EzriRealtimeClient {
         return;
       }
 
+      if (errType === "debug" && typeof msg.rms === "number") {
+        this.handlers.onUnknownMessage?.({ type: "debug", rms: msg.rms, is_speech: msg.is_speech });
+        return;
+      }
+
       if (errType === "step" && typeof msg.status === "string") {
         const stepStatus = msg.status;
         if (stepStatus === "speaking") {
