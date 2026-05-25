@@ -18,7 +18,7 @@ export function PublicFooter() {
       <div className="landing-section py-10 md:py-12">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
           <div className="col-span-2 md:col-span-1">
-            <BrandLogo heightClass="h-14" />
+            <BrandLogo heightClass="h-14" themeAware />
             <p className="mt-3 text-sm text-[var(--solace-ds-text-muted)]">
               Your AI-powered wellness companion, available 24/7
             </p>
