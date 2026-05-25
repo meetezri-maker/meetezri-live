@@ -2,6 +2,7 @@ import { memo, useSyncExternalStore } from "react";
 import type { RefObject } from "react";
 import type { EzriWsStatus } from "@/lib/ezri/realtimeClient";
 import type { LiveUserSpeechStore } from "../hooks/useLiveUserSpeechStore";
+import { usesBrowserStt } from "../utils/sttMode";
 import type { TranscriptLine } from "../utils/transcript";
 
 export interface SessionTranscriptPanelProps {
@@ -9,10 +10,102 @@ export interface SessionTranscriptPanelProps {
   transcript: TranscriptLine[];
   liveUserSpeech: LiveUserSpeechStore;
   isMuted: boolean;
+  isSessionPaused: boolean;
+  isSoundOff: boolean;
+  isEzriSpeaking: boolean;
+  isEzriThinking: boolean;
   companionName: string;
   sttProvider: string | undefined;
   ezriWsStatus: EzriWsStatus;
+  ezriWarmupStatus: "idle" | "warming" | "ready";
   permissionsGranted: boolean;
+}
+
+function SessionListeningHint({
+  isMuted,
+  isSessionPaused,
+  isSoundOff,
+  isEzriSpeaking,
+  isEzriThinking,
+  companionName,
+  sttProvider,
+  ezriWsStatus,
+  ezriWarmupStatus,
+  permissionsGranted,
+}: Omit<SessionTranscriptPanelProps, "transcriptListRef" | "transcript" | "liveUserSpeech">) {
+  if (!permissionsGranted) {
+    return (
+      <p className="text-xs text-white/45">
+        Allow microphone access to start talking with {companionName}.
+      </p>
+    );
+  }
+
+  if (isSessionPaused) {
+    return (
+      <p className="rounded-lg border border-amber-400/40 bg-amber-500/15 px-2 py-1.5 text-xs text-amber-100">
+        Session is paused — tap play below to resume listening and speaking.
+      </p>
+    );
+  }
+
+  if (isMuted) {
+    return (
+      <p className="rounded-lg border border-red-400/40 bg-red-500/15 px-2 py-1.5 text-xs text-red-200">
+        Microphone is muted — tap the mic button below (unmute) so {companionName}{" "}
+        can hear you.
+      </p>
+    );
+  }
+
+  if (isSoundOff) {
+    return (
+      <p className="rounded-lg border border-amber-400/35 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-100">
+        Speaker is off — you can still talk, but tap the speaker button below to
+        hear {companionName}.
+      </p>
+    );
+  }
+
+  if (ezriWarmupStatus === "warming" || ezriWsStatus === "connecting" || ezriWsStatus === "reconnecting") {
+    return (
+      <p className="text-xs text-white/45">
+        Connecting and warming up the voice pipeline…
+      </p>
+    );
+  }
+
+  if (ezriWsStatus !== "connected") {
+    return (
+      <p className="text-xs text-amber-200/90">
+        Not connected to the voice server — check your network or refresh the page.
+      </p>
+    );
+  }
+
+  if (isEzriSpeaking || isEzriThinking) {
+    return (
+      <p className="text-xs text-white/45">
+        {companionName} is speaking — you can interrupt by talking, or wait until
+        they finish.
+      </p>
+    );
+  }
+
+  if (usesBrowserStt(sttProvider)) {
+    return (
+      <p className="text-xs text-white/45">
+        Your browser is listening — speak naturally when you are ready.
+      </p>
+    );
+  }
+
+  return (
+    <p className="text-xs text-[#4ECDC4]/80">
+      Listening via your microphone — speak naturally; {companionName} will respond
+      when you pause.
+    </p>
+  );
 }
 
 function SessionTranscriptPanelComponent({
@@ -20,9 +113,14 @@ function SessionTranscriptPanelComponent({
   transcript,
   liveUserSpeech,
   isMuted,
+  isSessionPaused,
+  isSoundOff,
+  isEzriSpeaking,
+  isEzriThinking,
   companionName,
   sttProvider,
   ezriWsStatus,
+  ezriWarmupStatus,
   permissionsGranted,
 }: SessionTranscriptPanelProps) {
   const interimSpeech = useSyncExternalStore(
@@ -46,21 +144,18 @@ function SessionTranscriptPanelComponent({
             <p className="text-xs text-white/50">
               Nothing yet — your conversation will appear here.
             </p>
-            {isMuted ? (
-              <p className="rounded-lg border border-red-400/40 bg-red-500/15 px-2 py-1.5 text-xs text-red-200">
-                Microphone is muted — tap the mic button below to unmute so
-                {companionName} can hear you.
-              </p>
-            ) : null}
-            {!isMuted &&
-            sttProvider !== "browser" &&
-            ezriWsStatus === "connected" &&
-            permissionsGranted ? (
-              <p className="text-xs text-white/45">
-                Listening via server audio — speak after {companionName} finishes
-                talking.
-              </p>
-            ) : null}
+            <SessionListeningHint
+              isMuted={isMuted}
+              isSessionPaused={isSessionPaused}
+              isSoundOff={isSoundOff}
+              isEzriSpeaking={isEzriSpeaking}
+              isEzriThinking={isEzriThinking}
+              companionName={companionName}
+              sttProvider={sttProvider}
+              ezriWsStatus={ezriWsStatus}
+              ezriWarmupStatus={ezriWarmupStatus}
+              permissionsGranted={permissionsGranted}
+            />
           </div>
         ) : null}
         {transcript.length > 0

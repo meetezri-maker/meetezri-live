@@ -2,8 +2,10 @@ import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { Sparkles, Heart, Clock, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BRAND_LOGO_ON_DARK_BG } from "@/app/components/BrandLogo";
 import { ONBOARDING_WELCOME_BG } from "@/lib/solace/referenceImagery";
-const SOLACE_LOGO_SRC = "/logos/logo white.png";
+
+const SOLACE_LOGO_SRC = BRAND_LOGO_ON_DARK_BG;
 const ONBOARDING_NAV_H = "5rem";
 const CURRENT_STEP = 1;
 const TOTAL_STEPS = 8;
@@ -21,7 +23,7 @@ const features = [
   {
     icon: Clock,
     title: "Available 24/7",
-    description: "Connect with Ezri whenever you need",
+    description: "Connect with Solace whenever you need",
     glowClass:
       "shadow-[0_0_36px_-4px_rgba(138,79,255,0.5)] ring-[#8A4FFF]/35 text-[#d8b4fe]",
     ringClass: "from-[#8A4FFF]/55 to-indigo-900/25",
@@ -179,7 +181,7 @@ function WelcomeTopBar({ progressPercent }: WelcomeTopBarProps) {
             className="h-9 w-auto object-contain"
           />
           <span className="h-6 w-px bg-white/15" aria-hidden />
-          <span className="text-[15px] font-medium tracking-wide text-white/92">Ezri</span>
+          <span className="text-[15px] font-medium tracking-wide text-white/92">Solace</span>
         </div>
 
         <div className="px-2">

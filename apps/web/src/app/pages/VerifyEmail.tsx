@@ -38,7 +38,7 @@ function SolaceVerifyNav({ className }: SolaceVerifyNavProps) {
         transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
       >
         <Link to="/" className="relative z-10 flex shrink-0 items-center">
-          <BrandLogo heightClass="h-10" />
+          <BrandLogo heightClass="h-10" variant="onDark" />
         </Link>
 
         <nav

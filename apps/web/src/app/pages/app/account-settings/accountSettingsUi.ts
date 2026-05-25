@@ -46,6 +46,7 @@ export const accountCard = accountCinematicSurface;
 
 export const accountRailCard = cn(
   accountCinematicSurface,
+  "rounded-[1.85rem]",
   "shadow-[inset_0_1px_0_rgba(255,255,255,0.09),0_0_36px_-14px_rgba(139,92,246,0.18),0_24px_64px_-36px_rgba(0,0,0,0.75)]"
 );
 
@@ -104,17 +105,22 @@ export const accountPhoneInput = accountInput;
 
 /** Dark sanctuary popover + command list (phone country, timezone, etc.) */
 export const accountDropdownPopover = cn(
-  "z-[200] border border-white/[0.1] bg-[#090b12]/[0.98] p-0",
+  "z-[200] overflow-visible rounded-xl border border-white/[0.1] bg-[#090b12]/[0.98]",
+  "p-1 pb-0",
   "shadow-[0_28px_60px_-12px_rgba(0,0,0,0.9),0_0_40px_rgba(139,92,246,0.12)] backdrop-blur-xl"
 );
 
-export const accountDropdownCommand = "bg-transparent text-zinc-200";
+export const accountDropdownCommand = cn(
+  "overflow-visible rounded-lg bg-transparent text-zinc-200"
+);
 
 export const accountDropdownCommandInput = cn(
   "h-10 border-0 border-b border-white/10 bg-transparent text-sm text-zinc-100",
   "placeholder:text-zinc-500",
-  "[&_[cmdk-input-wrapper]]:border-white/10",
-  "[&_[cmdk-input-wrapper]_svg]:text-zinc-500"
+  "[&_[cmdk-input-wrapper]]:rounded-t-lg [&_[cmdk-input-wrapper]]:border-white/10",
+  "[&_[cmdk-input-wrapper]_svg]:text-zinc-500",
+  "focus-visible:outline-none",
+  "[&_[cmdk-input-wrapper]:focus-within]:ring-2 [&_[cmdk-input-wrapper]:focus-within]:ring-violet-500/30"
 );
 
 export const accountDropdownCommandList = "max-h-[min(280px,50vh)]";

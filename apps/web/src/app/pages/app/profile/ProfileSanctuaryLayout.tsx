@@ -1,5 +1,6 @@
-import { motion } from "motion/react";
+import { getWellnessGoalLabel } from "@/lib/wellnessGoals";
 import { Link } from "react-router-dom";
+import { motion } from "motion/react";
 import type { UseFormReturn } from "react-hook-form";
 import {
   User,
@@ -35,6 +36,7 @@ import {
 } from "lucide-react";
 import { SolaceDateOfBirthPicker, SolaceHeroEnvironment, SolaceSelect } from "@/app/solace";
 import { profileAgeDisplayLabel } from "@/lib/profileAge";
+import { resetAppMainScrollAfterProfileEdit } from "@/lib/scrollAppMain";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/app/components/ui/switch";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
@@ -244,6 +246,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
   } = props;
 
   const displayName = form.watch("name") || "Your name";
+  const profileInitial = (displayName.trim()[0] || "?").toUpperCase();
   const planPill = formatSubscriptionPlanLabel(planLabel);
 
   return (
@@ -351,7 +354,9 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                         {profileImage ? (
                           <img src={profileImage} alt="" className="h-full w-full object-cover" />
                         ) : (
-                          <span className="flex h-full w-full items-center justify-center bg-zinc-800 text-4xl">👤</span>
+                          <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-500/30 to-cyan-500/15 text-3xl font-semibold text-white sm:text-4xl">
+                            {profileInitial}
+                          </span>
                         )}
                       </button>
                       <button
@@ -571,12 +576,12 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
           {/* ── Right rail ~30% ── */}
           <motion.div className={`${profileRightRailGlow} min-w-0 space-y-5 xl:basis-[32%] xl:max-w-[420px]`}>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="relative z-10 space-y-5">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="relative z-10 space-y-5 overflow-visible">
                 {/* Personal information */}
                 <motion.div
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className={`${profileCard} ${isEditing ? "ring-1 ring-violet-400/30" : ""}`}
+                  className={`${profileCard} overflow-visible ${isEditing ? "ring-1 ring-violet-400/30" : ""}`}
                 >
                   <div className={profileCardHeader}>
                     <div>
@@ -601,7 +606,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                         key={f.name}
                         control={form.control}
                         name={f.name}
-                        render={({ field }) => (
+                        render={({ field, fieldState }) => (
                           <FormItem id={`profile-field-${f.name}`} className="scroll-mt-24">
                             <FieldRow icon={f.icon} label={f.label} editing={isEditing}>
                               {isEditing ? (
@@ -648,6 +653,8 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                     value={field.value ?? ""}
                                     onChange={field.onChange}
                                     disabled={isSaving}
+                                    minAgeYears={18}
+                                    externalError={fieldState.error?.message}
                                     showLabelIcon={false}
                                     showAgeHint
                                     placeholder="MM/DD/YYYY"
@@ -676,7 +683,11 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                         profileDropdownPopover,
                                         "w-[--radix-popover-trigger-width]"
                                       )}
+                                      side="bottom"
                                       align="start"
+                                      sideOffset={8}
+                                      avoidCollisions
+                                      collisionPadding={16}
                                     >
                                       <Command className={profileDropdownCommand}>
                                         <CommandInput
@@ -749,7 +760,6 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                 Phone
                               </p>
                               <PhoneInput
-                                key={`profile-phone-${field.value ?? ""}`}
                                 value={field.value ?? ""}
                                 onChange={field.onChange}
                                 disabled={isSaving}
@@ -789,6 +799,9 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                             onClick={() => {
                               setIsEditing(false);
                               loadProfile();
+                              requestAnimationFrame(() => {
+                                resetAppMainScrollAfterProfileEdit();
+                              });
                             }}
                             disabled={isSaving}
                             className={`${profileBtnGhost} flex-1`}
@@ -860,7 +873,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                           </motion.div>
                           <FormControl>
                             {isEditing ? (
-                              <div className="grid max-h-48 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                                 {goalsOptions.map((g) => {
                                   const selected = (field.value || []).includes(g.value);
                                   return (
@@ -889,7 +902,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                                     const opt = goalsOptions.find((o) => o.value === v);
                                     return (
                                       <span key={i} className={`${PILL} border-emerald-400/25 bg-emerald-500/12 text-emerald-200`}>
-                                        {opt?.emoji ? <FluentEmoji emoji={opt.emoji} size={16} /> : null} {opt?.label || v}
+                                        {opt?.emoji ? <FluentEmoji emoji={opt.emoji} size={16} /> : null} {opt?.label || getWellnessGoalLabel(v)}
                                       </span>
                                     );
                                   })
@@ -914,7 +927,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                           </div>
                           <FormControl>
                             {isEditing ? (
-                              <motion.div className="grid max-h-40 grid-cols-2 gap-2 overflow-y-auto">
+                              <motion.div className="grid grid-cols-2 gap-2">
                                 {triggersOptions.map((t) => {
                                   const selected = (field.value || []).includes(t.value);
                                   return (
@@ -1032,7 +1045,6 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                             <p className={profileEmergencyLabel}>Phone</p>
                             {isEditing ? (
                               <PhoneInput
-                                key={`emergency-phone-${field.value ?? ""}`}
                                 value={field.value ?? ""}
                                 onChange={field.onChange}
                                 disabled={isSaving}
@@ -1076,10 +1088,7 @@ export function ProfileSanctuaryLayout(props: ProfileSanctuaryLayoutProps) {
                       )}
                       <button
                         type="button"
-                        onClick={() => {
-                          setIsEditing(true);
-                          scrollToProfileField("emergency_contact_name");
-                        }}
+                        onClick={() => setIsEditing(true)}
                         className={`${profileBtnGhost} w-full border-rose-500/20 text-rose-100 hover:bg-rose-500/10`}
                       >
                         Update contact

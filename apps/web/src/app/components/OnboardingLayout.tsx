@@ -57,8 +57,8 @@ export function OnboardingLayout({
                 transition={{ type: "spring", stiffness: 200, damping: 20 }}
                 className="flex items-center gap-2"
               >
-                <BrandLogo heightClass="h-8" />
-                <span className="font-semibold">Ezri</span>
+                <BrandLogo heightClass="h-8" variant="onLight" />
+                <span className="font-semibold">Solace</span>
               </motion.div>
             </div>
             

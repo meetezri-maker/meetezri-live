@@ -329,7 +329,7 @@ export function AdminCredentials() {
         >
           <Link to="/">
             <Button variant="ghost" className="text-white hover:text-white/80">
-              ← Back to Ezri App
+              ← Back to Solace App
             </Button>
           </Link>
         </motion.div>

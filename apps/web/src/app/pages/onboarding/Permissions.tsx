@@ -27,10 +27,11 @@ import {
   FormItem,
 } from "../../components/ui/form";
 import { cn } from "@/lib/utils";
+import { BRAND_LOGO_ON_DARK_BG } from "@/app/components/BrandLogo";
 
 /** Pure twilight lake / mountain environment plate — not a UI screenshot. */
 const PERMISSIONS_BG = "/solace/permissions-notifications-twilight-lake.jpg";
-const SOLACE_LOGO_SRC = "/logos/logo white.png";
+const SOLACE_LOGO_SRC = BRAND_LOGO_ON_DARK_BG;
 const ONBOARDING_NAV_H = "4.5rem";
 const CURRENT_STEP = 8;
 const TOTAL_STEPS = 8;
@@ -86,7 +87,7 @@ const permissionItems = [
     key: "camera" as const,
     icon: Video,
     title: "Camera Access",
-    description: "Required for video sessions with Ezri",
+    description: "Required for video talking  with Solace",
     required: true,
     cardClass: permissionCardClass,
     iconClass: "text-[#fda4cf]",
@@ -97,7 +98,7 @@ const permissionItems = [
     key: "microphone" as const,
     icon: Mic,
     title: "Microphone Access",
-    description: "Required for talking during sessions",
+    description: "Required for talking during talking",
     required: true,
     cardClass: permissionCardClass,
     iconClass: "text-violet-300",
@@ -108,7 +109,7 @@ const permissionItems = [
     key: "notifications" as const,
     icon: Bell,
     title: "Push Notifications",
-    description: "Get reminders for check-ins and session schedules",
+    description: "Get reminders for check-ins and talk schedules",
     required: false,
     cardClass: pushCardClass,
     iconClass: "text-emerald-300",
@@ -128,7 +129,7 @@ const notificationPrefItems = [
   },
   {
     key: "sessionReminders" as const,
-    label: "Scheduled session reminders",
+    label: "Scheduled talking reminders",
     icon: Calendar,
     iconClass: "text-yellow-200/90",
     ring: "from-yellow-300/50 to-yellow-900/20",
@@ -267,7 +268,7 @@ function PermissionsTopBar({ progressPercent, onBack }: PermissionsTopBarProps) 
             </button>
             <img src={SOLACE_LOGO_SRC} alt="Solace" className="h-8 w-auto object-contain" />
             <span className="h-5 w-px shrink-0 bg-white/15" aria-hidden />
-            <span className="text-sm font-medium tracking-wide text-white/90">Ezri</span>
+            <span className="text-sm font-medium tracking-wide text-white/90">Solace</span>
           </motion.div>
           <p className="shrink-0 text-xs text-violet-200/65">
             Step {CURRENT_STEP} of {TOTAL_STEPS}
@@ -306,7 +307,7 @@ function PermissionsTopBar({ progressPercent, onBack }: PermissionsTopBarProps) 
           </button>
           <img src={SOLACE_LOGO_SRC} alt="Solace" className="h-9 w-auto object-contain" />
           <span className="h-6 w-px bg-white/15" aria-hidden />
-          <span className="text-[15px] font-medium tracking-wide text-white/92">Ezri</span>
+          <span className="text-[15px] font-medium tracking-wide text-white/92">Solace</span>
         </motion.div>
 
         <motion.div className="px-2">
@@ -470,7 +471,7 @@ export function OnboardingPermissions() {
               />
             </h1>
             <p className="mt-2 text-[clamp(1rem,1.9vw,1.25rem)] leading-relaxed text-violet-200/72">
-              Enable features to get the most out of Ezri
+              Enable features to get the most out of Solace
             </p>
           </header>
 
@@ -687,7 +688,7 @@ export function OnboardingPermissions() {
                         Camera and microphone access are required for video sessions.
                       </p>
                       <p className="mt-1 text-[13px] leading-relaxed text-violet-100/62 sm:text-[14px]">
-                        You can enable them now or when you start your first session.
+                        You can enable them now or when you start your first talking.
                       </p>
                     </div>
                   </div>

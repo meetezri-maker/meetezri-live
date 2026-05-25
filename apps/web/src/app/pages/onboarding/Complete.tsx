@@ -21,9 +21,10 @@ import { useAuth } from "@/app/contexts/AuthContext";
 import { useEffect, useRef } from "react";
 import { FluentEmoji } from "@/components/ui/FluentEmoji";
 import { cn } from "@/lib/utils";
+import { BRAND_LOGO_ON_DARK_BG } from "@/app/components/BrandLogo";
 
 const COMPLETION_BG = "/solace/onboarding-complete-twilight-lake.jpg";
-const SOLACE_LOGO_SRC = "/logos/logo white.png";
+const SOLACE_LOGO_SRC = BRAND_LOGO_ON_DARK_BG;
 const ONBOARDING_NAV_H = "5rem";
 const CURRENT_STEP = 8;
 const TOTAL_STEPS = 8;
@@ -47,7 +48,7 @@ const quickTips = [
   {
     icon: Video,
     title: "Start a Session",
-    description: "Connect with Ezri anytime you need support",
+    description: "Connect with Solace anytime you need support",
     linkPath: "/app/session-lobby",
     glowClass: "shadow-[0_0_36px_-6px_rgba(56,189,248,0.55)] ring-1 ring-cyan-400/30",
     ringClass: "from-cyan-400/55 to-sky-900/25",
@@ -75,7 +76,7 @@ const quickTips = [
 
 const whatsNextItems = [
   "Your profile is complete and saved",
-  "Ezri is ready for your first session",
+  "Solace is ready for your first session",
   "You can customize settings anytime",
   "Emergency resources are available 24/7",
 ] as const;
@@ -223,7 +224,7 @@ function CompleteTopBar({ onBack }: CompleteTopBarProps) {
             </button>
             <img src={SOLACE_LOGO_SRC} alt="Solace" className="h-8 w-auto object-contain" />
             <span className="h-5 w-px shrink-0 bg-white/15" aria-hidden />
-            <span className="text-sm font-medium tracking-wide text-white/90">Ezri</span>
+            <span className="text-sm font-medium tracking-wide text-white/90">Solace</span>
           </div>
           <p className="shrink-0 text-xs text-violet-200/65">
             Step {CURRENT_STEP} of {TOTAL_STEPS}
@@ -262,7 +263,7 @@ function CompleteTopBar({ onBack }: CompleteTopBarProps) {
           </button>
           <img src={SOLACE_LOGO_SRC} alt="Solace" className="h-9 w-auto object-contain" />
           <span className="h-6 w-px bg-white/15" aria-hidden />
-          <span className="text-[15px] font-medium tracking-wide text-white/92">Ezri</span>
+          <span className="text-[15px] font-medium tracking-wide text-white/92">Solace</span>
         </motion.div>
 
         <div className="px-2">
@@ -532,7 +533,7 @@ export function OnboardingComplete() {
                 Welcome to Your Wellness Journey!
               </h2>
               <p className="mt-3 text-[15px] leading-relaxed text-violet-100/78 sm:text-base">
-                We&apos;ve personalized Ezri based on your preferences. You&apos;re ready to start
+                We&apos;ve personalized Solace based on your preferences. You&apos;re ready to start
                 your first session!
               </p>
             </motion.div>

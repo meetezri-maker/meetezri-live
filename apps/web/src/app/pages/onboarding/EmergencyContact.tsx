@@ -47,8 +47,10 @@ import { Button } from "../../components/ui/button";
 import { normalizeStoredPhoneForInput } from "@/lib/normalizeStoredPhone";
 import { ONBOARDING_EMERGENCY_CONTACT_BG } from "@/lib/solace/referenceImagery";
 import { cn } from "@/lib/utils";
+import { BRAND_LOGO_ON_DARK_BG } from "@/app/components/BrandLogo";
 import { SolaceSelect } from "@/app/solace";
-const SOLACE_LOGO_SRC = "/logos/logo white.png";
+
+const SOLACE_LOGO_SRC = BRAND_LOGO_ON_DARK_BG;
 const ONBOARDING_NAV_H = "4.5rem";
 const CURRENT_STEP = 7;
 const TOTAL_STEPS = 8;
@@ -56,31 +58,73 @@ const PROGRESS_PERCENT = (CURRENT_STEP / TOTAL_STEPS) * 100;
 
 const countPhoneDigits = (value: string) => (value.match(/\d/g) || []).length;
 
-const emergencyContactSchema = z.object({
-  emergencyName: z.string().trim().min(2, "Emergency contact name is required"),
-  emergencyPhone: z
-    .string()
-    .trim()
-    .min(1, "Phone is required when adding an emergency contact")
-    .refine((v) => v.startsWith("+"), {
-      message: "Select a country from the dropdown first",
-    })
-    .refine(
-      (v) => {
-        const n = countPhoneDigits(v);
-        return n === 12;
-      },
-      {
-        message: "Enter exactly 12 digits total (country code + number)",
-      },
-    ),
-  emergencyRelationship: z
-    .string()
-    .trim()
-    .min(2, "Emergency contact relationship is required"),
-});
+const RELATIONSHIP_PRESETS = [
+  { value: "parent", label: "Parent" },
+  { value: "partner", label: "Partner/Spouse" },
+  { value: "sibling", label: "Sibling" },
+  { value: "friend", label: "Friend" },
+  { value: "other-family", label: "Other Family" },
+  { value: "other", label: "Other" },
+] as const;
+
+const PRESET_RELATIONSHIP_VALUES = RELATIONSHIP_PRESETS.map((option) => option.value).filter(
+  (value) => value !== "other",
+);
+
+function parseSavedRelationship(saved: string | undefined) {
+  const trimmed = (saved ?? "").trim();
+  if (!trimmed) {
+    return { emergencyRelationship: "", emergencyRelationshipCustom: "" };
+  }
+  if ((PRESET_RELATIONSHIP_VALUES as readonly string[]).includes(trimmed)) {
+    return { emergencyRelationship: trimmed, emergencyRelationshipCustom: "" };
+  }
+  return { emergencyRelationship: "other", emergencyRelationshipCustom: trimmed };
+}
+
+const emergencyContactSchema = z
+  .object({
+    emergencyName: z.string().trim().min(2, "Emergency contact name is required"),
+    emergencyPhone: z
+      .string()
+      .trim()
+      .min(1, "Phone is required when adding an emergency contact")
+      .refine((v) => v.startsWith("+"), {
+        message: "Select a country from the dropdown first",
+      })
+      .refine(
+        (v) => {
+          const n = countPhoneDigits(v);
+          return n === 12;
+        },
+        {
+          message: "Enter exactly 12 digits total (country code + number)",
+        },
+      ),
+    emergencyRelationship: z.string().trim().min(1, "Please select a relationship"),
+    emergencyRelationshipCustom: z.string().trim().optional(),
+  })
+  .superRefine((values, ctx) => {
+    if (values.emergencyRelationship === "other") {
+      const custom = values.emergencyRelationshipCustom?.trim() ?? "";
+      if (custom.length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["emergencyRelationshipCustom"],
+          message: "Please describe the relationship",
+        });
+      }
+    }
+  });
 
 type EmergencyContactValues = z.infer<typeof emergencyContactSchema>;
+
+function resolveRelationshipForSave(values: EmergencyContactValues): string {
+  if (values.emergencyRelationship === "other") {
+    return values.emergencyRelationshipCustom?.trim() ?? "";
+  }
+  return values.emergencyRelationship.trim();
+}
 
 const glassCardClass = cn(
   "relative w-full rounded-[28px] border border-[#FF4E91]/20 bg-[#0A0B1E]/48 backdrop-blur-2xl",
@@ -121,17 +165,20 @@ const onboardingPhoneButtonClass = cn(
   "hover:bg-[#12132e]/75 hover:text-white focus-visible:border-[#FF4E91]/50 focus-visible:ring-[#FF4E91]/18",
 );
 
+const phoneFieldHint =
+  "Select country code, then number (exactly 12 digits including code).";
+
 const crisisResources = [
   {
     icon: Phone,
-    label: "988 Suicide & Crisis Lifeline:",
+    label: "988 Suicide & Emergency Lifeline:",
     detail: "Call or text 988",
     iconClass: "text-[#fda4cf]",
     ring: "from-[#FF4E91]/45 to-pink-900/20",
   },
   {
     icon: MessageCircle,
-    label: "Crisis Text Line:",
+    label: "Emergency Text Line:",
     detail: "Text HOME to 741741",
     iconClass: "text-violet-300",
     ring: "from-violet-400/50 to-purple-900/25",
@@ -283,7 +330,7 @@ function EmergencyContactTopBar({ progressPercent, onBack }: EmergencyContactTop
             </button>
             <img src={SOLACE_LOGO_SRC} alt="Solace" className="h-8 w-auto object-contain" />
             <span className="h-5 w-px shrink-0 bg-white/15" aria-hidden />
-            <span className="text-sm font-medium tracking-wide text-white/90">Ezri</span>
+            <span className="text-sm font-medium tracking-wide text-white/90">Solace</span>
           </motion.div>
           <p className="shrink-0 text-xs text-violet-200/65">
             Step {CURRENT_STEP} of {TOTAL_STEPS}
@@ -322,7 +369,7 @@ function EmergencyContactTopBar({ progressPercent, onBack }: EmergencyContactTop
           </button>
           <img src={SOLACE_LOGO_SRC} alt="Solace" className="h-9 w-auto object-contain" />
           <span className="h-6 w-px bg-white/15" aria-hidden />
-          <span className="text-[15px] font-medium tracking-wide text-white/92">Ezri</span>
+          <span className="text-[15px] font-medium tracking-wide text-white/92">Solace</span>
         </motion.div>
 
         <motion.div className="px-2">
@@ -399,18 +446,22 @@ export function OnboardingEmergencyContact() {
     data.safetyPlan?.supportContacts || "",
   );
 
+  const savedRelationship = parseSavedRelationship(data.emergencyContactRelationship);
+
   const form = useForm<EmergencyContactValues>({
     resolver: zodResolver(emergencyContactSchema),
     mode: "onChange",
     defaultValues: {
       emergencyName: data.emergencyContactName || "",
       emergencyPhone: normalizeStoredPhoneForInput(data.emergencyContactPhone || ""),
-      emergencyRelationship: data.emergencyContactRelationship || "",
+      emergencyRelationship: savedRelationship.emergencyRelationship,
+      emergencyRelationshipCustom: savedRelationship.emergencyRelationshipCustom,
     },
   });
 
   const { isValid: isFormValid } = form.formState;
-  form.watch(["emergencyName", "emergencyPhone", "emergencyRelationship"]);
+  const relationshipChoice = form.watch("emergencyRelationship");
+  form.watch(["emergencyName", "emergencyPhone", "emergencyRelationship", "emergencyRelationshipCustom"]);
 
   const onSubmit = (values: EmergencyContactValues) => {
     setIsLoading(true);
@@ -418,7 +469,7 @@ export function OnboardingEmergencyContact() {
       updateData({
         emergencyContactName: values.emergencyName,
         emergencyContactPhone: values.emergencyPhone,
-        emergencyContactRelationship: values.emergencyRelationship,
+        emergencyContactRelationship: resolveRelationshipForSave(values),
       });
       navigate("/onboarding/permissions");
     }, 500);
@@ -501,7 +552,7 @@ export function OnboardingEmergencyContact() {
                   </motion.div>
                   <motion.div className="min-w-0">
                     <p className="mb-4 text-center text-[16px] font-semibold text-white/94 md:text-left sm:text-[17px]">
-                      If you&apos;re in crisis right now:
+                      If you&apos;re in an Emergency right now:
                     </p>
                     <ul className="space-y-3.5">
                       {crisisResources.map((item) => {
@@ -561,19 +612,22 @@ export function OnboardingEmergencyContact() {
                         Trusted Contact Person
                       </h2>
                       <p className="mt-1.5 text-[13px] leading-relaxed text-violet-100/68 sm:text-[14px]">
-                        Add someone we can notify if you&apos;re in crisis (we&apos;ll only contact
-                        them with your permission or in emergencies)
+                        Add someone we can notify if you&apos;re in an Emergency (we&apos;ll only
+                        contact them with your permission or in emergencies)
                       </p>
                     </motion.div>
                   </div>
 
-                  <motion.div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
+                  <motion.div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-start md:gap-5">
                     <FormField
                       control={form.control}
                       name="emergencyName"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className={onboardingLabelClass}>Contact Name</FormLabel>
+                          <p className="-mt-0.5 mb-1.5 text-xs text-transparent select-none" aria-hidden>
+                            {phoneFieldHint}
+                          </p>
                           <FormControl>
                             <div className="relative">
                               <User
@@ -598,9 +652,7 @@ export function OnboardingEmergencyContact() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className={onboardingLabelClass}>Phone Number</FormLabel>
-                          <p className="-mt-0.5 mb-1.5 text-xs text-violet-200/48">
-                            Select country code, then number (exactly 12 digits including code).
-                          </p>
+                          <p className="-mt-0.5 mb-1.5 text-xs text-violet-200/48">{phoneFieldHint}</p>
                           <FormControl>
                             <PhoneInput
                               value={field.value}
@@ -618,7 +670,7 @@ export function OnboardingEmergencyContact() {
                     />
                   </motion.div>
 
-                  <motion.div className="mt-4 md:mt-5">
+                  <div className="mt-4 space-y-4 md:mt-5">
                     <FormField
                       control={form.control}
                       name="emergencyRelationship"
@@ -628,35 +680,61 @@ export function OnboardingEmergencyContact() {
                             Relationship
                           </FormLabel>
                           <FormControl>
-                            <motion.div className="relative">
+                            <div className="relative">
                               <Heart
-                                className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-300/55"
+                                className="pointer-events-none absolute left-3.5 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-violet-300/55"
                                 aria-hidden
                               />
                               <SolaceSelect
                                 id="emergencyRelationship"
                                 value={field.value}
-                                onValueChange={field.onChange}
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  if (value !== "other") {
+                                    form.setValue("emergencyRelationshipCustom", "", {
+                                      shouldValidate: true,
+                                    });
+                                  }
+                                }}
                                 ariaLabel="Relationship"
                                 placeholder="Select relationship"
                                 variant="form"
                                 triggerClassName={cn(onboardingSelectClass, "pl-10")}
-                                options={[
-                                  { value: "parent", label: "Parent" },
-                                  { value: "partner", label: "Partner/Spouse" },
-                                  { value: "sibling", label: "Sibling" },
-                                  { value: "friend", label: "Friend" },
-                                  { value: "other-family", label: "Other Family" },
-                                  { value: "other", label: "Other" },
-                                ]}
+                                options={RELATIONSHIP_PRESETS.map((option) => ({
+                                  value: option.value,
+                                  label: option.label,
+                                }))}
                               />
-                            </motion.div>
+                            </div>
                           </FormControl>
                           <FormMessage className="text-[13px] text-[#ff8ab8]" />
                         </FormItem>
                       )}
                     />
-                  </motion.div>
+
+                    {relationshipChoice === "other" ? (
+                      <FormField
+                        control={form.control}
+                        name="emergencyRelationshipCustom"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel htmlFor="emergencyRelationshipCustom" className={onboardingLabelClass}>
+                              Describe relationship
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                id="emergencyRelationshipCustom"
+                                placeholder="e.g., Cousin, Neighbor, Caregiver"
+                                className={cn(onboardingInputClass, "pl-4")}
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage className="text-[13px] text-[#ff8ab8]" />
+                          </FormItem>
+                        )}
+                      />
+                    ) : null}
+                  </div>
                 </div>
               </motion.section>
 
@@ -735,7 +813,7 @@ export function OnboardingEmergencyContact() {
                       />
                     </GlowingOrb>
                     <h2 className="pt-1.5 text-[17px] font-semibold text-white/94 sm:text-lg">
-                      More Crisis Resources
+                      More Emergency Resources
                     </h2>
                   </motion.div>
                   <ul className="divide-y divide-white/[0.06]">

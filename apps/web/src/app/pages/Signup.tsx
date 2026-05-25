@@ -212,7 +212,7 @@ function SignupWelcomeBlock({ className, showMark = true }: SignupWelcomeBlockPr
     <div className={cn(className)}>
       {showMark ? (
         <div className="mb-8 flex items-center">
-          <BrandLogo heightClass="h-12" />
+          <BrandLogo heightClass="h-12" variant="onDark" />
         </div>
       ) : null}
       <h1 className="solace-login-serif text-[clamp(2rem,3.4vw,3.1rem)] font-medium leading-[1.1] text-[#faf8fc] drop-shadow-[0_2px_28px_rgba(0,0,0,0.45)]">
@@ -236,12 +236,14 @@ function SignupWelcomeBlock({ className, showMark = true }: SignupWelcomeBlockPr
   );
 }
 
-function ShieldEmblem({ className }: { className?: string }) {
+interface SignupBrandEmblemProps {
+  className?: string;
+}
+
+function SignupBrandEmblem({ className }: SignupBrandEmblemProps) {
   return (
     <div className={cn("flex justify-center", className)}>
-      <div className="relative flex h-14 w-14 items-center justify-center rounded-full border border-[#E91E63]/25 bg-gradient-to-br from-[#E91E63]/15 to-[#9C27B0]/12 shadow-[0_0_32px_-8px_rgba(233,30,99,0.45)] sm:h-16 sm:w-16">
-        <Shield className="h-6 w-6 text-[#f9a8d4]" aria-hidden />
-      </div>
+      <BrandLogo heightClass="h-10" variant="onDark" />
     </div>
   );
 }
@@ -549,8 +551,8 @@ export function Signup() {
                 <div className="pointer-events-none absolute -left-8 -top-8 h-20 w-20 rounded-full bg-[radial-gradient(circle,rgba(236,72,153,0.22),transparent_70%)]" />
                 <div className="pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br from-[#E91E63]/[0.06] via-transparent to-[#9C27B0]/[0.05]" />
                 <div className="relative">
-                  <ShieldEmblem className="mb-4 justify-center sm:mb-5" />
-                  <div className="mb-5 text-center sm:mb-6">
+                  <SignupBrandEmblem className="mb-2" />
+                  <div className="mb-3 text-center">
                     <h2 className="solace-login-serif text-[clamp(1.35rem,2.4vw,1.85rem)] font-medium leading-tight text-[#faf8fc]">
                       {phase === "form" ? "Create Your Account" : "Emergency Contact & Terms"}
                     </h2>
@@ -973,11 +975,19 @@ export function Signup() {
                                 console.log("Initializing profile...");
                                 await api.initProfile();
 
+                                const signupFirstName = form.getValues("firstName").trim();
+                                const signupLastName = form.getValues("lastName").trim();
+                                const signupFullName =
+                                  `${signupFirstName} ${signupLastName}`.trim();
+
                                 console.log(
                                   "Updating profile with emergency contact:",
                                   trialContact,
                                 );
                                 await api.updateProfile({
+                                  ...(signupFullName.length >= 2
+                                    ? { full_name: signupFullName }
+                                    : {}),
                                   emergency_contact_name: trialContact.name,
                                   emergency_contact_phone: trialContact.phone,
                                   emergency_contact_relationship: trialContact.relationship,

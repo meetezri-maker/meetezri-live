@@ -130,20 +130,19 @@ export function PhoneInput({
   commandEmptyClassName,
 }: PhoneInputProps) {
   const [open, setOpen] = React.useState(false)
-  
-  // Parse value into country code and number
-  // This is a simple parser, for robust parsing we'd need libphonenumber-js
+  const inputRef = React.useRef<HTMLInputElement>(null)
+
   const selectedCountry = React.useMemo(() => {
     if (!value) return countries[0]
-    // Sort by length desc to match longest prefix first (e.g. +1 vs +1242)
     const sortedCountries = [...countries].sort((a, b) => b.value.length - a.value.length)
-    return sortedCountries.find(c => value.startsWith(c.value)) || countries[0]
+    return sortedCountries.find((c) => value.startsWith(c.value)) || countries[0]
   }, [value])
 
   const [phoneNumber, setPhoneNumber] = React.useState("")
 
-  // Update local phone number state when value changes externally
   React.useEffect(() => {
+    if (document.activeElement === inputRef.current) return
+
     if (value) {
       if (value.startsWith(selectedCountry.value)) {
         setPhoneNumber(value.slice(selectedCountry.value.length))
@@ -153,7 +152,7 @@ export function PhoneInput({
     } else {
       setPhoneNumber("")
     }
-  }, [value, selectedCountry])
+  }, [value, selectedCountry.value])
 
   const handleCountrySelect = (currentValue: string) => {
     const newCountry = countries.find((c) => c.value === currentValue) || countries[0]
@@ -194,8 +193,15 @@ export function PhoneInput({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className={cn("z-[200] w-[300px] p-0", popoverClassName)}
+          className={cn(
+            "z-[200] w-[300px] overflow-visible rounded-xl p-1 pb-0",
+            popoverClassName,
+          )}
+          side="bottom"
           align="start"
+          sideOffset={8}
+          avoidCollisions
+          collisionPadding={16}
         >
           <Command className={commandClassName}>
             <CommandInput
@@ -230,6 +236,7 @@ export function PhoneInput({
         </PopoverContent>
       </Popover>
       <Input
+        ref={inputRef}
         id={id}
         name={name}
         type="tel"

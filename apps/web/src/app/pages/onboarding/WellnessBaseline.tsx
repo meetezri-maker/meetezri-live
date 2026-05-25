@@ -37,9 +37,12 @@ import {
   FormMessage,
 } from "../../components/ui/form";
 import { cn } from "@/lib/utils";
+import { BRAND_LOGO_ON_DARK_BG } from "@/app/components/BrandLogo";
+import { WELLNESS_GOALS, type WellnessGoalValue } from "@/lib/wellnessGoals";
+import type { LucideIcon } from "lucide-react";
 
 const WELLNESS_BASELINE_BG = "/solace/emotional-focus-twilight-sanctuary.jpg";
-const SOLACE_LOGO_SRC = "/logos/logo white.png";
+const SOLACE_LOGO_SRC = BRAND_LOGO_ON_DARK_BG;
 const ONBOARDING_NAV_H = "4.5rem";
 const CURRENT_STEP = 3;
 const TOTAL_STEPS = 8;
@@ -115,116 +118,93 @@ const moods = [
   },
 ] as const;
 
-const focusAreas = [
+const focusAreaStyles: Record<
+  WellnessGoalValue,
   {
-    value: "feel-calm-in-control",
-    title: "Mind & Emotions",
-    description: "Feel calm & in control",
+    icon: LucideIcon;
+    glow: string;
+    iconClass: string;
+    ring: string;
+  }
+> = {
+  "feel-calm-in-control": {
     icon: Brain,
     glow: "shadow-[0_0_20px_-4px_rgba(255,78,145,0.5)]",
     iconClass: "text-[#fda4cf]",
     ring: "from-[#FF4E91]/50 to-purple-900/25",
   },
-  {
-    value: "boost-mood-daily-energy",
-    title: "Energy & Vitality",
-    description: "Boost mood & daily energy",
+  "boost-mood-daily-energy": {
     icon: Zap,
     glow: "shadow-[0_0_20px_-4px_rgba(251,146,60,0.45)]",
     iconClass: "text-orange-300",
     ring: "from-orange-400/50 to-amber-900/20",
   },
-  {
-    value: "sleep-recovery",
-    title: "Sleep & Recovery",
-    description: "Improve rest & recharge",
+  "sleep-recovery": {
     icon: Moon,
     glow: "shadow-[0_0_20px_-4px_rgba(167,139,250,0.5)]",
     iconClass: "text-violet-300",
     ring: "from-violet-400/50 to-indigo-900/25",
   },
-  {
-    value: "build-confidence-self-trust",
-    title: "Confidence & Self Esteem",
-    description: "Build confidence & self trust",
+  "build-confidence-self-trust": {
     icon: ShieldCheck,
     glow: "shadow-[0_0_20px_-4px_rgba(96,165,250,0.45)]",
     iconClass: "text-sky-300",
     ring: "from-sky-400/50 to-blue-900/20",
   },
-  {
-    value: "strengthen-relationships",
-    title: "Relationships",
-    description: "Strengthen connections & boundaries",
+  "strengthen-relationships": {
     icon: Heart,
     glow: "shadow-[0_0_20px_-4px_rgba(255,78,145,0.45)]",
     iconClass: "text-[#fda4cf]",
     ring: "from-[#FF4E91]/45 to-rose-900/20",
   },
-  {
-    value: "navigate-life-changes",
-    title: "Life Transitions",
-    description: "Navigate changes with clarity",
+  "navigate-life-changes": {
     icon: Compass,
     glow: "shadow-[0_0_20px_-4px_rgba(45,212,191,0.45)]",
     iconClass: "text-teal-300",
     ring: "from-teal-400/50 to-teal-900/20",
   },
-  {
-    value: "work-life-balance",
-    title: "Work & Purpose",
-    description: "Find balance & meaning",
+  "work-life-balance": {
     icon: Briefcase,
     glow: "shadow-[0_0_20px_-4px_rgba(251,146,60,0.4)]",
     iconClass: "text-amber-200",
     ring: "from-amber-400/45 to-orange-900/20",
   },
-  {
-    value: "personal-goal-life-direction",
-    title: "Growth & Learning",
-    description: "Grow skills & inner potential",
+  "personal-goal-life-direction": {
     icon: Sprout,
     glow: "shadow-[0_0_20px_-4px_rgba(74,222,128,0.4)]",
     iconClass: "text-emerald-300",
     ring: "from-emerald-400/45 to-emerald-900/20",
   },
-  {
-    value: "time-management-productivity",
-    title: "Productivity",
-    description: "Manage time & stay focused",
+  "time-management-productivity": {
     icon: Clock,
     glow: "shadow-[0_0_20px_-4px_rgba(167,139,250,0.45)]",
     iconClass: "text-violet-300",
     ring: "from-violet-400/45 to-purple-900/20",
   },
-  {
-    value: "financial-wellness",
-    title: "Financial Wellness",
-    description: "Reduce stress & build financial confidence",
+  "financial-wellness": {
     icon: CircleDollarSign,
     glow: "shadow-[0_0_20px_-4px_rgba(250,204,21,0.4)]",
     iconClass: "text-amber-200",
     ring: "from-amber-300/45 to-yellow-900/20",
   },
-  {
-    value: "health-fitness-body-goals",
-    title: "Health & Body",
-    description: "Build healthy habits & feel your best",
+  "health-fitness-body-goals": {
     icon: Activity,
     glow: "shadow-[0_0_20px_-4px_rgba(255,78,145,0.4)]",
     iconClass: "text-[#fda4cf]",
     ring: "from-[#FF4E91]/40 to-pink-900/20",
   },
-  {
-    value: "faith-purpose-inner-grounding",
-    title: "Spiritual Growth",
-    description: "Find purpose & inner grounding",
+  "faith-purpose-inner-grounding": {
     icon: Flower2,
     glow: "shadow-[0_0_20px_-4px_rgba(192,132,252,0.45)]",
     iconClass: "text-purple-300",
     ring: "from-purple-400/45 to-violet-900/20",
   },
-] as const;
+};
+
+const focusAreas = WELLNESS_GOALS.map((goal) => ({
+  ...goal,
+  ...focusAreaStyles[goal.value],
+}));
 
 function WellnessBaselineSceneBackdrop() {
   return (
@@ -342,7 +322,7 @@ function WellnessBaselineTopBar({ progressPercent, onBack }: WellnessBaselineTop
             </button>
             <img src={SOLACE_LOGO_SRC} alt="Solace" className="h-8 w-auto object-contain" />
             <span className="h-5 w-px shrink-0 bg-white/15" aria-hidden />
-            <span className="text-sm font-medium tracking-wide text-white/90">Ezri</span>
+            <span className="text-sm font-medium tracking-wide text-white/90">Solace</span>
           </motion.div>
           <p className="shrink-0 text-xs text-violet-200/65">
             Step {CURRENT_STEP} of {TOTAL_STEPS}
@@ -381,7 +361,7 @@ function WellnessBaselineTopBar({ progressPercent, onBack }: WellnessBaselineTop
           </button>
           <img src={SOLACE_LOGO_SRC} alt="Solace" className="h-9 w-auto object-contain" />
           <span className="h-6 w-px bg-white/15" aria-hidden />
-          <span className="text-[15px] font-medium tracking-wide text-white/92">Ezri</span>
+          <span className="text-[15px] font-medium tracking-wide text-white/92">Solace</span>
         </div>
 
         <motion.div

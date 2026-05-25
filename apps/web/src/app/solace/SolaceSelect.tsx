@@ -152,7 +152,14 @@ export function SolaceSelect({
       >
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
-      <SelectContent position="popper" sideOffset={6} className={cn(solaceSelectContentClass, contentClassName)}>
+      <SelectContent
+        position="popper"
+        side="bottom"
+        align="start"
+        sideOffset={6}
+        avoidCollisions
+        className={cn(solaceSelectContentClass, contentClassName)}
+      >
         {groups?.map((group) => (
           <SelectGroup key={group.label}>
             <SelectLabel className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">

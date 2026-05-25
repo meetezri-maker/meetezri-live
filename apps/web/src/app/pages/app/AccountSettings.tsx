@@ -1447,7 +1447,11 @@ const openAvatarEditorFromUrl = (imageUrl: string, initialCropArea: CropArea | n
                         accountDropdownPopover,
                         "w-[--radix-popover-trigger-width]"
                       )}
+                      side="bottom"
                       align="start"
+                      sideOffset={8}
+                      avoidCollisions
+                      collisionPadding={16}
                     >
                       <Command className={accountDropdownCommand}>
                         <CommandInput
